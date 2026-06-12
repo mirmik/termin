@@ -310,6 +310,9 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     )
     win.build(ui)
 
+    from termin.editor_tcgui.mcp_server import start_editor_mcp_server
+    mcp_server = start_editor_mcp_server(win.python_executor)
+
     # First render
     engine.scene_manager.request_render()
     engine.tick_and_render(0.016)
@@ -328,6 +331,8 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
                 return
             if routed > 0:
                 engine.scene_manager.request_render()
+            if win.process_python_requests() > 0:
+                engine.scene_manager.request_render()
             win.poll_file_watcher()
 
         with profiler.section("Render Compose"):
@@ -337,6 +342,8 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         return not (win.should_close() or main_window.should_close())
 
     def on_shutdown() -> None:
+        if mcp_server is not None:
+            mcp_server.stop()
         wm.destroy_all()
         sdl2.SDL_Quit()
 

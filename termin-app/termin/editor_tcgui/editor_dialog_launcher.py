@@ -18,6 +18,7 @@ class EditorDialogLauncher:
         scene_manager,
         get_game_scene_name: Callable[[], str | None],
         get_project_path: Callable[[], str | None],
+        get_python_executor: Callable[[], object | None],
         get_rendering_controller: Callable[[], object | None],
         get_fbo_surface: Callable[[], object | None],
         get_project_file_watcher: Callable[[], object | None],
@@ -40,6 +41,7 @@ class EditorDialogLauncher:
         self._scene_manager = scene_manager
         self._get_game_scene_name = get_game_scene_name
         self._get_project_path = get_project_path
+        self._get_python_executor = get_python_executor
         self._get_rendering_controller = get_rendering_controller
         self._get_fbo_surface = get_fbo_surface
         self._get_project_file_watcher = get_project_file_watcher
@@ -88,6 +90,7 @@ class EditorDialogLauncher:
             editor=self._get_editor(),
             get_scene=self._get_scene,
             get_project_path=self._get_project_path,
+            executor=self._get_python_executor(),
         )
 
     def show_project_settings(self) -> None:

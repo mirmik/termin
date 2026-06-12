@@ -8,6 +8,7 @@ from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.button import Button
+from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.spin_box import SpinBox
 
 
@@ -115,6 +116,11 @@ def show_settings_dialog(ui) -> None:
         8.0, 24.0, 1.0, 0)
     content.add_child(font_small_row)
 
+    mcp_check = Checkbox()
+    mcp_check.text = "Enable local editor MCP server on startup"
+    mcp_check.checked = settings.get_mcp_server_enabled()
+    content.add_child(mcp_check)
+
     # Apply button — applies font changes without closing the dialog
     apply_row = HStack()
     apply_row.spacing = 8
@@ -150,6 +156,7 @@ def show_settings_dialog(ui) -> None:
             settings.set_slang_compiler(slang_text if slang_text else None)
             settings.set_font_size(font_spin.value)
             settings.set_font_size_small(font_small_spin.value)
+            settings.set_mcp_server_enabled(mcp_check.checked)
             settings.sync()
 
             # Apply font changes to the live widget tree immediately.

@@ -30,6 +30,7 @@ class EditorSettings:
     KEY_FONT_SIZE = "Editor/fontSize"
     KEY_FONT_SIZE_SMALL = "Editor/fontSizeSmall"
     KEY_SLANG_COMPILER = "Shader/slangCompiler"
+    KEY_MCP_SERVER_ENABLED = "Editor/mcpServerEnabled"
 
     # Значения по умолчанию
     DEFAULT_FONT_SIZE: float = 14.0
@@ -158,6 +159,14 @@ class EditorSettings:
     def set_slang_compiler(self, compiler_path: str | None) -> None:
         """Сохранить путь к компилятору Slang."""
         self.set(self.KEY_SLANG_COMPILER, compiler_path or "")
+
+    def get_mcp_server_enabled(self) -> bool:
+        """Whether to start the editor MCP server when env override is absent."""
+        return bool(self.get(self.KEY_MCP_SERVER_ENABLED, False))
+
+    def set_mcp_server_enabled(self, enabled: bool) -> None:
+        """Persist editor MCP server startup preference."""
+        self.set(self.KEY_MCP_SERVER_ENABLED, bool(enabled))
 
     def get_font_size(self) -> float:
         """Получить базовый размер шрифта."""

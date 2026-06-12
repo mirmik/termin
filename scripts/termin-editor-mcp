@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Small client for the running Termin editor MCP endpoint."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any
+
+
+DEFAULT_SESSION_FILE = Path("/tmp/termin-editor-mcp.json")
+
+
+def _load_session(path: Path) -> dict[str, Any]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit(
+            f"Session file not found: {path}\n"
+            "Start the editor with TERMIN_EDITOR_MCP=1."
+        )
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid session file '{path}': {exc}") from exc
+
+
+def _call(session: dict[str, Any], method: str, params: object | None = None) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": method,
+    }
+    if params is not None:
+        payload["params"] = params
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        str(session["url"]),
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {session.get('token', '')}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise SystemExit(f"HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"Cannot reach editor MCP endpoint: {exc}") from exc
+
+
+def _print_response(response: dict[str, Any]) -> int:
+    if "error" in response:
+        print(json.dumps(response["error"], indent=2, ensure_ascii=False), file=sys.stderr)
+        return 1
+
+    result = response.get("result")
+    if isinstance(result, dict) and "content" in result:
+        for item in result.get("content", []):
+            if isinstance(item, dict) and item.get("type") == "text":
+                print(item.get("text", ""), end="")
+        if result.get("isError"):
+            return 1
+        return 0
+
+    if isinstance(result, dict) and set(result.keys()) <= {"ok", "output", "error", "wants_more"}:
+        print(str(result.get("output", "")), end="")
+        if not result.get("ok", False):
+            error = result.get("error")
+            if error:
+                print(error, file=sys.stderr)
+            return 1
+        return 0
+
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--session",
+        type=Path,
+        default=DEFAULT_SESSION_FILE,
+        help=f"Editor MCP session file. Default: {DEFAULT_SESSION_FILE}",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("initialize")
+    sub.add_parser("tools-list")
+
+    exec_parser = sub.add_parser("exec")
+    exec_parser.add_argument("script")
+    exec_parser.add_argument("--timeout", type=float, default=30.0)
+
+    exec_file_parser = sub.add_parser("exec-file")
+    exec_file_parser.add_argument("path", type=Path)
+    exec_file_parser.add_argument("--timeout", type=float, default=30.0)
+
+    args = parser.parse_args()
+    session = _load_session(args.session)
+
+    if args.command == "initialize":
+        response = _call(
+            session,
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "termin-editor-mcp-cli", "version": "0.1.0"},
+            },
+        )
+    elif args.command == "tools-list":
+        response = _call(session, "tools/list")
+    elif args.command == "exec":
+        response = _call(
+            session,
+            "tools/call",
+            {
+                "name": "execute_python_script",
+                "arguments": {"script": args.script, "timeout": args.timeout},
+            },
+        )
+    elif args.command == "exec-file":
+        script = args.path.read_text(encoding="utf-8")
+        response = _call(
+            session,
+            "tools/call",
+            {
+                "name": "execute_python_script",
+                "arguments": {"script": script, "timeout": args.timeout},
+            },
+        )
+    else:
+        raise AssertionError(args.command)
+
+    return _print_response(response)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
