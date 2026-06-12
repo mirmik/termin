@@ -13,8 +13,16 @@ Current implementation checkpoint:
   binding and shader preparation helpers for material draws.
 - `ColorPass` uses that helper for ordinary mesh material resources and the
   direct drawable tgfx2 material path.
-- `DepthPass`, `DepthOnlyPass`, `IdPass`, and `ShadowPass` use the same helper
-  for shader preparation and their pass/draw named uniform payloads.
+- `ColorPass.extra_textures` now binds graph textures by reflected shader
+  resource name instead of allocating backend texture slots.
+- `DepthPass`, `DepthOnlyPass`, `IdPass`, `ShadowPass`, and `NormalPass` use
+  the same helper for shader preparation and their pass/draw named uniform
+  payloads.
+- `MaterialPass` uses the material pipeline helper for shader preparation,
+  per-frame data, material UBO/textures, and bind-by-name graph inputs.
+- `FoliageLayerComponent` prepares instanced foliage shaders and material
+  resources through the same helper; foliage-specific draw resources still bind
+  explicitly by logical name.
 - The helper now lives in `termin-render`, not `termin-render-passes`, so lower
   component renderers can share it without depending on concrete pass modules.
 - This checkpoint intentionally does not generate vertex transform variants
@@ -237,9 +245,10 @@ Slang modules, but their resources should follow the same scope/name rules.
 
 - `shader_skinning.cpp` edits shader source with regex and encodes a binding
   ABI in generated GLSL.
-- Foliage currently has standalone vertex shaders that must manually match
-  material fragment varyings.
-- Some renderers still know numeric slots or fixed vertex locations.
+- Foliage still creates renderer-specific shader variants instead of selecting
+  a shared vertex transform contract.
+- Some renderers still know numeric fallback slots or fixed vertex locations
+  for legacy paths.
 - Some tests still assert numeric `kind`/`scope` enum values instead of
   symbolic metadata.
 - Some material fixtures still call `set_material_ubo_layout(...)` even when

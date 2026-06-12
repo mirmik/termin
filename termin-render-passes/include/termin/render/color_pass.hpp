@@ -38,11 +38,6 @@ namespace termin {
  * Collects all Drawable components from entities, filters by phase_mark,
  * sorts by priority, and renders with materials and lighting.
  */
-// Starting binding for extra sampled textures. Vulkan's shared descriptor
-// layout reserves 4..7 and 9..15 for material samplers, 8 for the
-// shadow-map array, 16 for BoneBlock, and 17..23 for graph/debug extras.
-constexpr int EXTRA_TEXTURE_UNIT_START = 17;
-
 class ColorPass : public CxxFramePass {
 public:
     // Pass configuration
@@ -69,7 +64,8 @@ public:
     // Last GPU time in milliseconds (from detailed profiling)
     double last_gpu_time_ms() const { return last_gpu_time_ms_; }
 
-    // Extra texture uniforms: uniform_name -> texture_unit (computed during execute)
+    // Legacy debug cache. Layout-backed shaders bind extra textures by name;
+    // this map remains for old inspector/API callers and is cleared per pass.
     std::unordered_map<std::string, int> extra_texture_uniforms;
 
     // INSPECT_FIELD registrations
@@ -193,9 +189,12 @@ public:
 
 private:
     /**
-     * Bind extra textures to texture units before rendering.
+     * Bind extra textures by shader resource name before rendering.
      */
-    void bind_extra_textures(const Tex2Map& tex2_reads, tgfx::RenderContext2* ctx2);
+    void bind_extra_textures(
+        const Tex2Map& tex2_reads,
+        tgfx::RenderContext2* ctx2,
+        const tc_shader* shader);
 
     /**
      * Find camera component by entity name in scene.

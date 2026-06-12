@@ -170,13 +170,18 @@ void ColorPass::add_extra_texture(const std::string& uniform_name, const std::st
 
 void ColorPass::bind_extra_textures(
     const Tex2Map& tex2_reads,
-    tgfx::RenderContext2* ctx2
+    tgfx::RenderContext2* ctx2,
+    const tc_shader* shader
 ) {
-    // Clear previous frame's uniforms
     extra_texture_uniforms.clear();
     if (!ctx2) return;
+    if (!shader) {
+        tc::Log::error(
+            "[ColorPass:%s] cannot bind extra textures without active shader layout",
+            get_pass_name().c_str());
+        return;
+    }
 
-    int i = 0;
     for (const auto& [uniform_name, resource_name] : extra_textures) {
         auto it = tex2_reads.find(resource_name);
         if (it == tex2_reads.end() || !it->second) {
@@ -185,10 +190,19 @@ void ColorPass::bind_extra_textures(
             continue;
         }
 
-        int unit = EXTRA_TEXTURE_UNIT_START + i;
-        ctx2->bind_sampled_texture(unit, it->second);
-        extra_texture_uniforms[uniform_name] = unit;
-        ++i;
+        const tc_shader_resource_binding* rb =
+            tc_shader_find_resource_binding(shader, uniform_name.c_str());
+        if (!rb || rb->kind != TC_SHADER_RESOURCE_TEXTURE) {
+            tc::Log::error(
+                "[ColorPass:%s] extra texture '%s' cannot be bound to '%s': "
+                "shader does not declare a Texture2D resource with that name",
+                get_pass_name().c_str(),
+                resource_name.c_str(),
+                uniform_name.c_str());
+            continue;
+        }
+
+        ctx2->bind_texture(uniform_name, it->second);
     }
 }
 
@@ -440,7 +454,7 @@ void ColorPass::sort_draw_calls() {
 // pass owns material state, lighting UBO, shadow samplers, and phase ordering.
 //
 // Intentionally skipped for now:
-//   - shader variants where tc_shader_ensure_tgfx2 fails
+//   - shader variants where material pipeline preparation fails
 //   - maybe_blit_to_debugger for the selected debug symbol
 //   - GPU timing queries
 // These each get a log line when they are skipped.
@@ -539,13 +553,10 @@ void ColorPass::execute_with_data(
     ctx2->set_viewport(0, 0, rect.width, rect.height);
     ctx2->set_depth_bias(false);
 
-    // Bind per-frame / shadow-block UBOs after the pass is open —
-    // ResourceSet bindings are attached to the next pipeline flush
-    // anyway. These stay bound for the whole pass; per-draw bindings
-    // (material UBO, lighting UBO, shadow samplers) are set below.
+    // Per-frame/shadow/material resources are prepared per shader below,
+    // after the active shader layout is known.
     constexpr uint32_t SHADOW_UBO_BINDING =
         TC_SHADER_RESOURCE_BINDING_SHADOW_BLOCK;
-    bind_engine_per_frame_uniforms(*ctx2, pf);
 
     // Collect + sort draw calls. Reuses the legacy helpers —
     // gathering logic is backend-agnostic.
@@ -778,7 +789,7 @@ void ColorPass::execute_with_data(
                 material_fallback);
 
             if (!extra_textures.empty()) {
-                bind_extra_textures(ctx.tex2_reads, ctx2);
+                bind_extra_textures(ctx.tex2_reads, ctx2, direct_shader);
             }
 
             RenderContext direct_context;
@@ -809,10 +820,9 @@ void ColorPass::execute_with_data(
 
         Mat44f model = drawable->get_model_matrix(dc.entity);
 
-        // Compile the shader through the tc_shader_ensure_tgfx2 bridge.
-        // This is a separate GL program from the legacy one — ctx2
-        // binds it via bind_shader, legacy TcShader still has its own
-        // program id which is now unused for this pass.
+        // Prepare the shader through the shared material pipeline helper.
+        // The helper owns artifact creation, shader binding, and active
+        // resource-layout selection for the draw.
         tc_shader* raw_shader = tc_shader_get(final_shader);
         if (!raw_shader) {
             ++draw_index;
@@ -918,7 +928,7 @@ void ColorPass::execute_with_data(
         // Extra textures (nodegraph inputs) bind into the currently active
         // pipeline after material textures are in place.
         if (!extra_textures.empty()) {
-            bind_extra_textures(ctx.tex2_reads, ctx2);
+            bind_extra_textures(ctx.tex2_reads, ctx2, raw_shader);
         }
 
         // --- Per-draw data ---
