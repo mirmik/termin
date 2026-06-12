@@ -61,6 +61,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/debug_triangle_pass.cpp
     src/grayscale_pass.cpp
     src/id_pass.cpp
+    src/material_pipeline.cpp
     src/material_ubo_apply.cpp
     src/present_pass.cpp
     src/resolve_pass.cpp
@@ -83,6 +84,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/debug_triangle_pass.hpp
     include/termin/render/grayscale_pass.hpp
     include/termin/render/id_pass.hpp
+    include/termin/render/material_pipeline.hpp
     include/termin/render/material_ubo_apply.hpp
     include/termin/render/present_pass.hpp
     include/termin/render/resolve_pass.hpp

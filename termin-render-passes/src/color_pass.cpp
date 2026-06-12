@@ -1,6 +1,7 @@
 #include "termin/render/color_pass.hpp"
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/frame_uniforms.hpp"
+#include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/shader_binding_policy.hpp"
 #include "termin/render/shader_resource_apply.hpp"
@@ -614,14 +615,29 @@ void ColorPass::execute_with_data(
     // reading from the right slot.
     constexpr uint32_t SHADOW_SLOT_BASE =
         TC_SHADER_RESOURCE_BINDING_SHADOW_MAPS;
+
     // Vulkan descriptor set layout reserves bindings 0..3 for UBOs
     // (lighting, material, per-frame, shadow-block), 4..7 and 9..15
-    // for material samplers, 8 for shadows — see VulkanRenderDevice's
-    // shared layout.
-    // shader_parser writes matching layout(binding=N) qualifiers for
-    // Texture @properties, so the numbered slots stay stable and
-    // backend-neutral.
+    // for material samplers, 8 for shadows. Layout-backed Slang shaders
+    // should resolve resources by name; these numbers are transitional
+    // fallback slots for legacy metadata paths.
     constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
+
+    MaterialPipelineFallbackBindings material_fallback{};
+    material_fallback.shadow_block = SHADOW_UBO_BINDING;
+    material_fallback.material_ubo = MATERIAL_UBO_BINDING;
+    material_fallback.material_texture_base = MATERIAL_TEX_SLOT_BASE;
+    material_fallback.lighting_ubo = LIGHTING_UBO_BINDING;
+    material_fallback.shadow_map_base = SHADOW_SLOT_BASE;
+    material_fallback.max_shadow_maps = MAX_SHADOW_MAPS;
+
+    MaterialPipelineResourceContext material_resources{};
+    material_resources.per_frame = &pf;
+    material_resources.shadow_block = &sb;
+    material_resources.shadow_block_size = static_cast<uint32_t>(sizeof(sb));
+    material_resources.lighting_ubo = lighting_ubo_tgfx2;
+    material_resources.shadow_maps =
+        std::span<const tgfx::TextureHandle>(shadow_tex2s.data(), shadow_tex2s.size());
 
     size_t draw_index = 0;
     for (const auto& dc : cached_draw_calls_) {
@@ -722,13 +738,6 @@ void ColorPass::execute_with_data(
 
             tc_shader* direct_shader = tc_shader_get(final_shader);
             ctx2->use_shader_resource_layout(direct_shader);
-            bind_engine_per_frame_uniforms(*ctx2, pf, direct_shader);
-            bind_shadow_block_for_shader(
-                *ctx2,
-                direct_shader,
-                &sb,
-                sizeof(sb),
-                SHADOW_UBO_BINDING);
 
             ctx2->set_depth_test(state.depth_test);
             ctx2->set_depth_write(state.depth_write);
@@ -739,27 +748,6 @@ void ColorPass::execute_with_data(
             ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
                                    ? tgfx::PolygonMode::Line
                                    : tgfx::PolygonMode::Fill);
-
-            if (lighting_ubo_tgfx2 &&
-                (drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id) ||
-                 (direct_shader && tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)))) {
-                termin::bind_lighting_ubo_for_shader(
-                    *ctx2,
-                    direct_shader,
-                    lighting_ubo_tgfx2,
-                    LIGHTING_UBO_BINDING);
-            }
-
-            if (direct_shader) {
-                apply_material_phase_ubo(phase, direct_shader,
-                                         MATERIAL_UBO_BINDING,
-                                         MATERIAL_TEX_SLOT_BASE,
-                                         device, *ctx2);
-            }
-
-            if (!extra_textures.empty()) {
-                bind_extra_textures(ctx.tex2_reads, ctx2);
-            }
 
             if (!shadow_sampler_) {
                 tgfx::SamplerDesc sd;
@@ -773,13 +761,25 @@ void ColorPass::execute_with_data(
                 sd.compare_op = tgfx::CompareOp::LessEqual;
                 shadow_sampler_ = device.create_sampler(sd);
             }
-            bind_shadow_maps_for_shader(
+
+            MaterialPipelineResourceContext direct_resources = material_resources;
+            direct_resources.shadow_sampler = shadow_sampler_;
+            if (!(drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id) ||
+                  (direct_shader &&
+                   tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)))) {
+                direct_resources.lighting_ubo = {};
+            }
+            prepare_material_pipeline_resources(
                 *ctx2,
+                device,
                 direct_shader,
-                std::span<const tgfx::TextureHandle>(shadow_tex2s.data(), shadow_tex2s.size()),
-                shadow_sampler_,
-                SHADOW_SLOT_BASE,
-                MAX_SHADOW_MAPS);
+                phase,
+                direct_resources,
+                material_fallback);
+
+            if (!extra_textures.empty()) {
+                bind_extra_textures(ctx.tex2_reads, ctx2);
+            }
 
             RenderContext direct_context;
             direct_context.view = view;
@@ -876,45 +876,6 @@ void ColorPass::execute_with_data(
         ctx2->bind_shader(vs2, fs2);
         ctx2->use_shader_resource_layout(raw_shader);
 
-        // --- UBO bindings ---
-        bind_engine_per_frame_uniforms(*ctx2, pf, raw_shader);
-        bind_shadow_block_for_shader(
-            *ctx2,
-            raw_shader,
-            &sb,
-            sizeof(sb),
-            SHADOW_UBO_BINDING);
-
-        // Lighting UBO at slot 0.
-        if (lighting_ubo_tgfx2 &&
-            tc_shader_has_feature(raw_shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
-            termin::bind_lighting_ubo_for_shader(
-                *ctx2,
-                raw_shader,
-                lighting_ubo_tgfx2,
-                LIGHTING_UBO_BINDING);
-        }
-
-        // Material UBO + material textures through the dispatcher.
-        // The C++ variant (not the _gl raw path) is used here because
-        // we are inside a ctx2 pass.
-        apply_material_phase_ubo(phase, raw_shader,
-                                 MATERIAL_UBO_BINDING,
-                                 MATERIAL_TEX_SLOT_BASE,
-                                 device, *ctx2);
-
-        // Extra textures (nodegraph inputs) — bind into the currently
-        // active pipeline after material textures are in place.
-        if (!extra_textures.empty()) {
-            bind_extra_textures(ctx.tex2_reads, ctx2);
-        }
-
-        // Shadow maps as elements of the sampler array at SHADOW_SLOT_BASE,
-        // paired with the depth-compare sampler (sampler2DShadow needs
-        // compareEnable=true on Vulkan and GL_TEXTURE_COMPARE_MODE on
-        // OpenGL's bound sampler object). Filtering is explicit in
-        // shader code; keep the sampler point-filtered so PCF/Poisson do not
-        // get an extra hardware PCF pass underneath.
         if (!shadow_sampler_) {
             tgfx::SamplerDesc sd;
             sd.min_filter = tgfx::FilterMode::Nearest;
@@ -932,13 +893,22 @@ void ColorPass::execute_with_data(
             sd.compare_op = tgfx::CompareOp::LessEqual;
             shadow_sampler_ = device.create_sampler(sd);
         }
-        bind_shadow_maps_for_shader(
+
+        MaterialPipelineResourceContext draw_resources = material_resources;
+        draw_resources.shadow_sampler = shadow_sampler_;
+        prepare_material_pipeline_resources(
             *ctx2,
+            device,
             raw_shader,
-            std::span<const tgfx::TextureHandle>(shadow_tex2s.data(), shadow_tex2s.size()),
-            shadow_sampler_,
-            SHADOW_SLOT_BASE,
-            MAX_SHADOW_MAPS);
+            phase,
+            draw_resources,
+            material_fallback);
+
+        // Extra textures (nodegraph inputs) bind into the currently active
+        // pipeline after material textures are in place.
+        if (!extra_textures.empty()) {
+            bind_extra_textures(ctx.tex2_reads, ctx2);
+        }
 
         // --- Per-draw data ---
         //
