@@ -1,12 +1,12 @@
-"""
-Builtin resources registration.
+"""Builtin resources registration.
 
-Contains functions to register built-in shaders, materials, meshes, and pipelines.
+This module only registers resources that are truly embedded runtime defaults.
+Resources under ``termin/resources/stdlib`` are assets and must be loaded
+through the asset pipeline so their source files stay authoritative.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
@@ -15,93 +15,12 @@ if TYPE_CHECKING:
 from termin.assets.builtin_uuids import BUILTIN_UUIDS
 
 
-def register_default_shader(rm: "ResourceManager") -> None:
-    """Register built-in DefaultShader (Blinn-Phong)."""
-    if "DefaultShader" in rm.shaders:
-        return
-
-    from termin.visualization.render.materials.default_material import DEFAULT_SHADER_TEXT
-    from termin.materials import parse_shader_text
-
-    program = parse_shader_text(DEFAULT_SHADER_TEXT)
-    rm.register_shader("DefaultShader", program, uuid=BUILTIN_UUIDS["DefaultShader"])
-
-
-def register_pbr_shader(rm: "ResourceManager") -> None:
-    """Register built-in PBR shader."""
-    if "CookTorrancePBR" in rm.shaders:
-        return
-
-    from termin.assets.shader_asset import ShaderAsset
-
-    shader_path = (
-        Path(__file__).resolve().parents[1]
-        / "resources"
-        / "stdlib"
-        / "shaders"
-        / "CookTorrancePBR.shader"
-    )
-    shader_asset = ShaderAsset.from_file(shader_path, name="CookTorrancePBR")
-    if shader_asset.program is None:
-        raise RuntimeError(f"Failed to load builtin shader: {shader_path}")
-    rm.register_shader(
-        "CookTorrancePBR",
-        shader_asset.program,
-        source_path=str(shader_path),
-        uuid=BUILTIN_UUIDS["CookTorrancePBR"],
-    )
-
-
-def register_skinned_shader(rm: "ResourceManager") -> None:
-    """Register built-in SkinnedShader for skeletal animation."""
-    if "SkinnedShader" in rm.shaders:
-        return
-
-    from termin.visualization.render.materials.skinned_material import (
-        SKINNED_VERT,
-        SKINNED_FRAG,
-    )
-    from termin.materials import (
-        ShaderMultyPhaseProgramm,
-        ShaderPhase,
-        ShasderStage,
-        MaterialProperty,
-    )
-
-    vertex_stage = ShasderStage("vertex", SKINNED_VERT)
-    fragment_stage = ShasderStage("fragment", SKINNED_FRAG)
-    properties = [
-        MaterialProperty("u_color", "Color", (1.0, 1.0, 1.0, 1.0)),
-        MaterialProperty("u_albedo_texture", "Texture", None),
-        MaterialProperty("u_shininess", "Float", 32.0, 1.0, 2048.0),
-        MaterialProperty("u_emission_color", "Color", (0.0, 0.0, 0.0, 1.0)),
-        MaterialProperty("u_emission_intensity", "Float", 0.0, 0.0, 100.0),
-    ]
-
-    phase = ShaderPhase(
-        phase_mark="opaque",
-        priority=0,
-        gl_depth_mask=True,
-        gl_depth_test=True,
-        gl_blend=False,
-        gl_cull=True,
-        stages={"vertex": vertex_stage, "fragment": fragment_stage},
-        uniforms=properties,
-    )
-
-    program = ShaderMultyPhaseProgramm(
-        program="SkinnedShader",
-        phases=[phase],
-        material_properties=properties,
-    )
-    rm.register_shader("SkinnedShader", program, uuid=BUILTIN_UUIDS["SkinnedShader"])
-
-
 def register_builtin_shaders(rm: "ResourceManager") -> None:
-    """Register all built-in shaders."""
-    register_default_shader(rm)
-    register_pbr_shader(rm)
-    register_skinned_shader(rm)
+    """Register all built-in shaders.
+
+    Material shaders are loaded from stdlib assets, not synthesized here.
+    """
+    return
 
 
 def register_builtin_textures(rm: "ResourceManager") -> None:
@@ -133,89 +52,14 @@ def register_builtin_textures(rm: "ResourceManager") -> None:
 
 
 def register_builtin_materials(rm: "ResourceManager") -> None:
-    """Register built-in materials."""
-    from termin.materials import create_material_from_parsed
-    from termin.assets.texture_handle import (
-        get_normal_texture_handle,
-        get_white_texture_handle,
-    )
+    """Register dependencies for builtin materials.
 
-    # Ensure shaders are registered
+    Builtin material registration intentionally does not synthesize material
+    assets. Standard materials live in ``resources/stdlib/materials`` and must
+    be registered by the asset pipeline from their ``.material`` files.
+    """
     register_builtin_shaders(rm)
     register_builtin_textures(rm)
-
-    white_tex = get_white_texture_handle().get()
-    normal_tex = get_normal_texture_handle().get()
-
-    # DefaultMaterial (Blinn-Phong)
-    if "DefaultMaterial" not in rm.materials:
-        shader = rm.shaders.get("DefaultShader")
-        if shader is not None:
-            mat = create_material_from_parsed(
-                shader,
-                textures={
-                    "u_albedo_texture": white_tex,
-                    "u_metallic_roughness_texture": white_tex,
-                    "u_occlusion_texture": white_tex,
-                    "u_emissive_texture": white_tex,
-                },
-                default_white_texture=white_tex,
-                default_normal_texture=normal_tex,
-            )
-            mat.name = "DefaultMaterial"
-            mat.color = (0.3, 0.85, 0.9, 1.0)
-            rm.register_material("DefaultMaterial", mat, uuid=BUILTIN_UUIDS["DefaultMaterial"])
-
-    # PBRMaterial
-    if "PBRMaterial" not in rm.materials:
-        shader = rm.shaders.get("CookTorrancePBR")
-        if shader is not None:
-            mat = create_material_from_parsed(
-                shader,
-                textures={"u_albedo_texture": white_tex},
-                default_white_texture=white_tex,
-                default_normal_texture=normal_tex,
-            )
-            mat.name = "PBRMaterial"
-            mat.color = (0.8, 0.8, 0.8, 1.0)
-            rm.register_material("PBRMaterial", mat, uuid=BUILTIN_UUIDS["PBRMaterial"])
-
-    # NormalizedPBR is the material contract used by default scenes and GLB
-    # instantiation. Keep it registered as a first-class builtin, not as a
-    # lazy missing-material fallback.
-    if "NormalizedPBR" not in rm.materials:
-        shader = rm.shaders.get("CookTorrancePBR")
-        if shader is not None:
-            mat = create_material_from_parsed(
-                shader,
-                textures={"u_albedo_texture": white_tex},
-                default_white_texture=white_tex,
-                default_normal_texture=normal_tex,
-            )
-            mat.name = "NormalizedPBR"
-            mat.color = (0.8, 0.8, 0.8, 1.0)
-            rm.register_material("NormalizedPBR", mat, uuid=BUILTIN_UUIDS["NormalizedPBR"])
-
-    # GridMaterial (calibration grid)
-    if "GridMaterial" not in rm.materials:
-        from termin.visualization.render.materials.grid_material import GridMaterial
-        mat = GridMaterial(color=(0.8, 0.8, 0.8, 1.0), grid_spacing=1.0, line_width=0.02)
-        mat.name = "GridMaterial"
-        rm.register_material("GridMaterial", mat, uuid=BUILTIN_UUIDS["GridMaterial"])
-
-    # SkinnedMaterial (skeletal animation)
-    if "SkinnedMaterial" not in rm.materials:
-        shader = rm.shaders.get("SkinnedShader")
-        if shader is not None:
-            mat = create_material_from_parsed(
-                shader,
-                textures={"u_albedo_texture": white_tex},
-                default_white_texture=white_tex,
-                default_normal_texture=normal_tex,
-            )
-            mat.name = "SkinnedMaterial"
-            mat.color = (0.8, 0.8, 0.8, 1.0)
-            rm.register_material("SkinnedMaterial", mat, uuid=BUILTIN_UUIDS["SkinnedMaterial"])
 
 
 def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
@@ -294,7 +138,7 @@ def register_triangle_pipeline(rm: "ResourceManager") -> None:
 
 
 def register_all_builtins(rm: "ResourceManager") -> None:
-    """Register all built-in resources (shaders, materials, meshes, pipelines)."""
+    """Register all built-in resources (runtime shaders, textures, meshes, pipelines)."""
     register_builtin_shaders(rm)
     register_builtin_textures(rm)
     register_builtin_materials(rm)

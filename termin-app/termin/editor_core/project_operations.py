@@ -24,7 +24,7 @@ from termin.editor_core.dialog_service import DialogService
 # ======================================================================
 
 _MATERIAL_TEMPLATE = '''{
-    "shader": "DefaultShader",
+    "shader": "BlinnPhong",
     "uniforms": {
     },
     "textures": {

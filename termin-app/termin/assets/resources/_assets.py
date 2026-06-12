@@ -308,26 +308,6 @@ class AssetsMixin:
         names = set(self._shader_assets.keys()) | set(self.shaders.keys())
         return sorted(names)
 
-    def register_default_shader(self) -> None:
-        """Register builtin DefaultShader."""
-        from termin.assets.builtin_resources import register_default_shader
-        register_default_shader(self)
-
-    def register_pbr_shader(self) -> None:
-        """Register builtin PBR shader."""
-        from termin.assets.builtin_resources import register_pbr_shader
-        register_pbr_shader(self)
-
-    def register_advanced_pbr_shader(self) -> None:
-        """Register builtin Advanced PBR shader."""
-        from termin.assets.builtin_resources import register_advanced_pbr_shader
-        register_advanced_pbr_shader(self)
-
-    def register_skinned_shader(self) -> None:
-        """Register builtin SkinnedShader."""
-        from termin.assets.builtin_resources import register_skinned_shader
-        register_skinned_shader(self)
-
     def register_builtin_materials(self) -> None:
         """Register builtin materials."""
         from termin.assets.builtin_resources import register_builtin_materials
