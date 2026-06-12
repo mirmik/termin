@@ -3,6 +3,7 @@
 
 #include <termin/render/id_pass.hpp>
 #include "termin/camera/render_camera_utils.hpp"
+#include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -178,6 +179,30 @@ void IdPass::execute_with_data_tgfx2(
     float pick_g = 0.0f;
     float pick_b = 0.0f;
 
+    auto capture_debug_symbol = [&](const char* entity_name) {
+        if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
+            return;
+        }
+        FrameGraphCapture* capture = debug_capture();
+        if (!capture) {
+            return;
+        }
+
+        ctx.ctx2->end_pass();
+        capture->capture_direct_via_ctx2(ctx.ctx2, color_tex2, rect.width, rect.height);
+        ctx.ctx2->begin_pass(color_tex2, depth_tex2, nullptr, 1.0f, false);
+        ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
+        restore_id_raster_state();
+        ctx.ctx2->clear_resource_bindings();
+        prepare_material_pipeline_resources(
+            *ctx.ctx2,
+            device,
+            id_shader.shader,
+            nullptr,
+            id_resources,
+            id_fallback);
+    };
+
     for (const auto& dc : cached_draw_calls_) {
         Drawable* drawable = nullptr;
         if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
@@ -216,6 +241,7 @@ void IdPass::execute_with_data_tgfx2(
             direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
 
             drawable->draw_tgfx2(*ctx.ctx2, direct_context, phase_name(), nullptr, dc.geometry_id);
+            capture_debug_symbol(name);
             restore_id_raster_state();
             ctx.ctx2->clear_resource_bindings();
             prepare_material_pipeline_resources(
@@ -259,6 +285,7 @@ void IdPass::execute_with_data_tgfx2(
                 draw_resources,
                 id_fallback);
             termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+            capture_debug_symbol(name);
         } else {
             MaterialPipelineShaderBinding skinned_shader{};
             if (!ensure_material_pipeline_shader(
@@ -284,6 +311,7 @@ void IdPass::execute_with_data_tgfx2(
                 mesh,
                 {0, 4, 5},
                 true);
+            capture_debug_symbol(name);
 
             ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(id_shader.shader);
