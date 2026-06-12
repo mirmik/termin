@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from termin.geombase import Vec4
 from termin.materials import TcMaterial, TcRenderState
 from tgfx import TcShader
 
@@ -12,6 +13,10 @@ def _load_pick_shader() -> TcShader:
     shader = TcShader.from_builtin_catalog(PICK_SHADER_UUID)
     if not shader.is_valid:
         raise RuntimeError(f"Failed to load built-in shader '{PICK_SHADER_UUID}'")
+    shader.set_material_ubo_layout(
+        [("u_pickColor", "Vec4", 0, 16)],
+        16,
+    )
     return shader
 
 
@@ -23,6 +28,7 @@ def create_pick_material(name: str = "PickMaterial") -> TcMaterial:
     mat.shader_name = "PickShader"
     phase = mat.add_phase(shader, "pick", 0)
     phase.state = state
+    phase.set_uniform_vec4("u_pickColor", Vec4(1.0, 1.0, 1.0, 1.0))
     return mat
 
 
