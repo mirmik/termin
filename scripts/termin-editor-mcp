@@ -103,6 +103,12 @@ def main() -> int:
     exec_file_parser.add_argument("path", type=Path)
     exec_file_parser.add_argument("--timeout", type=float, default=30.0)
 
+    screenshot_parser = sub.add_parser("screenshot")
+    screenshot_parser.add_argument("--path", default=None)
+    screenshot_parser.add_argument("--include-image", action="store_true")
+    screenshot_parser.add_argument("--no-flip-y", action="store_true")
+    screenshot_parser.add_argument("--timeout", type=float, default=30.0)
+
     args = parser.parse_args()
     session = _load_session(args.session)
 
@@ -135,6 +141,22 @@ def main() -> int:
             {
                 "name": "execute_python_script",
                 "arguments": {"script": script, "timeout": args.timeout},
+            },
+        )
+    elif args.command == "screenshot":
+        arguments: dict[str, Any] = {
+            "include_image": args.include_image,
+            "flip_y": not args.no_flip_y,
+            "timeout": args.timeout,
+        }
+        if args.path is not None:
+            arguments["path"] = args.path
+        response = _call(
+            session,
+            "tools/call",
+            {
+                "name": "capture_editor_screenshot",
+                "arguments": arguments,
             },
         )
     else:
