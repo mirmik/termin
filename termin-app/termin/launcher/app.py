@@ -600,6 +600,7 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
         print("  TERMIN_LAUNCHER_MODE=exec|spawn")
         print("                  Linux default is exec, keeping debugger/profiler attached")
         print("                  to the same process. Windows default is spawn.")
+        sys.stdout.flush()
         return "__help__", None
 
     ui_backend: str | None = None
