@@ -279,6 +279,9 @@ Status:
 - Runtime configuration can come from explicit C++/Python calls or env vars:
   `TERMIN_SHADER_ARTIFACT_ROOT`, `TERMIN_SHADER_CACHE_ROOT`, and
   `TERMIN_SHADERC`.
+- Routine shader artifact/layout debug logging is quiet by default. Set
+  `TERMIN_SHADER_VERBOSE=1` to log sidecar loads, lazy dev-compile commands,
+  and Vulkan source-entry to SPIR-V entry remaps.
 - The dev compiler writes source snapshots under `cache/source/`, backend
   artifacts under the configured artifact root, and a sidecar metadata file
   containing shader hash, language, target, stage, UUID, and version.
