@@ -81,6 +81,7 @@ class EditorFramegraphDebuggerService:
             ),
             "mode": model.mode,
             "selected_pass": model.selected_pass,
+            "selected_pass_index": model.selected_pass_index,
             "selected_symbol": model.selected_symbol,
             "debug_source_resource": model.debug_source_res,
             "resources": resources,
@@ -130,6 +131,61 @@ class EditorFramegraphDebuggerService:
             "target_label": _current_target_label(model),
             "resource": selected_resource,
             "resources": resources,
+            "capture": _capture_summary(model),
+        }
+
+    def prepare_pass_symbol_capture(
+        self,
+        *,
+        target_index: int | None = None,
+        pass_index: int | None = None,
+        pass_name: str | None = None,
+        symbol: str | None = None,
+        symbol_index: int | None = None,
+    ) -> dict[str, object]:
+        """Connect an inside-pass debug capture to a pass internal symbol."""
+        model = self._ensure_model()
+        model.refresh_viewports()
+        if target_index is not None:
+            model.set_viewport_by_index(int(target_index))
+
+        pipeline = model.get_current_pipeline()
+        if pipeline is None:
+            raise RuntimeError("Current framegraph target has no pipeline")
+
+        frame_pass, resolved_pass_index = _resolve_pass(
+            pipeline,
+            pass_index=pass_index,
+            pass_name=pass_name,
+        )
+        symbols = list(frame_pass.get_internal_symbols())
+        if not symbols:
+            raise ValueError(
+                f"Framegraph pass '{frame_pass.pass_name}' has no internal symbols"
+            )
+        resolved_symbol, resolved_symbol_index = _resolve_symbol(
+            symbols,
+            symbol=symbol,
+            symbol_index=symbol_index,
+        )
+
+        model.core.capture.reset_capture()
+        model.core.depth_capture.reset_capture()
+        model.set_mode("inside")
+        model.set_selected_pass_by_index(resolved_pass_index)
+        model.set_selected_symbol(resolved_symbol)
+        if self._on_request_update is not None:
+            self._on_request_update()
+
+        return {
+            "target_index": _index_of_target_source(model.targets, model.current_viewport),
+            "target_label": _current_target_label(model),
+            "pass_index": resolved_pass_index,
+            "pass_name": frame_pass.pass_name,
+            "pass_type": frame_pass.type_name,
+            "symbol": resolved_symbol,
+            "symbol_index": resolved_symbol_index,
+            "symbols": symbols,
             "capture": _capture_summary(model),
         }
 
@@ -255,6 +311,84 @@ def _target_summary(index: int, target: object) -> dict[str, object]:
         "label": target.label,
         "source_type": type(source).__name__,
     }
+
+
+def _resolve_pass(
+    pipeline: object,
+    *,
+    pass_index: int | None,
+    pass_name: str | None,
+) -> tuple[object, int]:
+    passes = list(pipeline.passes)
+    if not passes:
+        raise RuntimeError("Current framegraph pipeline has no passes")
+    if pass_index is not None:
+        resolved_index = int(pass_index)
+        if resolved_index < 0 or resolved_index >= len(passes):
+            raise ValueError(
+                f"Framegraph pass index {resolved_index} is outside 0..{len(passes) - 1}"
+            )
+        frame_pass = passes[resolved_index]
+        if pass_name is not None and frame_pass.pass_name != pass_name:
+            raise ValueError(
+                "Framegraph pass selector mismatch: "
+                f"index {resolved_index} is '{frame_pass.pass_name}', not '{pass_name}'"
+            )
+        return frame_pass, resolved_index
+
+    if pass_name is None:
+        raise ValueError("Either pass_index or pass_name is required")
+
+    matches = [
+        (index, frame_pass)
+        for index, frame_pass in enumerate(passes)
+        if frame_pass.pass_name == pass_name
+    ]
+    if not matches:
+        raise ValueError(f"Framegraph pass '{pass_name}' is not available")
+    if len(matches) > 1:
+        indices = [index for index, _frame_pass in matches]
+        raise ValueError(
+            f"Framegraph pass name '{pass_name}' is ambiguous; use pass_index "
+            f"(matches: {indices})"
+        )
+    resolved_index, frame_pass = matches[0]
+    return frame_pass, resolved_index
+
+
+def _resolve_symbol(
+    symbols: list[str],
+    *,
+    symbol: str | None,
+    symbol_index: int | None,
+) -> tuple[str, int]:
+    if symbol_index is not None:
+        resolved_index = int(symbol_index)
+        if resolved_index < 0 or resolved_index >= len(symbols):
+            raise ValueError(
+                f"Framegraph symbol index {resolved_index} is outside 0..{len(symbols) - 1}"
+            )
+        resolved_symbol = symbols[resolved_index]
+        if symbol is not None and resolved_symbol != symbol:
+            raise ValueError(
+                "Framegraph symbol selector mismatch: "
+                f"index {resolved_index} is '{resolved_symbol}', not '{symbol}'"
+            )
+        return resolved_symbol, resolved_index
+
+    if symbol is None:
+        return symbols[-1], len(symbols) - 1
+
+    matches = [index for index, candidate in enumerate(symbols) if candidate == symbol]
+    if not matches:
+        raise ValueError(f"Framegraph symbol '{symbol}' is not available")
+    if len(matches) > 1:
+        raise ValueError(
+            f"Framegraph symbol '{symbol}' is ambiguous; use symbol_index "
+            f"(matches: {matches})"
+        )
+    resolved_index = matches[0]
+    return symbols[resolved_index], resolved_index
 
 
 def _current_target_label(model: object) -> str | None:

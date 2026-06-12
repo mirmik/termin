@@ -126,6 +126,18 @@ def main() -> int:
     framegraph_capture_parser.add_argument("--no-flip-y", action="store_true")
     framegraph_capture_parser.add_argument("--timeout", type=float, default=30.0)
 
+    framegraph_pass_capture_parser = sub.add_parser("framegraph-pass-capture")
+    framegraph_pass_capture_parser.add_argument("--target-index", type=int, default=None)
+    framegraph_pass_capture_parser.add_argument("--pass-index", type=int, default=None)
+    framegraph_pass_capture_parser.add_argument("--pass-name", default=None)
+    framegraph_pass_capture_parser.add_argument("--symbol", default=None)
+    framegraph_pass_capture_parser.add_argument("--symbol-index", type=int, default=None)
+    framegraph_pass_capture_parser.add_argument("--path", default=None)
+    framegraph_pass_capture_parser.add_argument("--include-image", action="store_true")
+    framegraph_pass_capture_parser.add_argument("--capture-kind", default="main")
+    framegraph_pass_capture_parser.add_argument("--no-flip-y", action="store_true")
+    framegraph_pass_capture_parser.add_argument("--timeout", type=float, default=30.0)
+
     args = parser.parse_args()
     session = _load_session(args.session)
 
@@ -212,6 +224,33 @@ def main() -> int:
             "tools/call",
             {
                 "name": "capture_framegraph_resource",
+                "arguments": arguments,
+            },
+        )
+    elif args.command == "framegraph-pass-capture":
+        arguments = {
+            "include_image": args.include_image,
+            "capture_kind": args.capture_kind,
+            "flip_y": not args.no_flip_y,
+            "timeout": args.timeout,
+        }
+        if args.target_index is not None:
+            arguments["target_index"] = args.target_index
+        if args.pass_index is not None:
+            arguments["pass_index"] = args.pass_index
+        if args.pass_name is not None:
+            arguments["pass_name"] = args.pass_name
+        if args.symbol is not None:
+            arguments["symbol"] = args.symbol
+        if args.symbol_index is not None:
+            arguments["symbol_index"] = args.symbol_index
+        if args.path is not None:
+            arguments["path"] = args.path
+        response = _call(
+            session,
+            "tools/call",
+            {
+                "name": "capture_framegraph_pass_symbol",
                 "arguments": arguments,
             },
         )
