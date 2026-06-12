@@ -82,7 +82,7 @@ class EditorMcpServer:
             "url": self.url,
             "token": self._config.token,
             "started_at": time.time(),
-            "tools": ["execute_python_script"],
+            "tools": ["execute_python_script", "capture_editor_screenshot"],
         }
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,7 +199,7 @@ class EditorMcpServer:
             if method == "ping":
                 return self._rpc_result(request_id, {})
             if method == "tools/list":
-                return self._rpc_result(request_id, {"tools": [self._tool_schema()]})
+                return self._rpc_result(request_id, {"tools": self._tool_schemas()})
             if method == "tools/call":
                 return self._handle_tool_call(request_id, request.get("params"))
             if method == "termin/execute_python":
@@ -226,6 +226,8 @@ class EditorMcpServer:
         if not isinstance(params, dict):
             return self._rpc_error(request_id, -32602, "Invalid params")
         name = params.get("name")
+        if name == "capture_editor_screenshot":
+            return self._handle_screenshot_tool_call(request_id, params)
         if name != "execute_python_script":
             return self._rpc_error(request_id, -32602, f"Unknown tool: {name}")
         arguments = params.get("arguments")
@@ -244,13 +246,137 @@ class EditorMcpServer:
             },
         )
 
+    def _handle_screenshot_tool_call(
+        self,
+        request_id: object,
+        params: dict[str, object],
+    ) -> dict[str, object]:
+        arguments = params.get("arguments")
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return self._rpc_error(request_id, -32602, "Tool arguments must be an object")
+
+        timeout = float(arguments.get("timeout", 30.0))
+        output_path = arguments.get("path")
+        if output_path is not None and not isinstance(output_path, str):
+            return self._rpc_error(request_id, -32602, "Screenshot path must be a string")
+        include_image = bool(arguments.get("include_image", False))
+        flip_y = bool(arguments.get("flip_y", True))
+
+        result = self._capture_editor_screenshot(
+            output_path=output_path,
+            include_image=include_image,
+            flip_y=flip_y,
+            timeout=timeout,
+        )
+        if not result.get("ok", False):
+            error = str(result.get("error", "Screenshot capture failed"))
+            return self._rpc_result(
+                request_id,
+                {
+                    "content": [{"type": "text", "text": error}],
+                    "isError": True,
+                    "structuredContent": result,
+                },
+            )
+
+        path = str(result.get("path", ""))
+        width = int(result.get("width", 0))
+        height = int(result.get("height", 0))
+        content: list[dict[str, object]] = [
+            {
+                "type": "text",
+                "text": f"Captured editor screenshot: {path} ({width}x{height})",
+            }
+        ]
+        image_data = result.get("base64")
+        if isinstance(image_data, str):
+            content.append(
+                {
+                    "type": "image",
+                    "data": image_data,
+                    "mimeType": str(result.get("mime_type", "image/png")),
+                }
+            )
+        return self._rpc_result(
+            request_id,
+            {
+                "content": content,
+                "isError": False,
+                "structuredContent": result,
+            },
+        )
+
     def _execute_python_result(self, script: str, *, timeout: float) -> dict[str, object]:
         return self._result_payload(self._execute_python(script, timeout=timeout))
 
     def _execute_python(self, script: str, *, timeout: float) -> PythonExecutionResult:
         return self._executor.execute_script_from_any_thread(script, timeout=timeout)
 
-    def _tool_schema(self) -> dict[str, object]:
+    def _capture_editor_screenshot(
+        self,
+        *,
+        output_path: str | None,
+        include_image: bool,
+        flip_y: bool,
+        timeout: float,
+    ) -> dict[str, object]:
+        marker = "__TERMIN_MCP_SCREENSHOT_RESULT__"
+        script = "\n".join(
+            [
+                "import json",
+                "from termin.editor_tcgui.editor_screenshot import capture_editor_viewport_screenshot",
+                "_termin_mcp_screenshot_result = capture_editor_viewport_screenshot(",
+                "    editor,",
+                f"    output_path={output_path!r},",
+                f"    include_image={include_image!r},",
+                f"    flip_y={flip_y!r},",
+                ")",
+                f"print({json.dumps(marker)} + json.dumps(_termin_mcp_screenshot_result, ensure_ascii=False))",
+            ]
+        )
+        result = self._execute_python(script, timeout=timeout)
+        if not result.ok:
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": result.error or "Screenshot capture script failed",
+            }
+
+        for line in result.output.splitlines():
+            if not line.startswith(marker):
+                continue
+            try:
+                payload = json.loads(line[len(marker):])
+            except json.JSONDecodeError as exc:
+                return {
+                    "ok": False,
+                    "output": result.output,
+                    "error": f"Invalid screenshot result JSON: {exc}",
+                }
+            if isinstance(payload, dict):
+                payload["ok"] = True
+                return payload
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": "Screenshot result payload is not an object",
+            }
+
+        return {
+            "ok": False,
+            "output": result.output,
+            "error": "Screenshot result marker not found",
+        }
+
+    def _tool_schemas(self) -> list[dict[str, object]]:
+        return [
+            self._execute_python_tool_schema(),
+            self._screenshot_tool_schema(),
+        ]
+
+    def _execute_python_tool_schema(self) -> dict[str, object]:
         return {
             "name": "execute_python_script",
             "description": "Execute a Python script inside the running Termin editor.",
@@ -268,6 +394,37 @@ class EditorMcpServer:
                     },
                 },
                 "required": ["script"],
+                "additionalProperties": False,
+            },
+        }
+
+    def _screenshot_tool_schema(self) -> dict[str, object]:
+        return {
+            "name": "capture_editor_screenshot",
+            "description": "Capture the running editor viewport FBO as a PNG screenshot.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Optional output PNG path. Defaults to /tmp/termin-editor-screenshots/.",
+                    },
+                    "include_image": {
+                        "type": "boolean",
+                        "description": "Return base64 PNG data as MCP image content.",
+                        "default": False,
+                    },
+                    "flip_y": {
+                        "type": "boolean",
+                        "description": "Flip framebuffer rows vertically before writing PNG.",
+                        "default": True,
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Seconds to wait for the editor thread to capture the screenshot.",
+                        "default": 30,
+                    },
+                },
                 "additionalProperties": False,
             },
         }

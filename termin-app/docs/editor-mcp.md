@@ -43,6 +43,7 @@ The repository includes a small local client:
 scripts/termin-editor-mcp tools-list
 scripts/termin-editor-mcp exec 'print(project_path)'
 scripts/termin-editor-mcp exec-file /tmp/probe_editor.py
+scripts/termin-editor-mcp screenshot --path /tmp/editor.png
 ```
 
 The Python namespace contains:
@@ -59,3 +60,16 @@ The Python namespace contains:
 
 Scripts are queued from the MCP server thread and executed by the editor loop on
 the main editor thread.
+
+## Tools
+
+`execute_python_script` executes Python inside the editor namespace. It is meant
+for diagnostics and automation while the editor is running.
+
+`capture_editor_screenshot` captures the editor viewport FBO as a PNG file. It
+accepts:
+
+- `path`: optional output path. Defaults to `/tmp/termin-editor-screenshots/`.
+- `include_image`: when true, returns the PNG as MCP image content.
+- `flip_y`: flips framebuffer rows vertically before saving. Enabled by default.
+- `timeout`: seconds to wait for the editor thread to complete the capture.
