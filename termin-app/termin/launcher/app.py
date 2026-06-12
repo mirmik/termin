@@ -150,6 +150,54 @@ def _find_editor_executable() -> str | None:
     return None
 
 
+def _editor_launch_env(editor_exe: str) -> dict[str, str]:
+    env = os.environ.copy()
+    lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
+    if os.name == "nt":
+        prev = env.get("PATH", "")
+        env["PATH"] = f"{lib_dir}{os.pathsep}{prev}" if prev else lib_dir
+    else:
+        prev = env.get("LD_LIBRARY_PATH", "")
+        env["LD_LIBRARY_PATH"] = f"{lib_dir}{os.pathsep}{prev}" if prev else lib_dir
+    return env
+
+
+def _launcher_mode() -> str:
+    mode = os.environ.get("TERMIN_LAUNCHER_MODE", "").strip().lower()
+    if not mode:
+        return "spawn" if os.name == "nt" else "exec"
+    if mode not in {"exec", "spawn"}:
+        log.warning(f"Unsupported TERMIN_LAUNCHER_MODE={mode!r}, using spawn")
+        return "spawn"
+    if mode == "exec" and os.name == "nt":
+        log.warning("TERMIN_LAUNCHER_MODE=exec is not supported on Windows, using spawn")
+        return "spawn"
+    return mode
+
+
+def _launch_editor_process(editor_exe: str, project_path: str) -> bool:
+    """Transfer control to termin_editor.
+
+    The default Linux path uses exec so debugger/profiler sessions attached to
+    termin_launcher continue with termin_editor under the same process id.
+    Set TERMIN_LAUNCHER_MODE=spawn to keep the historical detached launch.
+    """
+    env = _editor_launch_env(editor_exe)
+    args = [editor_exe, project_path]
+    mode = _launcher_mode()
+    log.info(f"Launching editor: {editor_exe} for project {project_path} mode={mode}")
+    if mode == "exec":
+        sys.stdout.flush()
+        sys.stderr.flush()
+        try:
+            os.execvpe(editor_exe, args, env)
+        except OSError as exc:
+            log.error(f"Failed to exec termin_editor: {exc}")
+        return False
+    subprocess.Popen(args, env=env)
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Launcher app
 # ---------------------------------------------------------------------------
@@ -510,13 +558,7 @@ class LauncherApp:
         write_launch_project(project_path)
         self.recent.add(project_path)
 
-        log.info(f"Launching editor: {editor_exe} for project {project_path}")
-        env = os.environ.copy()
-        lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
-        prev = env.get("LD_LIBRARY_PATH", "")
-        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
-        subprocess.Popen([editor_exe], env=env)
-        self.should_quit = True
+        self.should_quit = _launch_editor_process(editor_exe, project_path)
 
     def _on_open_project(self) -> None:
         """Handle 'Open Existing...' button — file dialog for .terminproj."""
@@ -553,6 +595,11 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
         print("Options:")
         print("  --ui=tcgui      Accepted for compatibility; tcgui is the only editor UI")
         print("  -h, --help      Show this help message and exit")
+        print()
+        print("Environment:")
+        print("  TERMIN_LAUNCHER_MODE=exec|spawn")
+        print("                  Linux default is exec, keeping debugger/profiler attached")
+        print("                  to the same process. Windows default is spawn.")
         return "__help__", None
 
     ui_backend: str | None = None
@@ -593,12 +640,7 @@ def run():
         if editor_exe is None:
             log.error("Cannot find termin_editor executable")
             return
-        log.info(f"Launching editor: {editor_exe} for project {project}")
-        env = os.environ.copy()
-        lib_dir = os.path.normpath(os.path.join(os.path.dirname(editor_exe), "..", "lib"))
-        prev = env.get("LD_LIBRARY_PATH", "")
-        env["LD_LIBRARY_PATH"] = f"{lib_dir}:{prev}" if prev else lib_dir
-        subprocess.Popen([editor_exe], env=env)
+        _launch_editor_process(editor_exe, project)
         return
 
     configure_sdk_shader_runtime("launcher")
