@@ -7,7 +7,7 @@ Usage:
 Defaults:
     threshold  2000
     dir        project root
-    exclude    .git, node_modules, __pycache__, .venv, build, dist, thirdparty
+    exclude    .git, node_modules, __pycache__, .venv, build, dist, thirdparty, termin-thirdparty
 """
 
 import argparse
@@ -25,6 +25,7 @@ DEFAULT_EXCLUDES = (
     "build",
     "dist",
     "thirdparty",
+    "termin-thirdparty",
 )
 
 
@@ -84,7 +85,7 @@ def main() -> None:
 
         for fname in filenames:
             fpath = Path(dirpath) / fname
-            if fpath.suffix == ".pyc":
+            if fpath.suffix in (".pyc", ".png"):
                 continue
             lines = count_lines(fpath)
             if lines >= args.threshold:
