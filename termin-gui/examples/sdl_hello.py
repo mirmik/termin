@@ -17,7 +17,7 @@ from tcgui.widgets.basic import Label, Button, TextInput
 from tcgui.widgets.containers import VStack, Panel
 from tcgui.widgets.units import px, pct
 from termin.display import SDLBackendWindow
-from tgfx import Tgfx2Context
+from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
 _KEY_MAP = {
@@ -125,6 +125,7 @@ def build_ui(graphics):
 # --- Main ---
 
 def main():
+    configure_default_shader_runtime("examples")
     window = SDLBackendWindow("tcgui SDL Example", 800, 500)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 

@@ -20,7 +20,7 @@ from tcgui.widgets.ui import UI
 from tcgui.widgets.units import pct
 from tcgui.widgets.vstack import VStack
 from termin.display import SDLBackendWindow
-from tgfx import Tgfx2Context
+from tgfx import Tgfx2Context, configure_default_shader_runtime
 
 
 _KEY_MAP = {
@@ -128,6 +128,7 @@ def build_ui(graphics) -> UI:
 
 
 def main():
+    configure_default_shader_runtime("examples")
     window = SDLBackendWindow("tcgui scene items demo", 1200, 800)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
     try:
