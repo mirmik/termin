@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -44,8 +45,33 @@ struct TcShaderEqual {
     }
 };
 
-// Static cache: original shader -> skinned shader
-static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> s_skinned_shader_cache;
+struct SkinnedShaderCacheKey {
+    TcShader shader;
+    std::string phase_mark;
+};
+
+struct SkinnedShaderCacheKeyHash {
+    size_t operator()(const SkinnedShaderCacheKey& key) const {
+        TcShaderHash shader_hash;
+        return shader_hash(key.shader)
+            ^ (std::hash<std::string>()(key.phase_mark) << 1);
+    }
+};
+
+struct SkinnedShaderCacheKeyEqual {
+    bool operator()(const SkinnedShaderCacheKey& a, const SkinnedShaderCacheKey& b) const {
+        TcShaderEqual shader_equal;
+        return shader_equal(a.shader, b.shader)
+            && a.phase_mark == b.phase_mark;
+    }
+};
+
+// Static cache: (original shader, phase mark) -> skinned shader
+static std::unordered_map<
+    SkinnedShaderCacheKey,
+    TcShader,
+    SkinnedShaderCacheKeyHash,
+    SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
 
 static const tc_shader_resource_binding* find_bone_block_resource(const tc_shader* shader) {
     if (!shader) {
@@ -166,6 +192,9 @@ TcShader SkinnedMeshRenderer::override_shader(
     if (!_skeleton_controller.valid() || !original_shader.is_valid()) {
         return original_shader;
     }
+    if (original_shader.variant_op() == TC_SHADER_VARIANT_SKINNING) {
+        return original_shader;
+    }
 
     // Check if shader already has skinning
     const char* vert_source = original_shader.vertex_source();
@@ -174,7 +203,8 @@ TcShader SkinnedMeshRenderer::override_shader(
     }
 
     // Check C++ cache first
-    auto it = s_skinned_shader_cache.find(original_shader);
+    SkinnedShaderCacheKey cache_key{original_shader, phase_mark};
+    auto it = s_skinned_shader_cache.find(cache_key);
     if (it != s_skinned_shader_cache.end()) {
         TcShader& cached = it->second;
         // Check if variant is stale (original shader was modified)
@@ -186,9 +216,9 @@ TcShader SkinnedMeshRenderer::override_shader(
     }
 
     // Use C++ skinning injection
-    TcShader skinned = get_skinned_shader(original_shader);
+    TcShader skinned = get_skinned_shader(phase_mark, original_shader);
     if (skinned.is_valid()) {
-        s_skinned_shader_cache[original_shader] = skinned;
+        s_skinned_shader_cache[cache_key] = skinned;
         return skinned;
     }
 
@@ -209,6 +239,9 @@ void SkinnedMeshRenderer::collect_shader_usages(
     if (!original_shader.is_valid()) {
         return;
     }
+    if (original_shader.variant_op() == TC_SHADER_VARIANT_SKINNING) {
+        return;
+    }
 
     const char* vert_source = original_shader.vertex_source();
     if (!vert_source || vert_source[0] == '\0') {
@@ -218,7 +251,7 @@ void SkinnedMeshRenderer::collect_shader_usages(
         return;
     }
 
-    TcShader skinned = get_skinned_shader(original_shader);
+    TcShader skinned = get_skinned_shader(phase_mark, original_shader);
     if (skinned.is_valid()) {
         emit(skinned);
     }

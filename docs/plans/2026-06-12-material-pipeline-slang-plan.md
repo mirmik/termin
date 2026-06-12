@@ -33,13 +33,18 @@ Current implementation checkpoint:
   compatibility alias to the canonical render-components native class.
 - Legacy `shader_skinning` ownership moved out of `termin-render-passes` and
   into `termin-components-render` with the renderer that still uses it.
+- Slang skinning now uses engine-authored vertex transform templates for
+  material, shadow, depth, id, and normal variants. `SkinnedMeshRenderer`
+  selects the template by phase/pass, keeps the original fragment stage, binds
+  `bone_block` by reflected draw-scope name, and avoids creating variants of
+  variants.
+- Skinned pass-only draws use shader-owned vertex input reflection, so compact
+  pass shaders can declare only the inputs they consume instead of depending on
+  full material vertex locations.
 - The material pipeline helper lives in `termin-render`, not
   `termin-render-passes`, so lower component renderers can share it without
   depending on concrete pass modules.
-- This checkpoint intentionally does not generate vertex transform variants
-  yet; it centralizes frame/pass/material resource binding first so static
-  mesh, skinning, foliage, and line paths can move to the same entry point
-  incrementally.
+- Regex-based skinning remains only as a transitional legacy GLSL path.
 
 The current engine already has the pieces needed for the target direction:
 Slang built-in shaders, sidecar resource metadata, `TerminScope`, runtime
@@ -149,25 +154,31 @@ old metadata.
 Static, skinned, and foliage rendering need a shared logical vertex transform
 layer.
 
-Current first step:
+Current checkpoint:
 
 - `termin_vertex_transform.slang` defines static and skinned input/output
-  structs and helper functions.
+  structs and helper functions, including reusable skinned position/normal
+  transforms.
 - `SkinnedMeshRenderer` binds `bone_block` by name when layout metadata exists.
 - `termin_shaderc` maps `bone_block` as draw-scope metadata and prevents it
   from colliding with `draw_data`.
-- `SkinnedMeshRenderer` now lives in `termin-components-render`, so the next
-  Slang variant step can be implemented without reaching into editor/app code.
+- `SkinnedMeshRenderer` now lives in `termin-components-render`.
+- Built-in Slang skinning templates cover material, shadow, depth, id, and
+  normal passes. They replace only the vertex stage and preserve the selected
+  material/pass fragment stage.
+- Pass-specific skinned mesh paths opt into shader-owned vertex input mapping,
+  so `position/joints/weights` and `position/normal/joints/weights` compact
+  shaders do not need to fake unused material inputs.
 
 Target next step:
 
-- material variants should select a vertex transform entry point instead of
-  injecting or replacing source text;
+- move from per-template selection to the shared material-pipeline assembly
+  point, so the same mechanism can select static, skinned, foliage, and later
+  morph/particle vertex transform variants;
 - the renderer should use shader-owned vertex input reflection for mesh,
   skinning, and foliage instance attributes;
-- `shader_skinning.cpp` regex injection should be retired;
-- skinning should be expressed as a Slang variant that declares
-  `[[TerminScope("draw")]] ConstantBuffer<TerminBoneBlock> bone_block;`.
+- `shader_skinning.cpp` regex injection should be retired after legacy GLSL
+  users are gone.
 
 This is conceptually a stage before the material fragment logic, but it is not
 a GPU stage after the vertex shader. It is a source/module composition step
@@ -227,8 +238,10 @@ Slang modules, but their resources should follow the same scope/name rules.
    vertex output to fragment input.
 
 4. Replace skinning regex injection.
-   Generate or select Slang vertex transform variants and bind `bone_block` by
-   name. Remove fixed binding assumptions from the renderer path.
+   Status: Slang material/pass skinning variants now select engine-authored
+   vertex transform templates and bind `bone_block` by name. Remaining work is
+   to retire the legacy GLSL injector once no migrated path depends on it, and
+   to move template selection into the common material-pipeline assembly point.
 
 5. Convert foliage to the same variant model.
    `foliage_draw` and `foliage_instances` must be reflected resources. The
@@ -256,8 +269,8 @@ Slang modules, but their resources should follow the same scope/name rules.
 
 ## Current Smells To Remove
 
-- `shader_skinning.cpp` edits shader source with regex and encodes a binding
-  ABI in generated GLSL.
+- `shader_skinning.cpp` still edits shader source with regex for legacy GLSL.
+  Migrated Slang skinning uses templates and reflected `bone_block` binding.
 - Foliage still creates renderer-specific shader variants instead of selecting
   a shared vertex transform contract.
 - `WorldBillboard` line rendering still uses the older fragment-only variant

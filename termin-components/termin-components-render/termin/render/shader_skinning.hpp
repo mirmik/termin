@@ -14,6 +14,7 @@ std::string inject_skinning_into_vertex_shader(const std::string& vertex_source)
 
 // Get or create a skinned variant of a shader.
 // Returns skinned shader, or invalid shader if injection fails.
+TcShader get_skinned_shader(const std::string& phase_mark, TcShader original_shader);
 TcShader get_skinned_shader(TcShader original_shader);
 
 } // namespace termin

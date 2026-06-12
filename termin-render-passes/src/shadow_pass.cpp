@@ -561,8 +561,11 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-                    // Skinning VS reads a_position (0) + joints/weights.
-                    termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 6, 7});
+                    termin::draw_tc_mesh(
+                        *ctx.ctx2,
+                        mesh,
+                        {0, 4, 5},
+                        true);
 
                     // Next mesh-backed draw must re-bind the base shadow
                     // shader; skinning variant left its own program bound.
