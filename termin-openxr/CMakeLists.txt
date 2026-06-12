@@ -98,6 +98,8 @@ else()
 endif()
 
 set(TERMIN_OPENXR_SOURCES
+    src/openxr_android_runtime.cpp
+    src/openxr_math.cpp
     src/openxr_runtime.cpp
 )
 
