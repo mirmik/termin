@@ -9,6 +9,7 @@
 
 #include <tgfx/tgfx_material_handle.hpp>
 
+#include <algorithm>
 #include <termin/bindings/entity_helpers.hpp>
 #include <termin/camera/camera_component.hpp>
 #include <termin/lighting/light_component.hpp>
@@ -18,6 +19,8 @@
 #include <termin/render/material_pass.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/normal_pass.hpp>
+#include <termin/render/skeleton_controller.hpp>
+#include <termin/render/skinned_mesh_renderer.hpp>
 #include <termin/xr/xr_origin_component.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <tcbase/tc_log.hpp>
@@ -197,6 +200,7 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.lighting._lighting_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
+    nb::module_::import_("termin.skeleton._components_skeleton_native");
     nb::module_::import_("termin.viewport._viewport_native");
 
     nb::class_<CameraComponent, CxxComponent>(m, "CameraComponent")
@@ -531,6 +535,69 @@ NB_MODULE(_components_render_native, m) {
             std::string pm = nb::cast<std::string>(phase_mark);
             return self.get_geometry_draws(&pm);
         }, nb::arg("phase_mark") = nb::none());
+
+    nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<SkinnedMeshRenderer>(self);
+        })
+        .def("__init__", [](nb::handle self,
+                            nb::object mesh_arg,
+                            nb::object material_arg,
+                            SkeletonController* skeleton_controller,
+                            bool cast_shadow) {
+            cxx_component_init<SkinnedMeshRenderer>(self);
+            auto* cpp = nb::inst_ptr<SkinnedMeshRenderer>(self);
+            cpp->cast_shadow = cast_shadow;
+
+            if (!mesh_arg.is_none()) {
+                if (nb::isinstance<TcMesh>(mesh_arg)) {
+                    cpp->set_mesh(nb::cast<TcMesh>(mesh_arg));
+                } else if (nb::isinstance<nb::str>(mesh_arg)) {
+                    cpp->set_mesh_by_name(nb::cast<std::string>(mesh_arg));
+                }
+            }
+
+            if (!material_arg.is_none()) {
+                if (nb::isinstance<TcMaterial>(material_arg)) {
+                    cpp->material = nb::cast<TcMaterial>(material_arg);
+                } else if (nb::isinstance<nb::str>(material_arg)) {
+                    cpp->set_material_by_name(nb::cast<std::string>(material_arg));
+                }
+            }
+
+            if (skeleton_controller != nullptr) {
+                cpp->set_skeleton_controller(skeleton_controller);
+            }
+        },
+            nb::arg("mesh") = nb::none(),
+            nb::arg("material") = nb::none(),
+            nb::arg("skeleton_controller") = nullptr,
+            nb::arg("cast_shadow") = true)
+        .def_rw("_skeleton_controller", &SkinnedMeshRenderer::_skeleton_controller)
+        .def_prop_rw("skeleton_controller",
+            &SkinnedMeshRenderer::skeleton_controller,
+            &SkinnedMeshRenderer::set_skeleton_controller,
+            nb::rv_policy::reference)
+        .def_prop_ro("skeleton_instance",
+            &SkinnedMeshRenderer::skeleton_instance,
+            nb::rv_policy::reference)
+        .def("update_bone_matrices", &SkinnedMeshRenderer::update_bone_matrices)
+        .def_ro("_bone_count", &SkinnedMeshRenderer::_bone_count)
+        .def("get_bone_matrices_flat", [](SkinnedMeshRenderer& self) {
+            if (self._bone_count == 0) {
+                size_t shape[3] = {0, 4, 4};
+                return nb::ndarray<nb::numpy, float>(nullptr, 3, shape);
+            }
+
+            size_t data_size = self._bone_count * 16;
+            float* buf = new float[data_size];
+            std::copy(self._bone_matrices_flat.data(),
+                      self._bone_matrices_flat.data() + data_size,
+                      buf);
+            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<float*>(p); });
+            size_t shape[3] = {static_cast<size_t>(self._bone_count), 4, 4};
+            return nb::ndarray<nb::numpy, float>(buf, 3, shape, owner);
+        });
 
     nb::enum_<LineRenderMode>(m, "LineRenderMode")
         .value("WorldBillboard", LineRenderMode::WorldBillboard)

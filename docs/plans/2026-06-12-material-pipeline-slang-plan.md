@@ -28,8 +28,14 @@ Current implementation checkpoint:
   material fragment contract, and `tgfx2::WorldTubeLineRenderer` accepts
   caller-owned shader/layout/resource binding instead of forcing an internal
   line shader layout for material draws.
-- The helper now lives in `termin-render`, not `termin-render-passes`, so lower
-  component renderers can share it without depending on concrete pass modules.
+- `SkinnedMeshRenderer` ownership moved from `termin-app` to
+  `termin-components-render`; the old `termin._native.render` binding is now a
+  compatibility alias to the canonical render-components native class.
+- Legacy `shader_skinning` ownership moved out of `termin-render-passes` and
+  into `termin-components-render` with the renderer that still uses it.
+- The material pipeline helper lives in `termin-render`, not
+  `termin-render-passes`, so lower component renderers can share it without
+  depending on concrete pass modules.
 - This checkpoint intentionally does not generate vertex transform variants
   yet; it centralizes frame/pass/material resource binding first so static
   mesh, skinning, foliage, and line paths can move to the same entry point
@@ -150,6 +156,8 @@ Current first step:
 - `SkinnedMeshRenderer` binds `bone_block` by name when layout metadata exists.
 - `termin_shaderc` maps `bone_block` as draw-scope metadata and prevents it
   from colliding with `draw_data`.
+- `SkinnedMeshRenderer` now lives in `termin-components-render`, so the next
+  Slang variant step can be implemented without reaching into editor/app code.
 
 Target next step:
 
