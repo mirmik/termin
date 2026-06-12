@@ -23,6 +23,11 @@ Current implementation checkpoint:
 - `FoliageLayerComponent` prepares instanced foliage shaders and material
   resources through the same helper; foliage-specific draw resources still bind
   explicitly by logical name.
+- `LineRenderer` has the first `WorldTube` integration slice: tube body/cap
+  material variants now combine the procedural line vertex contract with the
+  material fragment contract, and `tgfx2::WorldTubeLineRenderer` accepts
+  caller-owned shader/layout/resource binding instead of forcing an internal
+  line shader layout for material draws.
 - The helper now lives in `termin-render`, not `termin-render-passes`, so lower
   component renderers can share it without depending on concrete pass modules.
 - This checkpoint intentionally does not generate vertex transform variants
@@ -247,6 +252,9 @@ Slang modules, but their resources should follow the same scope/name rules.
   ABI in generated GLSL.
 - Foliage still creates renderer-specific shader variants instead of selecting
   a shared vertex transform contract.
+- `WorldBillboard` line rendering still uses the older fragment-only variant
+  path; `WorldTube` is the first line mode moved toward combined material
+  variants.
 - Some renderers still know numeric fallback slots or fixed vertex locations
   for legacy paths.
 - Some tests still assert numeric `kind`/`scope` enum values instead of

@@ -803,6 +803,42 @@ void ColorPass::execute_with_data(
             direct_context.viewport_width = rect.width;
             direct_context.viewport_height = rect.height;
             direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
+            direct_context.prepare_tgfx2_material_resources =
+                [this,
+                 &device,
+                 &material_resources,
+                 &material_fallback,
+                 &ctx,
+                 drawable,
+                 geometry_id = dc.geometry_id](
+                    tgfx::RenderContext2& draw_ctx,
+                    const tc_shader* shader,
+                    tc_material_phase* live_phase) {
+                    if (!shader || !live_phase) {
+                        tc::Log::error(
+                            "[ColorPass/tgfx2] direct drawable resource callback called without shader or phase");
+                        return;
+                    }
+
+                    MaterialPipelineResourceContext direct_resources = material_resources;
+                    direct_resources.shadow_sampler = shadow_sampler_;
+                    if (!(drawable->needs_lighting_ubo_tgfx2(phase_mark, geometry_id) ||
+                          tc_shader_has_feature(shader, TC_SHADER_FEATURE_LIGHTING_UBO))) {
+                        direct_resources.lighting_ubo = {};
+                    }
+
+                    prepare_material_pipeline_resources(
+                        draw_ctx,
+                        device,
+                        shader,
+                        live_phase,
+                        direct_resources,
+                        material_fallback);
+
+                    if (!extra_textures.empty()) {
+                        bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
+                    }
+                };
 
             if (drawable->draw_tgfx2(*ctx2, direct_context, phase_mark, phase, dc.geometry_id)) {
                 ++draw_index;
