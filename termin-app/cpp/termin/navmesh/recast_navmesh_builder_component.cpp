@@ -3,10 +3,8 @@
 #include "navmesh_keeper_component.hpp"
 #include "off_mesh_link_component.hpp"
 #include <components/mesh_component.hpp>
-#include <termin/materials/shader_parser.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/tc_scene.hpp>
-#include <tgfx2/builtin_shader_sources.hpp>
 #include <DetourAlloc.h>
 #include <DetourNavMesh.h>
 #include <DetourNavMeshBuilder.h>
@@ -805,11 +803,11 @@ void RecastNavMeshBuilderComponent::build_input_mesh(const float* verts, int nve
     if (!verts || nverts == 0 || !tris || ntris == 0) return;
 
     // Vertex layout: position (vec3) + color (vec4)
-    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    // Debug shader attribute locations: 0=position, 1=color
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     struct Vertex {
         float pos[3];
@@ -887,11 +885,11 @@ void RecastNavMeshBuilderComponent::build_heightfield_mesh() {
         hf.width, hf.height, hf.cs, hf.ch);
 
     // Vertex layout: position (vec3) + color (vec4)
-    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    // Debug shader attribute locations: 0=position, 1=color
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     struct Vertex {
         float pos[3];
@@ -983,11 +981,11 @@ void RecastNavMeshBuilderComponent::build_regions_mesh() {
         chf.width, chf.height, chf.span_count);
 
     // Vertex layout: position (vec3) + color (vec4)
-    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    // Debug shader attribute locations: 0=position, 1=color
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     struct Vertex {
         float pos[3];
@@ -1126,11 +1124,11 @@ void RecastNavMeshBuilderComponent::build_distance_field_mesh() {
         chf.width, chf.height, chf.span_count, max_dist);
 
     // Vertex layout: position (vec3) + color (vec4)
-    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    // Debug shader attribute locations: 0=position, 1=color
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     struct Vertex {
         float pos[3];
@@ -1258,11 +1256,11 @@ void RecastNavMeshBuilderComponent::build_contours_mesh() {
     tc_log_info("[NavMesh] Contours debug: %zu contours", cset.contours.size());
 
     // Vertex layout: position (vec3) + color (vec4)
-    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    // Debug shader attribute locations: 0=position, 1=color
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     struct Vertex {
         float pos[3];
@@ -1377,11 +1375,11 @@ void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
         pmesh.nverts, pmesh.npolys, pmesh.nvp);
 
     // Vertex layout: position (vec3) + color (vec4)
-    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    // Debug shader attribute locations: 0=position, 1=color
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     struct Vertex {
         float pos[3];
@@ -1503,11 +1501,11 @@ void RecastNavMeshBuilderComponent::build_detail_mesh_debug() {
         dmesh.nmeshes, dmesh.nverts, dmesh.ntris);
 
     // Vertex layout: position (vec3) + color (vec4)
-    // Standard attribute locations: 0=position, 1=normal, 2=uv, 3=tangent/joints, 4=weights, 5=color
+    // Debug shader attribute locations: 0=position, 1=color
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     struct Vertex {
         float pos[3];
@@ -1622,34 +1620,15 @@ TcMaterial RecastNavMeshBuilderComponent::get_debug_material() {
             return _debug_material;
         }
 
-        const std::string vertex_source =
-            tgfx::load_builtin_shader_stage_source_from_catalog(
-                NAVMESH_DEBUG_SHADER_UUID,
-                "vertex");
-        const std::string fragment_source =
-            tgfx::load_builtin_shader_stage_source_from_catalog(
-                NAVMESH_DEBUG_SHADER_UUID,
-                "fragment");
-        if (vertex_source.empty() || fragment_source.empty()) {
-            tc_log_error("[NavMesh] Failed to load debug shader '%s'", NAVMESH_DEBUG_SHADER_UUID);
-            return _debug_material;
-        }
-
         tc_render_state state = tc_render_state_opaque();
         state.depth_test = 1;
         state.depth_write = 0;
         state.cull = 0;  // No culling for debug mesh
         state.blend = 0;
 
-        std::string vertex_stage = rewrite_engine_uniforms_for_stage_source(
-            vertex_source, "vertex");
-        std::string fragment_stage = rewrite_engine_uniforms_for_stage_source(
-            fragment_source, "fragment");
-
-        tc_material_phase* phase = _debug_material.add_phase_from_sources(
-            vertex_stage.c_str(),
-            fragment_stage.c_str(),
-            nullptr,  // no geometry shader
+        tc_material_phase* phase = add_builtin_slang_debug_phase(
+            _debug_material,
+            NAVMESH_DEBUG_SHADER_UUID,
             "navmesh_debug_shader",
             NAVMESH_DEBUG_PHASE,
             0,  // priority

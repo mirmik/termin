@@ -1,6 +1,5 @@
 #include "detour_navmesh_asset_utils.hpp"
 
-#include <termin/materials/shader_parser.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <DetourNavMesh.h>
@@ -10,6 +9,8 @@
 #include <algorithm>
 #include <any>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <iomanip>
 #include <iterator>
 #include <memory>
@@ -23,6 +24,45 @@ const char* const NAVMESH_DEBUG_PHASE = "editor_debug";
 namespace {
 
 constexpr const char* NAVMESH_DEBUG_SHADER_UUID = "termin-engine-navmesh-debug";
+
+char* duplicate_c_string(const char* value) {
+    if (!value) return nullptr;
+    const size_t size = std::strlen(value) + 1;
+    char* copy = static_cast<char*>(std::malloc(size));
+    if (!copy) return nullptr;
+    std::memcpy(copy, value, size);
+    return copy;
+}
+
+bool set_debug_shader_entries(tc_material_phase* phase, const char* shader_name) {
+    if (!phase || tc_shader_handle_is_invalid(phase->shader)) {
+        tc_log_error("[NavMesh] cannot set debug shader entries for '%s': phase shader is invalid", shader_name);
+        return false;
+    }
+
+    TcShader shader(phase->shader);
+    tc_shader* raw = shader.get();
+    if (!raw) {
+        tc_log_error("[NavMesh] cannot set debug shader entries for '%s': shader data is missing", shader_name);
+        return false;
+    }
+
+    free(raw->vertex_entry);
+    raw->vertex_entry = duplicate_c_string("vs_main");
+    if (!raw->vertex_entry) {
+        tc_log_error("[NavMesh] failed to set vertex entry for debug shader '%s'", shader_name);
+        return false;
+    }
+
+    free(raw->fragment_entry);
+    raw->fragment_entry = duplicate_c_string("fs_main");
+    if (!raw->fragment_entry) {
+        tc_log_error("[NavMesh] failed to set fragment entry for debug shader '%s'", shader_name);
+        return false;
+    }
+
+    return true;
+}
 
 struct NavMeshHandleKindRegistrar {
     NavMeshHandleKindRegistrar() {
@@ -59,6 +99,58 @@ NavMeshHandleKindRegistrar navmesh_handle_kind_registrar;
 
 
 } // namespace
+
+tc_material_phase* add_builtin_slang_debug_phase(
+    TcMaterial& material,
+    const char* shader_uuid,
+    const char* shader_name,
+    const char* phase_mark,
+    int priority,
+    const tc_render_state& state
+) {
+    if (!material.is_valid()) {
+        tc_log_error("[NavMesh] cannot add debug shader '%s': material is invalid", shader_name);
+        return nullptr;
+    }
+
+    const std::string vertex_source =
+        tgfx::load_builtin_shader_stage_source_from_catalog(shader_uuid, "vertex");
+    const std::string fragment_source =
+        tgfx::load_builtin_shader_stage_source_from_catalog(shader_uuid, "fragment");
+    if (vertex_source.empty() || fragment_source.empty()) {
+        tc_log_error("[NavMesh] Failed to load debug shader '%s'", shader_uuid);
+        return nullptr;
+    }
+
+    tc_material_phase* phase = material.add_phase_from_sources(
+        vertex_source.c_str(),
+        fragment_source.c_str(),
+        nullptr,
+        shader_name,
+        phase_mark,
+        priority,
+        state,
+        nullptr,
+        TC_SHADER_LANGUAGE_SLANG,
+        TC_SHADER_ARTIFACT_REQUIRED
+    );
+
+    if (!phase) {
+        tc_log_error("[NavMesh] Failed to add phase to debug material for shader '%s'", shader_name);
+        return nullptr;
+    }
+
+    if (!set_debug_shader_entries(phase, shader_name)) {
+        tc_shader_handle shader = phase->shader;
+        phase->shader = tc_shader_handle_invalid();
+        if (!tc_shader_handle_is_invalid(shader)) {
+            tc_shader_destroy(shader);
+        }
+        return nullptr;
+    }
+
+    return phase;
+}
 
 std::string json_escape(const std::string& value) {
     std::ostringstream out;
@@ -268,32 +360,15 @@ TcMaterial get_or_create_navmesh_debug_material(TcMaterial& material) {
         return material;
     }
 
-    const std::string vertex_source =
-        tgfx::load_builtin_shader_stage_source_from_catalog(
-            NAVMESH_DEBUG_SHADER_UUID,
-            "vertex");
-    const std::string fragment_source =
-        tgfx::load_builtin_shader_stage_source_from_catalog(
-            NAVMESH_DEBUG_SHADER_UUID,
-            "fragment");
-    if (vertex_source.empty() || fragment_source.empty()) {
-        tc_log_error("[NavMesh] Failed to load debug shader '%s'", NAVMESH_DEBUG_SHADER_UUID);
-        return material;
-    }
-
     tc_render_state state = tc_render_state_opaque();
     state.depth_test = 1;
     state.depth_write = 0;
     state.cull = 0;
     state.blend = 0;
 
-    std::string vertex_stage = rewrite_engine_uniforms_for_stage_source(vertex_source, "vertex");
-    std::string fragment_stage = rewrite_engine_uniforms_for_stage_source(fragment_source, "fragment");
-
-    tc_material_phase* phase = material.add_phase_from_sources(
-        vertex_stage.c_str(),
-        fragment_stage.c_str(),
-        nullptr,
+    tc_material_phase* phase = add_builtin_slang_debug_phase(
+        material,
+        NAVMESH_DEBUG_SHADER_UUID,
         "navmesh_debug_shader",
         NAVMESH_DEBUG_PHASE,
         0,
@@ -431,7 +506,7 @@ TcMesh build_detour_debug_mesh(const std::vector<std::vector<unsigned char>>& bl
     tc_vertex_layout layout;
     tc_vertex_layout_init(&layout);
     tc_vertex_layout_add(&layout, "position", 3, TC_ATTRIB_FLOAT32, 0);
-    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 5);
+    tc_vertex_layout_add(&layout, "color", 4, TC_ATTRIB_FLOAT32, 1);
 
     char uuid[40];
     tc_mesh_compute_uuid(vertices.data(), vertices.size() * sizeof(NavMeshDebugVertex),

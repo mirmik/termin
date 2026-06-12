@@ -12,10 +12,10 @@
 #include <termin/geom/general_transform3.hpp>
 #include <termin/material/tc_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
-#include <tgfx2/builtin_shader_sources.hpp>
 #include <termin/render/drawable.hpp>
-#include <termin/materials/shader_parser.hpp>
 #include <tc_log.h>
+
+#include "detour_navmesh_asset_utils.hpp"
 
 namespace termin {
 
@@ -298,34 +298,14 @@ private:
             return true;
         }
 
-        const std::string vertex_source =
-            tgfx::load_builtin_shader_stage_source_from_catalog(
-                OFF_MESH_LINK_DEBUG_SHADER_UUID,
-                "vertex");
-        const std::string fragment_source =
-            tgfx::load_builtin_shader_stage_source_from_catalog(
-                OFF_MESH_LINK_DEBUG_SHADER_UUID,
-                "fragment");
-        if (vertex_source.empty() || fragment_source.empty()) {
-            tc_log(
-                TC_LOG_ERROR,
-                "[OffMeshLinkComponent] failed to load debug shader '%s'",
-                OFF_MESH_LINK_DEBUG_SHADER_UUID);
-            return false;
-        }
-
         tc_render_state state = tc_render_state_transparent();
         state.depth_test = 1;
         state.depth_write = 0;
         state.cull = 0;
 
-        std::string vertex_stage = rewrite_engine_uniforms_for_stage_source(vertex_source, "vertex");
-        std::string fragment_stage = rewrite_engine_uniforms_for_stage_source(fragment_source, "fragment");
-
-        tc_material_phase* phase = _debug_material.add_phase_from_sources(
-            vertex_stage.c_str(),
-            fragment_stage.c_str(),
-            nullptr,
+        tc_material_phase* phase = add_builtin_slang_debug_phase(
+            _debug_material,
+            OFF_MESH_LINK_DEBUG_SHADER_UUID,
             "termin_off_mesh_link_debug_shader",
             OFF_MESH_LINK_DEBUG_PHASE,
             30,

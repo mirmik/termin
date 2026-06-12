@@ -22,6 +22,13 @@ std::string stable_uuid(const std::string& seed);
 std::filesystem::path resolve_navmesh_output_path(const Entity& entity, const std::string& agent_type_name);
 std::filesystem::path find_navmesh_asset_by_uuid(const std::filesystem::path& scene_path, const std::string& uuid);
 TcMaterial get_or_create_navmesh_debug_material(TcMaterial& material);
+tc_material_phase* add_builtin_slang_debug_phase(
+    TcMaterial& material,
+    const char* shader_uuid,
+    const char* shader_name,
+    const char* phase_mark,
+    int priority,
+    const tc_render_state& state);
 TcMesh build_detour_debug_mesh(const std::filesystem::path& asset_path);
 TcMesh build_detour_debug_mesh(const std::vector<std::vector<unsigned char>>& blobs);
 TcMesh build_detour_debug_mesh(const TcNavMesh& navmesh);
