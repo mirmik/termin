@@ -704,30 +704,34 @@ bool FoliageLayerComponent::draw_tgfx2(
     std::memcpy(push.u_position_model, position_model.data, sizeof(push.u_position_model));
     std::memcpy(push.u_vector_model, vector_model.data, sizeof(push.u_vector_model));
 
-    EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(
-        context.view,
-        context.projection,
-        context.camera_position,
-        static_cast<float>(context.viewport_width),
-        static_cast<float>(context.viewport_height),
-        context.camera ? static_cast<float>(context.camera->near_clip) : 0.1f,
-        context.camera ? static_cast<float>(context.camera->far_clip) : 100.0f);
-
     ctx2.clear_resource_bindings();
     ctx2.use_shader_resource_layout(shader_binding.shader);
 
-    MaterialPipelineResourceContext material_resources{};
-    material_resources.per_frame = &per_frame;
-    MaterialPipelineFallbackBindings material_fallback{};
-    material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
-    material_fallback.material_texture_base = 4;
-    prepare_material_pipeline_resources(
-        ctx2,
-        ctx2.device(),
-        shader_binding.shader,
-        phase,
-        material_resources,
-        material_fallback);
+    if (context.prepare_tgfx2_material_resources) {
+        context.prepare_tgfx2_material_resources(ctx2, shader_binding.shader, phase);
+    } else {
+        EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(
+            context.view,
+            context.projection,
+            context.camera_position,
+            static_cast<float>(context.viewport_width),
+            static_cast<float>(context.viewport_height),
+            context.camera ? static_cast<float>(context.camera->near_clip) : 0.1f,
+            context.camera ? static_cast<float>(context.camera->far_clip) : 100.0f);
+
+        MaterialPipelineResourceContext material_resources{};
+        material_resources.per_frame = &per_frame;
+        MaterialPipelineFallbackBindings material_fallback{};
+        material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
+        material_fallback.material_texture_base = 4;
+        prepare_material_pipeline_resources(
+            ctx2,
+            ctx2.device(),
+            shader_binding.shader,
+            phase,
+            material_resources,
+            material_fallback);
+    }
 
     ctx2.bind_uniform_data("foliage_draw", &push, sizeof(push));
     ctx2.bind_storage_buffer(
