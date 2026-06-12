@@ -171,6 +171,7 @@ int test_degrade_upgrade_roundtrip() {
     TEST_ASSERT(component->type_name() != nullptr, "manual component has declared type entry");
     size_t before_count = tc_component_registry_instance_count("ReloadableComponent");
     component->value = 123;
+    component->set_display_name("Reloadable Label");
     entity.add_component(component);
     TEST_ASSERT(component->type_name() != nullptr, "type entry linked on add");
     TEST_ASSERT(tc_component_registry_instance_count("ReloadableComponent") == before_count + 1,
@@ -196,6 +197,8 @@ int test_degrade_upgrade_roundtrip() {
     TEST_ASSERT(stored_value != nullptr, "stored value exists");
     TEST_ASSERT(stored_value->type == TC_VALUE_INT, "stored value is int");
     TEST_ASSERT(stored_value->data.i == 123, "stored value matches");
+    TEST_ASSERT(std::string(tc_component_get_display_name(unknown_tc)) == "Reloadable Label",
+                "display_name preserved on degrade");
 
     termin::UnknownComponentStats upgraded = termin::upgrade_unknown_components(scene);
     TEST_ASSERT(upgraded.upgraded == 1, "one component upgraded");
@@ -204,6 +207,14 @@ int test_degrade_upgrade_roundtrip() {
     auto* restored = dynamic_cast<ReloadableComponent*>(entity.get_component<ReloadableComponent>());
     TEST_ASSERT(restored != nullptr, "reloadable component restored");
     TEST_ASSERT(restored->value == 123, "restored value matches");
+    TEST_ASSERT(restored->display_name() == "Reloadable Label", "display_name preserved on upgrade");
+
+    tc_value restored_data = restored->serialize_data();
+    tc_value* display_name = tc_value_dict_get(&restored_data, "display_name");
+    TEST_ASSERT(display_name != nullptr, "display_name serialized when non-empty");
+    TEST_ASSERT(display_name->type == TC_VALUE_STRING, "serialized display_name is string");
+    TEST_ASSERT(std::string(display_name->data.s) == "Reloadable Label", "serialized display_name matches");
+    tc_value_free(&restored_data);
 
     scene.destroy();
     std::cout << "  UnknownComponent roundtrip: PASS\n";

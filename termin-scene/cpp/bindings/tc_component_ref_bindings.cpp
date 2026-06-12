@@ -5,6 +5,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 
+#include <cstring>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
@@ -40,6 +41,14 @@ public:
     bool active_in_editor() const { return _c ? _c->active_in_editor : false; }
     void set_active_in_editor(bool v) { if (_c) _c->active_in_editor = v; }
 
+    std::string display_name() const {
+        return _c ? tc_component_get_display_name(_c) : "";
+    }
+
+    void set_display_name(const std::string& v) {
+        if (_c) tc_component_set_display_name(_c, v.c_str());
+    }
+
     // is_drawable moved to termin-render bindings
 
     // Call on_destroy via vtable
@@ -67,21 +76,30 @@ public:
     nb::object serialize_data() const {
         if (!_c) return nb::none();
 
+        nb::object result = nb::none();
         if (_c->kind == TC_CXX_COMPONENT) {
             CxxComponent* cxx = CxxComponent::from_tc(_c);
             if (!cxx) return nb::none();
             tc_value v = cxx->serialize_data();
-            nb::object result = tc_value_to_py(&v);
+            result = tc_value_to_py(&v);
             tc_value_free(&v);
-            return result;
         } else {
             void* obj_ptr = _c->body;
             if (!obj_ptr) return nb::none();
             tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
-            nb::object result = tc_value_to_py(&v);
+            result = tc_value_to_py(&v);
             tc_value_free(&v);
-            return result;
         }
+
+        if (nb::isinstance<nb::dict>(result)) {
+            nb::dict data = nb::cast<nb::dict>(result);
+            const char* name = tc_component_get_display_name(_c);
+            if (name && name[0]) {
+                data["display_name"] = name;
+            }
+            return data;
+        }
+        return result;
     }
 
     // Full serialize (type + data)
@@ -139,6 +157,19 @@ public:
             return;
         }
 
+        if (nb::isinstance<nb::dict>(data)) {
+            nb::dict dict = nb::cast<nb::dict>(data);
+            if (dict.contains("display_name") && !dict["display_name"].is_none()) {
+                set_display_name(nb::cast<std::string>(dict["display_name"]));
+            }
+            if (dict.contains("enabled") && !dict["enabled"].is_none()) {
+                set_enabled(nb::cast<bool>(dict["enabled"]));
+            }
+            if (dict.contains("active_in_editor") && !dict["active_in_editor"].is_none()) {
+                set_active_in_editor(nb::cast<bool>(dict["active_in_editor"]));
+            }
+        }
+
         if (_c->kind == TC_CXX_COMPONENT) {
             CxxComponent* cxx = CxxComponent::from_tc(_c);
             if (!cxx) {
@@ -166,6 +197,16 @@ public:
     nb::object get_field(const std::string& field_name) const {
         if (!_c) return nb::none();
 
+        if (field_name == "display_name") {
+            return nb::str(tc_component_get_display_name(_c));
+        }
+        if (field_name == "enabled") {
+            return nb::bool_(_c->enabled);
+        }
+        if (field_name == "active_in_editor") {
+            return nb::bool_(_c->active_in_editor);
+        }
+
         void* obj_ptr = nullptr;
         if (_c->kind == TC_CXX_COMPONENT) {
             obj_ptr = CxxComponent::from_tc(_c);
@@ -191,6 +232,19 @@ public:
     // Set field value by name (inlines tc_component_inspect_set to avoid core_c dependency)
     void set_field(const std::string& field_name, nb::object value, TcSceneRef scene = TcSceneRef()) {
         if (!_c || value.is_none()) return;
+
+        if (field_name == "display_name") {
+            set_display_name(nb::cast<std::string>(value));
+            return;
+        }
+        if (field_name == "enabled") {
+            set_enabled(nb::cast<bool>(value));
+            return;
+        }
+        if (field_name == "active_in_editor") {
+            set_active_in_editor(nb::cast<bool>(value));
+            return;
+        }
 
         nb::object to_convert = value;
 
@@ -258,6 +312,7 @@ void bind_tc_component_ref(nb::module_& m) {
         .def_prop_ro("type_name", &TcComponentRef::type_name)
         .def_prop_rw("enabled", &TcComponentRef::enabled, &TcComponentRef::set_enabled)
         .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
+        .def_prop_rw("display_name", &TcComponentRef::display_name, &TcComponentRef::set_display_name)
         // is_drawable moved to termin-render bindings
         .def_prop_ro("tc_component_ptr", [](TcComponentRef& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self._c);

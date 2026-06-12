@@ -98,6 +98,7 @@ bool upgrade_unknown_component_ref_impl(const Entity& entity,
 
     upgraded_tc->enabled = component->enabled;
     upgraded_tc->active_in_editor = component->active_in_editor;
+    tc_component_set_display_name(upgraded_tc, tc_component_get_display_name(component));
 
     tc_scene_handle scene_handle = entity.scene().handle();
     tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
@@ -254,6 +255,7 @@ bool degrade_component_ref_to_unknown(const Entity& entity, tc_component* compon
 
     unknown_tc->enabled = component->enabled;
     unknown_tc->active_in_editor = component->active_in_editor;
+    tc_component_set_display_name(unknown_tc, tc_component_get_display_name(component));
 
     Entity mutable_entity = entity;
     mutable_entity.add_component_ptr(unknown_tc);
