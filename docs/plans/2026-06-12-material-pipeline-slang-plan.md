@@ -10,9 +10,13 @@ material pipeline, skinned meshes, and foliage variants.
 Current implementation checkpoint:
 
 - `termin/render/material_pipeline.hpp` provides the first shared resource
-  binding helper for material draws.
+  binding and shader preparation helpers for material draws.
 - `ColorPass` uses that helper for ordinary mesh material resources and the
   direct drawable tgfx2 material path.
+- `DepthPass`, `DepthOnlyPass`, `IdPass`, and `ShadowPass` use the same helper
+  for shader preparation and their pass/draw named uniform payloads.
+- The helper now lives in `termin-render`, not `termin-render-passes`, so lower
+  component renderers can share it without depending on concrete pass modules.
 - This checkpoint intentionally does not generate vertex transform variants
   yet; it centralizes frame/pass/material resource binding first so static
   mesh, skinning, foliage, and line paths can move to the same entry point
