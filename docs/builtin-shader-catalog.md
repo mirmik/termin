@@ -82,10 +82,10 @@ bind-by-name model without changing the package shape later.
 | `termin-engine-world-tube-line-cap` | `WorldTubeLineCapVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-cap.vert.glsl`, `builtin_shaders/termin-engine-world-tube-line.frag.glsl` |
 | `termin-engine-world-tube-line-lit` | `WorldTubeLineLitFS` | fragment | GLSL | `builtin_shaders/termin-engine-world-tube-line-lit.frag.glsl` |
 | `termin-engine-line-default` | `DefaultLineShader` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-line-default.vert.glsl`, `builtin_shaders/termin-engine-line-default.frag.glsl` |
-| `termin-engine-navmesh-debug` | `NavMeshDebugVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-navmesh-debug.vert.glsl`, `builtin_shaders/termin-engine-navmesh-debug.frag.glsl` |
-| `termin-engine-off-mesh-link-debug` | `OffMeshLinkDebugVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-off-mesh-link-debug.vert.glsl`, `builtin_shaders/termin-engine-off-mesh-link-debug.frag.glsl` |
+| `termin-engine-navmesh-debug` | `NavMeshDebugVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-navmesh-debug.slang` |
+| `termin-engine-off-mesh-link-debug` | `OffMeshLinkDebugVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-off-mesh-link-debug.slang` |
 | `termin-engine-voxel-display` | `VoxelDisplay` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-voxel-display.vert.glsl`, `builtin_shaders/termin-engine-voxel-display.frag.glsl` |
-| `termin-engine-voxelizer-line` | `VoxelizerLine` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-voxelizer-line.vert.glsl`, `builtin_shaders/termin-engine-voxelizer-line.frag.glsl` |
+| `termin-engine-voxelizer-line` | `VoxelizerLine` | vertex + fragment | Slang | `builtin_shaders/termin-engine-voxelizer-line.slang` |
 | `termin-engine-pick-material` | `PickShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-pick-material.slang` |
 | `termin-engine-shadow-material` | `ShadowShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-shadow-material.slang` |
 | `termin-engine-depth-material` | `DepthShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-depth-material.slang` |
@@ -101,7 +101,7 @@ bind-by-name model without changing the package shape later.
 | `termin-engine-grayscale` | `GrayscaleEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-grayscale.frag.slang` |
 | `termin-engine-bloom-bright` | `BloomBrightFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-bright.frag.slang` |
 | `termin-engine-highlight` | `HighlightEngineFS` | fragment | Slang | `builtin_shaders/termin-engine-highlight.frag.slang` |
-| `termin-engine-gizmo-mask` | `GizmoMaskVSFS` | vertex + fragment | GLSL | `builtin_shaders/termin-engine-gizmo-mask.vert.glsl`, `builtin_shaders/termin-engine-gizmo-mask.frag.glsl` |
+| `termin-engine-gizmo-mask` | `GizmoMaskVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-gizmo-mask.slang` |
 | `termin-engine-ground-grid` | `GroundGridEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-ground-grid.slang` |
 | `termin-engine-solid-primitive` | `SolidPrimitiveEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-solid-primitive.slang` |
 | `termin-engine-bloom-downsample` | `BloomDownsampleFS` | fragment | Slang | `builtin_shaders/termin-engine-bloom-downsample.frag.slang` |
