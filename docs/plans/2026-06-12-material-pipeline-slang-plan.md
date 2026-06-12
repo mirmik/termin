@@ -7,6 +7,17 @@ Date: 2026-06-12
 Active plan. This extends the scope-first bind-by-name migration with the
 material pipeline, skinned meshes, and foliage variants.
 
+Current implementation checkpoint:
+
+- `termin/render/material_pipeline.hpp` provides the first shared resource
+  binding helper for material draws.
+- `ColorPass` uses that helper for ordinary mesh material resources and the
+  direct drawable tgfx2 material path.
+- This checkpoint intentionally does not generate vertex transform variants
+  yet; it centralizes frame/pass/material resource binding first so static
+  mesh, skinning, foliage, and line paths can move to the same entry point
+  incrementally.
+
 The current engine already has the pieces needed for the target direction:
 Slang built-in shaders, sidecar resource metadata, `TerminScope`, runtime
 bind-by-name calls, and initial shader-owned vertex input reflection. The
