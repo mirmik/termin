@@ -29,6 +29,23 @@ class _ExecutionRequest:
     result: PythonExecutionResult | None = None
 
 
+def _request_editor_render_update(editor: object | None) -> None:
+    if editor is None:
+        log.error("[EditorPythonExecutor] request_render_update requires an editor context")
+        raise RuntimeError("request_render_update requires an editor context")
+
+    try:
+        editor.request_viewport_update()
+    except AttributeError as exc:
+        log.error(
+            "[EditorPythonExecutor] editor context does not expose request_viewport_update()",
+            exc_info=True,
+        )
+        raise RuntimeError(
+            "editor context does not expose request_viewport_update()"
+        ) from exc
+
+
 class EditorPythonExecutor:
     """Executes Python snippets against the live editor namespace.
 
@@ -136,8 +153,19 @@ class EditorPythonExecutor:
         namespace.update(self._context_provider())
 
         from termin.assets.resources import ResourceManager
+        from termin.geombase import GeneralPose3, Pose3, Quat, Vec3, Vec4
+        from termin.scene import GeneralTransform3
         import termin
 
+        editor = namespace.get("editor")
         namespace["rm"] = ResourceManager.instance()
         namespace["resource_manager"] = namespace["rm"]
         namespace["termin"] = termin
+        namespace["Vec3"] = Vec3
+        namespace["Vec4"] = Vec4
+        namespace["Quat"] = Quat
+        namespace["Pose3"] = Pose3
+        namespace["GeneralPose3"] = GeneralPose3
+        namespace["GeneralTransform3"] = GeneralTransform3
+        namespace["request_render_update"] = lambda: _request_editor_render_update(editor)
+        namespace["refresh_editor"] = namespace["request_render_update"]

@@ -26,6 +26,54 @@ def test_editor_python_executor_refreshes_context_for_each_script():
     assert second.output == "second\n"
 
 
+def test_editor_python_executor_exposes_scene_control_value_types():
+    executor = EditorPythonExecutor(lambda: {})
+
+    result = executor.execute_script(
+        "print(Vec3(1, 2, 3).tolist())\n"
+        "print(Quat.identity().__class__.__name__)\n"
+        "print(Pose3().__class__.__name__)\n"
+        "print(GeneralPose3.identity().__class__.__name__)\n"
+        "print(GeneralTransform3.__name__)\n"
+    )
+
+    assert result.ok
+    assert result.output == (
+        "[1.0, 2.0, 3.0]\n"
+        "Quat\n"
+        "Pose3\n"
+        "GeneralPose3\n"
+        "GeneralTransform3\n"
+    )
+
+
+def test_editor_python_executor_exposes_refresh_helper_for_editor_context():
+    class FakeEditor:
+        def __init__(self) -> None:
+            self.render_update_count = 0
+
+        def request_viewport_update(self) -> None:
+            self.render_update_count += 1
+
+    editor = FakeEditor()
+    executor = EditorPythonExecutor(lambda: {"editor": editor})
+
+    result = executor.execute_script("request_render_update()\nrefresh_editor()")
+
+    assert result.ok
+    assert result.output == ""
+    assert editor.render_update_count == 2
+
+
+def test_editor_python_executor_reports_refresh_helper_without_editor_context():
+    executor = EditorPythonExecutor(lambda: {})
+
+    result = executor.execute_script("request_render_update()")
+
+    assert not result.ok
+    assert result.error == "RuntimeError: request_render_update requires an editor context"
+
+
 def test_editor_python_executor_reports_system_exit_as_script_error():
     executor = EditorPythonExecutor(lambda: {})
 
