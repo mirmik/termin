@@ -214,12 +214,11 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
             tc.set_sources(vertex_src, fragment_src, geometry_src, self._name, str(self._source_path) if self._source_path else "")
             tc.set_language(shader_language_enum(self._data.language))
 
-            # Push the std140 material UBO layout computed by the parser
-            # (if any) so runtime pass code can query tc_shader->material_ubo_*
-            # without re-parsing the shader text. Travels with set_sources
-            # because hot-reload is driven from here.
+            # Legacy GLSL still needs the parser-authored std140 layout.
+            # Migrated Slang shaders derive material fields from shaderc
+            # sidecar metadata, so clear stale manual entries on reload.
             layout = phase.material_ubo_layout
-            if layout is not None and layout.block_size > 0:
+            if self._data.language.lower() == "glsl" and layout is not None and layout.block_size > 0:
                 entries = [
                     (e.name, e.property_type, e.offset, e.size)
                     for e in layout.entries
