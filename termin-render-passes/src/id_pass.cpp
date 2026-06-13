@@ -260,8 +260,8 @@ void IdPass::execute_with_data_tgfx2(
             tc_shader_handle_eq(dc.final_shader, id_shader_handle_);
 
         // Push constants (u_model + u_pickColor) are shared between the
-        // base and skinned paths — the skinned variant injects BoneBlock into
-        // the canonical id vertex source, same push layout.
+        // base and skinned paths. The skinned variant uses the same id
+        // draw contract plus a reflected BoneBlock resource.
         IdPushStd140 push{};
         std::memcpy(push.u_model, model.data, sizeof(float) * 16);
         push.u_pickColor[0] = pick_r;
@@ -284,7 +284,12 @@ void IdPass::execute_with_data_tgfx2(
                 nullptr,
                 draw_resources,
                 id_fallback);
-            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+            draw_material_pipeline_mesh(
+                *ctx.ctx2,
+                mesh,
+                material_mesh_vertex_input_for_shader(
+                    id_shader.shader,
+                    MaterialMeshVertexInput::Position));
             capture_debug_symbol(name);
         } else {
             MaterialPipelineShaderBinding skinned_shader{};
@@ -306,11 +311,12 @@ void IdPass::execute_with_data_tgfx2(
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            termin::draw_tc_mesh(
+            draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
-                {0, 4, 5},
-                true);
+                material_mesh_vertex_input_for_shader(
+                    skinned_shader.shader,
+                    MaterialMeshVertexInput::Position));
             capture_debug_symbol(name);
 
             ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);

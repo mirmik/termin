@@ -266,9 +266,13 @@ void DepthPass::execute_with_data_tgfx2(
         ctx.ctx2->set_push_constants(&push, sizeof(push));
 
         if (override_is_base) {
-            // Base depth VS only reads a_position. See IdPass / ShadowPass
-            // for the rationale of stripping unused attributes.
-            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+            // Base depth VS only reads position.
+            draw_material_pipeline_mesh(
+                *ctx.ctx2,
+                mesh,
+                material_mesh_vertex_input_for_shader(
+                    depth_shader.shader,
+                    MaterialMeshVertexInput::Position));
             capture_debug_symbol(name);
         } else {
             // Skinning variant: compile via bridge, bind, upload BoneBlock
@@ -291,11 +295,12 @@ void DepthPass::execute_with_data_tgfx2(
                 depth_fallback);
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            termin::draw_tc_mesh(
+            draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
-                {0, 4, 5},
-                true);
+                material_mesh_vertex_input_for_shader(
+                    skinned_shader.shader,
+                    MaterialMeshVertexInput::Position));
             capture_debug_symbol(name);
 
             ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
@@ -620,7 +625,12 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         ctx.ctx2->set_push_constants(&push, sizeof(push));
 
         if (override_is_base) {
-            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+            draw_material_pipeline_mesh(
+                *ctx.ctx2,
+                mesh,
+                material_mesh_vertex_input_for_shader(
+                    depth_shader.shader,
+                    MaterialMeshVertexInput::Position));
             capture_debug_symbol(name);
         } else {
             MaterialPipelineShaderBinding skinned_shader{};
@@ -642,11 +652,12 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            termin::draw_tc_mesh(
+            draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
-                {0, 4, 5},
-                true);
+                material_mesh_vertex_input_for_shader(
+                    skinned_shader.shader,
+                    MaterialMeshVertexInput::Position));
             capture_debug_symbol(name);
 
             ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);

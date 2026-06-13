@@ -165,7 +165,12 @@ void NormalPass::execute_with_data_tgfx2(
         ctx.ctx2->set_push_constants(&push, sizeof(push));
 
         if (override_is_base) {
-            termin::draw_tc_mesh(*ctx.ctx2, mesh, {0, 1});
+            draw_material_pipeline_mesh(
+                *ctx.ctx2,
+                mesh,
+                material_mesh_vertex_input_for_shader(
+                    normal_shader.shader,
+                    MaterialMeshVertexInput::PositionNormal));
         } else {
             // Skinning variant: compile via bridge, bind, rely on
             // SkinnedMeshRenderer to upload BoneBlock UBO.
@@ -188,11 +193,12 @@ void NormalPass::execute_with_data_tgfx2(
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            termin::draw_tc_mesh(
+            draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
-                {0, 1, 4, 5},
-                true);
+                material_mesh_vertex_input_for_shader(
+                    skinned_shader.shader,
+                    MaterialMeshVertexInput::PositionNormal));
 
             ctx.ctx2->bind_shader(normal_shader.vertex, normal_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(normal_shader.shader);

@@ -237,10 +237,8 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
     CollectShadowDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
     // Use the UBO-based shadow shader as the base. Skinned variants are
-    // generated off of this source (via shader_skinning.cpp inject), which
-    // keeps push_constant / PerFrame UBO layout intact — so the skinning
-    // path below can reuse the same per-frame UBO + push_constants that
-    // the non-skinned fast path already sets up.
+    // assembled through the material pipeline vertex-variant helper and keep
+    // the same draw/per-frame resource contract as the base path.
     data.base_shader = shadow_shader_handle_;
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
@@ -571,15 +569,18 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         nullptr,
                         draw_resources,
                         shadow_fallback);
-                    // Non-skinned fast path. Shadow VS only reads
-                    // a_position — filter unused attrs so Vulkan doesn't
-                    // complain about loc 1/2/3 per pipeline creation.
-                    termin::draw_tc_mesh(*ctx.ctx2, mesh, {0});
+                    // Non-skinned fast path. Shadow VS only reads position.
+                    draw_material_pipeline_mesh(
+                        *ctx.ctx2,
+                        mesh,
+                        material_mesh_vertex_input_for_shader(
+                            shadow_shader.shader,
+                            MaterialMeshVertexInput::Position));
                     capture_debug_symbol(dc.entity.name());
                 } else {
-                    // Skinning variant: compile via bridge, bind, upload
-                    // BoneBlock UBO (SkinnedMeshRenderer takes care of
-                    // that in upload_per_draw_uniforms_tgfx2), draw.
+                    // Skinning variant: bind the material-pipeline shader and
+                    // let SkinnedMeshRenderer upload BoneBlock through the
+                    // reflected draw-scope resource.
                     MaterialPipelineShaderBinding skinned_shader{};
                     if (!ensure_material_pipeline_shader(
                             *ctx.ctx2,
@@ -599,15 +600,16 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-                    termin::draw_tc_mesh(
+                    draw_material_pipeline_mesh(
                         *ctx.ctx2,
                         mesh,
-                        {0, 4, 5},
-                        true);
+                        material_mesh_vertex_input_for_shader(
+                            skinned_shader.shader,
+                            MaterialMeshVertexInput::Position));
                     capture_debug_symbol(dc.entity.name());
 
                     // Next mesh-backed draw must re-bind the base shadow
-                    // shader; skinning variant left its own program bound.
+                    // shader; the variant left its own program bound.
                     last_shader = dc.final_shader;
                     ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
                     ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);

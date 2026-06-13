@@ -49,6 +49,11 @@ Current implementation checkpoint:
 - Skinned pass-only draws use shader-owned vertex input reflection, so compact
   pass shaders can declare only the inputs they consume instead of depending on
   full material vertex locations.
+- Material pass mesh input selection is centralized in `termin-render` through
+  `MaterialMeshVertexInput` / `draw_material_pipeline_mesh()`. Pass code now
+  requests logical contracts such as full material, position-only, or
+  position+normal; the transitional standard-location ABI is isolated in the
+  material pipeline helper.
 - The material pipeline helper lives in `termin-render`, not
   `termin-render-passes`, so lower component renderers can share it without
   depending on concrete pass modules.
@@ -179,14 +184,19 @@ Current checkpoint:
 - Pass-specific skinned mesh paths opt into shader-owned vertex input mapping,
   so `position/joints/weights` and `position/normal/joints/weights` compact
   shaders do not need to fake unused material inputs.
+- Pass code now requests logical mesh input contracts through
+  `MaterialMeshVertexInput`; skinned variants are selected from shader variant
+  metadata instead of each pass spelling out `position/joints/weights` location
+  lists.
 
 Current remaining step:
 
 - move static mesh material variants into the same material-pipeline assembly
   point, so the shared mechanism covers static, skinned, foliage, and later
   morph/particle vertex transform variants;
-- the renderer should use shader-owned vertex input reflection for mesh,
-  skinning, and foliage instance attributes;
+- replace the centralized standard-location mesh ABI with semantic vertex
+  layout metadata, so the renderer can build mesh, skinning, and foliage
+  instance inputs from reflected names instead of numeric locations;
 - legacy `shader_skinning.cpp` regex injection is retired; skinned variants
   now require Slang templates and shaderc-reflected resources.
 
@@ -278,7 +288,13 @@ Slang modules, but their resources should follow the same scope/name rules.
    missing name, mismatched kind, or incompatible vertex stream. Numeric
    fallback should be limited to explicitly legacy GLSL paths.
 
-8. Retire dead legacy files and APIs.
+8. Replace centralized standard vertex-location policy with semantic mesh
+   layout metadata.
+   Status: pass-local `{0}` / `{0,4,5}` lists have moved into
+   `MaterialMeshVertexInput`, but the final shape should derive compact draw
+   layouts from mesh attribute names plus shader reflection.
+
+9. Retire dead legacy files and APIs.
    Remove unused GLSL include banks, old material shader variants, hard-coded
    binding constants outside centralized transitional policy, and source
    injection helpers after their users are gone.
