@@ -130,6 +130,42 @@ def test_build_project_excludes_output_directory(tmp_path: Path) -> None:
     assert "dist/Game/assets/Old.scene" not in source_paths
 
 
+def test_build_project_excludes_project_ignored_resource_paths(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    _write_json(project / "game.terminproj", {"version": 1, "name": "Game"})
+    _write_json(
+        project / "project_settings" / "project.json",
+        {
+            "ignored_resource_paths": [
+                "Generated",
+                "LooseIgnored.png",
+            ],
+        },
+    )
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+
+    generated_scene = project / "Generated" / "Generated.scene"
+    _write_json(generated_scene, {"scene": {"uuid": "generated-scene-uuid"}})
+    loose_ignored = project / "LooseIgnored.png"
+    loose_ignored.write_bytes(b"png")
+    _write_json(loose_ignored.with_name(loose_ignored.name + ".meta"), {"uuid": "ignored-texture-uuid"})
+
+    result = build_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "Game",
+        copy_files=False,
+    )
+
+    source_paths = {resource.source_path for resource in result.manifest.resources}
+    assert "Main.scene" in source_paths
+    assert "project_settings/project.json" in source_paths
+    assert "Generated/Generated.scene" not in source_paths
+    assert "LooseIgnored.png" not in source_paths
+    assert "LooseIgnored.png.meta" not in source_paths
+
+
 class _FakeShader:
     is_valid = True
     uuid = "shader-phase-uuid"

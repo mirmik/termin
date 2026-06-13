@@ -4,6 +4,7 @@ from typing import Set
 from termin.assets.texture_plugin import TextureImportPlugin
 from termin.assets.plugin_preloader import PluginPreLoader
 from termin.assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
+from termin.project.settings import ProjectSettings, ProjectSettingsManager
 from termin_assets import PreLoadResult
 
 
@@ -66,6 +67,12 @@ def _queue_change(watcher: ProjectFileWatcher, path: Path, kind: str) -> None:
         watcher._pending_changes[str(path)] = kind
 
 
+def _set_project_settings(monkeypatch, settings: ProjectSettings) -> None:
+    manager = ProjectSettingsManager()
+    manager._settings = settings
+    monkeypatch.setattr(ProjectSettingsManager, "_instance", manager)
+
+
 def test_project_file_watcher_initial_scan_registers_plugin_assets(tmp_path: Path) -> None:
     texture_path = tmp_path / "Textures" / "Albedo.png"
     texture_path.parent.mkdir()
@@ -87,6 +94,76 @@ def test_project_file_watcher_initial_scan_registers_plugin_assets(tmp_path: Pat
     assert rm.registered[0].path == str(texture_path)
     assert rm.registered[0].uuid == "texture-scan-uuid"
     assert preloader.get_tracked_files() == {str(texture_path): {"Albedo"}}
+
+
+def test_project_file_watcher_initial_scan_ignores_project_setting_paths(tmp_path: Path, monkeypatch) -> None:
+    _set_project_settings(
+        monkeypatch,
+        ProjectSettings(ignored_resource_paths=["Ignored", "LooseIgnored.png"]),
+    )
+
+    keep_path = tmp_path / "Textures" / "Keep.png"
+    keep_path.parent.mkdir()
+    keep_path.write_bytes(b"png")
+    keep_path.with_name(keep_path.name + ".meta").write_text(
+        '{"uuid": "keep-texture-uuid"}',
+        encoding="utf-8",
+    )
+
+    ignored_dir_path = tmp_path / "Ignored" / "Skip.png"
+    ignored_dir_path.parent.mkdir()
+    ignored_dir_path.write_bytes(b"png")
+    ignored_dir_path.with_name(ignored_dir_path.name + ".meta").write_text(
+        '{"uuid": "ignored-dir-texture-uuid"}',
+        encoding="utf-8",
+    )
+
+    ignored_file_path = tmp_path / "LooseIgnored.png"
+    ignored_file_path.write_bytes(b"png")
+    ignored_file_path.with_name(ignored_file_path.name + ".meta").write_text(
+        '{"uuid": "ignored-file-texture-uuid"}',
+        encoding="utf-8",
+    )
+
+    rm = RecordingResourceManager()
+    preloader = PluginPreLoader(TextureImportPlugin(), rm)
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(preloader)
+
+    watcher._project_path = str(tmp_path)
+    watcher._scan_directory(str(tmp_path))
+
+    assert [result.path for result in rm.registered] == [str(keep_path)]
+    assert preloader.get_tracked_files() == {str(keep_path): {"Keep"}}
+
+
+def test_project_file_watcher_rescan_removes_newly_ignored_plugin_asset(tmp_path: Path, monkeypatch) -> None:
+    _set_project_settings(monkeypatch, ProjectSettings())
+
+    texture_path = tmp_path / "Generated" / "Albedo.png"
+    texture_path.parent.mkdir()
+    texture_path.write_bytes(b"png")
+    texture_path.with_name(texture_path.name + ".meta").write_text(
+        '{"uuid": "texture-generated-uuid"}',
+        encoding="utf-8",
+    )
+
+    rm = RecordingResourceManager()
+    preloader = PluginPreLoader(TextureImportPlugin(), rm)
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(preloader)
+    watcher._project_path = str(tmp_path)
+    watcher._scan_directory(str(tmp_path))
+
+    assert str(texture_path) in watcher.watched_files
+    assert preloader.get_tracked_files() == {str(texture_path): {"Albedo"}}
+
+    _set_project_settings(monkeypatch, ProjectSettings(ignored_resource_paths=["Generated"]))
+    watcher.rescan()
+
+    assert str(texture_path) not in watcher.watched_files
+    assert preloader.get_tracked_files() == {}
+    assert rm.external_assets.removed_paths == [str(texture_path)]
 
 
 def test_project_file_watcher_created_file_registers_plugin_asset(tmp_path: Path) -> None:

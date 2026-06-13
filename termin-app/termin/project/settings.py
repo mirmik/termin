@@ -11,7 +11,7 @@ This Python module handles persistence and synchronization.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from pathlib import PurePosixPath
@@ -64,12 +64,16 @@ class ProjectSettings:
     # treats this directory as generated output and excludes it from asset
     # discovery and live file watching.
     build_output_dir: str = "dist"
+    # Project-relative files/directories excluded from resource discovery,
+    # live file watching, and project build manifests.
+    ignored_resource_paths: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
         return {
             "render_sync_mode": self.render_sync_mode.value,
             "build_output_dir": self.build_output_dir,
+            "ignored_resource_paths": list(self.ignored_resource_paths),
         }
 
     @staticmethod
@@ -87,10 +91,15 @@ class ProjectSettings:
             fallback="dist",
             field_name="build_output_dir",
         )
+        ignored_resource_paths = _normalize_project_relative_paths(
+            data.get("ignored_resource_paths", []),
+            field_name="ignored_resource_paths",
+        )
 
         return ProjectSettings(
             render_sync_mode=sync_mode,
             build_output_dir=build_output_dir,
+            ignored_resource_paths=ignored_resource_paths,
         )
 
 
@@ -192,6 +201,14 @@ class ProjectSettingsManager:
         )
         self.save()
 
+    def set_ignored_resource_paths(self, values: list[str]) -> None:
+        """Set project-relative resource scanner ignore paths and save."""
+        self._settings.ignored_resource_paths = _normalize_project_relative_paths(
+            values,
+            field_name="ignored_resource_paths",
+        )
+        self.save()
+
     def _get_editor_state_path(self) -> Optional[Path]:
         """Get path to .editor_state.json (per-user, not committed)."""
         if self._project_path is None:
@@ -244,5 +261,44 @@ def _normalize_project_relative_dir(value: object, *, fallback: str, field_name:
     ):
         log.warning(f"[ProjectSettings] Invalid {field_name} '{value}', falling back to '{fallback}'")
         return fallback
+
+    return rel_path.as_posix()
+
+
+def _normalize_project_relative_paths(value: object, *, field_name: str) -> list[str]:
+    if not isinstance(value, list):
+        log.warning(f"[ProjectSettings] {field_name} must be a list, ignoring")
+        return []
+
+    normalized_paths: list[str] = []
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        normalized = _normalize_project_relative_path_item(
+            item,
+            field_name=f"{field_name}[{index}]",
+        )
+        if normalized is None or normalized in seen:
+            continue
+        normalized_paths.append(normalized)
+        seen.add(normalized)
+
+    return normalized_paths
+
+
+def _normalize_project_relative_path_item(value: object, *, field_name: str) -> str | None:
+    if type(value) is not str:
+        log.warning(f"[ProjectSettings] {field_name} must be a string, ignoring")
+        return None
+
+    normalized = value.strip().replace("\\", "/")
+    rel_path = PurePosixPath(normalized)
+    if (
+        normalized == ""
+        or rel_path.is_absolute()
+        or normalized == "."
+        or ".." in rel_path.parts
+    ):
+        log.warning(f"[ProjectSettings] Invalid {field_name} '{value}', ignoring")
+        return None
 
     return rel_path.as_posix()

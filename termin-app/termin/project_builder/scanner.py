@@ -11,6 +11,7 @@ from termin.assets.default_plugins import (
     build_import_plugin_extension_map,
     register_default_import_asset_plugins,
 )
+from termin.project.settings import ProjectSettings
 from termin.project_builder.manifest import BuildDiagnostic, BuildResource, ProjectBuildManifest
 from termin_assets import AssetImportPlugin, AssetTypeRegistry
 
@@ -56,6 +57,7 @@ class ProjectScanner:
         self.entry_scene = entry_scene
         self.output_dir = output_dir.resolve() if output_dir is not None else None
         self.diagnostics: list[BuildDiagnostic] = []
+        self.project_settings = self._load_project_settings()
         self.asset_type_registry = asset_type_registry or self._create_default_asset_type_registry()
         self.import_plugins_by_extension = build_import_plugin_extension_map(self.asset_type_registry)
 
@@ -132,7 +134,7 @@ class ProjectScanner:
                 if filename.startswith("."):
                     continue
                 path = root / filename
-                if self._is_inside_output_dir(path):
+                if self._is_ignored_path(path):
                     continue
                 files.append(path)
 
@@ -143,15 +145,70 @@ class ProjectScanner:
         name = path.name
         if name.startswith(".") or name.startswith("__"):
             return False
-        if self._is_inside_output_dir(path):
+        if self._is_ignored_path(path):
             return False
         return True
 
-    def _is_inside_output_dir(self, path: Path) -> bool:
-        if self.output_dir is None:
-            return False
+    def _ignored_paths(self) -> tuple[Path, ...]:
+        ignored: list[Path] = []
+        if self.output_dir is not None:
+            ignored.append(self.output_dir)
+
+        ignored.append((self.project_root / self.project_settings.build_output_dir).resolve())
+        ignored.extend(
+            (self.project_root / ignored_path).resolve()
+            for ignored_path in self.project_settings.ignored_resource_paths
+        )
+        return tuple(ignored)
+
+    def _is_ignored_path(self, path: Path) -> bool:
+        ignored_roots = self._ignored_paths()
         resolved = path.resolve()
-        return resolved == self.output_dir or self.output_dir in resolved.parents
+        if self._is_resolved_path_ignored(resolved, ignored_roots):
+            return True
+
+        path_str = str(path)
+        if path_str.endswith(".meta") or path_str.endswith(".spec"):
+            resource_path = Path(path_str[:-5]).resolve()
+            return self._is_resolved_path_ignored(resource_path, ignored_roots)
+
+        return False
+
+    def _is_resolved_path_ignored(self, resolved: Path, ignored_roots: tuple[Path, ...]) -> bool:
+        for ignored_root in ignored_roots:
+            if resolved == ignored_root or ignored_root in resolved.parents:
+                return True
+        return False
+
+    def _load_project_settings(self) -> ProjectSettings:
+        settings_path = self.project_root / "project_settings" / "project.json"
+        if not settings_path.exists():
+            return ProjectSettings()
+
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:
+            self.diagnostics.append(
+                BuildDiagnostic(
+                    "error",
+                    "project_settings/project.json",
+                    f"Failed to read project settings: {exc}",
+                )
+            )
+            return ProjectSettings()
+
+        if not isinstance(data, dict):
+            self.diagnostics.append(
+                BuildDiagnostic(
+                    "error",
+                    "project_settings/project.json",
+                    "Project settings root must be an object",
+                )
+            )
+            return ProjectSettings()
+
+        return ProjectSettings.from_dict(data)
 
     def _relative_project_path(self, path: Path) -> str:
         try:
