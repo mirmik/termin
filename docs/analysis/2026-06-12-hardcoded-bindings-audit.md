@@ -27,8 +27,8 @@ Legacy fallback **не мёртвый код** — это активный compa
 | `1` | Material UBO | `material_ubo_apply.hpp`, `tc_material.h`, `shader_parser.cpp` |
 | `2` | Per-frame UBO | `frame_uniforms.hpp`, `shader_parser.cpp` |
 | `3` | Shadow Block | `shader_parser.cpp` |
-| `4-7` | Material textures 0-3 | `material_texture_binding_for_index()` — четыре дубликата функции |
-| `8` | Shadow maps (резерв) | `shaderc.cpp`, `material_binding_slots.hpp` |
+| `4-7` | Material textures 0-3 | `tc_material_binding_slots.hpp` legacy fallback |
+| `8` | Shadow maps (резерв) | `tc_material_binding_slots.hpp` |
 | `14` | Push constants (GL emulation) | `i_command_list.hpp`, все builtin GLSL |
 | `16` | Bone matrices (skinning) | `shader_skinning.cpp`, `skinned_mesh_renderer.cpp` |
 | `24` | Draw data | `color_pass.cpp` |
@@ -60,15 +60,14 @@ ctx2.bind_uniform_buffer_ring(BONE_BLOCK_BINDING,  // 16, захардкожен
 
 ## 3. Legacy `material_texture_binding_for_index()`
 
-Функция, которая мапит индекс текстуры в binding-слот (с пропуском слота 8), теперь централизована для runtime/parser в
-`termin-materials/include/termin/materials/material_binding_slots.hpp`.
+Функция, которая мапит индекс текстуры в binding-слот (с пропуском слота 8), теперь централизована для shader compiler,
+parser и runtime fallback в `termin-graphics/include/tgfx/resources/tc_material_binding_slots.hpp`.
 
 | Файл | Контекст |
 |------|----------|
-| `termin-materials/include/termin/materials/material_binding_slots.hpp` | Legacy compile-time/runtime fallback contract |
-| `termin-graphics/tools/termin_shaderc.cpp` | Shader-компилятор; ещё держит локальную копию из-за границы пакетов |
+| `termin-graphics/include/tgfx/resources/tc_material_binding_slots.hpp` | Legacy compile-time/runtime fallback contract |
 
-Оставшийся хвост: `termin_shaderc` должен либо получить доступ к общему header без нарушения границ пакетов, либо перестать авторить legacy numeric slots для новых Slang paths.
+Оставшийся хвост: новые Slang paths должны постепенно перестать авторить legacy numeric slots там, где bind-by-name/reflection уже достаточно.
 
 ---
 
@@ -186,7 +185,7 @@ if (shader_uses_layout_only_bindings(raw_shader)) {
 | 🔴 Высокий | Ring UBO overflow — silent corruption | `vulkan_render_device.cpp` |
 | 🟡 Средний | Тихий фейл символического биндинга | `render_context.cpp` |
 | 🟡 Средний | Flat descriptor set (set 0) — производительность | `material_ubo_apply.cpp`, Vulkan backend |
-| 🟡 Средний | Дубликаты `material_texture_binding_for_index()` (4 копии) | 4 файла |
+| 🟡 Средний | Legacy material texture slot fallback ещё нужен старым путям | `tc_material_binding_slots.hpp`, `shader_parser.cpp`, `termin_shaderc.cpp` |
 | 🟢 Низкий | Двойной путь push constants | `color_pass.cpp` |
 | 🟢 Низкий | Regex инъекция skinning на hot path | `shader_skinning.cpp` |
 | 🟢 Низкий | GLSL с layout может использовать оба пути биндинга | `shader_binding_policy.hpp` |
