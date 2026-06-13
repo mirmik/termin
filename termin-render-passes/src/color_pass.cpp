@@ -1017,7 +1017,12 @@ void ColorPass::execute_with_data(
         // It sets vertex layout/topology, wraps/uploads mesh buffers for the
         // current backend, submits ctx2->draw(), then releases transient
         // bindings.
-        termin::draw_tc_mesh(*ctx2, mesh);
+        draw_material_pipeline_mesh(
+            *ctx2,
+            mesh,
+            material_mesh_vertex_input_for_shader(
+                raw_shader,
+                MaterialMeshVertexInput::FullMaterial));
         capture_debug_symbol(ename);
         ++draw_index;
     }

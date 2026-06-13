@@ -145,6 +145,20 @@ Regex-инъекция skinning-кода удалена из C++ и Python paths
 
 ---
 
+## 8a. Vertex input locations for material pass draws
+
+Pass-local списки вроде `{0}`, `{0,4,5}` и `{0,1,4,5}` больше не размазаны по `ColorPass`, `ShadowPass`, `DepthPass`,
+`IdPass` и `NormalPass`. Они централизованы в `termin-render/src/material_pipeline.cpp` за
+`MaterialMeshVertexInput` / `draw_material_pipeline_mesh()`: пассы запрашивают логический контракт (`Position`,
+`PositionNormal`, `FullMaterial`), а material pipeline выбирает skinned/static draw layout.
+
+Это всё ещё переходное состояние, не финальная архитектура. Числовой ABI стандартных mesh locations остаётся в одном месте,
+потому что runtime tgfx2 draw layout пока не несёт достаточно семантических имён атрибутов для построения compact layout
+только из reflection. Следующий шаг — протащить semantic vertex attribute metadata (`position`, `normal`, `joints`,
+`weights`, etc.) до draw layout builder и заменить централизованные числа сопоставлением по именам.
+
+---
+
 ## 9. Slang-шейдеры без `[[TerminScope]]`
 
 Из 38 Slang-шейдеров (не считая prelude):
