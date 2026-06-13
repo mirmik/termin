@@ -28,6 +28,10 @@ Current implementation checkpoint:
   material fragment contract, and `tgfx2::WorldTubeLineRenderer` accepts
   caller-owned shader/layout/resource binding instead of forcing an internal
   line shader layout for material draws.
+- Migrated Slang material shaders and Slang vertex-transform variants no
+  longer receive parser-authored `material_ubo_entries`. The runtime material
+  layout for Slang is expected to come from shaderc sidecar field metadata;
+  parser-authored layouts remain only for legacy GLSL compatibility.
 - `SkinnedMeshRenderer` ownership moved from `termin-app` to
   `termin-components-render`; the old `termin._native.render` binding is now a
   compatibility alias to the canonical render-components native class.

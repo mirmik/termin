@@ -139,11 +139,10 @@ TcShader create_slang_skinned_shader(
             return TcShader();
         }
 
-        tc_shader_set_material_ubo_layout(
-            skinned_raw,
-            orig_raw->material_ubo_entries,
-            orig_raw->material_ubo_entry_count,
-            orig_raw->material_ubo_block_size);
+        // Slang skinned variants get material field layout from shaderc
+        // sidecar reflection. Keep manual material_ubo_entries confined to
+        // the legacy regex/GLSL skinning path below.
+        tc_shader_set_material_ubo_layout(skinned_raw, nullptr, 0, 0);
     }
 
     skinned.set_variant_info(original_shader, TC_SHADER_VARIANT_SKINNING);

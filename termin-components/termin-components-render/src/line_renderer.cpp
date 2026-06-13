@@ -349,12 +349,10 @@ TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_varian
             return TcShader();
         }
 
-        tc_shader_set_material_ubo_layout(
-            variant_raw,
-            original_raw->material_ubo_entries,
-            original_raw->material_ubo_entry_count,
-            original_raw->material_ubo_block_size
-        );
+        // Slang line-tube variants get material field layout from their
+        // shaderc sidecar after compilation. Do not copy parser-authored
+        // legacy material_ubo_entries from the source material shader.
+        tc_shader_set_material_ubo_layout(variant_raw, nullptr, 0, 0);
     }
 
     variant.set_variant_info(original_shader, variant_op);
