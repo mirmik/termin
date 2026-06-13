@@ -202,12 +202,10 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
             return TcShader();
         }
 
-        tc_shader_set_material_ubo_layout(
-            variant_raw,
-            original_raw->material_ubo_entries,
-            original_raw->material_ubo_entry_count,
-            original_raw->material_ubo_block_size
-        );
+        // Slang foliage variants get material field layout from shaderc
+        // sidecar reflection. Copying legacy material_ubo_entries here would
+        // create a second source of truth and can mask missing sidecar data.
+        tc_shader_set_material_ubo_layout(variant_raw, nullptr, 0, 0);
     }
 
     variant.set_variant_info(original_shader, variant_op);
@@ -723,7 +721,6 @@ bool FoliageLayerComponent::draw_tgfx2(
         material_resources.per_frame = &per_frame;
         MaterialPipelineFallbackBindings material_fallback{};
         material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
-        material_fallback.material_texture_base = 4;
         prepare_material_pipeline_resources(
             ctx2,
             ctx2.device(),
