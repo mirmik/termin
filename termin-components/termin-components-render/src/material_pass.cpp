@@ -21,12 +21,6 @@ extern "C" {
 
 namespace termin {
 
-namespace {
-
-constexpr uint32_t MATERIAL_TEXTURE_BINDING_BASE = 4;
-
-} // namespace
-
 uint32_t MaterialPass::s_quad_vao = 0;
 uint32_t MaterialPass::s_quad_vbo = 0;
 
@@ -215,7 +209,6 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     material_resources.per_frame = &per_frame;
     MaterialPipelineFallbackBindings material_fallback{};
     material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
-    material_fallback.material_texture_base = MATERIAL_TEXTURE_BINDING_BASE;
     prepare_material_pipeline_resources(
         *ctx2,
         device,

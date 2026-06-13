@@ -648,17 +648,9 @@ void ColorPass::execute_with_data(
     constexpr uint32_t SHADOW_SLOT_BASE =
         TC_SHADER_RESOURCE_BINDING_SHADOW_MAPS;
 
-    // Vulkan descriptor set layout reserves bindings 0..3 for UBOs
-    // (lighting, material, per-frame, shadow-block), 4..7 and 9..15
-    // for material samplers, 8 for shadows. Layout-backed Slang shaders
-    // should resolve resources by name; these numbers are transitional
-    // fallback slots for legacy metadata paths.
-    constexpr uint32_t MATERIAL_TEX_SLOT_BASE = 4;
-
     MaterialPipelineFallbackBindings material_fallback{};
     material_fallback.shadow_block = SHADOW_UBO_BINDING;
     material_fallback.material_ubo = MATERIAL_UBO_BINDING;
-    material_fallback.material_texture_base = MATERIAL_TEX_SLOT_BASE;
     material_fallback.lighting_ubo = LIGHTING_UBO_BINDING;
     material_fallback.shadow_map_base = SHADOW_SLOT_BASE;
     material_fallback.max_shadow_maps = MAX_SHADOW_MAPS;

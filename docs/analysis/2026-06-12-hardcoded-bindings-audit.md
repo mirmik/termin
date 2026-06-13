@@ -28,7 +28,7 @@ Legacy fallback **не мёртвый код** — это активный compa
 | `2` | Per-frame UBO | `frame_uniforms.hpp`, `shader_parser.cpp` |
 | `3` | Shadow Block | `shader_parser.cpp` |
 | `4-7` | Material textures 0-3 | `material_texture_binding_for_index()` — четыре дубликата функции |
-| `8` | Shadow maps (резерв) | `shaderc.cpp`, `material_ubo_runtime.cpp` |
+| `8` | Shadow maps (резерв) | `shaderc.cpp`, `material_binding_slots.hpp` |
 | `14` | Push constants (GL emulation) | `i_command_list.hpp`, все builtin GLSL |
 | `16` | Bone matrices (skinning) | `shader_skinning.cpp`, `skinned_mesh_renderer.cpp` |
 | `24` | Draw data | `color_pass.cpp` |
@@ -58,18 +58,17 @@ ctx2.bind_uniform_buffer_ring(BONE_BLOCK_BINDING,  // 16, захардкожен
 
 ---
 
-## 3. Четыре дубликата `material_texture_binding_for_index()`
+## 3. Legacy `material_texture_binding_for_index()`
 
-Функция, которая мапит индекс текстуры в binding-слот (с пропуском слота 8), существует в **четырёх местах**:
+Функция, которая мапит индекс текстуры в binding-слот (с пропуском слота 8), теперь централизована для runtime/parser в
+`termin-materials/include/termin/materials/material_binding_slots.hpp`.
 
 | Файл | Контекст |
 |------|----------|
-| `termin-materials/include/termin/materials/shader_parser.hpp` | Compile-time инъекция GLSL |
-| `termin-graphics/tools/termin_shaderc.cpp` | Shader-компилятор |
-| `termin-render/src/material_ubo_runtime.cpp` | Runtime биндинг |
-| `termin-components-render/src/material_pass.cpp` | Ещё один runtime дубликат |
+| `termin-materials/include/termin/materials/material_binding_slots.hpp` | Legacy compile-time/runtime fallback contract |
+| `termin-graphics/tools/termin_shaderc.cpp` | Shader-компилятор; ещё держит локальную копию из-за границы пакетов |
 
-Это классический случай drift: если кто-то изменит логику в одном месте, остальные рассинхронизируются. Функция должна быть в одном месте, а все остальные места должны либо линковаться, либо использовать bind-by-name.
+Оставшийся хвост: `termin_shaderc` должен либо получить доступ к общему header без нарушения границ пакетов, либо перестать авторить legacy numeric slots для новых Slang paths.
 
 ---
 
