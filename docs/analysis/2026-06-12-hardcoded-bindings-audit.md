@@ -140,8 +140,8 @@ if (offset_in_slot + padded > ring_ubo_slot_size_) {
 ## 8. Skinned variants
 
 Regex-инъекция skinning-кода удалена из C++ и Python paths. `shader_skinning.cpp` создаёт только Slang-template variants
-для material/shadow/depth/pick/normal фаз. Старые GLSL shaders больше не получают auto-skinning variant и должны мигрировать
-на Slang material pipeline.
+для material/shadow/depth/pick/normal фаз через общий `get_material_vertex_variant()` helper в material pipeline.
+Старые GLSL shaders больше не получают auto-skinning variant и должны мигрировать на Slang material pipeline.
 
 ---
 

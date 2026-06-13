@@ -20,9 +20,13 @@ Current implementation checkpoint:
   payloads.
 - `MaterialPass` uses the material pipeline helper for shader preparation,
   per-frame data, material UBO/textures, and bind-by-name graph inputs.
-- `FoliageLayerComponent` prepares instanced foliage shaders and material
-  resources through the same helper; foliage-specific draw resources still bind
-  explicitly by logical name.
+- `termin/render/material_pipeline.hpp` also owns shared vertex variant
+  assembly through `MaterialVertexVariantRequest` /
+  `get_material_vertex_variant()`. Skinned and foliage variants now use this
+  common path instead of renderer-local shader assembly code.
+- `FoliageLayerComponent` prepares instanced foliage shader variants and
+  material resources through the same helper; foliage-specific draw resources
+  still bind explicitly by logical name.
 - `LineRenderer` has the first `WorldTube` integration slice: tube body/cap
   material variants now combine the procedural line vertex contract with the
   material fragment contract, and `tgfx2::WorldTubeLineRenderer` accepts
@@ -48,7 +52,9 @@ Current implementation checkpoint:
 - The material pipeline helper lives in `termin-render`, not
   `termin-render-passes`, so lower component renderers can share it without
   depending on concrete pass modules.
-- Regex-based skinning remains only as a transitional legacy GLSL path.
+- Regex-based skinning injection has been removed. Skinned variants are
+  Slang-template variants and old GLSL shaders must migrate instead of getting
+  generated auto-skinning code.
 
 The current engine already has the pieces needed for the target direction:
 Slang built-in shaders, sidecar resource metadata, `TerminScope`, runtime
@@ -174,10 +180,10 @@ Current checkpoint:
   so `position/joints/weights` and `position/normal/joints/weights` compact
   shaders do not need to fake unused material inputs.
 
-Target next step:
+Current remaining step:
 
-- move from per-template selection to the shared material-pipeline assembly
-  point, so the same mechanism can select static, skinned, foliage, and later
+- move static mesh material variants into the same material-pipeline assembly
+  point, so the shared mechanism covers static, skinned, foliage, and later
   morph/particle vertex transform variants;
 - the renderer should use shader-owned vertex input reflection for mesh,
   skinning, and foliage instance attributes;
@@ -211,6 +217,17 @@ The current direct `draw_tgfx2()` path can stay as the draw-call integration
 point, but it should prepare and bind resources through reflected shader layout
 metadata. The direct path should not invent a separate material ABI.
 
+Current checkpoint:
+
+- foliage material/shadow vertex variants are assembled by
+  `get_material_vertex_variant()` using engine-authored foliage templates and
+  the selected material/pass fragment stage;
+- `foliage_draw` and `foliage_instances` are still bound explicitly by logical
+  name in `FoliageLayerComponent`, because the component owns instance buffers
+  and direct draw submission;
+- remaining work is to make foliage vertex input layout fully reflection-owned
+  and to converge pass integration with static/skinned draw flows.
+
 ## Pass Integration
 
 `ColorPass`, `ShadowPass`, `DepthPass`, and `IdPass` should converge on the
@@ -243,14 +260,14 @@ Slang modules, but their resources should follow the same scope/name rules.
 
 4. Replace skinning regex injection.
    Status: Slang material/pass skinning variants now select engine-authored
-   vertex transform templates and bind `bone_block` by name. Remaining work is
-   to retire the legacy GLSL injector once no migrated path depends on it, and
-   to move template selection into the common material-pipeline assembly point.
+   vertex transform templates through `get_material_vertex_variant()` and bind
+   `bone_block` by name. The legacy GLSL injector is gone.
 
 5. Convert foliage to the same variant model.
-   `foliage_draw` and `foliage_instances` must be reflected resources. The
-   renderer binds them by name and uses reflected vertex input locations for
-   prototype and instance streams.
+   Status: foliage material/shadow variants now use the shared material vertex
+   variant helper. Remaining work: use reflected vertex input locations for
+   prototype and instance streams, and reduce direct renderer-specific binding
+   code where the common pass flow can own it.
 
 6. Convert remaining material/pass GLSL shaders to Slang.
    Built-in and stdlib shaders should be single Slang modules where vertex and
@@ -273,10 +290,11 @@ Slang modules, but their resources should follow the same scope/name rules.
 
 ## Current Smells To Remove
 
-- `shader_skinning.cpp` still edits shader source with regex for legacy GLSL.
-  Migrated Slang skinning uses templates and reflected `bone_block` binding.
-- Foliage still creates renderer-specific shader variants instead of selecting
-  a shared vertex transform contract.
+- Static MeshRenderer material flow still needs to use the same
+  material-pipeline assembly point as skinned and foliage variants.
+- Foliage still owns direct draw/resource binding glue for instance data; this
+  is narrower than the old renderer-specific shader assembly path but still a
+  separate integration path.
 - `WorldBillboard` line rendering still uses the older fragment-only variant
   path; `WorldTube` is the first line mode moved toward combined material
   variants.
