@@ -448,7 +448,7 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     assert "struct MaterialParams" not in phase.stages["vertex"].source
 
 
-def test_slang_material_resource_binding_surfaces_on_tc_shader():
+def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
     import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     shader_text = "\n".join([
@@ -477,8 +477,39 @@ def test_slang_material_resource_binding_surfaces_on_tc_shader():
 
     material = create_material_from_parsed(parse_shader_text(shader_text))
     shader = material.get_phase(0).shader
+
+    assert shader.material_ubo_entry_count == 0
+    assert shader.material_ubo_block_size == 0
+    assert shader.find_resource_binding("material") is None
+
+
+def test_glsl_material_layout_still_surfaces_on_tc_shader_for_legacy_path():
+    import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
+
+    shader_text = "\n".join([
+        "@program GlslWithRuntimeLayout",
+        "@language glsl",
+        "@property Color tint = Color(1, 1, 1, 1)",
+        "@phase opaque",
+        "@stage vertex",
+        "#version 450",
+        "layout(location = 0) in vec3 a_position;",
+        "void main() { gl_Position = vec4(a_position, 1.0); }",
+        "@endstage",
+        "@stage fragment",
+        "#version 450",
+        "layout(location = 0) out vec4 out_color;",
+        "void main() { out_color = tint; }",
+        "@endstage",
+        "@endphase",
+    ])
+
+    material = create_material_from_parsed(parse_shader_text(shader_text))
+    shader = material.get_phase(0).shader
     binding = shader.find_resource_binding("material")
 
+    assert shader.material_ubo_entry_count == 1
+    assert shader.material_ubo_block_size == 16
     assert binding is not None
     assert binding["kind"] == 1
     assert binding["scope"] == 3
