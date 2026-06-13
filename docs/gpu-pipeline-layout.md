@@ -71,9 +71,9 @@ For Slang, backend binding is not authored into the source. `termin_shaderc`
 writes resource metadata into the compiled artifact sidecar and the runtime
 merges that into `tc_shader_resource_binding[]`, including resource scope
 (`frame`, `pass`, `material`, `draw`, `transient`). Runtime uploaders
-(`material_ubo_apply.cpp` in `termin-app` and `material_ubo_runtime.cpp` in
-`termin-render`) walk those entries and copy values from `phase->uniforms[]`
-into the right offsets.
+(`termin-render/src/material_ubo_apply.cpp`) walks the parser metadata for
+legacy GLSL shaders or reflected sidecar fields for Slang shaders, then copies
+values from `phase->uniforms[]` into the right offsets.
 
 Block size is available from `shader->material_ubo_block_size`; fields from
 `shader->material_ubo_entries[]`. Don't hardcode it.

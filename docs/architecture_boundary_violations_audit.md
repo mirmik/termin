@@ -159,7 +159,6 @@ from termin.display import _input_manager_on_key
 | `termin-render/include/termin/render/render_engine.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/render_context.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/execute_context.hpp` | tgfx2 типы |
-| `termin-render/include/termin/render/material_ubo_runtime.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/frame_pass.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/tgfx2_bridge.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/frame_graph_debugger_core.hpp` | tgfx2 типы |
