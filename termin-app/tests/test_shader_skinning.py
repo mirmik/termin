@@ -390,6 +390,15 @@ def test_inject_skinning_pbr_shader():
             assert 'a_position' not in line or '_skinned_position' in line
 
 
+def test_shader_skinning_import_keeps_builtin_shader_catalog_available():
+    from termin.voxels.voxel_shader import voxel_display_shader
+
+    shader = voxel_display_shader()
+
+    assert shader.is_valid
+    assert shader.uuid == "termin-engine-voxel-display"
+
+
 def test_inject_skinning_uniform_locations():
     """Test that injected uniforms use correct array syntax."""
     result = inject_skinning_into_vertex_shader(SAMPLE_VERTEX_SHADER)

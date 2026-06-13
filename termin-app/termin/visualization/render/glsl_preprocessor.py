@@ -1,5 +1,7 @@
 """GLSL preprocessor integration for app ResourceManager includes."""
 
+import tgfx  # noqa: F401
+
 from termin.materials import (
     GlslPreprocessor,
     glsl_preprocessor,
