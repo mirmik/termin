@@ -5,6 +5,8 @@ The module exposes abstractions for window/context management, scene graphs,
 camera models and GPU resources such as meshes, shaders, materials and textures.
 """
 
+from tgfx import TcShader
+
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity, Component, InputComponent
 from termin.visualization.render.render_context import RenderContext
@@ -22,7 +24,6 @@ from termin.visualization.core.camera import (
 )
 from termin.render_components import MeshRenderer
 from termin.materials import TcMaterial as Material
-from tgfx import TcShader
 from tgfx.window import WindowBackend
 from tcbase import MouseButton, Key, Action
 from termin.visualization.render.texture import Texture
