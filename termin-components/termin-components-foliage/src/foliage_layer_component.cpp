@@ -3,13 +3,11 @@
 #include <any>
 #include <cmath>
 #include <cstddef>
-#include <cstdlib>
 #include <cstring>
 #include <functional>
 #include <limits>
 #include <span>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -22,9 +20,7 @@
 #include <tc_inspect_cpp.hpp>
 #include <tgfx/resources/tc_mesh.h>
 #include <tgfx/resources/tc_shader.h>
-#include <tgfx/resources/tc_shader_registry.h>
 #include <tgfx/tgfx_shader_handle.hpp>
-#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/render_context.hpp>
@@ -52,169 +48,19 @@ struct UploadedBuffer {
     uint64_t offset = 0;
 };
 
-char* duplicate_c_string(const char* value) {
-    if (!value) return nullptr;
-    const size_t size = std::strlen(value) + 1;
-    char* copy = static_cast<char*>(std::malloc(size));
-    if (!copy) return nullptr;
-    std::memcpy(copy, value, size);
-    return copy;
-}
-
-struct TcShaderHash {
-    size_t operator()(const TcShader& shader) const {
-        return std::hash<uint32_t>()(shader.handle.index)
-            ^ (std::hash<uint32_t>()(shader.handle.generation) << 1);
-    }
-};
-
-struct TcShaderEqual {
-    bool operator()(const TcShader& a, const TcShader& b) const {
-        return a.handle.index == b.handle.index
-            && a.handle.generation == b.handle.generation;
-    }
-};
-
-std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& foliage_shader_cache() {
-    static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
-    return cache;
-}
-
-std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& foliage_shadow_shader_cache() {
-    static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
-    return cache;
-}
-
 TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_variant = false) {
-    if (!original_shader.is_valid()) {
-        return TcShader();
-    }
-    const tc_shader_variant_op variant_op =
-        shadow_variant ? TC_SHADER_VARIANT_FOLIAGE_SHADOW : TC_SHADER_VARIANT_FOLIAGE;
-    if (original_shader.variant_op() == variant_op) {
-        return original_shader;
-    }
-    if (!shadow_variant && original_shader.language() != TC_SHADER_LANGUAGE_SLANG) {
-        tc::Log::error(
-            "[FoliageLayerComponent] cannot create foliage shader variant for '%s': "
-            "foliage rendering requires Slang material shaders",
-            original_shader.name()
-        );
-        return TcShader();
-    }
-
-    auto& cache = shadow_variant ? foliage_shadow_shader_cache() : foliage_shader_cache();
-    auto it = cache.find(original_shader);
-    if (it != cache.end()) {
-        TcShader& cached = it->second;
-        if (!cached.variant_is_stale()) {
-            return cached;
-        }
-        cache.erase(it);
-    }
-
-    const char* fragment_source =
-        shadow_variant ? FOLIAGE_SHADOW_FRAGMENT_SOURCE : original_shader.fragment_source();
-    if (!fragment_source || fragment_source[0] == '\0') {
-        tc::Log::error(
-            "[FoliageLayerComponent] cannot create foliage shader variant for '%s': fragment source is empty",
-            original_shader.name()
-        );
-        return TcShader();
-    }
-
-    const char* geometry_source = original_shader.geometry_source();
-    if (geometry_source && geometry_source[0] != '\0') {
-        tc::Log::error(
-            "[FoliageLayerComponent] cannot create foliage shader variant for '%s': geometry shaders are not supported yet",
-            original_shader.name()
-        );
-        return TcShader();
-    }
-
-    std::string variant_name = std::string(original_shader.name())
-        + (shadow_variant ? "_FoliageShadow" : "_Foliage");
-    char variant_uuid[40];
-    tc_shader_make_variant_uuid(
-        variant_uuid,
-        sizeof(variant_uuid),
-        original_shader.uuid(),
-        variant_op
-    );
-
-    const char* vertex_uuid =
+    MaterialVertexVariantRequest request{};
+    request.original_shader = original_shader;
+    request.variant_op = shadow_variant ? TC_SHADER_VARIANT_FOLIAGE_SHADOW : TC_SHADER_VARIANT_FOLIAGE;
+    request.vertex_template_uuid =
         shadow_variant ? FOLIAGE_SHADOW_VARIANT_SHADER_UUID : FOLIAGE_VARIANT_SHADER_UUID;
-    const std::string vertex_source =
-        tgfx::load_builtin_shader_stage_source_from_catalog(vertex_uuid, "vertex");
-    if (vertex_source.empty()) {
-        tc::Log::error(
-            "[FoliageLayerComponent] failed to load foliage vertex shader template '%s'",
-            vertex_uuid
-        );
-        return TcShader();
-    }
-
-    tc_shader_handle handle = tc_shader_from_sources_ex(
-        vertex_source.c_str(),
-        fragment_source,
-        nullptr,
-        variant_name.c_str(),
-        original_shader.source_path(),
-        variant_uuid,
-        TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED
-    );
-    if (tc_shader_handle_is_invalid(handle)) {
-        tc::Log::error(
-            "[FoliageLayerComponent] failed to create foliage shader variant for '%s'",
-            original_shader.name()
-        );
-        return TcShader();
-    }
-
-    TcShader variant(handle);
-    variant.set_features(original_shader.features());
-
-    tc_shader* original_raw = original_shader.get();
-    tc_shader* variant_raw = variant.get();
-    if (original_raw && variant_raw) {
-        free(variant_raw->vertex_entry);
-        variant_raw->vertex_entry = duplicate_c_string("vs_main");
-        if (!variant_raw->vertex_entry) {
-            tc::Log::error(
-                "[FoliageLayerComponent] failed to assign vertex entry for foliage shader variant '%s'",
-                variant_name.c_str()
-            );
-            return TcShader();
-        }
-
-        const char* fragment_entry = shadow_variant ? "fs_main" : original_raw->fragment_entry;
-        if (!fragment_entry || fragment_entry[0] == '\0') {
-            fragment_entry = "main";
-        }
-        free(variant_raw->fragment_entry);
-        variant_raw->fragment_entry = duplicate_c_string(fragment_entry);
-        if (!variant_raw->fragment_entry) {
-            tc::Log::error(
-                "[FoliageLayerComponent] failed to assign fragment entry for foliage shader variant '%s'",
-                variant_name.c_str()
-            );
-            return TcShader();
-        }
-
-        // Slang foliage variants get material field layout from shaderc
-        // sidecar reflection. Copying legacy material_ubo_entries here would
-        // create a second source of truth and can mask missing sidecar data.
-        tc_shader_set_material_ubo_layout(variant_raw, nullptr, 0, 0);
-    }
-
-    variant.set_variant_info(original_shader, variant_op);
-    if (shadow_variant) {
-        variant.set_language(TC_SHADER_LANGUAGE_SLANG);
-        variant.set_artifact_policy(TC_SHADER_ARTIFACT_REQUIRED);
-    }
-    cache[original_shader] = variant;
-    return variant;
+    request.variant_name_suffix = shadow_variant ? "_FoliageShadow" : "_Foliage";
+    request.debug_context = "FoliageLayerComponent";
+    request.vertex_entry = "vs_main";
+    request.fragment_source_override = shadow_variant ? FOLIAGE_SHADOW_FRAGMENT_SOURCE : nullptr;
+    request.fragment_entry_override = shadow_variant ? "fs_main" : nullptr;
+    request.require_slang_original = !shadow_variant;
+    return get_material_vertex_variant(request);
 }
 
 bool convert_foliage_vertex_layout(const tc_mesh* mesh, tgfx::VertexBufferLayout& out) {
