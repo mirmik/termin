@@ -30,7 +30,7 @@ Legacy fallback **не мёртвый код** — это активный compa
 | `4-7` | Material textures 0-3 | `tc_material_binding_slots.hpp` legacy fallback |
 | `8` | Shadow maps (резерв) | `tc_material_binding_slots.hpp` |
 | `14` | Push constants (GL emulation) | `i_command_list.hpp`, все builtin GLSL |
-| `16` | Bone matrices (skinning) | `shader_skinning.cpp`, `skinned_mesh_renderer.cpp` |
+| `16` | Bone matrices (skinning legacy fallback) | `skinned_mesh_renderer.cpp` |
 | `24` | Draw data | `color_pass.cpp` |
 | `25` | Draw storage | — |
 
@@ -38,23 +38,19 @@ Legacy fallback **не мёртвый код** — это активный compa
 
 ---
 
-## 2. Критическая проблема: SkinnedMeshRenderer обходит bind-by-name полностью
+## 2. SkinnedMeshRenderer: Slang path uses bind-by-name, legacy fallback remains
 
-**Файл:** `termin-app/cpp/termin/render/skinned_mesh_renderer.cpp:127`
+**Файл:** `termin-components/termin-components-render/src/skinned_mesh_renderer.cpp`
 
-```cpp
-ctx2.bind_uniform_buffer_ring(BONE_BLOCK_BINDING,  // 16, захардкожен
-                               staging.data(),
-                               staging.size());
-```
+Рендерер скinned-мешей теперь сначала ищет `bone_block` / `BoneBlock` в resource reflection и
+биндит UBO по имени. Это покрывает Slang-template variants, где `TerminBoneBlock` описан в
+`termin-engine-skinned-common.slang` и попадает в shaderc sidecar layout.
 
-Рендерер скinned-мешей **никогда** не пытается резолвить binding по имени. Он всегда использует `bind_uniform_buffer_ring(16, ...)` — прямой index-based вызов. При этом:
+Остался fallback на `TC_SHADER_RESOURCE_BINDING_BONE_BLOCK` для non-layout legacy shaders. Layout-only shaders без `bone_block`
+считаются ошибкой и логируются.
 
-- Шейдер skinning инжектируется через regex (`shader_skinning.cpp`), который вставляет `layout(std140, binding = 16)` в GLSL-источник
-- Для Slang-шейдеров эта инъекция не будет работать корректно, так как Slang не использует `layout(binding = N)`
-- Кэширование скinned-вариантов (`s_skinned_shader_cache`) не проверяет, соответствует ли binding 16 реальной политике layout
-
-**Вердикт:** это самый яркий пример обхода системы. Рендерер должен использовать `ctx.bind_uniform("bone_block", ...)` или хотя бы резолвить слот через `tc_shader_find_resource_binding()`.
+**Вердикт:** главный обход системы закрыт для актуального Slang material path. Оставшийся slot fallback можно удалить после
+окончательного выключения legacy GLSL renderer paths.
 
 ---
 
@@ -141,9 +137,11 @@ if (offset_in_slot + padded > ring_ubo_slot_size_) {
 
 ---
 
-## 8. Regex-инъекция на hot path
+## 8. Skinned variants
 
-`shader_skinning.cpp` использует `std::regex` для инъекции skinning-кода в vertex shader при первом draw каждого скinned-меша. Для больших шейдеров это может быть заметно в профайлере. Кэш помогает, но первая компиляция каждого меша будет с пиком latency.
+Regex-инъекция skinning-кода удалена из C++ и Python paths. `shader_skinning.cpp` создаёт только Slang-template variants
+для material/shadow/depth/pick/normal фаз. Старые GLSL shaders больше не получают auto-skinning variant и должны мигрировать
+на Slang material pipeline.
 
 ---
 
@@ -181,13 +179,13 @@ if (shader_uses_layout_only_bindings(raw_shader)) {
 
 | Приоритет | Проблема | Файл |
 |-----------|----------|------|
-| 🔴 Высокий | SkinnedMeshRenderer обходит bind-by-name | `skinned_mesh_renderer.cpp` |
 | 🔴 Высокий | Ring UBO overflow — silent corruption | `vulkan_render_device.cpp` |
 | 🟡 Средний | Тихий фейл символического биндинга | `render_context.cpp` |
 | 🟡 Средний | Flat descriptor set (set 0) — производительность | `material_ubo_apply.cpp`, Vulkan backend |
 | 🟡 Средний | Legacy material texture slot fallback ещё нужен старым путям | `tc_material_binding_slots.hpp`, `shader_parser.cpp`, `termin_shaderc.cpp` |
+| 🟡 Средний | BoneBlock slot fallback ещё нужен legacy non-layout shaders | `skinned_mesh_renderer.cpp` |
 | 🟢 Низкий | Двойной путь push constants | `color_pass.cpp` |
-| 🟢 Низкий | Regex инъекция skinning на hot path | `shader_skinning.cpp` |
 | 🟢 Низкий | GLSL с layout может использовать оба пути биндинга | `shader_binding_policy.hpp` |
 
-Самый критичный — `SkinnedMeshRenderer`. Он работает в обход всей системы и станет точкой отказа, когда legacy-путь будет выключен.
+Самый критичный оставшийся риск — silent corruption при overflow ring UBO. Skinned path теперь следует reflection-first
+модели для актуальных Slang shaders, но legacy fallback ещё стоит убрать после отключения старых GLSL путей.

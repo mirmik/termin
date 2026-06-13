@@ -259,8 +259,8 @@ void DepthPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
-        // Both paths share push_constants + PerFrame UBO — the skinned
-        // variant is the catalog depth vertex shader with injected BoneBlock.
+        // Both paths share push_constants + PerFrame UBO. The skinned
+        // variant is the catalog depth vertex shader with TerminBoneBlock.
         DepthPushStd140 push{};
         std::memcpy(push.u_model, model.data, sizeof(float) * 16);
         ctx.ctx2->set_push_constants(&push, sizeof(push));

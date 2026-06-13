@@ -23,11 +23,10 @@ extern "C" {
 
 namespace termin {
 
-// Must match the BoneBlock declaration in shader_skinning.cpp
-// SKINNING_INPUTS. The binding number is declared in the shader source;
-// the Vulkan descriptor set layout is built from SPIR-V reflection. std140:
-// mat4[] is tightly packed (4 vec4 per matrix), the int after the array
-// needs vec4 alignment → 16-byte stride. Total 128*64 + 16 = 8208.
+// Must match TerminBoneBlock in termin-engine-skinned-common.slang.
+// The descriptor set layout is built from shader reflection. std140 mat4[]
+// is tightly packed (4 vec4 per matrix), the int after the array needs
+// vec4 alignment. Total 128*64 + 16 = 8208.
 static constexpr uint32_t BONE_BLOCK_MAX_BONES = 128;
 static constexpr uint64_t BONE_BLOCK_SIZE =
     BONE_BLOCK_MAX_BONES * 16u * sizeof(float) + 16u;
@@ -161,8 +160,7 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     std::memcpy(staging.data() + BONE_BLOCK_MAX_BONES * 16u * sizeof(float),
                 &count, sizeof(int32_t));
 
-    // Route BoneBlock through shader metadata first. Legacy GLSL variants may
-    // still fall back to the historical slot, but layout-only shaders must
+    // Route BoneBlock through shader metadata. Layout-only shaders must
     // declare the draw-scope bone block explicitly.
     const tc_shader* active_shader = ctx2.active_shader_resource_layout();
     if (const tc_shader_resource_binding* rb = find_bone_block_resource(active_shader)) {

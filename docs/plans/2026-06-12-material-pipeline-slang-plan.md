@@ -181,8 +181,8 @@ Target next step:
   morph/particle vertex transform variants;
 - the renderer should use shader-owned vertex input reflection for mesh,
   skinning, and foliage instance attributes;
-- `shader_skinning.cpp` regex injection should be retired after legacy GLSL
-  users are gone.
+- legacy `shader_skinning.cpp` regex injection is retired; skinned variants
+  now require Slang templates and shaderc-reflected resources.
 
 This is conceptually a stage before the material fragment logic, but it is not
 a GPU stage after the vertex shader. It is a source/module composition step
