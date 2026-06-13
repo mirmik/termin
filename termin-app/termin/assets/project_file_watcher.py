@@ -284,6 +284,7 @@ class ProjectFileWatcher:
         if project_path is None:
             return
 
+        previously_watched_files = set(self._watched_files)
         for processor in self.get_all_processors():
             processor._file_to_resources.clear()
 
@@ -291,6 +292,10 @@ class ProjectFileWatcher:
         self._all_files_by_ext.clear()
 
         self._scan_directory(project_path)
+
+        removed_files = previously_watched_files - self._watched_files
+        for path in sorted(removed_files):
+            self._on_file_removed(path)
 
     def watch_directory(self, path: str) -> None:
         """Scan directory for resources and start live watching."""
@@ -483,7 +488,11 @@ class ProjectFileWatcher:
         # name is a project setting so this exclusion is visible and editable
         # instead of being a hidden "dist" special case.
         build_output_root = (project_root / settings.build_output_dir).resolve()
-        return (build_output_root,)
+        user_ignored_roots = tuple(
+            (project_root / ignored_path).resolve()
+            for ignored_path in settings.ignored_resource_paths
+        )
+        return (build_output_root, *user_ignored_roots)
 
     def _is_ignored_path(self, path: str) -> bool:
         ignored_roots = self._ignored_roots()
@@ -491,6 +500,16 @@ class ProjectFileWatcher:
             return False
 
         resolved = Path(path).resolve()
+        if self._is_resolved_path_ignored(resolved, ignored_roots):
+            return True
+
+        if path.endswith(".meta") or path.endswith(".spec"):
+            resource_path = Path(path[:-5]).resolve()
+            return self._is_resolved_path_ignored(resource_path, ignored_roots)
+
+        return False
+
+    def _is_resolved_path_ignored(self, resolved: Path, ignored_roots: tuple[Path, ...]) -> bool:
         for ignored_root in ignored_roots:
             if resolved == ignored_root or ignored_root in resolved.parents:
                 return True

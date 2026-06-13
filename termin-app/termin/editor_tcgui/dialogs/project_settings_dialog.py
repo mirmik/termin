@@ -10,6 +10,7 @@ from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.text_input import TextInput
+from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.units import px
 
 
@@ -72,12 +73,35 @@ def show_project_settings_dialog(
     build_row.add_child(build_dir_input)
     content.add_child(build_row)
 
+    ignored_label = Label()
+    ignored_label.text = "Ignored Resource Paths:"
+    ignored_label.tooltip = "Project-relative files or directories excluded from resource scan, file watching, and build manifests."
+    content.add_child(ignored_label)
+
+    ignored_paths_input = TextArea()
+    ignored_paths_input.text = "\n".join(manager.settings.ignored_resource_paths)
+    ignored_paths_input.placeholder = "cache\nexternal/generated_assets"
+    ignored_paths_input.preferred_width = px(320)
+    ignored_paths_input.preferred_height = px(120)
+    ignored_paths_input.word_wrap = False
+    content.add_child(ignored_paths_input)
+
+    def _ignored_paths_from_text(text: str) -> list[str]:
+        return [line.strip() for line in text.splitlines() if line.strip()]
+
+    def _apply_settings(_button: str) -> None:
+        manager.set_build_output_dir(build_dir_input.text)
+        manager.set_ignored_resource_paths(_ignored_paths_from_text(ignored_paths_input.text))
+        if on_changed:
+            on_changed()
+
     dlg = Dialog()
     dlg.title = "Project Settings"
     dlg.content = content
     dlg.buttons = ["Close"]
     dlg.default_button = "Close"
     dlg.cancel_button = "Close"
+    dlg.on_result = _apply_settings
     dlg.min_width = 350
 
     dlg.show(ui, windowed=True)
