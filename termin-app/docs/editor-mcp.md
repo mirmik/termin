@@ -58,6 +58,10 @@ The Python namespace contains:
 - `framegraph_debugger`: headless framegraph debugger inspection service.
 - `project_path`: current project path or `None`.
 - `rm` / `resource_manager`: `ResourceManager.instance()`.
+- `Vec3`, `Vec4`, `Quat`, `Pose3`, `GeneralPose3`, `GeneralTransform3`:
+  common geometry and transform types for scene-control scripts.
+- `request_render_update()` / `refresh_editor()`: request an editor viewport
+  redraw after scripts mutate scene state.
 - `termin`: the `termin` package.
 
 Scripts are queued from the MCP server thread and executed by the editor loop on
