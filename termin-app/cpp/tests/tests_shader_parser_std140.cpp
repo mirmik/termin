@@ -402,7 +402,7 @@ TEST_CASE("raw material engine uniform rewrite injects PerFrame for stdlib u_vie
     CHECK(out.find("#define u_model pc._u_model") == std::string::npos);
 }
 
-TEST_CASE("skinned shader variants rewrite legacy engine uniforms for Vulkan")
+TEST_CASE("skinned shader variants reject legacy GLSL shader injection")
 {
     std::string vertex =
         "#version 330 core\n"
@@ -438,21 +438,8 @@ TEST_CASE("skinned shader variants rewrite legacy engine uniforms for Vulkan")
     {
         TcShader original(original_handle);
         TcShader skinned = get_skinned_shader(original);
-        CHECK(skinned.is_valid());
+        CHECK(!skinned.is_valid());
         skinned_handle = skinned.handle;
-
-        std::string out = skinned.vertex_source();
-        CHECK(out.find("#version 450 core") != std::string::npos);
-        CHECK(out.find("uniform mat4 u_model;") == std::string::npos);
-        CHECK(out.find("uniform mat4 u_view;") == std::string::npos);
-        CHECK(out.find("uniform mat4 u_projection;") == std::string::npos);
-        CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
-        CHECK(out.find("layout(push_constant) uniform ColorPushBlock") != std::string::npos);
-        CHECK(out.find("#define u_model pc._u_model") != std::string::npos);
-        CHECK(out.find("layout(std140, binding = 16) uniform BoneBlock") != std::string::npos);
-        CHECK(out.find("_applySkinning(_skinned_position, _skinned_normal)") != std::string::npos);
-        CHECK(skinned.is_variant());
-        CHECK(skinned.variant_op() == TC_SHADER_VARIANT_SKINNING);
     }
 
     if (!tc_shader_handle_is_invalid(skinned_handle)) {
