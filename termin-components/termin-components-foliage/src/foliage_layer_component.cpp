@@ -5,9 +5,11 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
+#include <initializer_list>
 #include <limits>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -15,6 +17,7 @@
 #include <termin/geom/general_pose3.hpp>
 #include <termin/render/frame_uniforms.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/tgfx2_bridge.hpp>
 #include <inspect/tc_kind_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <tc_inspect_cpp.hpp>
@@ -48,6 +51,15 @@ struct UploadedBuffer {
     uint64_t offset = 0;
 };
 
+struct MeshBindingReleaseGuard {
+    tgfx::IRenderDevice& device;
+    const termin::Tgfx2MeshBinding& binding;
+
+    ~MeshBindingReleaseGuard() {
+        termin::release_mesh_binding(device, binding);
+    }
+};
+
 TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_variant = false) {
     MaterialVertexVariantRequest request{};
     request.original_shader = original_shader;
@@ -63,53 +75,51 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
     return get_material_vertex_variant(request);
 }
 
-bool convert_foliage_vertex_layout(const tc_mesh* mesh, tgfx::VertexBufferLayout& out) {
-    if (!mesh || mesh->layout.stride == 0) {
-        return false;
-    }
-
-    out.stride = mesh->layout.stride;
-    out.per_instance = false;
-    out.attributes.clear();
-    bool has_position = false;
-    for (uint8_t i = 0; i < mesh->layout.attrib_count; i++) {
-        const tgfx_vertex_attrib& attr = mesh->layout.attribs[i];
-        if (attr.location > 2) {
-            continue;
-        }
-        if (static_cast<tgfx_attrib_type>(attr.type) != TGFX_ATTRIB_FLOAT32) {
+bool validate_foliage_vertex_layout(
+    const tgfx::VertexBufferLayout& layout,
+    std::initializer_list<std::string_view> required_semantics,
+    const char* variant_name)
+{
+    bool ok = true;
+    for (std::string_view semantic : required_semantics) {
+        if (!tgfx::vertex_layout_has_semantic(layout, semantic)) {
             tc::Log::error(
-                "[FoliageLayerComponent] prototype mesh attribute location=%u must be float, got type=%u",
-                unsigned(attr.location),
-                unsigned(attr.type)
-            );
+                "[FoliageLayerComponent] prototype mesh is incompatible with %s foliage shader: "
+                "missing '%.*s' vertex attribute semantic",
+                variant_name,
+                static_cast<int>(semantic.size()),
+                semantic.data());
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+bool build_foliage_vertex_layout(
+    const termin::Tgfx2MeshBinding& binding,
+    bool shadow_variant,
+    tgfx::VertexBufferLayout& out)
+{
+    if (shadow_variant) {
+        const std::initializer_list<std::string_view> required = {"position"};
+        if (!validate_foliage_vertex_layout(binding.layout, required, "shadow")) {
             return false;
         }
-
-        tgfx::VertexFormat format = tgfx::VertexFormat::Float3;
-        switch (attr.size) {
-            case 1: format = tgfx::VertexFormat::Float; break;
-            case 2: format = tgfx::VertexFormat::Float2; break;
-            case 3: format = tgfx::VertexFormat::Float3; break;
-            case 4: format = tgfx::VertexFormat::Float4; break;
-            default:
-                tc::Log::error(
-                    "[FoliageLayerComponent] unsupported prototype mesh position size=%u",
-                    unsigned(attr.size)
-                );
-                return false;
-        }
-
-        out.attributes.push_back({attr.location, format, attr.offset});
-        if (attr.location == 0) {
-            has_position = true;
-        }
+        out = termin::filter_vertex_layout_to_semantics(
+            binding.layout,
+            required,
+            true);
+        return true;
     }
 
-    if (!has_position) {
-        tc::Log::error("[FoliageLayerComponent] prototype mesh has no position attribute at location 0");
+    const std::initializer_list<std::string_view> required = {"position", "normal", "uv"};
+    if (!validate_foliage_vertex_layout(binding.layout, required, "material")) {
         return false;
     }
+    out = termin::filter_vertex_layout_to_semantics(
+        binding.layout,
+        required,
+        true);
     return true;
 }
 
@@ -482,16 +492,25 @@ bool FoliageLayerComponent::draw_tgfx2(
         return false;
     }
 
-    tgfx::VertexBufferLayout vertex_layout;
-    if (!convert_foliage_vertex_layout(mesh, vertex_layout)) {
-        return false;
-    }
     if (!mesh->indices || mesh->index_count == 0) {
         tc::Log::error("[FoliageLayerComponent] prototype mesh must be indexed for instanced foliage draw");
         return false;
     }
     if (mesh->index_count > static_cast<size_t>(std::numeric_limits<uint32_t>::max())) {
         tc::Log::error("[FoliageLayerComponent] prototype mesh index count exceeds uint32 draw limit");
+        return false;
+    }
+
+    termin::Tgfx2MeshBinding mesh_binding = termin::wrap_mesh_as_tgfx2(ctx2.device(), mesh);
+    MeshBindingReleaseGuard mesh_binding_guard{ctx2.device(), mesh_binding};
+    if (mesh_binding.index_count == 0) {
+        tc::Log::error("[FoliageLayerComponent] failed to upload prototype mesh for instanced draw");
+        return false;
+    }
+
+    const bool shadow_variant = phase_mark == "shadow";
+    tgfx::VertexBufferLayout vertex_layout;
+    if (!build_foliage_vertex_layout(mesh_binding, shadow_variant, vertex_layout)) {
         return false;
     }
 
@@ -510,18 +529,12 @@ bool FoliageLayerComponent::draw_tgfx2(
         return false;
     }
 
-    auto [vertex_buffer, index_buffer] = ctx2.device().ensure_tc_mesh(mesh);
-    if (!vertex_buffer || !index_buffer) {
-        tc::Log::error("[FoliageLayerComponent] failed to upload prototype mesh for instanced draw");
-        return false;
-    }
-
     TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
-        shader = get_foliage_instanced_shader(TcShader(phase->shader), phase_mark == "shadow");
+        shader = get_foliage_instanced_shader(TcShader(phase->shader), shadow_variant);
     } else if (shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE
         && shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE_SHADOW) {
-        shader = get_foliage_instanced_shader(shader, phase_mark == "shadow");
+        shader = get_foliage_instanced_shader(shader, shadow_variant);
     }
     if (!shader.is_valid()) {
         tc::Log::error("[FoliageLayerComponent] cannot draw foliage: shader variant is invalid");
@@ -582,18 +595,16 @@ bool FoliageLayerComponent::draw_tgfx2(
         instance_buffer.buffer,
         instance_buffer.offset,
         static_cast<uint32_t>(instances.size() * sizeof(FoliageGpuInstance)));
-    ctx2.set_topology(mesh->draw_mode == TC_DRAW_LINES
-        ? tgfx::PrimitiveTopology::LineList
-        : tgfx::PrimitiveTopology::TriangleList);
+    ctx2.set_topology(mesh_binding.topology);
     ctx2.set_vertex_layout(vertex_layout);
     ctx2.draw_indexed_instanced(
-        vertex_buffer,
+        mesh_binding.vertex_buffer,
         0,
-        index_buffer,
+        mesh_binding.index_buffer,
         0,
         {},
         0,
-        static_cast<uint32_t>(mesh->index_count),
+        mesh_binding.index_count,
         static_cast<uint32_t>(instances.size())
     );
     return true;
