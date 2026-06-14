@@ -4,8 +4,8 @@
 // @program .shader source is loaded from built-in shader resources and parsed
 // at ensure_resources time. The parser auto-generates the std140
 // MaterialParams layout from @property entries, and values (camera matrices +
-// colors + variant selector) are packed each frame and bound via
-// bind_material_ubo. No hand-coded layout, no gradient/solid shader split.
+// colors + variant selector) are packed each frame and bound through reflected
+// material resources. No hand-coded layout, no gradient/solid shader split.
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
