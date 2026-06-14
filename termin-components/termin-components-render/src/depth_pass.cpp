@@ -55,12 +55,13 @@ struct DepthPerFrameStd140 {
 static_assert(sizeof(DepthPerFrameStd140) == 144,
               "DepthPerFrameStd140 must be 144 bytes");
 
-// PushConstants (binding 14): per-object model matrix.
-struct DepthPushStd140 {
+// Draw-scope per-object model matrix. The shader resource layout maps it to
+// backend storage; render code binds it by reflected resource name.
+struct DepthDrawStd140 {
     float u_model[16];
 };
-static_assert(sizeof(DepthPushStd140) == 64,
-              "DepthPushStd140 must be exactly one mat4");
+static_assert(sizeof(DepthDrawStd140) == 64,
+              "DepthDrawStd140 must be exactly one mat4");
 
 float depth_encoding_mode(const std::string& encoding) {
     if (encoding == "linear") return 0.0f;
@@ -259,13 +260,26 @@ void DepthPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
-        // Both paths share push_constants + PerFrame UBO. The skinned
-        // variant is the catalog depth vertex shader with TerminBoneBlock.
-        DepthPushStd140 push{};
-        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-        ctx.ctx2->set_push_constants(&push, sizeof(push));
+        // Both paths share the same draw-scope model matrix + PerFrame UBO.
+        // The skinned variant adds TerminBoneBlock as another reflected draw
+        // resource instead of changing the model binding contract.
+        DepthDrawStd140 draw{};
+        std::memcpy(draw.u_model, model.data, sizeof(float) * 16);
+        std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
+            {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
+        }};
+        MaterialPipelineResourceContext draw_resources{};
+        draw_resources.uniforms = draw_uniforms;
 
         if (override_is_base) {
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                depth_shader.shader,
+                nullptr,
+                draw_resources,
+                depth_fallback);
             // Base depth VS only reads position.
             draw_material_pipeline_mesh(
                 *ctx.ctx2,
@@ -291,7 +305,7 @@ void DepthPass::execute_with_data_tgfx2(
                 device,
                 skinned_shader.shader,
                 nullptr,
-                depth_resources,
+                draw_resources,
                 depth_fallback);
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -620,11 +634,23 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
-        DepthPushStd140 push{};
-        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-        ctx.ctx2->set_push_constants(&push, sizeof(push));
+        DepthDrawStd140 draw{};
+        std::memcpy(draw.u_model, model.data, sizeof(float) * 16);
+        std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
+            {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
+        }};
+        MaterialPipelineResourceContext draw_resources{};
+        draw_resources.uniforms = draw_uniforms;
 
         if (override_is_base) {
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                depth_shader.shader,
+                nullptr,
+                draw_resources,
+                depth_fallback);
             draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
@@ -647,7 +673,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 device,
                 skinned_shader.shader,
                 nullptr,
-                depth_resources,
+                draw_resources,
                 depth_fallback);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);

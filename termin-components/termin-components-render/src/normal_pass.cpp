@@ -36,13 +36,13 @@ struct NormalPerFrameStd140 {
 static_assert(sizeof(NormalPerFrameStd140) == 128,
               "NormalPerFrameStd140 must be 2 * mat4");
 
-// PushConstants: per-object model matrix. Vulkan uses real push constants;
-// OpenGL falls back to binding 14 in the tgfx2 compatibility layer.
-struct NormalPushStd140 {
+// Draw-scope per-object model matrix. The shader resource layout maps it to
+// backend storage; render code binds it by reflected resource name.
+struct NormalDrawStd140 {
     float u_model[16];
 };
-static_assert(sizeof(NormalPushStd140) == 64,
-              "NormalPushStd140 must be exactly one mat4");
+static_assert(sizeof(NormalDrawStd140) == 64,
+              "NormalDrawStd140 must be exactly one mat4");
 
 } // anonymous namespace
 
@@ -160,11 +160,23 @@ void NormalPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, normal_shader_handle_);
 
-        NormalPushStd140 push{};
-        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-        ctx.ctx2->set_push_constants(&push, sizeof(push));
+        NormalDrawStd140 draw{};
+        std::memcpy(draw.u_model, model.data, sizeof(float) * 16);
+        std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
+            {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            {"normal_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
+        }};
+        MaterialPipelineResourceContext draw_resources{};
+        draw_resources.uniforms = draw_uniforms;
 
         if (override_is_base) {
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                normal_shader.shader,
+                nullptr,
+                draw_resources,
+                normal_fallback);
             draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
@@ -188,7 +200,7 @@ void NormalPass::execute_with_data_tgfx2(
                 device,
                 skinned_shader.shader,
                 nullptr,
-                normal_resources,
+                draw_resources,
                 normal_fallback);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
