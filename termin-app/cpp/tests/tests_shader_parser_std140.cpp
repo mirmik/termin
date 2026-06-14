@@ -242,7 +242,7 @@ TEST_CASE("tc_shader: material UBO layout registers material resource binding")
         CHECK_EQ(std::string(binding->name), std::string(TC_SHADER_RESOURCE_MATERIAL));
         CHECK_EQ(binding->kind, static_cast<uint32_t>(TC_SHADER_RESOURCE_CONSTANT_BUFFER));
         CHECK_EQ(binding->set, TC_SHADER_RESOURCE_SET_DEFAULT);
-        CHECK_EQ(binding->binding, TC_SHADER_RESOURCE_BINDING_MATERIAL);
+        CHECK_EQ(binding->binding, 1u);
         CHECK_EQ(binding->stage_mask, static_cast<uint32_t>(TC_SHADER_STAGE_ALL_GRAPHICS));
         CHECK_EQ(binding->size, 16u);
     }
@@ -317,8 +317,8 @@ TEST_CASE("raw material stages rewrite engine uniforms for Vulkan")
     CHECK(out.find("uniform mat4 u_view;") == std::string::npos);
     CHECK(out.find("uniform mat4 u_projection;") == std::string::npos);
     CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
-    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") != std::string::npos);
-    CHECK(out.find("#define u_model pc._u_model") != std::string::npos);
+    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") != std::string::npos);
+    CHECK(out.find("#define u_model draw_data._u_model") != std::string::npos);
 }
 
 TEST_CASE("raw material engine uniform rewrite is idempotent")
@@ -333,7 +333,8 @@ TEST_CASE("raw material engine uniform rewrite is idempotent")
 
     CHECK_EQ(twice.find("uniform PerFrame"), twice.rfind("uniform PerFrame"));
     CHECK_EQ(twice.find("struct ColorPushData"), twice.rfind("struct ColorPushData"));
-    CHECK_EQ(twice.find("#define u_model pc._u_model"), twice.rfind("#define u_model pc._u_model"));
+    CHECK_EQ(twice.find("#define u_model draw_data._u_model"),
+             twice.rfind("#define u_model draw_data._u_model"));
 }
 
 TEST_CASE("raw material engine uniform rewrite ignores push-constant struct fields")
@@ -356,8 +357,8 @@ TEST_CASE("raw material engine uniform rewrite ignores push-constant struct fiel
 
     CHECK(out.find("#version 450 core") != std::string::npos);
     CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") == std::string::npos);
-    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") == std::string::npos);
-    CHECK(out.find("#define u_model pc._u_model") == std::string::npos);
+    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") == std::string::npos);
+    CHECK(out.find("#define u_model draw_data._u_model") == std::string::npos);
     CHECK(out.find("mat4 u_model;") != std::string::npos);
     CHECK(out.find("pc._u_model") == std::string::npos);
 }
@@ -376,8 +377,8 @@ TEST_CASE("raw material engine uniform rewrite only injects model macro for mode
     CHECK(out.find("#version 450 core") != std::string::npos);
     CHECK(out.find("uniform vec3 u_camera_position;") == std::string::npos);
     CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
-    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") == std::string::npos);
-    CHECK(out.find("#define u_model pc._u_model") == std::string::npos);
+    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") == std::string::npos);
+    CHECK(out.find("#define u_model draw_data._u_model") == std::string::npos);
     CHECK(out.find("mat4 u_model;") != std::string::npos);
 }
 
@@ -398,11 +399,11 @@ TEST_CASE("raw material engine uniform rewrite injects PerFrame for stdlib u_vie
     CHECK(out.find("#version 450 core") != std::string::npos);
     CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
     CHECK(out.find("mat4 u_view;") != std::string::npos);
-    CHECK(out.find("layout(push_constant) uniform ColorPushBlock") == std::string::npos);
-    CHECK(out.find("#define u_model pc._u_model") == std::string::npos);
+    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") == std::string::npos);
+    CHECK(out.find("#define u_model draw_data._u_model") == std::string::npos);
 }
 
-TEST_CASE("skinned shader variants reject legacy GLSL shader injection")
+TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection")
 {
     std::string vertex =
         "#version 330 core\n"
@@ -478,6 +479,25 @@ TEST_CASE("skinned shader variants create Slang vertex-stage variants")
         TC_SHADER_LANGUAGE_SLANG,
         TC_SHADER_ARTIFACT_REQUIRED);
     CHECK(!tc_shader_handle_is_invalid(original_handle));
+    tc_shader* original_raw = tc_shader_get(original_handle);
+    REQUIRE(original_raw != nullptr);
+
+    tc_shader_resource_binding original_bindings[2]{};
+    std::strncpy(original_bindings[0].name, TC_SHADER_RESOURCE_MATERIAL, TC_SHADER_RESOURCE_NAME_MAX - 1);
+    original_bindings[0].kind = TC_SHADER_RESOURCE_CONSTANT_BUFFER;
+    original_bindings[0].scope = TC_SHADER_RESOURCE_SCOPE_MATERIAL;
+    original_bindings[0].set = TC_SHADER_RESOURCE_SET_DEFAULT;
+    original_bindings[0].binding = 1u;
+    original_bindings[0].stage_mask = TC_SHADER_STAGE_FRAGMENT;
+    original_bindings[0].size = 16u;
+    std::strncpy(original_bindings[1].name, "lighting", TC_SHADER_RESOURCE_NAME_MAX - 1);
+    original_bindings[1].kind = TC_SHADER_RESOURCE_CONSTANT_BUFFER;
+    original_bindings[1].scope = TC_SHADER_RESOURCE_SCOPE_PASS;
+    original_bindings[1].set = TC_SHADER_RESOURCE_SET_DEFAULT;
+    original_bindings[1].binding = 0u;
+    original_bindings[1].stage_mask = TC_SHADER_STAGE_FRAGMENT;
+    original_bindings[1].size = 64u;
+    tc_shader_set_resource_layout(original_raw, original_bindings, 2u);
 
     {
         TcShader original(original_handle);
@@ -491,6 +511,24 @@ TEST_CASE("skinned shader variants create Slang vertex-stage variants")
         CHECK(out.find("import termin_vertex_transform;") != std::string::npos);
         CHECK(out.find("ConstantBuffer<TerminBoneBlock> bone_block") != std::string::npos);
         CHECK(out.find("termin_skinned_vertex") != std::string::npos);
+
+        const tc_shader* skinned_raw = skinned.get();
+        REQUIRE(skinned_raw != nullptr);
+        const tc_shader_resource_binding* material =
+            tc_shader_find_resource_binding(skinned_raw, TC_SHADER_RESOURCE_MATERIAL);
+        REQUIRE(material != nullptr);
+        CHECK_EQ(material->binding, 1u);
+        CHECK_EQ(material->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_MATERIAL));
+        const tc_shader_resource_binding* lighting =
+            tc_shader_find_resource_binding(skinned_raw, "lighting");
+        REQUIRE(lighting != nullptr);
+        CHECK_EQ(lighting->binding, 0u);
+        CHECK_EQ(lighting->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_PASS));
+        const tc_shader_resource_binding* bone =
+            tc_shader_find_resource_binding(skinned_raw, "bone_block");
+        REQUIRE(bone != nullptr);
+        CHECK_EQ(bone->binding, 16u);
+        CHECK_EQ(bone->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_DRAW));
     }
 
     tc_shader_destroy(original_handle);
@@ -621,8 +659,7 @@ TEST_CASE("parse_shader_text: texture properties keep declaration order in bindi
     CHECK(frag.find("layout(binding = 5) uniform sampler2D u_depth;") != std::string::npos);
     CHECK(frag.find("layout(binding = 6) uniform sampler2D u_normal;") != std::string::npos);
     CHECK(frag.find("layout(binding = 7) uniform sampler2D u_roughness;") != std::string::npos);
-    CHECK(frag.find("layout(binding = 9) uniform sampler2D u_emissive;") != std::string::npos);
-    CHECK(frag.find("layout(binding = 8) uniform sampler2D u_emissive;") == std::string::npos);
+    CHECK(frag.find("layout(binding = 8) uniform sampler2D u_emissive;") != std::string::npos);
 }
 
 TEST_CASE("parse_shader_text: Slang scalar properties synthesize material constant buffer")

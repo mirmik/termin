@@ -444,14 +444,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             }};
             MaterialPipelineResourceContext shadow_resources{};
             shadow_resources.uniforms = per_frame_uniforms;
-            MaterialPipelineFallbackBindings shadow_fallback{};
             prepare_material_pipeline_resources(
                 *ctx.ctx2,
                 device,
                 shadow_shader.shader,
                 nullptr,
-                shadow_resources,
-                shadow_fallback);
+                shadow_resources);
 
             if (cached_draw_calls_.empty()) {
                 end_shadow_pass();
@@ -494,8 +492,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     device,
                     shadow_shader.shader,
                     nullptr,
-                    shadow_resources,
-                    shadow_fallback);
+                    shadow_resources);
             };
 
             for (const auto& dc : cached_draw_calls_) {
@@ -539,8 +536,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         device,
                         shadow_shader.shader,
                         nullptr,
-                        shadow_resources,
-                        shadow_fallback);
+                        shadow_resources);
                     continue;
                 }
 
@@ -567,8 +563,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         device,
                         shadow_shader.shader,
                         nullptr,
-                        draw_resources,
-                        shadow_fallback);
+                        draw_resources);
                     // Non-skinned fast path. Shadow VS only reads position.
                     draw_material_pipeline_mesh(
                         *ctx.ctx2,
@@ -595,8 +590,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         device,
                         skinned_shader.shader,
                         nullptr,
-                        draw_resources,
-                        shadow_fallback);
+                        draw_resources);
 
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -618,8 +612,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         device,
                         shadow_shader.shader,
                         nullptr,
-                        shadow_resources,
-                        shadow_fallback);
+                        shadow_resources);
                 }
             }
             (void)last_shader;

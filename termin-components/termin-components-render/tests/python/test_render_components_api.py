@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from termin.materials import TcMaterial
 from termin.render_components import LineRenderer, LineRenderMode
 
@@ -150,3 +152,15 @@ def test_line_renderer_points_are_inspectable():
     assert component.get_field("render_mode") == 4
     assert component.to_python().points == [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
     assert component.to_python().render_mode == LineRenderMode.WorldTube
+
+
+def test_depth_conversion_passes_bind_textures_by_reflected_name():
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "depth_pass.cpp"
+    ).read_text(encoding="utf-8")
+
+    assert 'bind_texture("u_depth_tex", depth_tex)' in source
+    assert 'bind_texture("u_color_tex", color_tex)' in source
+    assert "bind_sampled_texture(9" not in source

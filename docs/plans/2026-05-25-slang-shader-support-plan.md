@@ -145,7 +145,7 @@ After M1 through M7:
 
 ## Migration Rules
 
-- Do not rewrite legacy GLSL without need.
+- Do not rewrite existing GLSL without need.
 - New backend-neutral shaders should be written in Slang.
 - A Slang shader without artifacts is a build/package error.
 - Runtime source fallback is allowed only for GLSL/dev mode.

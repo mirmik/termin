@@ -217,7 +217,7 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
             / "termin-engine-tonemap.shader-layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert tonemap_layout["binding_model"] == "legacy_numeric_bridge"
+    assert tonemap_layout["binding_model"] == "resource_layout"
     assert {
         "name": "u_input",
         "logical_name": "input_texture",
@@ -232,7 +232,7 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
             / "termin-engine-grayscale.shader-layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert grayscale_layout["binding_model"] == "legacy_numeric_bridge"
+    assert grayscale_layout["binding_model"] == "resource_layout"
     assert {
         "name": "u_input",
         "logical_name": "input_texture",
@@ -247,7 +247,7 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
             / "termin-engine-shadow.shader-layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert shadow_layout["binding_model"] == "legacy_numeric_bridge"
+    assert shadow_layout["binding_model"] == "resource_layout"
     assert {
         "name": "per_frame",
         "logical_name": "per_frame",
@@ -276,7 +276,7 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         "name": "MaterialParams",
         "logical_name": "material_params",
         "kind": "constant_buffer",
-        "legacy_binding": 1,
+        "binding": 1,
     } in skybox_layout["resources"]
 
 

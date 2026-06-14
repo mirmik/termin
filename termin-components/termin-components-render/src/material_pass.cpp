@@ -207,15 +207,12 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(ctx);
     MaterialPipelineResourceContext material_resources{};
     material_resources.per_frame = &per_frame;
-    MaterialPipelineFallbackBindings material_fallback{};
-    material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
     prepare_material_pipeline_resources(
         *ctx2,
         device,
         shader_binding.shader,
         phase,
-        material_resources,
-        material_fallback);
+        material_resources);
 
     auto bind_graph_texture = [&](
         const std::string& res_name,

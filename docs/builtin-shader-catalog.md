@@ -135,13 +135,9 @@ still needs the material shader parser to synthesize `MaterialParams` GLSL.
 Exporters parse those program sources and package generated GLSL stage
 artifacts while keeping the program source path in the layout sidecar.
 
-Runtime fallback GLSL is allowed only for legacy/editor compatibility when no
-artifact root is configured. It must stay next to the catalog entry, not in a
-caller-specific copy.
-
 Live engine renderers and render passes should call the built-in catalog loader
 with only the stable shader UUID. Filenames, shader names, and stage shape
 belong in `engine-shader-catalog.json`, not in individual pass implementations.
 Migrated Slang built-ins should consume generated artifacts plus layout
-metadata, then bind resources by logical name. Legacy GLSL built-ins may keep
-numeric bindings until their pass/runtime path is migrated.
+metadata, then bind resources by logical name. Runtime GLSL fallbacks should
+not be added; missing artifacts are errors.

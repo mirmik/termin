@@ -6,8 +6,8 @@ Binding/layout note, updated 2026-06-11: the resource binding direction in
 this historical plan has been superseded by
 `2026-06-11-slang-scope-first-binding.md`. Slang source should stay
 backend-neutral, runtime code should bind by logical name, and scope metadata
-is the active migration target. Any references below to shared-layout bridge
-work describe earlier transition state, not the current target architecture.
+is the active migration target. Any older fixed-layout bridge work referenced
+below describes earlier transition state, not the current target architecture.
 
 ## Goal
 
@@ -112,7 +112,8 @@ TC_SHADER_LANGUAGE_HLSL
 ```
 
 Also add an artifact requirement policy or equivalent state so runtime code can
-distinguish legacy GLSL fallback from Slang artifact-only shaders.
+distinguish source-compiled GLSL compatibility shaders from artifact-required
+Slang shaders.
 
 Acceptance:
 
@@ -332,7 +333,8 @@ Acceptance:
 - One `.slang` source produces OpenGL GLSL and Vulkan SPIR-V artifacts.
 - Vulkan smoke renders the generated Slang artifact path. OpenGL coverage is
   compatibility coverage and must not block Vulkan-first Slang migration.
-- Legacy GLSL remains available until enough built-ins are migrated.
+- Built-ins should keep moving to Slang/catalog artifacts; runtime GLSL
+  fallback paths should not grow.
 
 Status:
 
@@ -424,10 +426,8 @@ Status:
   grayscale, bloom, and tonemap built-ins are now catalog-managed sources.
   Skybox remains a `.shader`
   program so the existing material UBO parser owns its generated GLSL stage
-  layout. The resource-using entries carry logical resource metadata and
-  explicit `legacy_binding` values. They are not migrated to Slang yet because
-  texture resources, material UBO generation, and the current GL push-constant
-  bridge still depend on numeric binding slots.
+  layout. The resource-using entries carry logical resource metadata; the old
+  explicit legacy binding fields have been removed.
 - `ShadowPass`, `DebugTrianglePass`, `IdPass` base shader, `NormalPass`,
   `DepthPass`, `DepthOnlyPass`, `DepthToColorPass`, `ColorToDepthPass`,
   `LineRenderer` default material, `SkyBoxPass`, `GrayscalePass`, `BloomPass`,

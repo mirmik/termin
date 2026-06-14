@@ -34,8 +34,9 @@ constexpr const char* COLOR_TO_DEPTH_ENGINE_SHADER_UUID = "termin-engine-color-t
 
 namespace {
 
-// PerFrame UBO (binding 0): view + projection + near/far plane. Uploaded
-// ONCE per execute, bound as a regular uniform buffer. std140:
+// PerFrame UBO payload: view + projection + near/far plane. Uploaded once per
+// execute and bound through the shader's reflected per_frame resource layout.
+// std140:
 //   u_view       mat4   offset 0    (64 B)
 //   u_projection mat4   offset 64   (64 B)
 //   u_near       float  offset 128  (4 B)
@@ -193,14 +194,12 @@ void DepthPass::execute_with_data_tgfx2(
     }};
     MaterialPipelineResourceContext depth_resources{};
     depth_resources.uniforms = per_frame_uniforms;
-    MaterialPipelineFallbackBindings depth_fallback{};
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,
         depth_shader.shader,
         nullptr,
-        depth_resources,
-        depth_fallback);
+        depth_resources);
 
     const std::string& debug_symbol = get_debug_internal_point();
     auto capture_debug_symbol = [&](const char* entity_name) {
@@ -236,8 +235,7 @@ void DepthPass::execute_with_data_tgfx2(
             device,
             depth_shader.shader,
             nullptr,
-            depth_resources,
-            depth_fallback);
+            depth_resources);
     };
 
     for (const auto& dc : cached_draw_calls_) {
@@ -278,8 +276,7 @@ void DepthPass::execute_with_data_tgfx2(
                 device,
                 depth_shader.shader,
                 nullptr,
-                draw_resources,
-                depth_fallback);
+                draw_resources);
             // Base depth VS only reads position.
             draw_material_pipeline_mesh(
                 *ctx.ctx2,
@@ -305,8 +302,7 @@ void DepthPass::execute_with_data_tgfx2(
                 device,
                 skinned_shader.shader,
                 nullptr,
-                draw_resources,
-                depth_fallback);
+                draw_resources);
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
             draw_material_pipeline_mesh(
@@ -324,8 +320,7 @@ void DepthPass::execute_with_data_tgfx2(
                 device,
                 depth_shader.shader,
                 nullptr,
-                depth_resources,
-                depth_fallback);
+                depth_resources);
         }
     }
 
@@ -572,14 +567,12 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     }};
     MaterialPipelineResourceContext depth_resources{};
     depth_resources.uniforms = per_frame_uniforms;
-    MaterialPipelineFallbackBindings depth_fallback{};
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,
         depth_shader.shader,
         nullptr,
-        depth_resources,
-        depth_fallback);
+        depth_resources);
 
     const std::string& debug_symbol = get_debug_internal_point();
     auto capture_debug_symbol = [&](const char* entity_name) {
@@ -610,8 +603,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
             device,
             depth_shader.shader,
             nullptr,
-            depth_resources,
-            depth_fallback);
+            depth_resources);
     };
 
     for (const auto& dc : cached_draw_calls_) {
@@ -649,8 +641,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 device,
                 depth_shader.shader,
                 nullptr,
-                draw_resources,
-                depth_fallback);
+                draw_resources);
             draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
@@ -673,8 +664,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 device,
                 skinned_shader.shader,
                 nullptr,
-                draw_resources,
-                depth_fallback);
+                draw_resources);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -693,8 +683,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 device,
                 depth_shader.shader,
                 nullptr,
-                depth_resources,
-                depth_fallback);
+                depth_resources);
         }
     }
 
@@ -764,8 +753,9 @@ void DepthToColorPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::None);
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs);
+    ctx.ctx2->use_shader_resource_layout(raw);
     ctx.ctx2->clear_resource_bindings();
-    ctx.ctx2->bind_sampled_texture(9, depth_tex);
+    ctx.ctx2->bind_texture("u_depth_tex", depth_tex);
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
 }
@@ -833,8 +823,9 @@ void ColorToDepthPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->set_blend(false);
     ctx.ctx2->set_cull(tgfx::CullMode::None);
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), fs);
+    ctx.ctx2->use_shader_resource_layout(raw);
     ctx.ctx2->clear_resource_bindings();
-    ctx.ctx2->bind_sampled_texture(9, color_tex);
+    ctx.ctx2->bind_texture("u_color_tex", color_tex);
     ctx.ctx2->draw_fullscreen_quad();
     ctx.ctx2->end_pass();
 }
