@@ -285,3 +285,4 @@ def test_build_project_compiles_slang_shader_usages_for_vulkan_and_opengl(tmp_pa
     ]
     assert all("--language" in call and call[call.index("--language") + 1] == "slang" for call in calls)
     assert {call[call.index("--target") + 1] for call in calls} == {"vulkan", "opengl"}
+    assert all("--layout-scheme" not in call for call in calls)

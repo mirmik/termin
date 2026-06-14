@@ -29,13 +29,17 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
 
 def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
     compiler = tmp_path / "fake_target_termin_shaderc.py"
+    calls_path = tmp_path / "target_shaderc_calls.jsonl"
     compiler.write_text(
         "#!/usr/bin/env python3\n"
-        "import pathlib, sys\n"
+        "import json, pathlib, sys\n"
+        f"calls = pathlib.Path({str(calls_path)!r})\n"
         "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
         "target = sys.argv[sys.argv.index('--target') + 1]\n"
         "out.parent.mkdir(parents=True, exist_ok=True)\n"
-        "out.write_bytes(('ARTIFACT-' + target).encode('ascii'))\n",
+        "out.write_bytes(('ARTIFACT-' + target).encode('ascii'))\n"
+        "with calls.open('a', encoding='utf-8') as f:\n"
+        "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n",
         encoding="utf-8",
     )
     compiler.chmod(0o755)
@@ -620,6 +624,12 @@ def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -
     }
     assert (result.package_dir / "shaders" / "vulkan" / f"{shader_uuid}.vert.spv").read_bytes() == b"ARTIFACT-vulkan"
     assert (result.package_dir / "shaders" / "opengl" / f"{shader_uuid}.frag.glsl").read_bytes() == b"ARTIFACT-opengl"
+    calls = [
+        json.loads(line)
+        for line in (tmp_path / "target_shaderc_calls.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert {call[call.index("--target") + 1] for call in calls} == {"vulkan", "opengl"}
+    assert all("--layout-scheme" not in call for call in calls)
     assert result.diagnostics == []
 
 
