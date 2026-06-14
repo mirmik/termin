@@ -51,6 +51,33 @@ static void tc_value_to_string_map(
     }
 }
 
+static bool shader_has_material_field(const tc_shader* shader, const std::string& field_name) {
+    if (!shader || field_name.empty()) {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < shader->material_ubo_entry_count; ++i) {
+        if (field_name == shader->material_ubo_entries[i].name) {
+            return true;
+        }
+    }
+
+    const tc_shader_resource_binding* material_rb =
+        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
+    if (!material_rb ||
+        material_rb->kind != TC_SHADER_RESOURCE_CONSTANT_BUFFER ||
+        !material_rb->fields) {
+        return false;
+    }
+
+    for (uint32_t i = 0; i < material_rb->field_count; ++i) {
+        if (field_name == material_rb->fields[i].name) {
+            return true;
+        }
+    }
+    return false;
+}
+
 MaterialPass::MaterialPass() {
     pass_name_set("MaterialPass");
     link_to_type_registry("MaterialPass");
@@ -237,6 +264,28 @@ void MaterialPass::execute(ExecuteContext& ctx) {
             tc::Log::warn("[MaterialPass] '%s': tgfx2 input texture for '%s' not available",
                 get_pass_name().c_str(), res_name.c_str());
             return;
+        }
+
+        const std::string texel_size_uniform = uniform_name + "_texel_size";
+        if (shader_has_material_field(shader_binding.shader, texel_size_uniform)) {
+            tgfx::TextureDesc desc = device.texture_desc(res_it->second);
+            if (desc.width > 0 && desc.height > 0) {
+                const float texel_size[2] = {
+                    1.0f / static_cast<float>(desc.width),
+                    1.0f / static_cast<float>(desc.height),
+                };
+                if (!tc_material_phase_set_uniform(
+                        phase,
+                        texel_size_uniform.c_str(),
+                        TC_UNIFORM_VEC2,
+                        texel_size)) {
+                    tc::Log::error(
+                        "[MaterialPass] '%s': failed to update texture texel-size "
+                        "material property '%s'",
+                        get_pass_name().c_str(),
+                        texel_size_uniform.c_str());
+                }
+            }
         }
 
         ctx2->bind_texture(uniform_name, res_it->second);
