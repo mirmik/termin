@@ -42,7 +42,8 @@ struct IdPerFrameStd140 {
 static_assert(sizeof(IdPerFrameStd140) == 128,
               "IdPerFrameStd140 must be 2 * mat4");
 
-// PushConstants (binding 14): per-object model matrix + pick color.
+// Draw-scope per-object model matrix + pick color. The shader resource
+// layout maps it to backend storage; render code binds it by reflected name.
 // 64 + 16 = 80 bytes. vec4 used for pickColor because std140 pads
 // vec3 to 16-byte alignment anyway.
 struct IdPushStd140 {
@@ -51,8 +52,6 @@ struct IdPushStd140 {
 };
 static_assert(sizeof(IdPushStd140) == 80,
               "IdPushStd140 must be mat4 + vec4");
-static_assert(sizeof(IdPushStd140) <= 128,
-              "IdPushStd140 must fit within Vulkan min push constant size");
 
 } // anonymous namespace
 
