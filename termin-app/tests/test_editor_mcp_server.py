@@ -1,7 +1,10 @@
 import json
+import socket
 import threading
 import time
 import urllib.request
+
+import pytest
 
 from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
 from termin.editor_tcgui.mcp_server import (
@@ -9,6 +12,29 @@ from termin.editor_tcgui.mcp_server import (
     EditorMcpServer,
     editor_mcp_enabled,
 )
+
+
+def _loopback_listener_available() -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            sock.listen(1)
+    except OSError:
+        return False
+    return True
+
+
+requires_loopback_listener = pytest.mark.skipif(
+    not _loopback_listener_available(),
+    reason="local loopback listener is unavailable in this test environment",
+)
+
+
+def _start_or_skip(server: EditorMcpServer) -> None:
+    try:
+        server.start()
+    except OSError as exc:
+        pytest.skip(f"local loopback listener is unavailable: {exc}")
 
 
 def _post(session, method, params=None):
@@ -28,6 +54,7 @@ def _post(session, method, params=None):
         return json.loads(response.read().decode("utf-8"))
 
 
+@requires_loopback_listener
 def test_editor_mcp_server_exposes_editor_tools(tmp_path):
     executor = EditorPythonExecutor(lambda: {"value": 41})
     config = EditorMcpConfig(
@@ -37,7 +64,7 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
         session_file=tmp_path / "editor-mcp.json",
     )
     server = EditorMcpServer(executor, config)
-    server.start()
+    _start_or_skip(server)
     try:
         session = json.loads(config.session_file.read_text(encoding="utf-8"))
 
@@ -83,6 +110,7 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
         server.stop()
 
 
+@requires_loopback_listener
 def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
     from termin.editor_tcgui import editor_screenshot
 
@@ -113,7 +141,7 @@ def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
         session_file=tmp_path / "editor-mcp.json",
     )
     server = EditorMcpServer(executor, config)
-    server.start()
+    _start_or_skip(server)
     try:
         session = json.loads(config.session_file.read_text(encoding="utf-8"))
         result_holder = {}
@@ -158,6 +186,7 @@ def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
         server.stop()
 
 
+@requires_loopback_listener
 def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
     class FakeFramegraphDebugger:
         def __init__(self):
@@ -215,7 +244,7 @@ def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
         session_file=tmp_path / "editor-mcp.json",
     )
     server = EditorMcpServer(executor, config)
-    server.start()
+    _start_or_skip(server)
     try:
         session = json.loads(config.session_file.read_text(encoding="utf-8"))
         result_holder = {}
@@ -266,6 +295,7 @@ def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
         server.stop()
 
 
+@requires_loopback_listener
 def test_editor_mcp_server_captures_framegraph_pass_symbol_tool(tmp_path):
     class FakeFramegraphDebugger:
         def __init__(self):
@@ -330,7 +360,7 @@ def test_editor_mcp_server_captures_framegraph_pass_symbol_tool(tmp_path):
         session_file=tmp_path / "editor-mcp.json",
     )
     server = EditorMcpServer(executor, config)
-    server.start()
+    _start_or_skip(server)
     try:
         session = json.loads(config.session_file.read_text(encoding="utf-8"))
         result_holder = {}
@@ -384,6 +414,7 @@ def test_editor_mcp_server_captures_framegraph_pass_symbol_tool(tmp_path):
         server.stop()
 
 
+@requires_loopback_listener
 def test_editor_mcp_server_inspects_framegraph_tool(tmp_path):
     class FakeFramegraphDebugger:
         def inspect(
@@ -412,7 +443,7 @@ def test_editor_mcp_server_inspects_framegraph_tool(tmp_path):
         session_file=tmp_path / "editor-mcp.json",
     )
     server = EditorMcpServer(executor, config)
-    server.start()
+    _start_or_skip(server)
     try:
         session = json.loads(config.session_file.read_text(encoding="utf-8"))
         result_holder = {}
