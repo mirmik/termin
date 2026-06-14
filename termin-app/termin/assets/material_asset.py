@@ -429,6 +429,10 @@ def _parse_material_content(
             state=state,
             shader_uuid=phase_uuid,
             language=shader_language,
+            vertex_entry=shader_phase.stages["vertex"].entry,
+            fragment_entry=shader_phase.stages["fragment"].entry,
+            geometry_entry=shader_phase.stages["geometry"].entry
+            if "geometry" in shader_phase.stages else "",
         )
 
         if phase is None:
