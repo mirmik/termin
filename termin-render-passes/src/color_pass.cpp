@@ -3,7 +3,6 @@
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
-#include "termin/render/shader_binding_policy.hpp"
 #include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -92,8 +91,7 @@ template <typename T>
 void bind_draw_data_for_shader(
     tgfx::RenderContext2& ctx,
     const tc_shader* shader,
-    const T& payload,
-    uint32_t fallback_binding)
+    const T& payload)
 {
     const char* names[] = {"draw_data", TC_SHADER_RESOURCE_DRAW};
     for (const char* name : names) {
@@ -104,13 +102,12 @@ void bind_draw_data_for_shader(
             return;
         }
     }
-    if (shader_uses_layout_only_bindings(shader)) {
-        tc::Log::error(
-            "[ColorPass/tgfx2] layout-only shader '%s' is missing draw_data resource",
-            shader && shader->name ? shader->name : "<unnamed>");
+    if (shader && tc_shader_has_resource_layout(shader)) {
         return;
     }
-    ctx.bind_uniform_buffer_ring(fallback_binding, &payload, sizeof(payload));
+    tc::Log::error(
+        "[ColorPass/tgfx2] shader '%s' is missing draw_data resource layout entry",
+        shader && shader->name ? shader->name : "<unnamed>");
 }
 
 } // anonymous namespace
@@ -553,13 +550,7 @@ void ColorPass::execute_with_data(
     ctx2->set_viewport(0, 0, rect.width, rect.height);
     ctx2->set_depth_bias(false);
 
-    // Per-frame/shadow/material resources are prepared per shader below,
-    // after the active shader layout is known.
-    constexpr uint32_t SHADOW_UBO_BINDING =
-        TC_SHADER_RESOURCE_BINDING_SHADOW_BLOCK;
-
-    // Collect + sort draw calls. Reuses the legacy helpers —
-    // gathering logic is backend-agnostic.
+    // Collect + sort draw calls. Gathering logic is backend-agnostic.
     collect_draw_calls(scene, phase_mark, layer_mask);
 
     if (sort_mode != "none" && !cached_draw_calls_.empty()) {
@@ -641,20 +632,6 @@ void ColorPass::execute_with_data(
         ctx2->set_depth_bias(false);
     };
 
-    // Base offset for shadow sampler slots — matches legacy
-    // SHADOW_MAP_TEXTURE_UNIT_START so .shader files that still
-    // declare `uniform sampler2D u_shadow_map_N` at binding N keep
-    // reading from the right slot.
-    constexpr uint32_t SHADOW_SLOT_BASE =
-        TC_SHADER_RESOURCE_BINDING_SHADOW_MAPS;
-
-    MaterialPipelineFallbackBindings material_fallback{};
-    material_fallback.shadow_block = SHADOW_UBO_BINDING;
-    material_fallback.material_ubo = MATERIAL_UBO_BINDING;
-    material_fallback.lighting_ubo = LIGHTING_UBO_BINDING;
-    material_fallback.shadow_map_base = SHADOW_SLOT_BASE;
-    material_fallback.max_shadow_maps = MAX_SHADOW_MAPS;
-
     MaterialPipelineResourceContext material_resources{};
     material_resources.per_frame = &pf;
     material_resources.shadow_block = &sb;
@@ -662,6 +639,7 @@ void ColorPass::execute_with_data(
     material_resources.lighting_ubo = lighting_ubo_tgfx2;
     material_resources.shadow_maps =
         std::span<const tgfx::TextureHandle>(shadow_tex2s.data(), shadow_tex2s.size());
+    material_resources.max_shadow_maps = MAX_SHADOW_MAPS;
 
     size_t draw_index = 0;
     for (const auto& dc : cached_draw_calls_) {
@@ -798,8 +776,7 @@ void ColorPass::execute_with_data(
                 device,
                 direct_shader,
                 phase,
-                direct_resources,
-                material_fallback);
+                direct_resources);
 
             if (!extra_textures.empty()) {
                 bind_extra_textures(ctx.tex2_reads, ctx2, direct_shader);
@@ -820,7 +797,6 @@ void ColorPass::execute_with_data(
                 [this,
                  &device,
                  &material_resources,
-                 &material_fallback,
                  &ctx,
                  drawable,
                  geometry_id = dc.geometry_id](
@@ -845,8 +821,7 @@ void ColorPass::execute_with_data(
                         device,
                         shader,
                         live_phase,
-                        direct_resources,
-                        material_fallback);
+                        direct_resources);
 
                     if (!extra_textures.empty()) {
                         bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
@@ -862,8 +837,8 @@ void ColorPass::execute_with_data(
             // Other non-mesh drawables (immediate gizmos, NavMesh debug,
             // solid primitive helpers) belong in their own dedicated
             // passes (UnifiedGizmoPass, ColliderGizmoPass, ...), not
-            // in ColorPass. Stage 8.1 removed the legacy fallback
-            // that ran them through shader.use() + draw_geometry.
+            // in ColorPass. Stage 8.1 removed the path that ran them
+            // through shader.use() + draw_geometry.
             ++draw_index;
             continue;
         }
@@ -972,8 +947,7 @@ void ColorPass::execute_with_data(
             device,
             raw_shader,
             phase,
-            draw_resources,
-            material_fallback);
+            draw_resources);
 
         // Extra textures (nodegraph inputs) bind into the currently active
         // pipeline after material textures are in place.
@@ -984,29 +958,13 @@ void ColorPass::execute_with_data(
         // --- Per-draw data ---
         //
         // Layout-only shaders receive the model matrix through their draw
-        // scope resource. Legacy GLSL still uses the push-constant bridge
-        // until those sources are ported.
+        // scope resource.
         struct ColorPushData {
             float u_model[16];
         };
         ColorPushData push{};
         std::memcpy(push.u_model, model.data, sizeof(push.u_model));
-        if (shader_uses_layout_only_bindings(raw_shader)) {
-            bind_draw_data_for_shader(
-                *ctx2,
-                raw_shader,
-                push,
-                TC_SHADER_RESOURCE_BINDING_DRAW_DATA);
-        } else {
-            ctx2->set_push_constants(&push, sizeof(push));
-            if (tc_shader_get_language(raw_shader) != TC_SHADER_LANGUAGE_GLSL) {
-                bind_draw_data_for_shader(
-                    *ctx2,
-                    raw_shader,
-                    push,
-                    TC_SHADER_RESOURCE_BINDING_DRAW_DATA);
-            }
-        }
+        bind_draw_data_for_shader(*ctx2, raw_shader, push);
 
         // Per-draw uniforms that can't live in push-constants or the
         // material UBO yet — skinning bone matrices are the main case.

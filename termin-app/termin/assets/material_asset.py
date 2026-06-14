@@ -24,6 +24,19 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
+_GLSL_MATERIAL_BINDING = 1
+_GLSL_PER_FRAME_BINDING = 2
+_GLSL_DRAW_DATA_BINDING = 24
+_GLSL_MATERIAL_TEXTURE_BINDING_BASE = 4
+
+_RESOURCE_CONSTANT_BUFFER = 1
+_RESOURCE_TEXTURE = 2
+_SCOPE_FRAME = 1
+_SCOPE_MATERIAL = 3
+_SCOPE_DRAW = 4
+_SET_DEFAULT = 0
+_STAGE_ALL_GRAPHICS = 0x7
+
 from termin.assets.data_asset import DataAsset
 from termin.assets.shader_asset import make_phase_uuid, shader_language_enum
 from tcbase import log
@@ -428,10 +441,6 @@ def _parse_material_content(
             if feature == "lighting_ubo":
                 shader.set_feature(1)  # TC_SHADER_FEATURE_LIGHTING_UBO = 1
 
-        # Legacy GLSL still needs the parser-authored std140 layout because
-        # there is no sidecar field metadata. Slang material shaders use
-        # shaderc .layout.json reflection instead; clearing here prevents stale
-        # manual entries from shadowing reflected material fields after reloads.
         layout = shader_phase.material_ubo_layout
         if program.language.lower() == "glsl" and layout is not None and layout.block_size > 0:
             entries = [
@@ -439,8 +448,53 @@ def _parse_material_content(
                 for e in layout.entries
             ]
             shader.set_material_ubo_layout(entries, layout.block_size)
+            resource_layout = [
+                (
+                    "material",
+                    _RESOURCE_CONSTANT_BUFFER,
+                    _SCOPE_MATERIAL,
+                    _SET_DEFAULT,
+                    _GLSL_MATERIAL_BINDING,
+                    _STAGE_ALL_GRAPHICS,
+                    layout.block_size,
+                )
+            ]
         else:
             shader.set_material_ubo_layout([], 0)
+            resource_layout = []
+
+        if program.language.lower() == "glsl":
+            if shader_phase.uses_engine_per_frame:
+                resource_layout.append((
+                    "per_frame",
+                    _RESOURCE_CONSTANT_BUFFER,
+                    _SCOPE_FRAME,
+                    _SET_DEFAULT,
+                    _GLSL_PER_FRAME_BINDING,
+                    _STAGE_ALL_GRAPHICS,
+                    0,
+                ))
+            if shader_phase.uses_engine_draw_data:
+                resource_layout.append((
+                    "draw_data",
+                    _RESOURCE_CONSTANT_BUFFER,
+                    _SCOPE_DRAW,
+                    _SET_DEFAULT,
+                    _GLSL_DRAW_DATA_BINDING,
+                    _STAGE_ALL_GRAPHICS,
+                    64,
+                ))
+            for index, name in enumerate(shader_phase.material_texture_resources):
+                resource_layout.append((
+                    name,
+                    _RESOURCE_TEXTURE,
+                    _SCOPE_MATERIAL,
+                    _SET_DEFAULT,
+                    _GLSL_MATERIAL_TEXTURE_BINDING_BASE + index,
+                    _STAGE_ALL_GRAPHICS,
+                    0,
+                ))
+        shader.set_resource_layout(resource_layout)
 
         # Set available marks
         if shader_phase.available_marks:

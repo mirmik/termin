@@ -35,7 +35,8 @@ Current implementation checkpoint:
 - Migrated Slang material shaders and Slang vertex-transform variants no
   longer receive parser-authored `material_ubo_entries`. The runtime material
   layout for Slang is expected to come from shaderc sidecar field metadata;
-  parser-authored layouts remain only for legacy GLSL compatibility.
+  parser-authored GLSL layouts now use compact resource metadata instead of
+  the removed fixed-slot policy.
 - `SkinnedMeshRenderer` ownership moved from `termin-app` to
   `termin-components-render`; the old `termin._native.render` binding is now a
   compatibility alias to the canonical render-components native class.
@@ -80,7 +81,7 @@ Make material rendering a single Slang-first pipeline where:
   material/pass pipeline;
 - authored Slang does not contain backend-specific `[[vk::...]]`,
   `layout(binding=...)`, or fixed register annotations;
-- legacy GLSL paths are retired instead of growing new compatibility layers.
+- GLSL compatibility paths are retired instead of growing new compatibility layers.
 
 ## Target Shape
 
@@ -271,7 +272,7 @@ Slang modules, but their resources should follow the same scope/name rules.
 4. Replace skinning regex injection.
    Status: Slang material/pass skinning variants now select engine-authored
    vertex transform templates through `get_material_vertex_variant()` and bind
-   `bone_block` by name. The legacy GLSL injector is gone.
+   `bone_block` by name. The old GLSL skinning injector is gone.
 
 5. Convert foliage to the same variant model.
    Status: foliage material/shadow variants now use the shared material vertex
@@ -286,7 +287,7 @@ Slang modules, but their resources should follow the same scope/name rules.
 7. Tighten runtime validation.
    Layout-only Slang shaders should fail loudly when a renderer tries to bind a
    missing name, mismatched kind, or incompatible vertex stream. Numeric
-   fallback should be limited to explicitly legacy GLSL paths.
+   fallback is no longer part of the material pipeline contract.
 
 8. Replace centralized standard vertex-location policy with semantic mesh
    layout metadata.
@@ -303,9 +304,8 @@ Slang modules, but their resources should follow the same scope/name rules.
    Once pass/material code no longer relies on numeric slots, Vulkan can move
    from one flattened set to multiple descriptor sets by scope. OpenGL can keep
    flattening as a backend implementation detail.
-   Status: `termin_shaderc --layout-scheme per-pipeline` now preserves
-   Slang-reflected placement by default. The old fixed-slot rewrite is isolated
-   behind explicit `--layout-scheme legacy-engine`.
+   Status: `termin_shaderc` now preserves Slang-reflected placement. The old
+   fixed-slot rewrite mode has been removed from the compiler.
 
 ## Current Smells To Remove
 
@@ -317,8 +317,8 @@ Slang modules, but their resources should follow the same scope/name rules.
 - `WorldBillboard` line rendering still uses the older fragment-only variant
   path; `WorldTube` is the first line mode moved toward combined material
   variants.
-- Some renderers still know numeric fallback slots or fixed vertex locations
-  for legacy paths.
+- Some renderers still know fixed vertex locations directly instead of deriving
+  them from reflected mesh/shader metadata.
 - Some tests still assert numeric `kind`/`scope` enum values instead of
   symbolic metadata.
 - Some material fixtures still call `set_material_ubo_layout(...)` even when

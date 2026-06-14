@@ -13,6 +13,19 @@ from tgfx import TcShader
 if TYPE_CHECKING:
     from termin.materials import ShaderMultyPhaseProgramm
 
+_GLSL_MATERIAL_BINDING = 1
+_GLSL_PER_FRAME_BINDING = 2
+_GLSL_DRAW_DATA_BINDING = 24
+_GLSL_MATERIAL_TEXTURE_BINDING_BASE = 4
+
+_RESOURCE_CONSTANT_BUFFER = 1
+_RESOURCE_TEXTURE = 2
+_SCOPE_FRAME = 1
+_SCOPE_MATERIAL = 3
+_SCOPE_DRAW = 4
+_SET_DEFAULT = 0
+_STAGE_ALL_GRAPHICS = 0x7
+
 
 def make_phase_uuid(shader_uuid: str, phase_mark: str) -> str:
     """Generate deterministic UUID for shader phase.
@@ -214,9 +227,6 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
             tc.set_sources(vertex_src, fragment_src, geometry_src, self._name, str(self._source_path) if self._source_path else "")
             tc.set_language(shader_language_enum(self._data.language))
 
-            # Legacy GLSL still needs the parser-authored std140 layout.
-            # Migrated Slang shaders derive material fields from shaderc
-            # sidecar metadata, so clear stale manual entries on reload.
             layout = phase.material_ubo_layout
             if self._data.language.lower() == "glsl" and layout is not None and layout.block_size > 0:
                 entries = [
@@ -224,11 +234,53 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
                     for e in layout.entries
                 ]
                 tc.set_material_ubo_layout(entries, layout.block_size)
+                resource_layout = [
+                    (
+                        "material",
+                        _RESOURCE_CONSTANT_BUFFER,
+                        _SCOPE_MATERIAL,
+                        _SET_DEFAULT,
+                        _GLSL_MATERIAL_BINDING,
+                        _STAGE_ALL_GRAPHICS,
+                        layout.block_size,
+                    )
+                ]
             else:
-                # Explicit clear so stale layouts from a previous version
-                # of the same UUID don't linger after a hot-reload that
-                # removes @property declarations.
                 tc.set_material_ubo_layout([], 0)
+                resource_layout = []
+
+            if self._data.language.lower() == "glsl":
+                if phase.uses_engine_per_frame:
+                    resource_layout.append((
+                        "per_frame",
+                        _RESOURCE_CONSTANT_BUFFER,
+                        _SCOPE_FRAME,
+                        _SET_DEFAULT,
+                        _GLSL_PER_FRAME_BINDING,
+                        _STAGE_ALL_GRAPHICS,
+                        0,
+                    ))
+                if phase.uses_engine_draw_data:
+                    resource_layout.append((
+                        "draw_data",
+                        _RESOURCE_CONSTANT_BUFFER,
+                        _SCOPE_DRAW,
+                        _SET_DEFAULT,
+                        _GLSL_DRAW_DATA_BINDING,
+                        _STAGE_ALL_GRAPHICS,
+                        64,
+                    ))
+                for index, name in enumerate(phase.material_texture_resources):
+                    resource_layout.append((
+                        name,
+                        _RESOURCE_TEXTURE,
+                        _SCOPE_MATERIAL,
+                        _SET_DEFAULT,
+                        _GLSL_MATERIAL_TEXTURE_BINDING_BASE + index,
+                        _STAGE_ALL_GRAPHICS,
+                        0,
+                    ))
+            tc.set_resource_layout(resource_layout)
 
     def _on_loaded(self) -> None:
         """After loading/reloading, update tc_shader registry for hot-reload."""

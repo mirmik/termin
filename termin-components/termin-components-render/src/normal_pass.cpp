@@ -129,14 +129,12 @@ void NormalPass::execute_with_data_tgfx2(
     }};
     MaterialPipelineResourceContext normal_resources{};
     normal_resources.uniforms = per_frame_uniforms;
-    MaterialPipelineFallbackBindings normal_fallback{};
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,
         normal_shader.shader,
         nullptr,
-        normal_resources,
-        normal_fallback);
+        normal_resources);
 
     const std::string& debug_symbol = get_debug_internal_point();
 
@@ -175,8 +173,7 @@ void NormalPass::execute_with_data_tgfx2(
                 device,
                 normal_shader.shader,
                 nullptr,
-                draw_resources,
-                normal_fallback);
+                draw_resources);
             draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
@@ -200,8 +197,7 @@ void NormalPass::execute_with_data_tgfx2(
                 device,
                 skinned_shader.shader,
                 nullptr,
-                draw_resources,
-                normal_fallback);
+                draw_resources);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -219,8 +215,7 @@ void NormalPass::execute_with_data_tgfx2(
                 device,
                 normal_shader.shader,
                 nullptr,
-                normal_resources,
-                normal_fallback);
+                normal_resources);
         }
     }
 

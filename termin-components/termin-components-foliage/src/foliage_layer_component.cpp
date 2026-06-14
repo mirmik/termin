@@ -578,15 +578,12 @@ bool FoliageLayerComponent::draw_tgfx2(
 
         MaterialPipelineResourceContext material_resources{};
         material_resources.per_frame = &per_frame;
-        MaterialPipelineFallbackBindings material_fallback{};
-        material_fallback.material_ubo = TC_MATERIAL_UBO_BINDING_SLOT;
         prepare_material_pipeline_resources(
             ctx2,
             ctx2.device(),
             shader_binding.shader,
             phase,
-            material_resources,
-            material_fallback);
+            material_resources);
     }
 
     ctx2.bind_uniform_data("foliage_draw", &push, sizeof(push));

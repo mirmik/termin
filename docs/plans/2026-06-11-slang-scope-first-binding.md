@@ -172,7 +172,7 @@ conflicting scope attributes fail compilation and remove the generated artifact.
    backend-specific artifact decision, not authored/generated Slang source
    magic.
 5. Migrate `ColorPass` and material UBO/texture binding to name-first lookup.
-   Numeric fallback remains only for legacy GLSL paths.
+   Numeric fallback has been removed from the material pipeline.
 6. Add validation for duplicate backend bindings with incompatible resource
    type/count/stage.
 7. After the above is stable, introduce multiple Vulkan descriptor set layouts

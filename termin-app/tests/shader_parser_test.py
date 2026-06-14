@@ -216,7 +216,7 @@ def test_plain_uniforms_material_ubo_not_property():
     assert "uniform mat4 u_fov_view;" not in fragment
 
 
-def test_material_texture_bindings_skip_shadow_slot():
+def test_material_texture_bindings_are_compact():
     shader_text = "\n".join([
         "@program test",
         "@phase main",
@@ -245,8 +245,7 @@ def test_material_texture_bindings_skip_shadow_slot():
     assert "layout(binding = 5) uniform sampler2D u_tex1;" in fragment
     assert "layout(binding = 6) uniform sampler2D u_tex2;" in fragment
     assert "layout(binding = 7) uniform sampler2D u_tex3;" in fragment
-    assert "layout(binding = 9) uniform sampler2D u_tex4;" in fragment
-    assert "layout(binding = 8) uniform sampler2D u_tex4;" not in fragment
+    assert "layout(binding = 8) uniform sampler2D u_tex4;" in fragment
 
 
 def test_shader_interface_compare_separates_source_from_inputs():
@@ -483,7 +482,7 @@ def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
     assert shader.find_resource_binding("material") is None
 
 
-def test_glsl_material_layout_still_surfaces_on_tc_shader_for_legacy_path():
+def test_glsl_material_layout_surfaces_as_parser_owned_resource_metadata():
     import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     shader_text = "\n".join([

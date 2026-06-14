@@ -13,13 +13,10 @@ The current Vulkan backend still flattens reflected shader resources into one
 per-pipeline descriptor set. Treat that as implementation state, not a shader
 authoring rule.
 
-`termin_shaderc --layout-scheme per-pipeline` is the default for Slang and
-preserves the set/binding placement reported by Slang reflection in the
-generated sidecar. The `legacy-engine` scheme is the explicit compatibility
-mode that remaps scoped resources into the historical Termin fixed slots
-(`material=1`, `per_frame=2`, `draw_data=24`, etc.) and patches backend
-artifacts to match. Use `legacy-engine` only for old artifacts/tests that still
-need that numeric ABI.
+For Slang, `termin_shaderc` preserves the set/binding placement reported by
+Slang reflection in the generated sidecar. There is no compatibility layout
+mode that remaps resources into historical fixed Termin slots; migrated runtime
+code must bind resources through the reflected layout metadata.
 
 **Authoritative C++ locations (verify here before changing anything):**
 
@@ -30,7 +27,8 @@ need that numeric ABI.
 - `termin-render-passes/include/termin/lighting/lighting_ubo.hpp` — `LightingUBOData`.
 - `termin-render/include/termin/render/frame_uniforms.hpp` — `EnginePerFrameStd140`.
 - `termin-render-passes/src/color_pass.cpp` — `ShadowBlockStd140`.
-- `termin-app/cpp/termin/render/shader_parser.cpp` — generated `MaterialParams` + `ColorPushBlock`.
+- `termin-materials/src/shader_parser.cpp` — generated `MaterialParams`, `PerFrame`,
+  and `draw_data` GLSL compatibility blocks.
 - `termin-render-passes/src/{shadow,id}_pass.cpp`,
   `termin-components/termin-components-render/src/{depth,normal}_pass.cpp` —
   per-pass `PerFrame` + `PushStd140` variants.
@@ -38,10 +36,9 @@ need that numeric ABI.
   `BoneBlock`.
 - `termin-mesh/src/tgfx_types.c` — `tgfx_vertex_layout_*`.
 
-Rule of thumb: **new Slang code declares named resources, not backend slots.**
-Legacy GLSL can still carry `layout(binding=N)` while it remains on the old
-numeric path. Migrated code should bind by logical name and let the generated
-layout sidecar describe backend placement.
+Rule of thumb: **Slang code declares named resources, not backend slots.**
+Runtime code should bind by logical name and let the generated layout sidecar
+describe backend placement.
 
 ---
 
@@ -79,9 +76,8 @@ For Slang, backend binding is not authored into the source. `termin_shaderc`
 writes resource metadata into the compiled artifact sidecar and the runtime
 merges that into `tc_shader_resource_binding[]`, including resource scope
 (`frame`, `pass`, `material`, `draw`, `transient`). Runtime uploaders
-(`termin-render/src/material_ubo_apply.cpp`) walks the parser metadata for
-legacy GLSL shaders or reflected sidecar fields for Slang shaders, then copies
-values from `phase->uniforms[]` into the right offsets.
+(`termin-render/src/material_ubo_apply.cpp`) walks parser/reflection metadata
+and copies values from `phase->uniforms[]` into the right offsets.
 
 Block size is available from `shader->material_ubo_block_size`; fields from
 `shader->material_ubo_entries[]`. Don't hardcode it.
@@ -156,10 +152,9 @@ The shader sees the `[16]` arrays as scalar arrays — it reads only the `.x`
 memory layout, so the CPU side writes straight into the UBO without
 transpose).
 
-Runtime binding is name-first. New Slang shaders should declare a draw-scope
-resource named `bone_block`; legacy GLSL skinned variants still declare
-`BoneBlock` at binding 16, and the renderer accepts that name only as a
-compatibility path.
+Runtime binding is name-first. Skinned shaders should declare a draw-scope
+resource named `bone_block`; the renderer no longer has a fixed binding
+fallback for historical skinning blocks.
 
 ---
 
@@ -193,10 +188,9 @@ draw-scope constant buffers, not push constants. The renderer binds those
 buffers by reflected resource name (`draw_data`, `depth_draw`, `normal_draw`,
 `u_push`, etc.), and backend placement comes from the layout sidecar.
 
-Legacy GLSL and unmigrated debug/UI paths may still use the push-constant
-compatibility path described below.
+Standalone debug/UI paths may still use pass-local push constants.
 
-### Legacy push constants (128 B max)
+### Pass-local push constants (128 B max)
 
 All graphics stages share a single push-constant range of **128 bytes**. This
 is the Vulkan 1.0 minimum guaranteed by `maxPushConstantsSize` — don't exceed
@@ -207,7 +201,7 @@ the CPU side and the shader stay in sync:
 
 | Pass | Struct | Contents | Size |
 |---|---|---|---|
-| ColorPass | `ColorPushBlock` (legacy parser-generated) | `mat4 _u_model` | 64 B |
+| ColorPass | `draw_data` resource | `mat4 _u_model` | 64 B |
 | ShadowPass | `ShadowPushStd140` via draw resource | `mat4 u_model` | 64 B |
 | DepthPass | `DepthDrawStd140` via `depth_draw` | `mat4 u_model` | 64 B |
 | IdPass | `IdPushStd140` via `u_push` draw resource | `mat4 u_model`, `vec4 u_pickColor` | 80 B |
@@ -237,18 +231,16 @@ must receive the same data through a small per-draw cbuffer. Reserve
    `frame`, shadow resources are `pass`, material properties/textures are
    `material`, large object constants are `draw`, and skinning data is
    `bone_block` in `draw`.
-3. **For new Slang, do not author backend layout attributes.** Add the resource
+3. **For Slang, do not author backend layout attributes.** Add the resource
    declaration by name, annotate explicit scope with `[[TerminScope("...")]]`
    from the Termin Slang prelude, and let artifact layout metadata carry
-   backend placement. Legacy GLSL may still use `layout(binding=N)` until
-   migrated.
+   backend placement. Parser-generated GLSL metadata is a compatibility
+   artifact only; do not add new fixed-slot layout policy.
 4. **Pick the narrowest `stageFlags`** you can. Skinning only writes from
    VS, so `BoneBlock` is `VK_SHADER_STAGE_VERTEX_BIT` only.
 5. **Document the struct here** with offsets and a `static_assert(sizeof(...)
    == ...)` in the C++ source.
-6. **Mirror GL.** If a legacy GLSL UBO needs an explicit `set_block_binding`, make
-   sure it's called after `bind_shader`; the `layout(std140, binding = N)`
-   qualifier is honoured by most GL 4.2+ drivers but some need the
-   explicit glUniformBlockBinding hook as belt-and-suspenders.
+6. **Mirror GL.** If an OpenGL backend path needs explicit block binding,
+   keep it driven by shader resource metadata after `bind_shader`.
 7. **Update this doc in the same commit as the C++ change.** Future
    debugging depends on the table matching reality.

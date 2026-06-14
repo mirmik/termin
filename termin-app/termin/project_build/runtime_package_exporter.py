@@ -573,7 +573,7 @@ def _builtin_engine_shader_layout(
         "name": entry.get("name", entry["uuid"]),
         "language": artifact_language or source_language,
         "resources": entry.get("resources", []),
-        "binding_model": "legacy_numeric_bridge",
+        "binding_model": "resource_layout",
     }
     if artifact_language is not None and artifact_language != source_language:
         layout["source_language"] = source_language

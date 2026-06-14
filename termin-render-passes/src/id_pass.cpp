@@ -154,14 +154,12 @@ void IdPass::execute_with_data_tgfx2(
     }};
     MaterialPipelineResourceContext id_resources{};
     id_resources.uniforms = per_frame_uniforms;
-    MaterialPipelineFallbackBindings id_fallback{};
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,
         id_shader.shader,
         nullptr,
-        id_resources,
-        id_fallback);
+        id_resources);
 
     auto restore_id_raster_state = [&]() {
         ctx.ctx2->set_depth_test(true);
@@ -198,8 +196,7 @@ void IdPass::execute_with_data_tgfx2(
             device,
             id_shader.shader,
             nullptr,
-            id_resources,
-            id_fallback);
+            id_resources);
     };
 
     for (const auto& dc : cached_draw_calls_) {
@@ -248,8 +245,7 @@ void IdPass::execute_with_data_tgfx2(
                 device,
                 id_shader.shader,
                 nullptr,
-                id_resources,
-                id_fallback);
+                id_resources);
             continue;
         }
 
@@ -281,8 +277,7 @@ void IdPass::execute_with_data_tgfx2(
                 device,
                 id_shader.shader,
                 nullptr,
-                draw_resources,
-                id_fallback);
+                draw_resources);
             draw_material_pipeline_mesh(
                 *ctx.ctx2,
                 mesh,
@@ -305,8 +300,7 @@ void IdPass::execute_with_data_tgfx2(
                 device,
                 skinned_shader.shader,
                 nullptr,
-                draw_resources,
-                id_fallback);
+                draw_resources);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -326,8 +320,7 @@ void IdPass::execute_with_data_tgfx2(
                 device,
                 id_shader.shader,
                 nullptr,
-                draw_resources,
-                id_fallback);
+                draw_resources);
         }
     }
 

@@ -1,5 +1,4 @@
 #include <termin/render/skinned_mesh_renderer.hpp>
-#include <termin/render/shader_binding_policy.hpp>
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/render/shader_skinning.hpp>
 #include <termin/entity/entity.hpp>
@@ -168,18 +167,11 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
         return;
     }
 
-    if (shader_uses_layout_only_bindings(active_shader)) {
-        tc::Log::error(
-            "[SkinnedMeshRenderer] shader '%s' has no '%s' resource; cannot bind BoneBlock",
-            active_shader->name ? active_shader->name : active_shader->uuid,
-            TC_SHADER_RESOURCE_BONE_BLOCK);
-        return;
-    }
-
-    ctx2.bind_uniform_buffer_ring(
-        TC_SHADER_RESOURCE_BINDING_BONE_BLOCK,
-        staging.data(),
-        static_cast<uint32_t>(staging.size()));
+    tc::Log::error(
+        "[SkinnedMeshRenderer] shader '%s' has no '%s' resource; fixed binding "
+        "fallback has been removed",
+        active_shader && active_shader->name ? active_shader->name : "<unnamed>",
+        TC_SHADER_RESOURCE_BONE_BLOCK);
 }
 
 TcShader SkinnedMeshRenderer::override_shader(

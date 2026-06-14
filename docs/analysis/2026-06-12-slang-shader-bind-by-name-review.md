@@ -167,22 +167,12 @@ public struct TerminScopeAttribute { string value; }
 
 **Проблема:** name-based inference — это хрупкая магическая таблица. Добавление нового шейдера с нестандартным именем ресурса приведёт к `scope=unknown`, что означает fallback binding и потенциальный конфликт.
 
-### 3.3 Scope → (set, binding) mapping
+### 3.3 Retired fixed-slot remap
 
-`apply_slang_vulkan_scope_layout_policy()` (termin_shaderc.cpp:877):
-
-| Scope | Kind | Name | Set | Binding |
-|-------|------|------|-----|---------|
-| frame | constant_buffer | — | 0 | `TC_SHADER_RESOURCE_BINDING_PER_FRAME` (2) |
-| material | constant_buffer | `material` | 0 | `TC_SHADER_RESOURCE_BINDING_MATERIAL` (1) |
-| material | texture/storage_texture/sampler | — | 0 | 4+index |
-| draw | constant_buffer | — | 0 | `TC_SHADER_RESOURCE_BINDING_DRAW_DATA` (24) |
-| draw | storage_buffer | — | 0 | `TC_SHADER_RESOURCE_BINDING_DRAW_STORAGE` (25) |
-| pass | constant_buffer | `lighting` | 0 | `TC_SHADER_RESOURCE_BINDING_LIGHTING` (0) |
-| pass | constant_buffer | `shadow_block` | 0 | `TC_SHADER_RESOURCE_BINDING_SHADOW_BLOCK` (3) |
-| pass | texture | `shadow_maps` | 0 | `TC_SHADER_RESOURCE_BINDING_SHADOW_MAPS` (8) |
-
-**Всё в set=0.** Multi-set layout не поддерживается.
+The fixed scope-to-slot remap described in the original review has been
+removed. Slang artifacts now keep Slang-reflected placement in the sidecar, and
+runtime code binds by resource name/scope instead of rewriting artifacts into a
+global Termin numeric ABI.
 
 ### 3.4 Legacy shared policy
 
@@ -516,20 +506,10 @@ Slang устраняет эту необходимость, абстрагиру
 
 ---
 
-## Приложение A: Карта констант биндинга
+## Приложение A: retired binding constants
 
-```c
-#define TC_SHADER_RESOURCE_BINDING_LIGHTING      0
-#define TC_SHADER_RESOURCE_BINDING_MATERIAL      1
-#define TC_SHADER_RESOURCE_BINDING_PER_FRAME     2
-#define TC_SHADER_RESOURCE_BINDING_SHADOW_BLOCK  3
-#define TC_SHADER_RESOURCE_BINDING_MATERIAL_TEX  4  // +index для textur
-#define TC_SHADER_RESOURCE_BINDING_SHADOW_MAPS   8
-#define TC_SHADER_RESOURCE_BINDING_DRAW_DATA    24
-#define TC_SHADER_RESOURCE_BINDING_DRAW_STORAGE 25
-```
-
-Пробел между binding 8 и 24 — зарезервировано для будущего расширения (pass-scoped textures, transient buffers).
+The old fixed binding constants were removed. Current code should get backend
+placement from `tc_shader_resource_binding` metadata or shader sidecars.
 
 ## Приложение B: Полный список `.slang` файлов
 
