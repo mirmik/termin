@@ -303,6 +303,9 @@ Slang modules, but their resources should follow the same scope/name rules.
    Once pass/material code no longer relies on numeric slots, Vulkan can move
    from one flattened set to multiple descriptor sets by scope. OpenGL can keep
    flattening as a backend implementation detail.
+   Status: `termin_shaderc --layout-scheme per-pipeline` now preserves
+   Slang-reflected placement by default. The old fixed-slot rewrite is isolated
+   behind explicit `--layout-scheme legacy-engine`.
 
 ## Current Smells To Remove
 

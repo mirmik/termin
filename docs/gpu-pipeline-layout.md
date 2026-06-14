@@ -13,6 +13,14 @@ The current Vulkan backend still flattens reflected shader resources into one
 per-pipeline descriptor set. Treat that as implementation state, not a shader
 authoring rule.
 
+`termin_shaderc --layout-scheme per-pipeline` is the default for Slang and
+preserves the set/binding placement reported by Slang reflection in the
+generated sidecar. The `legacy-engine` scheme is the explicit compatibility
+mode that remaps scoped resources into the historical Termin fixed slots
+(`material=1`, `per_frame=2`, `draw_data=24`, etc.) and patches backend
+artifacts to match. Use `legacy-engine` only for old artifacts/tests that still
+need that numeric ABI.
+
 **Authoritative C++ locations (verify here before changing anything):**
 
 - `termin-graphics/docs/architecture/pipeline-layout.md` — architecture and data flow.
@@ -178,7 +186,17 @@ PBR shader's `length(a_tangent.xyz) > 0.001` check handles that case.
 
 ---
 
-## 3. Push constants (128 B max)
+## 3. Draw constants and push constants
+
+Migrated Slang material/pass shaders should model per-draw data as named
+draw-scope constant buffers, not push constants. The renderer binds those
+buffers by reflected resource name (`draw_data`, `depth_draw`, `normal_draw`,
+`u_push`, etc.), and backend placement comes from the layout sidecar.
+
+Legacy GLSL and unmigrated debug/UI paths may still use the push-constant
+compatibility path described below.
+
+### Legacy push constants (128 B max)
 
 All graphics stages share a single push-constant range of **128 bytes**. This
 is the Vulkan 1.0 minimum guaranteed by `maxPushConstantsSize` — don't exceed
@@ -189,11 +207,11 @@ the CPU side and the shader stay in sync:
 
 | Pass | Struct | Contents | Size |
 |---|---|---|---|
-| ColorPass | `ColorPushBlock` (parser-generated) | `mat4 _u_model` | 64 B |
-| ShadowPass | `ShadowPushStd140` | `mat4 u_model` | 64 B |
-| DepthPass | `DepthPushStd140` | `mat4 u_model` | 64 B |
-| IdPass | `IdPushStd140` | `mat4 u_model`, `vec4 u_pickColor` | 80 B |
-| NormalPass | `NormalPushStd140` | `mat4 u_model` | 64 B |
+| ColorPass | `ColorPushBlock` (legacy parser-generated) | `mat4 _u_model` | 64 B |
+| ShadowPass | `ShadowPushStd140` via draw resource | `mat4 u_model` | 64 B |
+| DepthPass | `DepthDrawStd140` via `depth_draw` | `mat4 u_model` | 64 B |
+| IdPass | `IdPushStd140` via `u_push` draw resource | `mat4 u_model`, `vec4 u_pickColor` | 80 B |
+| NormalPass | `NormalDrawStd140` via `normal_draw` | `mat4 u_model` | 64 B |
 | SolidPrimitive | `SolidPushBlock` | `mat4 u_mvp`, `vec4 u_color` | 80 B |
 | Immediate | `ImmediatePushBlock` | `mat4 u_mvp` | 64 B |
 | Text2D | `Text2DPushBlock` | `mat4 u_projection`, `vec4 u_color` | 80 B |
