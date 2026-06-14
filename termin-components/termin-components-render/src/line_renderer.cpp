@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cstdlib>
 #include <cstring>
 #include <unordered_map>
 
@@ -164,15 +163,6 @@ std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_c
     return cache;
 }
 
-char* duplicate_c_string(const char* value) {
-    if (!value) return nullptr;
-    const size_t size = std::strlen(value) + 1;
-    char* copy = static_cast<char*>(std::malloc(size));
-    if (!copy) return nullptr;
-    std::memcpy(copy, value, size);
-    return copy;
-}
-
 TcShader get_line_material_fragment_shader(TcShader original_shader) {
     if (!original_shader.is_valid()) {
         return TcShader();
@@ -299,7 +289,13 @@ TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_varian
         variant_op
     );
 
-    tc_shader_handle handle = tc_shader_from_sources_ex(
+    tc_shader* original_raw = original_shader.get();
+    const char* fragment_entry = original_raw ? original_raw->fragment_entry : nullptr;
+    if (!fragment_entry || fragment_entry[0] == '\0') {
+        fragment_entry = "main";
+    }
+
+    tc_shader_handle handle = tc_shader_from_sources_with_entries_ex(
         vertex_source.c_str(),
         fragment_source,
         nullptr,
@@ -307,7 +303,10 @@ TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_varian
         original_shader.source_path(),
         variant_uuid,
         TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED
+        TC_SHADER_ARTIFACT_REQUIRED,
+        cap_variant ? "vs_cap_main" : "vs_main",
+        fragment_entry,
+        nullptr
     );
     if (tc_shader_handle_is_invalid(handle)) {
         tc::Log::error(
@@ -322,33 +321,8 @@ TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_varian
     variant.set_language(TC_SHADER_LANGUAGE_SLANG);
     variant.set_artifact_policy(TC_SHADER_ARTIFACT_REQUIRED);
 
-    tc_shader* original_raw = original_shader.get();
     tc_shader* variant_raw = variant.get();
     if (original_raw && variant_raw) {
-        free(variant_raw->vertex_entry);
-        variant_raw->vertex_entry = duplicate_c_string(cap_variant ? "vs_cap_main" : "vs_main");
-        if (!variant_raw->vertex_entry) {
-            tc::Log::error(
-                "[LineRenderer] failed to assign vertex entry for line tube shader variant '%s'",
-                variant_name.c_str()
-            );
-            return TcShader();
-        }
-
-        const char* fragment_entry = original_raw->fragment_entry;
-        if (!fragment_entry || fragment_entry[0] == '\0') {
-            fragment_entry = "main";
-        }
-        free(variant_raw->fragment_entry);
-        variant_raw->fragment_entry = duplicate_c_string(fragment_entry);
-        if (!variant_raw->fragment_entry) {
-            tc::Log::error(
-                "[LineRenderer] failed to assign fragment entry for line tube shader variant '%s'",
-                variant_name.c_str()
-            );
-            return TcShader();
-        }
-
         // Slang line-tube variants get material field layout from their
         // shaderc sidecar after compilation. Do not copy parser-authored
         // legacy material_ubo_entries from the source material shader.
