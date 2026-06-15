@@ -25,6 +25,16 @@ class RecordingPreLoader(FilePreLoader):
         self.changed.append(path)
 
 
+class RecordingGlslPreLoader(RecordingPreLoader):
+    @property
+    def extensions(self) -> Set[str]:
+        return {".glsl"}
+
+    @property
+    def resource_type(self) -> str:
+        return "glsl"
+
+
 def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> None:
     shader_path = tmp_path / "HotReload.shader"
     shader_path.write_text("@program HotReload\n", encoding="utf-8")
@@ -39,6 +49,37 @@ def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> 
     watcher.poll()
 
     assert processor.changed == [str(shader_path)]
+
+
+def test_project_file_watcher_ignores_service_termin_directory_events(tmp_path: Path) -> None:
+    artifact_path = (
+        tmp_path
+        / ".termin"
+        / "shader-artifacts"
+        / "shaders"
+        / "opengl"
+        / "compiled.frag.glsl"
+    )
+    artifact_path.parent.mkdir(parents=True)
+    artifact_path.write_text("glsl", encoding="utf-8")
+    artifact_path.with_name(artifact_path.name + ".artifact").write_text(
+        "artifact_metadata_schema=1\n",
+        encoding="utf-8",
+    )
+
+    processor = RecordingGlslPreLoader()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._project_path = str(tmp_path)
+
+    watcher._scan_directory(str(tmp_path))
+    watcher._enqueue_change(str(artifact_path), "modified")
+    watcher._enqueue_change(str(artifact_path.with_name(artifact_path.name + ".artifact")), "modified")
+
+    assert watcher.watched_files == set()
+    assert processor.changed == []
+    with watcher._lock:
+        assert watcher._pending_changes == {}
 
 
 class RecordingAssetCatalog:

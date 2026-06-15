@@ -433,21 +433,39 @@ class PlayerRuntime:
         import os
         from tcbase import log
         from termin.assets.resources import ResourceManager
+        from termin.project.settings import SERVICE_RESOURCE_IGNORE_PATHS
 
         rm = ResourceManager.instance()
         ext_map = self._create_asset_import_plugin_map()
+        service_ignored_roots = tuple(
+            os.path.abspath(os.path.join(self.project_path, ignored_path))
+            for ignored_path in SERVICE_RESOURCE_IGNORE_PATHS
+        )
+
+        def is_service_ignored(path: str) -> bool:
+            resolved = os.path.abspath(path)
+            return any(
+                resolved == ignored_root or resolved.startswith(ignored_root + os.sep)
+                for ignored_root in service_ignored_roots
+            )
 
         # Collect files sorted by priority
         pending = []  # (priority, path, preloader)
         for root, dirs, files in os.walk(self.project_path):
-            dirs[:] = [d for d in dirs if not d.startswith((".", "__"))]
+            dirs[:] = [
+                d for d in dirs
+                if not d.startswith((".", "__"))
+                and not is_service_ignored(os.path.join(root, d))
+            ]
             for filename in files:
                 if filename.startswith("."):
+                    continue
+                path = os.path.join(root, filename)
+                if is_service_ignored(path):
                     continue
                 ext = os.path.splitext(filename)[1].lower()
                 if ext in ext_map:
                     pl = ext_map[ext]
-                    path = os.path.join(root, filename)
                     pending.append((pl.priority, path, pl))
 
         # Sort by priority

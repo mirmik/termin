@@ -26,7 +26,7 @@ from termin_assets import (
     read_spec_file,
     write_spec_file,
 )
-from termin.project.settings import ProjectSettingsManager
+from termin.project.settings import ProjectSettingsManager, SERVICE_RESOURCE_IGNORE_PATHS
 
 if TYPE_CHECKING:
     from termin.assets.resources import ResourceManager
@@ -488,11 +488,15 @@ class ProjectFileWatcher:
         # name is a project setting so this exclusion is visible and editable
         # instead of being a hidden "dist" special case.
         build_output_root = (project_root / settings.build_output_dir).resolve()
+        service_ignored_roots = tuple(
+            (project_root / ignored_path).resolve()
+            for ignored_path in SERVICE_RESOURCE_IGNORE_PATHS
+        )
         user_ignored_roots = tuple(
             (project_root / ignored_path).resolve()
             for ignored_path in settings.ignored_resource_paths
         )
-        return (build_output_root, *user_ignored_roots)
+        return (*service_ignored_roots, build_output_root, *user_ignored_roots)
 
     def _is_ignored_path(self, path: str) -> bool:
         ignored_roots = self._ignored_roots()
