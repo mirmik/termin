@@ -98,7 +98,7 @@ static void router_on_mouse_button(tc_input_manager* self, int button, int actio
         r->focused_viewport = viewport;
     }
     if (action == TC_INPUT_RELEASE) {
-        if (!tc_viewport_handle_valid(viewport)) {
+        if (tc_viewport_handle_valid(r->active_viewport)) {
             viewport = r->active_viewport;
         }
         r->active_viewport = TC_VIEWPORT_HANDLE_INVALID;

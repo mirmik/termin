@@ -301,11 +301,17 @@ if(TERMIN_DISPLAY_HAS_SDL)
     if(WIN32 AND SDL2_DLL)
         install(FILES ${SDL2_DLL} DESTINATION bin)
     endif()
+endif()
 
-    # Standalone smoke test: the same triangle code running on either
-    # backend. Built when tests are enabled.
-    option(TERMIN_DISPLAY_BUILD_TESTS "Build termin-display smoke tests" OFF)
-    if(TERMIN_DISPLAY_BUILD_TESTS)
+option(TERMIN_DISPLAY_BUILD_TESTS "Build termin-display tests" OFF)
+option(TERMIN_DISPLAY_BUILD_WINDOW_TESTS "Build termin-display window smoke tests" OFF)
+if(TERMIN_DISPLAY_BUILD_TESTS)
+    add_executable(display_input_router_test tests/test_display_input_router.cpp)
+    target_link_libraries(display_input_router_test PRIVATE termin_display)
+    add_test(NAME display_input_router_test COMMAND display_input_router_test)
+
+    # Standalone smoke test: the same triangle code running on either backend.
+    if(TERMIN_DISPLAY_HAS_SDL AND TERMIN_DISPLAY_BUILD_WINDOW_TESTS)
         add_executable(backend_window_triangle tests/test_backend_window_triangle.cpp)
         target_link_libraries(backend_window_triangle
             PRIVATE termin_display ${SDL2_LIBRARIES})
