@@ -101,7 +101,12 @@ void ModuleRuntime::discover(const std::filesystem::path& project_root) {
         const auto& entry = *it;
         if (entry.is_directory()) {
             const std::string dirname = entry.path().filename().string();
-            if (dirname == "build" || dirname == "__pycache__" || is_hidden_dir(entry.path())) {
+            if (
+                dirname == "build" ||
+                dirname == "dist" ||
+                dirname == "__pycache__" ||
+                is_hidden_dir(entry.path())
+            ) {
                 it.disable_recursion_pending();
             }
             ++it;
