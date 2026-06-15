@@ -80,8 +80,9 @@ descriptor-set noise around unrelated drawables.
 - The Slang parser now synthesizes canonical `per_frame` and `draw_data`
   resources for compact engine identifier use. Shader text should not declare
   duplicate per-frame/per-draw blocks for these built-in resources.
-- `termin_shaderc` now preserves Slang-reflected placement in sidecars. The old
-  compiler-side fixed-slot remap and SPIR-V patch path has been removed.
+- `termin_shaderc` owns backend placement for migrated Slang artifacts. The
+  current ownership model is documented in
+  `termin-graphics/docs/architecture/shader-resource-contracts.md`.
 - Remaining migration work is to port the rest of the ColorPass material shader
   set and built-in GLSL shaders to Slang so GLSL sidecars no longer define the
   compatibility path.
