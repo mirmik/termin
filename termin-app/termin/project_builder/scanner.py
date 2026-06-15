@@ -11,7 +11,7 @@ from termin.assets.default_plugins import (
     build_import_plugin_extension_map,
     register_default_import_asset_plugins,
 )
-from termin.project.settings import ProjectSettings
+from termin.project.settings import ProjectSettings, SERVICE_RESOURCE_IGNORE_PATHS
 from termin.project_builder.manifest import BuildDiagnostic, BuildResource, ProjectBuildManifest
 from termin_assets import AssetImportPlugin, AssetTypeRegistry
 
@@ -154,6 +154,10 @@ class ProjectScanner:
         if self.output_dir is not None:
             ignored.append(self.output_dir)
 
+        ignored.extend(
+            (self.project_root / ignored_path).resolve()
+            for ignored_path in SERVICE_RESOURCE_IGNORE_PATHS
+        )
         ignored.append((self.project_root / self.project_settings.build_output_dir).resolve())
         ignored.extend(
             (self.project_root / ignored_path).resolve()

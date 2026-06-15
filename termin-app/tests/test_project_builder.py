@@ -130,6 +130,32 @@ def test_build_project_excludes_output_directory(tmp_path: Path) -> None:
     assert "dist/Game/assets/Old.scene" not in source_paths
 
 
+def test_build_project_excludes_service_termin_directory(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    _write_json(project / "game.terminproj", {"version": 1, "name": "Game"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+    artifact = project / ".termin" / "shader-artifacts" / "shaders" / "opengl" / "Generated.glsl"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text("glsl", encoding="utf-8")
+    artifact.with_name(artifact.name + ".artifact").write_text(
+        "artifact_metadata_schema=1\n",
+        encoding="utf-8",
+    )
+
+    result = build_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "Game",
+        copy_files=False,
+    )
+
+    source_paths = {resource.source_path for resource in result.manifest.resources}
+    assert "Main.scene" in source_paths
+    assert ".termin/shader-artifacts/shaders/opengl/Generated.glsl" not in source_paths
+    assert ".termin/shader-artifacts/shaders/opengl/Generated.glsl.artifact" not in source_paths
+
+
 def test_build_project_excludes_project_ignored_resource_paths(tmp_path: Path) -> None:
     project = tmp_path / "Game"
     project.mkdir()

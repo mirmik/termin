@@ -24,6 +24,8 @@ from termin._native import (
     set_render_sync_mode as c_set_render_sync_mode,
 )
 
+SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
+
 
 class RenderSyncMode(Enum):
     """Render synchronization mode between passes."""
