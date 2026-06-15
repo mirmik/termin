@@ -233,6 +233,40 @@ void test_missing_dependency() {
     expect(backend->load_calls.empty(), "backend must not be called");
 }
 
+void test_discovery_ignores_dist_directory() {
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "chess.pymodule",
+        "name: chess\n"
+        "root: .\n"
+        "packages: [Scripts]\n"
+    );
+
+    write_text_file(
+        tmp.path / "dist" / "Chess" / "chess.pymodule",
+        "name: chess\n"
+        "root: .\n"
+        "packages: [Scripts]\n"
+    );
+
+    ModuleRuntime runtime;
+    std::vector<ModuleEvent> events;
+    make_runtime(runtime, &events);
+    runtime.discover(tmp.path);
+
+    expect(runtime.last_error().empty(), "dist module descriptor should be ignored");
+    expect(runtime.find("chess") != nullptr, "root chess module should be discovered");
+
+    size_t discovered_count = 0;
+    for (const ModuleEvent& event : events) {
+        if (event.kind == ModuleEventKind::Discovered) {
+            discovered_count++;
+        }
+    }
+    expect(discovered_count == 1, "only root module should be discovered");
+}
+
 } // namespace
 
 TEST_CASE("module runtime parses descriptors and discovers modules") {
@@ -249,6 +283,10 @@ TEST_CASE("module runtime rejects dependency cycles") {
 
 TEST_CASE("module runtime reports missing dependencies") {
     test_missing_dependency();
+}
+
+TEST_CASE("module runtime ignores dist build output") {
+    test_discovery_ignores_dist_directory();
 }
 
 GUARD_TEST_MAIN();

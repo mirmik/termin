@@ -192,6 +192,55 @@ def test_build_project_excludes_project_ignored_resource_paths(tmp_path: Path) -
     assert "LooseIgnored.png.meta" not in source_paths
 
 
+def test_build_project_includes_python_module_descriptor_and_packages(tmp_path: Path) -> None:
+    project = tmp_path / "PythonGame"
+    project.mkdir()
+    _write_json(project / "game.terminproj", {"version": 1, "name": "PythonGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+    _write_json(
+        project / "game.pymodule",
+        {
+            "name": "game",
+            "type": "python",
+            "root": ".",
+            "packages": ["Scripts"],
+            "requirements": ["python-chess"],
+        },
+    )
+    scripts = project / "Scripts"
+    scripts.mkdir()
+    (scripts / "__init__.py").write_text("from Scripts.Controller import Controller\n", encoding="utf-8")
+    (scripts / "Controller.py").write_text("class Controller:\n    pass\n", encoding="utf-8")
+    pycache = scripts / "__pycache__"
+    pycache.mkdir()
+    (pycache / "Controller.cpython-310.pyc").write_bytes(b"pyc")
+
+    result = build_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "PythonGame",
+    )
+
+    source_paths = {resource.source_path for resource in result.manifest.resources}
+    by_source = {resource.source_path: resource for resource in result.manifest.resources}
+
+    assert "game.pymodule" in source_paths
+    assert "Scripts/__init__.py" in source_paths
+    assert "Scripts/Controller.py" in source_paths
+    assert "Scripts/__pycache__/Controller.cpython-310.pyc" not in source_paths
+    assert by_source["game.pymodule"].kind == "module"
+    assert by_source["game.pymodule"].type == "module"
+    assert by_source["Scripts/Controller.py"].kind == "module"
+    assert by_source["Scripts/Controller.py"].type == "module_source"
+    assert by_source["Scripts/Controller.py"].build_path == "Scripts/Controller.py"
+
+    assert (result.output_dir / "game.pymodule").exists()
+    assert (result.output_dir / "Scripts" / "__init__.py").exists()
+    assert (result.output_dir / "Scripts" / "Controller.py").exists()
+    assert not (result.output_dir / "Scripts" / "__pycache__").exists()
+    assert result.manifest.diagnostics == []
+
+
 class _FakeShader:
     is_valid = True
     uuid = "shader-phase-uuid"

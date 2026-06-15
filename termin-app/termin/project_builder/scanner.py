@@ -42,6 +42,8 @@ RESOURCE_EXTENSIONS: dict[str, str] = {
 
 PROJECT_FILE_EXTENSIONS: dict[str, str] = {
     ".terminproj": "project",
+    ".module": "module",
+    ".pymodule": "module",
 }
 
 
@@ -60,6 +62,7 @@ class ProjectScanner:
         self.project_settings = self._load_project_settings()
         self.asset_type_registry = asset_type_registry or self._create_default_asset_type_registry()
         self.import_plugins_by_extension = build_import_plugin_extension_map(self.asset_type_registry)
+        self.module_source_paths = self._collect_module_source_paths()
 
     def _create_default_asset_type_registry(self) -> AssetTypeRegistry:
         registry = AssetTypeRegistry()
@@ -235,6 +238,8 @@ class ProjectScanner:
             return "project_settings"
         if self._is_module_file(path):
             return "module"
+        if path.resolve() in self.module_source_paths:
+            return "module_source"
         return PROJECT_FILE_EXTENSIONS.get(path.suffix.lower())
 
     def _is_project_settings_file(self, path: Path) -> bool:
@@ -245,6 +250,98 @@ class ProjectScanner:
         rel = path.resolve().relative_to(self.project_root)
         return len(rel.parts) >= 2 and rel.parts[0] == "modules"
 
+    def _collect_module_source_paths(self) -> set[Path]:
+        paths: set[Path] = set()
+        for descriptor in sorted(self.project_root.rglob("*.pymodule")):
+            if self._is_ignored_path(descriptor):
+                continue
+            paths.update(self._collect_python_module_source_paths(descriptor))
+        return paths
+
+    def _collect_python_module_source_paths(self, descriptor: Path) -> set[Path]:
+        data = self._read_json(descriptor)
+        root_text = data.get("root", ".")
+        if not isinstance(root_text, str) or root_text == "":
+            self.diagnostics.append(
+                BuildDiagnostic(
+                    "error",
+                    self._relative_project_path(descriptor),
+                    "Python module root must be a non-empty string",
+                )
+            )
+            return set()
+
+        packages = data.get("packages", [])
+        if not isinstance(packages, list):
+            self.diagnostics.append(
+                BuildDiagnostic(
+                    "error",
+                    self._relative_project_path(descriptor),
+                    "Python module packages must be a list",
+                )
+            )
+            return set()
+
+        root_path = (descriptor.parent / root_text).resolve()
+        result: set[Path] = set()
+        for package in packages:
+            if not isinstance(package, str) or package == "":
+                self.diagnostics.append(
+                    BuildDiagnostic(
+                        "error",
+                        self._relative_project_path(descriptor),
+                        "Python module packages must contain only non-empty strings",
+                    )
+                )
+                continue
+            result.update(self._collect_python_package_files(root_path, package, descriptor))
+        return result
+
+    def _collect_python_package_files(
+        self,
+        root_path: Path,
+        package: str,
+        descriptor: Path,
+    ) -> set[Path]:
+        package_rel = Path(*package.split("."))
+        package_dir = (root_path / package_rel).resolve()
+        module_file = package_dir.with_suffix(".py")
+
+        if module_file.exists() and module_file.is_file():
+            return {module_file}
+
+        if not package_dir.exists() or not package_dir.is_dir():
+            self.diagnostics.append(
+                BuildDiagnostic(
+                    "error",
+                    self._relative_project_path(descriptor),
+                    f"Python package '{package}' was not found under module root",
+                )
+            )
+            return set()
+
+        result: set[Path] = set()
+        for root_str, dirs, filenames in os.walk(package_dir):
+            root = Path(root_str)
+            dirs[:] = [
+                dirname
+                for dirname in dirs
+                if self._should_enter_python_package_dir(root / dirname)
+            ]
+            for filename in filenames:
+                if filename.startswith("."):
+                    continue
+                path = root / filename
+                if self._is_ignored_path(path):
+                    continue
+                result.add(path.resolve())
+        return result
+
+    def _should_enter_python_package_dir(self, path: Path) -> bool:
+        if path.name == "__pycache__":
+            return False
+        return self._should_enter_dir(path)
+
     def _build_resource(self, path: Path, rel_path: str, resource_type: str) -> BuildResource:
         uuid = self._read_uuid(path, resource_type)
         meta_path = self._find_meta_path(path)
@@ -252,7 +349,13 @@ class ProjectScanner:
         build_path = self._build_path_for(rel_path, resource_type)
         meta_build_path = self._build_path_for(meta_rel_path, "meta") if meta_rel_path is not None else None
 
-        if uuid is None and resource_type not in ("project", "project_settings", "module", "glsl"):
+        if uuid is None and resource_type not in (
+            "project",
+            "project_settings",
+            "module",
+            "module_source",
+            "glsl",
+        ):
             self.diagnostics.append(
                 BuildDiagnostic("warning", rel_path, "Resource has no uuid")
             )
@@ -272,7 +375,7 @@ class ProjectScanner:
     def _kind_for(self, resource_type: str) -> str:
         if resource_type in ("project", "project_settings"):
             return "project"
-        if resource_type == "module":
+        if resource_type in ("module", "module_source"):
             return "module"
         return "asset"
 
@@ -283,7 +386,7 @@ class ProjectScanner:
         rel = Path(rel_path)
         if len(rel.parts) > 0 and rel.parts[0] in ("stdlib", "modules", "project_settings"):
             return rel.as_posix()
-        if resource_type in ("project", "project_settings", "module"):
+        if resource_type in ("project", "project_settings", "module", "module_source"):
             return rel.as_posix()
         return (Path("assets") / rel).as_posix()
 
