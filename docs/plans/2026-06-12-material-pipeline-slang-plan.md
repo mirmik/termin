@@ -304,8 +304,9 @@ Slang modules, but their resources should follow the same scope/name rules.
    Once pass/material code no longer relies on numeric slots, Vulkan can move
    from one flattened set to multiple descriptor sets by scope. OpenGL can keep
    flattening as a backend implementation detail.
-   Status: `termin_shaderc` now preserves Slang-reflected placement. The old
-   fixed-slot rewrite mode has been removed from the compiler.
+   Status: `termin_shaderc` owns backend placement for migrated Slang
+   artifacts. The current ownership model is documented in
+   `termin-graphics/docs/architecture/shader-resource-contracts.md`.
 
 ## Current Smells To Remove
 

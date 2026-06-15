@@ -13,14 +13,17 @@ The current Vulkan backend still flattens reflected shader resources into one
 per-pipeline descriptor set. Treat that as implementation state, not a shader
 authoring rule.
 
-For Slang, `termin_shaderc` preserves the set/binding placement reported by
-Slang reflection in the generated sidecar. There is no compatibility layout
-mode that remaps resources into historical fixed Termin slots; migrated runtime
-code must bind resources through the reflected layout metadata.
+For Slang, `termin_shaderc` owns backend placement in the generated artifact
+and sidecar. There is no runtime compatibility mode that remaps resources into
+historical fixed Termin slots; migrated runtime code must bind resources
+through generated layout metadata.
 
 **Authoritative C++ locations (verify here before changing anything):**
 
 - `termin-graphics/docs/architecture/pipeline-layout.md` — architecture and data flow.
+- `termin-graphics/docs/architecture/shader-resource-contracts.md` — semantic
+  ownership model for shader authors, pass code, `termin_shaderc`, runtime, and
+  backends.
 - `docs/plans/2026-06-11-slang-scope-first-binding.md` — active migration plan.
 - `termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp` — per-pipeline
   `VkDescriptorSetLayout` built from SPIR-V reflection at `create_pipeline()` time.
