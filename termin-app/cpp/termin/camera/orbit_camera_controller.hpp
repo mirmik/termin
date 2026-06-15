@@ -169,6 +169,7 @@ private:
     // === Internal methods ===
 
     void _ensure_camera();
+    bool _event_targets_this_camera(tc_viewport_handle viewport);
     ViewportState& _get_viewport_state(uintptr_t viewport_id);
 
     // Clamp value to range

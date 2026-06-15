@@ -4,7 +4,6 @@
 #include "termin/editor/editor_interaction_system.hpp"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
-#include "render/tc_render_target.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_input_entity_pool.h"
 #include "core/tc_input_scene.h"
@@ -80,11 +79,11 @@ void EditorViewportInputManager::on_mouse_button(int button, int action, int mod
     double x = _last_cursor_x;
     double y = _last_cursor_y;
 
-    // Dispatch to camera, internal entities, and editor components
+    // Dispatch to viewport-local editor entities, then scene components
+    // explicitly opted into editor input.
     MouseButtonEvent event(_viewport, x, y, button, action, mods);
     _dispatch_to_internal_entities(&event);
     _dispatch_to_editor_components(&event);
-    _dispatch_to_camera(&event);
 
     // Delegate to EditorInteractionSystem for picking/gizmo
     auto* sys = EditorInteractionSystem::instance();
@@ -108,7 +107,6 @@ void EditorViewportInputManager::on_mouse_move(double x, double y) {
     MouseMoveEvent event(_viewport, x, y, dx, dy);
     _dispatch_to_internal_entities(&event);
     _dispatch_to_editor_components(&event);
-    _dispatch_to_camera(&event);
 
     // Delegate to EditorInteractionSystem for hover/gizmo
     auto* sys = EditorInteractionSystem::instance();
@@ -129,7 +127,6 @@ void EditorViewportInputManager::on_scroll(double xoffset, double yoffset, int m
     ScrollEvent event(_viewport, x, y, xoffset, yoffset, actual_mods);
     _dispatch_to_internal_entities(&event);
     _dispatch_to_editor_components(&event);
-    _dispatch_to_camera(&event);
 
     // Request render update (zoom changes camera, needs redraw)
     auto* sys = EditorInteractionSystem::instance();
@@ -145,7 +142,6 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
     KeyEvent event(_viewport, key, scancode, action, mods);
     _dispatch_to_internal_entities(&event);
     _dispatch_to_editor_components(&event);
-    _dispatch_to_camera(&event);
 
     // Delegate to EditorInteractionSystem for editor-level key handling
     auto* sys = EditorInteractionSystem::instance();
@@ -170,49 +166,6 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
     } else if (!sys) {
         tc_log(TC_LOG_WARN, "EditorViewportInputManager::on_key: no sys=%p or no on_key callback", (void*)sys);
     }
-}
-
-// ============================================================================
-// Dispatch helpers - Camera
-// ============================================================================
-
-static void _dispatch_camera_components(tc_viewport_handle vp, auto dispatch_fn) {
-    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-    tc_entity_handle cam_ent = tc_render_target_get_camera_entity(rt);
-    if (!tc_entity_handle_valid(cam_ent)) return;
-
-    tc_entity_foreach_input_handler_subtree(cam_ent,
-        [](tc_component* c, void* user_data) -> bool {
-            auto* fn = static_cast<decltype(&dispatch_fn)>(user_data);
-            (*fn)(c);
-            return true;
-        },
-        &dispatch_fn
-    );
-}
-
-void EditorViewportInputManager::_dispatch_to_camera(tc_mouse_button_event* ev) {
-    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
-        tc_component_on_mouse_button(c, ev);
-    });
-}
-
-void EditorViewportInputManager::_dispatch_to_camera(tc_mouse_move_event* ev) {
-    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
-        tc_component_on_mouse_move(c, ev);
-    });
-}
-
-void EditorViewportInputManager::_dispatch_to_camera(tc_scroll_event* ev) {
-    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
-        tc_component_on_scroll(c, ev);
-    });
-}
-
-void EditorViewportInputManager::_dispatch_to_camera(tc_key_event* ev) {
-    _dispatch_camera_components(_viewport, [ev](tc_component* c) {
-        tc_component_on_key(c, ev);
-    });
 }
 
 // ============================================================================

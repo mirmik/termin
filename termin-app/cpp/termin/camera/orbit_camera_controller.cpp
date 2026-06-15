@@ -2,6 +2,11 @@
 #include <termin/entity/component_registry.hpp>
 #include <tcbase/tc_log.hpp>
 
+extern "C" {
+#include "render/tc_render_target.h"
+#include "render/tc_viewport.h"
+}
+
 #include <cmath>
 
 namespace termin {
@@ -39,6 +44,21 @@ void OrbitCameraController::_ensure_camera() {
     if (!_camera.valid() && entity().valid()) {
         _camera.reset(entity().get_component<CameraComponent>());
     }
+}
+
+bool OrbitCameraController::_event_targets_this_camera(tc_viewport_handle viewport) {
+    _ensure_camera();
+    CameraComponent* camera = _camera.get();
+    if (!camera || !tc_viewport_alive(viewport)) {
+        return false;
+    }
+
+    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    if (!tc_render_target_handle_valid(rt)) {
+        return false;
+    }
+
+    return tc_render_target_get_camera(rt) == camera->tc_component_ptr();
 }
 
 void OrbitCameraController::on_added() {
@@ -302,8 +322,7 @@ OrbitCameraController::ViewportState& OrbitCameraController::_get_viewport_state
 // Events are C struct pointers (tc_mouse_button_event*, etc.)
 
 void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
-    _ensure_camera();
-    if (!_camera.valid() || !e) {
+    if (!e || !_event_targets_this_camera(e->viewport)) {
         return;
     }
 
@@ -328,8 +347,7 @@ void OrbitCameraController::on_mouse_button(tc_mouse_button_event* e) {
 
 void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
     if (_prevent_moving) return;
-    _ensure_camera();
-    if (!_camera.valid() || !e) return;
+    if (!e || !_event_targets_this_camera(e->viewport)) return;
 
     uintptr_t vp_key = viewport_key(e->viewport);
     ViewportState& state = _get_viewport_state(vp_key);
@@ -354,7 +372,7 @@ void OrbitCameraController::on_mouse_move(tc_mouse_move_event* e) {
 
 void OrbitCameraController::on_scroll(tc_scroll_event* e) {
     if (_prevent_moving) return;
-    if (!e) return;
+    if (!e || !_event_targets_this_camera(e->viewport)) return;
 
     // Scroll up (positive yoffset) = zoom in (negative delta)
     zoom(-e->yoffset * _zoom_speed);
