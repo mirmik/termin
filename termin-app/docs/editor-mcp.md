@@ -77,7 +77,6 @@ accepts:
 
 - `path`: optional output path. Defaults to `/tmp/termin-editor-screenshots/`.
 - `include_image`: when true, returns the PNG as MCP image content.
-- `flip_y`: flips framebuffer rows vertically before saving. Enabled by default.
 - `timeout`: seconds to wait for the editor thread to complete the capture.
 
 `inspect_framegraph` returns a JSON snapshot from the headless framegraph

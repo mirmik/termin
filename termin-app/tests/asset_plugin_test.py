@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import numpy as np
+
 from termin.assets.resources import ResourceManager
 from termin.editor_core.default_preloaders import create_default_preloaders
 from termin.assets.plugin_preloader import PluginPreLoader
@@ -29,6 +31,76 @@ def test_mesh_register_file_uses_asset_plugin(tmp_path) -> None:
     asset.mark_just_saved()
     assert not asset.should_reload_from_file()
     assert rm.get_asset_by_uuid("mesh-plugin-test-uuid") is asset
+
+
+def test_mesh_reload_updates_existing_tc_mesh_data(tmp_path) -> None:
+    mesh_path = tmp_path / "scaled.obj"
+    mesh_path.write_text(
+        "\n".join(
+            [
+                "v 0 0 0",
+                "v 1 0 0",
+                "v 0 1 0",
+                "f 1 2 3",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    rm = ResourceManager()
+    result = PreLoadResult(
+        resource_type="mesh",
+        path=str(mesh_path),
+        content=None,
+        uuid="mesh-reload-existing-tc-mesh",
+        spec_data={"uuid": "mesh-reload-existing-tc-mesh", "scale": 1.0},
+    )
+    rm.register_file(result)
+
+    asset = rm.get_mesh_asset("scaled")
+    assert asset is not None
+    original_mesh = asset.data
+    assert original_mesh is not None
+    assert original_mesh.is_valid
+    original_mesh_version = original_mesh.version
+    np.testing.assert_allclose(
+        np.asarray(original_mesh.vertices),
+        np.asarray(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float32,
+        ),
+    )
+
+    rm.reload_file(
+        PreLoadResult(
+            resource_type="mesh",
+            path=str(mesh_path),
+            content=None,
+            uuid="mesh-reload-existing-tc-mesh",
+            spec_data={"uuid": "mesh-reload-existing-tc-mesh", "scale": 2.0},
+        )
+    )
+
+    reloaded_mesh = asset.data
+    assert reloaded_mesh is not None
+    assert reloaded_mesh.is_valid
+    assert reloaded_mesh.uuid == original_mesh.uuid
+    assert reloaded_mesh.version > original_mesh_version
+    np.testing.assert_allclose(
+        np.asarray(reloaded_mesh.vertices),
+        np.asarray(
+            [
+                [0.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [0.0, 0.0, 2.0],
+            ],
+            dtype=np.float32,
+        ),
+    )
 
 
 def test_asset_plugin_registry_can_find_mesh_by_extension() -> None:

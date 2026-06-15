@@ -47,7 +47,7 @@ class ProjectFileActionController:
         if ext in (".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"):
             inspector.show_texture_inspector_for_file(path)
             return
-        if ext == ".obj":
+        if ext in (".obj", ".stl"):
             inspector.show_mesh_inspector_for_file(path)
             return
         if ext in (".glb", ".gltf"):

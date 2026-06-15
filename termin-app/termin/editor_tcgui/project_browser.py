@@ -39,6 +39,7 @@ _KNOWN_EXTENSIONS = {
     ".bmp": "Texture",
     ".hdr": "HDR",
     ".exr": "EXR",
+    ".stl": "Mesh",
     ".obj": "Mesh",
     ".wav": "Audio",
     ".ogg": "Audio",

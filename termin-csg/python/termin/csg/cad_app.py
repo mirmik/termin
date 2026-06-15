@@ -16,7 +16,7 @@ from tcgui.widgets.panel import Panel
 from tcgui.widgets.splitter import Splitter
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.ui import UI
-from tcgui.widgets.units import px
+from tcgui.widgets.units import pct, px
 from tcgui.widgets.vstack import VStack
 
 from termin.csg.cad_viewer import CadViewportWidget, CsgSceneRenderer, document_bounds
@@ -111,6 +111,8 @@ class CadApp:
         self.ui = ui
 
         root = VStack()
+        root.preferred_width = pct(100)
+        root.preferred_height = pct(100)
         root.spacing = 0
 
         menu_bar = self._build_menu_bar()

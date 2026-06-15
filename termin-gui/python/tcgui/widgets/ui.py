@@ -249,7 +249,11 @@ class UI:
         self._viewport_h = viewport_h
 
         if self._root:
-            w, h = viewport_w, viewport_h
+            w, h = self._root.compute_size(viewport_w, viewport_h)
+            if w <= 0:
+                w = viewport_w
+            if h <= 0:
+                h = viewport_h
 
             anchor = self._root.anchor
             x, y = 0.0, 0.0

@@ -75,6 +75,9 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
         assert tools[2]["name"] == "inspect_framegraph"
         assert tools[3]["name"] == "capture_framegraph_resource"
         assert tools[4]["name"] == "capture_framegraph_pass_symbol"
+        for tool in tools[1:5]:
+            properties = tool["inputSchema"]["properties"]
+            assert "flip_y" not in properties
         assert session["tools"] == [
             "execute_python_script",
             "capture_editor_screenshot",
@@ -114,11 +117,10 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
 def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
     from termin.editor_tcgui import editor_screenshot
 
-    def fake_capture(editor, *, output_path=None, include_image=False, flip_y=True):
+    def fake_capture(editor, *, output_path=None, include_image=False):
         assert editor == "fake-editor"
         assert output_path == "/tmp/editor-shot.png"
         assert include_image is True
-        assert flip_y is False
         return {
             "path": "/tmp/editor-shot.png",
             "width": 320,
@@ -155,7 +157,6 @@ def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
                     "arguments": {
                         "path": "/tmp/editor-shot.png",
                         "include_image": True,
-                        "flip_y": False,
                         "timeout": 2.0,
                     },
                 },
@@ -217,13 +218,11 @@ def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
             *,
             output_path=None,
             include_image=False,
-            flip_y=True,
             capture_kind="main",
         ):
             assert self.prepared is True
             assert output_path == "/tmp/framegraph-color.png"
             assert include_image is True
-            assert flip_y is False
             assert capture_kind == "main"
             return {
                 "ready": True,
@@ -260,7 +259,6 @@ def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
                         "resource": "ColorPass_3_output_res",
                         "path": "/tmp/framegraph-color.png",
                         "include_image": True,
-                        "flip_y": False,
                         "channel_mode": 2,
                         "highlight_hdr": True,
                         "timeout": 2.0,
@@ -333,13 +331,11 @@ def test_editor_mcp_server_captures_framegraph_pass_symbol_tool(tmp_path):
             *,
             output_path=None,
             include_image=False,
-            flip_y=True,
             capture_kind="main",
         ):
             assert self.prepared is True
             assert output_path == "/tmp/framegraph-pass-color-cube.png"
             assert include_image is True
-            assert flip_y is False
             assert capture_kind == "main"
             return {
                 "ready": True,
@@ -379,7 +375,6 @@ def test_editor_mcp_server_captures_framegraph_pass_symbol_tool(tmp_path):
                         "symbol_index": 2,
                         "path": "/tmp/framegraph-pass-color-cube.png",
                         "include_image": True,
-                        "flip_y": False,
                         "timeout": 2.0,
                     },
                 },

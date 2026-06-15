@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
+from termin.editor_tcgui.project_browser import ProjectBrowserTcgui, _get_file_subtitle
 
 
 class _DummyUi:
@@ -26,3 +26,7 @@ def test_project_browser_copy_absolute_path_uses_ui_clipboard(tmp_path):
     browser._copy_absolute_path(target)
 
     assert ui.clipboard_text == str(target.resolve(strict=False))
+
+
+def test_project_browser_labels_stl_as_mesh(tmp_path):
+    assert _get_file_subtitle(tmp_path / "piece.stl") == "Mesh"
