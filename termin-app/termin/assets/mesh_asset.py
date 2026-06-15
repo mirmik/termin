@@ -150,16 +150,18 @@ class MeshAsset(DataAsset[TcMesh]):
 
     def _populate_or_create_tc_mesh(self, mesh3: Mesh3) -> TcMesh | None:
         """Populate existing declared TcMesh or create new one."""
-        from tmesh import tc_mesh_is_loaded
+        from tmesh import TcMesh
 
-        # If we have a declared (but not loaded) TcMesh, populate it
-        if self._data is not None and self._data.is_valid and not tc_mesh_is_loaded(self._data):
-            if self._data.set_from_mesh3(mesh3):
-                return self._data
-            log.error(f"[MeshAsset] Failed to populate declared TcMesh: {self._name}")
+        tc_mesh = self._data
+        if (tc_mesh is None or not tc_mesh.is_valid) and self._uuid:
+            tc_mesh = TcMesh.from_uuid(self._uuid)
+
+        if tc_mesh is not None and tc_mesh.is_valid:
+            if tc_mesh.set_from_mesh3(mesh3):
+                return tc_mesh
+            log.error(f"[MeshAsset] Failed to update TcMesh: {self._name}")
             return None
 
-        # Otherwise create new TcMesh with asset's UUID
         return TcMesh.from_mesh3(mesh3, self._name, self._uuid)
 
     def _parse_stl_to_mesh3(self, content: bytes, spec: "MeshSpec") -> Mesh3 | None:

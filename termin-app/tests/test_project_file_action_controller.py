@@ -84,10 +84,13 @@ def test_project_file_actions_select_files_for_inspector() -> None:
     controller.select_file("/project/render.scene_pipeline")
     controller.select_file("/project/albedo.png")
     controller.select_file("/project/mesh.obj")
+    assert recorder.inspector.mesh_path == "/project/mesh.obj"
+
+    controller.select_file("/project/mesh.stl")
     controller.select_file("/project/model.glb")
 
     assert recorder.inspector.material_path == "/project/material.tc_mat"
     assert recorder.inspector.pipeline_path == "/project/render.scene_pipeline"
     assert recorder.inspector.texture_path == "/project/albedo.png"
-    assert recorder.inspector.mesh_path == "/project/mesh.obj"
+    assert recorder.inspector.mesh_path == "/project/mesh.stl"
     assert recorder.inspector.glb_path == "/project/model.glb"

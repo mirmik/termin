@@ -106,7 +106,6 @@ def main() -> int:
     screenshot_parser = sub.add_parser("screenshot")
     screenshot_parser.add_argument("--path", default=None)
     screenshot_parser.add_argument("--include-image", action="store_true")
-    screenshot_parser.add_argument("--no-flip-y", action="store_true")
     screenshot_parser.add_argument("--timeout", type=float, default=30.0)
 
     framegraph_parser = sub.add_parser("framegraph")
@@ -123,7 +122,6 @@ def main() -> int:
     framegraph_capture_parser.add_argument("--capture-kind", default="main")
     framegraph_capture_parser.add_argument("--channel-mode", type=int, default=0)
     framegraph_capture_parser.add_argument("--highlight-hdr", action="store_true")
-    framegraph_capture_parser.add_argument("--no-flip-y", action="store_true")
     framegraph_capture_parser.add_argument("--timeout", type=float, default=30.0)
 
     framegraph_pass_capture_parser = sub.add_parser("framegraph-pass-capture")
@@ -135,7 +133,6 @@ def main() -> int:
     framegraph_pass_capture_parser.add_argument("--path", default=None)
     framegraph_pass_capture_parser.add_argument("--include-image", action="store_true")
     framegraph_pass_capture_parser.add_argument("--capture-kind", default="main")
-    framegraph_pass_capture_parser.add_argument("--no-flip-y", action="store_true")
     framegraph_pass_capture_parser.add_argument("--timeout", type=float, default=30.0)
 
     args = parser.parse_args()
@@ -175,7 +172,6 @@ def main() -> int:
     elif args.command == "screenshot":
         arguments: dict[str, Any] = {
             "include_image": args.include_image,
-            "flip_y": not args.no_flip_y,
             "timeout": args.timeout,
         }
         if args.path is not None:
@@ -210,7 +206,6 @@ def main() -> int:
             "capture_kind": args.capture_kind,
             "channel_mode": args.channel_mode,
             "highlight_hdr": args.highlight_hdr,
-            "flip_y": not args.no_flip_y,
             "timeout": args.timeout,
         }
         if args.target_index is not None:
@@ -231,7 +226,6 @@ def main() -> int:
         arguments = {
             "include_image": args.include_image,
             "capture_kind": args.capture_kind,
-            "flip_y": not args.no_flip_y,
             "timeout": args.timeout,
         }
         if args.target_index is not None:

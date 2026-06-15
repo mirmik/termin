@@ -19,7 +19,6 @@ def capture_editor_viewport_screenshot(
     *,
     output_path: str | None = None,
     include_image: bool = False,
-    flip_y: bool = True,
 ) -> dict[str, object]:
     """Read the editor viewport FBO and save it as a PNG image."""
     surface = editor._fbo_surface
@@ -37,9 +36,8 @@ def capture_editor_viewport_screenshot(
     if not device.read_texture_rgba_float(surface.color_tex, pixels):
         raise RuntimeError("Failed to read editor viewport color texture")
 
+    # tgfx2 readback returns rows in top-left CPU order for all backends.
     rgba = pixels.reshape((height, width, 4))
-    if flip_y:
-        rgba = rgba[::-1, :, :]
     rgba8 = np.clip(rgba * 255.0, 0.0, 255.0).astype(np.uint8)
 
     path = _resolve_screenshot_path(output_path)

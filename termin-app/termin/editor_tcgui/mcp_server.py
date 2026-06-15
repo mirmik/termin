@@ -337,7 +337,6 @@ class EditorMcpServer:
 
         capture_kind = str(arguments.get("capture_kind", "main"))
         include_image = bool(arguments.get("include_image", False))
-        flip_y = bool(arguments.get("flip_y", True))
         highlight_hdr = bool(arguments.get("highlight_hdr", False))
         channel_mode = int(arguments.get("channel_mode", 0))
         timeout = float(arguments.get("timeout", 30.0))
@@ -347,7 +346,6 @@ class EditorMcpServer:
             resource_name=resource_name,
             output_path=output_path,
             include_image=include_image,
-            flip_y=flip_y,
             capture_kind=capture_kind,
             channel_mode=channel_mode,
             highlight_hdr=highlight_hdr,
@@ -441,7 +439,6 @@ class EditorMcpServer:
 
         capture_kind = str(arguments.get("capture_kind", "main"))
         include_image = bool(arguments.get("include_image", False))
-        flip_y = bool(arguments.get("flip_y", True))
         timeout = float(arguments.get("timeout", 30.0))
 
         result = self._capture_framegraph_pass_symbol(
@@ -452,7 +449,6 @@ class EditorMcpServer:
             symbol_index=symbol_index,
             output_path=output_path,
             include_image=include_image,
-            flip_y=flip_y,
             capture_kind=capture_kind,
             timeout=timeout,
         )
@@ -515,12 +511,10 @@ class EditorMcpServer:
         if output_path is not None and not isinstance(output_path, str):
             return self._rpc_error(request_id, -32602, "Screenshot path must be a string")
         include_image = bool(arguments.get("include_image", False))
-        flip_y = bool(arguments.get("flip_y", True))
 
         result = self._capture_editor_screenshot(
             output_path=output_path,
             include_image=include_image,
-            flip_y=flip_y,
             timeout=timeout,
         )
         if not result.get("ok", False):
@@ -628,7 +622,6 @@ class EditorMcpServer:
         resource_name: str | None,
         output_path: str | None,
         include_image: bool,
-        flip_y: bool,
         capture_kind: str,
         channel_mode: int,
         highlight_hdr: bool,
@@ -650,7 +643,6 @@ class EditorMcpServer:
             result = self._export_framegraph_resource_capture(
                 output_path=output_path,
                 include_image=include_image,
-                flip_y=flip_y,
                 capture_kind=capture_kind,
                 timeout=min(max(deadline - time.monotonic(), 0.1), 5.0),
             )
@@ -680,7 +672,6 @@ class EditorMcpServer:
         symbol_index: int | None,
         output_path: str | None,
         include_image: bool,
-        flip_y: bool,
         capture_kind: str,
         timeout: float,
     ) -> dict[str, object]:
@@ -701,7 +692,6 @@ class EditorMcpServer:
             result = self._export_framegraph_resource_capture(
                 output_path=output_path,
                 include_image=include_image,
-                flip_y=flip_y,
                 capture_kind=capture_kind,
                 timeout=min(max(deadline - time.monotonic(), 0.1), 5.0),
             )
@@ -802,7 +792,6 @@ class EditorMcpServer:
         *,
         output_path: str | None,
         include_image: bool,
-        flip_y: bool,
         capture_kind: str,
         timeout: float,
     ) -> dict[str, object]:
@@ -813,7 +802,6 @@ class EditorMcpServer:
                 "_termin_mcp_framegraph_capture_export = framegraph_debugger.export_capture(",
                 f"    output_path={output_path!r},",
                 f"    include_image={include_image!r},",
-                f"    flip_y={flip_y!r},",
                 f"    capture_kind={capture_kind!r},",
                 ")",
                 (
@@ -876,7 +864,6 @@ class EditorMcpServer:
         *,
         output_path: str | None,
         include_image: bool,
-        flip_y: bool,
         timeout: float,
     ) -> dict[str, object]:
         marker = "__TERMIN_MCP_SCREENSHOT_RESULT__"
@@ -888,7 +875,6 @@ class EditorMcpServer:
                 "    editor,",
                 f"    output_path={output_path!r},",
                 f"    include_image={include_image!r},",
-                f"    flip_y={flip_y!r},",
                 ")",
                 f"print({json.dumps(marker)} + json.dumps(_termin_mcp_screenshot_result, ensure_ascii=False))",
             ]
@@ -974,11 +960,6 @@ class EditorMcpServer:
                         "description": "Return base64 PNG data as MCP image content.",
                         "default": False,
                     },
-                    "flip_y": {
-                        "type": "boolean",
-                        "description": "Flip framebuffer rows vertically before writing PNG.",
-                        "default": True,
-                    },
                     "timeout": {
                         "type": "number",
                         "description": "Seconds to wait for the editor thread to capture the screenshot.",
@@ -1062,11 +1043,6 @@ class EditorMcpServer:
                         "description": "Apply the framegraph debugger HDR highlight preview to color captures.",
                         "default": False,
                     },
-                    "flip_y": {
-                        "type": "boolean",
-                        "description": "Flip framebuffer rows vertically before writing PNG.",
-                        "default": True,
-                    },
                     "timeout": {
                         "type": "number",
                         "description": "Seconds to wait for a render frame to produce the capture.",
@@ -1120,11 +1096,6 @@ class EditorMcpServer:
                         "type": "string",
                         "description": "'main' for selected symbol capture, or 'depth' for associated depth capture.",
                         "default": "main",
-                    },
-                    "flip_y": {
-                        "type": "boolean",
-                        "description": "Flip framebuffer rows vertically before writing PNG.",
-                        "default": True,
                     },
                     "timeout": {
                         "type": "number",

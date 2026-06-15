@@ -194,7 +194,6 @@ class EditorFramegraphDebuggerService:
         *,
         output_path: str | None = None,
         include_image: bool = False,
-        flip_y: bool = True,
         capture_kind: str = "main",
     ) -> dict[str, object]:
         """Write the current framegraph capture to PNG if a capture is ready."""
@@ -235,21 +234,18 @@ class EditorFramegraphDebuggerService:
             image_array = np.frombuffer(data, dtype=np.uint8).reshape(
                 (int(height), int(width))
             )
-            if flip_y:
-                image_array = image_array[::-1, :].copy()
             Image.fromarray(image_array, mode="L").save(path)
         else:
             pixels = np.empty(width * height * 4, dtype=np.float32)
             if not device.read_texture_rgba_float(capture.capture_tex, pixels):
                 raise RuntimeError("Failed to read framegraph color capture")
+            # tgfx2 readback returns rows in top-left CPU order for all backends.
             rgba = pixels.reshape((height, width, 4))
             rgba = _apply_preview_params(
                 rgba,
                 channel_mode=model.channel_mode,
                 highlight_hdr=model.highlight_hdr,
             )
-            if flip_y:
-                rgba = rgba[::-1, :, :].copy()
             rgba8 = np.clip(rgba * 255.0, 0.0, 255.0).astype(np.uint8)
             Image.fromarray(rgba8, mode="RGBA").save(path)
 
