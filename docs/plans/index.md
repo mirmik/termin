@@ -27,3 +27,4 @@
 - [Slang scope-first binding migration](2026-06-11-slang-scope-first-binding.md)
 - [Layout-only ColorPass binding migration](2026-06-11-layout-only-color-pass-binding.md)
 - [Material Pipeline Slang migration](2026-06-12-material-pipeline-slang-plan.md)
+- [D3D11 backend readiness](2026-06-15-d3d11-backend-readiness-plan.md)
