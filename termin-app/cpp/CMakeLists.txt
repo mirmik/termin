@@ -509,6 +509,7 @@ if(BUILD_TESTS)
         tests/main.cpp
         tests/tests_general_pose3.cpp
         tests/tests_inspect_registry.cpp
+        tests/tests_orbit_camera_controller.cpp
         tests/tests_rendering_manager.cpp
         tests/tests_shader_parser_std140.cpp
     )

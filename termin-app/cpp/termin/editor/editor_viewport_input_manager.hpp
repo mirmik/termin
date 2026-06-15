@@ -41,12 +41,6 @@ public:
     void on_key(int key, int scancode, int action, int mods);
 
 private:
-    // Dispatch to camera entity's input handler components
-    void _dispatch_to_camera(tc_mouse_button_event* ev);
-    void _dispatch_to_camera(tc_mouse_move_event* ev);
-    void _dispatch_to_camera(tc_scroll_event* ev);
-    void _dispatch_to_camera(tc_key_event* ev);
-
     // Dispatch to scene's editor components (active_in_editor=true)
     void _dispatch_to_editor_components(tc_mouse_button_event* ev);
     void _dispatch_to_editor_components(tc_mouse_move_event* ev);
