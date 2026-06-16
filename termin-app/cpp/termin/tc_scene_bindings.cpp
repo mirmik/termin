@@ -317,13 +317,6 @@ void bind_tc_scene(nb::module_& m) {
             tc_material* mat = state ? tc_material_get(state->skybox.material) : nullptr;
             return TcMaterial(mat);
         })
-        .def("ensure_skybox_material", [](SceneRenderState& self, int skybox_type) -> TcMaterial {
-            tc_scene_render_state* state = tc_scene_render_state_get(self._h);
-            tc_scene_skybox* skybox = state ? &state->skybox : nullptr;
-            if (!skybox) return TcMaterial(nullptr);
-            tc_material* mat = tc_scene_skybox_ensure_material(skybox, skybox_type);
-            return TcMaterial(mat);
-        }, nb::arg("skybox_type"))
 
         // Ambient lighting
         .def_prop_rw("ambient_color",

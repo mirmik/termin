@@ -8,7 +8,7 @@ from pathlib import Path
 
 from termin.project_builder.manifest import BuildProjectResult
 from termin.project_builder.scanner import ProjectScanner
-from termin.project_builder.shader_build import compile_shader_usages
+from termin.project_builder.shader_build import compile_shader_asset_resources, compile_shader_usages
 from termin.project_builder.writer import ProjectBuildWriter
 
 
@@ -18,6 +18,8 @@ def build_project(
     output_dir: str | Path,
     copy_files: bool = True,
     compile_shaders: bool = False,
+    compile_asset_shaders: bool = False,
+    include_engine_shaders: bool = False,
     shader_usages: Iterable[object] | None = None,
     shader_compiler: str | Path | None = None,
 ) -> BuildProjectResult:
@@ -45,6 +47,31 @@ def build_project(
             )
         )
 
+    if compile_asset_shaders:
+        manifest.resources.extend(
+            compile_shader_asset_resources(
+                manifest=manifest,
+                project_root=project_root_path,
+                output_dir=output_dir_path,
+                shader_compiler=Path(shader_compiler) if shader_compiler is not None else None,
+            )
+        )
+
+    if include_engine_shaders:
+        from termin.project_build.runtime_package_exporter import (
+            RuntimePackageExportDiagnostic,
+            _write_default_pipeline_shader_artifacts,
+        )
+
+        diagnostics: list[RuntimePackageExportDiagnostic] = []
+        _write_default_pipeline_shader_artifacts(
+            output_dir_path / "assets",
+            diagnostics,
+            Path(shader_compiler) if shader_compiler is not None else None,
+        )
+        for diagnostic in diagnostics:
+            manifest.diagnostics.append(_build_diagnostic_from_runtime(diagnostic))
+
     writer = ProjectBuildWriter(
         project_root=project_root_path,
         output_dir=output_dir_path,
@@ -61,6 +88,16 @@ def build_project(
         build_json_path=build_json_path,
         manifest_json_path=manifest_json_path,
         manifest=manifest,
+    )
+
+
+def _build_diagnostic_from_runtime(diagnostic: object):
+    from termin.project_builder.manifest import BuildDiagnostic
+
+    return BuildDiagnostic(
+        level=diagnostic.level,
+        path=diagnostic.path,
+        message=diagnostic.message,
     )
 
 

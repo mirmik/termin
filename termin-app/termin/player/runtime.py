@@ -122,6 +122,7 @@ class PlayerRuntime:
         from tcbase import log
 
         self._configure_backend_default()
+        self._configure_build_shader_runtime()
 
         # Load the app render bindings before resource preloaders touch
         # materials/shaders. Importing tgfx-only helpers first leaves some
@@ -333,6 +334,46 @@ class PlayerRuntime:
 
         os.environ["TERMIN_BACKEND"] = "vulkan"
         log.info("[PlayerRuntime] TERMIN_BACKEND not set; using vulkan for standalone player")
+
+    def _configure_build_shader_runtime(self) -> None:
+        """Make build.json runs consume prebuilt shader artifacts from the build."""
+        if self.build_json_path is None or self.asset_manifest_path is None:
+            return
+
+        from tcbase import log
+
+        manifest_path = self.asset_manifest_path
+        if not manifest_path.is_absolute():
+            manifest_path = self.project_path / manifest_path
+        artifact_root = manifest_path.parent
+        cache_root = self.project_path / ".build" / "shader-cache"
+        try:
+            cache_root.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            log.error(f"[PlayerRuntime] Failed to create build shader cache: {exc}")
+            return
+
+        os.environ["TERMIN_SHADER_ARTIFACT_ROOT"] = str(artifact_root)
+        os.environ["TERMIN_SHADER_CACHE_ROOT"] = str(cache_root)
+        os.environ["TERMIN_SHADER_DEV_COMPILE"] = "0"
+
+        try:
+            import tgfx
+
+            tgfx.configure_shader_runtime(
+                artifact_root=str(artifact_root),
+                cache_root=str(cache_root),
+                shader_compiler=os.environ.get("TERMIN_SHADERC", ""),
+                dev_compile=False,
+            )
+        except Exception as exc:
+            log.error(f"[PlayerRuntime] Failed to configure build shader runtime: {exc}")
+            return
+
+        log.info(
+            "[PlayerRuntime] Build shader runtime configured: "
+            f"artifact_root='{artifact_root}' cache_root='{cache_root}' dev_compile=False"
+        )
 
     def _ensure_texture_registry(self) -> None:
         """Load the tgfx texture registry before app-native modules."""

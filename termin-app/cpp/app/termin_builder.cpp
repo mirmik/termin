@@ -2,11 +2,24 @@
 #include <tcbase/trent/trent.h>
 
 #include <filesystem>
+#include <cstdlib>
+#include <cstdio>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#ifdef _WIN32
+#include <process.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -33,6 +46,173 @@ struct BuildProfile {
     std::string output_dir;
     const nos::trent* raw = nullptr;
 };
+
+fs::path executable_dir() {
+#ifdef _WIN32
+    std::vector<char> buffer(MAX_PATH);
+    DWORD size = GetModuleFileNameA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    while (size == buffer.size()) {
+        buffer.resize(buffer.size() * 2);
+        size = GetModuleFileNameA(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    }
+    if (size == 0) {
+        return fs::current_path();
+    }
+    return fs::path(std::string(buffer.data(), size)).parent_path();
+#else
+    std::vector<char> buffer(4096);
+    ssize_t size = readlink("/proc/self/exe", buffer.data(), buffer.size() - 1);
+    if (size <= 0) {
+        return fs::current_path();
+    }
+    buffer[static_cast<size_t>(size)] = '\0';
+    return fs::path(buffer.data()).parent_path();
+#endif
+}
+
+std::string env_path_separator() {
+#ifdef _WIN32
+    return ";";
+#else
+    return ":";
+#endif
+}
+
+std::string current_env(const char* name) {
+    const char* value = std::getenv(name);
+    return value == nullptr ? std::string() : std::string(value);
+}
+
+void set_env_value(const char* name, const std::string& value) {
+#ifdef _WIN32
+    _putenv_s(name, value.c_str());
+#else
+    setenv(name, value.c_str(), 1);
+#endif
+}
+
+void prepend_env_path(const char* name, const fs::path& value) {
+    if (value.empty()) {
+        return;
+    }
+    std::string current = current_env(name);
+    std::string next = value.string();
+    if (!current.empty()) {
+        next += env_path_separator();
+        next += current;
+    }
+    set_env_value(name, next);
+}
+
+std::vector<fs::path> python_module_paths(const fs::path& install_root, const fs::path& exe_dir) {
+    std::vector<fs::path> paths;
+    const fs::path lib_dir = install_root / "lib";
+    std::error_code ec;
+    if (fs::exists(lib_dir, ec)) {
+        for (const fs::directory_entry& entry : fs::directory_iterator(lib_dir, ec)) {
+            if (ec) {
+                break;
+            }
+            if (!entry.is_directory(ec)) {
+                continue;
+            }
+            const std::string name = entry.path().filename().string();
+            if (name.rfind("python3.", 0) == 0) {
+                fs::path site_packages = entry.path() / "site-packages";
+                if (fs::exists(site_packages, ec)) {
+                    paths.push_back(site_packages);
+                }
+            }
+        }
+    }
+
+    fs::path sdk_python = install_root / "lib" / "python";
+    if (fs::exists(sdk_python, ec)) {
+        paths.push_back(sdk_python);
+    }
+
+    for (fs::path dir = exe_dir; !dir.empty(); dir = dir.parent_path()) {
+        fs::path dev_python = dir / "termin-app";
+        if (fs::exists(dev_python / "termin" / "__init__.py", ec)) {
+            paths.push_back(dev_python);
+            break;
+        }
+        if (dir == dir.root_path()) {
+            break;
+        }
+    }
+
+    return paths;
+}
+
+void configure_python_backend_environment() {
+    fs::path exe_dir = executable_dir();
+    fs::path install_root = exe_dir.parent_path();
+
+    if (current_env("TERMIN_SDK").empty()) {
+        set_env_value("TERMIN_SDK", install_root.string());
+    }
+    prepend_env_path("PATH", exe_dir);
+
+    std::string pythonpath = current_env("PYTHONPATH");
+    for (const fs::path& path : python_module_paths(install_root, exe_dir)) {
+        if (!fs::exists(path)) {
+            continue;
+        }
+        if (!pythonpath.empty()) {
+            pythonpath = path.string() + env_path_separator() + pythonpath;
+        } else {
+            pythonpath = path.string();
+        }
+    }
+    if (!pythonpath.empty()) {
+        set_env_value("PYTHONPATH", pythonpath);
+    }
+}
+
+int run_process(const std::vector<std::string>& args) {
+    if (args.empty()) {
+        throw std::runtime_error("cannot run empty command");
+    }
+
+#ifdef _WIN32
+    std::vector<const char*> argv;
+    argv.reserve(args.size() + 1);
+    for (const std::string& arg : args) {
+        argv.push_back(arg.c_str());
+    }
+    argv.push_back(nullptr);
+    return _spawnvp(_P_WAIT, args.front().c_str(), argv.data());
+#else
+    pid_t pid = fork();
+    if (pid < 0) {
+        throw std::runtime_error("failed to fork build backend process");
+    }
+    if (pid == 0) {
+        std::vector<char*> argv;
+        argv.reserve(args.size() + 1);
+        for (const std::string& arg : args) {
+            argv.push_back(const_cast<char*>(arg.c_str()));
+        }
+        argv.push_back(nullptr);
+        execvp(args.front().c_str(), argv.data());
+        std::perror(args.front().c_str());
+        _exit(127);
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        throw std::runtime_error("failed to wait for build backend process");
+    }
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+    return 1;
+#endif
+}
 
 void print_help() {
     std::cout
@@ -297,11 +477,38 @@ int command_build(const ParsedArgs& args) {
         return 0;
     }
 
-    std::cerr
-        << "termin_builder: build execution is not wired yet for target '"
-        << profile.target << "'.\n"
-        << "Use --dry-run to validate profile loading without executing a build.\n";
-    return 3;
+    if (profile.target != "desktop") {
+        std::cerr
+            << "termin_builder: unsupported build target '"
+            << profile.target << "'.\n";
+        return 3;
+    }
+
+    fs::path output_dir = profile.output_dir;
+    if (!output_dir.is_absolute()) {
+        output_dir = project_root / output_dir;
+    }
+
+    configure_python_backend_environment();
+    std::vector<std::string> command = {
+#ifdef _WIN32
+        "python",
+#else
+        "python3",
+#endif
+        "-m",
+        "termin.project_builder.profile_build",
+        "desktop",
+        "--project-root",
+        project_root.string(),
+        "--entry-scene",
+        profile.entry_scene,
+        "--output-dir",
+        output_dir.string(),
+    };
+
+    std::cout << "Executing desktop build backend...\n";
+    return run_process(command);
 }
 
 } // namespace
