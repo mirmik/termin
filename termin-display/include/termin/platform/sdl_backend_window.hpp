@@ -7,6 +7,7 @@
 
 #include <SDL2/SDL.h>
 
+#include "render/tc_input_manager.h"
 #include "termin/platform/backend_window.hpp"
 
 namespace termin {
@@ -40,6 +41,8 @@ public:
     void close() override;
     void poll_events() override;
     bool poll_event(SDL_Event& out_event);
+    void set_input_manager(tc_input_manager* manager) { input_manager_ = manager; }
+    tc_input_manager* input_manager() const { return input_manager_; }
     std::pair<int, int> framebuffer_size() const override;
     void present(tgfx::TextureHandle color_tex) override;
 
@@ -47,6 +50,7 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
     SDL_Window* window_ = nullptr;
+    tc_input_manager* input_manager_ = nullptr;
     bool should_close_ = false;
 };
 

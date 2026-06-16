@@ -14,9 +14,11 @@
 #endif
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/render_runtime.hpp"
+#include "termin/platform/sdl_window.hpp"
 
 extern "C" {
 #include <tcbase/tc_log.h>
+#include "render/tc_input_manager.h"
 }
 
 #ifdef TGFX2_HAS_VULKAN
@@ -34,6 +36,27 @@ void configure_sdl_window_hints() {
 #ifdef SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
 #endif
+}
+
+uint32_t event_window_id(const SDL_Event& ev) {
+    switch (ev.type) {
+        case SDL_WINDOWEVENT:
+            return ev.window.windowID;
+        case SDL_MOUSEMOTION:
+            return ev.motion.windowID;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            return ev.button.windowID;
+        case SDL_MOUSEWHEEL:
+            return ev.wheel.windowID;
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+            return ev.key.windowID;
+        case SDL_TEXTINPUT:
+            return ev.text.windowID;
+        default:
+            return 0;
+    }
 }
 
 } // namespace
@@ -369,11 +392,87 @@ bool SDLBackendWindow::poll_event(SDL_Event& out_event) {
 void SDLBackendWindow::poll_events() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
-        if (ev.type == SDL_QUIT) should_close_ = true;
-        else if (ev.type == SDL_WINDOWEVENT &&
-                 ev.window.event == SDL_WINDOWEVENT_CLOSE &&
-                 ev.window.windowID == SDL_GetWindowID(window_)) {
+        if (ev.type == SDL_QUIT) {
             should_close_ = true;
+            continue;
+        }
+
+        const uint32_t own_window_id = window_ ? SDL_GetWindowID(window_) : 0;
+        const uint32_t ev_window_id = event_window_id(ev);
+        if (ev_window_id != 0 && own_window_id != 0 && ev_window_id != own_window_id) {
+            continue;
+        }
+
+        if (ev.type == SDL_WINDOWEVENT && ev.window.event == SDL_WINDOWEVENT_CLOSE) {
+            should_close_ = true;
+            continue;
+        }
+
+        if (!input_manager_) {
+            continue;
+        }
+
+        switch (ev.type) {
+            case SDL_MOUSEMOTION:
+                tc_input_manager_on_mouse_move(input_manager_, ev.motion.x, ev.motion.y);
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+                tc_input_manager_on_mouse_move(input_manager_, ev.button.x, ev.button.y);
+                tc_input_manager_on_mouse_button(
+                    input_manager_,
+                    SDLWindow::translate_mouse_button(ev.button.button),
+                    TC_INPUT_PRESS,
+                    SDLWindow::translate_sdl_mods(SDL_GetModState())
+                );
+                break;
+
+            case SDL_MOUSEBUTTONUP:
+                tc_input_manager_on_mouse_move(input_manager_, ev.button.x, ev.button.y);
+                tc_input_manager_on_mouse_button(
+                    input_manager_,
+                    SDLWindow::translate_mouse_button(ev.button.button),
+                    TC_INPUT_RELEASE,
+                    SDLWindow::translate_sdl_mods(SDL_GetModState())
+                );
+                break;
+
+            case SDL_MOUSEWHEEL: {
+                int x = 0;
+                int y = 0;
+                SDL_GetMouseState(&x, &y);
+                tc_input_manager_on_mouse_move(input_manager_, x, y);
+                tc_input_manager_on_scroll(
+                    input_manager_,
+                    ev.wheel.x,
+                    ev.wheel.y,
+                    SDLWindow::translate_sdl_mods(SDL_GetModState())
+                );
+                break;
+            }
+
+            case SDL_KEYDOWN:
+                tc_input_manager_on_key(
+                    input_manager_,
+                    ev.key.keysym.sym,
+                    ev.key.keysym.scancode,
+                    ev.key.repeat ? TC_INPUT_REPEAT : TC_INPUT_PRESS,
+                    SDLWindow::translate_sdl_mods(ev.key.keysym.mod)
+                );
+                break;
+
+            case SDL_KEYUP:
+                tc_input_manager_on_key(
+                    input_manager_,
+                    ev.key.keysym.sym,
+                    ev.key.keysym.scancode,
+                    TC_INPUT_RELEASE,
+                    SDLWindow::translate_sdl_mods(ev.key.keysym.mod)
+                );
+                break;
+
+            default:
+                break;
         }
     }
 }

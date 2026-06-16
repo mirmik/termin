@@ -15,6 +15,31 @@ if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
 
 
+_active_runtime: "PlayerRuntime | None" = None
+
+
+def active_runtime() -> "PlayerRuntime | None":
+    """Return the PlayerRuntime currently executing on this thread, if any."""
+    return _active_runtime
+
+
+def request_quit(exit_code: int = 0) -> bool:
+    """Request graceful standalone player shutdown from game code.
+
+    Returns True when an active player runtime accepted the request. In editor
+    or tool contexts there may be no standalone runtime, and callers should not
+    fall back to raising SystemExit from input callbacks.
+    """
+    runtime = _active_runtime
+    if runtime is None:
+        from tcbase import log
+        log.warning("[PlayerRuntime] Quit requested without an active player runtime")
+        return False
+
+    runtime.request_quit(exit_code)
+    return True
+
+
 def load_manifest_assets_with_import_plugins(
     project_path: Path,
     resources: list,
@@ -116,6 +141,7 @@ class PlayerRuntime:
         self._viewport = None
         self._fallback_render_target = None
         self._input_manager = None
+        self.exit_code = 0
 
     def initialize(self) -> bool:
         """Initialize player systems."""
@@ -708,12 +734,15 @@ class PlayerRuntime:
 
         # Router auto-attaches to display's surface
         self._input_router = DisplayInputRouter(self._display.tc_display_ptr)
+        if self.window is not None:
+            self.window.set_input_manager(self._input_router.tc_input_manager_ptr)
         if self.surface is not None:
             self.surface.set_input_manager(self._input_router.tc_input_manager_ptr)
 
     def run(self):
         """Run the game loop."""
         from tcbase import log
+        global _active_runtime
 
         if not self.initialize():
             log.error("[PlayerRuntime] Initialization failed")
@@ -723,12 +752,15 @@ class PlayerRuntime:
         self.running = True
         self.last_time = time.perf_counter()
 
+        previous_runtime = _active_runtime
+        _active_runtime = self
         try:
             while self.running and not self.window.should_close():
                 self._tick()
         except KeyboardInterrupt:
             log.info("[PlayerRuntime] Interrupted by user")
         finally:
+            _active_runtime = previous_runtime
             self.shutdown()
 
     def _tick(self):
@@ -816,6 +848,20 @@ class PlayerRuntime:
             self.window = None
 
         self.running = False
+
+    def request_quit(self, exit_code: int = 0) -> None:
+        """Request graceful shutdown at the next game loop boundary."""
+        from tcbase import log
+
+        self.exit_code = int(exit_code)
+        self.running = False
+        if self.window is not None:
+            self.window.set_should_close(True)
+        if self._display is not None:
+            try:
+                self._display.should_close = True
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to mark display closed: {e}")
 
 
 def run_project(
