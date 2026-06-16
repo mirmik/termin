@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
-from termin.project_builder.manifest import BuildResource
+from termin.project_builder.manifest import BuildDiagnostic, BuildResource, ProjectBuildManifest
 
 
 _STAGES: tuple[tuple[str, str, str], ...] = (
@@ -91,6 +91,88 @@ def compile_shader_usages(
     return resources
 
 
+def compile_shader_asset_resources(
+    manifest: ProjectBuildManifest,
+    project_root: Path,
+    output_dir: Path,
+    shader_compiler: Path | None,
+) -> list[BuildResource]:
+    compiler = _resolve_shader_compiler(shader_compiler)
+    source_dir = output_dir / ".build" / "shaders" / "source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+
+    resources: list[BuildResource] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    for resource in manifest.resources:
+        if resource.kind != "asset" or resource.type != "shader":
+            continue
+        if resource.uuid is None or resource.uuid == "":
+            manifest.diagnostics.append(
+                BuildDiagnostic(
+                    level="warning",
+                    path=resource.source_path,
+                    message="Shader asset has no uuid; precompiled shader artifacts were skipped",
+                )
+            )
+            continue
+
+        source_path = project_root / resource.source_path
+        program = _parse_shader_program(source_path)
+        language = _program_language(program)
+        targets = _TARGETS_BY_LANGUAGE.get(language)
+        if targets is None:
+            raise ValueError(f"Shader asset '{resource.source_path}' has unsupported language: {language}")
+
+        for phase in program.phases:
+            phase_uuid = _phase_uuid(resource.uuid, phase.phase_mark)
+            if phase_uuid == "":
+                raise ValueError(f"Shader asset '{resource.source_path}' produced an empty phase uuid")
+
+            for stage_name, stage_ext, _attr_name in _STAGES:
+                stage = phase.stages.get(stage_name)
+                if stage is None:
+                    continue
+                source = stage.source
+                if source == "":
+                    continue
+
+                phase_source_path = source_dir / f"{phase_uuid}.{stage_ext}.{_source_extension(language)}"
+                phase_source_path.write_text(source, encoding="utf-8")
+
+                for target in targets:
+                    key = (phase_uuid, target, stage_ext)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+
+                    artifact_dir = output_dir / "assets" / "shaders" / target
+                    artifact_path = artifact_dir / f"{phase_uuid}.{stage_ext}.{_artifact_extension(target)}"
+                    _run_shader_compiler(
+                        compiler=compiler,
+                        language=language,
+                        target=target,
+                        stage=stage_name,
+                        input_path=phase_source_path,
+                        output_path=artifact_path,
+                        debug_name=f"{program.program}:{phase.phase_mark or 'default'}:{stage_name}",
+                        entry=stage.entry or "main",
+                    )
+                    resources.append(
+                        BuildResource(
+                            kind="generated",
+                            type=_resource_type(target),
+                            source_path=_output_relative(output_dir, phase_source_path),
+                            build_path=_output_relative(output_dir, artifact_path),
+                            uuid=phase_uuid,
+                            name=program.program or resource.name or phase_uuid,
+                            size=artifact_path.stat().st_size,
+                        )
+                    )
+
+    return resources
+
+
 def _shader_language(shader: object) -> str:
     try:
         language = shader.language
@@ -112,6 +194,28 @@ def _shader_language(shader: object) -> str:
     if text.endswith(".hlsl") or text == "hlsl":
         return "hlsl"
     return text
+
+
+def _program_language(program: object) -> str:
+    language = program.language
+    if isinstance(language, str):
+        text = language
+    else:
+        text = str(language)
+    return text.lower()
+
+
+def _parse_shader_program(path: Path) -> object:
+    from termin.materials import ShaderMultyPhaseProgramm, parse_shader_text
+
+    tree = parse_shader_text(path.read_text(encoding="utf-8"))
+    return ShaderMultyPhaseProgramm.from_tree(tree)
+
+
+def _phase_uuid(shader_uuid: str, phase_mark: str) -> str:
+    from termin.assets.shader_asset import make_phase_uuid
+
+    return make_phase_uuid(shader_uuid, phase_mark)
 
 
 def _source_extension(language: str) -> str:
@@ -183,6 +287,7 @@ def _run_shader_compiler(
     input_path: Path,
     output_path: Path,
     debug_name: str,
+    entry: str = "main",
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = _executable_command(compiler) + [
@@ -199,7 +304,7 @@ def _run_shader_compiler(
         "--output",
         str(output_path),
         "--entry",
-        "main",
+        entry,
         "--debug-name",
         debug_name,
     ]

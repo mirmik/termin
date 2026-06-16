@@ -44,6 +44,11 @@ ENGINE_BLOOM_DOWNSAMPLE_SHADER_UUID = "termin-engine-bloom-downsample"
 ENGINE_BLOOM_UPSAMPLE_SHADER_UUID = "termin-engine-bloom-upsample"
 ENGINE_BLOOM_COMPOSITE_SHADER_UUID = "termin-engine-bloom-composite"
 ENGINE_TONEMAP_SHADER_UUID = "termin-engine-tonemap"
+ENGINE_CANVAS2D_SOLID_SHADER_UUID = "termin-engine-canvas2d-solid"
+ENGINE_CANVAS2D_TEXTURE_SHADER_UUID = "termin-engine-canvas2d-texture"
+ENGINE_TEXT2D_SHADER_UUID = "termin-engine-text2d"
+ENGINE_TEXT2D_SDF_SHADER_UUID = "termin-engine-text2d-sdf"
+ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
 
 
 PLACEHOLDER_MESH_VERTICES = [
@@ -146,6 +151,9 @@ class _ShaderSpec:
     fragment_source: str
     geometry_source: str = ""
     language: str = "glsl"
+    vertex_entry: str = "main"
+    fragment_entry: str = "main"
+    geometry_entry: str = "main"
     allow_precompiled_default: bool = False
 
 
@@ -166,6 +174,8 @@ def _default_shader_spec(language: str) -> _ShaderSpec:
             fragment_source=_builtin_engine_stage_source(DEFAULT_SHADER_UUID, stages, "fragment"),
             geometry_source="",
             language="slang",
+            vertex_entry=_builtin_engine_stage_entry(stages, "vertex"),
+            fragment_entry=_builtin_engine_stage_entry(stages, "fragment"),
             allow_precompiled_default=False,
         )
     raise ValueError(f"Unsupported default shader language: {language}")
@@ -378,6 +388,7 @@ def _write_shader(
             vertex_source_path,
             vulkan_dir / f"{shader.uuid}.vert.spv",
             f"{shader.name or shader.uuid}:vertex",
+            shader.vertex_entry,
         )
         _compile_shader_stage(
             compiler,
@@ -387,6 +398,7 @@ def _write_shader(
             fragment_source_path,
             vulkan_dir / f"{shader.uuid}.frag.spv",
             f"{shader.name or shader.uuid}:fragment",
+            shader.fragment_entry,
         )
         if geometry_source_path is not None:
             _compile_shader_stage(
@@ -397,6 +409,7 @@ def _write_shader(
                 geometry_source_path,
                 vulkan_dir / f"{shader.uuid}.geom.spv",
                 f"{shader.name or shader.uuid}:geometry",
+                shader.geometry_entry,
             )
 
         if shader.language == "slang":
@@ -408,6 +421,7 @@ def _write_shader(
                 vertex_source_path,
                 opengl_dir / f"{shader.uuid}.vert.glsl",
                 f"{shader.name or shader.uuid}:vertex",
+                shader.vertex_entry,
             )
             _compile_shader_stage(
                 compiler,
@@ -417,6 +431,7 @@ def _write_shader(
                 fragment_source_path,
                 opengl_dir / f"{shader.uuid}.frag.glsl",
                 f"{shader.name or shader.uuid}:fragment",
+                shader.fragment_entry,
             )
             if geometry_source_path is not None:
                 _compile_shader_stage(
@@ -427,6 +442,7 @@ def _write_shader(
                     geometry_source_path,
                     opengl_dir / f"{shader.uuid}.geom.glsl",
                     f"{shader.name or shader.uuid}:geometry",
+                    shader.geometry_entry,
                 )
 
     shader_spec: dict[str, Any] = {
@@ -480,6 +496,8 @@ class _EngineShaderArtifact:
     language: str = "glsl"
     vertex_source: str = ""
     fragment_source: str = ""
+    vertex_entry: str = "main"
+    fragment_entry: str = "main"
     layout: dict[str, Any] = field(default_factory=dict)
 
 
@@ -510,6 +528,11 @@ def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
         _builtin_engine_shader_artifact(ENGINE_BLOOM_UPSAMPLE_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_BLOOM_COMPOSITE_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_TONEMAP_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_CANVAS2D_SOLID_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_CANVAS2D_TEXTURE_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_TEXT2D_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_TEXT2D_SDF_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_SHADOW_MATERIAL_SHADER_UUID),
     ]
 
 
@@ -517,14 +540,14 @@ def _builtin_engine_shader_artifact(uuid_value: str) -> _EngineShaderArtifact:
     entry = _builtin_shader_catalog_entry(uuid_value)
     language = str(entry.get("language", "glsl"))
     if language == "shader":
-        vertex_source, fragment_source = _builtin_engine_shader_program_stages(uuid_value, entry)
+        program_language, vertex_source, fragment_source = _builtin_engine_shader_program_stages(uuid_value, entry)
         return _EngineShaderArtifact(
             uuid=uuid_value,
             name=str(entry.get("name", uuid_value)),
-            language="glsl",
+            language=program_language,
             vertex_source=vertex_source,
             fragment_source=fragment_source,
-            layout=_builtin_engine_shader_layout(entry, artifact_language="glsl"),
+            layout=_builtin_engine_shader_layout(entry, artifact_language=program_language),
         )
 
     stages = entry.get("stages")
@@ -539,6 +562,8 @@ def _builtin_engine_shader_artifact(uuid_value: str) -> _EngineShaderArtifact:
         language=language,
         vertex_source=vertex_source,
         fragment_source=fragment_source,
+        vertex_entry=_builtin_engine_stage_entry(stages, "vertex"),
+        fragment_entry=_builtin_engine_stage_entry(stages, "fragment"),
         layout=_builtin_engine_shader_layout(entry),
     )
 
@@ -561,6 +586,15 @@ def _builtin_engine_stage_source(
     else:
         raise ValueError(f"Built-in shader '{uuid_value}' stage '{stage_name}' has invalid catalog data")
     return _builtin_shader_source(source_name)
+
+
+def _builtin_engine_stage_entry(stages: dict[str, Any], stage_name: str) -> str:
+    stage = stages.get(stage_name)
+    if isinstance(stage, dict):
+        entry = stage.get("entry")
+        if isinstance(entry, str) and entry != "":
+            return entry
+    return "main"
 
 
 def _builtin_engine_shader_layout(
@@ -589,7 +623,7 @@ def _builtin_engine_shader_layout(
 def _builtin_engine_shader_program_stages(
     uuid_value: str,
     entry: dict[str, Any],
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     from termin.materials import parse_shader_text
 
     program_entry = entry.get("program")
@@ -607,7 +641,7 @@ def _builtin_engine_shader_program_stages(
     fragment_stage = phase.stages.get("fragment")
     if vertex_stage is None or fragment_stage is None:
         raise RuntimeError(f"Built-in shader '{uuid_value}' parser returned incomplete stages")
-    return vertex_stage.source, fragment_stage.source
+    return program.language, vertex_stage.source, fragment_stage.source
 
 
 def _write_engine_shader_artifact(
@@ -656,6 +690,7 @@ def _write_engine_shader_artifact(
             vertex_source_path,
             vulkan_dir / f"{shader.uuid}.vert.spv",
             f"{shader.name}:vertex",
+            shader.vertex_entry,
         )
         if shader.language == "slang":
             _compile_shader_stage(
@@ -666,6 +701,7 @@ def _write_engine_shader_artifact(
                 vertex_source_path,
                 opengl_dir / f"{shader.uuid}.vert.glsl",
                 f"{shader.name}:vertex",
+                shader.vertex_entry,
             )
 
     if shader.fragment_source == "":
@@ -686,6 +722,7 @@ def _write_engine_shader_artifact(
         fragment_source_path,
         vulkan_dir / f"{shader.uuid}.frag.spv",
         f"{shader.name}:fragment",
+        shader.fragment_entry,
     )
     if shader.language == "slang":
         _compile_shader_stage(
@@ -696,6 +733,7 @@ def _write_engine_shader_artifact(
             fragment_source_path,
             opengl_dir / f"{shader.uuid}.frag.glsl",
             f"{shader.name}:fragment",
+            shader.fragment_entry,
         )
 
 
@@ -1187,6 +1225,7 @@ def _compile_shader_stage(
     input_path: Path,
     output_path: Path,
     debug_name: str,
+    entry: str = "main",
 ) -> None:
     cmd = _executable_command(compiler) + [
         str(compiler),
@@ -1202,7 +1241,7 @@ def _compile_shader_stage(
         "--output",
         str(output_path),
         "--entry",
-        "main",
+        entry,
         "--debug-name",
         debug_name,
     ]
