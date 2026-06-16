@@ -9,6 +9,6 @@ Or programmatically:
     run_project("path/to/project", "scene.scene")
 """
 
-from .runtime import PlayerRuntime, run_build, run_project
+from .runtime import PlayerRuntime, active_runtime, request_quit, run_build, run_project
 
-__all__ = ["PlayerRuntime", "run_build", "run_project"]
+__all__ = ["PlayerRuntime", "active_runtime", "request_quit", "run_build", "run_project"]

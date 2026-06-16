@@ -201,6 +201,11 @@ void bind_sdl(nb::module_& m) {
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &SDLBackendWindow::should_close)
         .def("set_should_close", &SDLBackendWindow::set_should_close, nb::arg("value"))
+        .def("set_input_manager", [](SDLBackendWindow& self, uintptr_t input_manager_ptr) {
+                self.set_input_manager(reinterpret_cast<tc_input_manager*>(input_manager_ptr));
+            },
+            nb::arg("input_manager_ptr"),
+            "Route SDL input events from this window to a tc_input_manager.")
         .def("set_title", [](SDLBackendWindow& self, const std::string& title) {
                 SDL_Window* w = self.sdl_window();
                 if (w) {
