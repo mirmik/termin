@@ -8,6 +8,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from termin.project_build.common import preload_project_resources, read_project_name
+from termin.project_build.desktop_runtime_packager import (
+    DesktopRuntimeBundleResult,
+    package_desktop_runtime,
+)
 from termin.project_build.python_module_packager import PythonModuleBundleResult, package_python_modules
 from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportDiagnostic,
@@ -21,6 +25,7 @@ class DesktopBuildResult:
     dist_dir: Path
     package_result: RuntimePackageExportResult
     python_result: PythonModuleBundleResult
+    runtime_result: DesktopRuntimeBundleResult
     app_manifest_path: Path
     diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
 
@@ -31,6 +36,7 @@ def build_desktop_project(
     output_dir: str | Path | None = None,
     shader_compiler: str | Path | None = None,
     default_shader_language: str = "slang",
+    sdk_root: str | Path | None = None,
 ) -> DesktopBuildResult:
     project_root_path = Path(project_root).resolve()
     project_name = read_project_name(project_root_path)
@@ -52,6 +58,15 @@ def build_desktop_project(
         project_root=project_root_path,
         output_dir=package_dir / "python",
     )
+    runtime_result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[
+            requirement
+            for module in python_result.modules
+            for requirement in module.requirements
+        ],
+        sdk_root=sdk_root,
+    )
 
     app_manifest_path = dist_dir / "app.json"
     python_descriptors = [
@@ -71,9 +86,14 @@ def build_desktop_project(
                 "scene": "package/scene.json",
             },
             "runtime": {
+                "launcher": "bin/termin_player",
                 "python": {
                     "enabled": bool(python_result.modules),
-                    "root": "python",
+                    "home": (
+                        f"lib/{runtime_result.python_home.name}"
+                        if runtime_result.python_home is not None
+                        else ""
+                    ),
                     "project_modules": "package/python",
                     "module_manifest": "package/python/modules.json",
                     "descriptors": python_descriptors,
@@ -92,10 +112,12 @@ def build_desktop_project(
         dist_dir=dist_dir,
         package_result=package_result,
         python_result=python_result,
+        runtime_result=runtime_result,
         app_manifest_path=app_manifest_path,
         diagnostics=[
             *package_result.diagnostics,
             *python_result.diagnostics,
+            *runtime_result.diagnostics,
         ],
     )
 

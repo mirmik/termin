@@ -549,22 +549,32 @@ int command_run(const ParsedArgs& args) {
         }
         const bool has_bundle_after_build = fs::exists(app_manifest_path) && fs::exists(package_manifest_path);
         if (has_bundle_after_build) {
-            std::cerr
-                << "termin_runner: packaged desktop bundle launch is not implemented yet: "
-                << app_manifest_path << "\n"
-                << "Use 'termin run " << args.profile_name
-                << " --project " << project_root.string()
-                << " --mode project' for Play Mode until the desktop host is available.\n";
-            return 5;
+            fs::path player_path = output_dir / "bin" / "termin_player";
+#ifdef _WIN32
+            if (!fs::exists(player_path)) {
+                player_path += ".exe";
+            }
+#endif
+            if (!fs::exists(player_path)) {
+                std::cerr
+                    << "termin_runner: packaged desktop bundle player does not exist: "
+                    << player_path << "\n"
+                    << "Rebuild the profile with a Termin SDK that installs termin_player.\n";
+                return 5;
+            }
+            command.clear();
+            command.emplace_back(player_path.string());
         }
-        if (!fs::exists(build_json_path)) {
+        if (!has_bundle_after_build && !fs::exists(build_json_path)) {
             std::cerr
                 << "termin_runner: legacy build.json does not exist: "
                 << build_json_path << "\n";
             return 4;
         }
-        command.emplace_back("--build");
-        command.emplace_back(build_json_path.string());
+        if (!has_bundle_after_build) {
+            command.emplace_back("--build");
+            command.emplace_back(build_json_path.string());
+        }
     } else {
         command.emplace_back(project_root.string());
         command.emplace_back("--scene");

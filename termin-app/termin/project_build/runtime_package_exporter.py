@@ -49,6 +49,8 @@ ENGINE_CANVAS2D_TEXTURE_SHADER_UUID = "termin-engine-canvas2d-texture"
 ENGINE_TEXT2D_SHADER_UUID = "termin-engine-text2d"
 ENGINE_TEXT2D_SDF_SHADER_UUID = "termin-engine-text2d-sdf"
 ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
+TCGUI_UI_SHADER_UUID = "termin-tcgui-ui-engine"
+TCGUI_UI_SHADER_NAME = "UIEngineVSFS"
 
 
 PLACEHOLDER_MESH_VERTICES = [
@@ -459,6 +461,8 @@ def _write_shader(
             if shared_stage_source
             else f"shaders/vulkan/{shader.uuid}.frag.{source_ext}"
         ),
+        "vertex_entry": shader.vertex_entry,
+        "fragment_entry": shader.fragment_entry,
         "source_path": shader.source_path,
         "artifacts": {
             "vulkan": {
@@ -469,6 +473,7 @@ def _write_shader(
     }
     if geometry_source_path is not None:
         shader_spec["geometry_source_path"] = f"shaders/vulkan/{shader.uuid}.geom.{source_ext}"
+        shader_spec["geometry_entry"] = shader.geometry_entry
         shader_spec["artifacts"]["vulkan"]["geometry"] = f"shaders/vulkan/{shader.uuid}.geom.spv"
     if shader.language == "slang":
         shader_spec["artifacts"]["opengl"] = {
@@ -515,6 +520,7 @@ def _write_default_pipeline_shader_artifacts(
 
     for shader in _default_pipeline_engine_shaders():
         _write_engine_shader_artifact(package_dir, diagnostics, shader, compiler)
+    _write_tcgui_ui_shader_artifacts(package_dir, compiler)
 
 
 def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
@@ -735,6 +741,43 @@ def _write_engine_shader_artifact(
             f"{shader.name}:fragment",
             shader.fragment_entry,
         )
+
+
+def _write_tcgui_ui_shader_artifacts(package_dir: Path, compiler: Path) -> None:
+    from tcgui.widgets.renderer import UI_FRAGMENT_SHADER, UI_VERTEX_SHADER
+
+    vulkan_dir = package_dir / "shaders" / "vulkan"
+    opengl_dir = package_dir / "shaders" / "opengl"
+    vulkan_dir.mkdir(parents=True, exist_ok=True)
+    opengl_dir.mkdir(parents=True, exist_ok=True)
+
+    vulkan_vertex = vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.vert.glsl"
+    vulkan_fragment = vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.frag.glsl"
+    vulkan_vertex.write_text(UI_VERTEX_SHADER, encoding="utf-8")
+    vulkan_fragment.write_text(UI_FRAGMENT_SHADER, encoding="utf-8")
+    _compile_shader_stage(
+        compiler,
+        "glsl",
+        "vulkan",
+        "vertex",
+        vulkan_vertex,
+        vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.vert.spv",
+        f"{TCGUI_UI_SHADER_NAME}:vertex",
+        "main",
+    )
+    _compile_shader_stage(
+        compiler,
+        "glsl",
+        "vulkan",
+        "fragment",
+        vulkan_fragment,
+        vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.frag.spv",
+        f"{TCGUI_UI_SHADER_NAME}:fragment",
+        "main",
+    )
+
+    (opengl_dir / f"{TCGUI_UI_SHADER_UUID}.vert.glsl").write_text(UI_VERTEX_SHADER, encoding="utf-8")
+    (opengl_dir / f"{TCGUI_UI_SHADER_UUID}.frag.glsl").write_text(UI_FRAGMENT_SHADER, encoding="utf-8")
 
 
 def _source_extension_for_language(language: str) -> str:

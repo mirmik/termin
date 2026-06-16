@@ -225,7 +225,13 @@ class PlayerRuntime:
         # Create new scene and load data
         self.scene = create_scene(name=self.scene_name)
         self.scene.source_path = str(scene_path.resolve())
-        scene_data = data.get("scene") or (data.get("scenes", [None])[0])
+        scene_data = data.get("scene")
+        if scene_data is None:
+            scenes = data.get("scenes")
+            if isinstance(scenes, list) and len(scenes) > 0:
+                scene_data = scenes[0]
+        if scene_data is None and ("entities" in data or "uuid" in data):
+            scene_data = data
         if scene_data:
             self.scene.load_from_data(scene_data, context=None, update_settings=True)
             from termin.modules import upgrade_scene_unknown_components
@@ -553,7 +559,7 @@ class PlayerRuntime:
         log.info(f"[PlayerRuntime] Loaded {loaded_count} project assets")
 
     def _load_manifest_assets(self) -> None:
-        """Load build resources listed by assets/manifest.json."""
+        """Load build resources listed by manifest.json."""
         from tcbase import log
         from termin.assets.resources import ResourceManager
 
@@ -581,6 +587,12 @@ class PlayerRuntime:
             log.error(f"[PlayerRuntime] Invalid asset manifest resources: {manifest_path}")
             return
 
+        if self._is_runtime_package_manifest(resources):
+            from termin.player.runtime_package_loader import load_runtime_package_assets
+
+            load_runtime_package_assets(manifest_path.parent, manifest_path)
+            return
+
         for diagnostic in manifest_data.get("diagnostics", []):
             if not isinstance(diagnostic, dict):
                 continue
@@ -599,6 +611,17 @@ class PlayerRuntime:
         )
 
         log.info(f"[PlayerRuntime] Loaded {loaded_count} build assets from manifest")
+
+    def _is_runtime_package_manifest(self, resources: list) -> bool:
+        for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+            if resource.get("kind") == "asset":
+                return False
+            resource_type = resource.get("type")
+            if resource_type in {"shader", "mesh", "material", "pipeline", "foliage_data"}:
+                return True
+        return False
 
     def _setup_camera(self):
         """Find existing camera or create default one."""
@@ -925,5 +948,51 @@ def run_build(
         title=title,
         asset_manifest_path=asset_manifest,
         build_json_path=build_path,
+    )
+    runtime.run()
+
+
+def run_bundle(
+    app_manifest_path: str | Path,
+    width: int = 1280,
+    height: int = 720,
+    title: str = "Termin Player",
+):
+    """Run a packaged desktop bundle from app.json."""
+    app_path = Path(app_manifest_path).resolve()
+    with open(app_path, "r", encoding="utf-8") as f:
+        app_data = json.load(f)
+
+    package = app_data.get("package")
+    entry = app_data.get("entry")
+    if not isinstance(package, dict):
+        raise ValueError(f"app.json has no package object: {app_path}")
+    if not isinstance(entry, dict):
+        raise ValueError(f"app.json has no entry object: {app_path}")
+
+    package_root_value = package.get("root")
+    package_manifest_value = package.get("manifest")
+    entry_scene_value = entry.get("scene")
+    if not isinstance(package_root_value, str) or package_root_value == "":
+        raise ValueError(f"app.json has no package.root: {app_path}")
+    if not isinstance(package_manifest_value, str) or package_manifest_value == "":
+        raise ValueError(f"app.json has no package.manifest: {app_path}")
+    if not isinstance(entry_scene_value, str) or entry_scene_value == "":
+        raise ValueError(f"app.json has no entry.scene: {app_path}")
+
+    bundle_root = app_path.parent
+    package_root = (bundle_root / package_root_value).resolve()
+    manifest_path = (bundle_root / package_manifest_value).resolve()
+    scene_path = (bundle_root / entry_scene_value).resolve()
+    scene_name = scene_path.relative_to(package_root).as_posix()
+
+    runtime = PlayerRuntime(
+        project_path=package_root,
+        scene_name=scene_name,
+        width=width,
+        height=height,
+        title=title,
+        asset_manifest_path=manifest_path,
+        build_json_path=app_path,
     )
     runtime.run()

@@ -475,6 +475,34 @@ set_target_properties(termin_runner PROPERTIES
 termin_set_rpath_tool(termin_runner)
 install(TARGETS termin_runner RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+add_executable(termin_player
+    app/termin_player.cpp
+)
+target_compile_features(termin_player PRIVATE cxx_std_20)
+target_include_directories(termin_player PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${Python_INCLUDE_DIRS}
+)
+target_link_libraries(termin_player PRIVATE
+    Python::Python
+    termin_engine::termin_engine
+    termin_render::termin_render
+    termin_collision::termin_collision
+)
+target_compile_options(termin_player PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+set_target_properties(termin_player PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+if(WIN32)
+    set_target_properties(termin_player PROPERTIES WIN32_EXECUTABLE FALSE)
+endif()
+install(TARGETS termin_player RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+set_target_properties(termin_player PROPERTIES
+    INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN"
+    BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
+    BUILD_WITH_INSTALL_RPATH FALSE
+)
+
 add_executable(termin_stdlib
     app/termin_stdlib.cpp
 )
