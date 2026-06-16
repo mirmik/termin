@@ -228,7 +228,7 @@ void print_help() {
         << "\n"
         << "Options:\n"
         << "  --mode build|project      Run built output or source project scene (default: build).\n"
-        << "  --build-if-missing        Build the profile if build.json is missing.\n"
+        << "  --build-if-missing        Build the profile if build output is missing.\n"
         << "  --rebuild                 Build the profile before running.\n"
         << "  --dry-run                 Print the resolved command without executing it.\n"
         << "  --backend <name>          Set TERMIN_BACKEND for the player process.\n"
@@ -455,16 +455,15 @@ int maybe_build_profile(
     const ParsedArgs& args,
     const fs::path& project_root,
     const fs::path& profiles_path,
-    const fs::path& build_json_path
+    bool build_output_missing
 ) {
-    const bool build_missing = !fs::exists(build_json_path);
-    if (!args.options.rebuild && !build_missing) {
+    if (!args.options.rebuild && !build_output_missing) {
         return 0;
     }
 
-    if (!args.options.build_if_missing) {
+    if (!args.options.rebuild && !args.options.build_if_missing) {
         std::cerr
-            << "termin_runner: build file does not exist: " << build_json_path << "\n"
+            << "termin_runner: build output does not exist for profile '" << args.profile_name << "'.\n"
             << "Run 'termin build " << args.profile_name
             << " --project " << project_root.string()
             << "' or pass --build-if-missing.\n";
@@ -510,6 +509,8 @@ int command_run(const ParsedArgs& args) {
     BuildProfile profile = find_profile(profile_map(root), args.profile_name);
     fs::path output_dir = resolve_output_dir(project_root, profile);
     fs::path build_json_path = output_dir / "build.json";
+    fs::path app_manifest_path = output_dir / "app.json";
+    fs::path package_manifest_path = output_dir / "package" / "manifest.json";
 
     std::cout
         << "Profile: " << profile.name << "\n"
@@ -518,7 +519,8 @@ int command_run(const ParsedArgs& args) {
         << "Run mode: " << args.options.mode << "\n"
         << "Target: " << profile.target << "\n"
         << "Entry scene: " << profile.entry_scene << "\n"
-        << "Output dir: " << profile.output_dir << "\n";
+        << "Output dir: " << profile.output_dir << "\n"
+        << std::flush;
 
     if (profile.target != "desktop" && args.options.mode == "build") {
         std::cerr
@@ -534,9 +536,32 @@ int command_run(const ParsedArgs& args) {
 
     std::vector<std::string> command = python_module_command();
     if (args.options.mode == "build") {
-        int build_code = maybe_build_profile(args, project_root, profiles_path, build_json_path);
+        const bool has_legacy_build = fs::exists(build_json_path);
+        const bool has_desktop_bundle = fs::exists(app_manifest_path) && fs::exists(package_manifest_path);
+        int build_code = maybe_build_profile(
+            args,
+            project_root,
+            profiles_path,
+            !has_legacy_build && !has_desktop_bundle
+        );
         if (build_code != 0) {
             return build_code;
+        }
+        const bool has_bundle_after_build = fs::exists(app_manifest_path) && fs::exists(package_manifest_path);
+        if (has_bundle_after_build) {
+            std::cerr
+                << "termin_runner: packaged desktop bundle launch is not implemented yet: "
+                << app_manifest_path << "\n"
+                << "Use 'termin run " << args.profile_name
+                << " --project " << project_root.string()
+                << " --mode project' for Play Mode until the desktop host is available.\n";
+            return 5;
+        }
+        if (!fs::exists(build_json_path)) {
+            std::cerr
+                << "termin_runner: legacy build.json does not exist: "
+                << build_json_path << "\n";
+            return 4;
         }
         command.emplace_back("--build");
         command.emplace_back(build_json_path.string());

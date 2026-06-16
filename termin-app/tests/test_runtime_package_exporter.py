@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from termin.project_build import build_android_project, export_runtime_package
+from termin.project_build import build_android_project, build_desktop_project, export_runtime_package
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -154,6 +154,65 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
         "Runtime exporter used fallback material because registry entry is unavailable"
         in diagnostic_messages
     )
+
+
+def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
+    project = tmp_path / "DesktopGame"
+    project.mkdir()
+    _write_json(project / "DesktopGame.terminproj", {"version": 1, "name": "DesktopGame"})
+    _write_json(project / "Main.scene", {"uuid": "desktop-scene", "entities": []})
+
+    legacy_output = project / "dist" / "DesktopGame"
+    _write_json(legacy_output / "build.json", {"legacy": True})
+    _write_json(legacy_output / "assets" / "manifest.json", {"legacy": True})
+
+    result = build_desktop_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=legacy_output,
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    assert result.dist_dir == legacy_output.resolve()
+    assert result.app_manifest_path == result.dist_dir / "app.json"
+    assert result.package_result.manifest_path == result.dist_dir / "package" / "manifest.json"
+    assert result.package_result.scene_path == result.dist_dir / "package" / "scene.json"
+    assert result.app_manifest_path.exists()
+    assert result.package_result.manifest_path.exists()
+    assert not (result.dist_dir / "build.json").exists()
+    assert not (result.dist_dir / "assets").exists()
+
+    app_manifest_text = result.app_manifest_path.read_text(encoding="utf-8")
+    assert str(project.resolve()) not in app_manifest_text
+    app_manifest = json.loads(app_manifest_text)
+    assert app_manifest == {
+        "version": 1,
+        "format": "termin.desktop_bundle",
+        "target": "desktop",
+        "project_name": "DesktopGame",
+        "package": {
+            "root": "package",
+            "manifest": "package/manifest.json",
+            "scene": "package/scene.json",
+        },
+        "runtime": {
+            "python": {
+                "enabled": True,
+                "root": "python",
+                "project_modules": "package/python",
+            },
+            "native_library_dirs": [
+                "lib",
+            ],
+        },
+        "entry": {
+            "scene": "package/scene.json",
+        },
+    }
+
+    package_manifest = json.loads(result.package_result.manifest_path.read_text(encoding="utf-8"))
+    assert package_manifest["scene"] == "scene.json"
+    assert package_manifest["shader_artifact_root"] == "."
 
 
 def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path: Path) -> None:

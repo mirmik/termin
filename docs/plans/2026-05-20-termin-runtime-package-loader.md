@@ -4,7 +4,9 @@
 
 ## Цель
 
-`termin-runtime` - C++ слой для запуска собранного билда без Python. Первый практический сценарий: Android player получает каталог package artifacts, загружает ресурсы и создает `TcSceneRef`, после чего сцена рендерится обычным `MeshComponent` / `MeshRenderer` путем.
+`termin-runtime` - C++ слой для загрузки собранного runtime package без зависимости от editor-side asset graph. Первый практический сценарий: Android player получает каталог package artifacts, загружает ресурсы и создает `TcSceneRef`, после чего сцена рендерится обычным `MeshComponent` / `MeshRenderer` путем.
+
+Важно: это не означает общий отказ от Python в собранных билдах. Android path временно избегает Python из-за отсутствия поддержанного Python runtime на этой платформе, но desktop standalone может и должен уметь включать Python runtime/game scripts, если проект их использует.
 
 Это не замена `termin-assets`: editor/build side по-прежнему может жить в Python. `termin-runtime` должен читать уже собранные runtime artifacts.
 
