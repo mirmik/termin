@@ -187,6 +187,88 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     )
 
 
+def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_path: Path) -> None:
+    project = tmp_path / "MeshAssetGame"
+    project.mkdir()
+    mesh_uuid = "standalone-mesh-uuid"
+    material_uuid = "material-uuid"
+
+    models_dir = project / "Models"
+    models_dir.mkdir()
+    mesh_path = models_dir / "Triangle.obj"
+    mesh_path.write_text(
+        "\n".join(
+            [
+                "v 0 0 0",
+                "v 1 0 0",
+                "v 0 1 0",
+                "f 1 2 3",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    _write_json(
+        Path(str(mesh_path) + ".meta"),
+        {
+            "uuid": mesh_uuid,
+            "scale": 1.0,
+            "axis_x": "x",
+            "axis_y": "y",
+            "axis_z": "z",
+            "flip_uv_v": False,
+        },
+    )
+    _write_json(
+        project / "Main.scene",
+        {
+            "uuid": "scene-uuid",
+            "entities": [
+                {
+                    "uuid": "entity-uuid",
+                    "components": [
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
+                                "mesh": {
+                                    "uuid": mesh_uuid,
+                                    "name": "Triangle",
+                                    "type": "uuid",
+                                },
+                                "material": {
+                                    "uuid": material_uuid,
+                                    "name": "Triangle Material",
+                                    "type": "uuid",
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "desktop" / "MeshAssetGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    mesh_data = json.loads((result.package_dir / "meshes" / f"{mesh_uuid}.tmesh.json").read_text(encoding="utf-8"))
+    assert mesh_data["uuid"] == mesh_uuid
+    assert mesh_data["name"] == "Triangle"
+    assert mesh_data["vertex_count"] == 3
+    assert mesh_data["indices"] == [0, 1, 2]
+    attribute_names = [attribute["name"] for attribute in mesh_data["layout"]]
+    assert "position" in attribute_names
+    assert "normal" in attribute_names
+    assert "uv" in attribute_names
+    assert "color" not in attribute_names
+    diagnostic_messages = [diagnostic.message for diagnostic in result.diagnostics]
+    assert "Runtime exporter used fallback mesh because registry entry is unavailable" not in diagnostic_messages
+
+
 def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     project = tmp_path / "DesktopGame"
     project.mkdir()

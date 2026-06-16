@@ -103,7 +103,7 @@ def export_runtime_package(
 
     resources: list[dict[str, str]] = []
     shaders: dict[str, _ShaderSpec] = {}
-    _write_meshes(output_dir_path, refs.meshes, resources, diagnostics)
+    _write_meshes(project_root_path, output_dir_path, refs.meshes, resources, diagnostics)
     _write_materials(
         output_dir_path,
         refs.materials,
@@ -981,6 +981,7 @@ def _iter_project_pipeline_paths(project_root: Path):
 
 
 def _write_meshes(
+    project_root: Path,
     package_dir: Path,
     meshes: dict[str, str],
     resources: list[dict[str, str]],
@@ -991,7 +992,7 @@ def _write_meshes(
 
     for uuid_value, name in sorted(meshes.items()):
         path = mesh_dir / f"{uuid_value}.tmesh.json"
-        mesh_spec = _export_mesh_spec(uuid_value, name, diagnostics)
+        mesh_spec = _export_mesh_spec(project_root, uuid_value, name, diagnostics)
         _write_json(path, mesh_spec)
         resources.append(
             {
@@ -1033,10 +1034,24 @@ def _write_materials(
 
 
 def _export_mesh_spec(
+    project_root: Path,
     uuid_value: str,
     name: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> dict[str, Any]:
+    mesh_source = _find_mesh_source(project_root, uuid_value, name)
+    if mesh_source is not None:
+        try:
+            return _mesh_source_to_spec(mesh_source, uuid_value, name)
+        except Exception as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="warning",
+                    path=str(mesh_source.relative_to(project_root)),
+                    message=f"Runtime exporter failed to read mesh asset: {exc}",
+                )
+            )
+
     try:
         from tmesh import TcMesh
 
@@ -1060,6 +1075,59 @@ def _export_mesh_spec(
         )
     )
     return _fallback_mesh_spec(uuid_value, name)
+
+
+def _find_mesh_source(project_root: Path, uuid_value: str, name: str) -> Path | None:
+    mesh_paths = list(_iter_project_mesh_paths(project_root))
+
+    if uuid_value:
+        for path in mesh_paths:
+            meta_path = Path(str(path) + ".meta")
+            if not meta_path.exists():
+                continue
+            try:
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                if isinstance(meta, dict) and meta.get("uuid") == uuid_value:
+                    return path
+            except Exception:
+                pass
+
+    if name:
+        for path in mesh_paths:
+            if path.stem == name:
+                return path
+
+    return None
+
+
+def _iter_project_mesh_paths(project_root: Path):
+    ignored_parts = {".git", "__pycache__", "build", "dist"}
+    supported_suffixes = {".obj", ".stl"}
+    for path in project_root.rglob("*"):
+        rel = path.relative_to(project_root)
+        if any(part in ignored_parts for part in rel.parts):
+            continue
+        if path.is_file() and path.suffix.lower() in supported_suffixes:
+            yield path
+
+
+def _mesh_source_to_spec(source_path: Path, uuid_value: str, name: str) -> dict[str, Any]:
+    from termin.assets.mesh_asset import MeshAsset
+
+    asset = MeshAsset(name=name, source_path=source_path, uuid=uuid_value)
+    meta_path = Path(str(source_path) + ".meta")
+    if meta_path.exists():
+        with open(meta_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        if not isinstance(meta, dict):
+            raise ValueError(f"mesh meta JSON root must be an object: {meta_path}")
+        asset.parse_spec(meta)
+
+    mesh = asset.data
+    if mesh is None or not mesh.is_valid:
+        raise ValueError(f"mesh asset did not produce a valid TcMesh: {source_path}")
+    return _mesh_to_spec(mesh)
 
 
 def _mesh_to_spec(mesh: Any) -> dict[str, Any]:
