@@ -176,7 +176,7 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert "TEXCOORD0" in fsq_source
 
     skybox_source = (
-        result.package_dir / "shaders" / "vulkan" / "termin-engine-skybox.vert.glsl"
+        result.package_dir / "shaders" / "vulkan" / "termin-engine-skybox.vert.slang"
     ).read_text(encoding="utf-8")
     assert "MaterialParams" in skybox_source
     assert "u_view" in skybox_source
@@ -269,7 +269,7 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
             / "termin-engine-skybox.shader-layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert skybox_layout["language"] == "glsl"
+    assert skybox_layout["language"] == "slang"
     assert skybox_layout["source_language"] == "shader"
     assert skybox_layout["program"] == {"path": "termin-engine-skybox.shader"}
     assert {

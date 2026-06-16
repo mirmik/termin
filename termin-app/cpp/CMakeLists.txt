@@ -460,6 +460,32 @@ set_target_properties(termin_builder PROPERTIES
 termin_set_rpath_tool(termin_builder)
 install(TARGETS termin_builder RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+add_executable(termin_runner
+    app/termin_runner.cpp
+)
+target_compile_features(termin_runner PRIVATE cxx_std_20)
+target_include_directories(termin_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(termin_runner PRIVATE tcbase::termin_base)
+target_compile_options(termin_runner PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+set_target_properties(termin_runner PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+termin_set_rpath_tool(termin_runner)
+install(TARGETS termin_runner RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_executable(termin_stdlib
+    app/termin_stdlib.cpp
+)
+target_compile_features(termin_stdlib PRIVATE cxx_std_20)
+target_compile_options(termin_stdlib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+set_target_properties(termin_stdlib PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+termin_set_rpath_tool(termin_stdlib)
+install(TARGETS termin_stdlib RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
 # ============== Editor Executable ==============
 option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)
 

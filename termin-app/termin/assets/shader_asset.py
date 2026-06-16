@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,10 +28,16 @@ _SET_DEFAULT = 0
 _STAGE_ALL_GRAPHICS = 0x7
 
 
+def _phase_slug(phase_mark: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", phase_mark.strip()).strip("-")
+    return slug or "default"
+
+
 def make_phase_uuid(shader_uuid: str, phase_mark: str) -> str:
     """Generate deterministic UUID for shader phase.
 
-    Uses UUID5 (SHA-1 based) to create stable UUID from shader UUID + phase mark.
+    RFC UUID assets keep the historical UUID5 phase derivation. Named engine
+    and stdlib shader ids use readable phase ids instead.
     """
     if not phase_mark:
         return shader_uuid
@@ -38,9 +45,21 @@ def make_phase_uuid(shader_uuid: str, phase_mark: str) -> str:
         base = uuid.UUID(shader_uuid)
         return str(uuid.uuid5(base, phase_mark))
     except ValueError:
-        # Invalid UUID format, fallback
-        log.warning(f"[ShaderAsset] Invalid shader UUID format: {shader_uuid}")
-        return shader_uuid
+        slug = _phase_slug(phase_mark)
+        stdlib_prefix = "termin-stdlib-shader-"
+        if shader_uuid.startswith(stdlib_prefix):
+            stdlib_name = shader_uuid[len(stdlib_prefix):]
+            candidate = f"stdlib-{stdlib_name}-{slug}"
+            if len(candidate) < 40:
+                return candidate
+        else:
+            candidate = f"{shader_uuid}-{slug}"
+            if len(candidate) < 40:
+                return candidate
+        digest = uuid.uuid5(uuid.NAMESPACE_URL, f"{shader_uuid}:{phase_mark}").hex[:6]
+        suffix = f"-{slug}-{digest}"
+        prefix_size = max(1, 39 - len(suffix))
+        return f"{shader_uuid[:prefix_size]}{suffix}"
 
 
 def shader_language_enum(language: str):
@@ -65,7 +84,6 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         shader_name: Shader name
         shader_uuid: Shader asset UUID
     """
-    from termin.materials import TcRenderState
     from termin.assets.material_asset import _build_render_state, _apply_uniform_defaults, _apply_texture_defaults
     from termin.assets.resources import ResourceManager
 
@@ -81,22 +99,9 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
     material.shader_name = shader_name or program.program
 
     rm = ResourceManager.instance()
-    shader_language = shader_language_enum(program.language)
 
     for shader_phase in program.phases:
-        # Get shader sources
-        vertex_source = ""
-        fragment_source = ""
-        geometry_source = ""
-
-        if "vertex" in shader_phase.stages:
-            vertex_source = shader_phase.stages["vertex"].source
-        if "fragment" in shader_phase.stages:
-            fragment_source = shader_phase.stages["fragment"].source
-        if "geometry" in shader_phase.stages:
-            geometry_source = shader_phase.stages["geometry"].source
-
-        if not vertex_source or not fragment_source:
+        if "vertex" not in shader_phase.stages or "fragment" not in shader_phase.stages:
             log.warning(f"[update_material_shader] Phase missing vertex or fragment shader")
             continue
 
@@ -105,33 +110,17 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
 
         # Generate phase uuid for hot-reload support
         phase_uuid = make_phase_uuid(shader_uuid, shader_phase.phase_mark) if shader_uuid else ""
+        shader = TcShader.from_uuid(phase_uuid) if phase_uuid else TcShader()
+        if not shader.is_valid:
+            log.error(f"[update_material_shader] Shader phase not found: {phase_uuid}")
+            continue
 
-        # Add phase
-        phase = material.add_phase_from_sources(
-            vertex_source=vertex_source,
-            fragment_source=fragment_source,
-            geometry_source=geometry_source,
-            shader_name=shader_name or program.program,
-            phase_mark=shader_phase.phase_mark,
-            priority=shader_phase.priority,
-            state=state,
-            shader_uuid=phase_uuid,
-            language=shader_language,
-            vertex_entry=shader_phase.stages["vertex"].entry,
-            fragment_entry=shader_phase.stages["fragment"].entry,
-            geometry_entry=shader_phase.stages["geometry"].entry
-            if "geometry" in shader_phase.stages else "",
-        )
+        phase = material.add_phase(shader, shader_phase.phase_mark, shader_phase.priority)
 
         if phase is None:
             log.error(f"[update_material_shader] Failed to add phase")
             continue
-
-        # Apply shader features
-        shader = phase.shader
-        for feature in program.features:
-            if feature == "lighting_ubo":
-                shader.set_feature(1)
+        phase.state = state
 
         # Set available marks
         if shader_phase.available_marks:
@@ -168,6 +157,8 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         uuid: str | None = None,
     ):
         super().__init__(data=program, name=name, source_path=source_path, uuid=uuid)
+        if program is not None:
+            self._update_tc_shaders()
 
     # --- Convenience property ---
 
@@ -193,98 +184,125 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         tree = parse_shader_text(content)
         return ShaderMultyPhaseProgramm.from_tree(tree)
 
+    def get_tc_shader_for_phase(self, phase) -> TcShader:
+        """Return the registry shader for a parsed phase, creating it if missing."""
+        return self._ensure_tc_shader_for_phase(phase)
+
+    def _ensure_tc_shader_for_phase(self, phase) -> TcShader:
+        if self._data is None or not self._uuid:
+            return TcShader()
+
+        phase_uuid = make_phase_uuid(self._uuid, phase.phase_mark)
+        tc = TcShader.get_or_create(phase_uuid)
+        if not tc.is_valid:
+            log.error(f"[ShaderAsset] Failed to get/create phase shader: {phase_uuid}")
+            return TcShader()
+
+        self._configure_tc_shader_for_phase(tc, phase)
+        return tc
+
+    def _configure_tc_shader_for_phase(self, tc: TcShader, phase) -> None:
+        if self._data is None:
+            return
+
+        vs = phase.stages.get("vertex")
+        fs = phase.stages.get("fragment")
+        gs = phase.stages.get("geometry")
+        if vs is None or fs is None:
+            log.error(
+                f"[ShaderAsset] Phase '{phase.phase_mark}' in shader '{self._name}' "
+                "has no complete vertex/fragment stage pair"
+            )
+            return
+
+        vertex_src = vs.source
+        fragment_src = fs.source
+        geometry_src = gs.source if gs else ""
+        source_path = str(self._source_path) if self._source_path else ""
+
+        tc.set_language(shader_language_enum(self._data.language))
+        tc.set_sources_with_entries(
+            vertex_src,
+            fragment_src,
+            geometry_src,
+            self._name,
+            source_path,
+            vs.entry,
+            fs.entry,
+            gs.entry if gs else "",
+        )
+
+        tc.set_features(0)
+        for feature in self._data.features:
+            if feature == "lighting_ubo":
+                tc.set_feature(1)
+
+        layout = phase.material_ubo_layout
+        if self._data.language.lower() == "glsl" and layout is not None and layout.block_size > 0:
+            entries = [
+                (e.name, e.property_type, e.offset, e.size)
+                for e in layout.entries
+            ]
+            tc.set_material_ubo_layout(entries, layout.block_size)
+            resource_layout = [
+                (
+                    "material",
+                    _RESOURCE_CONSTANT_BUFFER,
+                    _SCOPE_MATERIAL,
+                    _SET_DEFAULT,
+                    _GLSL_MATERIAL_BINDING,
+                    _STAGE_ALL_GRAPHICS,
+                    layout.block_size,
+                )
+            ]
+        else:
+            tc.set_material_ubo_layout([], 0)
+            resource_layout = []
+
+        if self._data.language.lower() == "glsl":
+            if phase.uses_engine_per_frame:
+                resource_layout.append((
+                    "per_frame",
+                    _RESOURCE_CONSTANT_BUFFER,
+                    _SCOPE_FRAME,
+                    _SET_DEFAULT,
+                    _GLSL_PER_FRAME_BINDING,
+                    _STAGE_ALL_GRAPHICS,
+                    0,
+                ))
+            if phase.uses_engine_draw_data:
+                resource_layout.append((
+                    "draw_data",
+                    _RESOURCE_CONSTANT_BUFFER,
+                    _SCOPE_DRAW,
+                    _SET_DEFAULT,
+                    _GLSL_DRAW_DATA_BINDING,
+                    _STAGE_ALL_GRAPHICS,
+                    64,
+                ))
+            for index, name in enumerate(phase.material_texture_resources):
+                resource_layout.append((
+                    name,
+                    _RESOURCE_TEXTURE,
+                    _SCOPE_MATERIAL,
+                    _SET_DEFAULT,
+                    _GLSL_MATERIAL_TEXTURE_BINDING_BASE + index,
+                    _STAGE_ALL_GRAPHICS,
+                    0,
+                ))
+        tc.set_resource_layout(resource_layout)
+
     def _update_tc_shaders(self) -> None:
         """Update tc_shader registry for hot-reload.
 
         Runs at initial shader asset load AND on hot-reload from disk.
-        On first load the tc_shaders for the phases don't exist yet
-        (they are created later by MaterialPhase), so the loop skips.
-        On hot-reload they do exist and sources + material UBO layout
-        get pushed to them.
+        ShaderAsset owns phase shader creation and source/layout updates.
         """
         if self._data is None or not self._uuid:
             return
 
-        # Update tc_shader for each phase so existing TcShaders see new sources
         for phase in self._data.phases:
-            phase_mark = phase.phase_mark
-            phase_uuid = make_phase_uuid(self._uuid, phase_mark)
-
-            # Find existing tc_shader (don't create - it's created by MaterialPhase).
-            # On first asset load the tc_shader doesn't exist yet — that's
-            # expected, the layout gets pushed by material_asset._parse_material_content
-            # at material creation time instead.
-            tc = TcShader.from_uuid(phase_uuid)
-            if not tc.is_valid:
-                continue
-
-            # Get sources from phase
-            vs = phase.stages.get("vertex")
-            fs = phase.stages.get("fragment")
-            gs = phase.stages.get("geometry")
-
-            vertex_src = vs.source if vs else ""
-            fragment_src = fs.source if fs else ""
-            geometry_src = gs.source if gs else ""
-
-            # Update sources in tc_shader (bumps version if changed)
-            tc.set_sources(vertex_src, fragment_src, geometry_src, self._name, str(self._source_path) if self._source_path else "")
-            tc.set_language(shader_language_enum(self._data.language))
-
-            layout = phase.material_ubo_layout
-            if self._data.language.lower() == "glsl" and layout is not None and layout.block_size > 0:
-                entries = [
-                    (e.name, e.property_type, e.offset, e.size)
-                    for e in layout.entries
-                ]
-                tc.set_material_ubo_layout(entries, layout.block_size)
-                resource_layout = [
-                    (
-                        "material",
-                        _RESOURCE_CONSTANT_BUFFER,
-                        _SCOPE_MATERIAL,
-                        _SET_DEFAULT,
-                        _GLSL_MATERIAL_BINDING,
-                        _STAGE_ALL_GRAPHICS,
-                        layout.block_size,
-                    )
-                ]
-            else:
-                tc.set_material_ubo_layout([], 0)
-                resource_layout = []
-
-            if self._data.language.lower() == "glsl":
-                if phase.uses_engine_per_frame:
-                    resource_layout.append((
-                        "per_frame",
-                        _RESOURCE_CONSTANT_BUFFER,
-                        _SCOPE_FRAME,
-                        _SET_DEFAULT,
-                        _GLSL_PER_FRAME_BINDING,
-                        _STAGE_ALL_GRAPHICS,
-                        0,
-                    ))
-                if phase.uses_engine_draw_data:
-                    resource_layout.append((
-                        "draw_data",
-                        _RESOURCE_CONSTANT_BUFFER,
-                        _SCOPE_DRAW,
-                        _SET_DEFAULT,
-                        _GLSL_DRAW_DATA_BINDING,
-                        _STAGE_ALL_GRAPHICS,
-                        64,
-                    ))
-                for index, name in enumerate(phase.material_texture_resources):
-                    resource_layout.append((
-                        name,
-                        _RESOURCE_TEXTURE,
-                        _SCOPE_MATERIAL,
-                        _SET_DEFAULT,
-                        _GLSL_MATERIAL_TEXTURE_BINDING_BASE + index,
-                        _STAGE_ALL_GRAPHICS,
-                        0,
-                    ))
-            tc.set_resource_layout(resource_layout)
+            self._ensure_tc_shader_for_phase(phase)
 
     def _on_loaded(self) -> None:
         """After loading/reloading, update tc_shader registry for hot-reload."""
