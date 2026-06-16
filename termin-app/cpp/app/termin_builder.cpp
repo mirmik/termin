@@ -507,7 +507,7 @@ int command_build(const ParsedArgs& args) {
         output_dir.string(),
     };
 
-    std::cout << "Executing desktop build backend...\n";
+    std::cout << "Executing desktop build backend...\n" << std::flush;
     return run_process(command);
 }
 

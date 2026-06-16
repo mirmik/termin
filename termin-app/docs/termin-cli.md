@@ -74,6 +74,24 @@ Initial schema:
 `target: "desktop"` executes the desktop build backend. Use `--dry-run` to
 check profile loading without running the backend.
 
+Desktop builds are written as runtime bundles:
+
+```text
+dist/<app>/
+  app.json
+  package/
+    manifest.json
+    scene.json
+    meshes/
+    materials/
+    shaders/
+    pipelines/
+```
+
+`app.json` is the bundle entry manifest. Paths inside it are relative to the
+bundle root, so the directory can be moved without keeping the original project
+path.
+
 ## Running Profiles
 
 The default run mode starts a desktop build already produced by the matching
@@ -83,14 +101,18 @@ build profile:
 termin run dev --project path/to/project
 ```
 
-This resolves `output_dir` from the profile and launches:
+Legacy builds resolve `output_dir` from the profile and launch:
 
 ```bash
 python -m termin.player --build <output_dir>/build.json
 ```
 
+Packaged desktop bundle launching is tracked separately from the build output
+contract: the build currently produces `app.json` and `package/manifest.json`;
+the desktop runtime host will consume those artifacts.
+
 By default `run` does not rebuild implicitly. Pass `--build-if-missing` to build
-when `build.json` is absent, or `--rebuild` to rebuild before every launch.
+when build output is absent, or `--rebuild` to rebuild before every launch.
 Pass `--dry-run` to inspect the resolved player command without starting a
 window.
 

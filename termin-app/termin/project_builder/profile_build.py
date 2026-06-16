@@ -6,7 +6,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from termin.project_builder import build_project
+from termin.project_build import build_desktop_project
 
 
 def main() -> int:
@@ -33,22 +33,35 @@ def main() -> int:
 
 
 def _build_desktop(args: argparse.Namespace) -> int:
-    result = build_project(
+    if args.manifest_only:
+        print("warning: --manifest-only is ignored by the desktop runtime package backend")
+
+    result = build_desktop_project(
         project_root=args.project_root,
         entry_scene=args.entry_scene,
         output_dir=args.output_dir,
-        copy_files=not args.manifest_only,
-        compile_asset_shaders=True,
-        include_engine_shaders=True,
         shader_compiler=args.shader_compiler,
     )
 
-    print(f"Build: {result.build_json_path}")
-    print(f"Manifest: {result.manifest_json_path}")
-    print(f"Resources: {len(result.manifest.resources)}")
-    for diagnostic in result.manifest.diagnostics:
+    print(f"Bundle: {result.dist_dir}")
+    print(f"App manifest: {result.app_manifest_path}")
+    print(f"Package: {result.package_result.package_dir}")
+    print(f"Manifest: {result.package_result.manifest_path}")
+    print(f"Resources: {len(_manifest_resources(result.package_result.manifest_path))}")
+    for diagnostic in result.diagnostics:
         print(f"{diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
     return 0
+
+
+def _manifest_resources(manifest_path: Path) -> list[object]:
+    import json
+
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    resources = data.get("resources")
+    if isinstance(resources, list):
+        return resources
+    return []
 
 
 if __name__ == "__main__":
