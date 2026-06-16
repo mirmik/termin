@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
-import os
 import sys
 from collections.abc import Iterable
 from pathlib import Path
 
+from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
 from termin.project_builder.manifest import BuildResource
 
 
@@ -156,19 +155,18 @@ def _shader_debug_name(shader: object, stage: str) -> str:
 def _resolve_shader_compiler(shader_compiler: Path | None) -> Path:
     if shader_compiler is not None:
         compiler = Path(shader_compiler).resolve()
-        if not compiler.exists():
+        resolved = existing_executable(compiler)
+        if resolved is None:
             raise FileNotFoundError(f"Shader compiler does not exist: {compiler}")
-        return compiler
+        return resolved
 
-    found = shutil.which("termin_shaderc")
+    found = resolve_path_tool("termin_shaderc")
     if found is not None:
-        return Path(found).resolve()
+        return found.resolve()
 
-    sdk_env = os.environ.get("TERMIN_SDK")
-    if sdk_env is not None and sdk_env != "":
-        sdk_compiler = Path(sdk_env).resolve() / "bin" / "termin_shaderc"
-        if sdk_compiler.exists():
-            return sdk_compiler
+    sdk_compiler = resolve_sdk_tool("termin_shaderc", Path(__file__))
+    if sdk_compiler is not None:
+        return sdk_compiler.resolve()
 
     raise FileNotFoundError(
         "Shader compiler 'termin_shaderc' was not found. "
