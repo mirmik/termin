@@ -2,6 +2,7 @@
 
 GUARD_TEST_MAIN();
 
+#include "termin/materials/shader_parser.hpp"
 #include "tgfx2/builtin_shader_sources.hpp"
 
 #include <array>
@@ -340,6 +341,33 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
     CHECK(skybox.source.find("@program Skybox") != std::string::npos);
 
     tc_shader_shutdown();
+}
+
+TEST_CASE("built-in skybox shader is explicit Slang material shader") {
+    tgfx::BuiltinShaderProgramSource skybox =
+        tgfx::load_builtin_shader_program_from_catalog("termin-engine-skybox");
+    REQUIRE(!skybox.source.empty());
+    CHECK(skybox.source.find("@language slang") != std::string::npos);
+
+    termin::ShaderMultyPhaseProgramm parsed = termin::parse_shader_text(skybox.source);
+    CHECK(parsed.language == "slang");
+    REQUIRE(!parsed.phases.empty());
+    const termin::ShaderPhase& phase = parsed.phases.front();
+
+    const std::string& vertex = phase.stages.at("vertex").source;
+    const std::string& fragment = phase.stages.at("fragment").source;
+
+    CHECK(vertex.find("struct MaterialParams") != std::string::npos);
+    CHECK(vertex.find("ConstantBuffer<MaterialParams> material;") != std::string::npos);
+    CHECK(fragment.find("struct MaterialParams") != std::string::npos);
+    CHECK(fragment.find("ConstantBuffer<MaterialParams> material;") != std::string::npos);
+
+    CHECK(vertex.find("material.u_view") != std::string::npos);
+    CHECK(vertex.find("material.u_projection") != std::string::npos);
+    CHECK(fragment.find("material.u_skybox_type") != std::string::npos);
+    CHECK(fragment.find("material.u_skybox_color") != std::string::npos);
+    CHECK(fragment.find("material.u_skybox_top_color") != std::string::npos);
+    CHECK(fragment.find("material.u_skybox_bottom_color") != std::string::npos);
 }
 
 TEST_CASE("built-in slang shader catalog registers explicit stage entry points") {
