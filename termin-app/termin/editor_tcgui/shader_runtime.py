@@ -4,72 +4,67 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import shutil
 
 from tcbase import log
 
 from termin.editor_core.settings import EditorSettings
+from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
+
+
+def _configured_tool(env_name: str, label: str) -> Path | None:
+    configured = os.environ.get(env_name)
+    if configured:
+        path = Path(configured)
+        resolved = existing_executable(path)
+        if resolved is not None:
+            return resolved
+        log.error(f"[ShaderRuntime] {env_name} points to missing {label}: {configured}")
+        return None
+    return None
 
 
 def resolve_termin_shaderc() -> Path | None:
-    configured = os.environ.get("TERMIN_SHADERC")
-    if configured:
-        path = Path(configured)
-        if path.is_file():
-            return path
-        log.error(f"[ShaderRuntime] TERMIN_SHADERC points to missing file: {configured}")
-        return None
+    configured = _configured_tool("TERMIN_SHADERC", "file")
+    if configured is not None:
+        return configured
 
-    sdk = os.environ.get("TERMIN_SDK")
-    if sdk:
-        candidate = Path(sdk) / "bin" / "termin_shaderc"
-        if candidate.is_file():
-            return candidate
+    sdk_tool = resolve_sdk_tool("termin_shaderc", Path(__file__))
+    if sdk_tool is not None:
+        return sdk_tool
 
-    local_sdk = Path(__file__).resolve().parents[3] / "sdk" / "bin" / "termin_shaderc"
-    if local_sdk.is_file():
-        return local_sdk
-
-    found = shutil.which("termin_shaderc")
-    if found:
-        return Path(found)
-    return None
+    return resolve_path_tool("termin_shaderc")
 
 
 def resolve_slangc() -> Path | None:
     settings_path = EditorSettings.instance().get_slang_compiler()
     if settings_path:
         path = Path(settings_path)
-        if path.is_file():
-            return path
+        resolved = existing_executable(path)
+        if resolved is not None:
+            return resolved
         log.error(f"[ShaderRuntime] configured Slang compiler is missing: {settings_path}")
         return None
 
-    configured = os.environ.get("TERMIN_SLANGC")
-    if configured:
-        path = Path(configured)
-        if path.is_file():
-            return path
-        log.error(f"[ShaderRuntime] TERMIN_SLANGC points to missing file: {configured}")
-        return None
+    configured = _configured_tool("TERMIN_SLANGC", "slangc")
+    if configured is not None:
+        return configured
 
-    found = shutil.which("slangc")
-    if found:
-        return Path(found)
+    sdk_tool = resolve_sdk_tool("slangc", Path(__file__))
+    if sdk_tool is not None:
+        return sdk_tool
 
-    sdk = os.environ.get("TERMIN_SDK")
-    if sdk:
-        candidate = Path(sdk) / "bin" / "slangc"
-        if candidate.is_file():
-            return candidate
-
-    return None
+    return resolve_path_tool("slangc")
 
 
 def _sdk_shader_cache_root() -> Path:
     configured = os.environ.get("TERMIN_SDK_SHADER_CACHE_ROOT")
     if configured:
         return Path(configured)
+
+    if os.name == "nt":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
+        return base / "Termin" / "Cache" / "sdk-shaders"
 
     xdg_cache = os.environ.get("XDG_CACHE_HOME")
     base = Path(xdg_cache) if xdg_cache else Path.home() / ".cache"
@@ -101,8 +96,14 @@ def configure_shader_runtime(
         log.error(f"[ShaderRuntime] slangc not found; {label} Slang shaders cannot compile")
         return
 
-    artifact_root.mkdir(parents=True, exist_ok=True)
-    cache_root.mkdir(parents=True, exist_ok=True)
+    try:
+        artifact_root.mkdir(parents=True, exist_ok=True)
+        cache_root.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        log.error(
+            f"[ShaderRuntime] {label} failed to create shader cache directories: {exc}"
+        )
+        return
     os.environ["TERMIN_SLANGC"] = str(slangc)
 
     try:

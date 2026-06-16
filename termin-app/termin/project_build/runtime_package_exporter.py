@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
+
 
 DEFAULT_SHADER_UUID = "termin-runtime-default-color"
 DEFAULT_SHADER_NAME = "TerminRuntimeDefaultColor"
@@ -1161,23 +1163,18 @@ def _shader_language(shader: Any) -> str:
 def _resolve_shader_compiler(shader_compiler: Path | None) -> Path | None:
     if shader_compiler is not None:
         compiler = shader_compiler.resolve()
-        if not compiler.exists():
+        resolved = existing_executable(compiler)
+        if resolved is None:
             raise FileNotFoundError(f"Shader compiler does not exist: {compiler}")
-        return compiler
+        return resolved
 
-    found = shutil.which("termin_shaderc")
+    found = resolve_path_tool("termin_shaderc")
     if found is not None:
-        return Path(found).resolve()
+        return found.resolve()
 
-    sdk_env = os.environ.get("TERMIN_SDK")
-    if sdk_env is not None and sdk_env != "":
-        sdk_compiler = Path(sdk_env).resolve() / "bin" / "termin_shaderc"
-        if sdk_compiler.exists():
-            return sdk_compiler
-
-    local_sdk_compiler = Path(__file__).resolve().parents[3] / "sdk" / "bin" / "termin_shaderc"
-    if local_sdk_compiler.exists():
-        return local_sdk_compiler
+    sdk_compiler = resolve_sdk_tool("termin_shaderc", Path(__file__))
+    if sdk_compiler is not None:
+        return sdk_compiler.resolve()
 
     return None
 
