@@ -37,7 +37,7 @@ class RecordingGlslPreLoader(RecordingPreLoader):
 
 def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> None:
     shader_path = tmp_path / "HotReload.shader"
-    shader_path.write_text("@program HotReload\n", encoding="utf-8")
+    shader_path.write_text("@program HotReload\n@language slang\n", encoding="utf-8")
 
     processor = RecordingPreLoader()
     watcher = ProjectFileWatcher()

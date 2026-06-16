@@ -16,6 +16,7 @@ def test_parse_render_state_directives():
     shader_text = "\n".join(
         [
             "@program demo",
+            "@language slang",
             "@phase main",
             "@priority 3",
             "@glDepthMask false",
@@ -40,7 +41,7 @@ def test_parse_render_state_directives():
     assert phase.gl_depth_test is True
     assert phase.gl_blend is True
     assert phase.gl_cull is False
-    assert phase.stages["vertex"].source == "#version 450 core\nvoid main() {}\n"
+    assert phase.stages["vertex"].source == "void main() {}\n"
 
 
 def test_render_state_directives_require_phase():
@@ -62,6 +63,7 @@ def test_parse_multiple_phases_and_stages():
     shader_text = "\n".join(
         [
             "@program composite",
+            "@language slang",
             "@phase geometry",
             "@priority 1",
             "@glDepthTest on",
@@ -71,8 +73,8 @@ def test_parse_multiple_phases_and_stages():
             "@endstage",
             "@stage fragment",
             "// fragment stage",
-            "void main() {",
-            "  gl_FragColor = vec4(1.0);",
+            "float4 main() : SV_Target0 {",
+            "  return float4(1.0);",
             "}",
             "@endstage",
             "@endphase",
@@ -98,8 +100,8 @@ def test_parse_multiple_phases_and_stages():
     assert geometry.gl_depth_mask is None
     assert geometry.gl_blend is None
     assert geometry.gl_cull is None
-    assert geometry.stages["vertex"].source == "#version 450 core\n// vertex stage\nvoid main() {}\n"
-    assert geometry.stages["fragment"].source == "#version 450 core\n// fragment stage\nvoid main() {\n  gl_FragColor = vec4(1.0);\n}\n"
+    assert geometry.stages["vertex"].source == "// vertex stage\nvoid main() {}\n"
+    assert geometry.stages["fragment"].source == "// fragment stage\nfloat4 main() : SV_Target0 {\n  return float4(1.0);\n}\n"
 
     overlay = parsed.phases[1]
     assert overlay.phase_mark == "overlay"
@@ -108,13 +110,14 @@ def test_parse_multiple_phases_and_stages():
     assert overlay.gl_depth_test is False
     assert overlay.gl_blend is True
     assert overlay.gl_cull is None
-    assert overlay.stages["vertex"].source == "#version 450 core\n// overlay vertex\n"
+    assert overlay.stages["vertex"].source == "// overlay vertex\n"
 
 
 def test_tree_builders_have_uniform_signature():
     shader_text = "\n".join(
         [
             "@program mesh",
+            "@language slang",
             "@phase depth",
             "@glDepthTest true",
             "@stage vertex",
@@ -135,7 +138,7 @@ def test_tree_builders_have_uniform_signature():
     assert depth_phase.gl_depth_test is True
     assert depth_phase.gl_blend is None
     assert depth_phase.gl_depth_mask is None
-    assert depth_phase.stages["vertex"].source == "#version 450 core\nvoid main() {}\n"
+    assert depth_phase.stages["vertex"].source == "void main() {}\n"
     assert isinstance(depth_phase.stages["vertex"], ShasderStage)
 
 
@@ -183,42 +186,28 @@ def test_parse_property_directive_texture2d():
     assert prop.default is None
 
 
-def test_plain_uniforms_material_ubo_not_property():
-    """Plain GLSL uniforms participate in shader UBO layout but not inspector properties."""
+def test_parse_shader_text_rejects_implicit_glsl_shader():
     shader_text = "\n".join([
         "@program test",
         "@phase main",
         "@property Float u_strength = 0.5",
-        "@property Texture2D u_depth_texture = \"white\"",
         "@stage fragment",
         "#version 450 core",
         "uniform float u_strength;",
-        "uniform mat4 u_fov_view;",
-        "uniform sampler2D u_depth_texture;",
         "out vec4 FragColor;",
-        "void main() { FragColor = texture(u_depth_texture, vec2(0.5)) * u_strength + vec4(u_fov_view[0][0]); }",
+        "void main() { FragColor = vec4(u_strength); }",
         "@endstage",
         "@endphase",
     ])
 
-    program = parse_shader_text(shader_text)
-    phase = program.phases[0]
-
-    assert [prop.name for prop in program.material_properties] == ["u_strength", "u_depth_texture"]
-    assert [prop.name for prop in phase.uniforms] == ["u_strength", "u_depth_texture"]
-    assert [prop.name for prop in phase.material_uniforms] == ["u_fov_view"]
-    assert [entry.name for entry in phase.material_ubo_layout.entries] == ["u_strength", "u_fov_view"]
-
-    fragment = phase.stages["fragment"].source
-    assert "layout(std140, binding = 1) uniform MaterialParams" in fragment
-    assert "mat4 u_fov_view;" in fragment
-    assert "layout(binding = 4) uniform sampler2D u_depth_texture;" in fragment
-    assert "uniform mat4 u_fov_view;" not in fragment
+    with pytest.raises(RuntimeError, match="implicit GLSL .shader programs are no longer supported"):
+        parse_shader_text(shader_text)
 
 
-def test_material_texture_bindings_are_compact():
+def test_slang_material_texture_declarations_are_synthesized():
     shader_text = "\n".join([
         "@program test",
+        "@language slang",
         "@phase main",
         "@property Texture2D u_tex0 = \"white\"",
         "@property Texture2D u_tex1 = \"white\"",
@@ -226,14 +215,9 @@ def test_material_texture_bindings_are_compact():
         "@property Texture2D u_tex3 = \"white\"",
         "@property Texture2D u_tex4 = \"white\"",
         "@stage fragment",
-        "#version 450 core",
-        "uniform sampler2D u_tex0;",
-        "uniform sampler2D u_tex1;",
-        "uniform sampler2D u_tex2;",
-        "uniform sampler2D u_tex3;",
-        "uniform sampler2D u_tex4;",
-        "out vec4 FragColor;",
-        "void main() { FragColor = texture(u_tex0, vec2(0.5)) + texture(u_tex1, vec2(0.5)) + texture(u_tex2, vec2(0.5)) + texture(u_tex3, vec2(0.5)) + texture(u_tex4, vec2(0.5)); }",
+        "[shader(\"fragment\")] float4 main(float2 uv : TEXCOORD0) : SV_Target0 {",
+        "    return u_tex0.Sample(uv) + u_tex1.Sample(uv) + u_tex2.Sample(uv) + u_tex3.Sample(uv) + u_tex4.Sample(uv);",
+        "}",
         "@endstage",
         "@endphase",
     ])
@@ -241,11 +225,13 @@ def test_material_texture_bindings_are_compact():
     program = parse_shader_text(shader_text)
     fragment = program.phases[0].stages["fragment"].source
 
-    assert "layout(binding = 4) uniform sampler2D u_tex0;" in fragment
-    assert "layout(binding = 5) uniform sampler2D u_tex1;" in fragment
-    assert "layout(binding = 6) uniform sampler2D u_tex2;" in fragment
-    assert "layout(binding = 7) uniform sampler2D u_tex3;" in fragment
-    assert "layout(binding = 8) uniform sampler2D u_tex4;" in fragment
+    assert "Sampler2D u_tex0;" in fragment
+    assert "Sampler2D u_tex1;" in fragment
+    assert "Sampler2D u_tex2;" in fragment
+    assert "Sampler2D u_tex3;" in fragment
+    assert "Sampler2D u_tex4;" in fragment
+    assert "register(" not in fragment
+    assert "layout(" not in fragment
 
 
 def test_shader_interface_compare_separates_source_from_inputs():
@@ -253,52 +239,43 @@ def test_shader_interface_compare_separates_source_from_inputs():
 
     base = parse_shader_text("\n".join([
         "@program test",
+        "@language slang",
         "@phase main",
         "@property Texture2D u_input_tex = \"white\"",
         "@stage fragment",
-        "#version 450 core",
-        "uniform sampler2D u_input_tex;",
-        "out vec4 FragColor;",
-        "void main() { FragColor = texture(u_input_tex, vec2(0.5)); }",
+        "[shader(\"fragment\")] float4 main(float2 uv : TEXCOORD0) : SV_Target0 { return u_input_tex.Sample(uv); }",
         "@endstage",
         "@endphase",
     ]))
     source_only = parse_shader_text("\n".join([
         "@program test",
+        "@language slang",
         "@phase main",
         "@property Texture2D u_input_tex = \"white\"",
         "@stage fragment",
-        "#version 450 core",
-        "uniform sampler2D u_input_tex;",
-        "out vec4 FragColor;",
-        "void main() { FragColor = texture(u_input_tex, vec2(0.25)); }",
+        "[shader(\"fragment\")] float4 main(float2 uv : TEXCOORD0) : SV_Target0 { return u_input_tex.Sample(uv * 0.5); }",
         "@endstage",
         "@endphase",
     ]))
     texture_input_added = parse_shader_text("\n".join([
         "@program test",
+        "@language slang",
         "@phase main",
         "@property Texture2D u_input_tex = \"white\"",
         "@property Texture2D u_depth_texture = \"depth_default\"",
         "@stage fragment",
-        "#version 450 core",
-        "uniform sampler2D u_input_tex;",
-        "uniform sampler2D u_depth_texture;",
-        "out vec4 FragColor;",
-        "void main() { FragColor = texture(u_input_tex, vec2(0.5)) + texture(u_depth_texture, vec2(0.5)); }",
+        "[shader(\"fragment\")] float4 main(float2 uv : TEXCOORD0) : SV_Target0 { return u_input_tex.Sample(uv) + u_depth_texture.Sample(uv); }",
         "@endstage",
         "@endphase",
     ]))
     numeric_uniform_added = parse_shader_text("\n".join([
         "@program test",
+        "@language slang",
         "@phase main",
         "@property Texture2D u_input_tex = \"white\"",
+        "@property Float u_factor = 1.0",
         "@stage fragment",
-        "#version 450 core",
-        "uniform sampler2D u_input_tex;",
-        "uniform float u_factor;",
-        "out vec4 FragColor;",
-        "void main() { FragColor = texture(u_input_tex, vec2(0.5)) * u_factor; }",
+        "[shader(\"fragment\")] float4 main(float2 uv : TEXCOORD0) : SV_Target0 { return u_input_tex.Sample(uv) * material.u_factor; }",
         "@endstage",
         "@endphase",
     ]))
@@ -320,6 +297,7 @@ def test_parse_property_in_phase():
     """Тест парсинга @property внутри @phase."""
     shader_text = "\n".join([
         "@program test",
+        "@language slang",
         "@phase main",
         "@property Float u_roughness = 0.5",
         "@property Color u_color = Color(1.0, 0.0, 0.0, 1.0)",
@@ -355,6 +333,7 @@ def test_parse_property_in_phase():
 def test_shader_phase_from_tree_with_properties():
     """Тест создания ShaderPhase с properties через from_tree."""
     shader_text = "\n".join([
+        "@language slang",
         "@phase opaque",
         "@property Float u_value = 0.7",
         "@stage vertex",
@@ -377,7 +356,7 @@ def test_shader_phase_from_tree_with_properties():
 
 def test_property_outside_phase_accepted():
     """@property вне @phase принимается без ошибки (глобальное свойство)."""
-    result = parse_shader_text("@property Float u_value = 0.5")
+    result = parse_shader_text("@language slang\n@property Float u_value = 0.5")
     assert len(result.phases) == 0
     assert len(result.material_properties) == 1
     assert result.material_properties[0].name == "u_value"
@@ -482,9 +461,7 @@ def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
     assert shader.find_resource_binding("material") is None
 
 
-def test_glsl_material_layout_surfaces_as_parser_owned_resource_metadata():
-    import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
-
+def test_parse_shader_text_rejects_explicit_glsl_shader():
     shader_text = "\n".join([
         "@program GlslWithRuntimeLayout",
         "@language glsl",
@@ -503,18 +480,8 @@ def test_glsl_material_layout_surfaces_as_parser_owned_resource_metadata():
         "@endphase",
     ])
 
-    material = create_material_from_parsed(parse_shader_text(shader_text))
-    shader = material.get_phase(0).shader
-    binding = shader.find_resource_binding("material")
-
-    assert shader.material_ubo_entry_count == 1
-    assert shader.material_ubo_block_size == 16
-    assert binding is not None
-    assert binding["kind"] == 1
-    assert binding["scope"] == 3
-    assert binding["set"] == 0
-    assert binding["binding"] == 1
-    assert binding["size"] == 16
+    with pytest.raises(RuntimeError, match="GLSL .shader programs are no longer supported"):
+        parse_shader_text(shader_text)
 
 
 def test_slang_shader_synthesizes_engine_scope_blocks_for_compact_names():
