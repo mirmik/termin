@@ -31,7 +31,9 @@ def _load_shader_tools_module():
 
 def _load_shader_build_module():
     manifest_module = types.ModuleType("termin.project_builder.manifest")
+    manifest_module.BuildDiagnostic = object
     manifest_module.BuildResource = object
+    manifest_module.ProjectBuildManifest = object
     sys.modules["termin.project_builder.manifest"] = manifest_module
     _load_shader_tools_module()
     return _load_module(

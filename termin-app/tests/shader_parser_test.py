@@ -605,6 +605,19 @@ def test_stdlib_blinn_phong_uses_slang_scope_model():
     assert "layout(" not in fragment
 
 
+def test_string_shader_uuid_produces_readable_distinct_phase_ids():
+    from termin.assets.shader_asset import make_phase_uuid
+
+    assert (
+        make_phase_uuid("termin-stdlib-shader-blinn-phong", "opaque")
+        == "stdlib-blinn-phong-opaque"
+    )
+    assert (
+        make_phase_uuid("termin-stdlib-shader-blinn-phong", "shadow")
+        == "stdlib-blinn-phong-shadow"
+    )
+
+
 def test_stdlib_slang_material_creates_slang_tc_shader():
     from tgfx import ShaderLanguage
     from termin.assets.material_asset import MaterialAsset

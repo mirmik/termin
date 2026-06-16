@@ -24,21 +24,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
-_GLSL_MATERIAL_BINDING = 1
-_GLSL_PER_FRAME_BINDING = 2
-_GLSL_DRAW_DATA_BINDING = 24
-_GLSL_MATERIAL_TEXTURE_BINDING_BASE = 4
-
-_RESOURCE_CONSTANT_BUFFER = 1
-_RESOURCE_TEXTURE = 2
-_SCOPE_FRAME = 1
-_SCOPE_MATERIAL = 3
-_SCOPE_DRAW = 4
-_SET_DEFAULT = 0
-_STAGE_ALL_GRAPHICS = 0x7
-
 from termin.assets.data_asset import DataAsset
-from termin.assets.shader_asset import make_phase_uuid, shader_language_enum
+from termin.assets.shader_asset import make_phase_uuid
 from tcbase import log
 
 if TYPE_CHECKING:
@@ -323,7 +310,13 @@ def _parse_material_content(
     # Try to load shader by UUID first, fallback to name
     program = None
     shader_asset_uuid = shader_uuid  # The actual asset uuid for phase uuid generation
+    shader_asset = None
     if shader_uuid:
+        from termin.assets.shader_asset import ShaderAsset
+
+        candidate = rm._assets_by_uuid.get(shader_uuid)
+        if isinstance(candidate, ShaderAsset):
+            shader_asset = candidate
         program = rm.get_shader_by_uuid(shader_uuid)
     if program is None:
         program = rm.get_shader(shader_name)
@@ -386,22 +379,8 @@ def _parse_material_content(
     if source_path:
         mat.source_path = source_path
 
-    # Create phases from shader
-    shader_language = shader_language_enum(program.language)
     for i, shader_phase in enumerate(program.phases):
-        # Get shader sources
-        vertex_source = ""
-        fragment_source = ""
-        geometry_source = ""
-
-        if "vertex" in shader_phase.stages:
-            vertex_source = shader_phase.stages["vertex"].source
-        if "fragment" in shader_phase.stages:
-            fragment_source = shader_phase.stages["fragment"].source
-        if "geometry" in shader_phase.stages:
-            geometry_source = shader_phase.stages["geometry"].source
-
-        if not vertex_source or not fragment_source:
+        if "vertex" not in shader_phase.stages or "fragment" not in shader_phase.stages:
             log.warning(f"[MaterialAsset] Phase {i} missing vertex or fragment shader")
             continue
 
@@ -418,87 +397,17 @@ def _parse_material_content(
         if shader_asset_uuid:
             phase_uuid = make_phase_uuid(shader_asset_uuid, shader_phase.phase_mark)
 
-        # Add phase
-        phase = mat.add_phase_from_sources(
-            vertex_source=vertex_source,
-            fragment_source=fragment_source,
-            geometry_source=geometry_source,
-            shader_name=shader_name,
-            phase_mark=phase_mark,
-            priority=shader_phase.priority,
-            state=state,
-            shader_uuid=phase_uuid,
-            language=shader_language,
-            vertex_entry=shader_phase.stages["vertex"].entry,
-            fragment_entry=shader_phase.stages["fragment"].entry,
-            geometry_entry=shader_phase.stages["geometry"].entry
-            if "geometry" in shader_phase.stages else "",
-        )
+        shader = shader_asset.get_tc_shader_for_phase(shader_phase) if shader_asset is not None else None
+        if shader is None or not shader.is_valid:
+            log.error(f"[MaterialAsset] Shader phase not found: {phase_uuid}")
+            continue
+
+        phase = mat.add_phase(shader, phase_mark, shader_phase.priority)
 
         if phase is None:
             log.error(f"[MaterialAsset] Failed to add phase {i}")
             continue
-
-        # Apply shader features (e.g., lighting_ubo)
-        shader = phase.shader
-        for feature in program.features:
-            if feature == "lighting_ubo":
-                shader.set_feature(1)  # TC_SHADER_FEATURE_LIGHTING_UBO = 1
-
-        layout = shader_phase.material_ubo_layout
-        if program.language.lower() == "glsl" and layout is not None and layout.block_size > 0:
-            entries = [
-                (e.name, e.property_type, e.offset, e.size)
-                for e in layout.entries
-            ]
-            shader.set_material_ubo_layout(entries, layout.block_size)
-            resource_layout = [
-                (
-                    "material",
-                    _RESOURCE_CONSTANT_BUFFER,
-                    _SCOPE_MATERIAL,
-                    _SET_DEFAULT,
-                    _GLSL_MATERIAL_BINDING,
-                    _STAGE_ALL_GRAPHICS,
-                    layout.block_size,
-                )
-            ]
-        else:
-            shader.set_material_ubo_layout([], 0)
-            resource_layout = []
-
-        if program.language.lower() == "glsl":
-            if shader_phase.uses_engine_per_frame:
-                resource_layout.append((
-                    "per_frame",
-                    _RESOURCE_CONSTANT_BUFFER,
-                    _SCOPE_FRAME,
-                    _SET_DEFAULT,
-                    _GLSL_PER_FRAME_BINDING,
-                    _STAGE_ALL_GRAPHICS,
-                    0,
-                ))
-            if shader_phase.uses_engine_draw_data:
-                resource_layout.append((
-                    "draw_data",
-                    _RESOURCE_CONSTANT_BUFFER,
-                    _SCOPE_DRAW,
-                    _SET_DEFAULT,
-                    _GLSL_DRAW_DATA_BINDING,
-                    _STAGE_ALL_GRAPHICS,
-                    64,
-                ))
-            for index, name in enumerate(shader_phase.material_texture_resources):
-                resource_layout.append((
-                    name,
-                    _RESOURCE_TEXTURE,
-                    _SCOPE_MATERIAL,
-                    _SET_DEFAULT,
-                    _GLSL_MATERIAL_TEXTURE_BINDING_BASE + index,
-                    _STAGE_ALL_GRAPHICS,
-                    0,
-                ))
-        shader.set_resource_layout(resource_layout)
+        phase.state = state
 
         # Set available marks
         if shader_phase.available_marks:

@@ -42,8 +42,12 @@ void print_help() {
         << "  launcher               Run termin_launcher.\n"
         << "  shaderc [args...]      Run termin_shaderc.\n"
         << "  build <profile>        Run termin_builder build <profile>.\n"
+        << "  run <profile>          Run termin_runner run <profile>.\n"
+        << "  play <profile>         Alias for run <profile>.\n"
         << "  profiles [args...]     Run termin_builder profiles [args...].\n"
         << "  profile <name>         Run termin_builder profile <name>.\n"
+        << "  stdlib [args...]       Run termin_stdlib sync [args...].\n"
+        << "  runner [args...]       Run termin_runner directly.\n"
         << "  builder [args...]      Run termin_builder directly.\n"
         << "\n"
         << "External commands:\n"
@@ -164,6 +168,11 @@ Dispatch resolve_dispatch(int argc, char** argv, const fs::path& own_dir) {
         dispatch.args.emplace_back("build");
         std::vector<std::string> rest = tail_args(argc, argv, 2);
         dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
+    } else if (command == "run" || command == "play") {
+        dispatch.executable = "termin_runner";
+        dispatch.args.emplace_back("run");
+        std::vector<std::string> rest = tail_args(argc, argv, 2);
+        dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
     } else if (command == "profiles") {
         dispatch.executable = "termin_builder";
         dispatch.args.emplace_back("profiles");
@@ -174,8 +183,17 @@ Dispatch resolve_dispatch(int argc, char** argv, const fs::path& own_dir) {
         dispatch.args.emplace_back("profile");
         std::vector<std::string> rest = tail_args(argc, argv, 2);
         dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
+    } else if (command == "stdlib") {
+        dispatch.executable = "termin_stdlib";
+        std::vector<std::string> rest = tail_args(argc, argv, 2);
+        if (rest.empty() || (!rest.front().empty() && rest.front()[0] == '-')) {
+            dispatch.args.emplace_back("sync");
+        }
+        dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
     } else if (command == "builder") {
         direct("termin_builder", 2);
+    } else if (command == "runner") {
+        direct("termin_runner", 2);
     } else {
         fs::path underscore = find_executable(own_dir, "termin_" + command);
         if (!underscore.empty()) {
