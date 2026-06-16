@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from termin.project_build.common import preload_project_resources, read_project_name
+from termin.project_build.python_module_packager import PythonModuleBundleResult, package_python_modules
 from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportDiagnostic,
     RuntimePackageExportResult,
@@ -19,6 +20,7 @@ from termin.project_build.runtime_package_exporter import (
 class DesktopBuildResult:
     dist_dir: Path
     package_result: RuntimePackageExportResult
+    python_result: PythonModuleBundleResult
     app_manifest_path: Path
     diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
 
@@ -46,8 +48,16 @@ def build_desktop_project(
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
     )
+    python_result = package_python_modules(
+        project_root=project_root_path,
+        output_dir=package_dir / "python",
+    )
 
     app_manifest_path = dist_dir / "app.json"
+    python_descriptors = [
+        f"package/python/{module.descriptor}"
+        for module in python_result.modules
+    ]
     _write_app_manifest(
         app_manifest_path,
         {
@@ -62,9 +72,11 @@ def build_desktop_project(
             },
             "runtime": {
                 "python": {
-                    "enabled": True,
+                    "enabled": bool(python_result.modules),
                     "root": "python",
                     "project_modules": "package/python",
+                    "module_manifest": "package/python/modules.json",
+                    "descriptors": python_descriptors,
                 },
                 "native_library_dirs": [
                     "lib",
@@ -79,8 +91,12 @@ def build_desktop_project(
     return DesktopBuildResult(
         dist_dir=dist_dir,
         package_result=package_result,
+        python_result=python_result,
         app_manifest_path=app_manifest_path,
-        diagnostics=list(package_result.diagnostics),
+        diagnostics=[
+            *package_result.diagnostics,
+            *python_result.diagnostics,
+        ],
     )
 
 

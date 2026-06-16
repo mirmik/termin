@@ -161,6 +161,26 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     project.mkdir()
     _write_json(project / "DesktopGame.terminproj", {"version": 1, "name": "DesktopGame"})
     _write_json(project / "Main.scene", {"uuid": "desktop-scene", "entities": []})
+    _write_json(
+        project / "game.pymodule",
+        {
+            "name": "game",
+            "root": ".",
+            "packages": [
+                "Scripts",
+            ],
+            "requirements": [
+                "python-chess",
+            ],
+        },
+    )
+    scripts_dir = project / "Scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "__init__.py").write_text("", encoding="utf-8")
+    (scripts_dir / "Controller.py").write_text("class Controller:\n    pass\n", encoding="utf-8")
+    pycache_dir = scripts_dir / "__pycache__"
+    pycache_dir.mkdir()
+    (pycache_dir / "Controller.pyc").write_bytes(b"cached")
 
     legacy_output = project / "dist" / "DesktopGame"
     _write_json(legacy_output / "build.json", {"legacy": True})
@@ -177,10 +197,16 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert result.app_manifest_path == result.dist_dir / "app.json"
     assert result.package_result.manifest_path == result.dist_dir / "package" / "manifest.json"
     assert result.package_result.scene_path == result.dist_dir / "package" / "scene.json"
+    assert result.python_result.manifest_path == result.dist_dir / "package" / "python" / "modules.json"
     assert result.app_manifest_path.exists()
     assert result.package_result.manifest_path.exists()
+    assert result.python_result.manifest_path.exists()
     assert not (result.dist_dir / "build.json").exists()
     assert not (result.dist_dir / "assets").exists()
+    assert (result.dist_dir / "package" / "python" / "game.pymodule").exists()
+    assert (result.dist_dir / "package" / "python" / "Scripts" / "__init__.py").exists()
+    assert (result.dist_dir / "package" / "python" / "Scripts" / "Controller.py").exists()
+    assert not (result.dist_dir / "package" / "python" / "Scripts" / "__pycache__").exists()
 
     app_manifest_text = result.app_manifest_path.read_text(encoding="utf-8")
     assert str(project.resolve()) not in app_manifest_text
@@ -200,6 +226,10 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
                 "enabled": True,
                 "root": "python",
                 "project_modules": "package/python",
+                "module_manifest": "package/python/modules.json",
+                "descriptors": [
+                    "package/python/game.pymodule",
+                ],
             },
             "native_library_dirs": [
                 "lib",
@@ -213,6 +243,29 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     package_manifest = json.loads(result.package_result.manifest_path.read_text(encoding="utf-8"))
     assert package_manifest["scene"] == "scene.json"
     assert package_manifest["shader_artifact_root"] == "."
+    python_manifest = json.loads(result.python_result.manifest_path.read_text(encoding="utf-8"))
+    assert python_manifest == {
+        "version": 1,
+        "modules": [
+            {
+                "name": "game",
+                "descriptor": "game.pymodule",
+                "root": ".",
+                "packages": [
+                    "Scripts",
+                ],
+                "requirements": [
+                    "python-chess",
+                ],
+                "files": [
+                    "Scripts/Controller.py",
+                    "Scripts/__init__.py",
+                    "game.pymodule",
+                ],
+            },
+        ],
+        "diagnostics": [],
+    }
 
 
 def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path: Path) -> None:
