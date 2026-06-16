@@ -7,6 +7,8 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Ensure standard install dir variables (CMAKE_INSTALL_INCLUDEDIR, etc.) are set.
 include(GNUInstallDirs)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
+include(TerminRpath)
 
 # Project root - either from parent CMakeLists.txt or compute from here
 if(NOT DEFINED TERMIN_ROOT)
@@ -430,6 +432,33 @@ endif()
 if(TERMIN_BUILD_PYTHON)
     include(${CMAKE_CURRENT_SOURCE_DIR}/python_bindings.cmake)
 endif()
+
+# ============== SDK Command Tools ==============
+add_executable(termin
+    app/termin.cpp
+)
+target_compile_features(termin PRIVATE cxx_std_20)
+target_compile_options(termin PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+set_target_properties(termin PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+termin_set_rpath_tool(termin)
+install(TARGETS termin RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_executable(termin_builder
+    app/termin_builder.cpp
+)
+target_compile_features(termin_builder PRIVATE cxx_std_20)
+target_include_directories(termin_builder PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_link_libraries(termin_builder PRIVATE tcbase::termin_base)
+target_compile_options(termin_builder PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+set_target_properties(termin_builder PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+termin_set_rpath_tool(termin_builder)
+install(TARGETS termin_builder RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ============== Editor Executable ==============
 option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required)" OFF)

@@ -9,3 +9,4 @@ Current architecture notes live in:
 
 - `docs/editor-architecture.md`
 - `docs/project-build-manifest.md`
+- `docs/termin-cli.md`
