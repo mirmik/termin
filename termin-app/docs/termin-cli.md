@@ -79,6 +79,17 @@ Desktop builds are written as runtime bundles:
 ```text
 dist/<app>/
   app.json
+  bin/
+    termin_player
+  lib/
+    libpython3.10.so*
+    libtermin_*.so*
+    python3.10/
+      site-packages/
+        termin/
+        tcgui/
+        tgfx/
+        ...
   package/
     manifest.json
     scene.json
@@ -90,6 +101,8 @@ dist/<app>/
     materials/
     shaders/
     pipelines/
+  share/
+    termin/
 ```
 
 `app.json` is the bundle entry manifest. Paths inside it are relative to the
@@ -98,8 +111,15 @@ path.
 
 Project `.pymodule` descriptors are copied into `package/python`. The generated
 `package/python/modules.json` records module descriptors, package files, and
-Python requirements for the future desktop runtime host. Cache directories such
-as `__pycache__` are not copied into the bundle.
+Python requirements for the desktop runtime host. Cache directories such as
+`__pycache__` are not copied into the bundle.
+
+Desktop builds currently package the SDK CPython runtime, Termin Python
+packages, Termin native libraries, project Python modules, recursive Python
+package requirements discovered from module descriptors, built-in shader
+resources, and precompiled runtime shader artifacts. Linux system libraries are
+not vendored yet: SDL2, Vulkan/OpenGL, X11/Wayland/audio, libc/libstdc++, and
+their transitive dependencies are still resolved from the host OS.
 
 ## Running Profiles
 
@@ -116,9 +136,18 @@ Legacy builds resolve `output_dir` from the profile and launch:
 python -m termin.player --build <output_dir>/build.json
 ```
 
-Packaged desktop bundle launching is tracked separately from the build output
-contract: the build currently produces `app.json` and `package/manifest.json`;
-the desktop runtime host will consume those artifacts.
+Packaged desktop bundles launch through the bundle-local C++ host:
+
+```bash
+dist/<app>/bin/termin_player
+```
+
+The host embeds CPython from `dist/<app>/lib/python3.10`, adds bundled
+`site-packages` and `package/python` to `sys.path`, and calls
+`termin.player --bundle dist/<app>/app.json`.
+`--backend <name>` is consumed by the C++ host and translated to
+`TERMIN_BACKEND` before CPython is initialized; display options such as
+`--width`, `--height`, and `--title` are forwarded to the Python player.
 
 By default `run` does not rebuild implicitly. Pass `--build-if-missing` to build
 when build output is absent, or `--rebuild` to rebuild before every launch.

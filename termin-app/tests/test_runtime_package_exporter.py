@@ -27,6 +27,37 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
     return compiler
 
 
+def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
+    sdk = tmp_path / "fake-sdk"
+    bin_dir = sdk / "bin"
+    lib_dir = sdk / "lib"
+    python_home = lib_dir / "python3.10"
+    site_packages = python_home / "site-packages"
+    python_overlay = lib_dir / "python"
+    share_dir = sdk / "share" / "termin" / "builtin_shaders"
+
+    bin_dir.mkdir(parents=True)
+    lib_dir.mkdir(parents=True)
+    site_packages.mkdir(parents=True)
+    share_dir.mkdir(parents=True)
+
+    player = bin_dir / "termin_player"
+    player.write_text("#!/bin/sh\n", encoding="utf-8")
+    player.chmod(0o755)
+    (lib_dir / "libpython3.10.so").write_bytes(b"python")
+    (lib_dir / "libtermin_base.so").write_bytes(b"termin")
+    (python_home / "os.py").write_text("", encoding="utf-8")
+    (site_packages / "termin").mkdir()
+    (site_packages / "termin" / "__init__.py").write_text("", encoding="utf-8")
+    (python_overlay / "termin" / "player").mkdir(parents=True)
+    (python_overlay / "termin" / "player" / "__main__.py").write_text(
+        "# fresh player overlay\n",
+        encoding="utf-8",
+    )
+    (share_dir / "termin_prelude.slang").write_text("// prelude\n", encoding="utf-8")
+    return sdk
+
+
 def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
     compiler = tmp_path / "fake_target_termin_shaderc.py"
     calls_path = tmp_path / "target_shaderc_calls.jsonl"
@@ -191,6 +222,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         entry_scene="Main.scene",
         output_dir=legacy_output,
         shader_compiler=_write_fake_shader_compiler(tmp_path),
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
     )
 
     assert result.dist_dir == legacy_output.resolve()
@@ -198,6 +230,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert result.package_result.manifest_path == result.dist_dir / "package" / "manifest.json"
     assert result.package_result.scene_path == result.dist_dir / "package" / "scene.json"
     assert result.python_result.manifest_path == result.dist_dir / "package" / "python" / "modules.json"
+    assert result.runtime_result.python_home == result.dist_dir / "lib" / "python3.10"
     assert result.app_manifest_path.exists()
     assert result.package_result.manifest_path.exists()
     assert result.python_result.manifest_path.exists()
@@ -207,6 +240,21 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "package" / "python" / "Scripts" / "__init__.py").exists()
     assert (result.dist_dir / "package" / "python" / "Scripts" / "Controller.py").exists()
     assert not (result.dist_dir / "package" / "python" / "Scripts" / "__pycache__").exists()
+    assert (result.dist_dir / "bin" / "termin_player").exists()
+    assert (result.dist_dir / "lib" / "libpython3.10.so").exists()
+    assert (result.dist_dir / "lib" / "libtermin_base.so").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "os.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "__init__.py").exists()
+    assert (
+        result.dist_dir
+        / "lib"
+        / "python3.10"
+        / "site-packages"
+        / "termin"
+        / "player"
+        / "__main__.py"
+    ).exists()
+    assert (result.dist_dir / "share" / "termin" / "builtin_shaders" / "termin_prelude.slang").exists()
 
     app_manifest_text = result.app_manifest_path.read_text(encoding="utf-8")
     assert str(project.resolve()) not in app_manifest_text
@@ -222,9 +270,10 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
             "scene": "package/scene.json",
         },
         "runtime": {
+            "launcher": "bin/termin_player",
             "python": {
                 "enabled": True,
-                "root": "python",
+                "home": "lib/python3.10",
                 "project_modules": "package/python",
                 "module_manifest": "package/python/modules.json",
                 "descriptors": [

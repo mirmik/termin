@@ -4,6 +4,7 @@ Command-line entry point for Termin Player.
 Usage:
     python -m termin.player path/to/project --scene main.scene
     python -m termin.player --build dist/MyGame/build.json
+    python -m termin.player --bundle dist/MyGame/app.json
 """
 
 import argparse
@@ -27,6 +28,13 @@ def main():
         type=str,
         default=None,
         help="Path to build.json produced by termin.project_builder",
+    )
+    parser.add_argument(
+        "--bundle",
+        "--app",
+        type=str,
+        default=None,
+        help="Path to app.json produced by termin build",
     )
     parser.add_argument(
         "--scene", "-s",
@@ -54,6 +62,25 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.build is not None and args.bundle is not None:
+        parser.error("--build and --bundle are mutually exclusive")
+
+    if args.bundle is not None:
+        app_json_path = Path(args.bundle)
+        if not app_json_path.exists():
+            print(f"Error: Bundle app manifest does not exist: {app_json_path}")
+            sys.exit(1)
+
+        from termin.player import run_bundle
+
+        run_bundle(
+            app_manifest_path=app_json_path,
+            width=args.width,
+            height=args.height,
+            title=args.title,
+        )
+        return
 
     if args.build is not None:
         build_json_path = Path(args.build)
@@ -88,7 +115,7 @@ def main():
         return
 
     if args.project is None:
-        parser.error("project is required unless --build is used")
+        parser.error("project is required unless --build or --bundle is used")
 
     project_path = Path(args.project)
     if not project_path.exists():

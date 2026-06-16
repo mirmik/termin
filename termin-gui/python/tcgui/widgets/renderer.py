@@ -34,6 +34,10 @@ from tcbase.profiler import Profiler
 _prof = Profiler.instance()
 
 
+UI_SHADER_UUID = "termin-tcgui-ui-engine"
+UI_SHADER_NAME = "UIEngineVSFS"
+
+
 # UI shader: solid colour (mode 0) and RGBA-image sampling (mode 2).
 # Font-atlas sampling lives in Text2DRenderer; this shader does not
 # carry mode 1.
@@ -260,9 +264,14 @@ class UIRenderer:
             # alive across UIRenderer instances (each new RenderContext2
             # on Play/Stop otherwise re-runs shaderc).
             if self._ui_tc_shader is None:
-                self._ui_tc_shader = TcShader.from_sources(
-                    UI_VERTEX_SHADER, UI_FRAGMENT_SHADER,
-                    geometry="", name="UIEngineVSFS")
+                self._ui_tc_shader = TcShader.get_or_create(UI_SHADER_UUID)
+                self._ui_tc_shader.set_sources(
+                    UI_VERTEX_SHADER,
+                    UI_FRAGMENT_SHADER,
+                    "",
+                    UI_SHADER_NAME,
+                    "tcgui/widgets/renderer.py",
+                )
             pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
             self._ui_vs = pair.vs
             self._ui_fs = pair.fs
