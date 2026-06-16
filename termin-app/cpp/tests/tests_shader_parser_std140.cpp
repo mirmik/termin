@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,15 @@ static int32_t read_int_at(const std::vector<uint8_t>& buf, uint32_t offset) {
     int32_t v = 0;
     std::memcpy(&v, buf.data() + offset, sizeof(int32_t));
     return v;
+}
+
+static void expect_parse_error(const std::string& shader_text, const char* message) {
+    try {
+        parse_shader_text(shader_text);
+        FAIL(std::string("Expected parse_shader_text to throw: ") + message);
+    } catch (const std::exception& e) {
+        CHECK_EQ(std::string(e.what()), std::string(message));
+    }
 }
 
 TEST_CASE("std140: scalar and vector sizes/alignments")
@@ -557,8 +567,8 @@ TEST_CASE("parse_shader_text: rejects implicit GLSL material UBO shader")
         "@endstage\n"
         "@endphase\n";
 
-    CHECK_THROWS_WITH(
-        parse_shader_text(shader_text),
+    expect_parse_error(
+        shader_text,
         ".shader files must declare @language slang; implicit GLSL .shader "
         "programs are no longer supported");
 }
@@ -573,8 +583,8 @@ TEST_CASE("parse_shader_text: shader DSL requires explicit Slang language")
         "@endstage\n"
         "@endphase\n";
 
-    CHECK_THROWS_WITH(
-        parse_shader_text(implicit_glsl),
+    expect_parse_error(
+        implicit_glsl,
         ".shader files must declare @language slang; implicit GLSL .shader "
         "programs are no longer supported");
 
@@ -587,8 +597,8 @@ TEST_CASE("parse_shader_text: shader DSL requires explicit Slang language")
         "@endstage\n"
         "@endphase\n";
 
-    CHECK_THROWS_WITH(
-        parse_shader_text(explicit_glsl),
+    expect_parse_error(
+        explicit_glsl,
         ".shader files must declare @language slang; GLSL .shader "
         "programs are no longer supported");
 }
@@ -606,8 +616,8 @@ TEST_CASE("parse_shader_text: rejects implicit GLSL scalar property shader")
         "@endstage\n"
         "@endphase\n";
 
-    CHECK_THROWS_WITH(
-        parse_shader_text(shader_text),
+    expect_parse_error(
+        shader_text,
         ".shader files must declare @language slang; implicit GLSL .shader "
         "programs are no longer supported");
 }
@@ -625,8 +635,8 @@ TEST_CASE("parse_shader_text: rejects implicit GLSL texture-only shader")
         "@endstage\n"
         "@endphase\n";
 
-    CHECK_THROWS_WITH(
-        parse_shader_text(shader_text),
+    expect_parse_error(
+        shader_text,
         ".shader files must declare @language slang; implicit GLSL .shader "
         "programs are no longer supported");
 }
@@ -653,8 +663,8 @@ TEST_CASE("parse_shader_text: rejects implicit GLSL texture binding order shader
         "@endstage\n"
         "@endphase\n";
 
-    CHECK_THROWS_WITH(
-        parse_shader_text(shader_text),
+    expect_parse_error(
+        shader_text,
         ".shader files must declare @language slang; implicit GLSL .shader "
         "programs are no longer supported");
 }

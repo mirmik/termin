@@ -74,6 +74,7 @@ def test_material_pass_loads_texture_inputs_from_material_shader():
 
     shader_text = """
 @program TestMaterialPassDynamicInputs
+@language slang
 @phase main
 @property Texture2D u_input_tex = "white"
 @property Texture2D u_depth_texture = "depth_default"
