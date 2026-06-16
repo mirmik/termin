@@ -140,9 +140,10 @@ void SkyBoxPass::ensure_resources(ExecuteContext& ctx) {
 
     // Process-lifetime engine shader — hash-dedup keeps one handle
     // across pass re-creations, compiled VkShaderModule stays cached.
-    skybox_shader_handle_ = tc_shader_register_static_uuid(
+    skybox_shader_handle_ = tc_shader_register_static_uuid_ex(
         vs_it->second.source.c_str(), fs_it->second.source.c_str(),
-        nullptr, shader_program.name.c_str(), SKYBOX_ENGINE_SHADER_UUID);
+        nullptr, shader_program.name.c_str(), SKYBOX_ENGINE_SHADER_UUID,
+        TC_SHADER_LANGUAGE_SLANG, TC_SHADER_ARTIFACT_REQUIRED);
     if (tc_shader* raw = tc_shader_get(skybox_shader_handle_)) {
         std::vector<tc_material_ubo_entry> entries;
         entries.reserve(skybox_layout_.entries.size());

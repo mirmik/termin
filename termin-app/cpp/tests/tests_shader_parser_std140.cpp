@@ -534,7 +534,7 @@ TEST_CASE("skinned shader variants create Slang vertex-stage variants")
     tc_shader_destroy(original_handle);
 }
 
-TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
+TEST_CASE("parse_shader_text: rejects implicit GLSL material UBO shader")
 {
     const std::string shader_text =
         "@program TestShader\n"
@@ -557,34 +557,43 @@ TEST_CASE("parse_shader_text: material_ubo feature rewrites stage sources")
         "@endstage\n"
         "@endphase\n";
 
-    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
-    CHECK(prog.has_feature("material_ubo"));
-    CHECK_EQ(prog.phases.size(), 1u);
-
-    const auto& phase = prog.phases[0];
-    // Layout: only Float and Color enter the UBO; sampler stays out.
-    CHECK_EQ(phase.material_ubo_layout.entries.size(), 2u);
-    CHECK_EQ(phase.material_ubo_layout.entries[0].name, "u_strength");
-    CHECK_EQ(phase.material_ubo_layout.entries[1].name, "u_tint");
-
-    // Fragment source must have the generated block, no raw decls for
-    // u_strength / u_tint, and an explicit material sampler binding.
-    const auto& frag = phase.stages.at("fragment").source;
-    CHECK(frag.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
-    CHECK(frag.find("uniform float u_strength;") == std::string::npos);
-    CHECK(frag.find("uniform vec4 u_tint;") == std::string::npos);
-    CHECK(frag.find("\nuniform sampler2D u_albedo;") == std::string::npos);
-    CHECK(frag.find("layout(binding = 4) uniform sampler2D u_albedo;") != std::string::npos);
-
-    // The generated block must come after #version.
-    size_t ver_pos = frag.find("#version");
-    size_t block_pos = frag.find("layout(std140, binding = 1)");
-    CHECK(ver_pos != std::string::npos);
-    CHECK(block_pos != std::string::npos);
-    CHECK(ver_pos < block_pos);
+    CHECK_THROWS_WITH(
+        parse_shader_text(shader_text),
+        ".shader files must declare @language slang; implicit GLSL .shader "
+        "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: scalar properties synthesize material UBO without feature flag")
+TEST_CASE("parse_shader_text: shader DSL requires explicit Slang language")
+{
+    const std::string implicit_glsl =
+        "@program Legacy\n"
+        "@phase opaque\n"
+        "@stage fragment\n"
+        "void main() { }\n"
+        "@endstage\n"
+        "@endphase\n";
+
+    CHECK_THROWS_WITH(
+        parse_shader_text(implicit_glsl),
+        ".shader files must declare @language slang; implicit GLSL .shader "
+        "programs are no longer supported");
+
+    const std::string explicit_glsl =
+        "@program Legacy\n"
+        "@language glsl\n"
+        "@phase opaque\n"
+        "@stage fragment\n"
+        "void main() { }\n"
+        "@endstage\n"
+        "@endphase\n";
+
+    CHECK_THROWS_WITH(
+        parse_shader_text(explicit_glsl),
+        ".shader files must declare @language slang; GLSL .shader "
+        "programs are no longer supported");
+}
+
+TEST_CASE("parse_shader_text: rejects implicit GLSL scalar property shader")
 {
     const std::string shader_text =
         "@program LegacyShader\n"
@@ -597,17 +606,13 @@ TEST_CASE("parse_shader_text: scalar properties synthesize material UBO without 
         "@endstage\n"
         "@endphase\n";
 
-    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
-    CHECK(!prog.has_feature("material_ubo"));
-    CHECK_EQ(prog.phases[0].material_ubo_layout.entries.size(), 1u);
-    CHECK_EQ(prog.phases[0].material_ubo_layout.entries[0].name, "u_strength");
-
-    const auto& frag = prog.phases[0].stages.at("fragment").source;
-    CHECK(frag.find("uniform float u_strength;") == std::string::npos);
-    CHECK(frag.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
+    CHECK_THROWS_WITH(
+        parse_shader_text(shader_text),
+        ".shader files must declare @language slang; implicit GLSL .shader "
+        "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: phases without UBO properties still bind material samplers")
+TEST_CASE("parse_shader_text: rejects implicit GLSL texture-only shader")
 {
     const std::string shader_text =
         "@program TextureOnlyShader\n"
@@ -620,18 +625,13 @@ TEST_CASE("parse_shader_text: phases without UBO properties still bind material 
         "@endstage\n"
         "@endphase\n";
 
-    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
-    CHECK(!prog.has_feature("material_ubo"));
-    CHECK(prog.phases[0].material_ubo_layout.empty());
-
-    const auto& frag = prog.phases[0].stages.at("fragment").source;
-    CHECK(frag.find("#version 450 core") != std::string::npos);
-    CHECK(frag.find("\nuniform sampler2D u_albedo;") == std::string::npos);
-    CHECK(frag.find("layout(binding = 4) uniform sampler2D u_albedo;") != std::string::npos);
-    CHECK(frag.find("MaterialParams") == std::string::npos);
+    CHECK_THROWS_WITH(
+        parse_shader_text(shader_text),
+        ".shader files must declare @language slang; implicit GLSL .shader "
+        "programs are no longer supported");
 }
 
-TEST_CASE("parse_shader_text: texture properties keep declaration order in bindings")
+TEST_CASE("parse_shader_text: rejects implicit GLSL texture binding order shader")
 {
     const std::string shader_text =
         "@program TextureSlotsShader\n"
@@ -653,13 +653,10 @@ TEST_CASE("parse_shader_text: texture properties keep declaration order in bindi
         "@endstage\n"
         "@endphase\n";
 
-    ShaderMultyPhaseProgramm prog = parse_shader_text(shader_text);
-    const auto& frag = prog.phases[0].stages.at("fragment").source;
-    CHECK(frag.find("layout(binding = 4) uniform sampler2D u_input;") != std::string::npos);
-    CHECK(frag.find("layout(binding = 5) uniform sampler2D u_depth;") != std::string::npos);
-    CHECK(frag.find("layout(binding = 6) uniform sampler2D u_normal;") != std::string::npos);
-    CHECK(frag.find("layout(binding = 7) uniform sampler2D u_roughness;") != std::string::npos);
-    CHECK(frag.find("layout(binding = 8) uniform sampler2D u_emissive;") != std::string::npos);
+    CHECK_THROWS_WITH(
+        parse_shader_text(shader_text),
+        ".shader files must declare @language slang; implicit GLSL .shader "
+        "programs are no longer supported");
 }
 
 TEST_CASE("parse_shader_text: Slang scalar properties synthesize material constant buffer")
