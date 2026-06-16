@@ -82,6 +82,10 @@ dist/<app>/
   package/
     manifest.json
     scene.json
+    python/
+      modules.json
+      *.pymodule
+      <module packages>/
     meshes/
     materials/
     shaders/
@@ -91,6 +95,11 @@ dist/<app>/
 `app.json` is the bundle entry manifest. Paths inside it are relative to the
 bundle root, so the directory can be moved without keeping the original project
 path.
+
+Project `.pymodule` descriptors are copied into `package/python`. The generated
+`package/python/modules.json` records module descriptors, package files, and
+Python requirements for the future desktop runtime host. Cache directories such
+as `__pycache__` are not copied into the bundle.
 
 ## Running Profiles
 
