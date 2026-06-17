@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from termin.voxels.grid import VoxelGrid
     from termin.voxels.asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
-    from termin.assets.navmesh_asset import NavMeshAsset
+    from termin.navmesh.asset import NavMeshAsset
     from termin.animation import TcAnimationClip
     from termin.assets.animation_clip_asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
@@ -441,7 +441,7 @@ class AssetsMixin:
         return self._navmesh_registry.get_asset(name)
 
     def register_navmesh(self, name: str, navmesh: "NavMesh", source_path: str | None = None) -> None:
-        from termin.assets.navmesh_asset import NavMeshAsset
+        from termin.navmesh.asset import NavMeshAsset
         navmesh.name = name
         asset = NavMeshAsset.from_navmesh(navmesh, name=name, source_path=source_path)
         self._navmesh_registry.register(name, asset, source_path)

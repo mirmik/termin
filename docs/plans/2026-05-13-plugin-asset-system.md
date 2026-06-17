@@ -66,6 +66,14 @@ Status 2026-06-17: `VoxelGridAsset` and voxel-grid asset plugins were moved to
 registration calls the domain registration helpers from `termin-voxels`, and
 the package also exposes entry points for external plugin discovery.
 
+Status 2026-06-17: `NavMeshAsset` and navmesh asset plugins were moved to
+`termin-navmesh` as `termin.navmesh.asset` and
+`termin.navmesh.asset_plugin`. `termin-app` now keeps
+`termin.assets.navmesh_asset` and `termin.assets.navmesh_plugin` only as
+compatibility re-exports. Default registration calls the domain registration
+helpers from `termin-navmesh`, and the package exposes entry points for
+external plugin discovery.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
