@@ -1,0 +1,1402 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Целевая архитектура build/runtime packaging</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f7f7f4;
+      --surface: #ffffff;
+      --surface-soft: #f1f3ef;
+      --ink: #17202a;
+      --muted: #5f6b73;
+      --line: #d7ddd7;
+      --line-strong: #aeb9b1;
+      --teal: #177a75;
+      --teal-soft: #dcefed;
+      --indigo: #334e8a;
+      --indigo-soft: #e1e8f7;
+      --amber: #a85f00;
+      --amber-soft: #f5e4c8;
+      --red: #a33a2a;
+      --red-soft: #f1dcd8;
+      --green: #40723c;
+      --green-soft: #e2eedf;
+      --shadow: 0 18px 45px rgba(23, 32, 42, 0.08);
+      --radius: 8px;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(90deg, rgba(23, 122, 117, 0.07) 0 1px, transparent 1px 100%),
+        linear-gradient(0deg, rgba(51, 78, 138, 0.055) 0 1px, transparent 1px 100%),
+        var(--paper);
+      background-size: 34px 34px;
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--indigo);
+      text-decoration-color: rgba(51, 78, 138, 0.35);
+      text-underline-offset: 3px;
+    }
+
+    a:hover {
+      color: var(--teal);
+      text-decoration-color: var(--teal);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      padding: 28px 20px;
+      border-right: 1px solid var(--line);
+      background: rgba(247, 247, 244, 0.9);
+      backdrop-filter: blur(10px);
+      overflow: auto;
+    }
+
+    .brand {
+      margin-bottom: 28px;
+    }
+
+    .brand-mark {
+      display: inline-grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 12px;
+      border: 2px solid var(--ink);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: 6px 6px 0 var(--amber-soft);
+      font-family: var(--mono);
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .brand p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .nav-title {
+      margin: 22px 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .nav-list {
+      display: grid;
+      gap: 2px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .nav-list a {
+      display: block;
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: var(--ink);
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .nav-list a:hover {
+      background: var(--surface);
+      color: var(--teal);
+    }
+
+    .source-links {
+      display: grid;
+      gap: 8px;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      gap: 28px;
+      align-items: end;
+      min-height: 560px;
+      padding: 64px clamp(28px, 5vw, 78px) 42px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.92), rgba(255,255,255,0.72)),
+        var(--paper);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+      color: var(--teal);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 34px;
+      height: 3px;
+      background: var(--teal);
+      border-radius: 3px;
+    }
+
+    .hero h2 {
+      max-width: 920px;
+      margin: 0;
+      font-size: clamp(42px, 6vw, 78px);
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    .hero .lead {
+      max-width: 780px;
+      margin: 24px 0 0;
+      color: #33414c;
+      font-size: 21px;
+      line-height: 1.45;
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 26px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      color: #2d3a43;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .thesis {
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .thesis h3 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+
+    .thesis ul {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .thesis li {
+      padding-left: 18px;
+      border-left: 4px solid var(--teal);
+      color: #33414c;
+    }
+
+    section {
+      padding: 56px clamp(28px, 5vw, 78px);
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.45);
+    }
+
+    section:nth-of-type(even) {
+      background: rgba(241, 243, 239, 0.58);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(260px, 0.55fr);
+      gap: 30px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .section-kicker {
+      margin: 0 0 8px;
+      color: var(--amber);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.12;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .grid.three {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .panel {
+      min-width: 0;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: 0 10px 24px rgba(23, 32, 42, 0.05);
+    }
+
+    .panel.compact {
+      padding: 16px;
+    }
+
+    .panel.teal {
+      border-top: 5px solid var(--teal);
+    }
+
+    .panel.indigo {
+      border-top: 5px solid var(--indigo);
+    }
+
+    .panel.amber {
+      border-top: 5px solid var(--amber);
+    }
+
+    .panel.red {
+      border-top: 5px solid var(--red);
+    }
+
+    .panel.green {
+      border-top: 5px solid var(--green);
+    }
+
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: #2d3a43;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .tag.teal { background: var(--teal-soft); color: #0f4f4b; }
+    .tag.indigo { background: var(--indigo-soft); color: #263b6a; }
+    .tag.amber { background: var(--amber-soft); color: #704000; }
+    .tag.red { background: var(--red-soft); color: #77261b; }
+    .tag.green { background: var(--green-soft); color: #284d26; }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .step {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+      min-height: 142px;
+      padding: 16px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -11px;
+      width: 11px;
+      height: 2px;
+      background: var(--line-strong);
+    }
+
+    .step-num {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: var(--ink);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+      line-height: 1.18;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .split-line {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .lane {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      min-height: 360px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .lane .output {
+      margin: 12px 0 14px;
+      padding: 10px;
+      border-radius: 6px;
+      background: #f7f8f7;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    ul.clean {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .matrix {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--surface);
+      font-size: 14px;
+    }
+
+    .matrix th,
+    .matrix td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .matrix th {
+      background: #eef1ed;
+      color: #33414c;
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .matrix tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code,
+    pre {
+      font-family: var(--mono);
+    }
+
+    code {
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #eef1ed;
+      font-size: 0.9em;
+    }
+
+    pre {
+      margin: 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #111820;
+      color: #e7eee9;
+      font-size: 13px;
+      line-height: 1.45;
+      overflow: auto;
+      tab-size: 2;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font-size: inherit;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+      counter-reset: stage;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr) minmax(180px, 0.35fr);
+      gap: 16px;
+      align-items: start;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      counter-increment: stage;
+    }
+
+    .stage::before {
+      content: counter(stage);
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius);
+      background: var(--ink);
+      color: #fff;
+      font-family: var(--mono);
+      font-weight: 800;
+    }
+
+    .stage h3 {
+      margin-bottom: 6px;
+    }
+
+    .stage p {
+      margin: 0;
+    }
+
+    .stage-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .callout {
+      padding: 18px 20px;
+      border-left: 5px solid var(--red);
+      border-radius: var(--radius);
+      background: var(--red-soft);
+      color: #4a211d;
+    }
+
+    .footer {
+      padding: 36px clamp(28px, 5vw, 78px);
+      background: var(--ink);
+      color: #e8efec;
+    }
+
+    .footer a {
+      color: #bcd6ff;
+    }
+
+    @media (max-width: 1120px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        padding: 18px 24px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .nav-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .source-links {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .hero,
+      .section-head {
+        grid-template-columns: 1fr;
+      }
+
+      .pipeline {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .step:not(:last-child)::after {
+        display: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        font-size: 15px;
+      }
+
+      .nav-list,
+      .source-links,
+      .grid.two,
+      .grid.three,
+      .pipeline,
+      .split-line {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+        padding-top: 42px;
+      }
+
+      .hero h2 {
+        font-size: 42px;
+      }
+
+      .hero .lead {
+        font-size: 18px;
+      }
+
+      section {
+        padding-top: 42px;
+        padding-bottom: 42px;
+      }
+
+      .stage {
+        grid-template-columns: 44px minmax(0, 1fr);
+      }
+
+      .stage-links {
+        grid-column: 2;
+        justify-content: flex-start;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        color: #000;
+      }
+
+      .layout {
+        display: block;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .hero,
+      section,
+      .footer {
+        padding: 28px 0;
+        border-bottom: 1px solid #bbb;
+        background: #fff;
+      }
+
+      .panel,
+      .lane,
+      .stage,
+      .thesis {
+        box-shadow: none;
+        break-inside: avoid;
+      }
+
+      a {
+        color: #000;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Навигация">
+      <div class="brand">
+        <div class="brand-mark">TB</div>
+        <h1>Build / Runtime Packaging</h1>
+        <p>Целевая архитектура проектной сборки Termin. Версия от 2026-06-17.</p>
+      </div>
+
+      <div class="nav-title">Разделы</div>
+      <ul class="nav-list">
+        <li><a href="#idea">Идея</a></li>
+        <li><a href="#ownership">Границы</a></li>
+        <li><a href="#profile">Профиль</a></li>
+        <li><a href="#pipeline">Pipeline</a></li>
+        <li><a href="#targets">Targets</a></li>
+        <li><a href="#package">Package</a></li>
+        <li><a href="#assets">Assets</a></li>
+        <li><a href="#diagnostics">Diagnostics</a></li>
+        <li><a href="#cli">CLI / Editor</a></li>
+        <li><a href="#tests">Tests</a></li>
+        <li><a href="#migration">Migration</a></li>
+        <li><a href="#done">Готовность</a></li>
+      </ul>
+
+      <div class="source-links">
+        <a href="2026-06-17-build-system-target-architecture.md">Markdown-план</a>
+        <a href="../analysis/2026-06-17-build-runtime-system-audit.md">Аудит системы</a>
+        <a href="2026-06-07-build-system-refactor.md">SDK build plan</a>
+        <a href="2026-05-20-quest-openxr-foundation.md">Quest/OpenXR foundation</a>
+      </div>
+    </aside>
+
+    <main>
+      <header class="hero" id="top">
+        <div>
+          <div class="eyebrow">Termin build system</div>
+          <h2>Целевая архитектура project build и runtime packaging</h2>
+          <p class="lead">
+            Сборка проекта должна стать compiler pipeline: явные входы, фазы,
+            артефакты, проверки и воспроизводимый runtime package для desktop,
+            Android и Quest/OpenXR.
+          </p>
+          <div class="hero-meta">
+            <span class="pill">Дата: 2026-06-17</span>
+            <span class="pill">Scope: project build</span>
+            <span class="pill">Targets: desktop / android / quest_openxr</span>
+            <span class="pill">Связанные задачи: #27-#33, #39-#41</span>
+          </div>
+        </div>
+
+        <div class="thesis">
+          <h3>Главная линия</h3>
+          <ul>
+            <li>Editor запускает сборку и показывает диагностику, но не владеет графом ресурсов.</li>
+            <li>Runtime package является стабильным контрактом между build side и runtime side.</li>
+            <li>Desktop, Android и OpenXR различаются wrapper-ом, а не смыслом project package.</li>
+            <li>Missing resources и несовместимые capabilities должны падать на build stage.</li>
+          </ul>
+        </div>
+      </header>
+
+      <section id="idea">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">North star</p>
+            <h2>Сборка как compiler pipeline</h2>
+          </div>
+          <p class="muted">
+            Сейчас система "как-то собирает" за счет нескольких путей и неявных
+            предположений. Целевая форма должна объяснять каждый выходной файл
+            через профиль, project source tree и capability manifest установленного SDK.
+          </p>
+        </div>
+
+        <div class="pipeline" aria-label="Project build pipeline">
+          <div class="step">
+            <div class="step-num">0</div>
+            <div><strong>Inputs</strong><span>Project source, build profile, SDK capabilities, environment.</span></div>
+          </div>
+          <div class="step">
+            <div class="step-num">1</div>
+            <div><strong>Analyze graph</strong><span>Детерминированный граф сцен, ресурсов, модулей и зависимостей.</span></div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div><strong>Compile artifacts</strong><span>Scenes, materials, shaders, meshes, Python modules, sidecars.</span></div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div><strong>Write package</strong><span>Target-independent runtime package с manifest.json.</span></div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div><strong>Target wrapper</strong><span>Desktop bundle, Android APK или Quest/OpenXR APK.</span></div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div><strong>Validate</strong><span>Schema, paths, shaders, resources, platform requirements, smoke contract.</span></div>
+          </div>
+        </div>
+
+        <div class="split-line">
+          <div class="panel teal">
+            <h3>Цели</h3>
+            <ul class="clean">
+              <li>Единая модель build profiles для всех targets.</li>
+              <li>Runtime package как версионированный контракт.</li>
+              <li>Build graph из файлов проекта и metadata, не из editor state.</li>
+              <li>Общий package contract для desktop, Android и OpenXR.</li>
+              <li>Ошибки ресурсов, capabilities и SDK обнаруживаются до runtime.</li>
+            </ul>
+          </div>
+          <div class="panel amber">
+            <h3>Не-цели</h3>
+            <ul class="clean">
+              <li>Не переписывать весь CMake SDK graph.</li>
+              <li>Не требовать один runtime host для desktop window, Android surface и OpenXR swapchain.</li>
+              <li>Не обещать Python runtime на Android без отдельного решения.</li>
+              <li>Не сохранять бесконечную compatibility с недособранными legacy artifacts.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="ownership">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Boundaries</p>
+            <h2>Два уровня сборки и границы ownership</h2>
+          </div>
+          <p class="muted">
+            Важно не смешивать сборку SDK и сборку пользовательского проекта.
+            Этот план про project build, target packaging и runtime package contract.
+          </p>
+        </div>
+
+        <div class="grid two">
+          <div class="panel indigo">
+            <h3>SDK build</h3>
+            <p>CMake targets, Python packages, bindings, wheelhouse, Android SDK install tree.</p>
+            <div class="tag-row">
+              <span class="tag indigo">termin_build.sdk</span>
+              <span class="tag">build-sdk.sh</span>
+              <span class="tag">CMake</span>
+            </div>
+          </div>
+          <div class="panel teal">
+            <h3>Project build</h3>
+            <p>Build profile, graph analysis, runtime artifacts, package validation, target wrapper.</p>
+            <div class="tag-row">
+              <span class="tag teal">termin.project_build</span>
+              <span class="tag">termin_builder</span>
+              <span class="tag">runtime package</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel compact" style="margin-top:16px">
+          <pre><code>termin-build-tools/
+  termin_build/
+    project/
+      profiles.py        # schema/loading
+      capabilities.py    # SDK capability checks
+      graph.py           # project build graph
+      diagnostics.py     # structured diagnostics
+      pipeline.py        # phase orchestration
+      reports.py         # build report writer
+
+termin-runtime/
+  include/termin/runtime/
+    runtime_package.hpp
+    runtime_package_schema.hpp
+
+termin-app/
+  termin/editor_tcgui/
+    project_build_controller.py  # thin UI wrapper only</code></pre>
+        </div>
+      </section>
+
+      <section id="profile">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Contract</p>
+            <h2>Build Profile Contract</h2>
+          </div>
+          <p class="muted">
+            Профиль должен быть явным и версионированным. Target dispatch живет
+            в Python backend, а C++ <code>termin_builder</code> только находит
+            проект, грузит профиль, вызывает backend и возвращает exit code.
+          </p>
+        </div>
+
+        <div class="grid two">
+          <div class="panel">
+            <h3>Путь и targets</h3>
+            <p><code>project_settings/build_profiles.json</code></p>
+            <div class="tag-row">
+              <span class="tag teal">desktop</span>
+              <span class="tag indigo">android</span>
+              <span class="tag amber">quest_openxr</span>
+              <span class="tag">future: server / web / headless_test</span>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>Configurations</h3>
+            <ul class="clean">
+              <li><code>dev</code>: быстрый local build, возможны явные smoke fallbacks.</li>
+              <li><code>debug</code>: debuggable artifact, без fake resources.</li>
+              <li><code>release</code>: strict diagnostics, deterministic resource set.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="panel compact" style="margin-top:16px">
+          <pre><code>{
+  "version": 1,
+  "profiles": {
+    "dev": {
+      "target": "desktop",
+      "configuration": "dev",
+      "entry_scene": "Scenes/Main.scene",
+      "output_dir": "dist/dev",
+      "resource_policy": "dev",
+      "python": { "enabled": true },
+      "runtime": { "backend": "vulkan" }
+    },
+    "quest": {
+      "target": "quest_openxr",
+      "configuration": "debug",
+      "entry_scene": "Scenes/XR.scene",
+      "output_dir": "dist/quest",
+      "resource_policy": "strict",
+      "android": { "abi": "arm64-v8a", "platform": "android-26" },
+      "openxr": { "required": true }
+    }
+  }
+}</code></pre>
+        </div>
+      </section>
+
+      <section id="pipeline">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Phases</p>
+            <h2>Фазы project build</h2>
+          </div>
+          <p class="muted">
+            Каждая фаза имеет вход, ответственность, выход и диагностические
+            правила. Это делает pipeline тестируемым без editor runtime.
+          </p>
+        </div>
+
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>Фаза</th>
+              <th>Ответственность</th>
+              <th>Выход</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>0. Preflight</strong></td>
+              <td>Проверка schema, entry scene, output dir, SDK capability manifest, shaderc, Gradle/Android SDK/NDK, OpenXR, Python runtime.</td>
+              <td><code>BuildContext</code> или fatal diagnostics.</td>
+            </tr>
+            <tr>
+              <td><strong>1. Graph Analysis</strong></td>
+              <td>Загрузка <code>.terminproj</code>, parse scenes без side effects, resolution handles, include rules, module descriptors, duplicate UUID/name checks.</td>
+              <td><code>build/graph.json</code>, <code>build/diagnostics.json</code>.</td>
+            </tr>
+            <tr>
+              <td><strong>2. Resource Compilation</strong></td>
+              <td>Compilation scenes, meshes, materials, shaders, pipelines, textures, fonts, audio, navmesh, voxels, foliage, Python modules.</td>
+              <td><code>package/</code> с runtime artifacts.</td>
+            </tr>
+            <tr>
+              <td><strong>3. Package Validation</strong></td>
+              <td>Schema version, relative paths, resource existence, shader matrix, duplicate UUIDs, material phases, scene refs, platform capabilities.</td>
+              <td>Validated runtime package или structured errors.</td>
+            </tr>
+            <tr>
+              <td><strong>4. Target Packaging</strong></td>
+              <td>Desktop bundle, Android APK, Quest/OpenXR APK. Runtime host получает уже проверенный package.</td>
+              <td>Deployable artifact, logs, dependency report.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="targets">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Target wrappers</p>
+            <h2>Desktop, Android и Quest/OpenXR</h2>
+          </div>
+          <p class="muted">
+            Цель: один package contract, разные runtime hosts. Platform wrapper
+            отвечает за доставку, lifecycle и native dependencies, а не за
+            самостоятельную интерпретацию проекта.
+          </p>
+        </div>
+
+        <div class="grid three">
+          <article class="lane">
+            <h3>Desktop</h3>
+            <p class="muted">Bundle с <code>termin_player</code>, native libs и bundled Python при необходимости.</p>
+            <div class="output">dist/&lt;profile&gt;/
+  app.json
+  bin/termin_player
+  lib/
+  package/
+  share/termin/</div>
+            <ul class="clean">
+              <li>Только relative paths в <code>app.json</code>.</li>
+              <li>Dependency report: bundled libs vs system prerequisites.</li>
+              <li>Relocated bundle smoke как обязательный gate.</li>
+            </ul>
+          </article>
+
+          <article class="lane">
+            <h3>Android Surface</h3>
+            <p class="muted">APK использует тот же runtime package и единый Android delivery contract.</p>
+            <div class="output">dist/android/&lt;profile&gt;/
+  package/
+  apk/&lt;app&gt;-debug.apk
+  logs/android-build.log</div>
+            <ul class="clean">
+              <li>Native libs из Android SDK install.</li>
+              <li>Project-derived application id и label, если профиль не переопределяет.</li>
+              <li>Runtime host поднимает filesystem-like package root.</li>
+            </ul>
+          </article>
+
+          <article class="lane">
+            <h3>Quest/OpenXR</h3>
+            <p class="muted">OpenXR lifecycle и swapchains поверх общего runtime package.</p>
+            <div class="output">dist/quest_openxr/&lt;profile&gt;/
+  package/
+  apk/&lt;app&gt;-quest-openxr-debug.apk
+  logs/quest-openxr-build.log</div>
+            <ul class="clean">
+              <li>Требует <code>openxr.enabled == true</code> в SDK capabilities.</li>
+              <li>OpenXR app metadata берется из профиля.</li>
+              <li>Fail loudly, если сцена не XR-compatible.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="package">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Runtime contract</p>
+            <h2>Runtime Package Contract</h2>
+          </div>
+          <p class="muted">
+            Runtime package target-independent там, где это возможно, и
+            target-aware там, где нужны shader/runtime capabilities. Unknown
+            major versions должны быть fatal.
+          </p>
+        </div>
+
+        <div class="grid two">
+          <div class="panel compact">
+            <pre><code>{
+  "schema": "termin.runtime_package",
+  "version": 2,
+  "package_id": "com.example.game",
+  "project_name": "Game",
+  "entry_scene": "scene.json",
+  "shader_artifact_root": "shaders",
+  "targets": {
+    "desktop": { "graphics": ["vulkan", "opengl"] },
+    "android": { "graphics": ["vulkan"] },
+    "quest_openxr": { "graphics": ["vulkan"], "xr": true }
+  },
+  "resources": [
+    {
+      "type": "shader",
+      "uuid": "shader-uuid",
+      "path": "shaders/shader-uuid.shader.json"
+    }
+  ],
+  "diagnostics": []
+}</code></pre>
+          </div>
+          <div class="panel green">
+            <h3>Validated once, reused everywhere</h3>
+            <ul class="clean">
+              <li>Exporter tests.</li>
+              <li>Desktop build.</li>
+              <li>Android build.</li>
+              <li>Quest/OpenXR build.</li>
+              <li>Runtime loaders как defensive validation.</li>
+            </ul>
+            <div class="tag-row">
+              <span class="tag green">manifest.json</span>
+              <span class="tag">*.shader.json</span>
+              <span class="tag">*.tmat.json</span>
+              <span class="tag">*.tmesh.json</span>
+              <span class="tag">*.pipeline.json</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="assets">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Resource graph</p>
+            <h2>Asset Graph и include policy</h2>
+          </div>
+          <p class="muted">
+            Статический scene graph не может надежно вывести dynamic resources:
+            <code>TcMaterial.from_name(...)</code>, gameplay-selected assets,
+            DLC, plugins. Это должно быть явной частью профиля.
+          </p>
+        </div>
+
+        <div class="grid two">
+          <div class="panel">
+            <h3>Default source categories</h3>
+            <ul class="clean">
+              <li>Entry scene, scene dependencies, prefabs.</li>
+              <li>Meshes, materials, textures, shaders, pipelines.</li>
+              <li>Audio, UI, fonts, navmesh, voxels, foliage.</li>
+              <li>Project module descriptors и stdlib runtime dependencies.</li>
+            </ul>
+          </div>
+          <div class="panel compact">
+            <pre><code>{
+  "resource_includes": [
+    {"type": "material", "glob": "Materials/**/*.material"},
+    {"type": "texture", "glob": "Textures/UI/**/*.png"},
+    {"type": "audio", "name": "MoveSound"}
+  ]
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="grid three" style="margin-top:16px">
+          <div class="panel compact teal">
+            <h3>dev</h3>
+            <p class="muted">Broad include allowed, warnings for suspicious dynamic refs.</p>
+          </div>
+          <div class="panel compact amber">
+            <h3>debug</h3>
+            <p class="muted">Explicit dynamic includes required when not statically reachable.</p>
+          </div>
+          <div class="panel compact red">
+            <h3>release</h3>
+            <p class="muted">No unresolved dynamic names, duplicate names are errors.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="diagnostics">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Observability</p>
+            <h2>Diagnostics и SDK capability manifest</h2>
+          </div>
+          <p class="muted">
+            Логи нужны людям, diagnostics нужны tools/tests/UI. Capability
+            manifest позволяет падать быстро до дорогой упаковки.
+          </p>
+        </div>
+
+        <div class="grid two">
+          <div class="panel compact">
+            <h3>Structured diagnostic</h3>
+            <pre><code>{
+  "level": "error",
+  "code": "resource.missing",
+  "path": "Scenes/Main.scene",
+  "message": "Material uuid '...' is referenced but not included",
+  "hint": "Add the material file or resource_includes entry"
+}</code></pre>
+          </div>
+          <div class="panel compact">
+            <h3>SDK capabilities</h3>
+            <pre><code>{
+  "version": 1,
+  "platforms": {
+    "desktop": {
+      "vulkan": true,
+      "opengl": true,
+      "sdl": true,
+      "python_runtime": true
+    },
+    "android": {
+      "abis": ["arm64-v8a"],
+      "vulkan": true,
+      "python_runtime": false
+    },
+    "quest_openxr": {
+      "abis": ["arm64-v8a"],
+      "openxr_headers": true,
+      "openxr_loader": true,
+      "vulkan": true
+    }
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="callout" style="margin-top:16px">
+          Build возвращает non-zero на <code>error</code> и <code>fatal</code>.
+          Любой fallback обязан иметь diagnostic code. Placeholder artifacts
+          разрешены только в явно выбранной dev/smoke policy.
+        </div>
+      </section>
+
+      <section id="cli">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Interface</p>
+            <h2>CLI и Editor integration</h2>
+          </div>
+          <p class="muted">
+            CLI становится canonical interface. Editor build UI остается тонким
+            wrapper-ом: сохранить состояние, выбрать профиль, вызвать backend,
+            показать logs/diagnostics/output paths.
+          </p>
+        </div>
+
+        <div class="grid two">
+          <div class="panel compact">
+            <h3>Canonical commands</h3>
+            <pre><code>termin profiles [--project PROJECT]
+termin profile PROFILE [--project PROJECT]
+termin build PROFILE [--project PROJECT]
+termin run PROFILE [--project PROJECT]
+termin deploy PROFILE [--project PROJECT]
+termin doctor PROFILE [--project PROJECT]</code></pre>
+          </div>
+          <div class="panel red">
+            <h3>Editor should not</h3>
+            <ul class="clean">
+              <li>Traverse asset dependencies itself.</li>
+              <li>Call Gradle directly.</li>
+              <li>Mutate runtime package internals.</li>
+              <li>Depend on singleton preloaders for build correctness.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="tests">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Quality gates</p>
+            <h2>Tests and gates</h2>
+          </div>
+          <p class="muted">
+            Тесты должны покрывать не только happy path packaging, но и contract
+            compatibility между exporter, Python loader, C++ runtime и platform wrappers.
+          </p>
+        </div>
+
+        <div class="grid three">
+          <div class="panel teal">
+            <h3>Unit / contract</h3>
+            <ul class="clean">
+              <li>Profile schema validation.</li>
+              <li>Graph duplicate/missing diagnostics.</li>
+              <li>Runtime package schema validation.</li>
+              <li>Shader artifact target matrix.</li>
+              <li>Android/Quest routing with fake build scripts.</li>
+            </ul>
+          </div>
+          <div class="panel indigo">
+            <h3>Integration</h3>
+            <ul class="clean">
+              <li>Export small scene package and load with Python loader.</li>
+              <li>Load same package with C++ <code>termin-runtime</code>.</li>
+              <li>Desktop bundle has no absolute source paths.</li>
+              <li>Relocated desktop bundle smoke.</li>
+              <li>Minimal Android and Quest APK assemble.</li>
+            </ul>
+          </div>
+          <div class="panel amber">
+            <h3>Device / manual</h3>
+            <ul class="clean">
+              <li>Android logcat smoke.</li>
+              <li>Quest/OpenXR runtime smoke.</li>
+              <li>Render pipeline visual sanity.</li>
+              <li>No shader/resource missing errors in logs.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="migration">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Roadmap</p>
+            <h2>Migration plan</h2>
+          </div>
+          <p class="muted">
+            Порядок миграции двигает систему от текущего состояния к единому
+            backend и package contract без попытки одномоментно переписать весь SDK.
+          </p>
+        </div>
+
+        <div class="timeline">
+          <div class="stage">
+            <div>
+              <h3>Target profile backend</h3>
+              <p class="muted">Перенести dispatch в <code>termin.project_build.profile_build</code>, сделать <code>termin_builder</code> target-agnostic, добавить routing tests.</p>
+            </div>
+            <div class="stage-links"><span class="tag red">#41</span></div>
+          </div>
+          <div class="stage">
+            <div>
+              <h3>Runtime package schema</h3>
+              <p class="muted">Модель manifest/resource specs, validation after export, validation in loaders, Python/C++ contract tests, versioning policy.</p>
+            </div>
+            <div class="stage-links"><span class="tag green">contract</span></div>
+          </div>
+          <div class="stage">
+            <div>
+              <h3>Legacy build split</h3>
+              <p class="muted">Переименовать broad-copy path в dev/legacy export, обновить UI naming, убрать implicit legacy run path или закрыть explicit mode.</p>
+            </div>
+            <div class="stage-links"><span class="tag red">#27</span></div>
+          </div>
+          <div class="stage">
+            <div>
+              <h3>Asset runtime graph</h3>
+              <p class="muted">Вынести build-safe graph APIs из editor layer, заменить editor preloaders, реализовать dynamic include policy, dev-only fallbacks.</p>
+            </div>
+            <div class="stage-links"><span class="tag red">#32</span><span class="tag red">#39</span><span class="tag red">#40</span></div>
+          </div>
+          <div class="stage">
+            <div>
+              <h3>Platform delivery unification</h3>
+              <p class="muted">Единый Android package delivery contract, shared asset copy/index/provider logic, SDK capability manifest, split smoke/project OpenXR semantics.</p>
+            </div>
+            <div class="stage-links"><span class="tag amber">#5</span><span class="tag amber">#7</span><span class="tag amber">#8</span></div>
+          </div>
+          <div class="stage">
+            <div>
+              <h3>Release-grade packaging</h3>
+              <p class="muted">Python requirement lock policy, native dependency report, deterministic package reports, reproducible build mode, release smoke matrix.</p>
+            </div>
+            <div class="stage-links"><span class="tag green">release</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="done">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Definition of done</p>
+            <h2>Когда архитектура в порядке</h2>
+          </div>
+          <p class="muted">
+            Эти критерии полезны как чеклист для ревью миграции и как основание
+            закрывать крупные технические задачи.
+          </p>
+        </div>
+
+        <div class="grid two">
+          <div class="panel green">
+            <h3>Success criteria</h3>
+            <ul class="clean">
+              <li>Каждый <code>termin build PROFILE</code> идет через один project build backend.</li>
+              <li>Build output объясним из profile + source tree + SDK capabilities.</li>
+              <li>Runtime package schema-validated и loader-compatible.</li>
+              <li>Desktop/Android/OpenXR разделяют один package contract.</li>
+              <li>Editor build actions являются thin wrappers.</li>
+              <li>Missing resources падают structured diagnostics, а не device-only сюрпризами.</li>
+            </ul>
+          </div>
+          <div class="panel amber">
+            <h3>Open questions</h3>
+            <ul class="clean">
+              <li>Runtime scene format: editor JSON или compiled scene после стабилизации handles?</li>
+              <li>Когда переводить mesh/material artifacts из JSON transition format в binary sidecars?</li>
+              <li>Python on Android: non-goal сейчас или будущий optional target?</li>
+              <li>Plugin/resource compilers: SDK entry points, project plugins или оба источника?</li>
+              <li>Release dependency policy: vendor libs или host prerequisites?</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <p>
+          Source of truth: <a href="2026-06-17-build-system-target-architecture.md">markdown architecture plan</a>.
+          Эта HTML-страница является обзорной визуализацией плана и должна обновляться вместе с ним.
+        </p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
