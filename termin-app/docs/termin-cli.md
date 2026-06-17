@@ -65,14 +65,39 @@ Initial schema:
     "quest": {
       "target": "quest_openxr",
       "entry_scene": "Main.scene",
-      "output_dir": "dist/quest"
+      "output_dir": "dist/quest",
+      "android": {
+        "abi": "arm64-v8a",
+        "platform": "android-26"
+      },
+      "openxr": {
+        "required": true
+      }
     }
   }
 }
 ```
 
-`target: "desktop"` executes the desktop build backend. Use `--dry-run` to
-check profile loading without running the backend.
+Supported build targets:
+
+- `desktop` - writes a relocatable desktop runtime bundle.
+- `android` - exports the shared runtime package and assembles an Android APK.
+- `quest_openxr` - exports the shared runtime package and assembles a
+  Quest/OpenXR APK.
+
+`termin_builder` resolves the project and profile, then delegates to the
+canonical Python backend:
+
+```bash
+python -m termin.project_build.profile_build build \
+  --project-root PROJECT \
+  --profiles-path project_settings/build_profiles.json \
+  --profile PROFILE \
+  --target TARGET
+```
+
+Use `--dry-run` to check profile loading without running the backend. Unknown
+targets fail before build work starts and print the supported target list.
 
 Desktop builds are written as runtime bundles:
 
@@ -140,6 +165,11 @@ build profile:
 ```bash
 termin run dev --project path/to/project
 ```
+
+`run`/`play` are desktop/runtime commands today. Android and Quest/OpenXR
+profiles are build-only from `termin build`; install/launch on devices still
+goes through the dedicated deploy helpers until `termin deploy PROFILE` becomes
+the canonical device command.
 
 Enable player MCP for a run:
 

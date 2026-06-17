@@ -477,18 +477,6 @@ int command_build(const ParsedArgs& args) {
         return 0;
     }
 
-    if (profile.target != "desktop") {
-        std::cerr
-            << "termin_builder: unsupported build target '"
-            << profile.target << "'.\n";
-        return 3;
-    }
-
-    fs::path output_dir = profile.output_dir;
-    if (!output_dir.is_absolute()) {
-        output_dir = project_root / output_dir;
-    }
-
     configure_python_backend_environment();
     std::vector<std::string> command = {
 #ifdef _WIN32
@@ -497,17 +485,19 @@ int command_build(const ParsedArgs& args) {
         "python3",
 #endif
         "-m",
-        "termin.project_builder.profile_build",
-        "desktop",
+        "termin.project_build.profile_build",
+        "build",
         "--project-root",
         project_root.string(),
-        "--entry-scene",
-        profile.entry_scene,
-        "--output-dir",
-        output_dir.string(),
+        "--profiles-path",
+        profiles_path.string(),
+        "--profile",
+        profile.name,
+        "--target",
+        profile.target,
     };
 
-    std::cout << "Executing desktop build backend...\n" << std::flush;
+    std::cout << "Executing " << profile.target << " build backend...\n" << std::flush;
     return run_process(command);
 }
 
