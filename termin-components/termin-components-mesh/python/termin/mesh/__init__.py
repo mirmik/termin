@@ -1,6 +1,10 @@
 """Mesh module — Mesh3, TcMesh (via tgfx) + MeshComponent (nanobind)."""
 
+from pkgutil import extend_path
+
 from termin_nanobind.runtime import preload_sdk_libs
+
+__path__ = extend_path(__path__, __name__)
 
 preload_sdk_libs("nanobind", "termin_components_mesh")
 
@@ -14,9 +18,21 @@ from termin.mesh.surface_edge_query import (
     find_surface_edge_for_entity,
 )
 
+
+def __getattr__(name: str):
+    if name == "MeshAsset":
+        from termin.mesh.asset import MeshAsset
+
+        globals()["MeshAsset"] = MeshAsset
+        return MeshAsset
+
+    raise AttributeError(f"module 'termin.mesh' has no attribute {name!r}")
+
+
 __all__ = [
     "Mesh3",
     "TcMesh",
+    "MeshAsset",
     "MeshComponent",
     "ProceduralMeshComponent",
     "ScriptMeshComponent",
