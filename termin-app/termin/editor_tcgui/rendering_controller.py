@@ -406,7 +406,7 @@ class RenderingControllerTcgui:
                     unmanaged_viewports.append((viewport, display_name, i))
 
         for pipeline_name, viewports in sorted(scene_pipeline_viewports.items()):
-            for viewport, display_name, i in viewports:
+            for viewport, _display_name, i in viewports:
                 vp_name = viewport.name or f"Viewport {i}"
                 label = f"[{pipeline_name}] {vp_name}"
                 result.append((viewport, label))

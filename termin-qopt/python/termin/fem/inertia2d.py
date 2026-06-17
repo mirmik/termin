@@ -17,12 +17,14 @@ def skew2(v):
                      [v,  0]])
 
 class SpatialInertia2D:
-    def __init__(self, mass = 0.0, inertia = 0.0, com=np.zeros(2)):
+    def __init__(self, mass = 0.0, inertia = 0.0, com=None):
         """
         mass : масса тела
         J_com : момент инерции вокруг центра масс (скаляр)
         com : 2-вектор центра масс в локальной системе
         """
+        if com is None:
+            com = np.zeros(2)
         self.m = float(mass)
         self.Jc = float(inertia)
         self.c = np.asarray(com, float).reshape(2)

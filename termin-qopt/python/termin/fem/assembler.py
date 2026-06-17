@@ -760,13 +760,15 @@ class MatrixAssembler:
                     f"Матрица плохо обусловлена: cond(A) = {cond_number:.2e}. "
                     f"Это может быть из-за penalty method в граничных условиях. "
                     f"Рассмотрите использование use_least_squares=True",
-                    RuntimeWarning
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
             elif cond_number > 1e6:
                 import warnings
                 warnings.warn(
                     f"Матрица имеет высокое число обусловленности: cond(A) = {cond_number:.2e}",
-                    RuntimeWarning
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
 
         # Решение системы
@@ -778,14 +780,16 @@ class MatrixAssembler:
                 warnings.warn(
                     f"Матрица вырожденная или близка к вырожденной: "
                     f"rank(A) = {rank}, expected {len(b)}",
-                    RuntimeWarning
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
             elif check_conditioning and rank < len(b):
                 import warnings
                 warnings.warn(
                     f"Матрица вырожденная или близка к вырожденной: "
                     f"rank(A) = {rank}, expected {len(b)}",
-                    RuntimeWarning
+                    RuntimeWarning,
+                    stacklevel=2,
                 )
 
         else:
@@ -1283,7 +1287,7 @@ class LagrangeConstraint(Constraint):
         
         # Проверка размерностей
         n_constraints = self.coefficients[0].shape[0]
-        for i, (var, coef) in enumerate(zip(variables, self.coefficients)):
+        for i, (var, coef) in enumerate(zip(variables, self.coefficients, strict=True)):
             if coef.shape[0] != n_constraints:
                 raise ValueError(f"Все матрицы коэффициентов должны иметь одинаковое "
                                f"количество строк (связей)")
@@ -1323,7 +1327,7 @@ class LagrangeConstraint(Constraint):
         indices = index_map[self.variables[0]]
         contr_indicies = lambdas_index_map[self.lambdas]
         for i in range(self.n_constraints):
-            for var, coef in zip(self.variables, self.coefficients):
+            for var, coef in zip(self.variables, self.coefficients, strict=True):
                 var_indices = index_map[var]
                 for j, global_idx in enumerate(var_indices):
                     C[contr_indicies[i], global_idx] += coef[i, j]

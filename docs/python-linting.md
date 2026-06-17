@@ -19,13 +19,12 @@ Specific paths can be checked during focused work:
 
 ## Current Baseline
 
-The initial rule set is deliberately narrow:
+The current rule set focuses on likely defects and avoids broad style churn:
 
-- `B006`, `B011`, `B012`, and `B018` for low-noise Bugbear checks that catch
-  mutable defaults, `assert False`, control-flow statements in `finally`, and
-  useless expressions.
-- `B009` and `B010` for constant-name `getattr` and `setattr` calls. Dynamic
-  reflection is still allowed, but ordinary field access should stay explicit.
+- `B` for Bugbear checks that catch likely runtime bugs and ambiguous behavior:
+  mutable defaults, function calls in defaults, late-bound loop variables in
+  closures, missing exception chaining, non-explicit `zip()` strictness, and
+  related hazards.
 - Ruff parser diagnostics for syntax and parser-level failures. These are
   emitted before rule selection and are therefore active even though the
   resolved `E9` lint rule is currently only `E902`.

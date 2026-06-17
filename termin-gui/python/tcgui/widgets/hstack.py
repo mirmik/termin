@@ -81,6 +81,6 @@ class HStack(Widget):
         else:
             cx = x
 
-        for child, cw in zip(visible, child_widths):
+        for child, cw in zip(visible, child_widths, strict=True):
             child.layout(cx, y, cw, height, viewport_w, viewport_h)
             cx += cw + self.spacing

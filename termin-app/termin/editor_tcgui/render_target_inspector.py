@@ -271,7 +271,7 @@ class RenderTargetInspectorTcgui(VStack):
             self._select_combo_value(self._color_format, self._color_format_values, render_target.color_format)
             self._select_combo_value(self._depth_format, self._depth_format_values, render_target.depth_format)
             self._clear_color.checked = bool(render_target.clear_color_enabled)
-            for spin, value in zip(self._clear_color_spins, render_target.clear_color_value):
+            for spin, value in zip(self._clear_color_spins, render_target.clear_color_value, strict=True):
                 spin.value = float(value)
             self._clear_depth.checked = bool(render_target.clear_depth_enabled)
             self._clear_depth_value.value = float(render_target.clear_depth_value)

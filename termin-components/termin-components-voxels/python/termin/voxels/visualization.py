@@ -129,7 +129,7 @@ class VoxelVisualizer:
         cell_size = self._grid.cell_size
         idx = 0
 
-        for vx, vy, vz, vtype in self._grid.iter_non_empty():
+        for vx, vy, vz, _vtype in self._grid.iter_non_empty():
             if idx >= max_voxels:
                 break
 

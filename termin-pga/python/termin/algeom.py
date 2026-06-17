@@ -388,11 +388,11 @@ def _fit_quadric_auto_center(points):
     try:
         A_inv = numpy.linalg.inv(A)
         center = -0.5 * A_inv @ b
-    except numpy.linalg.LinAlgError:
+    except numpy.linalg.LinAlgError as exc:
         raise ValueError(
             "Не удалось найти центр квадрики. "
             "Возможно, точки лежат на параболоиде или вырожденной поверхности."
-        )
+        ) from exc
     
     # Нормализуем к канонической форме (x-c)ᵀA(x-c) = ±1
     k = -(center @ A @ center + b @ center + d)
@@ -620,4 +620,3 @@ def ellipsoid_contains(points, A, center, tol=1e-10):
     """
     values = evaluate_ellipsoid(points, A, center)
     return values <= (1.0 + tol)
-

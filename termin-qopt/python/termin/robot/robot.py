@@ -64,7 +64,7 @@ class Robot:
     def sensitivity_twists(
         self,
         body: Transform3,
-        local_pose: Pose3 = Pose3.identity(),
+        local_pose: Optional[Pose3] = None,
         basis: Optional[Pose3] = None,
     ) -> Dict[KinematicTransform3, List[Screw3]]:
         """Возвращает чувствительности (твисты) к цели `body * local_pose`.
@@ -74,6 +74,8 @@ class Robot:
         требует знания полного числа степеней свободы: нули автоматически
         отсутствуют, а далее `Robot.jacobian` расставляет столбцы по индексам.
         """
+        if local_pose is None:
+            local_pose = Pose3.identity()
         out_pose = body.global_pose() * local_pose
         basis_pose = basis.inverse() * out_pose if basis is not None else out_pose
 
@@ -100,7 +102,7 @@ class Robot:
     def jacobian(
         self,
         body: Transform3,
-        local_pose: Pose3 = Pose3.identity(),
+        local_pose: Optional[Pose3] = None,
         basis: Optional[Pose3] = None,
     ) -> np.ndarray:
         """Строит полный 6×N Якобиан, собирая столбцы из `sensitivity_twists`.
@@ -125,7 +127,7 @@ class Robot:
     def translation_jacobian(
         self,
         body: Transform3,
-        local_pose: Pose3 = Pose3.identity(),
+        local_pose: Optional[Pose3] = None,
         basis: Optional[Pose3] = None,
     ) -> np.ndarray:
         """Возвращает только трансляционную часть Якобиана (3×N)."""

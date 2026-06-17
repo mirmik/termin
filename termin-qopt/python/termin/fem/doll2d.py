@@ -229,7 +229,9 @@ class DollLink2D:
         twist: Твист точки привязки (Screw2 - винт скоростей)
     """
     
-    def __init__(self, name: str = "link", inertia: 'SpatialInertia2D' = SpatialInertia2D()):
+    def __init__(self, name: str = "link", inertia: Optional['SpatialInertia2D'] = None):
+        if inertia is None:
+            inertia = SpatialInertia2D()
         self.name = name
         self.children: List['DollLink2D'] = []
         self.parent: Optional['DollLink2D'] = None

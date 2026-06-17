@@ -522,7 +522,7 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
                 continue
             # First try regular TextureAsset lookup.
             asset_uuid = None
-            for asset_name, asset in rm._texture_registry.assets.items():
+            for _asset_name, asset in rm._texture_registry.assets.items():
                 if asset.uuid and asset.uuid == tex.uuid:
                     asset_uuid = asset.uuid
                     break

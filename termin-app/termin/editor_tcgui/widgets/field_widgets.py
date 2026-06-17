@@ -83,7 +83,7 @@ class FieldWidget(Widget):
                 b_seq = list(b) if b is not None else []
                 if len(a_seq) != len(b_seq):
                     return False
-                return all(FieldWidget._values_equal(x, y) for x, y in zip(a_seq, b_seq))
+                return all(FieldWidget._values_equal(x, y) for x, y in zip(a_seq, b_seq, strict=True))
             return a == b or str(a) == str(b)
         except Exception as e:
             log.debug(f"[FieldWidget] _values_equal comparison failed: {e}")
@@ -300,7 +300,7 @@ class Vec3FieldWidget(FieldWidget):
         else:
             arr = list(value)
 
-        for sb, v in zip(self._boxes, arr):
+        for sb, v in zip(self._boxes, arr, strict=True):
             old = sb.on_changed
             sb.on_changed = None
             sb.value = float(v)

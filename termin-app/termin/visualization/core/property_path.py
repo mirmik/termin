@@ -543,7 +543,7 @@ class PropertyPath:
         if isinstance(a, (list, tuple)):
             if len(a) != len(b):
                 return False
-            return all(cls._values_equal(x, y) for x, y in zip(a, b))
+            return all(cls._values_equal(x, y) for x, y in zip(a, b, strict=True))
 
         if isinstance(a, dict):
             if set(a.keys()) != set(b.keys()):

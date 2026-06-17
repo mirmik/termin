@@ -80,6 +80,6 @@ class VStack(Widget):
         else:
             cy = y
 
-        for child, ch in zip(visible, child_heights):
+        for child, ch in zip(visible, child_heights, strict=True):
             child.layout(x, cy, width, ch, viewport_w, viewport_h)
             cy += ch + self.spacing

@@ -235,7 +235,7 @@ class GLBAsset(DataAsset["GLBSceneData"]):
                 spec_changed = True
 
         # Create skeleton assets for any skins not in spec
-        for i, skin in enumerate(self._data.skins):
+        for i, _skin in enumerate(self._data.skins):
             skeleton_key = "skeleton" if i == 0 else f"skeleton_{i}"
             if skeleton_key not in self._skeleton_assets:
                 self._create_new_skeleton_asset(skeleton_key, i)

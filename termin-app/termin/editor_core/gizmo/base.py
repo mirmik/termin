@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 # Drag Constraints
 # ============================================================
 
-class DragConstraint(ABC):
+class DragConstraint:
     """Base class for drag constraints."""
     pass
 
@@ -282,7 +282,7 @@ class Gizmo(ABC):
         Override this for opaque geometry (arrows, rings, spheres).
 
         """
-        pass
+        return None
 
     def draw_transparent(self, renderer: "ImmediateRenderer") -> None:
         """
@@ -290,7 +290,7 @@ class Gizmo(ABC):
 
         Called after opaque pass. Override for transparent geometry (plane quads).
         """
-        pass
+        return None
 
     @abstractmethod
     def get_colliders(self) -> list[GizmoCollider]:
@@ -303,11 +303,11 @@ class Gizmo(ABC):
 
     def on_hover_enter(self, collider_id: Any) -> None:
         """Called when mouse starts hovering over a collider."""
-        pass
+        return None
 
     def on_hover_exit(self, collider_id: Any) -> None:
         """Called when mouse stops hovering over a collider."""
-        pass
+        return None
 
     def on_click(self, collider_id: Any, hit_position: np.ndarray | None) -> None:
         """
@@ -317,7 +317,7 @@ class Gizmo(ABC):
             collider_id: Which collider was clicked
             hit_position: Projected position on the constraint (for computing grab offset)
         """
-        pass
+        return None
 
     def on_drag(self, collider_id: Any, position: np.ndarray, delta: np.ndarray) -> None:
         """
@@ -328,11 +328,11 @@ class Gizmo(ABC):
             position: New position (projected according to constraint)
             delta: Change from last position
         """
-        pass
+        return None
 
     def on_release(self, collider_id: Any) -> None:
         """Called when drag ends (mouse up)."""
-        pass
+        return None
 
 
 # ============================================================

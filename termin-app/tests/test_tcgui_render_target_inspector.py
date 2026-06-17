@@ -338,8 +338,8 @@ def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monke
     )
     picker.set_value("", "default")
 
-    assert ("rt_color", "LiveRT") in zip(picker._item_tags, picker._item_values)
-    assert ("rt_depth", "LiveRT") in zip(picker._item_tags, picker._item_values)
+    assert ("rt_color", "LiveRT") in zip(picker._item_tags, picker._item_values, strict=True)
+    assert ("rt_depth", "LiveRT") in zip(picker._item_tags, picker._item_values, strict=True)
 
 
 def test_texture_picker_lists_render_targets_before_file_textures(monkeypatch):

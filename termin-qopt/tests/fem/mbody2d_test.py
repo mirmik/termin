@@ -242,7 +242,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
         left_side = False
         right_side = False
 
-        for step in range(500):
+        for _step in range(500):
             matrices = assembler.assemble()
             A_ext, b_ext, variables = assembler.assemble_extended_system(matrices)
             x = linalg.solve(A_ext, b_ext)
@@ -325,7 +325,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         assembler.time_step = 0.01  # временной шаг
 
-        for step in range(500):
+        for _step in range(500):
             matrices = assembler.assemble()
             A_ext, b_ext, variables = assembler.assemble_extended_system(matrices)
             x = linalg.solve(A_ext, b_ext)

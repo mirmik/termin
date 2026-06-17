@@ -157,7 +157,7 @@ class ToolBar(Widget):
                            self.background_color)
 
         for i, (item, (rx, ry, rw, rh)) in enumerate(
-                zip(self.items, self._item_rects)):
+                zip(self.items, self._item_rects, strict=True)):
             if item.separator:
                 lx = rx + self.separator_margin
                 renderer.draw_rect(

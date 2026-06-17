@@ -35,7 +35,7 @@ class ConvexBody2:
         int_vertices = []
         for vertex in vertices:
             is_internal = True
-            for plane in self.planes:
+            for _plane in self.planes:
                 is_internal = self.is_internal_point(vertex)
                 if not is_internal:
                     break

@@ -939,7 +939,7 @@ def instantiate_glb(
     if animation_assets:
         animation_player = AnimationPlayer()
 
-        for anim_name, anim_asset in animation_assets.items():
+        for _anim_name, anim_asset in animation_assets.items():
             clip = anim_asset.clip
             if clip is not None and clip.is_valid:
                 clips.append(clip)
