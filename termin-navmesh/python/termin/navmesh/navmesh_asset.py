@@ -1,4 +1,5 @@
-"""Re-export for backwards compatibility."""
-from termin.assets.navmesh_asset import NavMeshAsset
+"""Compatibility re-export for navmesh assets."""
 
-__all__ = ["NavMeshAsset"]
+from termin.navmesh.asset import DetourNavMeshData, DetourNavMeshTileData, NavMeshAsset
+
+__all__ = ["DetourNavMeshData", "DetourNavMeshTileData", "NavMeshAsset"]

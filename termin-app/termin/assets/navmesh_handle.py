@@ -14,7 +14,7 @@ from termin.assets.resource_handle import ResourceHandle
 
 if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
-    from termin.navmesh.navmesh_asset import NavMeshAsset
+    from termin.navmesh.asset import NavMeshAsset
 
 
 class NavMeshHandle(ResourceHandle["NavMesh", "NavMeshAsset"]):
