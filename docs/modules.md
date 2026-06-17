@@ -177,6 +177,26 @@ Source of truth: [termin-navmesh docs](../termin-navmesh/docs/index.md)
 
 NavMesh bindings and navigation utilities.
 
+### termin-tween
+
+Source of truth: [termin-tween docs](../termin-tween/docs/index.md)
+
+Чистое ядро твининга: easing-функции, tween-классы и `TweenManager`.
+
+Scene-компонент живёт выше, в [termin-components-tween](#component-libraries), чтобы
+`termin-tween` не зависел от `termin-scene` и editor/UI-слоя.
+
+### termin-voxels
+
+Source of truth: [termin-voxels docs](../termin-voxels/docs/index.md)
+
+Voxel grid runtime API, persistence, mesh voxelization helpers and
+`termin.voxels._voxels_native`.
+
+Scene/render components live in [termin-components-voxels](#component-libraries);
+the native CMake target is still built from `termin-app/cpp` during the current
+migration stage.
+
 ## Component Libraries
 
 Source of truth: [termin-components docs](../termin-components/docs/index.md)
@@ -190,6 +210,8 @@ Component packages attach domain behavior/data to scene/entity objects:
 - [termin-components-physics](../termin-components/termin-components-physics/docs/index.md)
 - [termin-components-skeleton](../termin-components/termin-components-skeleton/docs/index.md)
 - [termin-components-animation](../termin-components/termin-components-animation/docs/index.md)
+- [termin-components-tween](../termin-components/termin-components-tween/docs/index.md)
+- [termin-components-voxels](../termin-components/termin-components-voxels/docs/index.md)
 
 ## Language Bindings
 
