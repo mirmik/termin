@@ -213,7 +213,7 @@ class AccessorsMixin:
     # Handle accessors for TextureHandle
     def _find_texture_handle_name(self, handle: Any) -> Optional[str]:
         """Find name for a TextureHandle."""
-        from termin.assets.texture_handle import TextureHandle
+        from termin.render.texture_handle import TextureHandle
         if isinstance(handle, TextureHandle):
             return self.find_texture_name(handle)
         return None
@@ -339,7 +339,7 @@ class AccessorsMixin:
             return self.get_audio_clip_by_uuid(uuid)
 
         if kind == "texture":
-            from termin.assets.texture_handle import TextureHandle
+            from termin.render.texture_handle import TextureHandle
             asset = self.get_texture_asset_by_uuid(uuid)
             if asset:
                 return TextureHandle.from_asset(asset)

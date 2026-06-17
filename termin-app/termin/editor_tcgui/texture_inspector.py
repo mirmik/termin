@@ -139,7 +139,7 @@ class TextureInspectorTcgui(VStack):
 
     def set_texture(self, texture, name: str = "") -> None:
         from tgfx import TcTexture
-        from termin.visualization.render.texture import Texture
+        from termin.render.texture import Texture
 
         self._texture = texture
         self._name = name
@@ -241,7 +241,7 @@ class TextureInspectorTcgui(VStack):
         texture = self._rm.get_texture(name)
         if texture is None:
             try:
-                from termin.visualization.render.texture import Texture
+                from termin.render.texture import Texture
                 texture = Texture.from_file(file_path)
             except Exception as e:
                 log.error(f"[TextureInspectorTcgui] set_texture_by_path failed: {e}")

@@ -340,7 +340,7 @@ class MaterialInspectorTcgui(VStack):
     def _set_texture_all_phases(self, uniform_name: str, tag: str, texture_name: str, default_tex: str = "white") -> None:
         if self._material is None:
             return
-        from termin.assets.texture_handle import (
+        from termin.render.texture_handle import (
             get_white_texture_handle,
             get_normal_texture_handle,
         )
@@ -456,7 +456,7 @@ class MaterialInspectorTcgui(VStack):
                         selected_name = tname
                         selected_tag = "file"
                     else:
-                        from termin.assets.material_asset import _classify_render_target_texture
+                        from termin.render.material_asset import _classify_render_target_texture
                         ref = _classify_render_target_texture(tex)
                         if ref is not None:
                             selected_tag = f"rt_{ref['channel']}"
@@ -540,7 +540,7 @@ class MaterialInspectorTcgui(VStack):
         if shader_name == self._material.shader_name:
             return
         try:
-            from termin.assets.shader_asset import update_material_shader
+            from termin.render.shader_asset import update_material_shader
             program = self._rm.get_shader(shader_name)
             if program is None:
                 log.error(f"[MaterialInspectorTcgui] Shader not found: {shader_name}")

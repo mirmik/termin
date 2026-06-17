@@ -26,7 +26,7 @@ def register_builtin_shaders(rm: "ResourceManager") -> None:
 def register_builtin_textures(rm: "ResourceManager") -> None:
     """Register built-in placeholder textures."""
     from termin.render.texture_asset import TextureAsset
-    from termin.visualization.render.texture import get_normal_texture, get_white_texture
+    from termin.render.texture import get_normal_texture, get_white_texture
 
     if "__white_1x1__" not in rm._texture_registry.assets:
         white_texture = get_white_texture().texture_data

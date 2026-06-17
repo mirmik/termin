@@ -8,11 +8,11 @@ from termin_assets import AssetRuntimeManager
 
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
-    from termin.assets.material_asset import MaterialAsset
+    from termin.render.material_asset import MaterialAsset
     from termin.mesh.asset import MeshAsset
     from termin.render.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
-    from termin.assets.shader_asset import ShaderAsset
+    from termin.render.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
     from termin.voxels.asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
@@ -118,7 +118,7 @@ class ResourceManagerBase(AssetRuntimeManager):
         """Create AssetRegistry for textures."""
         from termin_assets import AssetRegistry
         from termin.render.texture_asset import TextureAsset
-        from termin.assets.texture_handle import TextureHandle
+        from termin.render.texture_handle import TextureHandle
 
         def data_from_asset(asset: TextureAsset) -> TextureHandle:
             return TextureHandle.from_asset(asset)

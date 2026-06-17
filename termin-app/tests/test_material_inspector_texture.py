@@ -29,7 +29,7 @@ class _ResourceManager:
         return None
 
 
-def test_material_inspector_default_texture_uses_assets_texture_handle_module() -> None:
+def test_material_inspector_default_texture_uses_render_texture_handle_module() -> None:
     inspector = MaterialInspectorTcgui.__new__(MaterialInspectorTcgui)
     inspector._material = _Material()
     inspector._rm = _ResourceManager()

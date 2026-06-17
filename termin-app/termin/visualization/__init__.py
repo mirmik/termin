@@ -26,7 +26,7 @@ from termin.render_components import MeshRenderer
 from termin.materials import TcMaterial as Material
 from tgfx.window import WindowBackend
 from tcbase import MouseButton, Key, Action
-from termin.visualization.render.texture import Texture
+from termin.render.texture import Texture
 
 __all__ = [
     "Scene",
