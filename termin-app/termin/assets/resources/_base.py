@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, TYPE_CHECKING
 
+from termin_assets import AssetRuntimeManager
+
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
     from termin.assets.material_asset import MaterialAsset
@@ -26,12 +28,14 @@ if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
 
 
-class ResourceManagerBase:
+class ResourceManagerBase(AssetRuntimeManager):
     """Base class with core initialization and registry setup."""
 
     _instance: "ResourceManagerBase | None" = None
 
     def __init__(self):
+        super().__init__()
+
         self.materials: Dict[str, "Material"] = {}
         self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
         self.voxel_grids: Dict[str, "VoxelGrid"] = {}
@@ -40,15 +44,6 @@ class ResourceManagerBase:
         self.skeletons: Dict[str, "TcSkeleton"] = {}
         self.components: Dict[str, type["Component"]] = {}
         self.frame_passes: Dict[str, type] = {}
-
-        # Assets by UUID (for lookup during loading)
-        from termin_assets import Asset
-        self._assets_by_uuid: Dict[str, Asset] = {}
-
-        from termin_assets import AssetTypeRegistry
-        self._asset_type_plugins = AssetTypeRegistry()
-        from termin_assets import AssetCatalog
-        self.external_assets = AssetCatalog()
 
         # Asset registries
         self._mesh_registry = self._create_mesh_registry()
@@ -69,7 +64,7 @@ class ResourceManagerBase:
         self._glb_assets: Dict[str, "GLBAsset"] = {}
         self._prefab_assets: Dict[str, "PrefabAsset"] = {}
 
-        self._runtime_asset_registries = {
+        for type_id, registry in {
             "mesh": self._mesh_registry,
             "texture": self._texture_registry,
             "voxel_grid": self._voxel_grid_registry,
@@ -81,19 +76,14 @@ class ResourceManagerBase:
             "ui": self._ui_registry,
             "pipeline": self._pipeline_registry,
             "scene_pipeline": self._scene_pipeline_registry,
-        }
+        }.items():
+            self.register_runtime_asset_registry(type_id, registry)
 
         self._register_builtin_asset_type_plugins()
 
     def _register_builtin_asset_type_plugins(self) -> None:
         """Register asset plugins that have already migrated off hard-coded dispatch."""
-        from termin_assets.default_plugins import register_default_asset_plugins
-
-        register_default_asset_plugins(self._asset_type_plugins)
-
-    @property
-    def asset_type_plugins(self) -> "AssetTypeRegistry":
-        return self._asset_type_plugins
+        self.register_default_asset_type_plugins()
 
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
