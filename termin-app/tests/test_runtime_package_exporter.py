@@ -229,6 +229,38 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     )
 
 
+def test_export_runtime_package_includes_project_material_assets(tmp_path: Path) -> None:
+    project = tmp_path / "DynamicMaterialGame"
+    project.mkdir()
+    material_uuid = "dynamic-highlight-material"
+    _write_json(project / "Main.scene", {"uuid": "scene-uuid", "entities": []})
+    _write_json(
+        project / "Materials" / "Highlight.material",
+        {
+            "uuid": material_uuid,
+            "shader": "CookTorrancePBR",
+            "uniforms": {
+                "u_color": [1.0, 0.9, 0.1, 1.0],
+            },
+        },
+    )
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "desktop" / "DynamicMaterialGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    assert (result.package_dir / "materials" / f"{material_uuid}.tmat.json").exists()
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert {
+        "type": "material",
+        "uuid": material_uuid,
+        "path": f"materials/{material_uuid}.tmat.json",
+    } in manifest["resources"]
+
+
 def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_path: Path) -> None:
     project = tmp_path / "MeshAssetGame"
     project.mkdir()

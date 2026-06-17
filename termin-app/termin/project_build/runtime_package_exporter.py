@@ -96,6 +96,7 @@ def export_runtime_package(
     scene_data = _read_scene_data(entry_scene_path)
     diagnostics: list[RuntimePackageExportDiagnostic] = []
     refs = _collect_runtime_refs(scene_data)
+    _collect_project_material_refs(project_root_path, refs, diagnostics)
 
     _write_clean_package_dir(output_dir_path)
     scene_path = output_dir_path / "scene.json"
@@ -282,6 +283,59 @@ def _collect_pipeline_refs(value: dict[str, Any], refs: _RuntimeRefs) -> None:
     if isinstance(pipeline_uuid, str) and pipeline_uuid != "":
         name = pipeline_name if isinstance(pipeline_name, str) and pipeline_name != "" else pipeline_uuid
         refs.pipelines[pipeline_uuid] = name
+
+
+def _collect_project_material_refs(
+    project_root: Path,
+    refs: _RuntimeRefs,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    for path in _iter_project_material_paths(project_root):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="warning",
+                    path=str(path.relative_to(project_root)),
+                    message=f"Runtime exporter failed to inspect material asset: {exc}",
+                )
+            )
+            continue
+
+        if not isinstance(data, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="warning",
+                    path=str(path.relative_to(project_root)),
+                    message="Runtime exporter skipped material asset because JSON root is not an object",
+                )
+            )
+            continue
+
+        uuid_value = data.get("uuid")
+        if not isinstance(uuid_value, str) or uuid_value == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    level="warning",
+                    path=str(path.relative_to(project_root)),
+                    message="Runtime exporter skipped material asset because it has no uuid",
+                )
+            )
+            continue
+
+        refs.materials[uuid_value] = path.stem
+
+
+def _iter_project_material_paths(project_root: Path):
+    ignored_parts = {".git", "__pycache__", "build", "dist"}
+    for path in project_root.rglob("*.material"):
+        rel = path.relative_to(project_root)
+        if any(part in ignored_parts for part in rel.parts):
+            continue
+        if path.is_file():
+            yield path
 
 
 def _looks_like_mesh_ref(value: dict[str, Any], field_name: str) -> bool:
