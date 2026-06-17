@@ -12,21 +12,9 @@ Projection matrices are adapted accordingly.
 
 from __future__ import annotations
 
-import math
-from typing import Dict, List, Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from termin.visualization.core.viewport import Viewport
-
 import numpy as np
 
-from tcbase import log
-from termin.geombase import Pose3
-
-from termin.inspect import inspect
 from termin.visualization.core.python_component import InputComponent
-from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent, ScrollEvent
-from tcbase import Action, MouseButton
 
 # Re-export from C++
 from termin.render_components import (

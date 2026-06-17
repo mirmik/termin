@@ -1247,7 +1247,7 @@ def edge_collapse(
 
         log.warning(f"[edge_collapse] {collapse_count} collapses, {len(vertices)} vertices, {len(triangles)} triangles")
     else:
-        log.warning(f"[edge_collapse] no collapses performed")
+        log.warning("[edge_collapse] no collapses performed")
 
     return np.array(vertices, dtype=np.float32), triangles
 

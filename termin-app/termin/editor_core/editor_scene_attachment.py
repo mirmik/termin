@@ -9,7 +9,7 @@ Handles:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from termin.visualization.core.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.entity import Entity
-    from tgfx.window import BackendWindow
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.editor_core.editor_camera import EditorCameraManager
     RenderingController = Any

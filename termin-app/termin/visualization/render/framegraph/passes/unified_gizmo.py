@@ -73,7 +73,7 @@ class UnifiedGizmoPass(PythonFramePass):
         with profiler.section("UnifiedGizmoPass"):
             if ctx.ctx2 is None:
                 from tcbase import log
-                log.error(f"[UnifiedGizmoPass] ctx.ctx2 is None — UnifiedGizmoPass is tgfx2-only")
+                log.error("[UnifiedGizmoPass] ctx.ctx2 is None — UnifiedGizmoPass is tgfx2-only")
                 return
 
             from tgfx._tgfx_native import PIXEL_RGBA8

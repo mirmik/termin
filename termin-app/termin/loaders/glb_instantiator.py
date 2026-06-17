@@ -230,8 +230,6 @@ def _populate_tc_skeleton_from_glb(tc_skel: "TcSkeleton", skin, nodes) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    from termin.skeleton._skeleton_native import TcSkeleton
-
     if not tc_skel.is_valid:
         return False
 
@@ -250,11 +248,6 @@ def _populate_tc_skeleton_from_glb(tc_skel: "TcSkeleton", skin, nodes) -> bool:
     bones = tc_skel.alloc_bones(num_joints)
     if bones is None:
         return False
-
-    # Build a mapping from joint bone index -> node index
-    joint_to_node = {i: joint_indices[i] for i in range(num_joints)}
-    # Inverse: node index -> bone index
-    node_to_bone = {node_idx: bone_idx for bone_idx, node_idx in enumerate(joint_indices)}
 
     # Populate each bone
     for bone_idx in range(num_joints):

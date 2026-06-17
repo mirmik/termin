@@ -36,9 +36,6 @@ class PythonComponent:
         "enabled": InspectField(path="enabled", label="Enabled", kind="bool"),
     }
 
-    # Override to True in input handler subclasses
-    is_input_handler: bool = False
-
     def __init__(self, enabled: bool = True, display_name: str = ""):
         # Create TcComponent wrapper
         type_name = type(self).__name__

@@ -102,7 +102,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
 
     for shader_phase in program.phases:
         if "vertex" not in shader_phase.stages or "fragment" not in shader_phase.stages:
-            log.warning(f"[update_material_shader] Phase missing vertex or fragment shader")
+            log.warning("[update_material_shader] Phase missing vertex or fragment shader")
             continue
 
         # Build render state
@@ -118,7 +118,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         phase = material.add_phase(shader, shader_phase.phase_mark, shader_phase.priority)
 
         if phase is None:
-            log.error(f"[update_material_shader] Failed to add phase")
+            log.error("[update_material_shader] Failed to add phase")
             continue
         phase.state = state
 

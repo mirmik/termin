@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 
-from tcgui.widgets.units import Value, px
+from tcgui.widgets.units import Value
 from tcgui.widgets.events import DragEvent, DragPayload, MouseEvent, MouseWheelEvent, KeyEvent, TextEvent
 
 if TYPE_CHECKING:

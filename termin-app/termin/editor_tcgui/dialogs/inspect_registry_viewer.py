@@ -146,9 +146,9 @@ def show_inspect_registry_viewer(ui) -> None:
                     choices_str = ", ".join(f"{c.value}={c.label}" for c in f.choices)
                     lines.append(f"    choices: {choices_str}")
                 if not f.is_serializable:
-                    lines.append(f"    is_serializable: False")
+                    lines.append("    is_serializable: False")
                 if not f.is_inspectable:
-                    lines.append(f"    is_inspectable: False")
+                    lines.append("    is_inspectable: False")
                 lines.append("")
         else:
             lines.append("  (none)")

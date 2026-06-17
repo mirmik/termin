@@ -181,7 +181,7 @@ def show_quest_openxr_build_dialog(
         try:
             from termin.project_build import launch_quest_openxr_app
 
-            results = launch_quest_openxr_app(
+            launch_quest_openxr_app(
                 log_path=deploy_log_path(),
                 log_callback=lambda line: defer(lambda line=line: append_log(line)),
             )

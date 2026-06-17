@@ -844,8 +844,6 @@ def normalize_glb_scale(scene_data: GLBSceneData) -> bool:
 
     # 2. Build scale matrix from root_scale for IBM compensation
     scale_matrix = np.diag([root_scale[0], root_scale[1], root_scale[2], 1.0]).astype(np.float32)
-    inverse_scale_matrix = np.diag([1.0 / root_scale[0], 1.0 / root_scale[1], 1.0 / root_scale[2], 1.0]).astype(np.float32)
-
     # 3. Compensate IBM: scale applies to input vertex coordinates
     for skin in scene_data.skins:
         for i in range(len(skin.inverse_bind_matrices)):

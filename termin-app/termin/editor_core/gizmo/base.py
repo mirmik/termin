@@ -11,14 +11,13 @@ Architecture:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Callable, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
 if TYPE_CHECKING:
     from termin.visualization.render.immediate import ImmediateRenderer
-    from termin.visualization.render.solid_primitives import SolidPrimitiveRenderer
 
 
 # ============================================================

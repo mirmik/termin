@@ -251,7 +251,6 @@ def make_svg(top_days: list[dict[str, object]], totals: dict[str, int]) -> str:
         y = top + index * (bar_height + gap)
         churn = int(day["churn"])
         additions = int(day["additions"])
-        deletions = int(day["deletions"])
         commits = int(day["commits"])
         files = int(day["files"])
         total_width = round(scale_width * math.sqrt(churn / max_churn), 2)
@@ -315,7 +314,6 @@ def make_monthly_svg(months: list[dict[str, object]], totals: dict[str, int]) ->
     for index, month in enumerate(months):
         churn = int(month["churn"])
         additions = int(month["additions"])
-        deletions = int(month["deletions"])
         commits = int(month["commits"])
         x = left + index * (bar_width + bar_gap)
         total_height = round(plot_height * math.sqrt(churn / max_churn), 2) if churn else 0

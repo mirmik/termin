@@ -6,17 +6,12 @@ Stores the link to the source prefab and tracks property overrides.
 
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
 from termin.inspect import InspectField
-
-if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
-
 
 class PrefabInstanceMarker(PythonComponent):
     """
