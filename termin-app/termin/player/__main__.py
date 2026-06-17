@@ -60,8 +60,38 @@ def main():
         default="Termin Player",
         help="Window title",
     )
+    parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Enable the player MCP diagnostics endpoint",
+    )
+    parser.add_argument(
+        "--mcp-host",
+        type=str,
+        default=None,
+        help="Player MCP bind host (default: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--mcp-port",
+        type=int,
+        default=None,
+        help="Player MCP bind port (default: 8766)",
+    )
+    parser.add_argument(
+        "--mcp-token",
+        type=str,
+        default=None,
+        help="Player MCP bearer token (default: generated)",
+    )
+    parser.add_argument(
+        "--mcp-session-file",
+        type=str,
+        default=None,
+        help="Player MCP session file path (default: /tmp/termin-player-mcp.json)",
+    )
 
     args = parser.parse_args()
+    mcp_options = _mcp_options_from_args(args)
 
     if args.build is not None and args.bundle is not None:
         parser.error("--build and --bundle are mutually exclusive")
@@ -79,6 +109,8 @@ def main():
             width=args.width,
             height=args.height,
             title=args.title,
+            mcp_enabled=args.mcp,
+            mcp_options=mcp_options,
         )
         return
 
@@ -111,6 +143,8 @@ def main():
             width=args.width,
             height=args.height,
             title=args.title,
+            mcp_enabled=args.mcp,
+            mcp_options=mcp_options,
         )
         return
 
@@ -142,7 +176,22 @@ def main():
         width=args.width,
         height=args.height,
         title=args.title,
+        mcp_enabled=args.mcp,
+        mcp_options=mcp_options,
     )
+
+
+def _mcp_options_from_args(args) -> dict[str, object]:
+    options: dict[str, object] = {}
+    if args.mcp_host is not None:
+        options["host"] = args.mcp_host
+    if args.mcp_port is not None:
+        options["port"] = args.mcp_port
+    if args.mcp_token is not None:
+        options["token"] = args.mcp_token
+    if args.mcp_session_file is not None:
+        options["session_file"] = args.mcp_session_file
+    return options
 
 
 if __name__ == "__main__":
