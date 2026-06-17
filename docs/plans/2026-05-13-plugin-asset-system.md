@@ -53,6 +53,12 @@ Status 2026-05-27: `Identifiable`, `Asset`, `DataAsset`, `AssetRegistry`, and
 `termin.assets.resource_handle`, and `termin.core.identifiable` modules are now
 compatibility re-exports so existing imports keep working during the migration.
 
+Status 2026-06-17: `FilePreLoader`, `ProjectFileWatcher`, and `PluginPreLoader`
+were moved into `termin-assets`. The generic watcher now accepts an injected
+ignored-root policy instead of importing project settings. `termin-app` keeps
+the editor/project behavior through compatibility wrappers in
+`termin.assets.project_file_watcher` and `termin.assets.plugin_preloader`.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
