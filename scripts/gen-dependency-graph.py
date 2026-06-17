@@ -63,7 +63,9 @@ PYTHON_PKG_TO_DIR = {
     "termin-base": "termin-base",
     "termin-assets": "termin-assets",
     "termin-tween": "termin-tween",
+    "termin-voxels": "termin-voxels",
     "termin-components-tween": "termin-components-tween",
+    "termin-components-voxels": "termin-components-voxels",
     "termin-nanobind": "termin-nanobind-sdk",
     "termin-csg": "termin-csg",
     "termin-lighting": "termin-lighting",
@@ -121,6 +123,11 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.navmesh": "termin-navmesh",
     "termin.tween.component": "termin-components-tween",
     "termin.tween": "termin-tween",
+    "termin.voxels.component": "termin-components-voxels",
+    "termin.voxels.display_component": "termin-components-voxels",
+    "termin.voxels.visualization": "termin-components-voxels",
+    "termin.voxels.voxelizer_component": "termin-components-voxels",
+    "termin.voxels": "termin-voxels",
     # Fallback: bare `import termin` touches only the namespace root.
     "termin": "termin",
 }
@@ -161,6 +168,8 @@ MANUAL_DEPS = {
     "termin-navmesh": {"termin"},
     "termin-tween": {"termin"},
     "termin-components-tween": {"termin-tween"},
+    "termin-voxels": {"termin"},
+    "termin-components-voxels": {"termin-voxels"},
 }
 
 
@@ -401,13 +410,13 @@ def main():
             "termin-base", "termin-mesh", "termin-inspect", "termin-modules",
             "termin-scene", "termin-skeleton", "termin-collision", "termin-input",
             "termin-animation", "termin-physics", "termin-csg", "termin-navmesh",
-            "termin-tween",
+            "termin-tween", "termin-voxels",
         ],
         "Other Components": [
             "termin-components-skeleton", "termin-components-animation",
             "termin-components-collision", "termin-components-physics",
             "termin-components-kinematic", "termin-components-mesh",
-            "termin-components-tween",
+            "termin-components-tween", "termin-components-voxels",
         ],
         "Thin Facades": [],  # termin-entity удалён
     }
