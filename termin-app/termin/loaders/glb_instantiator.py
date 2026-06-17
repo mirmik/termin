@@ -18,13 +18,13 @@ from termin.animation_components import AnimationPlayer
 from termin.skeleton import SkeletonInstance, TcSkeleton
 from termin.skeleton_components import SkeletonController
 from termin.visualization.core.entity import Entity
-from termin.mesh import TcMesh
+from tmesh import TcMesh
 from termin.render_components import MeshRenderer
 from termin.render_components.skinned_mesh_renderer import SkinnedMeshRenderer
 
 if TYPE_CHECKING:
     from termin.assets.glb_asset import GLBAsset
-    from termin.assets.mesh_asset import MeshAsset
+    from termin.mesh.asset import MeshAsset
     from termin.visualization.core.scene import Scene
     from termin.loaders.glb_loader import GLBSceneData, GLBMeshData, GLBMaterialData, GLBTcTexture
 

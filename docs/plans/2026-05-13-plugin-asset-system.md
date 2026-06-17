@@ -95,6 +95,13 @@ only as compatibility re-exports and no longer owns the `termin.audio`
 namespace. `termin-audio` exposes import/runtime plugin entry points for
 `audio_clip`.
 
+Status 2026-06-17: `MeshAsset`, standalone mesh import/runtime plugins, mesh
+specs, and OBJ/STL loaders were moved to `termin-mesh` under `termin.mesh`.
+The old app modules `termin.assets.mesh_asset`, `termin.assets.mesh_plugin`,
+and `termin.loaders.{mesh_spec,obj_loader,stl_loader}` are compatibility
+re-exports. `termin-mesh` exposes import/runtime plugin entry points for
+`mesh`; GLB remains app-owned until the importer package boundary is decided.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:

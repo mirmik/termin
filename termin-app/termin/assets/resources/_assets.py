@@ -9,8 +9,8 @@ from tcbase import log
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
     from termin.assets.material_asset import MaterialAsset
-    from termin.assets.mesh_asset import MeshAsset
-    from termin.mesh import TcMesh
+    from termin.mesh.asset import MeshAsset
+    from tmesh import TcMesh
     from termin.assets.texture_handle import TextureHandle
     from termin.assets.glb_asset import GLBAsset
     from termin.visualization.render.texture import Texture

@@ -69,8 +69,8 @@ def register_builtin_meshes(rm: "ResourceManager") -> List[str]:
     Returns:
         List of registered mesh names.
     """
-    from termin.assets.mesh_asset import MeshAsset
-    from termin.mesh.mesh import (
+    from termin.mesh.asset import MeshAsset
+    from tmesh import (
         TexturedCubeMesh,
         UVSphereMesh,
         PlaneMesh,

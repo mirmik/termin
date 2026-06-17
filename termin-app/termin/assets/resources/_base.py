@@ -7,7 +7,7 @@ from typing import Dict, TYPE_CHECKING
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
     from termin.assets.material_asset import MaterialAsset
-    from termin.assets.mesh_asset import MeshAsset
+    from termin.mesh.asset import MeshAsset
     from termin.assets.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.assets.shader_asset import ShaderAsset
@@ -98,8 +98,8 @@ class ResourceManagerBase:
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
         from termin_assets import AssetRegistry
-        from termin.assets.mesh_asset import MeshAsset
-        from termin.mesh import TcMesh
+        from termin.mesh.asset import MeshAsset
+        from tmesh import TcMesh
 
         def data_from_asset(asset: MeshAsset) -> TcMesh | None:
             if asset.mesh_data is None:
