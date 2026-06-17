@@ -17,3 +17,9 @@
 
 Python package: `termin.navmesh` через пакет `termin-navmesh`.
 
+Верхний импорт `import termin.navmesh` должен оставаться лёгким и не поднимать
+native Recast/app цепочку. Данные и алгоритмы (`NavMesh`, `NavMeshConfig`,
+`PolygonBuilder`) доступны через ленивые top-level экспорты, а native
+Recast/Detour компоненты загружаются только при обращении к соответствующим
+именам (`RecastNavMeshBuilderComponent`, `DetourPathfindingWorldComponent`,
+`TcNavMesh` и т.п.).
