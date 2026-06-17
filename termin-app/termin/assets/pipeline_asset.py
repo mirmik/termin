@@ -94,7 +94,7 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         """True if this pipeline graph references any of material_names."""
         if not self._loaded:
             return False
-        from termin.assets.pipeline_dependencies import uses_material_names
+        from termin.render.pipeline_dependencies import uses_material_names
 
         return uses_material_names(self._graph_data, material_names)
 

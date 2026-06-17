@@ -367,7 +367,7 @@ class TexturePickerWidget(HStack):
         return None, "No\nTex"
 
     def _resolve_default_preview(self) -> tuple[Any, str]:
-        from termin.visualization.render.texture import (
+        from termin.render.texture import (
             get_normal_texture,
             get_white_texture,
         )

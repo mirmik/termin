@@ -139,6 +139,27 @@ now declares the `texture` and `glsl` asset plugin entry points; shader,
 material, and pipeline assets remain app-owned until their hot-reload boundary
 is separated from app material/pipeline code.
 
+Status 2026-06-18: texture handles and simple texture helper/singleton wrappers
+moved to `termin-render` as `termin.render.texture_handle` and
+`termin.render.texture`. The old app modules `termin.assets.texture_handle` and
+`termin.visualization.render.texture` remain compatibility re-exports. The
+Python API is now canonical in `termin-render`; the underlying native
+`TextureHandle` binding still comes from the transitional app-owned
+`termin._native.assets` module and remains a C++ extraction follow-up.
+
+Status 2026-06-18: material and shader asset runtime moved to `termin-render`.
+`MaterialAsset`, `ShaderAsset`, material/shader asset plugins, shader interface
+comparison helpers, and shader-to-material/pipeline hot-reload dependency
+helpers now live under `termin.render.material_asset`,
+`termin.render.shader_asset`, `termin.render.material_plugin`,
+`termin.render.shader_plugin`, `termin.render.shader_interface`, and
+`termin.render.pipeline_dependencies`. The old app modules remain
+compatibility re-exports, and `termin-render` now declares the `material` and
+`shader` asset plugin entry points. Remaining render asset follow-ups:
+`PipelineAsset`/`ScenePipelineAsset` still live in `termin-app`, and material
+file parse/save paths still use the app `ResourceManager` facade at runtime for
+typed lookups.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:

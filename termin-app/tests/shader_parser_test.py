@@ -235,7 +235,7 @@ def test_slang_material_texture_declarations_are_synthesized():
 
 
 def test_shader_interface_compare_separates_source_from_inputs():
-    from termin.assets.shader_interface import compare_shader_interface
+    from termin.render.shader_interface import compare_shader_interface
 
     base = parse_shader_text("\n".join([
         "@program test",
@@ -572,7 +572,7 @@ def test_slang_texture_property_does_not_duplicate_existing_sampler2d_declaratio
 
 
 def test_stdlib_blinn_phong_uses_slang_scope_model():
-    from termin.assets.shader_asset import ShaderAsset
+    from termin.render.shader_asset import ShaderAsset
 
     shader_path = (
         Path(__file__).resolve().parents[1]
@@ -606,7 +606,7 @@ def test_stdlib_blinn_phong_uses_slang_scope_model():
 
 
 def test_string_shader_uuid_produces_readable_distinct_phase_ids():
-    from termin.assets.shader_asset import make_phase_uuid
+    from termin.render.shader_asset import make_phase_uuid
 
     assert (
         make_phase_uuid("termin-stdlib-shader-blinn-phong", "opaque")
@@ -620,8 +620,8 @@ def test_string_shader_uuid_produces_readable_distinct_phase_ids():
 
 def test_stdlib_slang_material_creates_slang_tc_shader():
     from tgfx import ShaderLanguage
-    from termin.assets.material_asset import MaterialAsset
-    from termin.assets.shader_asset import ShaderAsset
+    from termin.render.material_asset import MaterialAsset
+    from termin.render.shader_asset import ShaderAsset
     from termin.assets.resources import ResourceManager
 
     ResourceManager._reset_for_testing()
@@ -662,8 +662,8 @@ def test_stdlib_slang_material_creates_slang_tc_shader():
 
 def test_stdlib_slang_textured_normal_material_uses_texture_property():
     from tgfx import ShaderLanguage
-    from termin.assets.material_asset import MaterialAsset
-    from termin.assets.shader_asset import ShaderAsset
+    from termin.render.material_asset import MaterialAsset
+    from termin.render.shader_asset import ShaderAsset
     from termin.assets.resources import ResourceManager
 
     ResourceManager._reset_for_testing()
@@ -708,7 +708,7 @@ def test_stdlib_slang_textured_normal_material_uses_texture_property():
 
 
 def test_builtin_pbr_shader_uses_slang_scope_model():
-    from termin.assets.shader_asset import ShaderAsset
+    from termin.render.shader_asset import ShaderAsset
 
     stdlib = Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
     shader_asset = ShaderAsset.from_file(

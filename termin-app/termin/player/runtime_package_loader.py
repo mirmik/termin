@@ -124,7 +124,7 @@ def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, 
 def _load_shader(package_dir: Path, spec: dict[str, Any], path: Path) -> _RuntimeShader | None:
     from tcbase import log
     import tgfx
-    from termin.assets.shader_asset import shader_language_enum
+    from termin.render.shader_asset import shader_language_enum
 
     uuid_value = _string(spec, "uuid")
     if uuid_value == "":
@@ -226,7 +226,7 @@ def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
 
 def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, _RuntimeShader]) -> bool:
     from tcbase import log
-    from termin.assets.material_asset import MaterialAsset
+    from termin.render.material_asset import MaterialAsset
     from termin.assets.resources import ResourceManager
     from termin.materials import TcMaterial
 
@@ -323,7 +323,7 @@ def _apply_default_material_textures(phase: Any, texture_names: tuple[str, ...],
 
 
 def _builtin_texture_for_material_slot(name: str) -> Any | None:
-    from termin.assets.texture_handle import get_normal_texture_handle, get_white_texture_handle
+    from termin.render.texture_handle import get_normal_texture_handle, get_white_texture_handle
 
     if "normal" in name.lower():
         return get_normal_texture_handle().get()
