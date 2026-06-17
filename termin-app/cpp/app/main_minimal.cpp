@@ -53,6 +53,25 @@ static fs::path get_executable_dir() {
 #endif
 }
 
+#ifdef _WIN32
+static void configure_windows_sdl_dll_path(const fs::path& exe_dir,
+                                           const fs::path& python_stdlib) {
+    // PySDL2 otherwise imports the SDL2.dll bundled by pysdl2-dll, while
+    // termin_display is linked to the SDK SDL2.dll next to this executable.
+    // Two SDL runtimes in one process have independent event queues, which
+    // leaves the C++-owned window without a message pump on Windows.
+    if (std::getenv("PYSDL2_DLL_PATH") == nullptr) {
+        std::string dll_path = exe_dir.string();
+        fs::path pysdl2_dll_dir = python_stdlib / "site-packages" / "sdl2dll" / "dll";
+        if (!python_stdlib.empty() && fs::exists(pysdl2_dll_dir)) {
+            dll_path += ";";
+            dll_path += pysdl2_dll_dir.string();
+        }
+        _putenv_s("PYSDL2_DLL_PATH", dll_path.c_str());
+    }
+}
+#endif
+
 static fs::path find_python_stdlib(const fs::path& install_root) {
 #ifdef _WIN32
     fs::path lib_dir = install_root / "python" / "Lib";
@@ -104,6 +123,10 @@ int main(int argc, char* argv[]) {
     bool bundled_python = false;
 
     fs::path python_stdlib = find_python_stdlib(install_root);
+#ifdef _WIN32
+    configure_windows_sdl_dll_path(exe_dir, python_stdlib);
+#endif
+
     fs::path termin_path;
     bool sdk_python_tree = false;
 
