@@ -296,7 +296,7 @@ def _parse_material_content(
     from termin.assets.resources import ResourceManager
     from termin.assets.texture_asset import TextureAsset
     from termin.geombase import Vec3, Vec4
-    from termin.materials import TcMaterial, TcRenderState
+    from termin.materials import TcMaterial
 
     data = json.loads(content)
 
@@ -437,7 +437,6 @@ def _load_material_file(path: str) -> tuple["TcMaterial", str | None]:
     Returns:
         Tuple of (TcMaterial, uuid or None)
     """
-    from termin.materials import TcMaterial
     path = Path(path)
 
     with open(path, "r", encoding="utf-8") as f:

@@ -8,8 +8,6 @@ import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
-
 import numpy as np
 from PIL import Image
 from tcbase import log

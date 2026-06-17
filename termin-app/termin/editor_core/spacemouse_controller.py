@@ -11,12 +11,9 @@ from __future__ import annotations
 
 import ctypes
 import ctypes.util
-from typing import TYPE_CHECKING, Callable
+from typing import Callable
 
 from tcbase import log
-
-if TYPE_CHECKING:
-    from termin.visualization.core.camera import OrbitCameraController
 
 # --- libspnav ctypes bindings ---
 

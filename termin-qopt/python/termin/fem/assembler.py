@@ -1068,30 +1068,30 @@ class MatrixAssembler:
         print("=" * 70)
         
         # Dimensions
-        print(f"\nSystem dimensions:")
+        print("\nSystem dimensions:")
         print(f"  Number of variables: {len(self.variables)}")
         print(f"  Degrees of freedom (DOF): {self.total_dofs()}")
         
         # Matrix rank
-        print(f"\nMatrix rank:")
+        print("\nMatrix rank:")
         print(f"  Current rank: {info['rank']}")
         print(f"  Expected rank: {info['expected_rank']}")
         if info['is_full_rank']:
-            print(f"  [OK] Matrix has full rank")
+            print("  [OK] Matrix has full rank")
         else:
-            print(f"  [PROBLEM] Matrix is singular (rank deficient)")
-            print(f"    Possibly missing boundary conditions")
+            print("  [PROBLEM] Matrix is singular (rank deficient)")
+            print("    Possibly missing boundary conditions")
         
         # Symmetry
-        print(f"\nSymmetry:")
+        print("\nSymmetry:")
         if info['is_symmetric']:
-            print(f"  [OK] Matrix is symmetric")
+            print("  [OK] Matrix is symmetric")
         else:
-            print(f"  [PROBLEM] Matrix is not symmetric")
-            print(f"    This may indicate an error in contributions")
+            print("  [PROBLEM] Matrix is not symmetric")
+            print("    This may indicate an error in contributions")
         
         # Conditioning
-        print(f"\nConditioning:")
+        print("\nConditioning:")
         print(f"  Condition number: {info['condition_number']:.2e}")
         print(f"  Quality assessment: {info['quality']}")
         
@@ -1105,26 +1105,26 @@ class MatrixAssembler:
         print(f"  {quality_desc.get(info['quality'], '')}")
         
         if info['quality'] in ['poor', 'very_poor']:
-            print(f"\n  Recommendations:")
-            print(f"    - Reduce penalty in boundary conditions (try 1e8)")
-            print(f"    - Use use_least_squares=True when solving")
-            print(f"    - Check the scales of quantities in the problem")
+            print("\n  Recommendations:")
+            print("    - Reduce penalty in boundary conditions (try 1e8)")
+            print("    - Use use_least_squares=True when solving")
+            print("    - Check the scales of quantities in the problem")
         
         # Eigenvalues
         if info.get('min_eigenvalue') is not None:
-            print(f"\nEigenvalues:")
+            print("\nEigenvalues:")
             print(f"  Minimum: {info['min_eigenvalue']:.2e}")
             print(f"  Maximum: {info['max_eigenvalue']:.2e}")
             
             if info.get('is_positive_definite'):
-                print(f"  [OK] Matrix is positive definite")
+                print("  [OK] Matrix is positive definite")
             else:
-                print(f"  [PROBLEM] Matrix is not positive definite")
+                print("  [PROBLEM] Matrix is not positive definite")
                 if info['min_eigenvalue'] <= 0:
-                    print(f"    Has non-positive eigenvalues")
+                    print("    Has non-positive eigenvalues")
         
         # Final recommendation
-        print(f"\n" + "=" * 70)
+        print("\n" + "=" * 70)
         if info['is_full_rank'] and info['is_symmetric'] and info['quality'] in ['excellent', 'good', 'acceptable']:
             print("SUMMARY: [OK] System is ready to solve")
         else:
@@ -1289,8 +1289,8 @@ class LagrangeConstraint(Constraint):
         n_constraints = self.coefficients[0].shape[0]
         for i, (var, coef) in enumerate(zip(variables, self.coefficients, strict=True)):
             if coef.shape[0] != n_constraints:
-                raise ValueError(f"Все матрицы коэффициентов должны иметь одинаковое "
-                               f"количество строк (связей)")
+                raise ValueError("Все матрицы коэффициентов должны иметь одинаковое "
+                               "количество строк (связей)")
             if coef.shape[1] != var.size:
                 raise ValueError(f"Матрица коэффициентов {i} имеет {coef.shape[1]} столбцов, "
                                f"ожидалось {var.size}")

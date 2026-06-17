@@ -8,8 +8,6 @@ from termin.geombase.pose2 import Pose2
 from termin.geombase.screw import Screw2, cross2d_scalar
 
 
-import numpy as np
-
 def skew2(v):
     """2D псевдо-skew: ω × r = [-ω*r_y, ω*r_x].
        Здесь возвращаем 2×2 матрицу для углового ω."""

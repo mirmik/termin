@@ -319,7 +319,7 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
         lines.append(f"Phases:  {len(mat.phases) if mat.phases else 0}")
         if mat.phases:
             for i, phase in enumerate(mat.phases):
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"  Phase {i}: mark={phase.phase_mark}")
                 if phase.uniforms:
                     for uname, uval in phase.uniforms.items():

@@ -97,7 +97,7 @@ class FEMFixedJointComponent(PythonComponent):
 
         fem_body = self._body_component.fem_body
         if fem_body is None:
-            log.error(f"FEMFixedJointComponent: FEMRigidBodyComponent not initialized")
+            log.error("FEMFixedJointComponent: FEMRigidBodyComponent not initialized")
             return
 
         # Создать joint

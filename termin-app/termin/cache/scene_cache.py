@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, List, Optional
-from weakref import WeakValueDictionary
+from typing import TYPE_CHECKING, Dict, List
 
 from tcbase import log
 

@@ -587,7 +587,7 @@ def funnel_algorithm(
     while i < len(portals):
         iteration += 1
         if iteration > max_iterations:
-            _log.warn(f"[Funnel] max iterations exceeded, breaking")
+            _log.warn("[Funnel] max iterations exceeded, breaking")
             break
 
         portal_left = portals[i][0]
@@ -755,7 +755,7 @@ def navmesh_line_of_sight(
         prev_tri = current_tri
         current_tri = neighbor
 
-    _log.warn(f"[LOS] max iterations reached")
+    _log.warn("[LOS] max iterations reached")
     return False
 
 

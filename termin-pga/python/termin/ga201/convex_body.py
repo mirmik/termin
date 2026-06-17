@@ -1,5 +1,4 @@
 import termin.ga201.join as join
-import termin.ga201.point as point
 import numpy as np
 from itertools import combinations
 from scipy.spatial import ConvexHull

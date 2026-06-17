@@ -12,7 +12,7 @@ from tcgui.widgets.menu import Menu, MenuItem
 from tcgui.widgets.menu_bar import MenuBar
 
 from termin.editor_core.menu_bar_model import build_editor_menu_spec
-from termin.editor_core.menu_spec import MenuItemSpec, MenuSpec
+from termin.editor_core.menu_spec import MenuSpec
 
 
 class MenuBarControllerTcgui:

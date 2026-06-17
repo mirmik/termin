@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional
 
 from tcbase import log
 
@@ -16,9 +16,6 @@ from tcgui.widgets.scroll_area import ScrollArea
 from tcgui.widgets.units import px
 
 from termin.editor_tcgui.widgets.field_widgets import FieldWidget
-
-if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
 
 
 def _show_layer_mask_dialog(

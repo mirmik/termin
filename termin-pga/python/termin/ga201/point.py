@@ -40,9 +40,6 @@ class Point2:
     def bulk_norm(self):
         return math.sqrt(self.x*self.x + self.y*self.y)
 
-    def __str__(self):
-        return str((self.x, self.y, self.z))
-
     def __repr__(self):
         return str(self)
 

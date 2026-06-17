@@ -27,7 +27,6 @@ from termin.render_framework import FrameDebugCapturePass, PipelineFrameGraphVie
 from termin.editor_core.signal import Signal
 
 if TYPE_CHECKING:
-    from termin.visualization.core.viewport import Viewport
     from termin.visualization.render.framegraph import RenderPipeline
 
 

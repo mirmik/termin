@@ -11,7 +11,6 @@ Outputs docs/library-dependencies.dot, .png, .svg
 import os
 import re
 import subprocess
-import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

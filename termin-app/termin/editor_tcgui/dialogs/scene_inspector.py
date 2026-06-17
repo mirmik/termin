@@ -417,8 +417,6 @@ def show_scene_properties_dialog(
                                  "All available pipelines are already added.")
             return
 
-        from tcgui.widgets.input_dialog import show_input_dialog
-
         # Use combo-style selection via a simple list dialog
         selection_list = ListWidget()
         selection_list.set_items([{"text": n} for n in available])

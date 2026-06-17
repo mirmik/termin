@@ -7,7 +7,6 @@ no bare register(...) without semantic justification.
 Exits 0 if clean, 1 if violations found.
 """
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -71,7 +70,7 @@ def main() -> int:
                 if severity == "FORBIDDEN":
                     forbidden_count += 1
 
-    print(f"\n=== Summary ===")
+    print("\n=== Summary ===")
     print(f"  Files scanned: {len(slang_files)}")
     print(f"  Issues: {total_issues} ({forbidden_count} forbidden)")
 

@@ -78,7 +78,7 @@ class ProjectBrowserTcgui:
         on_file_activated: Callable[[str], None] | None = None,
         on_file_selected: Callable[[str], None] | None = None,
     ) -> None:
-        from tcgui.widgets.tree import TreeWidget, TreeNode
+        from tcgui.widgets.tree import TreeWidget
         from tcgui.widgets.file_grid_widget import FileGridWidget
         from tcgui.widgets.hstack import HStack
 

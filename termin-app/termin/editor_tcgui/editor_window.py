@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from tcbase import log
 
 from tcgui.widgets.ui import UI
-from tcgui.widgets.vstack import VStack
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.menu_bar import MenuBar
 from tcgui.widgets.splitter import Splitter
@@ -19,7 +18,6 @@ from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.viewport3d import Viewport3D
 from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.message_box import MessageBox
 
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
 from termin.engine import SceneManager, scene as engine_scene
@@ -451,8 +449,6 @@ class EditorWindowTcgui:
             from termin.editor_core.editor_pipeline import make_editor_pipeline
             from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
             from termin.editor_tcgui.rendering_controller import RenderingControllerTcgui
-            from termin.engine import RenderingManager
-
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
                 viewport_list_widget=self._viewport_list,
@@ -1084,7 +1080,6 @@ class EditorWindowTcgui:
         if self._rendering_controller is not None:
             from termin.engine import RenderingManager
             current_display = RenderingManager.instance().get_display_for_viewport(viewport)
-            scene = viewport.scene or self.scene
         self._inspector_controller.show_viewport_inspector(
             viewport=viewport,
             displays=displays,

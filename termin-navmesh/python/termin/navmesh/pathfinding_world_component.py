@@ -568,7 +568,7 @@ class PathfindingWorldComponent(PythonComponent):
                     # Портал на границе — попробуем найти ближайший треугольник
                     current_tri_idx = self._find_nearest_triangle_in_region(current_pos, region_id)
                     if current_tri_idx < 0:
-                        log.warn(f"[PathfindingWorld] no triangle found, skipping to target")
+                        log.warn("[PathfindingWorld] no triangle found, skipping to target")
                         # Всё равно идём к target напрямую
                         pass
 
