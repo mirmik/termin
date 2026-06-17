@@ -22,6 +22,8 @@ from termin_assets.plugin_discovery import (
     register_runtime_plugins_from_entry_points,
 )
 from termin_assets.preload import PreLoadResult
+from termin_assets.plugin_preloader import PluginPreLoader
+from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 from termin_assets.resource_handle import ResourceHandle, set_resource_manager_factory
 from termin_assets.spec_file import get_uuid_from_spec, read_spec_file, write_spec_file
 
@@ -42,6 +44,9 @@ __all__ = [
     "DataAsset",
     "Identifiable",
     "PreLoadResult",
+    "FilePreLoader",
+    "PluginPreLoader",
+    "ProjectFileWatcher",
     "ResourceHandle",
     "get_uuid_from_spec",
     "register_combined_plugins_from_entry_points",

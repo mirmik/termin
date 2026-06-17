@@ -36,11 +36,20 @@ setup(
     packages=["termin.navmesh"],
     package_dir={"termin.navmesh": "python/termin/navmesh"},
     install_requires=[
+        "termin-assets",
         "termin-nanobind",
         "termin-voxels",
         "termin-components-voxels",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
+    entry_points={
+        "termin.asset_import_plugins": [
+            "navmesh = termin.navmesh.asset_plugin:create_import_plugin",
+        ],
+        "termin.asset_runtime_plugins": [
+            "navmesh = termin.navmesh.asset_plugin:create_runtime_plugin",
+        ],
+    },
     zip_safe=False,
 )

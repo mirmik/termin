@@ -23,3 +23,16 @@ native Recast/app цепочку. Данные и алгоритмы (`NavMesh`,
 Recast/Detour компоненты загружаются только при обращении к соответствующим
 именам (`RecastNavMeshBuilderComponent`, `DetourPathfindingWorldComponent`,
 `TcNavMesh` и т.п.).
+
+## Asset integration
+
+Navmesh asset ownership живет в доменном пакете:
+
+- `termin.navmesh.asset.NavMeshAsset`
+- `termin.navmesh.handle.NavMeshHandle`
+- `termin.navmesh.asset_plugin.NavMeshImportPlugin`
+- `termin.navmesh.asset_plugin.NavMeshRuntimePlugin`
+
+Старые пути `termin.assets.navmesh_asset`, `termin.assets.navmesh_plugin`,
+`termin.assets.navmesh_handle` и `termin.navmesh.navmesh_asset` остаются
+compatibility re-exports на время миграции `termin-app`.
