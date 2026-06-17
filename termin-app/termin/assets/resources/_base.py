@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from termin.assets.prefab_asset import PrefabAsset
     from termin.assets.glb_asset import GLBAsset
     from termin.audio.asset import AudioClipAsset
-    from termin.visualization.core.entity import Component
     from termin_assets import AssetTypeRegistry
 
 
@@ -42,8 +41,13 @@ class ResourceManagerBase(AssetRuntimeManager):
         self.navmeshes: Dict[str, "NavMesh"] = {}
         self.animation_clips: Dict[str, "TcAnimationClip"] = {}
         self.skeletons: Dict[str, "TcSkeleton"] = {}
-        self.components: Dict[str, type["Component"]] = {}
-        self.frame_passes: Dict[str, type] = {}
+        from termin.scene.component_registry import ComponentClassRegistry
+        from termin.render_framework.frame_pass_registry import FramePassRegistry
+
+        self.component_registry = ComponentClassRegistry()
+        self.frame_pass_registry = FramePassRegistry()
+        self.components = self.component_registry.classes
+        self.frame_passes = self.frame_pass_registry.classes
 
         # Asset registries
         self._mesh_registry = self._create_mesh_registry()
