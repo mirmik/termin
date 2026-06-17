@@ -157,6 +157,7 @@ class _ShaderSpec:
     fragment_entry: str = "main"
     geometry_entry: str = "main"
     allow_precompiled_default: bool = False
+    features: int = 0
 
 
 def _default_shader_spec(language: str) -> _ShaderSpec:
@@ -464,6 +465,7 @@ def _write_shader(
         "vertex_entry": shader.vertex_entry,
         "fragment_entry": shader.fragment_entry,
         "source_path": shader.source_path,
+        "features": int(shader.features),
         "artifacts": {
             "vulkan": {
                 "vertex": f"shaders/vulkan/{shader.uuid}.vert.spv",
@@ -1251,11 +1253,59 @@ def _material_to_spec(material: Any, shaders: dict[str, _ShaderSpec]) -> dict[st
     if not phases:
         raise ValueError(f"Material '{material.uuid}' has no phases")
 
-    return {
+    spec = {
         "uuid": material.uuid,
         "name": material.name or material.uuid,
         "phases": phases,
     }
+    uniforms = _material_uniforms_to_json(material)
+    if uniforms:
+        spec["uniforms"] = uniforms
+    textures = _material_textures_to_json(material)
+    if textures:
+        spec["textures"] = textures
+    return spec
+
+
+def _material_uniforms_to_json(material: Any) -> dict[str, Any]:
+    from termin.geombase import Vec3, Vec4
+
+    result: dict[str, Any] = {}
+    for name, value in material.uniforms.items():
+        if isinstance(value, Vec3):
+            result[name] = [float(value.x), float(value.y), float(value.z)]
+        elif isinstance(value, Vec4):
+            result[name] = [float(value.x), float(value.y), float(value.z), float(value.w)]
+        elif isinstance(value, bool):
+            result[name] = value
+        elif isinstance(value, (int, float)):
+            result[name] = value
+        elif isinstance(value, tuple):
+            result[name] = list(value)
+        elif isinstance(value, list):
+            result[name] = value
+    return result
+
+
+def _material_textures_to_json(material: Any) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for name, texture in material.textures.items():
+        if texture is None or not texture.is_valid:
+            continue
+        if texture.name == "__normal_1x1__":
+            result[name] = {"kind": "builtin", "name": "normal"}
+            continue
+        if texture.name == "__white_1x1__":
+            result[name] = {"kind": "builtin", "name": "white"}
+            continue
+        texture_uuid = texture.uuid
+        if texture_uuid:
+            result[name] = {
+                "kind": "asset",
+                "uuid": texture_uuid,
+                "name": texture.name,
+            }
+    return result
 
 
 def _fallback_material_spec(uuid_value: str, name: str) -> dict[str, Any]:
@@ -1283,6 +1333,10 @@ def _shader_to_spec(shader: Any) -> _ShaderSpec:
         fragment_source=shader.fragment_source,
         geometry_source=shader.geometry_source,
         language=_shader_language(shader),
+        vertex_entry=shader.vertex_entry,
+        fragment_entry=shader.fragment_entry,
+        geometry_entry=shader.geometry_entry,
+        features=int(shader.features),
     )
 
 

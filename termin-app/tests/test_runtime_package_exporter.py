@@ -6,6 +6,8 @@ import numpy as np
 import pytest
 
 from termin.project_build import build_android_project, build_desktop_project, export_runtime_package
+from termin.project_build.runtime_package_exporter import _material_textures_to_json
+from termin.player.runtime_package_loader import _material_texture_resources_from_shader_spec
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -75,6 +77,46 @@ def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
     )
     compiler.chmod(0o755)
     return compiler
+
+
+def test_runtime_shader_layout_collects_material_texture_resources(tmp_path: Path) -> None:
+    package_dir = tmp_path / "package"
+    layout_path = package_dir / "shaders" / "vulkan" / "pbr.frag.spv.layout.json"
+    _write_json(
+        layout_path,
+        {
+            "resources": [
+                {"name": "material", "kind": "constant_buffer", "scope": "material"},
+                {"name": "u_albedo_texture", "kind": "texture", "scope": "material"},
+                {"name": "u_normal_texture", "kind": "texture", "scope": "material"},
+                {"name": "shadow_maps", "kind": "texture", "scope": "pass"},
+            ]
+        },
+    )
+
+    assert _material_texture_resources_from_shader_spec(
+        package_dir,
+        {"artifacts": {"vulkan": {"fragment": "shaders/vulkan/pbr.frag.spv"}}},
+    ) == ("u_albedo_texture", "u_normal_texture")
+
+
+def test_runtime_material_texture_export_records_builtin_placeholders() -> None:
+    class FakeTexture:
+        def __init__(self, name: str, uuid: str) -> None:
+            self.name = name
+            self.uuid = uuid
+            self.is_valid = True
+
+    class FakeMaterial:
+        textures = {
+            "u_albedo_texture": FakeTexture("__white_1x1__", "white-uuid"),
+            "u_normal_texture": FakeTexture("__normal_1x1__", "normal-uuid"),
+        }
+
+    assert _material_textures_to_json(FakeMaterial()) == {
+        "u_albedo_texture": {"kind": "builtin", "name": "white"},
+        "u_normal_texture": {"kind": "builtin", "name": "normal"},
+    }
 
 
 def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
@@ -693,6 +735,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
 def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -> None:
     import tgfx
     from termin.materials import TcMaterial
+    from termin.geombase import Vec4
     from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
 
     project = tmp_path / "LiveResourceGame"
@@ -735,6 +778,11 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
         shader_uuid=shader_uuid,
     )
     assert phase is not None
+    shader = tgfx.TcShader.from_uuid(shader_uuid)
+    assert shader.is_valid
+    shader.set_feature(1)
+    material.set_uniform_vec4("u_color", Vec4(0.25, 0.5, 0.75, 1.0))
+    material.set_uniform_float("u_roughness", 0.625)
 
     _write_json(
         project / "Main.scene",
@@ -786,8 +834,13 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     assert material_data["phases"] == [
         {"mark": "opaque", "shader": shader_uuid, "priority": 7},
     ]
+    assert material_data["uniforms"] == {
+        "u_color": [0.25, 0.5, 0.75, 1.0],
+        "u_roughness": 0.625,
+    }
     assert shader_data["uuid"] == shader_uuid
     assert shader_data["language"] == "glsl"
+    assert shader_data["features"] == 1
     assert shader_data["artifacts"] == {
         "vulkan": {
             "vertex": f"shaders/vulkan/{shader_uuid}.vert.spv",
