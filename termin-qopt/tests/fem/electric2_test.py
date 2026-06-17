@@ -17,7 +17,6 @@ from termin.fem.electrical_2 import (
     Resistor, Capacitor, Inductor, 
     VoltageSource, CurrentSource, Ground, ElectricalNode
 )
-from termin.fem.assembler import Variable, MatrixAssembler
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 
 
@@ -35,9 +34,11 @@ class TestResistor(unittest.TestCase):
 
         assembler = DynamicMatrixAssembler()
 
-        vs = VoltageSource(v1, v2, 5.0, assembler)
-        r = Resistor(v1, v2, 10.0, assembler)
-        ground = Ground(v2, assembler)
+        _components = [
+            VoltageSource(v1, v2, 5.0, assembler),
+            Resistor(v1, v2, 10.0, assembler),
+            Ground(v2, assembler),
+        ]
 
         index_maps = {
             "voltage": assembler.index_map_by_tag("voltage"),
@@ -69,10 +70,12 @@ class TestCapacitor(unittest.TestCase):
 
         assembler = DynamicMatrixAssembler()
 
-        vs = VoltageSource(v1, v0, 5.0, assembler)
-        r = Resistor(v1, v2, 10.0, assembler)
-        c = Capacitor(v2, v0, 0.1, assembler)
-        ground = Ground(v0, assembler)
+        _components = [
+            VoltageSource(v1, v0, 5.0, assembler),
+            Resistor(v1, v2, 10.0, assembler),
+            Capacitor(v2, v0, 0.1, assembler),
+            Ground(v0, assembler),
+        ]
 
         index_maps = {
             "voltage": assembler.index_map_by_tag("voltage"),
@@ -103,17 +106,15 @@ class TestCapacitor(unittest.TestCase):
 
         assembler = DynamicMatrixAssembler()
 
-        vs = VoltageSource(v1, v0, 5.0, assembler)
-        r = Resistor(v1, v2, 10.0, assembler)
         c = Capacitor(v2, v0, 0.1, assembler)
-        ground = Ground(v0, assembler)
+        _components = [
+            VoltageSource(v1, v0, 5.0, assembler),
+            Resistor(v1, v2, 10.0, assembler),
+            c,
+            Ground(v0, assembler),
+        ]
 
         assembler.time_step = 0.01
-
-        index_maps = {
-            "voltage": assembler.index_map_by_tag("voltage"),
-            "current": assembler.index_map_by_tag("current")
-        }
 
         for i in range(50):
             matrices = assembler.assemble_electric_domain()        
@@ -141,10 +142,12 @@ class TestInductor(unittest.TestCase):
 
         assembler = DynamicMatrixAssembler()
 
-        vs = VoltageSource(v1, v0, 10.0, assembler)
-        l = Inductor(v1, v2, 0.5, assembler)
-        r = Resistor(v2, v0, 100.0, assembler)
-        ground = Ground(v0, assembler)
+        _components = [
+            VoltageSource(v1, v0, 10.0, assembler),
+            Inductor(v1, v2, 0.5, assembler),
+            Resistor(v2, v0, 100.0, assembler),
+            Ground(v0, assembler),
+        ]
 
         index_maps = {
             "voltage": assembler.index_map_by_tag("voltage"),
@@ -174,17 +177,15 @@ class TestInductor(unittest.TestCase):
 
         assembler = DynamicMatrixAssembler()
 
-        vs = VoltageSource(v1, v0, 10.0, assembler)
         l = Inductor(v1, v2, 10, assembler)
-        r = Resistor(v2, v0, 100.0, assembler)
-        ground = Ground(v0, assembler)
+        _components = [
+            VoltageSource(v1, v0, 10.0, assembler),
+            l,
+            Resistor(v2, v0, 100.0, assembler),
+            Ground(v0, assembler),
+        ]
 
         assembler.time_step = 0.01
-
-        index_maps = {
-            "voltage": assembler.index_map_by_tag("voltage"),
-            "current": assembler.index_map_by_tag("current")
-        }
 
         for i in range(50):
             matrices = assembler.assemble_electric_domain()        
@@ -210,9 +211,11 @@ class TestCurrentSource(unittest.TestCase):
 
         assembler = DynamicMatrixAssembler()
 
-        cs = CurrentSource(v1, v0, 2.0, assembler)
-        r = Resistor(v1, v0, 5.0, assembler)
-        ground = Ground(v0, assembler)
+        _components = [
+            CurrentSource(v1, v0, 2.0, assembler),
+            Resistor(v1, v0, 5.0, assembler),
+            Ground(v0, assembler),
+        ]
 
         index_maps = {
             "voltage": assembler.index_map_by_tag("voltage"),

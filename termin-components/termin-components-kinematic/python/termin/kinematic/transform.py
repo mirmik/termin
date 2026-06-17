@@ -1,4 +1,3 @@
-import math
 import numpy
 from tcbase._geom_native import Pose3
 
@@ -185,5 +184,4 @@ class Transform3(Transform):
     def left(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the left direction vector in global coordinates."""
         return -self.right(distance)
-
 

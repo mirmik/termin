@@ -3,7 +3,6 @@
 
 import unittest
 import numpy as np
-import warnings
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.fem.multibody2d_3 import (
     RigidBody2D, ForceOnBody2D, FixedRotationJoint2D, RevoluteJoint2D
@@ -78,7 +77,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             gravity=np.array([0.0, 0.0]),
             assembler=assembler)
 
-        force = ForceOnBody2D(
+        _force = ForceOnBody2D(
             body=body,
             wrench=Screw2(ang=0.0, lin=np.array([6.0, 0.0])),
             assembler=assembler)
@@ -109,7 +108,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             gravity=np.array([0.0, 0.0]),
             assembler=assembler)
 
-        force = ForceOnBody2D(
+        _force = ForceOnBody2D(
             body=body,
             wrench=Screw2(ang=16.0, lin=np.array([0.0, 0.0])),
             assembler=assembler)
@@ -180,7 +179,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
         body.set_pose(Pose2(lin=[1.0, 0.0], ang=0.0))
         body.velocity_var.set_value([0.0, 6.0, 6.0]) 
 
-        joint = FixedRotationJoint2D(
+        _joint = FixedRotationJoint2D(
             body=body,
             coords_of_joint=np.array([0.0, 0.0]),
             assembler=assembler)
@@ -206,7 +205,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         body.set_pose(Pose2(lin=[0.0, -1.0], ang=0.0))
 
-        joint = FixedRotationJoint2D(
+        _joint = FixedRotationJoint2D(
             body=body,
             assembler=assembler)
 
@@ -232,7 +231,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         body.set_pose(Pose2(lin=np.array([1.0, 0.0]), ang=0.0)) # это установка позиции (хотя может показаться, что это скорость. но это позиция)
 
-        joint = FixedRotationJoint2D(
+        _joint = FixedRotationJoint2D(
             body=body,
             coords_of_joint=np.array([0.0, 0.0]),
             assembler=assembler)
@@ -259,8 +258,6 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
             assert np.isclose(np.linalg.norm(pose.lin), 1.0, atol=1e-3)
 
-        eps = 1e-15
-        pose = body.pose()
         assert left_side and right_side
         
 
@@ -275,7 +272,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         body.set_pose(Pose2(lin=np.array([0.75, 0.0]), ang=0.0))
 
-        joint = FixedRotationJoint2D(
+        _joint = FixedRotationJoint2D(
             body=body,
             coords_of_joint=np.array([0.0, 0.0]),
             assembler=assembler)
@@ -305,7 +302,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         body1.set_pose(Pose2(lin=np.array([0.0, -2.0]), ang=0.0))
 
-        joint1 = FixedRotationJoint2D(
+        _joint1 = FixedRotationJoint2D(
             body=body1,
             assembler=assembler)
 
@@ -317,7 +314,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         body2.set_pose(Pose2(lin=np.array([0.0, -4.0]), ang=0.0))
 
-        joint2 = RevoluteJoint2D(
+        _joint2 = RevoluteJoint2D(
             bodyA=body1,
             bodyB=body2,
             coords_of_joint=np.array([0.0, -2.0]),

@@ -5,7 +5,6 @@ import numpy as np
 from termin.geombase import Pose3
 from termin.geombase import GeneralPose3
 from termin.mesh.mesh import CubeMesh
-from termin.visualization.core.camera import PerspectiveCameraComponent, OrbitCameraController
 from termin.visualization.core.entity import Entity
 from termin.materials import TcMaterial as Material
 from termin.voxels.voxel_mesh import create_voxel_mesh

@@ -550,7 +550,6 @@ def find_inter_region_boundaries(
     result: dict[int, set[tuple[int, int, int]]] = {i: set() for i in range(len(regions))}
 
     for region_idx, (voxels, _) in enumerate(regions):
-        region_set = set(voxels)
         for voxel in voxels:
             vx, vy, vz = voxel
             # Проверяем соседей по 26-связности

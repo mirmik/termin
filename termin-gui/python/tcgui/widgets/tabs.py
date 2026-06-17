@@ -72,8 +72,6 @@ class TabBar(Widget):
         return -1
 
     def render(self, renderer: 'UIRenderer'):
-        tab_h = self.height - self.indicator_height
-
         for i, (title, (rx, ry, rw, rh)) in enumerate(zip(self.tabs, self._tab_rects, strict=True)):
             # Tab background
             if i == self.selected_index:

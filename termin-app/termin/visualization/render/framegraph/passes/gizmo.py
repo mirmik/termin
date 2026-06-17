@@ -71,7 +71,6 @@ class GizmoPass(PythonFramePass):
             tc_shader_ensure_tgfx2,
             draw_tc_mesh,
             CULL_NONE,
-            PIXEL_RGBA8,
         )
 
         ctx2 = ctx.ctx2

@@ -23,8 +23,6 @@ from termin.navmesh.region_growing import (
     collect_surface_voxels,
     region_growing_basic,
     greedy_absorption,
-    expand_all_regions,
-    filter_hanging_voxels,
     share_boundary_voxels,
     expand_regions,
     find_inter_region_boundaries,
@@ -51,7 +49,6 @@ from termin.navmesh.contour_extraction import (
     SharedLabelMap,
     compute_distance_field_for_region,
     watershed_split_region,
-    WatershedResult,
 )
 
 
@@ -534,7 +531,6 @@ class PolygonBuilder:
         other_axes = [i for i in range(3) if i != dominant_axis]
 
         # Проецируем в 2D: (voxel[other_axes[0]], voxel[other_axes[1]])
-        voxel_set = set(voxels)
         voxel_2d_to_3d: dict[tuple[int, int], tuple[int, int, int]] = {}
         for v in voxels:
             key_2d = (v[other_axes[0]], v[other_axes[1]])

@@ -145,13 +145,13 @@ def show_mesh(mesh: Mesh3):
 
 # Re-export primitives for backward compatibility
 from .primitives import (
-    CubeMesh,
-    TexturedCubeMesh,
-    UVSphereMesh,
-    IcoSphereMesh,
-    PlaneMesh,
-    CylinderMesh,
-    ConeMesh,
-    TorusMesh,
-    RingMesh,
+    CubeMesh as CubeMesh,
+    TexturedCubeMesh as TexturedCubeMesh,
+    UVSphereMesh as UVSphereMesh,
+    IcoSphereMesh as IcoSphereMesh,
+    PlaneMesh as PlaneMesh,
+    CylinderMesh as CylinderMesh,
+    ConeMesh as ConeMesh,
+    TorusMesh as TorusMesh,
+    RingMesh as RingMesh,
 )

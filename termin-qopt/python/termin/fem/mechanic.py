@@ -12,9 +12,6 @@ import numpy as np
 from typing import List, Dict
 from .assembler import Contribution, Variable
 
-# Optional:
-from typing import Optional
-
 
 class BarElement(Contribution):
     """
@@ -358,8 +355,7 @@ class BeamElement2D(Contribution):
         
         # Третьи производные функций формы
         L = self.L
-        xi = x / L
-        
+
         N1_ddd = -12 / L**3
         N2_ddd = -6 / L**2
         N3_ddd = 12 / L**3

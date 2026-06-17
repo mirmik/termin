@@ -13,7 +13,7 @@ from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.tabs import TabBar, TabView
 from tcgui.widgets.menu import MenuItem, Menu
 from tcgui.widgets.menu_bar import MenuBar
-from tcgui.widgets.tool_bar import ToolBar, ToolBarItem
+from tcgui.widgets.tool_bar import ToolBar
 from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.message_box import MessageBox

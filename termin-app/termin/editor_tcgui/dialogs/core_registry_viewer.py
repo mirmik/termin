@@ -27,7 +27,6 @@ def show_core_registry_viewer(ui) -> None:
             TcMaterial,
         )
         from termin.render_framework import (
-            tc_pipeline_registry_count,
             tc_pipeline_registry_get_all_info,
             tc_pass_registry_get_all_instance_info,
             tc_pass_registry_get_all_types,
@@ -36,11 +35,9 @@ def show_core_registry_viewer(ui) -> None:
             component_registry_get_all_info,
             component_registry_type_count,
             soa_registry_get_all_info,
-            soa_registry_type_count,
         )
         from termin.engine import scene as engine_scene
         tc_scene_registry_get_all_info = engine_scene.tc_scene_registry_get_all_info
-        tc_scene_registry_count = engine_scene.tc_scene_registry_count
         tc_scene_get_entities = engine_scene.tc_scene_get_entities
         tc_scene_get_component_types = engine_scene.tc_scene_get_component_types
     except ImportError as e:

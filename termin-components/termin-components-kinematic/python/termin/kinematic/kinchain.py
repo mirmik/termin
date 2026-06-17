@@ -1,9 +1,7 @@
-
-from .kinematic import *
-from tcbase._geom_native import Pose3
+from .kinematic import KinematicTransform3
+from tcbase._geom_native import Pose3, Screw3
 from .transform import Transform3
 import numpy
-import math
 
 class KinematicChain3:
     """A class for kinematic chains in 3D space."""

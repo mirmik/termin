@@ -1388,8 +1388,7 @@ class TestSubspaceDimension(unittest.TestCase):
     def test_linearly_dependent_vectors(self):
         """Линейно зависимые векторы не увеличивают размерность"""
         u = np.array([1., 2., 3.])
-        
-        P1 = vector_projector(u)
+
         P2 = subspace_projector(u, 2*u, 3*u)
         
         self.assertEqual(subspace_dimension(P2), 1)

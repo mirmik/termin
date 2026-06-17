@@ -689,8 +689,6 @@ def _create_entity_from_node(
     scene: Optional["Scene"] = None,
 ) -> Entity:
     """Recursively create Entity hierarchy from GLBNodeData."""
-    from termin.visualization.core.scene import Scene
-
     node = scene_data.nodes[node_index]
     pose = GeneralPose3(lin=node.translation, ang=node.rotation, scale=node.scale)
 
@@ -790,7 +788,6 @@ def instantiate_glb(
         GLBInstantiateResult containing root Entity, SkeletonController, and AnimationPlayer.
     """
     from termin.assets.resources import ResourceManager
-    from termin.visualization.core.scene import Scene
 
     # Access scene_data triggers lazy loading and populates child assets
     scene_data = glb_asset.scene_data

@@ -10,7 +10,6 @@ from termin.scene.python_component import PythonComponent
 from termin.voxels.grid import VoxelGrid
 
 if TYPE_CHECKING:
-    from termin.scene import Scene
     from termin.voxels.visualization import VoxelVisualizer
 
 

@@ -76,8 +76,6 @@ class UnifiedGizmoPass(PythonFramePass):
                 log.error("[UnifiedGizmoPass] ctx.ctx2 is None — UnifiedGizmoPass is tgfx2-only")
                 return
 
-            from tgfx._tgfx_native import PIXEL_RGBA8
-
             manager = self._get_gizmo_manager()
             renderer = ImmediateRenderer.instance()
 

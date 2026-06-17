@@ -13,7 +13,7 @@ process regardless of how many OS windows the host opens.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 _logger = logging.getLogger(__name__)

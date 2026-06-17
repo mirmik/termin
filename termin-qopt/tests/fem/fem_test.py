@@ -330,7 +330,7 @@ class TestMatrixConditioning(unittest.TestCase):
         # Должно выдать предупреждение
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            solution = assembler.solve_stiffness_problem(check_conditioning=True)
+            assembler.solve_stiffness_problem(check_conditioning=True)
             
             # Проверить, что было предупреждение
             self.assertGreater(len(w), 0)
@@ -605,4 +605,3 @@ class TestVariableSolution(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

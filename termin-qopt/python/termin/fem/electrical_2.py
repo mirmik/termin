@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List, Dict
-from .assembler import Contribution, Variable, Constraint   
+from .assembler import Contribution, Variable
 
 
 class ElectricalContribution(Contribution):
@@ -167,8 +167,6 @@ class Ground(ElectricalContribution):
         Добавить вклад в матрицы ускорений (точнее: в систему ограничений)
         """
         H = matrices["electric_holonomic"]
-        rhs = matrices["electric_holonomic_rhs"]
-
         # индексы
         cmap = index_maps["current"]
         vmap = index_maps["voltage"]  # узлы — это группа voltage

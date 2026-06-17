@@ -2,7 +2,7 @@
 
 from tcgui.widgets.scroll_area import ScrollArea
 from tcgui.widgets.units import px
-from tests.conftest import make_widget, assert_rect, VIEWPORT_W, VIEWPORT_H
+from tests.conftest import make_widget, VIEWPORT_W, VIEWPORT_H
 
 
 def _make_scroll_area(sa_w, sa_h, content_w, content_h, scroll_y=0.0):

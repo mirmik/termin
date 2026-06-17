@@ -18,10 +18,10 @@ Doll2D - система из звеньев (links), соединенных ша
 
 import numpy as np
 from typing import List, Dict, Optional
-from termin.fem.assembler import MatrixAssembler, Variable, Contribution, Constraint
+from termin.fem.assembler import Variable, Contribution
 from termin.fem.inertia2d import SpatialInertia2D
 from termin.geombase.pose2 import Pose2
-from termin.geombase.screw import Screw2, cross2d_scalar
+from termin.geombase.screw import Screw2
 
 
 class Doll2D(Contribution):

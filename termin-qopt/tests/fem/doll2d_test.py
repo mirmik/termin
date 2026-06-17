@@ -199,7 +199,7 @@ class TestDoll2DWithAssembler(unittest.TestCase):
         assembler = MatrixAssembler()
         
         # Добавляем Doll2D как contribution
-        doll = Doll2D(base_link=base, assembler=assembler)
+        _doll = Doll2D(base_link=base, assembler=assembler)
         
         # Проверяем, что переменная зарегистрирована
         self.assertGreater(len(assembler.variables), 0)

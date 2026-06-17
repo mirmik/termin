@@ -25,13 +25,13 @@ The current rule set focuses on likely defects and avoids broad style churn:
   mutable defaults, function calls in defaults, late-bound loop variables in
   closures, missing exception chaining, non-explicit `zip()` strictness, and
   related hazards.
+- `F` for the full Pyflakes rule family: undefined names, unresolved exports,
+  unused imports, ambiguous star imports, unused local variables, duplicate
+  arguments, and related correctness checks.
 - Ruff parser diagnostics for syntax and parser-level failures. These are
   emitted before rule selection and are therefore active even though the
   resolved `E9` lint rule is currently only `E902`.
 - `E902` for I/O errors while reading Python sources.
-- `F63` and `F7` for Pyflakes checks that usually indicate broken code.
-- `F821`, `F822`, and `F823` for undefined names, unresolved exports, and
-  local-variable-before-assignment cases.
 
 Forward reference annotations should be backed by `TYPE_CHECKING` imports when
 the referenced type is intentionally type-only. Avoid runtime imports that

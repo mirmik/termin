@@ -132,8 +132,6 @@ class ComboBox(Widget):
         if not self.items or self._ui is None:
             return
 
-        from tcgui.widgets.containers import Panel
-
         self._open = True
         n_visible = min(len(self.items), self.dropdown_max_visible)
         dd_height = n_visible * self.dropdown_item_height
@@ -206,7 +204,6 @@ class _DropdownList(Widget):
         )
 
     def _scrollbar_thumb_rect(self) -> tuple[float, float, float, float]:
-        c = self._combo
         track_x, track_y, track_w, track_h = self._scrollbar_track_rect()
         content_h = self._content_height()
         thumb_h = max(20.0, track_h * (track_h / content_h))

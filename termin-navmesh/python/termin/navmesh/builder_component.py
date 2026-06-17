@@ -25,7 +25,6 @@ from termin.navmesh.settings import NavigationSettingsManager
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid
     from termin.navmesh.types import NavMesh
@@ -740,7 +739,6 @@ void main() {
         Returns:
             True if successful, False on error.
         """
-        from termin.voxels.grid import VoxelGrid
         from termin.voxels.native_voxelizer import voxelize_mesh_native
         from termin.navmesh import PolygonBuilder, NavMeshConfig
         import math

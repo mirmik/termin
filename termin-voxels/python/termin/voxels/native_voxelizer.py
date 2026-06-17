@@ -7,7 +7,7 @@ Falls back to Python implementation if native module not built.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 import numpy as np
 
 from tcbase import log
