@@ -110,6 +110,14 @@ and the old app module is only a compatibility re-export. This removes the app
 as the central registry hub for already-extracted domain plugins; the remaining
 technical debt is the concrete render/UI/GLB/prefab plugin ownership itself.
 
+Status 2026-06-17: the shared runtime-management core moved to
+`termin_assets.resource_manager.AssetRuntimeManager`. It owns the UUID index,
+asset plugin registry, external asset catalog, generic runtime registry
+dispatch, and `register_file`/`reload_file`. The app `ResourceManager` now
+inherits this core and remains the domain/application facade for typed
+registries, builtins, render/material/pipeline/prefab/UI/GLB accessors,
+component/frame-pass registration, and legacy import paths.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
@@ -317,6 +325,8 @@ After plugin dispatch works:
 
 - Decide which typed `ResourceManager` methods remain as stable domain accessors.
 - Move domain-specific accessors into domain packages or adapter mixins.
+- Move builtin resource registration and component/frame-pass catalogs out of
+  the asset runtime facade.
 - Prefer generic APIs for new code:
   - `get_asset(type_id, name)`
   - `get_asset_by_uuid(uuid)`

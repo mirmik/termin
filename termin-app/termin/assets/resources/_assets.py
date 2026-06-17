@@ -36,59 +36,6 @@ if TYPE_CHECKING:
 class AssetsMixin:
     """Mixin for all asset type management methods."""
 
-    def get_runtime_asset(self, type_id: str, name: str):
-        """Get a registered runtime asset by plugin type id and name."""
-        registry = self._runtime_asset_registries.get(type_id)
-        if registry is None:
-            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
-            return None
-        return registry.get_asset(name)
-
-    def get_runtime_asset_by_uuid(self, type_id: str, uuid: str):
-        """Get a registered runtime asset by plugin type id and UUID."""
-        registry = self._runtime_asset_registries.get(type_id)
-        if registry is None:
-            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
-            return None
-        return registry.get_asset_by_uuid(uuid)
-
-    def register_runtime_asset(
-        self,
-        type_id: str,
-        name: str,
-        asset: "Asset",
-        source_path: str | None = None,
-        uuid: str | None = None,
-    ) -> None:
-        """Register a runtime asset through its plugin type registry."""
-        registry = self._runtime_asset_registries.get(type_id)
-        if registry is None:
-            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
-            raise KeyError(type_id)
-        registry.register(name, asset, source_path, uuid)
-
-    def get_or_create_runtime_asset(
-        self,
-        type_id: str,
-        name: str,
-        source_path: str | None = None,
-        uuid: str | None = None,
-        parent: "Asset | None" = None,
-        parent_key: str | None = None,
-    ):
-        """Get or create a runtime asset through its plugin type registry."""
-        registry = self._runtime_asset_registries.get(type_id)
-        if registry is None:
-            log.error(f"[ResourceManager] Runtime asset registry is not registered: {type_id}")
-            raise KeyError(type_id)
-        return registry.get_or_create_asset(
-            name=name,
-            source_path=source_path,
-            uuid=uuid,
-            parent=parent,
-            parent_key=parent_key,
-        )
-
     # --------- Prefabs ---------
     def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:
         """Get PrefabAsset by name."""
@@ -163,10 +110,6 @@ class AssetsMixin:
     def get_glb_asset(self, name: str) -> Optional["GLBAsset"]:
         """Get GLBAsset by name."""
         return self._glb_assets.get(name)
-
-    def get_asset_by_uuid(self, uuid: str) -> Optional["Asset"]:
-        """Get any Asset by UUID."""
-        return self._assets_by_uuid.get(uuid)
 
     # --------- Materials ---------
     def get_material_asset(self, name: str) -> Optional["MaterialAsset"]:
