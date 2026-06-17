@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.assets.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
-    from termin.assets.voxel_grid_asset import VoxelGridAsset
+    from termin.voxels.asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
     from termin.assets.navmesh_asset import NavMeshAsset
     from termin.animation import TcAnimationClip
@@ -390,7 +390,7 @@ class AssetsMixin:
 
     def register_voxel_grid(self, name: str, grid: "VoxelGrid", source_path: str | None = None) -> None:
         """Register voxel grid."""
-        from termin.assets.voxel_grid_asset import VoxelGridAsset
+        from termin.voxels.asset import VoxelGridAsset
         grid.name = name
         existing_asset = self._voxel_grid_registry.get_asset(name)
         if existing_asset is not None:

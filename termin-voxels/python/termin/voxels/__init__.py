@@ -31,6 +31,10 @@ def __getattr__(name: str):
             raise ImportError("VoxelGridHandle requires termin.voxels._voxels_native") from exc
         return VoxelGridHandle
 
+    if name == "VoxelGridAsset":
+        from termin.voxels.asset import VoxelGridAsset
+        return VoxelGridAsset
+
     if name == "VoxelGridComponent":
         from termin.voxels.component import VoxelGridComponent
         return VoxelGridComponent
@@ -69,6 +73,7 @@ __all__ = [
     "VoxelChunk",
     "VoxelGrid",
     "VoxelGridHandle",
+    "VoxelGridAsset",
     "VoxelGridComponent",
     "VoxelVisualizer",
     "MeshVoxelizer",
