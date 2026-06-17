@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from ._base import ResourceManagerBase
-from ._registration import RegistrationMixin
 from ._assets import AssetsMixin
 from ._components import ComponentsMixin
 from ._pipelines import PipelinesMixin
@@ -14,7 +13,6 @@ from ._serialization import SerializationMixin
 
 class ResourceManager(
     ResourceManagerBase,
-    RegistrationMixin,
     AssetsMixin,
     ComponentsMixin,
     PipelinesMixin,

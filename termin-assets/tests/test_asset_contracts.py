@@ -1,12 +1,18 @@
+from pathlib import Path
+
 from termin_assets import (
     Asset,
     AssetRegistry,
+    AssetRuntimeManager,
     AssetTypeRegistry,
     DataAsset,
     Identifiable,
     PreLoadResult,
     ResourceHandle,
+    build_import_plugin_extension_map,
     get_uuid_from_spec,
+    register_default_import_asset_plugins,
+    register_default_runtime_asset_plugins,
     register_import_plugins_from_entry_points,
     read_spec_file,
     write_spec_file,
@@ -116,6 +122,49 @@ def test_registry_keeps_runtime_and_import_plugins_separate() -> None:
     assert registry.get_for_extension(".runtime-only") == [import_plugin]
 
 
+def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=Asset,
+        uuid_registry=manager._assets_by_uuid,
+        data_from_asset=lambda asset: asset,
+    )
+    manager.register_runtime_asset_registry("dummy", registry)
+
+    class RuntimePlugin:
+        type_id = "dummy"
+
+        def register(self, context, result: PreLoadResult) -> None:
+            asset = Asset(name=context.name, uuid=result.uuid)
+            context.resource_manager.register_runtime_asset(
+                self.type_id,
+                context.name,
+                asset,
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+
+        def reload(self, context, result: PreLoadResult) -> None:
+            asset = context.resource_manager.get_runtime_asset(self.type_id, context.name)
+            if asset is not None:
+                asset.source_path = result.path
+
+    manager.asset_type_plugins.register_runtime(RuntimePlugin())
+
+    result = PreLoadResult(resource_type="dummy", path="/tmp/probe.dummy", uuid="dummy-uuid")
+    manager.register_file(result)
+
+    asset = manager.get_runtime_asset("dummy", "probe")
+    assert asset is not None
+    assert manager.get_runtime_asset_by_uuid("dummy", "dummy-uuid") is asset
+    assert manager.get_asset_by_uuid("dummy-uuid") is asset
+
+    reloaded = PreLoadResult(resource_type="dummy", path="/var/tmp/probe.dummy", uuid="dummy-uuid")
+    manager.reload_file(reloaded)
+
+    assert asset.source_path == Path("/var/tmp/probe.dummy")
+
+
 def test_spec_file_helpers_prefer_meta_and_migrate_legacy_spec(tmp_path) -> None:
     asset_path = tmp_path / "probe.obj"
     asset_path.write_text("", encoding="utf-8")
@@ -151,3 +200,24 @@ def test_import_plugin_entry_point_discovery(monkeypatch) -> None:
 
     assert registry.get_import("dummy") is not None
     assert registry.get_for_extension(".dummy")[0].type_id == "dummy"
+
+
+def test_default_plugin_helpers_load_entry_points(monkeypatch) -> None:
+    registry = AssetTypeRegistry()
+
+    def fake_entry_points(group: str):
+        if group in {"termin.asset_import_plugins", "termin.asset_runtime_plugins"}:
+            return [_EntryPoint()]
+        return []
+
+    monkeypatch.setattr(plugin_discovery, "entry_points", fake_entry_points)
+
+    register_default_runtime_asset_plugins(registry)
+    assert registry.get_runtime("dummy") is not None
+    assert registry.get_import("dummy") is None
+
+    register_default_import_asset_plugins(registry)
+
+    assert registry.get_import("dummy") is not None
+    extension_map = build_import_plugin_extension_map(registry)
+    assert extension_map[".dummy"].type_id == "dummy"

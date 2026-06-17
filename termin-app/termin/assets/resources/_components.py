@@ -1,4 +1,4 @@
-"""Components and FramePasses mixin for ResourceManager."""
+"""Component and frame pass facade mixin for ResourceManager."""
 
 from __future__ import annotations
 
@@ -11,17 +11,17 @@ if TYPE_CHECKING:
 
 
 class ComponentsMixin:
-    """Mixin for component and frame pass management."""
+    """Compatibility facade for component and frame pass registries."""
 
     # --------- Компоненты ---------
     def register_component(self, name: str, cls: type["Component"]):
-        self.components[name] = cls
+        self.component_registry.register(name, cls)
 
     def get_component(self, name: str) -> Optional[type["Component"]]:
-        return self.components.get(name)
+        return self.component_registry.get(name)
 
     def list_component_names(self) -> list[str]:
-        return sorted(self.components.keys())
+        return self.component_registry.list_names()
 
     def register_builtin_components(self) -> List[str]:
         """
@@ -33,27 +33,7 @@ class ComponentsMixin:
         Returns:
             Список имён успешно зарегистрированных компонентов.
         """
-        import importlib
-        from tcbase import log
-
-        registered = []
-
-        for module_name, class_name in BUILTIN_COMPONENTS:
-            if class_name in self.components:
-                # Уже зарегистрирован (например, через __init_subclass__)
-                registered.append(class_name)
-                continue
-
-            try:
-                module = importlib.import_module(module_name)
-                cls = getattr(module, class_name, None)
-                if cls is not None:
-                    self.components[class_name] = cls
-                    registered.append(class_name)
-            except Exception as e:
-                log.warning(f"Failed to register component {class_name} from {module_name}: {e}")
-
-        return registered
+        return self.component_registry.register_builtins(BUILTIN_COMPONENTS)
 
     def scan_components(self, paths: list[str]) -> list[str]:
         """
@@ -65,21 +45,20 @@ class ComponentsMixin:
         Returns:
             Список имён загруженных компонентов.
         """
-        from termin.visualization.core.plugin_loader import scan_paths
-        return scan_paths(paths, self.components, "_dynamic_components_")
+        return self.component_registry.scan(paths)
 
     # --------- FramePass'ы ---------
     def register_frame_pass(self, name: str, cls: type):
         """Регистрирует класс FramePass по имени."""
-        self.frame_passes[name] = cls
+        self.frame_pass_registry.register(name, cls)
 
     def get_frame_pass(self, name: str) -> Optional[type]:
         """Получить класс FramePass по имени."""
-        return self.frame_passes.get(name)
+        return self.frame_pass_registry.get(name)
 
     def list_frame_pass_names(self) -> list[str]:
         """Список имён всех зарегистрированных FramePass'ов."""
-        return sorted(self.frame_passes.keys())
+        return self.frame_pass_registry.list_names()
 
     def register_builtin_frame_passes(self) -> List[str]:
         """
@@ -88,26 +67,7 @@ class ComponentsMixin:
         Returns:
             Список имён успешно зарегистрированных FramePass'ов.
         """
-        import importlib
-        from tcbase import log
-
-        registered = []
-
-        for module_name, class_name in BUILTIN_FRAME_PASSES:
-            if class_name in self.frame_passes:
-                registered.append(class_name)
-                continue
-
-            try:
-                module = importlib.import_module(module_name)
-                cls = getattr(module, class_name, None)
-                if cls is not None:
-                    self.frame_passes[class_name] = cls
-                    registered.append(class_name)
-            except Exception as e:
-                log.warning(f"Failed to register frame pass {class_name} from {module_name}: {e}")
-
-        return registered
+        return self.frame_pass_registry.register_builtins(BUILTIN_FRAME_PASSES)
 
     def scan_frame_passes(self, paths: list[str]) -> list[str]:
         """
@@ -119,6 +79,4 @@ class ComponentsMixin:
         Returns:
             Список имён загруженных FramePass'ов.
         """
-        from termin.visualization.core.plugin_loader import scan_for_subclasses
-        from termin.render_framework.python_pass import PythonFramePass
-        return scan_for_subclasses(paths, PythonFramePass, self.frame_passes, "_dynamic_frame_passes_")
+        return self.frame_pass_registry.scan(paths)

@@ -16,6 +16,7 @@ from termin.scene._scene_native import (
     upgrade_unknown_components,
 )
 from termin.scene.python_component import PythonComponent
+from termin.scene.component_registry import ComponentClassRegistry
 
 __all__ = [
     "Entity",
@@ -29,4 +30,5 @@ __all__ = [
     "degrade_components_to_unknown",
     "upgrade_unknown_components",
     "PythonComponent",
+    "ComponentClassRegistry",
 ]

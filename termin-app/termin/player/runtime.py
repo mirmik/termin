@@ -517,15 +517,15 @@ class PlayerRuntime:
         log.info(f"[PlayerRuntime] Python modules: {py_loaded} loaded, {py_failed} failed")
 
     def _create_build_import_registry(self) -> "AssetTypeRegistry":
-        from termin.assets.default_plugins import register_default_import_asset_plugins
         from termin_assets import AssetTypeRegistry
+        from termin_assets.default_plugins import register_default_import_asset_plugins
 
         registry = AssetTypeRegistry()
         register_default_import_asset_plugins(registry)
         return registry
 
     def _create_asset_import_plugin_map(self):
-        from termin.assets.default_plugins import build_import_plugin_extension_map
+        from termin_assets.default_plugins import build_import_plugin_extension_map
 
         registry = self._create_build_import_registry()
         return build_import_plugin_extension_map(registry)

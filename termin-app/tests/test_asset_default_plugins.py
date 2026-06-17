@@ -1,4 +1,4 @@
-from termin.assets.default_plugins import (
+from termin_assets.default_plugins import (
     build_import_plugin_extension_map,
     register_default_import_asset_plugins,
     register_default_runtime_asset_plugins,
