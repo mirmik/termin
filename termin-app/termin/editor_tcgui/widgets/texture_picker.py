@@ -200,7 +200,7 @@ class TexturePickerWidget(HStack):
             log.warn(
                 f"[TexturePickerWidget] combo populated: "
                 f"item_count={self._combo.item_count}, "
-                f"items={list(zip(self._item_tags, self._item_values, self._combo.items))}"
+                f"items={list(zip(self._item_tags, self._item_values, self._combo.items, strict=True))}"
             )
         finally:
             self._combo.on_changed = old_cb

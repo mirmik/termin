@@ -157,7 +157,7 @@ def greedy_absorption(
     total_absorbed = 0
     total_pruned = 0
 
-    for rank, region_idx in enumerate(sorted_indices):
+    for _rank, region_idx in enumerate(sorted_indices):
         region_normal = region_normals[region_idx]
         region_set = region_sets[region_idx]
 

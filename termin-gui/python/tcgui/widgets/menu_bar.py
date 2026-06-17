@@ -98,7 +98,7 @@ class MenuBar(Widget):
                            self.background_color)
 
         for i, ((label, _), (rx, ry, rw, rh)) in enumerate(
-                zip(self._entries, self._item_rects)):
+                zip(self._entries, self._item_rects, strict=True)):
             # Item background & text color
             if i == self._active_index and self._menu_open:
                 renderer.draw_rect(rx, ry, rw, rh, self.active_color)

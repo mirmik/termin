@@ -242,7 +242,7 @@ def _source_copy_entity_pairs(source_data: dict, copy_entity: Entity) -> list[tu
                 len(source_children),
                 len(copy_children),
             )
-        for child_data, child_transform in zip(source_children, copy_children):
+        for child_data, child_transform in zip(source_children, copy_children, strict=False):
             child_entity = child_transform.entity
             if child_entity is not None:
                 walk(child_data, child_entity)
@@ -331,7 +331,7 @@ def _remap_duplicate_internal_entity_refs(scene, source_data: dict, copy_entity:
                 len(component_refs),
             )
 
-        for component_snapshot, component_ref in zip(component_snapshots, component_refs):
+        for component_snapshot, component_ref in zip(component_snapshots, component_refs, strict=False):
             type_name = component_snapshot.get("type", "")
             if component_ref.type_name != type_name:
                 _logger.warning(

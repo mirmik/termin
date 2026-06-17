@@ -47,16 +47,19 @@ class KinematicChain3:
         if len(delta_coords) != len(self._kinematics):
             raise ValueError("Length of delta_coords must match number of kinematic units in the chain.")
 
-        for kinunit, delta in zip(self._kinematics, delta_coords):
+        for kinunit, delta in zip(self._kinematics, delta_coords, strict=True):
             current_coord = kinunit.get_coord()
             kinunit.set_coord(current_coord + delta)
 
-    def sensitivity_twists(self, topbody:Transform3=None, local_pose:Pose3=Pose3.identity(), basis:Pose3=None) -> [Screw3]:
+    def sensitivity_twists(self, topbody:Transform3=None, local_pose:Pose3=None, basis:Pose3=None) -> [Screw3]:
         """Return the sensitivity twists for all kinematic transforms in the chain.
         
         Если basis не задан, то используется локальная система отсчета topbody*local_pose.
         Базис должен совпадать с системой, в которой формируется управление.
         """
+
+        if local_pose is None:
+            local_pose = Pose3.identity()
 
         if topbody == None:
             topbody = self.distal
@@ -114,8 +117,10 @@ class KinematicChain3:
 
         return senses
 
-    def sensitivity_jacobian(self, body=None, local=Pose3.identity(), basis=None):
+    def sensitivity_jacobian(self, body=None, local=None, basis=None):
         """Вернуть матрицу Якоби выхода по координатам в виде numpy массива 6xN"""
+        if local is None:
+            local = Pose3.identity()
 
         sens = self.sensitivity_twists(body, local, basis)
         jacobian = numpy.zeros((6, len(sens)))
@@ -129,8 +134,10 @@ class KinematicChain3:
 
         return jacobian
 
-    def translation_sensitivity_jacobian(self, body=None, local=Pose3.identity(), basis=None):
+    def translation_sensitivity_jacobian(self, body=None, local=None, basis=None):
         """Вернуть матрицу Якоби трансляции выхода по координатам в виде numpy массива 3xN"""
+        if local is None:
+            local = Pose3.identity()
 
         sens = self.sensitivity_twists(body, local, basis)
         jacobian = numpy.zeros((3, len(sens)))

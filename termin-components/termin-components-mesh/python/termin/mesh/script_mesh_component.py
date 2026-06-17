@@ -166,7 +166,7 @@ class ScriptMeshComponent(PythonComponent):
                 return local_env["result"]
             if "mesh" in local_env:
                 return local_env["mesh"]
-            raise ValueError("script must be an expression or assign result/mesh")
+            raise ValueError("script must be an expression or assign result/mesh") from None
 
     def _to_tc_mesh(self, value) -> TcMesh:
         value_type = type(value)

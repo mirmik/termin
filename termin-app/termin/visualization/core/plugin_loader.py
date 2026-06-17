@@ -138,7 +138,7 @@ def _scan_module(
 
         # If it's a package, scan submodules
         if hasattr(module, "__path__"):
-            for importer, name, is_pkg in pkgutil.walk_packages(
+            for _importer, name, _is_pkg in pkgutil.walk_packages(
                 module.__path__, prefix=module_name + "."
             ):
                 try:
@@ -312,7 +312,7 @@ def _scan_module_for_subclasses(
 
         # If it's a package, scan submodules
         if hasattr(module, "__path__"):
-            for importer, name, is_pkg in pkgutil.walk_packages(
+            for _importer, name, _is_pkg in pkgutil.walk_packages(
                 module.__path__, prefix=module_name + "."
             ):
                 try:

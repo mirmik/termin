@@ -315,7 +315,7 @@ class InspectFieldPanel(VStack):
             return
         self._updating_from_model = True
         try:
-            for key, field in self._fields.items():
+            for key, _field in self._fields.items():
                 widget = self._widgets.get(key)
                 if widget is not None:
                     widget.load_from_target()

@@ -603,7 +603,7 @@ def delaunay_flip(
 
     flip_count = 0
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         flipped = False
         edge_map = build_edge_map(triangles)
 
@@ -714,7 +714,7 @@ def valence_flip(
     flip_count = 0
     initial_max_valence = max(compute_valence().values()) if triangles else 0
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         flipped = False
         valence = compute_valence()
         edge_map = build_edge_map(triangles)
@@ -848,7 +848,7 @@ def angle_flip(
 
     flip_count = 0
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         flipped = False
         edge_map = build_edge_map(triangles)
 
@@ -1000,7 +1000,7 @@ def cvt_smoothing(
     # Коэффициент сдвига (консервативный)
     alpha = 0.3
 
-    for iteration in range(iterations):
+    for _iteration in range(iterations):
         new_vertices = vertices.copy()
 
         for v_idx in interior_indices:
@@ -1124,7 +1124,7 @@ def edge_collapse(
     min_len_sq = min_edge_length * min_edge_length
     min_contour_len_sq = min_contour_edge_length * min_contour_edge_length
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         # Находим самое короткое СХЛОПЫВАЕМОЕ ребро
         # (учитываем разные пороги для внутренних и контурных рёбер)
         shortest_edge = None
@@ -1328,7 +1328,7 @@ def refine_triangulation(
 
         return verts, new_triangles
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         made_split = False
 
         # Фаза 1: Разбиение по длине рёбер

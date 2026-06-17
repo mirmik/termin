@@ -217,7 +217,7 @@ class Dialog(Widget):
             total_btn_w += self.button_spacing * (len(self._button_widgets) - 1)
 
         btn_x = x + width - self.padding - total_btn_w
-        for btn, (bw, bh) in zip(self._button_widgets, btn_sizes):
+        for btn, (bw, bh) in zip(self._button_widgets, btn_sizes, strict=True):
             by = btn_y + (self.button_bar_height - bh) / 2
             btn.layout(btn_x, by, bw, bh, viewport_w, viewport_h)
             btn_x += bw + self.button_spacing

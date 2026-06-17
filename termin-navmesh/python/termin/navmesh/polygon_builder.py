@@ -386,7 +386,7 @@ class PolygonBuilder:
         """
         result: list[tuple[np.ndarray, float, int]] = []
 
-        for region_idx, df in enumerate(self._last_distance_fields):
+        for _region_idx, df in enumerate(self._last_distance_fields):
             if not df:
                 continue
 
@@ -1013,7 +1013,7 @@ class PolygonBuilder:
                     outer_2d = douglas_peucker_2d(outer_2d, simplify_epsilon)
 
                 simplified_holes = []
-                for hole_voxels_item, hole_2d in zip(holes_voxels, holes_2d):
+                for hole_voxels_item, hole_2d in zip(holes_voxels, holes_2d, strict=True):
                     if len(hole_2d) < 3:
                         continue
                     hole_fixed_indices: set[int] = set()
@@ -1180,4 +1180,3 @@ class PolygonBuilder:
 
         else:
             return np.array([]).reshape(0, 3), []
-

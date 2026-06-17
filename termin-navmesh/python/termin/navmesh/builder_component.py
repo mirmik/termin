@@ -974,7 +974,7 @@ void main() {
         colors = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
 
         voxel_idx = 0
-        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
+        for region_idx, (region_voxels, _region_normal) in enumerate(self._debug_regions):
             region_color = region_colors[region_idx]
 
             for vx, vy, vz in region_voxels:
@@ -1026,7 +1026,7 @@ void main() {
         colors = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
 
         voxel_idx = 0
-        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_watershed_regions):
+        for region_idx, (region_voxels, _region_normal) in enumerate(self._debug_watershed_regions):
             region_color = region_colors[region_idx]
 
             for vx, vy, vz in region_voxels:

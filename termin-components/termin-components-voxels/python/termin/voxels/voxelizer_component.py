@@ -1050,7 +1050,7 @@ class VoxelizerComponent(DrawableComponent):
         colors = np.zeros((total_voxels * verts_per_cube, 3), dtype=np.float32)
 
         voxel_idx = 0
-        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
+        for region_idx, (region_voxels, _region_normal) in enumerate(self._debug_regions):
             region_color = region_colors[region_idx]
 
             for vx, vy, vz in region_voxels:
@@ -1103,7 +1103,7 @@ class VoxelizerComponent(DrawableComponent):
         outer_voxels: list[tuple[tuple[int, int, int], tuple[float, float, float]]] = []
         inner_voxels: list[tuple[tuple[int, int, int], tuple[float, float, float]]] = []
 
-        for region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
+        for _region_idx, (region_voxels, region_normal) in enumerate(self._debug_regions):
             # Генерируем цвет для региона
             h = random.random()
             s = random.random() * 0.3 + 0.7

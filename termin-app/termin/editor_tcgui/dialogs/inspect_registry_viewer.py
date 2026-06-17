@@ -99,7 +99,7 @@ def show_inspect_registry_viewer(ui) -> None:
         if text:
             rows = []
             data = []
-            for r, d in zip(all_rows, all_data):
+            for r, d in zip(all_rows, all_data, strict=True):
                 if text in d.lower():
                     rows.append(r)
                     data.append(d)

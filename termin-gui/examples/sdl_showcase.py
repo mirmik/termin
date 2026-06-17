@@ -548,19 +548,19 @@ def make_dialogs_page(ui_ref):
     mb_row.alignment = "center"
 
     for label, factory in [
-        ("Info", lambda: MessageBox.info(ui_ref[0], "Info", "Operation completed.", on_result=lambda b: show_result("Info", b))),
-        ("Warning", lambda: MessageBox.warning(ui_ref[0], "Warning", "Disk space low.", on_result=lambda b: show_result("Warning", b))),
-        ("Error", lambda: MessageBox.error(ui_ref[0], "Error", "File not found.", on_result=lambda b: show_result("Error", b))),
-        ("Question", lambda: MessageBox.question(ui_ref[0], "Confirm", "Delete items?", on_result=lambda b: show_result("Question", b))),
+        ("Info", lambda: MessageBox.info(ui_ref[0], "Info", "Operation completed.", on_result=lambda result: show_result("Info", result))),
+        ("Warning", lambda: MessageBox.warning(ui_ref[0], "Warning", "Disk space low.", on_result=lambda result: show_result("Warning", result))),
+        ("Error", lambda: MessageBox.error(ui_ref[0], "Error", "File not found.", on_result=lambda result: show_result("Error", result))),
+        ("Question", lambda: MessageBox.question(ui_ref[0], "Confirm", "Delete items?", on_result=lambda result: show_result("Question", result))),
         ("Yes/No/Cancel", lambda: MessageBox.question(
             ui_ref[0], "Save", "Save changes?", buttons=Buttons.YES_NO_CANCEL,
-            on_result=lambda b: show_result("YN", b))),
+            on_result=lambda result: show_result("YN", result))),
     ]:
-        b = Button()
-        b.text = label
-        b.padding = 6
-        b.on_click = factory
-        mb_row.add_child(b)
+        button = Button()
+        button.text = label
+        button.padding = 6
+        button.on_click = factory
+        mb_row.add_child(button)
     page.add_child(mb_row)
 
     page.add_child(_section_label("InputDialog"))

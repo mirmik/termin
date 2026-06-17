@@ -5,7 +5,9 @@ import numpy
 
 
 class Screw2:
-    def __init__(self, m=0, v=numpy.array([0, 0])):
+    def __init__(self, m=0, v=None):
+        if v is None:
+            v = numpy.array([0, 0])
         self._m = m
         self._v = numpy.array(v)
 

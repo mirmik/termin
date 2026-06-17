@@ -84,7 +84,7 @@ def test_robot_sensitivity_matches_chain():
     assert set(robot_twists.keys()) == set(chain_units)
 
     # 1 DOF на сустав → массивы сравниваем по одному твисту
-    for joint, screw in zip(chain_units, chain_twists):
+    for joint, screw in zip(chain_units, chain_twists, strict=True):
         joint_twist = robot_twists[joint][0]
         np.testing.assert_allclose(joint_twist.ang, screw.ang, atol=1e-9)
         np.testing.assert_allclose(joint_twist.lin, screw.lin, atol=1e-9)

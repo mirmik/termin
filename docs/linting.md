@@ -18,13 +18,10 @@ Prefer adding rules in small batches with a clean baseline for each batch.
 
 Recommended near-term Ruff additions:
 
-- Done: a narrow low-noise Bugbear baseline is enabled (`B006`, `B009`, `B010`,
-  `B011`, `B012`, `B018`).
+- Done: the full Bugbear `B` baseline is enabled.
 - Full Pyflakes `F` after auditing import-contract noise in `__init__.py`
   files. This would add unused imports, star-import ambiguity, unused
   variables, duplicate arguments, and related checks.
-- More targeted Bugbear rules for likely runtime bugs, especially function calls
-  in defaults, missing exception chaining, and accidental non-strict `zip`.
 - `F541` and similar low-noise correctness checks can be enabled early if they
   do not create migration noise.
 

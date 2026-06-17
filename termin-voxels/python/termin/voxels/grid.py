@@ -275,7 +275,7 @@ class VoxelGrid:
         # Собираем координаты surface вокселей
         surface_coords: list[tuple[int, int, int]] = []
 
-        for x, y, z, vtype in self.iter_non_empty():
+        for x, y, z, _vtype in self.iter_non_empty():
             # Проверяем есть ли пустой сосед
             for dx, dy, dz in neighbors:
                 if self.get(x + dx, y + dy, z + dz) == 0:
@@ -331,7 +331,7 @@ class VoxelGrid:
 
         neighbors = [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)]
 
-        for x, y, z, vtype in self.iter_non_empty():
+        for x, y, z, _vtype in self.iter_non_empty():
             # Проверяем есть ли пустой сосед
             has_empty_neighbor = False
             for dx, dy, dz in neighbors:

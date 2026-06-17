@@ -300,7 +300,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         t_total = 0.1
         n_steps = int(t_total / dt)
 
-        for step in range(n_steps):
+        for _step in range(n_steps):
             self._step_simulation(assembler)
 
         # Финальная энергия
@@ -336,7 +336,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         t_total = 0.2
         n_steps = int(t_total / dt)
 
-        for step in range(n_steps):
+        for _step in range(n_steps):
             self._step_simulation(assembler)
 
         # Финальная энергия
@@ -447,7 +447,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         t_total = 0.5
         n_steps = int(t_total / dt)
 
-        for step in range(n_steps):
+        for _step in range(n_steps):
             self._step_simulation(assembler)
 
         # После половины периода маятник должен быть примерно в противоположной точке
@@ -501,7 +501,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         t_total = 0.5
         n_steps = int(t_total / dt)
 
-        for step in range(n_steps):
+        for _step in range(n_steps):
             self._step_simulation(assembler)
 
         E_final = compute_energy()
@@ -590,7 +590,7 @@ class TestRevoluteJoint(unittest.TestCase):
         pos_swapped = run_simulation(swap_bodies=True)
 
         # Траектории должны быть одинаковыми
-        for i, (p1, p2) in enumerate(zip(pos_normal, pos_swapped)):
+        for i, (p1, p2) in enumerate(zip(pos_normal, pos_swapped, strict=True)):
             diff = np.linalg.norm(p1 - p2)
             self.assertLess(diff, 0.1, f"Trajectories diverge at step {i*50}")
 
@@ -660,7 +660,7 @@ class TestRevoluteJoint(unittest.TestCase):
         # Симуляция на 0.2 секунды
         n_steps = int(0.2 / dt)
 
-        for step in range(n_steps):
+        for _step in range(n_steps):
             self._step_simulation(assembler)
 
         E_final = compute_energy()
@@ -728,7 +728,7 @@ class TestRevoluteJoint(unittest.TestCase):
 
         # Симуляция на 0.2 секунды
         n_steps = int(0.2 / dt)
-        for step in range(n_steps):
+        for _step in range(n_steps):
             matrices = assembler.assemble()
             A_ext, b_ext, _ = assembler.assemble_extended_system(matrices)
             x_ext = np.linalg.solve(A_ext, b_ext)
@@ -815,7 +815,7 @@ class TestRevoluteJoint(unittest.TestCase):
         # Симуляция на 0.2 секунды
         n_steps = int(0.2 / dt)
 
-        for step in range(n_steps):
+        for _step in range(n_steps):
             self._step_simulation(assembler)
 
         E_final = compute_energy()
@@ -931,7 +931,7 @@ class TestRevoluteJoint(unittest.TestCase):
         # Симуляция на 0.2 секунды
         n_steps = int(0.2 / dt)
 
-        for step in range(n_steps):
+        for _step in range(n_steps):
             self._step_simulation(assembler)
 
         E_final = compute_energy()

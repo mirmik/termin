@@ -426,7 +426,7 @@ class MeshVoxelizerTest(unittest.TestCase):
         # Проверяем что воксели есть на поверхности куба
         # Центр грани Z=0.5 должен быть заполнен
         has_top_face = False
-        for vx, vy, vz, vtype in grid.iter_non_empty():
+        for vx, vy, vz, _vtype in grid.iter_non_empty():
             world = grid.voxel_to_world(vx, vy, vz)
             if abs(world[2] - 0.5) < 0.2:  # Близко к верхней грани
                 has_top_face = True
@@ -459,7 +459,7 @@ class MeshVoxelizerTest(unittest.TestCase):
 
         # Проверяем что воксели около (10, 10, 10)
         has_voxel_near_target = False
-        for vx, vy, vz, vtype in grid.iter_non_empty():
+        for vx, vy, vz, _vtype in grid.iter_non_empty():
             world = grid.voxel_to_world(vx, vy, vz)
             if world[0] > 9 and world[1] > 9 and world[2] > 9:
                 has_voxel_near_target = True
