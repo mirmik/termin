@@ -26,6 +26,7 @@ class ResourceHandle(Generic[T, AssetT]):
     """
 
     _asset_getter: str = ""
+    _asset_by_uuid_getter: str = ""
 
     def __init__(self):
         self._direct: T | None = None
@@ -55,6 +56,24 @@ class ResourceHandle(Generic[T, AssetT]):
         handle = cls()
         handle._init_asset(asset)
         return handle
+
+    @classmethod
+    def from_uuid(cls, uuid: str) -> "ResourceHandle[T, AssetT]":
+        """Create handle by UUID using the configured resource manager factory."""
+        if not cls._asset_by_uuid_getter:
+            return cls()
+        if _resource_manager_factory is None:
+            return cls()
+
+        resource_manager = _resource_manager_factory()
+        getter = getattr(resource_manager, cls._asset_by_uuid_getter, None)
+        if getter is None:
+            return cls()
+
+        asset = getter(uuid)
+        if asset is not None:
+            return cls.from_asset(asset)
+        return cls()
 
     @property
     def is_direct(self) -> bool:

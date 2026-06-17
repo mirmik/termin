@@ -4,7 +4,7 @@ import numpy as np
 
 from termin.assets.resources import ResourceManager
 from termin.editor_core.default_preloaders import create_default_preloaders
-from termin.assets.plugin_preloader import PluginPreLoader
+from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets import PreLoadResult
 
 

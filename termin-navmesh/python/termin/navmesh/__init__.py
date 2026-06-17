@@ -104,6 +104,18 @@ def _load_native_exports() -> dict[str, object]:
 
 
 def __getattr__(name: str):
+    if name == "NavMeshAsset":
+        from termin.navmesh.asset import NavMeshAsset
+
+        globals()["NavMeshAsset"] = NavMeshAsset
+        return NavMeshAsset
+
+    if name == "NavMeshHandle":
+        from termin.navmesh.handle import NavMeshHandle
+
+        globals()["NavMeshHandle"] = NavMeshHandle
+        return NavMeshHandle
+
     if name == "PolygonBuilder":
         from termin.navmesh.polygon_builder import PolygonBuilder
 
@@ -121,7 +133,9 @@ def __getattr__(name: str):
 
 __all__ = [
     "NavMesh",
+    "NavMeshAsset",
     "NavMeshConfig",
+    "NavMeshHandle",
     "NavPolygon",
     "PolygonBuilder",
     "Portal",

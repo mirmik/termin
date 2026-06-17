@@ -15,14 +15,14 @@ def register_default_runtime_asset_plugins(registry: "AssetTypeRegistry") -> Non
     from termin.assets.glsl_plugin import register_glsl_runtime_plugin
     from termin.assets.material_plugin import register_material_runtime_plugin
     from termin.assets.mesh_plugin import register_mesh_runtime_plugin
-    from termin.assets.navmesh_plugin import register_navmesh_runtime_plugin
     from termin.assets.pipeline_plugin import register_pipeline_runtime_plugin
     from termin.assets.prefab_plugin import register_prefab_runtime_plugin
     from termin.assets.scene_pipeline_plugin import register_scene_pipeline_runtime_plugin
     from termin.assets.shader_plugin import register_shader_runtime_plugin
     from termin.assets.texture_plugin import register_texture_runtime_plugin
     from termin.assets.ui_plugin import register_ui_runtime_plugin
-    from termin.assets.voxel_grid_plugin import register_voxel_grid_runtime_plugin
+    from termin.navmesh.asset_plugin import register_navmesh_runtime_plugin
+    from termin.voxels.asset_plugin import register_voxel_grid_runtime_plugin
 
     register_audio_clip_runtime_plugin(registry)
     register_glb_runtime_plugin(registry)
@@ -53,14 +53,14 @@ def register_default_import_asset_plugins(registry: "AssetTypeRegistry") -> None
     from termin.assets.glsl_plugin import register_glsl_import_plugin
     from termin.assets.material_plugin import register_material_import_plugin
     from termin.assets.mesh_plugin import register_mesh_import_plugin
-    from termin.assets.navmesh_plugin import register_navmesh_import_plugin
     from termin.assets.pipeline_plugin import register_pipeline_import_plugin
     from termin.assets.prefab_plugin import register_prefab_import_plugin
     from termin.assets.scene_pipeline_plugin import register_scene_pipeline_import_plugin
     from termin.assets.shader_plugin import register_shader_import_plugin
     from termin.assets.texture_plugin import register_texture_import_plugin
     from termin.assets.ui_plugin import register_ui_import_plugin
-    from termin.assets.voxel_grid_plugin import register_voxel_grid_import_plugin
+    from termin.navmesh.asset_plugin import register_navmesh_import_plugin
+    from termin.voxels.asset_plugin import register_voxel_grid_import_plugin
 
     register_audio_clip_import_plugin(registry)
     register_glb_import_plugin(registry)

@@ -53,6 +53,34 @@ Status 2026-05-27: `Identifiable`, `Asset`, `DataAsset`, `AssetRegistry`, and
 `termin.assets.resource_handle`, and `termin.core.identifiable` modules are now
 compatibility re-exports so existing imports keep working during the migration.
 
+Status 2026-06-17: `FilePreLoader`, `ProjectFileWatcher`, and `PluginPreLoader`
+were moved into `termin-assets`. The generic watcher now accepts an injected
+ignored-root policy instead of importing project settings. `termin-app` keeps
+the editor/project behavior through compatibility wrappers in
+`termin.assets.project_file_watcher` and `termin.assets.plugin_preloader`.
+
+Status 2026-06-17: `VoxelGridAsset` and voxel-grid asset plugins were moved to
+`termin-voxels` as `termin.voxels.asset` and `termin.voxels.asset_plugin`.
+`termin-app` now keeps `termin.assets.voxel_grid_asset` and
+`termin.assets.voxel_grid_plugin` only as compatibility re-exports. Default
+registration calls the domain registration helpers from `termin-voxels`, and
+the package also exposes entry points for external plugin discovery.
+
+Status 2026-06-17: `NavMeshAsset` and navmesh asset plugins were moved to
+`termin-navmesh` as `termin.navmesh.asset` and
+`termin.navmesh.asset_plugin`. `termin-app` now keeps
+`termin.assets.navmesh_asset` and `termin.assets.navmesh_plugin` only as
+compatibility re-exports. Default registration calls the domain registration
+helpers from `termin-navmesh`, and the package exposes entry points for
+external plugin discovery.
+
+Status 2026-06-17: `NavMeshHandle` was moved to `termin-navmesh` as
+`termin.navmesh.handle.NavMeshHandle`. The app path
+`termin.assets.navmesh_handle` is now a compatibility re-export, and
+`termin.assets.resources` explicitly configures the shared
+`termin_assets.ResourceHandle` resource-manager factory instead of relying on
+the old `termin.assets.resource_handle` import side effect.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:

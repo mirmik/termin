@@ -7,8 +7,8 @@ from collections.abc import Callable
 from tcbase import log
 
 from termin.assets.resources import ResourceManager
-from termin.assets.plugin_preloader import PluginPreLoader
-from termin.assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
+from termin_assets.plugin_preloader import PluginPreLoader
+from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 from termin.editor_core.file_processors import ComponentFileProcessor
 
 

@@ -17,6 +17,9 @@ Core infrastructure:
 - `AssetContext`
 - `AssetTypeRegistry`
 - `AssetCatalog`
+- `FilePreLoader`
+- `ProjectFileWatcher`
+- `PluginPreLoader`
 
 The plugin API separates two roles:
 
@@ -26,3 +29,7 @@ The plugin API separates two roles:
 A concrete plugin may temporarily implement both roles while an asset type is
 being migrated, but the contracts keep the runtime surface independent from
 editor-only import tooling.
+
+`ProjectFileWatcher` is intentionally policy-neutral. Applications can inject
+their own ignored-root policy; `termin-app` keeps its project-settings behavior
+through a compatibility wrapper in `termin.assets.project_file_watcher`.

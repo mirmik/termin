@@ -26,11 +26,20 @@ setup(
     install_requires=[
         "numpy",
         "tcbase",
+        "termin-assets",
         "tgfx",
         "tmesh",
         "termin-nanobind",
     ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
+    entry_points={
+        "termin.asset_import_plugins": [
+            "voxel_grid = termin.voxels.asset_plugin:create_import_plugin",
+        ],
+        "termin.asset_runtime_plugins": [
+            "voxel_grid = termin.voxels.asset_plugin:create_runtime_plugin",
+        ],
+    },
     zip_safe=False,
 )
