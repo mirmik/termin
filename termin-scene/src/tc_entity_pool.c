@@ -16,6 +16,32 @@
 #define WARN_DEAD_ENTITY(func_name, id) \
     tc_log_warn("[tc_entity_pool] %s: entity (idx=%u, gen=%u) is dead", func_name, id.index, id.generation)
 
+static void fill_vec3(double* xyz, double x, double y, double z) {
+    if (!xyz) return;
+    xyz[0] = x;
+    xyz[1] = y;
+    xyz[2] = z;
+}
+
+static void fill_rotation_identity(double* xyzw) {
+    if (!xyzw) return;
+    xyzw[0] = 0.0;
+    xyzw[1] = 0.0;
+    xyzw[2] = 0.0;
+    xyzw[3] = 1.0;
+}
+
+static void fill_matrix_identity(double* m16) {
+    if (!m16) return;
+    for (int i = 0; i < 16; ++i) {
+        m16[i] = 0.0;
+    }
+    m16[0] = 1.0;
+    m16[5] = 1.0;
+    m16[10] = 1.0;
+    m16[15] = 1.0;
+}
+
 // ============================================================================
 // Internal structures
 // ============================================================================
@@ -910,7 +936,7 @@ tc_entity_id tc_entity_pool_find_by_uuid(const tc_entity_pool* pool, const char*
 // ============================================================================
 
 void tc_entity_pool_get_local_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_position", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_position", id); fill_vec3(xyz, 0.0, 0.0, 0.0); return; }
     Vec3 p = pool->local_positions[id.index];
     xyz[0] = p.x; xyz[1] = p.y; xyz[2] = p.z;
 }
@@ -922,7 +948,7 @@ void tc_entity_pool_set_local_position(tc_entity_pool* pool, tc_entity_id id, co
 }
 
 void tc_entity_pool_get_local_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_rotation", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_rotation", id); fill_rotation_identity(xyzw); return; }
     Quat r = pool->local_rotations[id.index];
     xyzw[0] = r.x; xyzw[1] = r.y; xyzw[2] = r.z; xyzw[3] = r.w;
 }
@@ -934,7 +960,7 @@ void tc_entity_pool_set_local_rotation(tc_entity_pool* pool, tc_entity_id id, co
 }
 
 void tc_entity_pool_get_local_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_scale", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_local_scale", id); fill_vec3(xyz, 1.0, 1.0, 1.0); return; }
     Vec3 s = pool->local_scales[id.index];
     xyz[0] = s.x; xyz[1] = s.y; xyz[2] = s.z;
 }
@@ -1055,7 +1081,7 @@ void tc_entity_pool_mark_dirty(tc_entity_pool* pool, tc_entity_id id) {
 }
 
 void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_position", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_position", id); fill_vec3(xyz, 0.0, 0.0, 0.0); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -1065,7 +1091,7 @@ void tc_entity_pool_get_global_position(const tc_entity_pool* pool, tc_entity_id
 }
 
 void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id id, double* xyzw) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_rotation", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_rotation", id); fill_rotation_identity(xyzw); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -1075,7 +1101,7 @@ void tc_entity_pool_get_global_rotation(const tc_entity_pool* pool, tc_entity_id
 }
 
 void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id, double* xyz) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_scale", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_global_scale", id); fill_vec3(xyz, 1.0, 1.0, 1.0); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);
@@ -1085,7 +1111,7 @@ void tc_entity_pool_get_global_scale(const tc_entity_pool* pool, tc_entity_id id
 }
 
 void tc_entity_pool_get_world_matrix(const tc_entity_pool* pool, tc_entity_id id, double* m16) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_world_matrix", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("get_world_matrix", id); fill_matrix_identity(m16); return; }
     // Lazy update if dirty
     if (pool->transform_dirty[id.index]) {
         update_entity_transform((tc_entity_pool*)pool, id.index);

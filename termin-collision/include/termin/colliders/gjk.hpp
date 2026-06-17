@@ -101,7 +101,7 @@ inline BaryResult closest_on_triangle(const Vec3& A, const Vec3& B, const Vec3& 
         double t = closest_t_on_segment(B, C);
         Vec3 p = B * (1.0 - t) + C * t;
         double d = p.dot(p);
-        if (d < best_dist_sq) { best_dist_sq = d; best = {0, 1.0 - t, t, p}; }
+        if (d < best_dist_sq) { best = {0, 1.0 - t, t, p}; }
     }
 
     return best;

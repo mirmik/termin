@@ -407,9 +407,36 @@ static inline void tc_entity_set_flags(tc_entity_handle h, uint64_t v) {
 }
 
 // Transform
+static inline void tc_entity_default_vec3(double* xyz, double x, double y, double z) {
+    if (!xyz) return;
+    xyz[0] = x;
+    xyz[1] = y;
+    xyz[2] = z;
+}
+
+static inline void tc_entity_default_rotation(double* xyzw) {
+    if (!xyzw) return;
+    xyzw[0] = 0.0;
+    xyzw[1] = 0.0;
+    xyzw[2] = 0.0;
+    xyzw[3] = 1.0;
+}
+
+static inline void tc_entity_default_world_matrix(double* m16) {
+    if (!m16) return;
+    for (int i = 0; i < 16; ++i) {
+        m16[i] = 0.0;
+    }
+    m16[0] = 1.0;
+    m16[5] = 1.0;
+    m16[10] = 1.0;
+    m16[15] = 1.0;
+}
+
 static inline void tc_entity_get_local_position(tc_entity_handle h, double* xyz) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     if (pool) tc_entity_pool_get_local_position(pool, h.id, xyz);
+    else tc_entity_default_vec3(xyz, 0.0, 0.0, 0.0);
 }
 
 static inline void tc_entity_set_local_position(tc_entity_handle h, const double* xyz) {
@@ -420,6 +447,7 @@ static inline void tc_entity_set_local_position(tc_entity_handle h, const double
 static inline void tc_entity_get_local_rotation(tc_entity_handle h, double* xyzw) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     if (pool) tc_entity_pool_get_local_rotation(pool, h.id, xyzw);
+    else tc_entity_default_rotation(xyzw);
 }
 
 static inline void tc_entity_set_local_rotation(tc_entity_handle h, const double* xyzw) {
@@ -430,6 +458,7 @@ static inline void tc_entity_set_local_rotation(tc_entity_handle h, const double
 static inline void tc_entity_get_local_scale(tc_entity_handle h, double* xyz) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     if (pool) tc_entity_pool_get_local_scale(pool, h.id, xyz);
+    else tc_entity_default_vec3(xyz, 1.0, 1.0, 1.0);
 }
 
 static inline void tc_entity_set_local_scale(tc_entity_handle h, const double* xyz) {
@@ -440,6 +469,7 @@ static inline void tc_entity_set_local_scale(tc_entity_handle h, const double* x
 static inline void tc_entity_get_world_matrix(tc_entity_handle h, double* m16) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     if (pool) tc_entity_pool_get_world_matrix(pool, h.id, m16);
+    else tc_entity_default_world_matrix(m16);
 }
 
 static inline void tc_entity_mark_dirty(tc_entity_handle h) {

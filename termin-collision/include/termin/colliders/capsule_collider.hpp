@@ -442,7 +442,6 @@ inline ColliderHit CapsuleCollider::closest_to_box_impl(const BoxCollider& box) 
 
     double dist = (axis_pt - box_pt).norm();
     if (dist < best_dist) {
-        best_dist = dist;
         best_axis_pt = axis_pt;
         best_box_pt = box_pt;
     }
