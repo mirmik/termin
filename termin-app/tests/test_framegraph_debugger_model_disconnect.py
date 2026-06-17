@@ -1,18 +1,7 @@
-import importlib.util
-from pathlib import Path
-
-
-_MODEL_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "termin"
-    / "editor_core"
-    / "framegraph_debugger_model.py"
+from termin.editor_core.framegraph_debugger_model import (
+    FramegraphDebuggerModel,
+    FramegraphDebugTarget,
 )
-_SPEC = importlib.util.spec_from_file_location("framegraph_debugger_model_source", _MODEL_PATH)
-_MODULE = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(_MODULE)
-FramegraphDebuggerModel = _MODULE.FramegraphDebuggerModel
-FramegraphDebugTarget = _MODULE.FramegraphDebugTarget
 
 
 class _Pipeline:

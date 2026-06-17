@@ -8,43 +8,25 @@ import unittest
 from termin.geombase import AABB
 from termin.geomalgo.project import closest_of_aabb_and_capsule
 import numpy as np
-import numpy
 
 
 class TestProjectPointOnAABB(unittest.TestCase):
     """Тесты для функции project_point_on_aabb"""
     
-    def test_point_inside_aabb(self):
-        """Точка внутри AABB должна проецироваться в саму себя"""
-        point = [0.5, 0.5, 0.5]
-        aabb_min = [0, 0, 0]
-        aabb_max = [2, 2, 2]
-        result = project_point_on_aabb(point, aabb_min, aabb_max)
-        np.testing.assert_allclose(result, point)
-    
-    def test_point_outside_aabb(self):
-        """Точка вне AABB должна проецироваться на угол"""
-        point = [3, 3, 3]
-        aabb_min = [0, 0, 0]
-        aabb_max = [2, 2, 2]
-        result = project_point_on_aabb(point, aabb_min, aabb_max)
-        np.testing.assert_allclose(result, [2, 2, 2])
-    
-    def test_point_on_aabb_boundary(self):
-        """Точка на границе AABB должна остаться на месте"""
-        point = [2, 1, 1]
-        aabb_min = [0, 0, 0]
-        aabb_max = [2, 2, 2]
-        result = project_point_on_aabb(point, aabb_min, aabb_max)
-        np.testing.assert_allclose(result, point)
-    
-    def test_point_outside_one_dimension(self):
-        """Точка вне только по одной координате"""
-        point = [1, 1, 3]
-        aabb_min = [0, 0, 0]
-        aabb_max = [2, 2, 2]
-        result = project_point_on_aabb(point, aabb_min, aabb_max)
-        np.testing.assert_allclose(result, [1, 1, 2])
+    def test_point_projection_cases(self):
+        """Точки внутри, на границе и вне AABB проецируются ожидаемо"""
+        cases = [
+            ("inside", [0.5, 0.5, 0.5], [0, 0, 0], [2, 2, 2], [0.5, 0.5, 0.5]),
+            ("outside_corner", [3, 3, 3], [0, 0, 0], [2, 2, 2], [2, 2, 2]),
+            ("boundary", [2, 1, 1], [0, 0, 0], [2, 2, 2], [2, 1, 1]),
+            ("outside_one_axis", [1, 1, 3], [0, 0, 0], [2, 2, 2], [1, 1, 2]),
+            ("asymmetric_bounds", [3, 0, 0], [-1, -0.5, -0.25], [1, 0.5, 0.25], [1, 0, 0]),
+        ]
+
+        for name, point, aabb_min, aabb_max, expected in cases:
+            with self.subTest(name=name):
+                result = project_point_on_aabb(point, aabb_min, aabb_max)
+                np.testing.assert_allclose(result, expected)
 
 
 class TestProjectSegmentOnAABB(unittest.TestCase):
@@ -132,85 +114,53 @@ class TestProjectSegmentOnAABB(unittest.TestCase):
 class TestProjectPointOnPlane(unittest.TestCase):
     """Тесты для функции project_point_on_plane"""
     
-    def test_point_on_plane(self):
-        """Точка на плоскости должна остаться на месте"""
-        point = [1, 1, 0]
-        plane_point = [0, 0, 0]
-        plane_normal = [0, 0, 1]
-        result = project_point_on_plane(point, plane_point, plane_normal)
-        np.testing.assert_allclose(result, point)
-    
-    def test_point_above_plane(self):
-        """Точка над плоскостью должна проецироваться вниз"""
-        point = [1, 1, 5]
-        plane_point = [0, 0, 0]
-        plane_normal = [0, 0, 1]
-        result = project_point_on_plane(point, plane_point, plane_normal)
-        np.testing.assert_allclose(result, [1, 1, 0])
-    
-    def test_point_below_plane(self):
-        """Точка под плоскостью должна проецироваться вверх"""
-        point = [1, 1, -3]
-        plane_point = [0, 0, 0]
-        plane_normal = [0, 0, 1]
-        result = project_point_on_plane(point, plane_point, plane_normal)
-        np.testing.assert_allclose(result, [1, 1, 0])
+    def test_point_projection_cases(self):
+        """Точки на плоскости и по обе стороны от неё проецируются на плоскость"""
+        cases = [
+            ("on_plane", [1, 1, 0], [1, 1, 0]),
+            ("above", [1, 1, 5], [1, 1, 0]),
+            ("below", [1, 1, -3], [1, 1, 0]),
+        ]
+
+        for name, point, expected in cases:
+            with self.subTest(name=name):
+                result = project_point_on_plane(point, [0, 0, 0], [0, 0, 1])
+                np.testing.assert_allclose(result, expected)
 
 
 class TestProjectPointOnLine(unittest.TestCase):
     """Тесты для функции project_point_on_line"""
     
-    def test_point_on_line(self):
-        """Точка на линии должна остаться на месте"""
-        point = [2, 0, 0]
-        line_point = [0, 0, 0]
-        line_direction = [1, 0, 0]
-        result = project_point_on_line(point, line_point, line_direction)
-        np.testing.assert_allclose(result, point)
-    
-    def test_point_perpendicular_to_line(self):
-        """Точка перпендикулярно линии"""
-        point = [1, 5, 0]
-        line_point = [0, 0, 0]
-        line_direction = [1, 0, 0]
-        result = project_point_on_line(point, line_point, line_direction)
-        np.testing.assert_allclose(result, [1, 0, 0])
-    
-    def test_point_arbitrary_position(self):
-        """Точка в произвольной позиции относительно линии"""
-        point = [3, 4, 5]
-        line_point = [0, 0, 0]
-        line_direction = [1, 1, 1]
-        result = project_point_on_line(point, line_point, line_direction)
-        # Проекция точки [3,4,5] на линию через начало координат в направлении [1,1,1]
-        # должна дать точку [4,4,4] (т.к. dot([3,4,5], [1,1,1])/|[1,1,1]|^2 = 12/3 = 4)
-        expected = [4, 4, 4]
-        np.testing.assert_allclose(result, expected)
+    def test_point_projection_cases(self):
+        """Точки на осевой и произвольной линии проецируются ожидаемо"""
+        cases = [
+            ("on_axis_line", [2, 0, 0], [0, 0, 0], [1, 0, 0], [2, 0, 0]),
+            ("perpendicular_to_axis", [1, 5, 0], [0, 0, 0], [1, 0, 0], [1, 0, 0]),
+            ("arbitrary_direction", [3, 4, 5], [0, 0, 0], [1, 1, 1], [4, 4, 4]),
+        ]
+
+        for name, point, line_point, line_direction, expected in cases:
+            with self.subTest(name=name):
+                result = project_point_on_line(point, line_point, line_direction)
+                np.testing.assert_allclose(result, expected)
 
 
 class TestClosestOfAABBAndCapsule(unittest.TestCase):
     """Тесты для функции closest_of_aabb_and_capsule"""
     def test_closest_of_aabb_and_capsule(self):
-        aabb = AABB(numpy.array([0.0, 0.0, 0.0]), numpy.array([1.0, 1.0, 1.0]))
-        capsule_start = numpy.array([2.0, 0.5, 0.5])
-        capsule_end = numpy.array([3.0, 0.5, 0.5])
+        aabb = AABB(np.array([0.0, 0.0, 0.0]), np.array([1.0, 1.0, 1.0]))
+        capsule_start = np.array([2.0, 0.5, 0.5])
+        capsule_end = np.array([3.0, 0.5, 0.5])
         capsule_radius = 0.2
 
         closest_aabb_point, closest_capsule_point, distance = closest_of_aabb_and_capsule(
             aabb.min_point, aabb.max_point, capsule_start, capsule_end, capsule_radius
         )
 
-        expected_closest_aabb_point = numpy.array([1.0, 0.5, 0.5])
-        expected_closest_capsule_point = numpy.array([1.8, 0.5, 0.5])
+        expected_closest_aabb_point = np.array([1.0, 0.5, 0.5])
+        expected_closest_capsule_point = np.array([1.8, 0.5, 0.5])
         expected_distance = 0.8
 
-        numpy.testing.assert_array_almost_equal(closest_aabb_point, expected_closest_aabb_point)
-        numpy.testing.assert_array_almost_equal(closest_capsule_point, expected_closest_capsule_point)
+        np.testing.assert_array_almost_equal(closest_aabb_point, expected_closest_aabb_point)
+        np.testing.assert_array_almost_equal(closest_capsule_point, expected_closest_capsule_point)
         self.assertAlmostEqual(distance, expected_distance)
-
-    def test_project_point_on_aabb(self):
-        aabb = AABB(numpy.array([-1.0, -0.5, -0.25]), numpy.array([1.0, 0.5, 0.25]))
-        point = numpy.array([3.0, 0.0, 0.0])
-        projected_point = project_point_on_aabb(point, aabb.min_point, aabb.max_point)
-        expected_point = numpy.array([1.0, 0.0, 0.0])
-        numpy.testing.assert_array_almost_equal(projected_point, expected_point)

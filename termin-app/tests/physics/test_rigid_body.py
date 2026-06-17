@@ -1,7 +1,6 @@
 """Тесты физического движка: падение кубиков на плоскость."""
 
 import math
-import numpy as np
 from termin.geombase._geom_native import Pose3, Vec3, Quat
 from termin.physics import RigidBody, PhysicsWorld
 
@@ -126,22 +125,3 @@ def test_static_body():
 
     # Статическое тело не должно упасть
     assert static_box.position().z == initial_z
-
-
-if __name__ == "__main__":
-    test_drop_cube()
-    print("test_drop_cube passed")
-
-    test_tilted_cube()
-    print("test_tilted_cube passed")
-
-    test_box_box_collision()
-    print("test_box_box_collision passed")
-
-    test_sphere_creation()
-    print("test_sphere_creation passed")
-
-    test_static_body()
-    print("test_static_body passed")
-
-    print("\nAll tests passed!")

@@ -14,14 +14,6 @@ from termin_assets import (
 import termin_assets.plugin_discovery as plugin_discovery
 
 
-def test_asset_core_classes_are_exported() -> None:
-    assert Identifiable is not None
-    assert Asset is not None
-    assert DataAsset is not None
-    assert AssetRegistry is not None
-    assert ResourceHandle is not None
-
-
 class DummyPlugin:
     type_id = "dummy"
     extensions = {".dummy"}

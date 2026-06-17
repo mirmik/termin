@@ -133,8 +133,6 @@ class TestTransform3(unittest.TestCase):
         reconstructed_transform = from_trent(dct)
         reconstructed_dct = reconstructed_transform.to_trent_with_children()
 
-        print(reconstructed_dct)
-
         self.assertEqual(reconstructed_dct, expected_dct)
     
     def test_trent_with_rotator_and_actuator(self):

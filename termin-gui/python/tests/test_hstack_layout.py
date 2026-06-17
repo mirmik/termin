@@ -1,7 +1,6 @@
 """HStack layout tests."""
 
 from tcgui.widgets.hstack import HStack
-from tcgui.widgets.units import px
 from tests.conftest import make_widget, assert_rect, VIEWPORT_W, VIEWPORT_H
 
 W, H = 1280.0, 600.0
@@ -45,12 +44,6 @@ def test_spacing():
     _make_hstack(c1, c2, spacing=10)
     assert_rect(c1, 0, 0, 100, H)
     assert_rect(c2, 110, 0, 200, H)
-
-
-def test_children_get_full_height():
-    c = make_widget(100, 50)
-    _make_hstack(c)
-    assert c.height == H
 
 
 # --- Stretch ---

@@ -3,16 +3,6 @@ from termin.ga201.motor import Motor2
 import math
 
 
-def early(a, b):
-    if abs(a.x - b.x) > 0.0001:
-        return False
-    if abs(a.y - b.y) > 0.0001:
-        return False
-    if abs(a.z - b.z) > 0.0001:
-        return False
-    return True
-
-
 class TransformationProbe(unittest.TestCase):
     def test_translate(self):
         ident = Motor2(0,0,0,1)

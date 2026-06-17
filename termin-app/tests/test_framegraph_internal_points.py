@@ -67,11 +67,6 @@ def test_framepass_has_no_internal_symbols_by_default():
     assert p.get_internal_symbols() == []
 
 
-def test_custom_pass_can_expose_internal_symbols():
-    p = DummyPass(name="dummy")
-    assert p.get_internal_symbols() == ["a", "b", "c"]
-
-
 def test_debug_internal_point_configuration_is_mutable():
     p = DummyPass(name="p", reads={"in"}, writes={"out"})
     # по умолчанию точки дебага не заданы

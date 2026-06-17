@@ -4,6 +4,8 @@ from pathlib import Path
 import sys
 import types
 
+import pytest
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -25,7 +27,7 @@ def _load_shader_tools_module():
         "termin.shader_tools",
         _repo_root() / "termin-app" / "termin" / "shader_tools.py",
     )
-    setattr(termin_module, "shader_tools", module)
+    termin_module.shader_tools = module
     return module
 
 
@@ -154,7 +156,7 @@ def test_editor_shader_runtime_uses_local_app_data_cache_root_on_windows(
     tmp_path: Path,
 ) -> None:
     if os.name != "nt":
-        return
+        pytest.skip("Windows LOCALAPPDATA shader cache path")
 
     local_app_data = tmp_path / "LocalAppData"
     monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
