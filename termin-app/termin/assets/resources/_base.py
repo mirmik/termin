@@ -7,7 +7,7 @@ from typing import Dict, TYPE_CHECKING
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
     from termin.assets.material_asset import MaterialAsset
-    from termin.assets.mesh_asset import MeshAsset
+    from termin.mesh.asset import MeshAsset
     from termin.assets.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.assets.shader_asset import ShaderAsset
@@ -16,12 +16,12 @@ if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
     from termin.navmesh.asset import NavMeshAsset
     from termin.animation import TcAnimationClip
-    from termin.assets.animation_clip_asset import AnimationClipAsset
+    from termin.animation.asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
-    from termin.assets.skeleton_asset import SkeletonAsset
+    from termin.skeleton.asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.assets.glb_asset import GLBAsset
-    from termin.assets.audio_clip_asset import AudioClipAsset
+    from termin.audio.asset import AudioClipAsset
     from termin.visualization.core.entity import Component
     from termin_assets import AssetTypeRegistry
 
@@ -98,8 +98,8 @@ class ResourceManagerBase:
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
         from termin_assets import AssetRegistry
-        from termin.assets.mesh_asset import MeshAsset
-        from termin.mesh import TcMesh
+        from termin.mesh.asset import MeshAsset
+        from tmesh import TcMesh
 
         def data_from_asset(asset: MeshAsset) -> TcMesh | None:
             if asset.mesh_data is None:
@@ -206,7 +206,7 @@ class ResourceManagerBase:
             return None
 
         def get_asset_class():
-            from termin.assets.animation_clip_asset import AnimationClipAsset
+            from termin.animation.asset import AnimationClipAsset
             return AnimationClipAsset
 
         return AssetRegistry(
@@ -232,7 +232,7 @@ class ResourceManagerBase:
             return None
 
         def get_asset_class():
-            from termin.assets.skeleton_asset import SkeletonAsset
+            from termin.skeleton.asset import SkeletonAsset
             return SkeletonAsset
 
         return AssetRegistry(
@@ -273,7 +273,7 @@ class ResourceManagerBase:
         from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
-            from termin.assets.audio_clip_handle import AudioClipHandle
+            from termin.audio.handle import AudioClipHandle
             return AudioClipHandle.from_asset(asset)
 
         def data_to_asset(handle):
@@ -282,7 +282,7 @@ class ResourceManagerBase:
             return None
 
         def get_asset_class():
-            from termin.assets.audio_clip_asset import AudioClipAsset
+            from termin.audio.asset import AudioClipAsset
             return AudioClipAsset
 
         return AssetRegistry(

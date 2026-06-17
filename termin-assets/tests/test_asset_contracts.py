@@ -72,6 +72,18 @@ def test_registry_finds_plugin_by_type_and_extension() -> None:
     assert registry.get_for_extension(".DUMMY") == [plugin]
 
 
+def test_registry_replaces_import_plugin_extension_entries_by_type_id() -> None:
+    registry = AssetTypeRegistry()
+    first_plugin = DummyPlugin()
+    second_plugin = DummyPlugin()
+
+    registry.register_import(first_plugin)
+    registry.register_import(second_plugin)
+
+    assert registry.get_import("dummy") is second_plugin
+    assert registry.get_for_extension(".dummy") == [second_plugin]
+
+
 class RuntimeOnlyPlugin:
     type_id = "runtime_only"
 

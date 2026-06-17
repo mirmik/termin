@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import numpy as np
 from typing import TYPE_CHECKING
+
+import numpy as np
 
 from termin.visualization.core.python_component import PythonComponent
 from termin.inspect import InspectField
-from termin.assets.audio_clip_handle import AudioClipHandle
+from termin.audio.handle import AudioClipHandle
 
 if TYPE_CHECKING:
     from termin.audio.components.audio_listener import AudioListener
@@ -92,7 +93,6 @@ class AudioSource(PythonComponent):
     ):
         super().__init__(enabled=True)
 
-        # Serialized properties
         self.clip: AudioClipHandle | None = clip
         self.volume: float = volume
         self.pitch: float = pitch
@@ -102,7 +102,6 @@ class AudioSource(PythonComponent):
         self.min_distance: float = min_distance
         self.max_distance: float = max_distance
 
-        # Runtime state (not serialized)
         self._channel: int = -1
         self._is_playing: bool = False
         self._is_paused: bool = False
@@ -125,14 +124,12 @@ class AudioSource(PythonComponent):
     def start(self) -> None:
         """Called before first update."""
         super().start()
-        # play_on_awake is handled in on_added for immediate playback
 
     def play(self) -> None:
         """Start playing the audio clip."""
         if self.clip is None:
             return
 
-        # Get AudioClip from handle (lazy loads if needed)
         audio_clip = self.clip.get()
         if audio_clip is None or not audio_clip.is_valid:
             return
@@ -144,7 +141,6 @@ class AudioSource(PythonComponent):
             if not engine.initialize():
                 return
 
-        # Stop current playback if any
         if self._channel >= 0:
             engine.stop_channel(self._channel)
 
@@ -209,18 +205,16 @@ class AudioSource(PythonComponent):
         if not self._is_playing or self._channel < 0:
             return
 
-        # Check if playback finished naturally
         if not self.is_playing and not self._is_paused:
             self._is_playing = False
             self._channel = -1
             return
 
-        # Update volume if changed
         from termin.audio.audio_engine import AudioEngine
+
         engine = AudioEngine.instance()
         engine.set_channel_volume(self._channel, self.volume)
 
-        # Skip spatial processing for 2D sounds
         if self.spatial_blend <= 0.0:
             return
 
@@ -251,15 +245,12 @@ class AudioSource(PythonComponent):
         if self.entity is None or listener.entity is None:
             return
 
-        # Get world positions
         source_pos = self.entity.world_transform.position
         listener_pos = listener.entity.world_transform.position
 
-        # Calculate distance
         to_source = source_pos - listener_pos
         distance = np.linalg.norm(to_source)
 
-        # Calculate SDL distance (0 = close, 255 = far)
         if distance <= self.min_distance:
             sdl_distance = 0
         elif distance >= self.max_distance:
@@ -268,14 +259,9 @@ class AudioSource(PythonComponent):
             t = (distance - self.min_distance) / (self.max_distance - self.min_distance)
             sdl_distance = int(t * 255)
 
-        # Calculate angle relative to listener
         if distance > 0.001:
             to_source_norm = to_source / distance
-
-            # Get listener forward direction
             listener_forward = listener.entity.world_transform.forward
-
-            # Calculate angle in XZ plane (horizontal)
             angle_rad = np.arctan2(to_source_norm[0], to_source_norm[2])
             listener_angle = np.arctan2(listener_forward[0], listener_forward[2])
             relative_angle = angle_rad - listener_angle
@@ -283,7 +269,6 @@ class AudioSource(PythonComponent):
         else:
             angle_deg = 0
 
-        # Apply spatial blend
         final_distance = int(sdl_distance * self.spatial_blend)
 
         engine.set_channel_position(self._channel, angle_deg, final_distance)

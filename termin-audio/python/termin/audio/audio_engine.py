@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import ctypes
 
 from tcbase import log
-
-if TYPE_CHECKING:
-    pass
 
 
 class AudioEngine:
@@ -32,18 +27,14 @@ class AudioEngine:
         self._initialized: bool = False
         self._mixer_available: bool = False
 
-        # Audio settings
         self._frequency: int = 44100
-        self._format: int = 0  # Will be set to MIX_DEFAULT_FORMAT
+        self._format: int = 0
         self._channels_stereo: int = 2
         self._chunk_size: int = 2048
-        self._num_channels: int = 32  # Mixing channels (not stereo channels)
+        self._num_channels: int = 32
 
-        # SDL_mixer module reference (set on init)
         self._mixer = None
-
-        # Track channel positions (SDL_mixer has no getter)
-        self._channel_positions: dict[int, tuple[int, int]] = {}  # channel -> (angle, distance)
+        self._channel_positions: dict[int, tuple[int, int]] = {}
 
     @classmethod
     def instance(cls) -> "AudioEngine":
@@ -83,7 +74,6 @@ class AudioEngine:
         if self._initialized:
             return True
 
-        # Try to import SDL_mixer
         try:
             from sdl2 import sdlmixer
             self._mixer = sdlmixer
@@ -93,14 +83,12 @@ class AudioEngine:
             self._mixer_available = False
             return False
 
-        # Initialize SDL audio subsystem
         import sdl2
         if sdl2.SDL_InitSubSystem(sdl2.SDL_INIT_AUDIO) != 0:
             error = sdl2.SDL_GetError()
             log.error(f"[AudioEngine] Failed to init SDL audio: {error}")
             return False
 
-        # Initialize SDL_mixer with format support
         init_flags = (
             sdlmixer.MIX_INIT_MP3 |
             sdlmixer.MIX_INIT_OGG |
@@ -108,23 +96,20 @@ class AudioEngine:
         )
         result = sdlmixer.Mix_Init(init_flags)
         if result == 0:
-            # Mix_Init returns 0 on complete failure
             log.warn("[AudioEngine] No audio format support initialized")
 
-        # Open audio device
         self._format = sdlmixer.MIX_DEFAULT_FORMAT
         if sdlmixer.Mix_OpenAudio(
             self._frequency,
             self._format,
             self._channels_stereo,
-            self._chunk_size
+            self._chunk_size,
         ) < 0:
             error = sdlmixer.Mix_GetError()
             log.error(f"[AudioEngine] Failed to open audio: {error}")
             sdlmixer.Mix_Quit()
             return False
 
-        # Allocate mixing channels
         sdlmixer.Mix_AllocateChannels(self._num_channels)
 
         self._initialized = True
@@ -147,15 +132,7 @@ class AudioEngine:
         log.info("[AudioEngine] Shutdown complete")
 
     def load_chunk(self, path: str) -> ctypes.c_void_p | None:
-        """
-        Load audio file as Mix_Chunk.
-
-        Args:
-            path: Path to audio file (.wav, .ogg, .mp3, .flac)
-
-        Returns:
-            Mix_Chunk pointer or None on failure.
-        """
+        """Load audio file as Mix_Chunk."""
         if not self._initialized:
             if not self.initialize():
                 return None
@@ -180,18 +157,7 @@ class AudioEngine:
         loops: int = 0,
         fade_in_ms: int = 0,
     ) -> int:
-        """
-        Play a Mix_Chunk on a channel.
-
-        Args:
-            chunk: Mix_Chunk pointer from load_chunk()
-            channel: Channel to play on (-1 for first available)
-            loops: Number of times to loop (-1 for infinite, 0 for once)
-            fade_in_ms: Fade in duration in milliseconds
-
-        Returns:
-            Channel number playing on, or -1 on error.
-        """
+        """Play a Mix_Chunk on a channel."""
         if not self._initialized or chunk is None:
             return -1
 
@@ -200,13 +166,7 @@ class AudioEngine:
         return self._mixer.Mix_PlayChannel(channel, chunk, loops)
 
     def stop_channel(self, channel: int, fade_out_ms: int = 0) -> None:
-        """
-        Stop playback on a channel.
-
-        Args:
-            channel: Channel to stop (-1 for all channels)
-            fade_out_ms: Fade out duration in milliseconds
-        """
+        """Stop playback on a channel."""
         if not self._initialized:
             return
 
@@ -238,17 +198,10 @@ class AudioEngine:
         return self._mixer.Mix_Paused(channel) == 1
 
     def set_channel_volume(self, channel: int, volume: float) -> None:
-        """
-        Set volume for a channel.
-
-        Args:
-            channel: Channel number (-1 for all)
-            volume: Volume level (0.0 to 1.0)
-        """
+        """Set volume for a channel."""
         if not self._initialized:
             return
 
-        # SDL_mixer uses 0-128 volume range
         sdl_volume = int(max(0.0, min(1.0, volume)) * 128)
         self._mixer.Mix_Volume(channel, sdl_volume)
 
@@ -257,7 +210,6 @@ class AudioEngine:
         if not self._initialized:
             return 0.0
 
-        # Pass -1 as volume to query current volume
         sdl_volume = self._mixer.Mix_Volume(channel, -1)
         return sdl_volume / 128.0
 
@@ -267,49 +219,24 @@ class AudioEngine:
         angle: int,
         distance: int,
     ) -> bool:
-        """
-        Set 3D position for a channel (panning and distance).
-
-        Args:
-            channel: Channel number
-            angle: Angle in degrees (0 = front, 90 = right, 180 = back, 270 = left)
-            distance: Distance (0 = close/loud, 255 = far/quiet)
-
-        Returns:
-            True if successful.
-        """
+        """Set 3D position for a channel (panning and distance)."""
         if not self._initialized:
             return False
 
-        # Normalize angle to 0-360
         angle = angle % 360
         if angle < 0:
             angle += 360
-
-        # Clamp distance
         distance = max(0, min(255, distance))
-
-        # Track position for debugging
         self._channel_positions[channel] = (angle, distance)
 
         return self._mixer.Mix_SetPosition(channel, angle, distance) != 0
 
     def get_channel_position(self, channel: int) -> tuple[int, int]:
-        """
-        Get last set position for a channel.
-
-        Returns:
-            Tuple of (angle, distance). Returns (0, 0) if not set.
-        """
+        """Get last set position for a channel."""
         return self._channel_positions.get(channel, (0, 0))
 
     def set_master_volume(self, volume: float) -> None:
-        """
-        Set master volume for all channels.
-
-        Args:
-            volume: Volume level (0.0 to 1.0)
-        """
+        """Set master volume for all channels."""
         if not self._initialized:
             return
 
@@ -330,15 +257,7 @@ class AudioEngine:
         return self._num_channels
 
     def allocate_channels(self, num: int) -> int:
-        """
-        Set number of mixing channels.
-
-        Args:
-            num: Number of channels to allocate
-
-        Returns:
-            Actual number of channels allocated.
-        """
+        """Set number of mixing channels."""
         if not self._initialized:
             return 0
 

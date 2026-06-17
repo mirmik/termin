@@ -1169,7 +1169,7 @@ def _iter_project_mesh_paths(project_root: Path):
 
 
 def _mesh_source_to_spec(source_path: Path, uuid_value: str, name: str) -> dict[str, Any]:
-    from termin.assets.mesh_asset import MeshAsset
+    from termin.mesh.asset import MeshAsset
 
     asset = MeshAsset(name=name, source_path=source_path, uuid=uuid_value)
     meta_path = Path(str(source_path) + ".meta")
