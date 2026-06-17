@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
     from termin.assets.material_asset import MaterialAsset
     from termin.mesh.asset import MeshAsset
-    from termin.assets.texture_asset import TextureAsset
+    from termin.render.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.assets.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
@@ -117,7 +117,7 @@ class ResourceManagerBase(AssetRuntimeManager):
     def _create_texture_registry(self):
         """Create AssetRegistry for textures."""
         from termin_assets import AssetRegistry
-        from termin.assets.texture_asset import TextureAsset
+        from termin.render.texture_asset import TextureAsset
         from termin.assets.texture_handle import TextureHandle
 
         def data_from_asset(asset: TextureAsset) -> TextureHandle:
@@ -251,7 +251,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.assets.glsl_asset import GlslAsset
+            from termin.render.glsl_asset import GlslAsset
             return GlslAsset
 
         return AssetRegistry(
