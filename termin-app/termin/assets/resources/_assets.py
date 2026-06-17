@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from termin.assets.texture_handle import TextureHandle
     from termin.assets.glb_asset import GLBAsset
     from termin.visualization.render.texture import Texture
-    from termin.assets.texture_asset import TextureAsset
+    from termin.render.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.assets.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
@@ -198,7 +198,7 @@ class AssetsMixin:
 
     def get_texture_asset_by_uuid(self, uuid: str) -> Optional["TextureAsset"]:
         """Get TextureAsset by UUID."""
-        from termin.assets.texture_asset import TextureAsset
+        from termin.render.texture_asset import TextureAsset
         asset = self._assets_by_uuid.get(uuid)
         if asset is not None and isinstance(asset, TextureAsset):
             return asset
