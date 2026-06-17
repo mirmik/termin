@@ -13,7 +13,7 @@ import numpy as np
 
 from termin.render import DrawableComponent
 from termin.mesh import TcMesh
-from termin.assets.navmesh_handle import NavMeshHandle
+from termin.navmesh.handle import NavMeshHandle
 from termin._native.render import TcMaterial
 from termin.visualization.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField

@@ -74,6 +74,13 @@ compatibility re-exports. Default registration calls the domain registration
 helpers from `termin-navmesh`, and the package exposes entry points for
 external plugin discovery.
 
+Status 2026-06-17: `NavMeshHandle` was moved to `termin-navmesh` as
+`termin.navmesh.handle.NavMeshHandle`. The app path
+`termin.assets.navmesh_handle` is now a compatibility re-export, and
+`termin.assets.resources` explicitly configures the shared
+`termin_assets.ResourceHandle` resource-manager factory instead of relying on
+the old `termin.assets.resource_handle` import side effect.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
