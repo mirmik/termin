@@ -54,6 +54,7 @@ if __name__ == "__main__":
                 "termin.animation", "termin.animation.*",       # termin-animation
                 "termin.physics", "termin.physics.*",           # termin-physics
                 "termin.navmesh", "termin.navmesh.*",           # termin-navmesh
+                "termin.tween", "termin.tween.*",               # termin-tween / termin-components-tween
                 "termin.lighting", "termin.lighting.*",         # termin-lighting
                 "termin.render_components", "termin.render_components.*",  # termin-components-render
                 "termin.kinematic", "termin.kinematic.*",       # termin-components-kinematic
@@ -98,6 +99,8 @@ if __name__ == "__main__":
         install_requires=[
             "tcbase",
             "termin-assets",
+            "termin-tween",
+            "termin-components-tween",
             "termin-materials",
             "termin-render-passes",
             "termin-nanobind",

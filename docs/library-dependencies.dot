@@ -47,6 +47,7 @@ digraph termin_dependencies {
 		"termin-physics";
 		"termin-scene";
 		"termin-skeleton";
+		"termin-tween";
 	}
 
 	subgraph cluster_namespace {
@@ -79,6 +80,7 @@ digraph termin_dependencies {
 		"termin-components-mesh";
 		"termin-components-physics";
 		"termin-components-skeleton";
+		"termin-components-tween";
 	}
 
 	subgraph cluster_python_support {
@@ -144,9 +146,11 @@ digraph termin_dependencies {
 	"tcplot" -> "termin-csharp";
 	"termin" -> "termin-app";
 	"termin" -> "termin-navmesh";
+	"termin" -> "termin-tween";
 	"termin-animation" -> "termin-components-animation";
 	"termin-app" -> "termin-csharp";
 	"termin-assets" -> "termin-app";
+	"termin-assets" -> "termin-components-foliage";
 	"termin-base" -> "termin-assets";
 	"termin-base" -> "termin-inspect";
 	"termin-base" -> "termin-lighting";
@@ -168,7 +172,9 @@ digraph termin_dependencies {
 	"termin-components-render" -> "termin-render-passes";
 	"termin-components-render" -> "termin-runtime";
 	"termin-components-skeleton" -> "termin-components-animation";
-	"termin-csg" -> "termin-app";
+	"termin-components-skeleton" -> "termin-components-render";
+	"termin-components-tween" -> "termin-app";
+	"termin-csg" -> "termin-components-mesh";
 	"termin-display" -> "termin-components-render";
 	"termin-display" -> "termin-engine";
 	"termin-engine" -> "termin-android";
@@ -184,7 +190,6 @@ digraph termin_dependencies {
 	"termin-input" -> "termin-display";
 	"termin-inspect" -> "termin-scene";
 	"termin-lighting" -> "termin-render";
-	"termin-mesh" -> "termin-components-mesh";
 	"termin-mesh" -> "termin-graphics";
 	"termin-modules" -> "termin-app";
 	"termin-nanobind-sdk" -> "termin-base";
@@ -204,4 +209,5 @@ digraph termin_dependencies {
 	"termin-scene" -> "termin-skeleton";
 	"termin-skeleton" -> "termin-animation";
 	"termin-skeleton" -> "termin-components-skeleton";
+	"termin-tween" -> "termin-components-tween";
 }

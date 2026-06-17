@@ -177,6 +177,15 @@ Source of truth: [termin-navmesh docs](../termin-navmesh/docs/index.md)
 
 NavMesh bindings and navigation utilities.
 
+### termin-tween
+
+Source of truth: [termin-tween docs](../termin-tween/docs/index.md)
+
+Чистое ядро твининга: easing-функции, tween-классы и `TweenManager`.
+
+Scene-компонент живёт выше, в [termin-components-tween](#component-libraries), чтобы
+`termin-tween` не зависел от `termin-scene` и editor/UI-слоя.
+
 ## Component Libraries
 
 Source of truth: [termin-components docs](../termin-components/docs/index.md)
@@ -190,6 +199,7 @@ Component packages attach domain behavior/data to scene/entity objects:
 - [termin-components-physics](../termin-components/termin-components-physics/docs/index.md)
 - [termin-components-skeleton](../termin-components/termin-components-skeleton/docs/index.md)
 - [termin-components-animation](../termin-components/termin-components-animation/docs/index.md)
+- [termin-components-tween](../termin-components/termin-components-tween/docs/index.md)
 
 ## Language Bindings
 
