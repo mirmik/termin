@@ -6,7 +6,10 @@ from termin_assets import (
     Identifiable,
     PreLoadResult,
     ResourceHandle,
+    build_import_plugin_extension_map,
     get_uuid_from_spec,
+    register_default_import_asset_plugins,
+    register_default_runtime_asset_plugins,
     register_import_plugins_from_entry_points,
     read_spec_file,
     write_spec_file,
@@ -151,3 +154,24 @@ def test_import_plugin_entry_point_discovery(monkeypatch) -> None:
 
     assert registry.get_import("dummy") is not None
     assert registry.get_for_extension(".dummy")[0].type_id == "dummy"
+
+
+def test_default_plugin_helpers_load_entry_points(monkeypatch) -> None:
+    registry = AssetTypeRegistry()
+
+    def fake_entry_points(group: str):
+        if group in {"termin.asset_import_plugins", "termin.asset_runtime_plugins"}:
+            return [_EntryPoint()]
+        return []
+
+    monkeypatch.setattr(plugin_discovery, "entry_points", fake_entry_points)
+
+    register_default_runtime_asset_plugins(registry)
+    assert registry.get_runtime("dummy") is not None
+    assert registry.get_import("dummy") is None
+
+    register_default_import_asset_plugins(registry)
+
+    assert registry.get_import("dummy") is not None
+    extension_map = build_import_plugin_extension_map(registry)
+    assert extension_map[".dummy"].type_id == "dummy"

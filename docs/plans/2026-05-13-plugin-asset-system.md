@@ -102,6 +102,14 @@ and `termin.loaders.{mesh_spec,obj_loader,stl_loader}` are compatibility
 re-exports. `termin-mesh` exposes import/runtime plugin entry points for
 `mesh`; GLB remains app-owned until the importer package boundary is decided.
 
+Status 2026-06-17: default asset plugin composition moved from
+`termin.assets.default_plugins` to `termin_assets.default_plugins`.
+`termin-app` now declares its remaining app-owned asset plugins through
+`termin.asset_import_plugins` and `termin.asset_runtime_plugins` entry points,
+and the old app module is only a compatibility re-export. This removes the app
+as the central registry hub for already-extracted domain plugins; the remaining
+technical debt is the concrete render/UI/GLB/prefab plugin ownership itself.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
@@ -279,28 +287,29 @@ Move plugins gradually:
 - UI support to `termin-gui` or future UI package.
 - GLB/FBX importers to `termin-importers` or equivalent.
 
-Each domain package should expose an explicit registration function:
+Each domain package should expose asset plugin entry points:
 
-```python
-def register_mesh_asset_plugins(registry: AssetTypeRegistry) -> None:
-    registry.register(MeshAssetPlugin())
+```toml
+termin.asset_import_plugins:
+  mesh = termin.mesh.asset_plugin:create_import_plugin
+termin.asset_runtime_plugins:
+  mesh = termin.mesh.asset_plugin:create_runtime_plugin
 ```
 
 ### Phase 4: Composition Layer
 
-Add a central composition helper outside `termin-app` if useful:
+Central composition lives in `termin_assets.default_plugins` and should remain
+entry-point driven:
 
 ```python
 def register_default_runtime_asset_plugins(registry: AssetTypeRegistry) -> None:
-    register_mesh_asset_plugins(registry)
-    register_render_asset_plugins(registry)
-    register_animation_asset_plugins(registry)
-    register_skeleton_asset_plugins(registry)
-    register_navmesh_asset_plugins(registry)
-    register_importer_asset_plugins(registry)
+    register_runtime_plugins_from_entry_points(registry)
+    register_combined_plugins_from_entry_points(registry)
 ```
 
-`termin-app` can call this helper, but should not own the concrete plugins.
+`termin-app` can call this helper, but should not own composition or domain
+plugin discovery. Its current app-owned entry points are transitional until the
+corresponding concrete assets/plugins move to domain packages.
 
 ### Phase 5: Clean Up Typed Manager Surface
 
