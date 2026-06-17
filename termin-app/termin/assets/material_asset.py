@@ -294,7 +294,7 @@ def _parse_material_content(
         Tuple of (TcMaterial, uuid or None)
     """
     from termin.assets.resources import ResourceManager
-    from termin.assets.texture_asset import TextureAsset
+    from termin.render.texture_asset import TextureAsset
     from termin.geombase import Vec3, Vec4
     from termin.materials import TcMaterial
 

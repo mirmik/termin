@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
-from termin.assets.texture_asset import TextureAsset
+from termin.render.texture_asset import TextureAsset
 from termin.assets.texture_handle import TextureHandle
 
 if TYPE_CHECKING:

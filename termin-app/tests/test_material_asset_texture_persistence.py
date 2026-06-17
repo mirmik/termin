@@ -8,7 +8,7 @@ from PIL import Image
 from termin.assets.material_asset import _parse_material_content, _save_material_file
 from termin.assets.resources import ResourceManager
 from termin.assets.shader_asset import ShaderAsset
-from termin.assets.texture_asset import TextureAsset
+from termin.render.texture_asset import TextureAsset
 from tgfx import TcTexture
 
 
