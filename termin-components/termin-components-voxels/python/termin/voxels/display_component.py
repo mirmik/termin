@@ -15,15 +15,15 @@ import numpy as np
 
 from termin.render import DrawableComponent
 from termin.materials import TcMaterial as Material
-from termin.visualization.core.voxel_grid_handle import VoxelGridHandle
-from termin.visualization.render.drawable import GeometryDrawCall
+from termin.render.drawable import GeometryDrawCall
+from termin.voxels._voxels_native import VoxelGridHandle
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from tmesh import TcMesh
 from termin.inspect import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
+    from termin.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid
 
@@ -439,9 +439,6 @@ class VoxelDisplayComponent(DrawableComponent):
         if self._needs_rebuild:
             try:
                 self._rebuild_mesh()
-                # Request render update after mesh rebuild
-                from termin.editor_core.render_request import request_render_update
-                request_render_update()
             except Exception as e:
                 log.error(f"[VoxelDisplayComponent.update] error rebuilding mesh: {e}")
             self._needs_rebuild = False

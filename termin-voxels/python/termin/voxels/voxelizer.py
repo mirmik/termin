@@ -12,8 +12,7 @@ from termin.voxels.intersection import triangle_aabb_intersect, triangle_aabb
 
 if TYPE_CHECKING:
     from termin.mesh.mesh import Mesh3
-    from termin.visualization.core.entity import Entity
-    from termin.visualization.core.scene import Scene
+    from termin.scene import Entity, Scene
 
 
 # Типы вокселей

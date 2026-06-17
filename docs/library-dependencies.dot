@@ -48,6 +48,7 @@ digraph termin_dependencies {
 		"termin-scene";
 		"termin-skeleton";
 		"termin-tween";
+		"termin-voxels";
 	}
 
 	subgraph cluster_namespace {
@@ -81,6 +82,7 @@ digraph termin_dependencies {
 		"termin-components-physics";
 		"termin-components-skeleton";
 		"termin-components-tween";
+		"termin-components-voxels";
 	}
 
 	subgraph cluster_python_support {
@@ -147,6 +149,7 @@ digraph termin_dependencies {
 	"termin" -> "termin-app";
 	"termin" -> "termin-navmesh";
 	"termin" -> "termin-tween";
+	"termin" -> "termin-voxels";
 	"termin-animation" -> "termin-components-animation";
 	"termin-app" -> "termin-csharp";
 	"termin-assets" -> "termin-app";
@@ -156,7 +159,6 @@ digraph termin_dependencies {
 	"termin-base" -> "termin-lighting";
 	"termin-base" -> "termin-mesh";
 	"termin-base" -> "termin-modules";
-	"termin-base" -> "termin-navmesh";
 	"termin-base" -> "termin-pga";
 	"termin-base" -> "termin-qopt";
 	"termin-collision" -> "termin-android";
@@ -174,6 +176,7 @@ digraph termin_dependencies {
 	"termin-components-skeleton" -> "termin-components-animation";
 	"termin-components-skeleton" -> "termin-components-render";
 	"termin-components-tween" -> "termin-app";
+	"termin-components-voxels" -> "termin-navmesh";
 	"termin-csg" -> "termin-components-mesh";
 	"termin-display" -> "termin-components-render";
 	"termin-display" -> "termin-engine";
@@ -184,6 +187,7 @@ digraph termin_dependencies {
 	"termin-graphics" -> "termin-gui";
 	"termin-graphics" -> "termin-materials";
 	"termin-graphics" -> "termin-render";
+	"termin-graphics" -> "termin-voxels";
 	"termin-gui" -> "tcplot";
 	"termin-gui" -> "termin-csg";
 	"termin-gui" -> "termin-nodegraph";
@@ -210,4 +214,6 @@ digraph termin_dependencies {
 	"termin-skeleton" -> "termin-animation";
 	"termin-skeleton" -> "termin-components-skeleton";
 	"termin-tween" -> "termin-components-tween";
+	"termin-voxels" -> "termin-components-voxels";
+	"termin-voxels" -> "termin-physics";
 }

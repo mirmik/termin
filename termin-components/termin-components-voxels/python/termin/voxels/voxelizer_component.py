@@ -17,13 +17,13 @@ from termin.materials import TcMaterial as Material
 from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
-from termin.visualization.render.drawable import GeometryDrawCall
+from termin.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
-    from termin.visualization.core.scene import Scene
+    from termin.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid
 
@@ -774,13 +774,6 @@ class VoxelizerComponent(DrawableComponent):
         try:
             output_path = Path(output)
 
-            # Если путь относительный, разрешаем относительно директории проекта
-            if not output_path.is_absolute():
-                from termin.editor_core.project_context import current_project_path
-                project_root = current_project_path()
-                if project_root is not None:
-                    output_path = project_root / output_path
-
             # Создаём директорию если не существует
             if output_path.parent and not output_path.parent.exists():
                 output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -890,13 +883,6 @@ class VoxelizerComponent(DrawableComponent):
         # Сохраняем в файл
         try:
             output_path = Path(output)
-
-            # Если путь относительный, разрешаем относительно директории проекта
-            if not output_path.is_absolute():
-                from termin.editor_core.project_context import current_project_path
-                project_root = current_project_path()
-                if project_root is not None:
-                    output_path = project_root / output_path
 
             # Создаём директорию если не существует
             if output_path.parent and not output_path.parent.exists():

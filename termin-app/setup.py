@@ -11,7 +11,8 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 class BuildExt(TerminCMakeBuildExt):
     # Main termin's own C++ native modules, built by termin/cpp/python_bindings.cmake:
     #   _native          — monolithic render/editor/scene/skeleton/inspect kernel
-    #   _voxels_native   — VoxelGrid + voxelization (termin.voxels)
+    #   termin.voxels._voxels_native is owned by termin-voxels. The target is
+    #   still built by termin-app/cpp during the current native migration stage.
     #
     # These are NOT yet extracted into standalone pip subprojects. cmake_ext
     # copies their pre-built .so files from TERMIN_BINDINGS_DIR/build/.../bin
@@ -55,6 +56,7 @@ if __name__ == "__main__":
                 "termin.physics", "termin.physics.*",           # termin-physics
                 "termin.navmesh", "termin.navmesh.*",           # termin-navmesh
                 "termin.tween", "termin.tween.*",               # termin-tween / termin-components-tween
+                "termin.voxels", "termin.voxels.*",             # termin-voxels / termin-components-voxels
                 "termin.lighting", "termin.lighting.*",         # termin-lighting
                 "termin.render_components", "termin.render_components.*",  # termin-components-render
                 "termin.kinematic", "termin.kinematic.*",       # termin-components-kinematic
@@ -101,6 +103,8 @@ if __name__ == "__main__":
             "termin-assets",
             "termin-tween",
             "termin-components-tween",
+            "termin-voxels",
+            "termin-components-voxels",
             "termin-materials",
             "termin-render-passes",
             "termin-nanobind",

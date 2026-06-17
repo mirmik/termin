@@ -6,11 +6,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene.python_component import PythonComponent
 from termin.voxels.grid import VoxelGrid
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
+    from termin.scene import Scene
     from termin.voxels.visualization import VoxelVisualizer
 
 
