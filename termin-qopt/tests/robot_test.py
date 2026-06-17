@@ -202,7 +202,5 @@ def test_robot_hqp_reaches_point_2():
 
         delta = solver.solve()
         robot.integrate_joint_speeds(delta, dt)
-
-        print(f"EE pos: {ee.global_pose().lin}, err norm: {np.linalg.norm(err)}")
     
     assert np.linalg.norm(target - ee.global_pose().lin) < 5e-3

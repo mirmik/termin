@@ -439,20 +439,6 @@ static int test_query(void) {
     tc_entity_id group_c = tc_entity_pool_alloc(pool, "group_c");
     tc_entity_pool_add_soa(pool, group_c, hp_id);
 
-    // Query: all entities with Velocity + Health (should match groups A and B)
-    // Need to access pool internals for query - use the archetype arrays
-    // For now construct query from pool's archetype data
-    // We'll use a helper to get pool's archetypes
-
-    // Access pool internals through the C API
-    // The query needs archetype array — we'll test through the public archetype API
-    // Since tc_soa_query_init takes archetype** directly, and pool stores them internally,
-    // we need to access pool fields. Let's use tc_entity_pool_get_soa to verify instead.
-
-    // Alternative: test query through archetype API directly
-    // But we don't have pool->archetypes exposed...
-    // Let's verify by iterating all entities and checking masks
-
     // Verify group A: mask = vel | hp
     uint64_t mask_vel_hp = (1ULL << vel_id) | (1ULL << hp_id);
     for (int i = 0; i < 3; i++) {

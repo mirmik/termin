@@ -1,23 +1,7 @@
-import importlib.util
-import sys
-from pathlib import Path
-
-
-_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_ROOT / "termin-gui" / "python"))
-
-_DIALOG_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "termin"
-    / "editor_tcgui"
-    / "dialogs"
-    / "framegraph_debugger.py"
+from termin.editor_tcgui.dialogs.framegraph_debugger import (
+    _FramegraphDebuggerHandle,
+    CapturePreviewWidget,
 )
-_SPEC = importlib.util.spec_from_file_location("tcgui_framegraph_debugger_source", _DIALOG_PATH)
-_MODULE = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(_MODULE)
-_FramegraphDebuggerHandle = _MODULE._FramegraphDebuggerHandle
-CapturePreviewWidget = _MODULE.CapturePreviewWidget
 
 
 class _Signal:

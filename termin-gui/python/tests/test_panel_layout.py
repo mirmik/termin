@@ -1,7 +1,6 @@
 """Panel layout tests."""
 
 from tcgui.widgets.panel import Panel
-from tcgui.widgets.units import px
 from tests.conftest import make_widget, assert_rect, VIEWPORT_W, VIEWPORT_H
 
 W, H = 400.0, 300.0

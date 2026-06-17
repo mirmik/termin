@@ -1,5 +1,4 @@
 import unittest
-import pytest
 from termin.geombase import Pose3, Vec3, Quat
 from termin.util import deg2rad
 import numpy
@@ -133,7 +132,7 @@ class TestPose3(unittest.TestCase):
         point = Vec3(1.0, 0.0, 0.0)
         transformed_point = lerped_pose.transform_point(point)
 
-        # Expected rotation is 45 degrees around Z and translation is (5, 0, 0)
+        # Expected halfway rotation around Z and translation is (5, 0, 0)
         expected_rotation = Pose3(
             ang=Quat(0.0, 0.0, math.sin(math.pi/4), math.cos(math.pi/4)),
             lin=Vec3(5.0, 0.0, 0.0)
@@ -269,16 +268,7 @@ class TestPose3(unittest.TestCase):
         )
         vector = Vec3(1.0, 0.0, 0.0)
         transformed = pose.transform_vector(vector)
-        # 90 degree rotation around Z: (1,0,0) -> (-1,0,0) wait, let me recalculate
-        # Using right-hand rule: 90 deg CCW around Z: x->-y, y->x
-        # So (1,0,0) should rotate to... let me use the actual rotation
-        expected_pose = Pose3(
-            ang=Quat(0.0, 0.0, math.sin(math.pi/2), math.cos(math.pi/2)),
-            lin=Vec3(0.0, 0.0, 0.0)  # No translation
-        )
-        point_as_origin = Vec3(1.0, 0.0, 0.0)
-        expected = expected_pose.transform_point(point_as_origin)
-        assert_vec3_approx(transformed, expected)
+        assert_vec3_approx(transformed, (-1.0, 0.0, 0.0))
 
     def test_inverse_transform_vector(self):
         pose = Pose3(
@@ -329,8 +319,6 @@ class TestPose3(unittest.TestCase):
 
     def test_static_move_methods(self):
         # Test moveX, moveY, moveZ, right, forward, up
-        point = Vec3(0.0, 0.0, 0.0)
-
         # Test moveX and right (should be same)
         pose = Pose3.moveX(5.0)
         self.assertAlmostEqual(pose.x, 5.0)

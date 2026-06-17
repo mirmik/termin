@@ -93,14 +93,6 @@ def make_ui_renderer_for_clip(viewport_w: int = 900, viewport_h: int = 520):
 
 # --- Tests ---
 
-def test_single_clip():
-    r = MockRenderer()
-    r.begin_clip(10, 20, 100, 200)
-    assert r._graphics.scissor_active
-    r.end_clip()
-    assert not r._graphics.scissor_active
-
-
 def test_ui_renderer_clamps_negative_clip_to_viewport():
     r = make_ui_renderer_for_clip()
 

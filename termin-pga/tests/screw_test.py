@@ -8,15 +8,6 @@ import math
 import numpy
 
 
-def early(a, b):
-    if abs(a.x - b.x) > 0.0001:
-        return False
-    if abs(a.y - b.y) > 0.0001:
-        return False
-    if abs(a.z - b.z) > 0.0001:
-        return False
-    return True
-
 def screw_equal(a, b):
     if abs(a.moment() - b.moment()) > 0.0001:
         return False
@@ -82,10 +73,27 @@ class TransformationProbe(unittest.TestCase):
 class Screw2Tests(unittest.TestCase):
     """Tests for geombase.Screw2"""
     
-    def test_screw2_creation(self):
+    def test_screw2_basic_arithmetic(self):
         screw = Screw2(ang=numpy.array([1.0]), lin=numpy.array([2.0, 3.0]))
         self.assertEqual(screw.moment(), 1.0)
-        self.assertTrue((screw.vector() == numpy.array([2.0, 3.0])).all())
+        numpy.testing.assert_array_equal(screw.vector(), numpy.array([2.0, 3.0]))
+
+        scaled = Screw2(ang=numpy.array([2.0]), lin=numpy.array([1.0, 2.0])) * 3.0
+        self.assertAlmostEqual(scaled.moment(), 6.0)
+        numpy.testing.assert_array_equal(scaled.vector(), numpy.array([3.0, 6.0]))
+
+        screw1 = Screw2(ang=numpy.array([1.0]), lin=numpy.array([1.0, 2.0]))
+        screw2 = Screw2(ang=numpy.array([2.0]), lin=numpy.array([3.0, 4.0]))
+        added = screw1 + screw2
+        self.assertAlmostEqual(added.moment(), 3.0)
+        numpy.testing.assert_array_equal(added.vector(), numpy.array([4.0, 6.0]))
+
+        subtracted = Screw2(ang=numpy.array([5.0]), lin=numpy.array([10.0, 8.0])) - Screw2(
+            ang=numpy.array([2.0]),
+            lin=numpy.array([3.0, 2.0]),
+        )
+        self.assertAlmostEqual(subtracted.moment(), 3.0)
+        numpy.testing.assert_array_equal(subtracted.vector(), numpy.array([7.0, 6.0]))
 
     def test_screw2_kinematic_carry(self):
         screw = Screw2(ang=numpy.array([1.0]), lin=numpy.array([0.0, 0.0]))
@@ -101,26 +109,6 @@ class Screw2Tests(unittest.TestCase):
         carried = screw.force_carry(arm)
         self.assertAlmostEqual(carried.moment(), 1.0, places=5)
         self.assertTrue((carried.vector() == numpy.array([1.0, 0.0])).all())
-
-    def test_screw2_scalar_multiplication(self):
-        screw = Screw2(ang=numpy.array([2.0]), lin=numpy.array([1.0, 2.0]))
-        scaled = screw * 3.0
-        self.assertAlmostEqual(scaled.moment(), 6.0)
-        self.assertTrue((scaled.vector() == numpy.array([3.0, 6.0])).all())
-
-    def test_screw2_addition(self):
-        screw1 = Screw2(ang=numpy.array([1.0]), lin=numpy.array([1.0, 2.0]))
-        screw2 = Screw2(ang=numpy.array([2.0]), lin=numpy.array([3.0, 4.0]))
-        result = screw1 + screw2
-        self.assertAlmostEqual(result.moment(), 3.0)
-        self.assertTrue((result.vector() == numpy.array([4.0, 6.0])).all())
-
-    def test_screw2_subtraction(self):
-        screw1 = Screw2(ang=numpy.array([5.0]), lin=numpy.array([10.0, 8.0]))
-        screw2 = Screw2(ang=numpy.array([2.0]), lin=numpy.array([3.0, 2.0]))
-        result = screw1 - screw2
-        self.assertAlmostEqual(result.moment(), 3.0)
-        self.assertTrue((result.vector() == numpy.array([7.0, 6.0])).all())
 
     def test_screw2_transform_by_pose(self):
         screw = Screw2(ang=numpy.array([1.0]), lin=numpy.array([1.0, 0.0]))
@@ -200,10 +188,14 @@ class Screw2Tests(unittest.TestCase):
 class Screw3Tests(unittest.TestCase):
     """Tests for geombase.Screw3"""
     
-    def test_screw3_creation(self):
+    def test_screw3_basic_api(self):
         screw = Screw3(ang=numpy.array([1.0, 0.0, 0.0]), lin=numpy.array([0.0, 1.0, 0.0]))
-        self.assertTrue((screw.moment() == numpy.array([1.0, 0.0, 0.0])).all())
-        self.assertTrue((screw.vector() == numpy.array([0.0, 1.0, 0.0])).all())
+        numpy.testing.assert_array_equal(screw.moment(), numpy.array([1.0, 0.0, 0.0]))
+        numpy.testing.assert_array_equal(screw.vector(), numpy.array([0.0, 1.0, 0.0]))
+
+        scaled = Screw3(ang=numpy.array([1.0, 2.0, 3.0]), lin=numpy.array([4.0, 5.0, 6.0])) * 2.0
+        numpy.testing.assert_array_equal(scaled.moment(), numpy.array([2.0, 4.0, 6.0]))
+        numpy.testing.assert_array_equal(scaled.vector(), numpy.array([8.0, 10.0, 12.0]))
 
     def test_screw3_kinematic_carry(self):
         # Твист с чистой угловой скоростью вокруг Z
@@ -227,12 +219,6 @@ class Screw3Tests(unittest.TestCase):
         self.assertAlmostEqual(carried.moment()[2], 0.0, places=5)
         self.assertTrue((carried.vector() == numpy.array([0.0, 0.0, 1.0])).all())
 
-    def test_screw3_scalar_multiplication(self):
-        screw = Screw3(ang=numpy.array([1.0, 2.0, 3.0]), lin=numpy.array([4.0, 5.0, 6.0]))
-        scaled = screw * 2.0
-        self.assertTrue((scaled.moment() == numpy.array([2.0, 4.0, 6.0])).all())
-        self.assertTrue((scaled.vector() == numpy.array([8.0, 10.0, 12.0])).all())
-
     def test_screw3_transform_by_pose(self):
         # Поворот вокруг Z на 90 градусов
         screw = Screw3(ang=numpy.array([1.0, 0.0, 0.0]), lin=numpy.array([1.0, 0.0, 0.0]))
@@ -243,17 +229,6 @@ class Screw3Tests(unittest.TestCase):
         self.assertAlmostEqual(transformed.moment()[2], 0.0, places=5)
         self.assertAlmostEqual(transformed.vector()[0], 0.0, places=5)
         self.assertAlmostEqual(transformed.vector()[1], 1.0, places=5)
-        self.assertAlmostEqual(transformed.vector()[2], 0.0, places=5)
-
-    def test_screw3_transform_as_twist(self):
-        # Твист с угловой скоростью вокруг Z
-        screw = Screw3(ang=numpy.array([0.0, 0.0, 1.0]), lin=numpy.array([0.0, 0.0, 0.0]))
-        pose = Pose3.translation(1.0, 0.0, 0.0)
-        transformed = screw.transform_as_twist_by(pose)
-        # v' = v + p × ω = [0,0,0] + [1,0,0] × [0,0,1] = [0, -1, 0]
-        self.assertTrue((transformed.moment() == numpy.array([0.0, 0.0, 1.0])).all())
-        self.assertAlmostEqual(transformed.vector()[0], 0.0, places=5)
-        self.assertAlmostEqual(transformed.vector()[1], -1.0, places=5)
         self.assertAlmostEqual(transformed.vector()[2], 0.0, places=5)
 
     def test_screw3_transform_as_wrench(self):

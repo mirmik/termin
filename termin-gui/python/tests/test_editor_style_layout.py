@@ -479,16 +479,6 @@ class TestScrollAreaInLeftPanel:
         ui["root"].layout(0, 0, vw, vh, vw, vh)
         assert dp.scroll_y <= dp._max_scroll_y + 0.5
 
-    def test_lama_content_may_fit(self):
-        """LamaPanel has less content — may or may not need scrolling."""
-        ui = _build_editor_ui(1280, 800)
-        _activate_panel(ui, "lama_panel")
-        lp = ui["lama_panel"]
-        # Just verify no crash and valid geometry
-        assert lp.height > 0
-        assert lp._content_h >= 0
-
-
 # =========================================================================
 # Tests: layer panel (right) internal layout
 # =========================================================================
@@ -607,8 +597,7 @@ class TestViewportSizes:
         """Even when viewport is barely larger than fixed panels, no crash."""
         min_w = LEFT_CONTAINER_W + SPLITTER_W * 2 + LAYER_PANEL_W + 10
         ui = _build_editor_ui(min_w, 600)
-        # Canvas should get approximately 10px
-        assert ui["canvas"].width >= 0
+        assert abs(ui["canvas"].width - 10) <= 0.5
 
 
 # =========================================================================

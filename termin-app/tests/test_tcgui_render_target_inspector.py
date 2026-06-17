@@ -49,7 +49,6 @@ class _Entity:
         if component_type is _XrOriginComponent:
             return self._xr_origin
         raise AssertionError(component_type)
-        return self._camera
 
 
 class _SceneHandle:

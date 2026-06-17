@@ -8,7 +8,6 @@ from termin.robot.hqsolver import (
     InequalityConstraint
 )
 
-from termin.linalg.solve import solve_qp_active_set
 from termin.linalg.subspaces import nullspace_basis
 
 # -------------------------------------------------------------
@@ -31,10 +30,10 @@ def test_hqp_single_level_basic():
 
 
 # -------------------------------------------------------------
-# ТЕСТ 2: ДВА УРОВНЯ, ВТОРОЙ РАБОТАЕТ В NULLSPACE ПЕРВОГО
+# ТЕСТ 2: ПОЛНОРАНГОВЫЙ ПЕРВЫЙ УРОВЕНЬ НЕ ОСТАВЛЯЕТ СВОБОДЫ
 # -------------------------------------------------------------
 
-def test_hqp_two_levels_nullspace_simple():
+def test_hqp_lower_priority_ignored_when_no_nullspace_remains():
     solver = HQPSolver(n_vars=2)
 
     # Level 0: тянем x → [1, 0]
@@ -42,7 +41,7 @@ def test_hqp_two_levels_nullspace_simple():
     lvl0.add_task(QuadraticTask(np.eye(2), np.array([1., 0.])))
     solver.add_level(lvl0)
 
-    # Level 1: x → [1, 5], но только в nullspace первого уровня
+    # Level 1 хочет изменить x2, но nullspace первого уровня пуст.
     lvl1 = Level(priority=1)
     lvl1.add_task(QuadraticTask(np.eye(2), np.array([1., 5.])))
     solver.add_level(lvl1)
@@ -50,7 +49,7 @@ def test_hqp_two_levels_nullspace_simple():
     x = solver.solve()
 
     assert abs(x[0] - 1.0) < 1e-7   # не нарушено первым уровнем
-    assert abs(x[1] - 0.0) < 1e-7   # второй уровень не может изменить x1
+    assert abs(x[1] - 0.0) < 1e-7   # второй уровень не может изменить x2
 
 # -------------------------------------------------------------
 # ТЕСТ 2.2: ДВА УРОВНЯ, ВТОРОЙ РАБОТАЕТ В NULLSPACE ПЕРВОГО
@@ -163,4 +162,3 @@ def test_hqp_full_logic_with_constraints():
 
     # Второй уровень: двигаем только x2 → ограничение даёт x2 = 3
     assert abs(x[1] - 3) < 1e-7
-

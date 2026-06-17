@@ -24,8 +24,6 @@ def test_builtin_default_pipeline_color_fbos_follow_output_render_target():
 
 
 def test_builtin_default_pipeline_resolves_msaa_before_postfx():
-    assert ResolvePass is not None
-
     pipeline = RenderingManager.instance().create_pipeline("Default")
 
     pass_types = [frame_pass.type_name for frame_pass in pipeline.passes]
