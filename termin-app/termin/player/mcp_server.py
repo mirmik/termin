@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 from pathlib import Path
@@ -64,6 +65,164 @@ class PlayerMcpServer(TerminMcpServer):
             server_version="TerminPlayerMCP/0.1",
             thread_name="termin-player-mcp",
         )
+
+    def _handle_tool_call(
+        self,
+        request_id: object,
+        params: object,
+    ) -> dict[str, object]:
+        if not isinstance(params, dict):
+            return self._rpc_error(request_id, -32602, "Invalid params")
+        name = params.get("name")
+        if name == "capture_player_screenshot":
+            return self._handle_screenshot_tool_call(request_id, params)
+        return super()._handle_tool_call(request_id, params)
+
+    def _handle_screenshot_tool_call(
+        self,
+        request_id: object,
+        params: dict[str, object],
+    ) -> dict[str, object]:
+        arguments = params.get("arguments")
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, dict):
+            return self._rpc_error(request_id, -32602, "Tool arguments must be an object")
+
+        timeout = float(arguments.get("timeout", 30.0))
+        output_path = arguments.get("path")
+        if output_path is not None and not isinstance(output_path, str):
+            return self._rpc_error(request_id, -32602, "Screenshot path must be a string")
+        include_image = bool(arguments.get("include_image", False))
+
+        result = self._capture_player_screenshot(
+            output_path=output_path,
+            include_image=include_image,
+            timeout=timeout,
+        )
+        if not result.get("ok", False):
+            error = str(result.get("error", "Screenshot capture failed"))
+            return self._rpc_result(
+                request_id,
+                {
+                    "content": [{"type": "text", "text": error}],
+                    "isError": True,
+                    "structuredContent": result,
+                },
+            )
+
+        path = str(result.get("path", ""))
+        width = int(result.get("width", 0))
+        height = int(result.get("height", 0))
+        content: list[dict[str, object]] = [
+            {
+                "type": "text",
+                "text": f"Captured player screenshot: {path} ({width}x{height})",
+            }
+        ]
+        image_data = result.get("base64")
+        if isinstance(image_data, str):
+            content.append(
+                {
+                    "type": "image",
+                    "data": image_data,
+                    "mimeType": str(result.get("mime_type", "image/png")),
+                }
+            )
+        return self._rpc_result(
+            request_id,
+            {
+                "content": content,
+                "isError": False,
+                "structuredContent": result,
+            },
+        )
+
+    def _capture_player_screenshot(
+        self,
+        *,
+        output_path: str | None,
+        include_image: bool,
+        timeout: float,
+    ) -> dict[str, object]:
+        marker = "__TERMIN_PLAYER_MCP_SCREENSHOT_RESULT__"
+        script = "\n".join(
+            [
+                "import json",
+                "from termin.player.screenshot import capture_player_screenshot",
+                "_termin_mcp_screenshot_result = capture_player_screenshot(",
+                "    runtime,",
+                f"    output_path={output_path!r},",
+                f"    include_image={include_image!r},",
+                ")",
+                f"print({json.dumps(marker)} + json.dumps(_termin_mcp_screenshot_result, ensure_ascii=False))",
+            ]
+        )
+        result = self._execute_python(script, timeout=timeout)
+        if not result.ok:
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": result.error or "Screenshot capture script failed",
+            }
+
+        for line in result.output.splitlines():
+            if not line.startswith(marker):
+                continue
+            try:
+                payload = json.loads(line[len(marker):])
+            except json.JSONDecodeError as exc:
+                return {
+                    "ok": False,
+                    "output": result.output,
+                    "error": f"Invalid screenshot result JSON: {exc}",
+                }
+            if isinstance(payload, dict):
+                payload["ok"] = True
+                return payload
+            return {
+                "ok": False,
+                "output": result.output,
+                "error": "Screenshot result payload is not an object",
+            }
+
+        return {
+            "ok": False,
+            "output": result.output,
+            "error": "Screenshot result marker not found",
+        }
+
+    def _tool_schemas(self) -> list[dict[str, object]]:
+        return [
+            self._execute_python_tool_schema(),
+            self._screenshot_tool_schema(),
+        ]
+
+    def _screenshot_tool_schema(self) -> dict[str, object]:
+        return {
+            "name": "capture_player_screenshot",
+            "description": "Capture the running player render surface as a PNG screenshot.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Optional output PNG path. Defaults to /tmp/termin-player-screenshots/.",
+                    },
+                    "include_image": {
+                        "type": "boolean",
+                        "description": "Return base64 PNG data as MCP image content.",
+                        "default": False,
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Seconds to wait for the player thread to capture the screenshot.",
+                        "default": 30,
+                    },
+                },
+                "additionalProperties": False,
+            },
+        }
 
 
 def player_mcp_enabled(

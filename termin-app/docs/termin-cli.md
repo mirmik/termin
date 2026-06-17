@@ -118,10 +118,12 @@ Desktop bundles also include a player MCP diagnostics contract in
 `app.json` under `runtime.mcp`. It is disabled by default and can be enabled at
 run time with `--mcp`, `TERMIN_PLAYER_MCP=1`, or by setting
 `runtime.mcp.enabled` in the manifest. The player MCP server exposes the shared
-MCP transport and an `execute_python_script` tool against the running player
-thread. The script namespace includes `runtime`/`player`, `scene`, `window`,
-`surface`, `display`, `viewport`, `camera`, `project_path`, `scene_name`,
-`asset_manifest_path`, `build_json_path`, `delta_time`, and `request_quit`.
+MCP transport, an `execute_python_script` tool against the running player
+thread, and a `capture_player_screenshot` tool that reads the player render
+surface into a PNG. The script namespace includes `runtime`/`player`, `scene`,
+`window`, `surface`, `display`, `viewport`, `camera`, `project_path`,
+`scene_name`, `asset_manifest_path`, `build_json_path`, `delta_time`, and
+`request_quit`.
 
 Desktop builds currently package the SDK CPython runtime, Termin Python
 packages, Termin native libraries, project Python modules, recursive Python
@@ -150,6 +152,12 @@ The default player MCP session file is:
 
 ```text
 /tmp/termin-player-mcp.json
+```
+
+Player screenshots captured through MCP default to:
+
+```text
+/tmp/termin-player-screenshots/
 ```
 
 Legacy builds resolve `output_dir` from the profile and launch:

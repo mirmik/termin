@@ -2,8 +2,9 @@ from pathlib import Path
 from types import SimpleNamespace
 import threading
 
-from termin.mcp import PythonScriptExecutor, TerminMcpConfig, TerminMcpServer
+from termin.mcp import PythonExecutionResult, PythonScriptExecutor, TerminMcpConfig, TerminMcpServer
 from termin.player.mcp_server import (
+    PlayerMcpServer,
     PlayerPythonExecutor,
     load_player_mcp_config,
     player_mcp_enabled,
@@ -128,3 +129,80 @@ def test_player_mcp_config_uses_manifest_and_env(monkeypatch) -> None:
     config = load_player_mcp_config(manifest_options={"port": 9100, "token": "manifest-token"})
     assert config.port == 9200
     assert config.token == "env-token"
+
+
+def test_player_mcp_server_exposes_screenshot_tool(tmp_path: Path) -> None:
+    executor = PythonScriptExecutor(lambda: {})
+    server = PlayerMcpServer(
+        executor,
+        TerminMcpConfig(
+            host="127.0.0.1",
+            port=0,
+            token="",
+            session_file=tmp_path / "mcp.json",
+        ),
+    )
+
+    tools_response = server._handle_rpc(
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+    )
+    assert tools_response is not None
+    tools = tools_response["result"]["tools"]
+    assert [tool["name"] for tool in tools] == [
+        "execute_python_script",
+        "capture_player_screenshot",
+    ]
+
+
+def test_player_mcp_screenshot_tool_returns_structured_result(tmp_path: Path) -> None:
+    class FakePlayerMcpServer(PlayerMcpServer):
+        def _execute_python(self, script: str, *, timeout: float) -> PythonExecutionResult:
+            assert "capture_player_screenshot" in script
+            return PythonExecutionResult(
+                ok=True,
+                output=(
+                    "__TERMIN_PLAYER_MCP_SCREENSHOT_RESULT__"
+                    '{"path": "/tmp/player.png", "width": 320, "height": 200, '
+                    '"mime_type": "image/png", "base64": "cG5n"}\n'
+                ),
+                wants_more=False,
+            )
+
+    executor = PythonScriptExecutor(lambda: {})
+    server = FakePlayerMcpServer(
+        executor,
+        TerminMcpConfig(
+            host="127.0.0.1",
+            port=0,
+            token="",
+            session_file=tmp_path / "mcp.json",
+        ),
+    )
+
+    response = server._handle_rpc(
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "capture_player_screenshot",
+                "arguments": {
+                    "path": "/tmp/player.png",
+                    "include_image": True,
+                    "timeout": 1.0,
+                },
+            },
+        }
+    )
+
+    assert response is not None
+    result = response["result"]
+    assert result["isError"] is False
+    assert result["structuredContent"]["ok"] is True
+    assert result["structuredContent"]["path"] == "/tmp/player.png"
+    assert result["content"][0]["text"] == "Captured player screenshot: /tmp/player.png (320x200)"
+    assert result["content"][1] == {
+        "type": "image",
+        "data": "cG5n",
+        "mimeType": "image/png",
+    }
