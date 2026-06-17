@@ -128,6 +128,17 @@ lookup, listing, and scanning to the domain registries. The old app
 `visualization.core.plugin_loader` is now a compatibility re-export for
 `termin.scene.class_scanner`.
 
+Status 2026-06-18: texture and GLSL include asset classes/plugins moved to
+`termin-render` as `termin.render.texture_asset`, `termin.render.texture_plugin`,
+`termin.render.glsl_asset`, and `termin.render.glsl_plugin`. Texture import
+settings moved to `termin.render.texture_spec`. The old app modules
+`termin.assets.texture_asset`, `termin.assets.texture_plugin`,
+`termin.assets.glsl_asset`, `termin.assets.glsl_plugin`, and
+`termin.loaders.texture_spec` remain compatibility re-exports. `termin-render`
+now declares the `texture` and `glsl` asset plugin entry points; shader,
+material, and pipeline assets remain app-owned until their hot-reload boundary
+is separated from app material/pipeline code.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:

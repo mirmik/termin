@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from termin.assets.texture_asset import TextureAsset
+    from termin.render.texture_asset import TextureAsset
 
 
 class SerializationMixin:

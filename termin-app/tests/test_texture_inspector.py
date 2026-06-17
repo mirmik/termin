@@ -2,7 +2,7 @@ from PIL import Image
 
 from termin.assets.resources import ResourceManager
 from termin.editor_tcgui.texture_inspector import TextureInspectorTcgui
-from termin.loaders.texture_spec import TextureSpec
+from termin.render.texture_spec import TextureSpec
 
 
 def test_texture_inspector_opens_unregistered_texture_file(tmp_path):
