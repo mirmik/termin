@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from termin.assets.default_plugins import register_default_import_asset_plugins
+from termin_assets.default_plugins import register_default_import_asset_plugins
 from termin.player.runtime import load_manifest_assets_with_import_plugins
 from termin_assets import AssetTypeRegistry, PreLoadResult
 

@@ -21,10 +21,17 @@ from termin_assets.plugin_discovery import (
     register_import_plugins_from_entry_points,
     register_runtime_plugins_from_entry_points,
 )
+from termin_assets.default_plugins import (
+    build_import_plugin_extension_map,
+    register_default_asset_plugins,
+    register_default_import_asset_plugins,
+    register_default_runtime_asset_plugins,
+)
 from termin_assets.preload import PreLoadResult
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 from termin_assets.resource_handle import ResourceHandle, set_resource_manager_factory
+from termin_assets.resource_manager import AssetRuntimeManager
 from termin_assets.spec_file import get_uuid_from_spec, read_spec_file, write_spec_file
 
 __all__ = [
@@ -39,8 +46,10 @@ __all__ = [
     "AssetRegistry",
     "AssetRecord",
     "AssetRuntimePlugin",
+    "AssetRuntimeManager",
     "AssetTypePlugin",
     "AssetTypeRegistry",
+    "build_import_plugin_extension_map",
     "DataAsset",
     "Identifiable",
     "PreLoadResult",
@@ -50,6 +59,9 @@ __all__ = [
     "ResourceHandle",
     "get_uuid_from_spec",
     "register_combined_plugins_from_entry_points",
+    "register_default_asset_plugins",
+    "register_default_import_asset_plugins",
+    "register_default_runtime_asset_plugins",
     "register_import_plugins_from_entry_points",
     "register_runtime_plugins_from_entry_points",
     "read_spec_file",
