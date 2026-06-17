@@ -1,4 +1,4 @@
-"""Audio components for termin editor."""
+"""Audio components."""
 
 from termin.audio.components.audio_source import AudioSource
 from termin.audio.components.audio_listener import AudioListener

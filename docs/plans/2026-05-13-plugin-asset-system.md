@@ -81,15 +81,33 @@ Status 2026-06-17: `NavMeshHandle` was moved to `termin-navmesh` as
 `termin_assets.ResourceHandle` resource-manager factory instead of relying on
 the old `termin.assets.resource_handle` import side effect.
 
+Status 2026-06-17: `AnimationClipAsset` and `SkeletonAsset` were moved to
+`termin-animation` and `termin-skeleton` as `termin.animation.asset` and
+`termin.skeleton.asset`. The old app modules remain only compatibility
+re-exports. These asset families still do not have standalone file plugins;
+GLB import continues to create their child assets through the shared
+`ResourceManager`.
+
+Status 2026-06-17: audio runtime, audio clip assets, audio clip handles, audio
+asset plugins, and audio scene components were moved to a new `termin-audio`
+package. `termin-app` now keeps the old `termin.assets.audio_clip_*` modules
+only as compatibility re-exports and no longer owns the `termin.audio`
+namespace. `termin-audio` exposes import/runtime plugin entry points for
+`audio_clip`.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
 
 - `termin-mesh`: `MeshAsset`, `MeshAssetPlugin`, mesh file loaders/specs for mesh-owned formats.
 - `termin-render` or a render-facing package: `TextureAssetPlugin`, `ShaderAssetPlugin`, `MaterialAssetPlugin`, `PipelineAssetPlugin`, render pipeline asset support.
-- `termin-animation`: `AnimationClipAsset`, `AnimationClipAssetPlugin`.
-- `termin-skeleton`: `SkeletonAsset`, `SkeletonAssetPlugin`.
+- `termin-animation`: `AnimationClipAsset`; add `AnimationClipAssetPlugin` only
+  when a standalone animation file pipeline exists.
+- `termin-skeleton`: `SkeletonAsset`; add `SkeletonAssetPlugin` only when a
+  standalone skeleton file pipeline exists.
 - `termin-navmesh`: `NavMeshAsset`, `NavMeshAssetPlugin`.
+- `termin-audio`: `AudioClipAsset`, `AudioClipHandle`, `AudioClipAssetPlugin`,
+  `AudioEngine`, `AudioClip`, audio scene components.
 - `termin-gui` or a future UI package: `UIAsset`, `UIAssetPlugin`.
 
 ### Importer Packages

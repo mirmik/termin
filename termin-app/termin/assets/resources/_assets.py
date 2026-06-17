@@ -22,13 +22,13 @@ if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
     from termin.navmesh.asset import NavMeshAsset
     from termin.animation import TcAnimationClip
-    from termin.assets.animation_clip_asset import AnimationClipAsset
+    from termin.animation.asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
-    from termin.assets.skeleton_asset import SkeletonAsset
+    from termin.skeleton.asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.kinematic.general_transform import GeneralTransform3
-    from termin.assets.audio_clip_asset import AudioClipAsset
-    from termin.assets.audio_clip_handle import AudioClipHandle
+    from termin.audio.asset import AudioClipAsset
+    from termin.audio.handle import AudioClipHandle
     from termin.visualization.core.entity import Entity
     from termin.assets.asset import Asset
 
@@ -488,7 +488,7 @@ class AssetsMixin:
     def register_animation_clip(
         self, name: str, clip: "TcAnimationClip", source_path: str | None = None, uuid: str | None = None
     ) -> None:
-        from termin.assets.animation_clip_asset import AnimationClipAsset
+        from termin.animation.asset import AnimationClipAsset
         asset = AnimationClipAsset(clip=clip, name=name, source_path=source_path, uuid=uuid)
         self._animation_clip_registry.register(name, asset, source_path, uuid)
         self.animation_clips[name] = clip
@@ -532,7 +532,7 @@ class AssetsMixin:
     def register_skeleton(
         self, name: str, skeleton: "TcSkeleton", source_path: str | None = None, uuid: str | None = None
     ) -> None:
-        from termin.assets.skeleton_asset import SkeletonAsset
+        from termin.skeleton.asset import SkeletonAsset
         asset = SkeletonAsset.from_tc_skeleton(skeleton, name=name, source_path=source_path, uuid=uuid)
         self._skeleton_registry.register(name, asset, source_path, uuid)
         self.skeletons[name] = skeleton

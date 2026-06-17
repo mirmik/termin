@@ -14,13 +14,6 @@ class AudioClip:
     """
 
     def __init__(self, chunk: ctypes.c_void_p, duration_ms: int = 0):
-        """
-        Initialize AudioClip.
-
-        Args:
-            chunk: Mix_Chunk pointer from SDL_mixer
-            duration_ms: Duration in milliseconds (0 if unknown)
-        """
         self._chunk: ctypes.c_void_p = chunk
         self._duration_ms: int = duration_ms
 

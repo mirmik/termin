@@ -2,21 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from termin.visualization.core.python_component import PythonComponent
 from termin.inspect import InspectField
-
-if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
 
 
 class AudioListener(PythonComponent):
     """
-    Component that represents the audio listener (ears) in the scene.
+    Component that represents the audio listener in the scene.
 
-    Usually attached to the camera or player entity.
-    There should typically be only one active AudioListener in a scene.
+    Usually attached to the camera or player entity. There should typically be
+    only one active AudioListener in a scene.
     """
 
     inspect_fields = {
