@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.assets.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
-    from termin.assets.voxel_grid_asset import VoxelGridAsset
+    from termin.voxels.asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
     from termin.assets.navmesh_asset import NavMeshAsset
     from termin.animation import TcAnimationClip
@@ -156,7 +156,7 @@ class ResourceManagerBase:
             return None
 
         def get_asset_class():
-            from termin.assets.voxel_grid_asset import VoxelGridAsset
+            from termin.voxels.asset import VoxelGridAsset
             return VoxelGridAsset
 
         return AssetRegistry(

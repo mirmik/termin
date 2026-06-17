@@ -22,7 +22,7 @@ def register_default_runtime_asset_plugins(registry: "AssetTypeRegistry") -> Non
     from termin.assets.shader_plugin import register_shader_runtime_plugin
     from termin.assets.texture_plugin import register_texture_runtime_plugin
     from termin.assets.ui_plugin import register_ui_runtime_plugin
-    from termin.assets.voxel_grid_plugin import register_voxel_grid_runtime_plugin
+    from termin.voxels.asset_plugin import register_voxel_grid_runtime_plugin
 
     register_audio_clip_runtime_plugin(registry)
     register_glb_runtime_plugin(registry)
@@ -60,7 +60,7 @@ def register_default_import_asset_plugins(registry: "AssetTypeRegistry") -> None
     from termin.assets.shader_plugin import register_shader_import_plugin
     from termin.assets.texture_plugin import register_texture_import_plugin
     from termin.assets.ui_plugin import register_ui_import_plugin
-    from termin.assets.voxel_grid_plugin import register_voxel_grid_import_plugin
+    from termin.voxels.asset_plugin import register_voxel_grid_import_plugin
 
     register_audio_clip_import_plugin(registry)
     register_glb_import_plugin(registry)

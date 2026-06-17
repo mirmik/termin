@@ -59,6 +59,13 @@ ignored-root policy instead of importing project settings. `termin-app` keeps
 the editor/project behavior through compatibility wrappers in
 `termin.assets.project_file_watcher` and `termin.assets.plugin_preloader`.
 
+Status 2026-06-17: `VoxelGridAsset` and voxel-grid asset plugins were moved to
+`termin-voxels` as `termin.voxels.asset` and `termin.voxels.asset_plugin`.
+`termin-app` now keeps `termin.assets.voxel_grid_asset` and
+`termin.assets.voxel_grid_plugin` only as compatibility re-exports. Default
+registration calls the domain registration helpers from `termin-voxels`, and
+the package also exposes entry points for external plugin discovery.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
