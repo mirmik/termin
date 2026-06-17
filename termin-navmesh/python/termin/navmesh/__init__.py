@@ -110,6 +110,12 @@ def __getattr__(name: str):
         globals()["NavMeshAsset"] = NavMeshAsset
         return NavMeshAsset
 
+    if name == "NavMeshHandle":
+        from termin.navmesh.handle import NavMeshHandle
+
+        globals()["NavMeshHandle"] = NavMeshHandle
+        return NavMeshHandle
+
     if name == "PolygonBuilder":
         from termin.navmesh.polygon_builder import PolygonBuilder
 
@@ -129,6 +135,7 @@ __all__ = [
     "NavMesh",
     "NavMeshAsset",
     "NavMeshConfig",
+    "NavMeshHandle",
     "NavPolygon",
     "PolygonBuilder",
     "Portal",

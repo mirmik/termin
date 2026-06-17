@@ -22,6 +22,29 @@ def test_asset_core_classes_are_exported() -> None:
     assert ResourceHandle is not None
 
 
+def test_resource_handle_can_lookup_assets_by_uuid() -> None:
+    asset = Asset(name="probe", uuid="probe-uuid")
+
+    class FakeResourceManager:
+        def get_probe_asset_by_uuid(self, uuid: str):
+            return asset if uuid == asset.uuid else None
+
+    class ProbeHandle(ResourceHandle[object, Asset]):
+        _asset_by_uuid_getter = "get_probe_asset_by_uuid"
+
+    from termin_assets import set_resource_manager_factory
+
+    set_resource_manager_factory(FakeResourceManager)
+    try:
+        handle = ProbeHandle.from_uuid("probe-uuid")
+        missing = ProbeHandle.from_uuid("missing")
+    finally:
+        set_resource_manager_factory(None)
+
+    assert handle.get_asset() is asset
+    assert missing.get_asset() is None
+
+
 class DummyPlugin:
     type_id = "dummy"
     extensions = {".dummy"}

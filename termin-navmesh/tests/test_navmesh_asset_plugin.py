@@ -1,4 +1,4 @@
-from termin_assets import AssetTypeRegistry
+from termin_assets import AssetTypeRegistry, set_resource_manager_factory
 from termin.navmesh.asset import NavMeshAsset
 from termin.navmesh.asset_plugin import (
     create_import_plugin,
@@ -6,8 +6,10 @@ from termin.navmesh.asset_plugin import (
     register_navmesh_import_plugin,
     register_navmesh_runtime_plugin,
 )
+from termin.navmesh.handle import NavMeshHandle
 from termin.navmesh.navmesh_asset import NavMeshAsset as LegacyNavMeshAsset
 from termin.navmesh.types import NavMesh
+from termin.assets.navmesh_handle import NavMeshHandle as LegacyNavMeshHandle
 
 
 def test_navmesh_asset_wraps_navmesh() -> None:
@@ -22,6 +24,38 @@ def test_navmesh_asset_wraps_navmesh() -> None:
 
 def test_navmesh_asset_legacy_module_reexports_canonical_class() -> None:
     assert LegacyNavMeshAsset is NavMeshAsset
+
+
+def test_navmesh_handle_legacy_module_reexports_canonical_class() -> None:
+    assert LegacyNavMeshHandle is NavMeshHandle
+
+
+def test_navmesh_handle_uses_configured_resource_manager_factory() -> None:
+    navmesh = NavMesh(name="factory_navmesh")
+    asset = NavMeshAsset.from_navmesh(
+        navmesh,
+        name="factory_navmesh",
+        source_path="/tmp/factory.navmesh",
+    )
+
+    class FakeResourceManager:
+        def get_navmesh_asset(self, name: str):
+            return asset if name == asset.name else None
+
+        def get_navmesh_asset_by_uuid(self, uuid: str):
+            return asset if uuid == asset.uuid else None
+
+    set_resource_manager_factory(FakeResourceManager)
+    try:
+        by_name = NavMeshHandle.from_name("factory_navmesh")
+        by_uuid = NavMeshHandle.from_uuid(asset.uuid)
+    finally:
+        set_resource_manager_factory(None)
+
+    assert by_name.asset is asset
+    assert by_name.navmesh is navmesh
+    assert by_uuid.asset is asset
+    assert by_uuid.navmesh is navmesh
 
 
 def test_navmesh_plugins_register_with_asset_registry() -> None:
