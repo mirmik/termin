@@ -15,6 +15,12 @@ extend-exclude = [
 # style migration. Formatting and broader cleanup rules should be enabled
 # after the current codebase is clean on this baseline.
 select = [
+    "B006",
+    "B009",
+    "B010",
+    "B011",
+    "B012",
+    "B018",
     "E9",
     "F63",
     "F7",
