@@ -235,7 +235,12 @@ void print_help() {
         << "  --scene <path>            Override profile entry_scene in project mode.\n"
         << "  --width <pixels>          Forward to termin.player.\n"
         << "  --height <pixels>         Forward to termin.player.\n"
-        << "  --title <text>            Forward to termin.player.\n";
+        << "  --title <text>            Forward to termin.player.\n"
+        << "  --mcp                     Enable player MCP diagnostics endpoint.\n"
+        << "  --mcp-host <host>         Forward player MCP bind host.\n"
+        << "  --mcp-port <port>         Forward player MCP bind port.\n"
+        << "  --mcp-token <token>       Forward player MCP bearer token.\n"
+        << "  --mcp-session-file <path> Forward player MCP session file path.\n";
 }
 
 void print_usage_error() {
@@ -299,6 +304,12 @@ ParsedArgs parse_args(int argc, char** argv) {
             parsed.options.backend = take_value(argc, argv, i, arg);
         } else if (arg == "--scene") {
             parsed.options.scene_override = take_value(argc, argv, i, arg);
+        } else if (arg == "--mcp") {
+            parsed.options.player_args.emplace_back(arg);
+        } else if (arg == "--mcp-host" || arg == "--mcp-port" ||
+                   arg == "--mcp-token" || arg == "--mcp-session-file") {
+            parsed.options.player_args.emplace_back(arg);
+            parsed.options.player_args.emplace_back(take_value(argc, argv, i, arg));
         } else if (arg == "--width" || arg == "--height" || arg == "--title" ||
                    arg == "-W" || arg == "-H" || arg == "-t") {
             parsed.options.player_args.emplace_back(arg);

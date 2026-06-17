@@ -112,6 +112,8 @@ class PlayerRuntime:
         title: str = "Termin Player",
         asset_manifest_path: str | Path | None = None,
         build_json_path: str | Path | None = None,
+        mcp_enabled: bool = False,
+        mcp_options: dict | None = None,
     ):
         self.project_path = Path(project_path)
         self.scene_name = scene_name
@@ -120,6 +122,8 @@ class PlayerRuntime:
         self.title = title
         self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
         self.build_json_path = Path(build_json_path) if build_json_path is not None else None
+        self.mcp_enabled = bool(mcp_enabled)
+        self.mcp_options = mcp_options if mcp_options is not None else {}
         self._scene_file_data = None
 
         self.running = False
@@ -141,7 +145,17 @@ class PlayerRuntime:
         self._viewport = None
         self._fallback_render_target = None
         self._input_manager = None
+        self._mcp_executor = None
+        self._mcp_server = None
         self.exit_code = 0
+
+    @property
+    def display(self):
+        return self._display
+
+    @property
+    def viewport(self):
+        return self._viewport
 
     def initialize(self) -> bool:
         """Initialize player systems."""
@@ -246,9 +260,24 @@ class PlayerRuntime:
 
         # Set up input handling
         self._setup_input()
+        self._start_mcp_server()
 
         log.info("[PlayerRuntime] Initialization complete")
         return True
+
+    def _start_mcp_server(self) -> None:
+        from tcbase import log
+        from termin.player.mcp_server import start_player_mcp_server
+
+        executor, server = start_player_mcp_server(
+            self,
+            explicit=self.mcp_enabled,
+            manifest_options=self.mcp_options,
+        )
+        self._mcp_executor = executor
+        self._mcp_server = server
+        if executor is not None and server is None:
+            log.error("[PlayerRuntime] Player MCP executor was created but server did not start")
 
     def _runtime_display_factory(self, name: str):
         """Return the player's native display for scene-declared displays."""
@@ -796,6 +825,9 @@ class PlayerRuntime:
             self.window.poll_events()
             self._sync_surface_size()
 
+        if self._mcp_executor is not None:
+            self._mcp_executor.process_pending()
+
         # Update scene
         if self.scene is not None:
             self.scene.update(self.delta_time)
@@ -846,6 +878,11 @@ class PlayerRuntime:
 
         log.info("[PlayerRuntime] Shutting down")
 
+        if self._mcp_server is not None:
+            self._mcp_server.stop()
+            self._mcp_server = None
+        self._mcp_executor = None
+
         # Remove display from manager
         manager = RenderingManager.instance()
         manager.set_display_factory(lambda name: None)
@@ -893,6 +930,8 @@ def run_project(
     width: int = 1280,
     height: int = 720,
     title: str = "Termin Player",
+    mcp_enabled: bool = False,
+    mcp_options: dict | None = None,
 ):
     """
     Run a project in standalone player mode.
@@ -910,6 +949,8 @@ def run_project(
         width=width,
         height=height,
         title=title,
+        mcp_enabled=mcp_enabled,
+        mcp_options=mcp_options,
     )
     runtime.run()
 
@@ -919,6 +960,8 @@ def run_build(
     width: int = 1280,
     height: int = 720,
     title: str = "Termin Player",
+    mcp_enabled: bool = False,
+    mcp_options: dict | None = None,
 ):
     """
     Run a built project from build.json.
@@ -948,6 +991,8 @@ def run_build(
         title=title,
         asset_manifest_path=asset_manifest,
         build_json_path=build_path,
+        mcp_enabled=mcp_enabled,
+        mcp_options=mcp_options,
     )
     runtime.run()
 
@@ -957,6 +1002,8 @@ def run_bundle(
     width: int = 1280,
     height: int = 720,
     title: str = "Termin Player",
+    mcp_enabled: bool = False,
+    mcp_options: dict | None = None,
 ):
     """Run a packaged desktop bundle from app.json."""
     app_path = Path(app_manifest_path).resolve()
@@ -969,6 +1016,15 @@ def run_bundle(
         raise ValueError(f"app.json has no package object: {app_path}")
     if not isinstance(entry, dict):
         raise ValueError(f"app.json has no entry object: {app_path}")
+
+    runtime_manifest = app_data.get("runtime")
+    manifest_mcp_options: dict = {}
+    if isinstance(runtime_manifest, dict):
+        mcp_value = runtime_manifest.get("mcp")
+        if isinstance(mcp_value, dict):
+            manifest_mcp_options.update(mcp_value)
+    if mcp_options is not None:
+        manifest_mcp_options.update(mcp_options)
 
     package_root_value = package.get("root")
     package_manifest_value = package.get("manifest")
@@ -994,5 +1050,7 @@ def run_bundle(
         title=title,
         asset_manifest_path=manifest_path,
         build_json_path=app_path,
+        mcp_enabled=mcp_enabled,
+        mcp_options=manifest_mcp_options,
     )
     runtime.run()

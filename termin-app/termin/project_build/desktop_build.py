@@ -101,6 +101,12 @@ def build_desktop_project(
                 "native_library_dirs": [
                     "lib",
                 ],
+                "mcp": {
+                    "enabled": False,
+                    "host": "127.0.0.1",
+                    "port": 8766,
+                    "session_file": "/tmp/termin-player-mcp.json",
+                },
             },
             "entry": {
                 "scene": "package/scene.json",
