@@ -64,29 +64,13 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         A_ext, b_ext, variables = assembler.assemble_extended_system(matrices)
         x = linalg.solve(A_ext, b_ext)
 
-        print("A_ext:")
-        print(A_ext)
 
-        print("b_ext:")
-        print(b_ext)
 
-        print("variables:")
-        print(variables)
 
         x = linalg.solve(A_ext, b_ext)
-        print("Result:")
-        print(x)
 
-        diagnosis = assembler.matrix_diagnosis(A_ext)
-        print("Matrix Diagnosis: ")
-        for key, value in diagnosis.items():
-            print(f"  {key}: {value}")
 
-        print("Equations: ")
-        eqs = assembler.system_to_human_readable(A_ext, b_ext, variables)
-        print(eqs)
 
-        #assert False
 
         assert np.isclose(x[0], 0.0)
         assert np.isclose(x[1], 0.0)
@@ -117,27 +101,12 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         A_ext, b_ext, variables = assembler.assemble_extended_system(matrices)
         x = linalg.solve(A_ext, b_ext)
 
-        print("A_ext:")
-        print(A_ext)
 
-        print("b_ext:")
-        print(b_ext)
 
-        print("variables:")
-        print(variables)
 
         x = linalg.solve(A_ext, b_ext)
-        print("Result:")
-        print(x)
 
-        diagnosis = assembler.matrix_diagnosis(A_ext)
-        print("Matrix Diagnosis: ")
-        for key, value in diagnosis.items():
-            print(f"  {key}: {value}")
 
-        print("Equations: ")
-        eqs = assembler.system_to_human_readable(A_ext, b_ext, variables)
-        print(eqs)
 
         assert np.isclose(x[0], 0.0)
         assert np.isclose(x[1], 0.0)
@@ -179,30 +148,8 @@ class TestIntegrationMultibody3D(unittest.TestCase):
 
         matrices = assembler.assemble()
         A_ext, b_ext, variables = assembler.assemble_extended_system(matrices)        
-        print("A_ext:")
-        print(A_ext)
-
-        print("b_ext:")
-        print(b_ext)
-
-        print("variables:")
-        print(variables)
-
         x = linalg.solve(A_ext, b_ext)
-        print("Result:")
-        print(x)
 
-        diagnosis = assembler.matrix_diagnosis(A_ext)
-        print("Matrix Diagnosis: ")
-        for key, value in diagnosis.items():
-            print(f"  {key}: {value}")
-
-        print("Equations: ")
-        eqs = assembler.system_to_human_readable(A_ext, b_ext, variables)
-        print(eqs)
-        
-        #assert False
-            
         assert np.isclose(x[0], 0.0)
         assert np.isclose(x[1], 0.0)
         assert np.isclose(x[2], -5.0)
@@ -227,8 +174,6 @@ class TestIntegrationMultibody3D(unittest.TestCase):
         #joint.update_radius()
 
         assert joint.radius is not None
-        #assert joint.radius[0] == -1.0
-        #assert joint.radius[1] == 0.0
         assert assembler.total_variables_by_tag("acceleration") == 6
         assert assembler.total_variables_by_tag("force") == 3
 
@@ -242,32 +187,17 @@ class TestIntegrationMultibody3D(unittest.TestCase):
 
         matrices = assembler.assemble()
         A_ext, b_ext, variables = assembler.assemble_extended_system(matrices)        
-        print("A_ext:")
-        print(A_ext)
-
-        print("b_ext:")
-        print(b_ext)
-
-        print("variables:")
-        print(variables)
-
         x = linalg.solve(A_ext, b_ext)
-        print("Result:")
-        print(x)
 
-        diagnosis = assembler.matrix_diagnosis(A_ext)
-        print("Matrix Diagnosis: ")
-        for key, value in diagnosis.items():
-            print(f"  {key}: {value}")
-
-        print("Equations: ")
-        eqs = assembler.system_to_human_readable(A_ext, b_ext, variables)
-        print(eqs)
-
-
-        #assert np.isclose(x[0], 0.0)
-        #assert np.isclose(x[1], 0.0)
-        #assert np.isclose(x[2], -5.0)
+        assert np.isclose(x[0], 0.0)
+        assert np.isclose(x[1], 0.0)
+        assert np.isclose(x[2], -1.25)
+        assert np.isclose(x[3], 0.0)
+        assert np.isclose(x[4], 5.0)
+        assert np.isclose(x[5], 0.0)
+        assert np.isclose(x[6], 0.0)
+        assert np.isclose(x[7], 0.0)
+        assert np.isclose(x[8], 25.0)
 
 
 class TestIntegrationDynamics(unittest.TestCase):
@@ -312,7 +242,6 @@ class TestIntegrationDynamics(unittest.TestCase):
         z_expected = z0 + 0.5 * g * t_total**2
         z_actual = body.pose().lin[2]
 
-        print(f"Free fall: z_expected={z_expected}, z_actual={z_actual}")
         self.assertAlmostEqual(z_actual, z_expected, delta=0.1)
 
     def test_free_fall_velocity(self):
@@ -342,7 +271,6 @@ class TestIntegrationDynamics(unittest.TestCase):
         vz_expected = g * t_total
         vz_actual = body.velocity_var.value[2]
 
-        print(f"Free fall velocity: vz_expected={vz_expected}, vz_actual={vz_actual}")
         self.assertAlmostEqual(vz_actual, vz_expected, delta=0.1)
 
     def test_energy_conservation_linear(self):
@@ -379,7 +307,6 @@ class TestIntegrationDynamics(unittest.TestCase):
         v_final = body.velocity_var.value[0:3]
         E_final = 0.5 * mass * np.dot(v_final, v_final)
 
-        print(f"Energy conservation (linear): E0={E0}, E_final={E_final}")
         self.assertAlmostEqual(E_final, E0, delta=E0 * 0.01)  # 1% tolerance
 
     def test_energy_conservation_rotation(self):
@@ -416,7 +343,6 @@ class TestIntegrationDynamics(unittest.TestCase):
         omega_final = body.velocity_var.value[3:6]
         E_final = 0.5 * np.dot(I_diag * omega_final, omega_final)
 
-        print(f"Energy conservation (rotation): E0={E0}, E_final={E_final}")
         self.assertAlmostEqual(E_final, E0, delta=E0 * 0.01)
 
     def test_angular_momentum_conservation(self):
@@ -454,7 +380,6 @@ class TestIntegrationDynamics(unittest.TestCase):
         L_final = I_diag * omega_final
         L_final_magnitude = np.linalg.norm(L_final)
 
-        print(f"Angular momentum: |L0|={L0_magnitude}, |L_final|={L_final_magnitude}")
         self.assertAlmostEqual(L_final_magnitude, L0_magnitude, delta=L0_magnitude * 0.01)
 
     def test_uniform_rotation(self):
@@ -484,7 +409,6 @@ class TestIntegrationDynamics(unittest.TestCase):
 
         omega_final = body.velocity_var.value[5]
 
-        print(f"Uniform rotation: omega0={omega0}, omega_final={omega_final}")
         self.assertAlmostEqual(omega_final, omega0, delta=0.01)
 
     def test_pendulum_small_oscillations(self):
@@ -529,7 +453,6 @@ class TestIntegrationDynamics(unittest.TestCase):
         # После половины периода маятник должен быть примерно в противоположной точке
         x_final = body.pose().lin[0]
 
-        print(f"Pendulum half-period: x0={x0:.4f}, x_final={x_final:.4f}")
 
         # Проверяем что маятник качнулся в другую сторону
         self.assertLess(x_final, 0)  # должен быть отрицательным
@@ -583,7 +506,6 @@ class TestIntegrationDynamics(unittest.TestCase):
 
         E_final = compute_energy()
 
-        print(f"Pendulum energy: E0={E0:.6f}, E_final={E_final:.6f}")
 
         # Энергия должна сохраняться с точностью 5%
         self.assertAlmostEqual(E_final, E0, delta=abs(E0) * 0.05)
@@ -670,7 +592,6 @@ class TestRevoluteJoint(unittest.TestCase):
         # Траектории должны быть одинаковыми
         for i, (p1, p2) in enumerate(zip(pos_normal, pos_swapped)):
             diff = np.linalg.norm(p1 - p2)
-            print(f"Step {i*50}: diff={diff:.6f}, p1={p1}, p2={p2}")
             self.assertLess(diff, 0.1, f"Trajectories diverge at step {i*50}")
 
     def test_double_pendulum_energy(self):
@@ -744,7 +665,6 @@ class TestRevoluteJoint(unittest.TestCase):
 
         E_final = compute_energy()
 
-        print(f"Double pendulum: E0={E0:.6f}, E_final={E_final:.6f}")
 
         # Энергия должна сохраняться с точностью 10% (двойной маятник более чувствителен)
         self.assertAlmostEqual(E_final, E0, delta=abs(E0) * 0.1)
@@ -801,17 +721,10 @@ class TestRevoluteJoint(unittest.TestCase):
         )
 
         # Выведем начальное состояние
-        print(f"\n=== Initial state ===")
-        print(f"body1.pose = {body1.pose().lin}")
-        print(f"body2.pose = {body2.pose().lin}")
-        print(f"joint_fixed.r_local = {joint_fixed.r_local}")
-        print(f"joint_rev.rA_local = {joint_rev.rA_local}")
-        print(f"joint_rev.rB_local = {joint_rev.rB_local}")
 
         # L1 = расстояние от anchor до body1, L2 = расстояние от body1 до body2
         L1 = np.linalg.norm(pos1 - anchor)
         L2 = np.linalg.norm(pos2 - pos1)
-        print(f"Expected L1 = {L1}, L2 = {L2}")
 
         # Симуляция на 0.2 секунды
         n_steps = int(0.2 / dt)
@@ -953,7 +866,6 @@ class TestRevoluteJoint(unittest.TestCase):
         r1_local = -pos1  # вектор от центра тела к точке крепления
         v1 = -np.cross(omega1, r1_local)  # v_lin = -ω × r_local
         body1.velocity_var.value[0:3] = v1
-        print(f"body1: pos={pos1}, omega={omega1}, v={v1}, r_local={r1_local}")
 
         # Второе тело (нижний маятник)
         body2 = RigidBody3D(
@@ -979,7 +891,6 @@ class TestRevoluteJoint(unittest.TestCase):
         # Условие совместимости скоростей: v1 = v2 + ω2 × r2_local
         v2 = v1 - np.cross(omega2, r2_local)
         body2.velocity_var.value[0:3] = v2
-        print(f"body2: pos={pos2}, omega={omega2}, v={v2}, r_local={r2_local}")
 
         # Фиксируем первое тело в начале координат (ось Y)
         joint_fixed = FixedRotationJoint3D(
