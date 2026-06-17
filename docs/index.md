@@ -8,6 +8,7 @@
 
 - [Documentation System](./documentation-system.md) — где должны жить разные типы документов.
 - [Module Map](./modules.md) — границы ответственности модулей и правила переноса кода.
+- [Linting And Static Analysis](./linting.md) — общий план Python и C/C++ lint/static-analysis.
 - [Python Linting](./python-linting.md) — Ruff baseline для Python-кода.
 - [Code Duplication Check](./code-duplication.md) — jscpd-прогон для поиска copy/paste-дублей.
 - [SDK Python Wheelhouse](./sdk-python-wheelhouse.md) — wheels из SDK для внешних Python-проектов.
