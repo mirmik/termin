@@ -10,7 +10,8 @@ coverage once the baseline is stable.
 - The Python baseline is defect-oriented and documented in
   `docs/python-linting.md`; full Bugbear `B` and full Pyflakes `F` are enabled.
 - CI runs Python lint as a separate job before the heavier build jobs.
-- C/C++ currently has no repository-owned lint or static-analysis entry point.
+- C/C++ has an opt-in clang-tidy entry point through `./run-lint-cpp.sh`.
+  It is not a mandatory CI gate yet.
 
 ## Python Next Steps
 
@@ -30,34 +31,56 @@ Defer until the defect-oriented baseline is clean:
 - Type checking with mypy or pyright. This needs package-boundary cleanup and a
   clear policy for native modules, generated bindings, and editor-only imports.
 
-## C/C++ Linting Direction
+## C/C++ Linting
 
-The first C/C++ milestone should be an opt-in script, not a mandatory CI gate:
+Run the current opt-in baseline with:
 
 ```bash
 ./run-lint-cpp.sh
 ```
 
-Suggested behavior:
+Focused checks can pass repository-relative path filters:
 
-- Configure a dedicated build directory, for example `build/Release-lint`.
-- Pass `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`.
-- Keep lint builds separate from normal SDK/test builds to avoid changing build
+```bash
+./run-lint-cpp.sh termin-render termin-graphics
+```
+
+The script:
+
+- configures a dedicated build directory, `build/Release-lint` by default;
+- passes `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`;
+- keeps lint builds separate from normal SDK/test builds to avoid changing build
   semantics.
-- Disable unity build and preferably PCH for lint runs, because clang-tidy
+- disables unity build and PCH, because clang-tidy
   diagnostics are easier to interpret on real translation units.
-- Exclude `termin-thirdparty`, generated SDK outputs, bundled Python, and build
+- excludes `termin-thirdparty`, generated SDK outputs, bundled Python, and build
   directories.
+- starts with `clang-diagnostic-*` and a narrow non-`optin`
+  `clang-analyzer-*` baseline;
+- treats matched clang-tidy warnings as errors;
+- excludes the noisy C11 `*_s` replacement warning for ordinary
+  `memcpy` / `memset` calls, `clang-analyzer-deadcode.*` until local and
+  third-party header noise is audited, and clang's `nan-infinity-disabled`
+  diagnostic in the Release lint profile.
 
-Recommended first `clang-tidy` baseline:
+Useful options:
 
-- `clang-diagnostic-*` and `clang-analyzer-*` for compiler-backed diagnostics
-  and path-sensitive static analysis.
-- A narrow subset of `bugprone-*`, `performance-*`, and `modernize-*` after an
-  initial dry run. Do not enable broad style families before seeing the noise
-  level on the current codebase.
-- `readability-*` should stay mostly off at first; it tends to produce style
-  churn rather than defect signal.
+- `./run-lint-cpp.sh --configure-only` to generate `compile_commands.json`
+  without running clang-tidy.
+- `./run-lint-cpp.sh --checks 'CHECKS'` to test broader local rule sets.
+- `./run-lint-cpp.sh --warnings-as-errors ''` to run an exploratory audit
+  without failing on warnings.
+- `CLANG_TIDY_BIN=/path/to/clang-tidy ./run-lint-cpp.sh` when multiple LLVM
+  versions are installed.
+
+Recommended next `clang-tidy` additions after the baseline is understood:
+
+- a narrow subset of `bugprone-*`, `performance-*`, and `modernize-*`;
+- selected `clang-analyzer-optin.*` checks after flags-style enum noise is
+  handled;
+- `clang-analyzer-deadcode.*` after third-party header diagnostics are filtered
+  or otherwise isolated;
+- no broad `readability-*` family until the signal/noise level is known.
 
 Possible later additions:
 

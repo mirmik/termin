@@ -1418,10 +1418,9 @@ void RecastNavMeshBuilderComponent::build_poly_mesh_debug() {
         return {r, g, b, 0.8f};
     };
 
-    // For each polygon, triangulate using fan triangulation
+        // For each polygon, triangulate using fan triangulation
     for (int p = 0; p < pmesh.npolys; p++) {
         const uint16_t* poly = &pmesh.polys[p * pmesh.nvp * 2];
-        uint16_t region = pmesh.regions[p];
 
         // Count vertices in this polygon (stop at 0xFFFF)
         int nv = 0;
@@ -1647,7 +1646,8 @@ TcMaterial RecastNavMeshBuilderComponent::get_debug_material() {
 void RecastNavMeshBuilderComponent::capture_heightfield_data(rcHeightfield* hf) {
     if (!hf) return;
 
-    auto& data = debug_data.heightfield.emplace();
+    debug_data.heightfield = RecastDebugData::Heightfield{};
+    auto& data = *debug_data.heightfield;
     data.width = hf->width;
     data.height = hf->height;
     data.cs = hf->cs;
@@ -1674,7 +1674,8 @@ void RecastNavMeshBuilderComponent::capture_heightfield_data(rcHeightfield* hf) 
 void RecastNavMeshBuilderComponent::capture_compact_data(rcCompactHeightfield* chf) {
     if (!chf) return;
 
-    auto& data = debug_data.compact.emplace();
+    debug_data.compact = RecastDebugData::CompactHeightfield{};
+    auto& data = *debug_data.compact;
     data.width = chf->width;
     data.height = chf->height;
     data.span_count = chf->spanCount;
@@ -1706,7 +1707,8 @@ void RecastNavMeshBuilderComponent::capture_compact_data(rcCompactHeightfield* c
 void RecastNavMeshBuilderComponent::capture_contour_data(rcContourSet* cset) {
     if (!cset) return;
 
-    auto& data = debug_data.contours.emplace();
+    debug_data.contours = RecastDebugData::ContourSet{};
+    auto& data = *debug_data.contours;
     data.cs = cset->cs;
     data.ch = cset->ch;
     rcVcopy(data.bmin, cset->bmin);
@@ -1735,7 +1737,8 @@ void RecastNavMeshBuilderComponent::capture_contour_data(rcContourSet* cset) {
 void RecastNavMeshBuilderComponent::capture_poly_mesh_data(rcPolyMesh* pmesh) {
     if (!pmesh) return;
 
-    auto& data = debug_data.poly_mesh.emplace();
+    debug_data.poly_mesh = RecastDebugData::PolyMesh{};
+    auto& data = *debug_data.poly_mesh;
     data.nverts = pmesh->nverts;
     data.npolys = pmesh->npolys;
     data.nvp = pmesh->nvp;
@@ -1764,7 +1767,8 @@ void RecastNavMeshBuilderComponent::capture_poly_mesh_data(rcPolyMesh* pmesh) {
 void RecastNavMeshBuilderComponent::capture_detail_mesh_data(rcPolyMeshDetail* dmesh) {
     if (!dmesh) return;
 
-    auto& data = debug_data.detail_mesh.emplace();
+    debug_data.detail_mesh = RecastDebugData::PolyMeshDetail{};
+    auto& data = *debug_data.detail_mesh;
     data.nmeshes = dmesh->nmeshes;
     data.nverts = dmesh->nverts;
     data.ntris = dmesh->ntris;

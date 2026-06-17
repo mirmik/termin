@@ -315,7 +315,10 @@ struct GeneralTransform3 {
 
     void world_matrix(double* m) const {
         tc_entity_pool* pool = pool_ptr();
-        if (!pool) return;
+        if (!pool) {
+            tc_entity_default_world_matrix(m);
+            return;
+        }
         tc_entity_pool_get_world_matrix(pool, _h.id, m);
     }
 

@@ -420,7 +420,6 @@ inline RayHit ConvexHullCollider::closest_to_ray(const Ray3& ray) const {
             Vec3 P = vertex_world(idx[e]);
             Vec3 Q = vertex_world(idx[(e + 1) % 3]);
             Vec3 PQ = Q - P;
-            Vec3 PO = ray.origin - P;
 
             // Closest between line segment PQ and ray
             double pq_sq = PQ.dot(PQ);
