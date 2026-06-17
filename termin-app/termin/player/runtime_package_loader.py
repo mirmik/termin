@@ -5,9 +5,16 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
+
+@dataclass(frozen=True)
+class _RuntimeShader:
+    shader: Any
+    material_texture_resources: tuple[str, ...]
 
 
 def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
@@ -28,7 +35,7 @@ def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
         return
 
     loaded = 0
-    shaders: dict[str, Any] = {}
+    shaders: dict[str, _RuntimeShader] = {}
     for resource_type in ("shader", "mesh", "material", "pipeline", "foliage_data"):
         for entry in resources:
             if not isinstance(entry, dict) or entry.get("type") != resource_type:
@@ -71,7 +78,7 @@ def _configure_shader_runtime(package_dir: Path, manifest: dict[str, Any]) -> No
     log.info(f"[PlayerRuntime] Runtime package shader artifacts: {artifact_root}")
 
 
-def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, Any]) -> bool:
+def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, _RuntimeShader]) -> bool:
     from tcbase import log
 
     resource_type = entry.get("type")
@@ -103,7 +110,7 @@ def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, 
         shader = _load_shader(package_dir, spec, path)
         if shader is None:
             return False
-        shaders[shader.uuid] = shader
+        shaders[shader.shader.uuid] = shader
         return True
     if resource_type == "mesh":
         return _load_mesh(spec, path)
@@ -114,7 +121,7 @@ def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, 
     return False
 
 
-def _load_shader(package_dir: Path, spec: dict[str, Any], path: Path) -> Any | None:
+def _load_shader(package_dir: Path, spec: dict[str, Any], path: Path) -> _RuntimeShader | None:
     from tcbase import log
     import tgfx
     from termin.assets.shader_asset import shader_language_enum
@@ -151,7 +158,11 @@ def _load_shader(package_dir: Path, spec: dict[str, Any], path: Path) -> Any | N
         _string(spec, "fragment_entry"),
         _string(spec, "geometry_entry"),
     )
-    return shader
+    shader.set_features(int(spec.get("features", 0)))
+    return _RuntimeShader(
+        shader=shader,
+        material_texture_resources=_material_texture_resources_from_shader_spec(package_dir, spec),
+    )
 
 
 def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
@@ -213,7 +224,7 @@ def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
     return True
 
 
-def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, Any]) -> bool:
+def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, _RuntimeShader]) -> bool:
     from tcbase import log
     from termin.assets.material_asset import MaterialAsset
     from termin.assets.resources import ResourceManager
@@ -240,16 +251,165 @@ def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, Any]) ->
             log.error(f"[PlayerRuntime] Runtime material has invalid phase: {uuid_value}")
             return False
         shader_uuid = _string(phase_spec, "shader")
-        shader = shaders.get(shader_uuid)
-        if shader is None or not shader.is_valid:
+        shader_info = shaders.get(shader_uuid)
+        if shader_info is None or not shader_info.shader.is_valid:
             log.error(f"[PlayerRuntime] Runtime material references missing shader: {shader_uuid}")
             return False
-        material.add_phase(shader, _string(phase_spec, "mark", "opaque"), int(phase_spec.get("priority", 0)))
+        phase = material.add_phase(
+            shader_info.shader,
+            _string(phase_spec, "mark", "opaque"),
+            int(phase_spec.get("priority", 0)),
+        )
+        _apply_default_material_textures(phase, shader_info.material_texture_resources, uuid_value)
+
+    _apply_material_uniforms(material, spec.get("uniforms"), uuid_value)
+    _apply_material_textures(material, spec.get("textures"), uuid_value)
 
     rm = ResourceManager.instance()
     rm.register_material(name, material, str(path), uuid_value)
     rm._assets_by_uuid[uuid_value] = MaterialAsset(material=material, name=name, source_path=path, uuid=uuid_value)
     return True
+
+
+def _material_texture_resources_from_shader_spec(package_dir: Path, spec: dict[str, Any]) -> tuple[str, ...]:
+    from tcbase import log
+
+    result: list[str] = []
+    seen: set[str] = set()
+    artifacts = spec.get("artifacts")
+    if not isinstance(artifacts, dict):
+        return ()
+
+    for target_spec in artifacts.values():
+        if not isinstance(target_spec, dict):
+            continue
+        for artifact_path in target_spec.values():
+            if not isinstance(artifact_path, str) or artifact_path == "":
+                continue
+            layout_path = package_dir / f"{artifact_path}.layout.json"
+            if not layout_path.exists():
+                continue
+            try:
+                layout = json.loads(layout_path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                log.error(f"[PlayerRuntime] Failed to read shader layout '{layout_path}': {exc}")
+                continue
+            resources = layout.get("resources")
+            if not isinstance(resources, list):
+                continue
+            for resource in resources:
+                if not isinstance(resource, dict):
+                    continue
+                if resource.get("kind") != "texture" or resource.get("scope") != "material":
+                    continue
+                name = resource.get("name")
+                if not isinstance(name, str) or name == "" or name in seen:
+                    continue
+                seen.add(name)
+                result.append(name)
+
+    return tuple(result)
+
+
+def _apply_default_material_textures(phase: Any, texture_names: tuple[str, ...], uuid_value: str) -> None:
+    from tcbase import log
+
+    for name in texture_names:
+        tc_tex = _builtin_texture_for_material_slot(name)
+        if tc_tex is None:
+            log.error(f"[PlayerRuntime] Failed to resolve default texture '{name}' for material: {uuid_value}")
+            continue
+        phase.set_texture(name, tc_tex)
+
+
+def _builtin_texture_for_material_slot(name: str) -> Any | None:
+    from termin.assets.texture_handle import get_normal_texture_handle, get_white_texture_handle
+
+    if "normal" in name.lower():
+        return get_normal_texture_handle().get()
+    return get_white_texture_handle().get()
+
+
+def _apply_material_textures(material: Any, textures: object, uuid_value: str) -> None:
+    from tcbase import log
+    from termin.assets.resources import ResourceManager
+
+    if textures is None:
+        return
+    if not isinstance(textures, dict):
+        log.error(f"[PlayerRuntime] Runtime material textures must be an object: {uuid_value}")
+        return
+
+    rm = ResourceManager.instance()
+    for name, value in textures.items():
+        if not isinstance(name, str):
+            log.error(f"[PlayerRuntime] Runtime material texture name must be a string: {uuid_value}")
+            continue
+
+        tc_tex = None
+        if isinstance(value, dict):
+            if value.get("kind") == "builtin":
+                builtin_name = value.get("name")
+                if builtin_name == "normal":
+                    tc_tex = _builtin_texture_for_material_slot("normal")
+                elif builtin_name == "white":
+                    tc_tex = _builtin_texture_for_material_slot("white")
+            else:
+                texture_uuid = value.get("uuid")
+                if isinstance(texture_uuid, str) and texture_uuid != "":
+                    asset = rm.get_texture_asset_by_uuid(texture_uuid)
+                    if asset is not None:
+                        if asset.texture_data is None:
+                            asset.ensure_loaded()
+                        tc_tex = asset.texture_data
+        elif isinstance(value, str) and value != "":
+            asset = rm.get_texture_asset_by_uuid(value)
+            if asset is not None:
+                if asset.texture_data is None:
+                    asset.ensure_loaded()
+                tc_tex = asset.texture_data
+
+        if tc_tex is None or not tc_tex.is_valid:
+            log.error(f"[PlayerRuntime] Failed to resolve material texture '{name}': {uuid_value}")
+            continue
+        material.set_texture(name, tc_tex)
+
+
+def _apply_material_uniforms(material: Any, uniforms: object, uuid_value: str) -> None:
+    from tcbase import log
+    from termin.geombase import Vec3, Vec4
+
+    if uniforms is None:
+        return
+    if not isinstance(uniforms, dict):
+        log.error(f"[PlayerRuntime] Runtime material uniforms must be an object: {uuid_value}")
+        return
+
+    for name, value in uniforms.items():
+        if not isinstance(name, str):
+            log.error(f"[PlayerRuntime] Runtime material uniform name must be a string: {uuid_value}")
+            continue
+        if isinstance(value, bool):
+            material.set_uniform_int(name, 1 if value else 0)
+        elif isinstance(value, int):
+            material.set_uniform_int(name, value)
+        elif isinstance(value, float):
+            material.set_uniform_float(name, value)
+        elif isinstance(value, list) and len(value) == 3 and _all_numbers(value):
+            material.set_uniform_vec3(name, Vec3(float(value[0]), float(value[1]), float(value[2])))
+        elif isinstance(value, list) and len(value) == 4 and _all_numbers(value):
+            material.set_uniform_vec4(
+                name,
+                Vec4(float(value[0]), float(value[1]), float(value[2]), float(value[3])),
+            )
+        else:
+            log.error(
+                f"[PlayerRuntime] Runtime material uniform '{name}' has unsupported value: {uuid_value}"
+            )
+
+
+def _all_numbers(values: list[object]) -> bool:
+    return all(isinstance(item, (int, float)) for item in values)
 
 
 def _read_optional_text(package_dir: Path, rel_path: str) -> str:
