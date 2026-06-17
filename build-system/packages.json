@@ -23,6 +23,10 @@
       "distribution": "termin-assets"
     },
     {
+      "path": "termin-tween",
+      "distribution": "termin-tween"
+    },
+    {
       "path": "termin-mesh",
       "distribution": "tmesh",
       "native_extensions": [
@@ -34,6 +38,13 @@
       "distribution": "tgfx",
       "native_extensions": [
         {"extension": "tgfx._tgfx_native", "target": "_tgfx_native"}
+      ]
+    },
+    {
+      "path": "termin-voxels",
+      "distribution": "termin-voxels",
+      "native_extensions": [
+        {"extension": "termin.voxels._voxels_native", "target": "_voxels_native"}
       ]
     },
     {
@@ -106,6 +117,10 @@
       ]
     },
     {
+      "path": "termin-components/termin-components-tween",
+      "distribution": "termin-components-tween"
+    },
+    {
       "path": "termin-input",
       "distribution": "termin-input",
       "native_extensions": [
@@ -135,6 +150,10 @@
       "native_extensions": [
         {"extension": "termin.render_components._components_render_native", "target": "_components_render_native"}
       ]
+    },
+    {
+      "path": "termin-components/termin-components-voxels",
+      "distribution": "termin-components-voxels"
     },
     {
       "path": "termin-components/termin-components-foliage",
@@ -204,8 +223,7 @@
       "path": "termin-app",
       "distribution": "termin-app",
       "native_extensions": [
-        {"extension": "termin._native", "target": "_native"},
-        {"extension": "termin.voxels._voxels_native", "target": "_voxels_native"}
+        {"extension": "termin._native", "target": "_native"}
       ]
     },
     {

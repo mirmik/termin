@@ -24,10 +24,13 @@ Usage:
     )
 """
 
+from pkgutil import extend_path
+
 from termin.tween.ease import Ease
 from termin.tween.tween import Tween, TweenState, MoveTween, RotateTween, ScaleTween
 from termin.tween.manager import TweenManager
-from termin.tween.component import TweenManagerComponent
+
+__path__ = extend_path(__path__, __name__)
 
 __all__ = [
     # Easing
@@ -43,3 +46,11 @@ __all__ = [
     "TweenManager",
     "TweenManagerComponent",
 ]
+
+
+def __getattr__(name: str):
+    if name == "TweenManagerComponent":
+        from termin.tween.component import TweenManagerComponent
+
+        return TweenManagerComponent
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -13,7 +13,7 @@ from termin.materials import TcMaterial as Material
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
     from termin.voxels.grid import VoxelGrid
 
 

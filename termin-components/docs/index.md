@@ -17,6 +17,7 @@
 - [termin-components-physics](../termin-components-physics/docs/index.md)
 - [termin-components-skeleton](../termin-components-skeleton/docs/index.md)
 - [termin-components-animation](../termin-components-animation/docs/index.md)
+- [termin-components-tween](../termin-components-tween/docs/index.md)
+- [termin-components-voxels](../termin-components-voxels/docs/index.md)
 
 These packages are built as SDK modules through `modules.conf`.
-

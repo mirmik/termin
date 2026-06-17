@@ -4,6 +4,8 @@ Voxel system for navmesh generation.
 Provides chunked voxel grid with visualization and serialization support.
 """
 
+from pkgutil import extend_path
+
 from termin.voxels.chunk import VoxelChunk, CHUNK_SIZE
 from termin.voxels.grid import VoxelGrid
 from termin.voxels.voxelizer import (
@@ -15,6 +17,8 @@ from termin.voxels.voxelizer import (
     VOXEL_SURFACE,
 )
 from termin.voxels.persistence import VoxelPersistence, VOXEL_FILE_EXTENSION
+
+__path__ = extend_path(__path__, __name__)
 
 
 def __getattr__(name: str):

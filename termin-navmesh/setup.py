@@ -35,7 +35,11 @@ setup(
     python_requires=">=3.8",
     packages=["termin.navmesh"],
     package_dir={"termin.navmesh": "python/termin/navmesh"},
-    install_requires=["termin-nanobind"],
+    install_requires=[
+        "termin-nanobind",
+        "termin-voxels",
+        "termin-components-voxels",
+    ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

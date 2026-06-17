@@ -11,7 +11,7 @@ from termin.tween.tween import Tween, MoveTween, RotateTween, ScaleTween
 
 if TYPE_CHECKING:
     from termin.kinematic.general_transform import GeneralTransform3
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
 
 
 class TweenManager:
