@@ -9,7 +9,6 @@ using termin::Vec3;
 using termin::GeneralPose3;
 using termin::Quat;
 using termin::AABB;
-using termin::AABB;
 
 // Helper: create a cube ConvexHullCollider from 8 points
 static ConvexHullCollider make_cube_hull(const Vec3& half_size, const GeneralPose3& t = GeneralPose3()) {

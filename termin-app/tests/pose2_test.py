@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import unittest
 import numpy as np
 import math
@@ -197,7 +196,3 @@ class TestPose2(unittest.TestCase):
         
         pose_forward = Pose2.forward(5.0)
         np.testing.assert_array_equal(pose_forward.lin, np.array([0.0, 5.0]))
-
-
-if __name__ == '__main__':
-    unittest.main()

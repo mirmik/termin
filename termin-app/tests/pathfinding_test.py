@@ -6,7 +6,6 @@ import numpy as np
 from termin.navmesh.pathfinding import (
     RegionGraph,
     build_adjacency,
-    compute_centroids,
     find_triangle_containing_point,
     point_in_triangle_2d,
     astar_triangles,
@@ -144,10 +143,6 @@ class AStarTest(unittest.TestCase):
 
     def test_two_triangles(self):
         """Путь через два соседних треугольника."""
-        triangles = np.array([
-            [0, 1, 2],
-            [1, 3, 2],
-        ], dtype=np.int32)
         neighbors = np.array([
             [-1, 1, -1],  # tri 0: сосед 1 по ребру 1
             [-1, -1, 0],  # tri 1: сосед 0 по ребру 2
@@ -363,7 +358,3 @@ class RayTriangleIntersectTest(unittest.TestCase):
 
         t = _ray_triangle_intersect(origin, direction, v0, v1, v2)
         self.assertIsNone(t)
-
-
-if __name__ == "__main__":
-    unittest.main()

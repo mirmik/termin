@@ -39,6 +39,7 @@ def test_native_import_before_tgfx_keeps_builtin_shader_catalog_available():
         text=True,
         capture_output=True,
         check=False,
+        timeout=10,
     )
 
     assert result.returncode == 0, result.stdout + result.stderr

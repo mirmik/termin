@@ -1,4 +1,5 @@
 import threading
+import time
 
 from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
 
@@ -98,10 +99,12 @@ def test_editor_python_executor_queues_external_thread_work_on_main_thread():
     thread = threading.Thread(target=worker)
     thread.start()
 
-    while thread.is_alive():
+    deadline = time.monotonic() + 2.5
+    while thread.is_alive() and time.monotonic() < deadline:
         executor.process_pending()
         thread.join(timeout=0.01)
 
+    assert not thread.is_alive()
     result = received["result"]
     assert result.ok
     assert result.output == "True\n"

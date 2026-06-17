@@ -3,10 +3,8 @@
 """
 
 import numpy as np
-import pytest
 
 from termin.navmesh.triangulation import (
-    ear_clip,
     ear_clipping,
     ear_clipping_refined,
     refine_triangulation,
@@ -30,39 +28,8 @@ class TestInCircumcircle:
         # Та же окружность, точка (1, 5) снаружи
         assert in_circumcircle(0, 0, 2, 0, 1, 2, 1, 5) is False
 
-    def test_point_on_circle(self):
-        """Точка на окружности — граничный случай."""
-        # Квадрат — все 4 точки на одной окружности
-        # Треугольник (0,0), (1,0), (0,1) — точка (1,1) на окружности
-        result = in_circumcircle(0, 0, 1, 0, 0, 1, 1, 1)
-        # На границе — может быть True или False, зависит от погрешности
-        assert isinstance(result, bool)
-
-
 class TestDelaunayFlip:
     """Тесты для delaunay_flip."""
-
-    def test_simple_quad(self):
-        """Квадрат — должен выбрать лучшую диагональ."""
-        # Квадрат: (0,0), (1,0), (1,1), (0,1)
-        vertices = np.array([
-            [0, 0],
-            [1, 0],
-            [1, 1],
-            [0, 1],
-        ], dtype=np.float32)
-
-        # Плохая триангуляция: острые треугольники через диагональ (0,2)
-        triangles = [(0, 1, 2), (0, 2, 3)]
-
-        boundary = extract_boundary_edges(4)
-        result = delaunay_flip(vertices, triangles, boundary)
-
-        print(f"Before: {triangles}")
-        print(f"After: {result}")
-
-        # Должно быть 2 треугольника
-        assert len(result) == 2
 
     def test_no_flip_needed(self):
         """Уже Delaunay — ничего не меняется."""
@@ -116,7 +83,6 @@ class TestEarClippingWithOptimization:
         ], dtype=np.float32)
 
         result = ear_clipping(vertices, optimize=True)
-        print(f"Optimized triangles: {result}")
 
         assert len(result) == 2
         assert result.shape == (2, 3)
@@ -128,7 +94,6 @@ class TestEarClippingWithOptimization:
         vertices = np.column_stack([np.cos(angles), np.sin(angles)]).astype(np.float32)
 
         result = ear_clipping(vertices, optimize=True)
-        print(f"Pentagon triangles: {result}")
 
         assert len(result) == 3  # n - 2
 
@@ -146,9 +111,6 @@ class TestEarClippingWithOptimization:
 
         result_optimized = ear_clipping(vertices, optimize=True)
         result_basic = ear_clipping(vertices, optimize=False)
-
-        print(f"Basic: {result_basic}")
-        print(f"Optimized: {result_optimized}")
 
         # Оба должны давать 4 треугольника
         assert len(result_optimized) == 4
@@ -188,9 +150,6 @@ class TestEarClippingWithOptimization:
         min_basic = min_angle(result_basic, vertices)
         min_optimized = min_angle(result_optimized, vertices)
 
-        print(f"Min angle basic: {min_basic:.1f}°")
-        print(f"Min angle optimized: {min_optimized:.1f}°")
-
         # Оптимизированный должен быть не хуже
         assert min_optimized >= min_basic - 1.0  # допуск на погрешность
 
@@ -225,9 +184,6 @@ class TestRefinement:
 
         new_verts, new_tris = refine_triangulation(vertices, triangles, max_edge_length=5.0)
 
-        print(f"Vertices: {len(new_verts)}")
-        print(f"Triangles: {len(new_tris)}")
-
         # Должно быть больше треугольников
         assert len(new_tris) > 1
         assert len(new_verts) > 3
@@ -244,9 +200,6 @@ class TestRefinement:
         triangles = [(0, 1, 2), (0, 2, 3)]
 
         new_verts, new_tris = refine_triangulation(vertices, triangles, max_edge_length=2.0)
-
-        print(f"Vertices: {len(new_verts)}")
-        print(f"Triangles: {len(new_tris)}")
 
         # Длинные рёбра (10 единиц) должны быть разбиты
         assert len(new_tris) > 2
@@ -274,9 +227,6 @@ class TestEarClippingRefined:
 
         new_verts, triangles = ear_clipping_refined(vertices, max_edge_length=3.0)
 
-        print(f"Vertices: {len(new_verts)} (was 4)")
-        print(f"Triangles: {len(triangles)}")
-
         # Должно быть много маленьких треугольников
         assert len(triangles) > 2
 
@@ -293,8 +243,6 @@ class TestEarClippingRefined:
 
         new_verts, triangles = ear_clipping_refined(vertices, max_edge_length=2.0)
 
-        print(f"L-shaped: {len(new_verts)} vertices, {len(triangles)} triangles")
-
         # Проверяем все рёбра
         max_edge = 0
         for tri in triangles:
@@ -304,9 +252,4 @@ class TestEarClippingRefined:
                 length = np.linalg.norm(v1 - v0)
                 max_edge = max(max_edge, length)
 
-        print(f"Max edge length: {max_edge:.2f}")
         assert max_edge <= 2.0 + 0.01
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])

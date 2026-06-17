@@ -18,7 +18,7 @@ def test_basic_equality_qp():
     A = np.array([[1., 1.]])
     b = np.array([1.])
 
-    # Аналитическое решение: x = [0, 1]
+    # Аналитическое решение для equality-constrained optimum.
     x, lam_eq, lam_ineq, active, iters = solve_eq(H, g, A, b)
 
     assert np.allclose(H@x + A.T @ lam_eq + g, 0)

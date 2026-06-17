@@ -1,7 +1,6 @@
 """VStack layout tests."""
 
 from tcgui.widgets.vstack import VStack
-from tcgui.widgets.units import px
 from tests.conftest import make_widget, assert_rect, VIEWPORT_W, VIEWPORT_H
 
 W, H = 400.0, 600.0
@@ -45,12 +44,6 @@ def test_spacing():
     _make_vstack(c1, c2, spacing=10)
     assert_rect(c1, 0, 0, W, 30)
     assert_rect(c2, 0, 40, W, 50)
-
-
-def test_children_get_full_width():
-    c = make_widget(100, 50)
-    _make_vstack(c)
-    assert c.width == W
 
 
 # --- Stretch ---

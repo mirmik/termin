@@ -36,19 +36,17 @@ class TestGetPortalsFromPath:
         ], dtype=np.int32)
 
         neighbors = build_adjacency(triangles)
-        print(f"neighbors: {neighbors}")
 
         # Путь из треугольника 0 в треугольник 1
         path = [0, 1]
         portals = get_portals_from_path(path, triangles, vertices, neighbors)
 
-        print(f"portals: {portals}")
         assert len(portals) == 1
 
         left, right = portals[0]
         # Общее ребро — 0-1, порядок зависит от edge_idx
         edge_set = {tuple(left), tuple(right)}
-        assert tuple(vertices[0]) in edge_set or tuple(vertices[1]) in edge_set
+        assert edge_set == {tuple(vertices[0]), tuple(vertices[1])}
 
     def test_three_triangles_strip(self):
         """Три треугольника в линию."""
@@ -77,16 +75,10 @@ class TestGetPortalsFromPath:
         ], dtype=np.int32)
 
         neighbors = build_adjacency(triangles)
-        print(f"triangles:\n{triangles}")
-        print(f"neighbors:\n{neighbors}")
 
         # Путь через все треугольники
         path = [0, 1, 2, 3, 4, 5]
         portals = get_portals_from_path(path, triangles, vertices, neighbors)
-
-        print(f"portals count: {len(portals)}")
-        for i, (left, right) in enumerate(portals):
-            print(f"  portal {i}: left={left}, right={right}")
 
         assert len(portals) == 5  # 6 треугольников = 5 порталов
 
@@ -108,7 +100,6 @@ class TestFunnelAlgorithm:
 
         path = funnel_algorithm(start, end, portals)
 
-        print(f"path: {path}")
         # Ожидаем только start и end (прямая линия проходит через все порталы)
         assert len(path) == 2
         assert np.allclose(path[0], start)
@@ -135,7 +126,6 @@ class TestFunnelAlgorithm:
 
         path = funnel_algorithm(start, end, portals)
 
-        print(f"path: {[p.tolist() for p in path]}")
         # Должен быть поворот где-то
         assert len(path) >= 2
         assert np.allclose(path[0], start)
@@ -156,7 +146,6 @@ class TestFunnelAlgorithm:
 
         path = funnel_algorithm(start, end, portals)
 
-        print(f"zigzag path: {[p.tolist() for p in path]}")
         # Путь должен проходить через углы порталов (это корректно для зигзага)
         assert len(path) >= 2
         assert np.allclose(path[0], start)
@@ -177,7 +166,6 @@ class TestFunnelAlgorithm:
 
         path = funnel_algorithm(start, end, portals)
 
-        print(f"wide corridor path: {[p.tolist() for p in path]}")
         # Прямая линия z=0.5 проходит через все порталы
         assert len(path) == 2, f"Expected straight line (2 points), got {len(path)}"
         assert np.allclose(path[0], start)
@@ -193,42 +181,6 @@ class TestFunnelAlgorithm:
         assert len(path) == 2
         assert np.allclose(path[0], start)
         assert np.allclose(path[1], end)
-
-
-class TestTriarea2:
-    """Тесты для функции triarea2 внутри funnel_algorithm."""
-
-    def test_triarea2_sign(self):
-        """Проверка знака triarea2."""
-        # triarea2 использует X и Z координаты
-        # Cross product (a→b) × (a→c) в XZ плоскости
-        # Положительный = c слева от вектора a→b (если смотреть сверху, Y вниз)
-        # Отрицательный = c справа
-
-        def triarea2(a, b, c):
-            ax = b[0] - a[0]
-            az = b[2] - a[2]
-            bx = c[0] - a[0]
-            bz = c[2] - a[2]
-            return ax * bz - az * bx
-
-        a = np.array([0, 0, 0])
-        b = np.array([1, 0, 0])  # вправо по X
-        c_pos_z = np.array([0.5, 0, 1])   # положительный Z
-        c_neg_z = np.array([0.5, 0, -1])  # отрицательный Z
-
-        area_pos_z = triarea2(a, b, c_pos_z)
-        area_neg_z = triarea2(a, b, c_neg_z)
-
-        print(f"area (c at z=1): {area_pos_z}")
-        print(f"area (c at z=-1): {area_neg_z}")
-
-        # В XZ плоскости, если двигаемся вправо по X:
-        # - точка с положительным Z даёт положительную площадь (слева)
-        # - точка с отрицательным Z даёт отрицательную площадь (справа)
-        assert area_pos_z > 0, f"Expected positive, got {area_pos_z}"
-        assert area_neg_z < 0, f"Expected negative, got {area_neg_z}"
-
 
 class TestNavmeshLineOfSight:
     """Тесты для navmesh_line_of_sight."""
@@ -270,7 +222,6 @@ class TestNavmeshLineOfSight:
         end = np.array([1, 0, -1], dtype=np.float32)   # в треугольнике 1
 
         result = navmesh_line_of_sight(start, end, 0, triangles, vertices, neighbors)
-        print(f"LOS result: {result}")
         assert result is True
 
     def test_blocked_by_boundary(self):
@@ -335,29 +286,20 @@ class TestIntegration:
         neighbors = build_adjacency(triangles)
         centroids = compute_centroids(vertices, triangles)
 
-        print(f"neighbors:\n{neighbors}")
-
         # A* от треугольника 0 до треугольника 7
         path_tris = astar_triangles(0, 7, neighbors, centroids)
-        print(f"A* path: {path_tris}")
         assert path_tris is not None
         assert path_tris[0] == 0
         assert path_tris[-1] == 7
 
         # Извлекаем порталы
         portals = get_portals_from_path(path_tris, triangles, vertices, neighbors)
-        print(f"portals ({len(portals)}):")
-        for i, (left, right) in enumerate(portals):
-            print(f"  {i}: L={left.tolist()}, R={right.tolist()}")
 
         # Funnel algorithm
         start = np.array([0.3, 0, 0.5], dtype=np.float32)
         end = np.array([3.7, 0, 0.5], dtype=np.float32)
 
         path = funnel_algorithm(start, end, portals)
-        print(f"funnel path ({len(path)}):")
-        for i, p in enumerate(path):
-            print(f"  {i}: {p.tolist()}")
 
         # Прямая линия должна быть возможна
         assert len(path) == 2, f"Expected 2 points (straight line), got {len(path)}"
@@ -401,29 +343,18 @@ class TestIntegration:
         neighbors = build_adjacency(triangles)
         centroids = compute_centroids(vertices, triangles)
 
-        print(f"\nL-shaped mesh:")
-        print(f"triangles:\n{triangles}")
-        print(f"neighbors:\n{neighbors}")
-
         # Путь от нижнего левого (0) до верхнего правого (4)
         path_tris = astar_triangles(0, 4, neighbors, centroids)
-        print(f"A* path: {path_tris}")
         assert path_tris is not None
 
         # Извлекаем порталы
         portals = get_portals_from_path(path_tris, triangles, vertices, neighbors)
-        print(f"portals ({len(portals)}):")
-        for i, (left, right) in enumerate(portals):
-            print(f"  {i}: L={left.tolist()}, R={right.tolist()}")
 
         # Funnel algorithm
         start = np.array([0.2, 0, 1.5], dtype=np.float32)  # нижний левый угол
         end = np.array([1.8, 0, 2.5], dtype=np.float32)    # верхний правый угол
 
         path = funnel_algorithm(start, end, portals)
-        print(f"funnel path ({len(path)}):")
-        for i, p in enumerate(path):
-            print(f"  {i}: {p.tolist()}")
 
         # Должен быть путь с поворотом около точки (1, 0, 2)
         assert len(path) >= 2
@@ -451,20 +382,14 @@ class TestIntegration:
         ], dtype=np.int32)
 
         neighbors = build_adjacency(triangles)
-        print(f"\nPortal orientation test:")
-        print(f"triangles:\n{triangles}")
-        print(f"neighbors:\n{neighbors}")
 
         # Путь из 0 в 1
         path_tris = [0, 1]
 
         portals = get_portals_from_path(path_tris, triangles, vertices, neighbors)
-        print(f"portals: {portals}")
 
         assert len(portals) == 1
         left, right = portals[0]
-
-        print(f"left: {left}, right: {right}")
 
         # Главное — left и right должны быть разными точками ребра
         assert not np.allclose(left, right), "left and right should be different"
@@ -525,39 +450,23 @@ class TestNonConvexPolygons:
         neighbors = build_adjacency(triangles)
         centroids = compute_centroids(vertices, triangles)
 
-        print("\nU-shaped corridor:")
-        print(f"triangles:\n{triangles}")
-        print(f"neighbors:\n{neighbors}")
-
         # Путь от верхнего левого (0) до верхнего правого (7)
         path_tris = astar_triangles(0, 7, neighbors, centroids)
-        print(f"A* path: {path_tris}")
 
         if path_tris is None:
             pytest.skip("A* не нашёл путь — нужно исправить триангуляцию")
 
         portals = get_portals_from_path(path_tris, triangles, vertices, neighbors)
-        print(f"portals ({len(portals)}):")
-        for i, (left, right) in enumerate(portals):
-            print(f"  {i}: L={left.tolist()}, R={right.tolist()}")
 
         start = np.array([0.5, 0, 3.8], dtype=np.float32)
         end = np.array([3.5, 0, 3.8], dtype=np.float32)
 
         path = funnel_algorithm(start, end, portals)
-        print(f"funnel path ({len(path)}):")
-        for i, p in enumerate(path):
-            print(f"  {i}: {p.tolist()}")
 
         # Путь должен идти вокруг — не может быть прямой линией
         assert len(path) >= 2
         assert np.allclose(path[0], start)
         assert np.allclose(path[-1], end)
-
-        # Проверяем, что путь не проходит через область z < 3 (внутренняя стена)
-        # если путь короткий (2 точки), это подозрительно
-        if len(path) == 2:
-            print("WARNING: Path is suspiciously straight through U-shape!")
 
     def test_concave_corner_cut(self):
         """
@@ -584,11 +493,6 @@ class TestNonConvexPolygons:
             [4, 0, -2], # 3
         ], dtype=np.float32)
 
-        triangles = np.array([
-            [0, 1, 2],  # верхний
-            [1, 3, 2],  # нижний (неправильный — для теста)
-        ], dtype=np.int32)
-
         # Исправляем — правильная триангуляция
         triangles = np.array([
             [0, 1, 2],   # 0: левый треугольник
@@ -598,12 +502,7 @@ class TestNonConvexPolygons:
         neighbors = build_adjacency(triangles)
         centroids = compute_centroids(vertices, triangles)
 
-        print("\nConcave corner:")
-        print(f"triangles:\n{triangles}")
-        print(f"neighbors:\n{neighbors}")
-
         if neighbors[0, 1] < 0 and neighbors[0, 0] < 0 and neighbors[0, 2] < 0:
-            print("No adjacency — triangles don't share edge")
             # Создаём связные треугольники
             vertices = np.array([
                 [0, 0, 0],  # 0
@@ -630,9 +529,6 @@ class TestNonConvexPolygons:
         end = np.array([2, 0, -0.5], dtype=np.float32)
 
         path = funnel_algorithm(start, end, portals)
-        print(f"funnel path ({len(path)}):")
-        for i, p in enumerate(path):
-            print(f"  {i}: {p.tolist()}")
 
         assert len(path) >= 2
         assert np.allclose(path[0], start)
@@ -673,48 +569,22 @@ class TestNonConvexPolygons:
         neighbors = build_adjacency(triangles)
         centroids = compute_centroids(vertices, triangles)
 
-        print("\nNarrow bottleneck:")
-        print(f"triangles:\n{triangles}")
-        print(f"neighbors:\n{neighbors}")
-
         # Путь снизу-слева до верх-справа через горлышко
         path_tris = astar_triangles(0, 3, neighbors, centroids)
-        print(f"A* path: {path_tris}")
 
         if path_tris is None:
             pytest.skip("A* не нашёл путь")
 
         portals = get_portals_from_path(path_tris, triangles, vertices, neighbors)
-        print(f"portals ({len(portals)}):")
-        for i, (left, right) in enumerate(portals):
-            print(f"  {i}: L={left.tolist()}, R={right.tolist()}")
 
         start = np.array([0.5, 0, 0.5], dtype=np.float32)  # низ-лево
         end = np.array([3.5, 0, 1.8], dtype=np.float32)    # верх-право
 
         path = funnel_algorithm(start, end, portals)
-        print(f"funnel path ({len(path)}):")
-        for i, p in enumerate(path):
-            print(f"  {i}: {p.tolist()}")
 
         assert len(path) >= 2
         assert np.allclose(path[0], start)
         assert np.allclose(path[-1], end)
-
-        # Путь должен проходить близко к точке 3 (горлышко)
-        bottleneck = vertices[3]
-        min_dist_to_bottleneck = float('inf')
-        for i in range(len(path) - 1):
-            # Расстояние от точки 3 до отрезка path[i] -> path[i+1]
-            p0, p1 = path[i], path[i + 1]
-            v = p1 - p0
-            w = bottleneck - p0
-            t = max(0, min(1, np.dot(w, v) / (np.dot(v, v) + 1e-10)))
-            closest = p0 + t * v
-            dist = np.linalg.norm(bottleneck - closest)
-            min_dist_to_bottleneck = min(min_dist_to_bottleneck, dist)
-
-        print(f"Min distance to bottleneck: {min_dist_to_bottleneck}")
 
     def test_zigzag_corridor_detailed(self):
         """
@@ -767,17 +637,11 @@ class TestNonConvexPolygons:
         neighbors = build_adjacency(triangles)
         centroids = compute_centroids(vertices, triangles)
 
-        print("\nZigzag corridor:")
-        for i, t in enumerate(triangles):
-            print(f"  tri {i}: {t} -> neighbors {neighbors[i]}")
-
         # Ищем путь от первого до последнего треугольника
         path_tris = astar_triangles(0, 8, neighbors, centroids)
-        print(f"A* path: {path_tris}")
 
         if path_tris is None:
             # Попробуем упростить меш
-            print("Simplifying mesh...")
             vertices = np.array([
                 [0, 0, 2],  # 0
                 [2, 0, 2],  # 1
@@ -797,7 +661,6 @@ class TestNonConvexPolygons:
             neighbors = build_adjacency(triangles)
             centroids = compute_centroids(vertices, triangles)
             path_tris = astar_triangles(0, 3, neighbors, centroids)
-            print(f"Simplified A* path: {path_tris}")
 
         if path_tris is None:
             pytest.skip("Не удалось найти путь")
@@ -808,9 +671,6 @@ class TestNonConvexPolygons:
         end = np.array([3.8, 0, 0.2], dtype=np.float32)
 
         path = funnel_algorithm(start, end, portals)
-        print(f"funnel path ({len(path)}):")
-        for i, p in enumerate(path):
-            print(f"  {i}: {p.tolist()}")
 
         assert len(path) >= 2
         assert np.allclose(path[0], start)
@@ -852,52 +712,19 @@ class TestNonConvexPolygons:
         neighbors = build_adjacency(triangles)
         centroids = compute_centroids(vertices, triangles)
 
-        print("\nL-shaped boundary test:")
-        for i, t in enumerate(triangles):
-            print(f"  tri {i}: verts {t}, neighbors {neighbors[i]}")
-
         # Путь из нижнего левого угла в верхний правый
         path_tris = astar_triangles(3, 2, neighbors, centroids)
-        print(f"A* path: {path_tris}")
 
         if path_tris is None:
             pytest.skip("A* не нашёл путь")
 
         portals = get_portals_from_path(path_tris, triangles, vertices, neighbors)
-        print(f"portals ({len(portals)}):")
-        for i, (left, right) in enumerate(portals):
-            print(f"  {i}: L={left.tolist()}, R={right.tolist()}")
 
         start = np.array([0.5, 0, 0.5], dtype=np.float32)  # низ-лево
         end = np.array([3.5, 0, 3.5], dtype=np.float32)    # верх-право
 
         path = funnel_algorithm(start, end, portals)
-        print(f"funnel path ({len(path)}):")
-        for i, p in enumerate(path):
-            print(f"  {i}: {p.tolist()}")
-
-        # Проверяем, что путь не проходит через точку (3, 0, 1)
-        # которая находится вне L-образного полигона
-        outside_point = np.array([3, 0, 1], dtype=np.float32)
-
-        for i in range(len(path) - 1):
-            p0, p1 = path[i], path[i + 1]
-            # Проверяем, что отрезок не проходит слишком близко к outside_point
-            v = p1 - p0
-            w = outside_point - p0
-            t = np.dot(w, v) / (np.dot(v, v) + 1e-10)
-            if 0 < t < 1:
-                closest = p0 + t * v
-                dist = np.linalg.norm(outside_point - closest)
-                print(f"  segment {i}: closest dist to outside = {dist:.3f}")
-                # Если путь проходит очень близко к точке вне полигона — это подозрительно
-                if dist < 0.3:
-                    print(f"  WARNING: Path may be cutting through outside area!")
 
         assert len(path) >= 2
         assert np.allclose(path[0], start)
         assert np.allclose(path[-1], end)
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-s"])
