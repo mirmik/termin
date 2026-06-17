@@ -1,8 +1,7 @@
-from termin.fem.assembler import MatrixAssembler, Variable, Contribution
+from termin.fem.assembler import MatrixAssembler, Variable
 from typing import Dict, List, Tuple
 import numpy as np
 from termin.linalg.subspaces import project_onto_affine, metric_project_onto_constraints 
-from termin.geombase import Pose3
 
 class DynamicMatrixAssembler(MatrixAssembler):
     def __init__(self):
@@ -154,10 +153,6 @@ class DynamicMatrixAssembler(MatrixAssembler):
         A_ext = np.zeros((n_voltage + n_currents + n_acceleration + n_force,
                           n_voltage + n_currents + n_acceleration + n_force))
 
-        С_ext = np.zeros((n_voltage + n_currents + n_acceleration + n_force,
-                          n_voltage + n_currents + n_acceleration + n_force))
-        
-
         b_ext = np.zeros(n_voltage + n_currents + n_acceleration + n_force)
         variables = (
             list(self.index_map_by_tag("voltage").keys()) +
@@ -288,7 +283,6 @@ class DynamicMatrixAssembler(MatrixAssembler):
         variables = self.names_from_variables(variables)
 
         size = self.total_variables_by_tag(tag="acceleration") + self.total_variables_by_tag(tag="force")
-        n_dofs = self.total_variables_by_tag(tag="acceleration")
         n_holonomic = self.total_variables_by_tag(tag="force")
 
         # Расширенная система
@@ -431,7 +425,6 @@ class DynamicMatrixAssembler(MatrixAssembler):
 
     def integrate_nonlinear(self):
         """Интегрировать нелинейные переменные (если есть)"""
-        index_map = self.index_maps()["acceleration"]
         for var in self.variables:
             if var.tag == "acceleration":
                 var.integrate_nonlinear(self.time_step)

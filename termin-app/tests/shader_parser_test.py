@@ -427,7 +427,7 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
 
 
 def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
-    import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
+    import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     shader_text = "\n".join([
         "@program SlangWithRuntimeLayout",

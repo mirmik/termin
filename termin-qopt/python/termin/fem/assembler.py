@@ -10,8 +10,6 @@
 
 import numpy as np
 from typing import List, Dict, Tuple, Optional
-import numpy
-from termin.geombase import Pose3
 
 import termin.linalg.subspaces
 
@@ -850,9 +848,6 @@ class MatrixAssembler:
         A_eff += C @ x_dot
         A_eff += K @ x
 
-        # Правая часть
-        b_eff = b
-
         return self.solve(check_conditioning=check_conditioning,
                           use_least_squares=use_least_squares,
                           use_constraints=False)
@@ -988,8 +983,6 @@ class MatrixAssembler:
             Строковое представление системы
         """
         lines = []
-        n_vars = len(variables)
-        
         for i in range(A_ext.shape[0]):
             row_terms = []
 
@@ -1324,7 +1317,6 @@ class LagrangeConstraint(Constraint):
         #     for i in range(self.n_constraints):
         #         for j, global_idx in enumerate(var_indices):
         #             C[i, global_idx] += coef[i, j]
-        indices = index_map[self.variables[0]]
         contr_indicies = lambdas_index_map[self.lambdas]
         for i in range(self.n_constraints):
             for var, coef in zip(self.variables, self.coefficients, strict=True):

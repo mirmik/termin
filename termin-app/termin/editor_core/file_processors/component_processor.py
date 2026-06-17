@@ -72,9 +72,6 @@ class ComponentFileProcessor(FilePreLoader):
         if _is_inside_package(path):
             return
 
-        # Get previously loaded components from this file
-        old_components = self._file_to_resources.get(path, set()).copy()
-
         try:
             # Reload the file
             loaded = self._resource_manager.scan_components([path])

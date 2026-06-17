@@ -3,7 +3,6 @@
 
 import unittest
 import numpy as np
-import warnings
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.fem.multibody3d_3 import (
     RigidBody3D, FixedRotationJoint3D #ForceOnBody3D, , RevoluteJoint3D
@@ -437,7 +436,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         z0 = -L * np.cos(theta0)
         body.set_pose(Pose3(lin=np.array([x0, 0.0, z0])))
 
-        joint = FixedRotationJoint3D(
+        _joint = FixedRotationJoint3D(
             body=body,
             assembler=assembler,
             coords_of_joint=np.array([0.0, 0.0, 0.0])
@@ -482,7 +481,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         z0 = -L * np.cos(theta0)
         body.set_pose(Pose3(lin=np.array([x0, 0.0, z0])))
 
-        joint = FixedRotationJoint3D(
+        _joint = FixedRotationJoint3D(
             body=body,
             assembler=assembler,
             coords_of_joint=np.array([0.0, 0.0, 0.0])
@@ -554,7 +553,7 @@ class TestRevoluteJoint(unittest.TestCase):
             bodyB.set_pose(Pose3(lin=np.array([1.0, 0.0, 0.0])))
 
             # Фиксируем bodyA в начале координат
-            joint_fixed = FixedRotationJoint3D(
+            _joint_fixed = FixedRotationJoint3D(
                 body=bodyA,
                 assembler=assembler,
                 coords_of_joint=np.array([0.0, 0.0, 0.0])
@@ -563,14 +562,14 @@ class TestRevoluteJoint(unittest.TestCase):
             # Соединяем A и B шарниром
             joint_coords = np.array([0.5, 0.0, 0.0])
             if swap_bodies:
-                joint_rev = RevoluteJoint3D(
+                _joint_rev = RevoluteJoint3D(
                     bodyA=bodyB,
                     bodyB=bodyA,
                     coords_of_joint=joint_coords,
                     assembler=assembler
                 )
             else:
-                joint_rev = RevoluteJoint3D(
+                _joint_rev = RevoluteJoint3D(
                     bodyA=bodyA,
                     bodyB=bodyB,
                     coords_of_joint=joint_coords,
@@ -632,14 +631,14 @@ class TestRevoluteJoint(unittest.TestCase):
         body2.set_pose(Pose3(lin=pos2))
 
         # Фиксируем первое тело в начале координат
-        joint_fixed = FixedRotationJoint3D(
+        _joint_fixed = FixedRotationJoint3D(
             body=body1,
             assembler=assembler,
             coords_of_joint=np.array([0.0, 0.0, 0.0])
         )
 
         # Соединяем тела шарниром
-        joint_rev = RevoluteJoint3D(
+        _joint_rev = RevoluteJoint3D(
             bodyA=body1,
             bodyB=body2,
             coords_of_joint=body1.pose().lin.copy(),
@@ -706,14 +705,14 @@ class TestRevoluteJoint(unittest.TestCase):
         body2.set_pose(Pose3(lin=pos2))
 
         # Фиксируем body1 в (0, 0, 0)
-        joint_fixed = FixedRotationJoint3D(
+        _joint_fixed = FixedRotationJoint3D(
             body=body1,
             assembler=assembler,
             coords_of_joint=anchor
         )
 
         # RevoluteJoint между body1 и body2 в позиции body1 = (0, 2, 0)
-        joint_rev = RevoluteJoint3D(
+        _joint_rev = RevoluteJoint3D(
             bodyA=body1,
             bodyB=body2,
             coords_of_joint=pos1.copy(),
@@ -780,14 +779,14 @@ class TestRevoluteJoint(unittest.TestCase):
         body2.set_pose(Pose3(lin=pos2))
 
         # Фиксируем первое тело в (0, 0, 0)
-        joint_fixed = FixedRotationJoint3D(
+        _joint_fixed = FixedRotationJoint3D(
             body=body1,
             assembler=assembler,
             coords_of_joint=np.array([0.0, 0.0, 0.0])
         )
 
         # Соединяем тела шарниром в (0, 2, 0) - позиция body1
-        joint_rev = RevoluteJoint3D(
+        _joint_rev = RevoluteJoint3D(
             bodyA=body1,
             bodyB=body2,
             coords_of_joint=pos1.copy(),
@@ -893,14 +892,14 @@ class TestRevoluteJoint(unittest.TestCase):
         body2.velocity_var.value[0:3] = v2
 
         # Фиксируем первое тело в начале координат (ось Y)
-        joint_fixed = FixedRotationJoint3D(
+        _joint_fixed = FixedRotationJoint3D(
             body=body1,
             assembler=assembler,
             coords_of_joint=np.array([0.0, 0.0, 0.0])
         )
 
         # Соединяем тела шарниром (ось Y)
-        joint_rev = RevoluteJoint3D(
+        _joint_rev = RevoluteJoint3D(
             bodyA=body1,
             bodyB=body2,
             coords_of_joint=pos1.copy(),

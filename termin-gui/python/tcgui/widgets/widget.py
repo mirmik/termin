@@ -1,7 +1,7 @@
 """Base widget class for the UI system."""
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from tcgui.widgets.units import Value
 from tcgui.widgets.events import DragEvent, DragPayload, MouseEvent, MouseWheelEvent, KeyEvent, TextEvent

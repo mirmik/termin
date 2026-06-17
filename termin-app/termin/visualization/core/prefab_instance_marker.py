@@ -6,7 +6,7 @@ Stores the link to the source prefab and tracks property overrides.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import numpy as np
 

@@ -12,7 +12,7 @@ from termin.voxels.intersection import triangle_aabb_intersect, triangle_aabb
 
 if TYPE_CHECKING:
     from termin.mesh.mesh import Mesh3
-    from termin.scene import Entity, Scene
+    from termin.scene import Scene
 
 
 # Типы вокселей
@@ -311,7 +311,6 @@ def voxelize_scene(
 
     # Добавляем padding
     origin = scene_min - padding
-    size = scene_max - scene_min + 2 * padding
 
     # Выравниваем origin на cell_size
     origin = np.floor(origin / cell_size) * cell_size

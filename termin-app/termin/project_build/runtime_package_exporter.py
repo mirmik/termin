@@ -1288,7 +1288,7 @@ def _export_material_spec(
 
 
 def _material_to_spec(material: Any, shaders: dict[str, _ShaderSpec]) -> dict[str, Any]:
-    import tgfx  # Registers TcShader before TcMaterialPhase.shader casts it.
+    import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     phases: list[dict[str, Any]] = []
     for phase in material.phases:

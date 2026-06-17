@@ -65,12 +65,9 @@ class Screw2:
 
     def force_carry(self, motor):
         angle = motor.factorize_rotation_angle()
-        translation = motor.factorize_translation_vector()
         rotated_scr = self.rotate_by_angle(angle)
         m = rotated_scr.moment()
         v = rotated_scr.vector()
-        b = translation
-        a = -m
         new_m = m
         new_v = v
         ret = Screw2(m=new_m, v=new_v)

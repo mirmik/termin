@@ -126,7 +126,6 @@ class PrefabAsset(DataAsset[dict]):
         """
         from termin.visualization.core.entity import Entity
         from termin.visualization.core.prefab_instance_marker import PrefabInstanceMarker
-        from termin.visualization.core.prefab_registry import PrefabRegistry
 
         # Ensure prefab is loaded
         self.ensure_loaded()

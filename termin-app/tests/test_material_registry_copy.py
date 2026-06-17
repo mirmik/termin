@@ -16,7 +16,7 @@ void main() { out_color = vec4(1.0); }
 
 
 def test_raw_glsl_phase_records_rewritten_engine_resource_layout() -> None:
-    import tgfx
+    import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     material = TcMaterial.create("RawGlslEngineLayoutMaterial", "")
     phase = material.add_phase_from_sources(

@@ -164,8 +164,6 @@ class PhysicsWorldComponent(PythonComponent):
         self._initialized = True
 
     def _collect_rigid_bodies(self, scene):
-        from termin.physics_components.rigid_body_component import RigidBodyComponent
-
         self._rigid_body_components.clear()
 
         visited_entities = set()

@@ -23,7 +23,6 @@ from tcbase import log
 
 if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
-    from termin.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.voxels.grid import VoxelGrid
 
@@ -679,7 +678,6 @@ class VoxelizerComponent(DrawableComponent):
         Returns:
             True если успешно, False если ошибка.
         """
-        from termin.assets.resources import ResourceManager
         from termin.voxels.grid import VoxelGrid
         from termin.voxels.voxelizer import VOXEL_SOLID
         from termin.voxels.persistence import VoxelPersistence
@@ -770,7 +768,6 @@ class VoxelizerComponent(DrawableComponent):
         self._rebuild_voxel_display_mesh()
 
         # Сохраняем в файл
-        rm = ResourceManager.instance()
         try:
             output_path = Path(output)
 

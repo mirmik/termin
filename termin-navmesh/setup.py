@@ -13,7 +13,7 @@
 # They depend on higher-level termin modules (visualization.core, etc.) and
 # may not be usable in environments without main termin installed.
 
-from setuptools import setup, find_packages
+from setuptools import setup
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
 from termin_build.setup_helpers import native_extensions_for_source
 

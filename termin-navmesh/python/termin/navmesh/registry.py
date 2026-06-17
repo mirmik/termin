@@ -8,7 +8,6 @@ Components register their NavMesh data here. Other components
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, List, Optional
-from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh

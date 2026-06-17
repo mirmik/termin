@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
-from tcbase import Key, MouseButton, Mods, log
+from tcbase import Key, MouseButton, log
 from tgfx.font import FontTextureAtlas
 from tgfx import Tgfx2Context
 from tcgui.widgets.widget import Widget

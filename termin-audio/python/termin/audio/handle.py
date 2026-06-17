@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from termin_assets import ResourceHandle
 
 if TYPE_CHECKING:
-    from termin.audio.asset import AudioClipAsset
     from termin.audio.audio_clip import AudioClip
 
 

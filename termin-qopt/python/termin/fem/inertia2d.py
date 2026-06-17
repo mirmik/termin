@@ -5,7 +5,7 @@
 
 import numpy as np
 from termin.geombase.pose2 import Pose2
-from termin.geombase.screw import Screw2, cross2d_scalar
+from termin.geombase.screw import Screw2
 
 
 def skew2(v):

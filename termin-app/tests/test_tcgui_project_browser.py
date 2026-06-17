@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui, _get_file_subtitle
 
 

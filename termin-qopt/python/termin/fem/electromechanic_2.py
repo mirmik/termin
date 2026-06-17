@@ -1,6 +1,6 @@
 
-from termin.fem.assembler import Contribution, Variable
-from termin.fem.electrical_2 import ElectricalNode, CurrentVariable
+from termin.fem.assembler import Contribution
+from termin.fem.electrical_2 import CurrentVariable
 
 class DCMotor(Contribution):
     """
@@ -43,13 +43,9 @@ class DCMotor(Contribution):
         Вкладывает уравнения в матрицы электрического и механического доменов.
         """
         # Матрицы
-        G   = matrices["conductance"]              # KCL
         H   = matrices["electric_holonomic"]       # KVL
-        rhs = matrices["electric_holonomic_rhs"]   # KVL правая часть
         EM = matrices["electromechanic_coupling"]  # электромеханическая связь
         EM_damping = matrices["electromechanic_coupling_damping"]  # электромеханическая связь (в демпфирование)
-
-        b_rhs = matrices["load"]         # правая часть сил на ускорения
         
         # Индексы
         vmap = index_maps["voltage"]

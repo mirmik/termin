@@ -292,7 +292,6 @@ class RevoluteJoint2D(Contribution):
         F  = index_maps["force"][self.internal_force]  # 2 строки
 
         rA = self.rA_local
-        rB_A = self.rB_in_A
         R = self.poseAB.rotation_matrix()
 
         # блок по aA (в СК A)

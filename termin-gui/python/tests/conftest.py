@@ -1,7 +1,7 @@
 """Helpers for layout tests."""
 
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.units import px, pct
+from tcgui.widgets.units import px
 
 VIEWPORT_W = 1280.0
 VIEWPORT_H = 800.0

@@ -20,7 +20,6 @@ from termin.visualization.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
     from termin.visualization.render.render_context import RenderContext
     from termin.navmesh.types import NavMesh
 

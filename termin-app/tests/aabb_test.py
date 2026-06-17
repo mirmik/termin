@@ -56,7 +56,7 @@ class AABBTest(unittest.TestCase):
         child_aabb = AABB(numpy.array([-1.0, -1.0, -1.0]), numpy.array([1.0, 1.0, 1.0]))
 
         parent_taabb = TransformAABB(parent_transform, parent_aabb)
-        child_taabb = TransformAABB(child_transform, child_aabb)
+        _child_taabb = TransformAABB(child_transform, child_aabb)
 
         compiled_aabb = parent_taabb.compile_tree_aabb()
         expected_min = numpy.array([-2.0, -2.0, -2.0])

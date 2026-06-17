@@ -36,10 +36,12 @@ __all__ = [
     # Assembler
     'Variable',
     'Contribution',
+    'Constraint',
     'MatrixAssembler',
     'BilinearContribution',
     'LoadContribution',
     'ConstraintContribution',
+    'LagrangeConstraint',
     
     # Mechanic
     'BarElement',

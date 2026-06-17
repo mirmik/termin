@@ -1012,7 +1012,6 @@ def cvt_smoothing(
             new_vertices[v_idx][1] = vertices[v_idx][1] + alpha * (target_y - vertices[v_idx][1])
 
         # Проверяем изменение площади и корректируем
-        old_verts = vertices
         vertices = new_vertices
         area_after = compute_total_area()
 
@@ -1129,7 +1128,6 @@ def edge_collapse(
         # (учитываем разные пороги для внутренних и контурных рёбер)
         shortest_edge = None
         shortest_len_sq = float('inf')
-        shortest_is_boundary = False
 
         edge_map = build_edge_map(triangles)
 
@@ -1153,7 +1151,6 @@ def edge_collapse(
             if len_sq < shortest_len_sq:
                 shortest_len_sq = len_sq
                 shortest_edge = edge
-                shortest_is_boundary = is_boundary
 
         if shortest_edge is None:
             break

@@ -25,7 +25,6 @@ from tgfx.font import FontTextureAtlas, get_default_font
 from tgfx._tgfx_native import (
     Tgfx2Context,
     Tgfx2TextureHandle,
-    Tgfx2ShaderStage,
     tc_shader_ensure_tgfx2,
     CULL_NONE,
 )

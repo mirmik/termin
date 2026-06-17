@@ -7,8 +7,8 @@ coverage once the baseline is stable.
 ## Current State
 
 - Python uses Ruff through `./run-lint-python.sh`.
-- The Python baseline is intentionally narrow and documented in
-  `docs/python-linting.md`.
+- The Python baseline is defect-oriented and documented in
+  `docs/python-linting.md`; full Bugbear `B` and full Pyflakes `F` are enabled.
 - CI runs Python lint as a separate job before the heavier build jobs.
 - C/C++ currently has no repository-owned lint or static-analysis entry point.
 
@@ -19,11 +19,8 @@ Prefer adding rules in small batches with a clean baseline for each batch.
 Recommended near-term Ruff additions:
 
 - Done: the full Bugbear `B` baseline is enabled.
-- Full Pyflakes `F` after auditing import-contract noise in `__init__.py`
-  files. This would add unused imports, star-import ambiguity, unused
-  variables, duplicate arguments, and related checks.
-- `F541` and similar low-noise correctness checks can be enabled early if they
-  do not create migration noise.
+- Done: the full Pyflakes `F` baseline is enabled after auditing package
+  facades and intentional re-exports.
 
 Defer until the defect-oriented baseline is clean:
 

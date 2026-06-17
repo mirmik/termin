@@ -2,7 +2,6 @@
 
 from tcgui.widgets.splitter import Splitter
 from tcgui.widgets.events import MouseEvent
-from tcgui.widgets.units import px
 from tcbase import MouseButton
 from tests.conftest import make_widget, VIEWPORT_W, VIEWPORT_H
 

@@ -134,7 +134,6 @@ class AStarTest(unittest.TestCase):
 
     def test_same_triangle(self):
         """Старт и финиш в одном треугольнике."""
-        triangles = np.array([[0, 1, 2]], dtype=np.int32)
         neighbors = np.array([[-1, -1, -1]], dtype=np.int32)
         centroids = np.array([[0.5, 0.0, 0.5]], dtype=np.float32)
 

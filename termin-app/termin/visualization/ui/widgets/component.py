@@ -136,8 +136,6 @@ class UIComponent(InputComponent):
 
     def set_ui_layout(self, handle: "UIHandle | None") -> None:
         """Set UI layout from handle."""
-        from termin.assets.ui_handle import UIHandle
-
         if handle is None:
             self._ui_handle = None
             self._ui_layout_name = ""
