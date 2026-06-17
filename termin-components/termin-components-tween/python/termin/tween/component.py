@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene.python_component import PythonComponent
 from termin.tween.manager import TweenManager
 from termin.tween.ease import Ease
 from termin.tween.tween import Tween, MoveTween, RotateTween, ScaleTween
 
 if TYPE_CHECKING:
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
     from termin.kinematic.general_transform import GeneralTransform3
 
 

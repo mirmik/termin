@@ -62,6 +62,8 @@ PYTHON_PKG_TO_DIR = {
     "termin-app": "termin-app",
     "termin-base": "termin-base",
     "termin-assets": "termin-assets",
+    "termin-tween": "termin-tween",
+    "termin-components-tween": "termin-components-tween",
     "termin-nanobind": "termin-nanobind-sdk",
     "termin-csg": "termin-csg",
     "termin-lighting": "termin-lighting",
@@ -117,6 +119,8 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.kinematic": "termin-components-kinematic",
     "termin.modules": "termin-modules",
     "termin.navmesh": "termin-navmesh",
+    "termin.tween.component": "termin-components-tween",
+    "termin.tween": "termin-tween",
     # Fallback: bare `import termin` touches only the namespace root.
     "termin": "termin",
 }
@@ -155,6 +159,8 @@ MANUAL_DEPS = {
     "termin-app": {"termin"},
     # "termin-entity": {"termin"},  # удалён, мигрирован в termin-app
     "termin-navmesh": {"termin"},
+    "termin-tween": {"termin"},
+    "termin-components-tween": {"termin-tween"},
 }
 
 
@@ -283,6 +289,12 @@ def main():
         path = os.path.join(ROOT, name)
         if os.path.isdir(path) and os.path.exists(os.path.join(path, "setup.py")):
             python_dirs.append((name, name))
+        if name == "termin-components":
+            for sub in os.listdir(path):
+                subpath = os.path.join(path, sub)
+                setup_path = os.path.join(subpath, "setup.py")
+                if os.path.isdir(subpath) and os.path.exists(setup_path):
+                    python_dirs.append((sub, os.path.join(name, sub)))
 
     for dir_name, subdir in python_dirs:
         setup_path = os.path.join(ROOT, subdir, "setup.py")
@@ -389,11 +401,13 @@ def main():
             "termin-base", "termin-mesh", "termin-inspect", "termin-modules",
             "termin-scene", "termin-skeleton", "termin-collision", "termin-input",
             "termin-animation", "termin-physics", "termin-csg", "termin-navmesh",
+            "termin-tween",
         ],
         "Other Components": [
             "termin-components-skeleton", "termin-components-animation",
             "termin-components-collision", "termin-components-physics",
             "termin-components-kinematic", "termin-components-mesh",
+            "termin-components-tween",
         ],
         "Thin Facades": [],  # termin-entity удалён
     }
