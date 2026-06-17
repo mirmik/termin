@@ -118,6 +118,16 @@ inherits this core and remains the domain/application facade for typed
 registries, builtins, render/material/pipeline/prefab/UI/GLB accessors,
 component/frame-pass registration, and legacy import paths.
 
+Status 2026-06-17: component class and frame-pass class registries moved out of
+the app resource manager into domain packages. `termin.scene.component_registry`
+now owns `ComponentClassRegistry`, while
+`termin.render_framework.frame_pass_registry` owns `FramePassRegistry`.
+`termin.assets.resources.ResourceManager` keeps compatibility facade methods and
+the old `components`/`frame_passes` dict views, but delegates registration,
+lookup, listing, and scanning to the domain registries. The old app
+`visualization.core.plugin_loader` is now a compatibility re-export for
+`termin.scene.class_scanner`.
+
 ### Domain Packages
 
 Concrete plugins should live near the domain implementation:
@@ -325,8 +335,8 @@ After plugin dispatch works:
 
 - Decide which typed `ResourceManager` methods remain as stable domain accessors.
 - Move domain-specific accessors into domain packages or adapter mixins.
-- Move builtin resource registration and component/frame-pass catalogs out of
-  the asset runtime facade.
+- Move builtin resource registration and component/frame-pass default catalogs
+  out of the asset runtime facade.
 - Prefer generic APIs for new code:
   - `get_asset(type_id, name)`
   - `get_asset_by_uuid(uuid)`
