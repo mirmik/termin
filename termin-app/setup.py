@@ -53,6 +53,7 @@ if __name__ == "__main__":
                 "termin.engine", "termin.engine.*",             # termin-engine
                 "termin.skeleton", "termin.skeleton.*",         # termin-skeleton
                 "termin.animation", "termin.animation.*",       # termin-animation
+                "termin.audio",                                 # termin-audio core
                 "termin.physics", "termin.physics.*",           # termin-physics
                 "termin.navmesh", "termin.navmesh.*",           # termin-navmesh
                 "termin.tween", "termin.tween.*",               # termin-tween / termin-components-tween
@@ -103,6 +104,7 @@ if __name__ == "__main__":
             "termin-assets",
             "termin-tween",
             "termin-components-tween",
+            "termin-audio",
             "termin-voxels",
             "termin-components-voxels",
             "termin-materials",

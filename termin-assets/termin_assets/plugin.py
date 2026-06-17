@@ -71,13 +71,19 @@ class AssetTypeRegistry:
         self._runtime_by_type[plugin.type_id] = plugin
 
     def register_import(self, plugin: AssetImportPlugin) -> None:
+        previous = self._import_by_type.get(plugin.type_id)
+        if previous is not None:
+            for extension_plugins in self._import_by_extension.values():
+                extension_plugins[:] = [
+                    item for item in extension_plugins if item.type_id != plugin.type_id
+                ]
+
         self._import_by_type[plugin.type_id] = plugin
         for ext in plugin.extensions:
             normalized = ext.lower()
             plugins = self._import_by_extension.setdefault(normalized, [])
-            if plugin not in plugins:
-                plugins.append(plugin)
-                plugins.sort(key=lambda item: item.priority)
+            plugins.append(plugin)
+            plugins.sort(key=lambda item: item.priority)
 
     def get(self, type_id: str) -> AssetTypePlugin | None:
         """Compatibility alias for runtime plugin lookup."""
