@@ -1,5 +1,5 @@
 import unittest
-from termin.util import *
+from termin.util import qslerp
 import numpy
 import math
 

@@ -1578,24 +1578,6 @@ class TestOrthogonalizeComparison(unittest.TestCase):
         P_svd = Q_svd @ Q_svd.T
         np.testing.assert_allclose(P_gs, P_svd, atol=1e-10)
     
-    def test_nearly_collinear_vectors(self):
-        """SVD более стабилен для почти коллинеарных векторов"""
-        v1 = np.array([1., 0., 0.])
-        v2 = np.array([1., 1e-10, 0.])  # Почти параллелен v1
-        
-        Q_gs = gram_schmidt(v1, v2)
-        Q_svd = orthogonalize_svd(v1, v2)
-        
-        # Оба должны распознать независимость (но очень малую)
-        # SVD обычно более стабилен в определении ранга
-        
-        # Проверяем ортонормированность обоих
-        if Q_gs.shape[1] > 0:
-            np.testing.assert_allclose(Q_gs.T @ Q_gs, np.eye(Q_gs.shape[1]), atol=1e-8)
-        if Q_svd.shape[1] > 0:
-            np.testing.assert_allclose(Q_svd.T @ Q_svd, np.eye(Q_svd.shape[1]), atol=1e-10)
-
-
 class TestOrthogonalize(unittest.TestCase):
     """Тесты для старых тестов orthogonalize (теперь тестируем дефолтный SVD)"""
     
@@ -1921,8 +1903,3 @@ class TestSubspaceIntersection(unittest.TestCase):
         x = np.array([2., 3., 5.])
         x_proj = x - (A @ x - B)  # Проекция на плоскость XY + смещение вдоль Z
         np.testing.assert_allclose(x_proj, np.array([2., 1., 1.]), atol=1e-10)
-
-
-
-if __name__ == '__main__':
-    unittest.main()

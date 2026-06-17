@@ -1,6 +1,5 @@
 import unittest
-from termin.kinematic import *
-from termin.kinematic import Transform3
+from termin.kinematic import Rotator3, Transform3
 from termin.geombase import Pose3
 import numpy
 import math
@@ -22,7 +21,7 @@ class TestRotator3(unittest.TestCase):
         count_of_rotator_childs = len(rotator.children)
         self.assertEqual(count_of_rotator_childs, 1)
 
-        count_of_rotator_output_childs = len(rotator.children)
+        count_of_rotator_output_childs = len(rotator.output.children)
         self.assertEqual(count_of_rotator_output_childs, 1)
 
         count_of_trsf_childs = len(trsf.children)

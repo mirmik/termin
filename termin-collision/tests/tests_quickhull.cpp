@@ -20,10 +20,7 @@ TEST_CASE("Quickhull: cube 8 points")
 
     auto hull = ConvexHullCollider::from_points(pts);
     CHECK_EQ((int)hull.vertices.size(), 8);
-    CHECK_EQ((int)hull.faces.size(), 12);  // 6 faces * 2 triangles each... actually quickhull gives triangulated
-    // Actually a cube has 6 quad faces = 12 triangles
-    // But quickhull might give fewer if some faces are coplanar.
-    // At minimum 6 faces (if merging coplanar), at most 12 (all triangulated)
+    // Cube hulls can be represented as 6 merged quad faces or 12 triangles.
     CHECK((int)hull.faces.size() >= 6);
     CHECK((int)hull.faces.size() <= 12);
 }

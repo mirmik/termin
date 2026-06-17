@@ -1,8 +1,8 @@
 """Тест на сохранение энергии в физическом движке."""
 
 import numpy as np
-from termin.geombase._geom_native import Pose3, Vec3, Quat
-from termin.physics import RigidBody, PhysicsWorld
+from termin.geombase._geom_native import Pose3, Vec3
+from termin.physics import PhysicsWorld
 
 
 def compute_total_energy(world: PhysicsWorld, gravity_z: float) -> float:
@@ -70,23 +70,14 @@ def test_free_fall_energy():
     gravity_z = -9.81
 
     initial_energy = compute_total_energy(world, gravity_z)
-    print(f"Initial energy: {initial_energy:.6f}")
 
-    for i in range(120):  # 2 секунды
+    for _ in range(120):  # 2 секунды
         world.step(dt)
-
-        if i % 30 == 0:
-            E = compute_total_energy(world, gravity_z)
-            pos = world.get_body(idx).position()
-            vel = world.get_body(idx).linear_velocity
-            print(f"Step {i}: E={E:.6f}, z={pos.z:.3f}, v_z={vel.z:.3f}")
 
     final_energy = compute_total_energy(world, gravity_z)
 
     # Энергия должна сохраняться (с небольшой погрешностью из-за численного интегрирования)
     energy_drift = abs(final_energy - initial_energy) / initial_energy
-    print(f"\nFinal energy: {final_energy:.6f}")
-    print(f"Energy drift: {energy_drift * 100:.4f}%")
 
     # Допускаем 5% дрейфа за 2 секунды
     assert energy_drift < 0.05, f"Energy drift too large: {energy_drift * 100:.2f}%"
@@ -111,23 +102,13 @@ def test_spinning_cube_energy():
     dt = 1.0 / 60.0
 
     initial_energy = compute_total_energy(world, 0.0)
-    print(f"\nSpinning cube test:")
-    print(f"Initial energy: {initial_energy:.6f}")
 
-    for i in range(300):  # 5 секунд
+    for _ in range(300):  # 5 секунд
         world.step(dt)
-
-        if i % 60 == 0:
-            E = compute_total_energy(world, 0.0)
-            omega = world.get_body(idx).angular_velocity
-            omega_norm = (omega.x**2 + omega.y**2 + omega.z**2)**0.5
-            print(f"Step {i}: E={E:.6f}, omega_norm={omega_norm:.6f}")
 
     final_energy = compute_total_energy(world, 0.0)
 
     energy_drift = abs(final_energy - initial_energy) / initial_energy if initial_energy > 0 else 0
-    print(f"\nFinal energy: {final_energy:.6f}")
-    print(f"Energy drift: {energy_drift * 100:.4f}%")
 
     # Энергия должна сохраняться
     assert energy_drift < 0.05, f"Energy drift too large: {energy_drift * 100:.2f}%"
@@ -155,43 +136,12 @@ def test_multiple_cubes_energy():
     gravity_z = -9.81
 
     initial_energy = compute_total_energy(world, gravity_z)
-    print(f"\nMultiple cubes test:")
-    print(f"Initial energy: {initial_energy:.6f}")
 
-    for i in range(120):
+    for _ in range(120):
         world.step(dt)
-
-        if i % 30 == 0:
-            E = compute_total_energy(world, gravity_z)
-            print(f"Step {i}: E={E:.6f}")
 
     final_energy = compute_total_energy(world, gravity_z)
     energy_drift = abs(final_energy - initial_energy) / initial_energy
 
-    print(f"Final energy: {final_energy:.6f}")
-    print(f"Energy drift: {energy_drift * 100:.4f}%")
-
     # Допускаем 5% дрейфа
     assert energy_drift < 0.05, f"Energy drift too large: {energy_drift * 100:.2f}%"
-
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("TEST: Free fall energy conservation")
-    print("=" * 60)
-    test_free_fall_energy()
-    print("\nPASSED\n")
-
-    print("=" * 60)
-    print("TEST: Spinning cube energy conservation")
-    print("=" * 60)
-    test_spinning_cube_energy()
-    print("\nPASSED\n")
-
-    print("=" * 60)
-    print("TEST: Multiple cubes energy conservation")
-    print("=" * 60)
-    test_multiple_cubes_energy()
-    print("\nPASSED\n")
-
-    print("All energy tests passed!")

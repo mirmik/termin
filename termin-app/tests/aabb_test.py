@@ -64,7 +64,6 @@ class AABBTest(unittest.TestCase):
 
         numpy.testing.assert_array_equal(compiled_aabb.min_point, expected_min)
         numpy.testing.assert_array_equal(compiled_aabb.max_point, expected_max)
-        numpy.testing.assert_array_equal(compiled_aabb.max_point, expected_max)
 
     def test_transform_aabb_with_children_with_latest_relocation(self):
         parent_transform = Transform(Pose3.identity())

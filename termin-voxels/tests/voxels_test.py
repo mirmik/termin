@@ -8,7 +8,7 @@ import numpy as np
 from termin.voxels.chunk import VoxelChunk, CHUNK_SIZE
 from termin.voxels.grid import VoxelGrid
 from termin.voxels.intersection import triangle_aabb_intersect, triangle_aabb
-from termin.voxels.voxelizer import MeshVoxelizer, VOXEL_SURFACE
+from termin.voxels.voxelizer import MeshVoxelizer
 
 
 class VoxelChunkTest(unittest.TestCase):
@@ -559,7 +559,3 @@ class VoxelPersistenceTest(unittest.TestCase):
             np.testing.assert_array_equal(loaded.origin, [0, 0, 0])
         finally:
             os.unlink(temp_path)
-
-
-if __name__ == "__main__":
-    unittest.main()

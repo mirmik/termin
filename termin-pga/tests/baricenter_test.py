@@ -6,53 +6,25 @@ from termin.geomalgo.baricenter import baricoords_of_point_simplex
 class TestBaricentricCoordinates(unittest.TestCase):
     """Тесты для функции baricoords_of_point_simplex"""
     
-    def test_triangle_center(self):
-        """Центр треугольника имеет координаты (1/3, 1/3, 1/3)"""
+    def test_triangle_reference_points(self):
+        """Опорные точки треугольника имеют ожидаемые барицентрические координаты"""
         simplex = np.array([[0.0, 0.0],
                             [1.0, 0.0],
                             [0.0, 1.0]])
-        point = np.array([1.0/3, 1.0/3])
-        coords = baricoords_of_point_simplex(point, simplex)
-        
-        expected = np.array([1.0/3, 1.0/3, 1.0/3])
-        np.testing.assert_allclose(coords, expected, rtol=1e-10)
-        self.assertAlmostEqual(np.sum(coords), 1.0)
-    
-    def test_triangle_vertex(self):
-        """Вершина треугольника имеет координату 1 в соответствующей позиции"""
-        simplex = np.array([[0.0, 0.0],
-                            [1.0, 0.0],
-                            [0.0, 1.0]])
-        
-        # Первая вершина
-        point = np.array([0.0, 0.0])
-        coords = baricoords_of_point_simplex(point, simplex)
-        expected = np.array([1.0, 0.0, 0.0])
-        np.testing.assert_allclose(coords, expected, atol=1e-10)
-        
-        # Вторая вершина
-        point = np.array([1.0, 0.0])
-        coords = baricoords_of_point_simplex(point, simplex)
-        expected = np.array([0.0, 1.0, 0.0])
-        np.testing.assert_allclose(coords, expected, atol=1e-10)
-        
-        # Третья вершина
-        point = np.array([0.0, 1.0])
-        coords = baricoords_of_point_simplex(point, simplex)
-        expected = np.array([0.0, 0.0, 1.0])
-        np.testing.assert_allclose(coords, expected, atol=1e-10)
-    
-    def test_triangle_edge_midpoint(self):
-        """Середина ребра имеет координаты (0.5, 0.5, 0) для соответствующих вершин"""
-        simplex = np.array([[0.0, 0.0],
-                            [1.0, 0.0],
-                            [0.0, 1.0]])
-        
-        # Середина между V0 и V1
-        point = np.array([0.5, 0.0])
-        coords = baricoords_of_point_simplex(point, simplex)
-        expected = np.array([0.5, 0.5, 0.0])
-        np.testing.assert_allclose(coords, expected, atol=1e-10)
+
+        cases = [
+            ("center", np.array([1.0/3, 1.0/3]), np.array([1.0/3, 1.0/3, 1.0/3])),
+            ("vertex_0", np.array([0.0, 0.0]), np.array([1.0, 0.0, 0.0])),
+            ("vertex_1", np.array([1.0, 0.0]), np.array([0.0, 1.0, 0.0])),
+            ("vertex_2", np.array([0.0, 1.0]), np.array([0.0, 0.0, 1.0])),
+            ("edge_midpoint", np.array([0.5, 0.0]), np.array([0.5, 0.5, 0.0])),
+        ]
+
+        for name, point, expected in cases:
+            with self.subTest(name=name):
+                coords = baricoords_of_point_simplex(point, simplex)
+                np.testing.assert_allclose(coords, expected, atol=1e-10)
+                self.assertAlmostEqual(np.sum(coords), 1.0)
     
     def test_segment_1d(self):
         """Отрезок в 1D пространстве"""

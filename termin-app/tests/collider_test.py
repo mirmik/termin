@@ -15,17 +15,13 @@ def vec3_to_np(v: Vec3) -> np.ndarray:
 
 class TestCollider(unittest.TestCase):
     def test_closest_to_capsule(self):
-        # Old: CapsuleCollider(Vec3(0,0,0), Vec3(0,0,1), 0.25)
-        # New: half_height = 0.5, radius = 0.25, axis along Z
         capsule1 = CapsuleCollider(0.5, 0.25)  # from (0,0,-0.5) to (0,0,0.5)
 
-        # Old: CapsuleCollider(Vec3(1,0,0), Vec3(1,0,0), 0.25) - degenerate
-        # New: half_height=0, radius=0.25, at x=1
         capsule2 = CapsuleCollider(0.0, 0.25, GeneralPose3(Quat.identity(), Vec3(1.0, 0.0, 0.0)))
 
         hit = capsule1.closest_to_collider(capsule2)
 
-        expected_dist = 0.5  # Capsules are touching
+        expected_dist = 0.5
         self.assertAlmostEqual(hit.distance, expected_dist)
 
         expected_p_near = np.array([0.25, 0.0, 0.0])
@@ -35,12 +31,8 @@ class TestCollider(unittest.TestCase):
         np.testing.assert_array_almost_equal(vec3_to_np(hit.point_on_b), expected_q_near)
 
     def test_closest_sphere_to_capsule(self):
-        # Old: CapsuleCollider(Vec3(0,0,0), Vec3(0,0,2), 0.5)
-        # New: half_height = 1.0, radius = 0.5, axis along Z (from z=-1 to z=1)
         capsule = CapsuleCollider(1.0, 0.5)
 
-        # Old: SphereCollider(Vec3(1,0,1), 0.5)
-        # New: radius=0.5, center at (1,0,1)
         sphere = SphereCollider(0.5, GeneralPose3(Quat.identity(), Vec3(1.0, 0.0, 1.0)))
 
         hit = sphere.closest_to_collider(capsule)
@@ -93,14 +85,8 @@ class TestCollider(unittest.TestCase):
         np.testing.assert_array_almost_equal(vec3_to_np(hit.point_on_b), expected_q_near)
 
     def test_closest_of_box_and_capsule(self):
-        # from_size takes size (full size) and transform
-        # Old: from_size(center, size) - center was (0,0,0), size was (2,1,0.5)
-        # New: from_size(size, transform) - size is (2,1,0.5)
         box = BoxCollider.from_size(Vec3(2.0, 1.0, 0.5))
 
-        # Old: CapsuleCollider(Vec3(3,0,0), Vec3(4,0,0), 0.2) - along X axis
-        # New: half_height=0.5, radius=0.2, rotated 90 deg around Y, centered at (3.5,0,0)
-        # Or we can use: axis along X, center at 3.5
         # For X-axis capsule: rotate around Y by 90 degrees
         rot_y_90 = Quat.from_axis_angle(Vec3(0, 1, 0), np.pi/2)
         capsule = CapsuleCollider(0.5, 0.2, GeneralPose3(rot_y_90, Vec3(3.5, 0.0, 0.0)))
@@ -119,7 +105,6 @@ class TestCollider(unittest.TestCase):
 
 class AttachedColliderTest(unittest.TestCase):
     def test_attached_collider_distance(self):
-        # from_size takes size (full size) and transform
         box = BoxCollider.from_size(Vec3(2.0, 1.0, 0.5))
 
         # Check half_size
@@ -179,8 +164,6 @@ class TestColliderRay(unittest.TestCase):
         self.assertAlmostEqual(hit.distance, 4.0)
 
     def test_ray_hits_capsule(self):
-        # Old: CapsuleCollider(Vec3(0,0,3), Vec3(0,0,7), 1.0)
-        # New: half_height=2.0, radius=1.0, center at (0,0,5)
         capsule = CapsuleCollider(2.0, 1.0, GeneralPose3(Quat.identity(), Vec3(0.0, 0.0, 5.0)))
 
         ray = Ray3(Vec3(0.0, 0.0, 0.0), Vec3(0.0, 0.0, 1.0))
@@ -193,8 +176,6 @@ class TestColliderRay(unittest.TestCase):
         np.testing.assert_array_almost_equal(vec3_to_np(hit.point_on_collider), np.array([0.0, 0.0, 2.0]))
 
     def test_ray_misses_capsule(self):
-        # Old: CapsuleCollider(Vec3(5,0,0), Vec3(5,0,5), 0.5)
-        # New: half_height=2.5, radius=0.5, center at (5,0,2.5)
         capsule = CapsuleCollider(2.5, 0.5, GeneralPose3(Quat.identity(), Vec3(5.0, 0.0, 2.5)))
 
         ray = Ray3(Vec3(0.0, 0.0, 0.0), Vec3(0.0, 0.0, 1.0))
@@ -205,8 +186,6 @@ class TestColliderRay(unittest.TestCase):
         self.assertAlmostEqual(hit.distance, 4.5)
 
     def test_ray_hits_box(self):
-        # Old: from_size(center=(0,0,5), size=(2,2,2))
-        # New: from_size(size=(2,2,2), transform with center at (0,0,5))
         box = BoxCollider.from_size(
             Vec3(2.0, 2.0, 2.0),
             GeneralPose3(Quat.identity(), Vec3(0.0, 0.0, 5.0))
@@ -221,8 +200,6 @@ class TestColliderRay(unittest.TestCase):
         np.testing.assert_array_almost_equal(vec3_to_np(hit.point_on_ray), np.array([0.0, 0.0, 4.0]))
 
     def test_ray_misses_box(self):
-        # Old: from_size(center=(5,0,5), size=(2,2,2))
-        # New: from_size(size=(2,2,2), transform with center at (5,0,5))
         box = BoxCollider.from_size(
             Vec3(2.0, 2.0, 2.0),
             GeneralPose3(Quat.identity(), Vec3(5.0, 0.0, 5.0))
@@ -254,7 +231,3 @@ class TestColliderRay(unittest.TestCase):
         # Will hit sphere1
         self.assertAlmostEqual(hit.distance, 0.0)
         np.testing.assert_array_almost_equal(vec3_to_np(hit.point_on_ray), np.array([0.0, 0.0, 4.0]))
-
-
-if __name__ == '__main__':
-    unittest.main()

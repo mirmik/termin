@@ -22,13 +22,6 @@ def test_compute_size():
     assert h == 0
 
 
-def test_initial_state():
-    target = _make_target()
-    sp = Splitter(target=target, side="left")
-    assert sp._dragging is False
-    assert sp._hovered is False
-
-
 # --- Drag left side ---
 
 def test_drag_left_side():

@@ -1,9 +1,8 @@
 """Tests for GeneralTransform3 - transform hierarchy with scale inheritance."""
 
 import math
-import pytest
 
-from termin.geombase import GeneralPose3, Pose3, Vec3, Quat
+from termin.geombase import GeneralPose3, Pose3, Vec3
 from termin.kinematic import GeneralTransform3
 
 

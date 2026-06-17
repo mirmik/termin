@@ -1,7 +1,6 @@
 """GroupBox layout tests."""
 
 from tcgui.widgets.group_box import GroupBox
-from tcgui.widgets.units import px
 from tests.conftest import make_widget, VIEWPORT_W, VIEWPORT_H
 
 

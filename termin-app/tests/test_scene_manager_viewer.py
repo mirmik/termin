@@ -1,23 +1,7 @@
-import importlib.util
-from pathlib import Path
-
-
-def _load_module(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from termin.editor_tcgui.dialogs import scene_manager_viewer as tcgui_viewer
 
 
 def test_scene_manager_viewers_format_scene_handle_object():
-    repo_root = Path(__file__).resolve().parents[2]
-    tcgui_viewer = _load_module(
-        "tcgui_scene_manager_viewer_under_test",
-        repo_root / "termin-app/termin/editor_tcgui/dialogs/scene_manager_viewer.py",
-    )
-
     from termin.engine import SceneManager
 
     scene_manager = SceneManager()

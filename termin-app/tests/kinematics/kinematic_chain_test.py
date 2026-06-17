@@ -1,8 +1,8 @@
 import unittest
 from termin.kinematic import KinematicChain3
-from termin.kinematic import KinematicTransform3, Rotator3, Actuator3
-from termin.geombase import Pose3, Screw2, Screw3
-from termin.kinematic import Transform, Transform3
+from termin.kinematic import Rotator3, Actuator3
+from termin.geombase import Pose3, Screw3
+from termin.kinematic import Transform3
 import numpy
 
 class TestKinematicChain3(unittest.TestCase):
@@ -37,9 +37,6 @@ class TestKinematicChain3(unittest.TestCase):
         end_effector = Transform3(parent=actuator.output)
 
         chain = KinematicChain3(distal=end_effector)
-
-        initial_rotator_angle = 0
-        initial_actuator_displacement = 0
 
         delta_coords = [1.0, numpy.pi / 2]  # Rotate 90 degrees and extend by 1.0
         chain.apply_coordinate_changes(delta_coords)

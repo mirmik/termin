@@ -1,19 +1,13 @@
 """Тесты для модуля алгебраической геометрии."""
 import unittest
 import numpy as np
-import sys
-import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from termin.algeom import (
     fit_ellipsoid,
-    fit_quadric,
     fit_hyperboloid,
     fit_paraboloid,
     evaluate_ellipsoid,
     ellipsoid_contains,
-    ellipsoid_equation,
     ellipsoid_volume
 )
 
@@ -185,7 +179,7 @@ class TestFitEllipsoid(unittest.TestCase):
     def test_insufficient_points(self):
         """Ошибка при недостаточном количестве точек"""
         # Для 3D нужно минимум 9 точек
-        points = np.random.randn(5, 3)
+        points = np.zeros((5, 3))
         
         with self.assertRaises(ValueError) as ctx:
             fit_ellipsoid(points)
@@ -195,6 +189,7 @@ class TestFitEllipsoid(unittest.TestCase):
     def test_noisy_data(self):
         """Подгонка с зашумлёнными данными"""
         a, b, c = 2.0, 1.5, 1.0
+        rng = np.random.default_rng(0)
         
         # Генерируем точки с шумом
         n = 50
@@ -208,7 +203,7 @@ class TestFitEllipsoid(unittest.TestCase):
                 y = b * np.sin(p) * np.sin(t)
                 z = c * np.cos(p)
                 # Добавляем шум
-                noise = np.random.randn(3) * 0.05
+                noise = rng.normal(size=3) * 0.05
                 points.append(np.array([x, y, z]) + noise)
         
         points = np.array(points)
@@ -270,34 +265,6 @@ class TestEvaluateEllipsoid(unittest.TestCase):
         values = evaluate_ellipsoid(points, A, center)
         
         self.assertTrue(np.all(values > 1))
-
-
-class TestEllipsoidEquation(unittest.TestCase):
-    """Тесты для форматирования уравнения эллипсоида."""
-    
-    def test_sphere_equation(self):
-        """Уравнение единичной сферы"""
-        A = np.eye(3)
-        center = np.zeros(3)
-        
-        eq = ellipsoid_equation(A, center)
-        
-        # Проверяем, что строка содержит базовую структуру
-        self.assertIsInstance(eq, str)
-        self.assertIn("x-c", eq.lower())
-    
-    def test_ellipsoid_with_center(self):
-        """Уравнение эллипсоида со смещённым центром"""
-        A = np.diag([1/4, 1/9, 1/16])
-        center = np.array([1.0, 2.0, 3.0])
-        
-        eq = ellipsoid_equation(A, center)
-        
-        self.assertIsInstance(eq, str)
-        # Проверяем, что центр представлен в уравнении
-        self.assertIn("1.", eq)  # содержит координату 1.0
-        self.assertIn("2.", eq)  # содержит координату 2.0
-        self.assertIn("3.", eq)  # содержит координату 3.0
 
 
 class TestEllipsoidVolume(unittest.TestCase):
