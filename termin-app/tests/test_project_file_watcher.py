@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import Set
 
 from termin.assets.texture_plugin import TextureImportPlugin
-from termin.assets.plugin_preloader import PluginPreLoader
-from termin.assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
+from termin.assets.project_file_watcher import ProjectFileWatcher
+from termin_assets.plugin_preloader import PluginPreLoader
+from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
 from termin_assets import PreLoadResult
 

@@ -1,7 +1,4 @@
-"""Compatibility re-export for project asset watching.
-
-New code should import from termin.assets.project_file_watcher.
-"""
+"""Compatibility re-export for project asset watching."""
 
 from termin.assets.project_file_watcher import (
     DEBOUNCE_DELAY_S,
