@@ -44,20 +44,15 @@ class TestResistor(unittest.TestCase):
             "current": assembler.index_map_by_tag("current"),
         }
 
-        print(index_maps)
         assert v1 in index_maps["voltage"]
         assert v2 in index_maps["voltage"]
 
         matrices = assembler.assemble_electric_domain()        
         A_ext, b_ext, variables = assembler.assemble_extended_system_for_electric(matrices)
 
-        print("A_ext:\n", A_ext)
-        print("b_ext:\n", b_ext)
-        print("variables:\n", variables)
 
         x = np.linalg.solve(A_ext, b_ext)
 
-        print("result:\n", x)
         assert np.isclose(x[0], 5.0)  # V1
         assert np.isclose(x[1], 0.0)  # V2
         assert np.isclose(x[2], 0.5)  # I_vs
@@ -85,7 +80,6 @@ class TestCapacitor(unittest.TestCase):
             "charge": assembler.index_map_by_tag("charge"),
         }
 
-        print(index_maps)
         assert v1 in index_maps["voltage"]
         assert v2 in index_maps["voltage"]
         assert v0 in index_maps["voltage"]
@@ -93,18 +87,10 @@ class TestCapacitor(unittest.TestCase):
         matrices = assembler.assemble_electric_domain()        
         A_ext, b_ext, variables = assembler.assemble_extended_system_for_electric(matrices)
 
-        print("A_ext:\n", A_ext)
-        print("b_ext:\n", b_ext)
-        print("variables:\n", variables)
-        print("dt:", assembler.time_step)
 
-        print("Equations:")
-        equations = assembler.system_to_human_readable(A_ext, b_ext, variables)
-        print(equations)
 
         x = np.linalg.solve(A_ext, b_ext)
 
-        print("result:\n", x)
 
         assert np.isclose(x[0], 5.0)  # V1
         assert np.isclose(x[1], 0.0)  # V2
@@ -138,9 +124,7 @@ class TestCapacitor(unittest.TestCase):
             real = c.voltage_difference()
             
             t = (i) * assembler.time_step
-            print(f"Time: {t:.3f} s")
             expected = 5.0 * (1.0 - math.exp(-t))
-            print(f"  Capacitor voltage: {real.item():.4f} V, expected: {expected:.4f} V")
 
             c.finish_timestep()
 
@@ -173,25 +157,11 @@ class TestInductor(unittest.TestCase):
         matrices = assembler.assemble_electric_domain()        
         A_ext, b_ext, variables = assembler.assemble_extended_system_for_electric(matrices)
 
-        print("A_ext:\n", A_ext)
-        print("b_ext:\n", b_ext)
-        print("variables:\n", variables)
-        print("dt:", assembler.time_step)
 
-        print("Matrix Diagnosis:")
-        diagnosis = assembler.matrix_diagnosis(A_ext)
-        for key, value in diagnosis.items():
-            print(f"  {key}: {value}")
 
-        print("Equations:")
-        equations = assembler.system_to_human_readable(A_ext, b_ext, variables)
-        print(equations)
 
         x = np.linalg.solve(A_ext, b_ext)
 
-        print("result:")
-        result_str = assembler.result_to_human_readable(x, variables)
-        print(result_str)
 
         assert np.isclose(x[0], 10.0)  # V1
         assert np.isclose(x[1], 0.0)   # V0
@@ -225,9 +195,7 @@ class TestInductor(unittest.TestCase):
             real = l.current()
             
             t = (i) * assembler.time_step
-            print(f"Time: {t:.3f} s")
             expected = 0.1 * (1 - math.exp(-10 * t))
-            print(f"  Inductor current: {real.item():.4f} A, expected: {expected:.4f} A")
 
             l.finish_timestep()
 
@@ -257,24 +225,11 @@ class TestCurrentSource(unittest.TestCase):
         matrices = assembler.assemble_electric_domain()        
         A_ext, b_ext, variables = assembler.assemble_extended_system_for_electric(matrices)
 
-        print("A_ext:\n", A_ext)
-        print("b_ext:\n", b_ext)
-        print("variables:\n", variables)
         
-        print("Matrix Diagnosis:")
-        diagnosis = assembler.matrix_diagnosis(A_ext)
-        for key, value in diagnosis.items():
-            print(f"  {key}: {value}")
 
-        print("Equations:")
-        equations = assembler.system_to_human_readable(A_ext, b_ext, variables)
-        print(equations)
 
         x = np.linalg.solve(A_ext, b_ext)
 
-        print("result:")
-        result_str = assembler.result_to_human_readable(x, variables)
-        print(result_str)
 
         assert np.isclose(x[0], 10.0)  # V1
         assert np.isclose(x[1], 0.0)   # V0

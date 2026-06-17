@@ -103,12 +103,19 @@ def test_mesh_reload_updates_existing_tc_mesh_data(tmp_path) -> None:
     )
 
 
-def test_asset_plugin_registry_can_find_mesh_by_extension() -> None:
+def test_asset_plugin_registry_can_find_default_import_plugins_by_extension() -> None:
     rm = ResourceManager()
-    plugins = rm.asset_type_plugins.get_for_extension(".obj")
+    expected_types = {
+        ".obj": "mesh",
+        ".wav": "audio_clip",
+        ".png": "texture",
+        ".glb": "glb",
+    }
 
-    assert len(plugins) == 1
-    assert plugins[0].type_id == "mesh"
+    for extension, type_id in expected_types.items():
+        plugins = rm.asset_type_plugins.get_for_extension(extension)
+        assert len(plugins) == 1
+        assert plugins[0].type_id == type_id
 
 
 def test_resource_manager_runtime_asset_api_registers_mesh(tmp_path) -> None:
@@ -206,70 +213,24 @@ def test_glb_register_file_creates_spec_child_assets() -> None:
     assert animation_asset.name == "Walk"
 
 
-def test_asset_plugin_registry_can_find_audio_by_extension() -> None:
-    rm = ResourceManager()
-    plugins = rm.asset_type_plugins.get_for_extension(".wav")
-
-    assert len(plugins) == 1
-    assert plugins[0].type_id == "audio_clip"
-
-
-def test_asset_plugin_registry_can_find_texture_by_extension() -> None:
-    rm = ResourceManager()
-    plugins = rm.asset_type_plugins.get_for_extension(".png")
-
-    assert len(plugins) == 1
-    assert plugins[0].type_id == "texture"
-
-
-def test_asset_plugin_registry_can_find_glb_by_extension() -> None:
-    rm = ResourceManager()
-    plugins = rm.asset_type_plugins.get_for_extension(".glb")
-
-    assert len(plugins) == 1
-    assert plugins[0].type_id == "glb"
-
-
-def test_default_preloaders_use_plugin_adapter_for_mesh() -> None:
+def test_default_preloaders_use_plugin_adapters_for_direct_asset_files() -> None:
     rm = ResourceManager()
     preloaders = create_default_preloaders(rm)
-    mesh_preloaders = [
-        preloader
-        for preloader in preloaders
-        if ".obj" in preloader.extensions
-    ]
+    expected_types = {
+        ".obj": "mesh",
+        ".wav": "audio_clip",
+        ".png": "texture",
+    }
 
-    assert len(mesh_preloaders) == 1
-    assert isinstance(mesh_preloaders[0], PluginPreLoader)
-    assert mesh_preloaders[0].resource_type == "mesh"
-
-
-def test_default_preloaders_use_plugin_adapter_for_audio() -> None:
-    rm = ResourceManager()
-    preloaders = create_default_preloaders(rm)
-    audio_preloaders = [
-        preloader
-        for preloader in preloaders
-        if ".wav" in preloader.extensions
-    ]
-
-    assert len(audio_preloaders) == 1
-    assert isinstance(audio_preloaders[0], PluginPreLoader)
-    assert audio_preloaders[0].resource_type == "audio_clip"
-
-
-def test_default_preloaders_use_plugin_adapter_for_texture() -> None:
-    rm = ResourceManager()
-    preloaders = create_default_preloaders(rm)
-    texture_preloaders = [
-        preloader
-        for preloader in preloaders
-        if ".png" in preloader.extensions
-    ]
-
-    assert len(texture_preloaders) == 1
-    assert isinstance(texture_preloaders[0], PluginPreLoader)
-    assert texture_preloaders[0].resource_type == "texture"
+    for extension, type_id in expected_types.items():
+        matching_preloaders = [
+            preloader
+            for preloader in preloaders
+            if extension in preloader.extensions
+        ]
+        assert len(matching_preloaders) == 1
+        assert isinstance(matching_preloaders[0], PluginPreLoader)
+        assert matching_preloaders[0].resource_type == type_id
 
 
 def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
