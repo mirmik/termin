@@ -155,6 +155,7 @@ def _validate_resources(
             continue
 
         path = resource.get("path")
+        resolved_path: Path | None = None
         if not isinstance(path, str) or path == "":
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
@@ -164,7 +165,11 @@ def _validate_resources(
                 )
             )
         else:
-            _validate_relative_existing_path(package_root, path, context, diagnostics)
+            resolved_path = _validate_relative_existing_path(package_root, path, context, diagnostics)
+
+        resource_type = resource.get("type")
+        if resource_type == "shader" and resolved_path is not None and isinstance(path, str):
+            _validate_shader_resource(package_root, path, resolved_path, diagnostics)
 
         uuid = resource.get("uuid")
         if uuid is None:
@@ -190,6 +195,110 @@ def _validate_resources(
             )
         else:
             seen_uuids[uuid] = context
+
+
+def _validate_shader_resource(
+    package_root: Path,
+    resource_path: str,
+    shader_spec_path: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    shader_spec = _read_json_file(shader_spec_path, resource_path, diagnostics)
+    if shader_spec is None:
+        return
+
+    artifacts = shader_spec.get("artifacts")
+    if not isinstance(artifacts, dict) or not artifacts:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                "Runtime shader spec must contain non-empty object field 'artifacts'",
+            )
+        )
+        return
+
+    for target_name, target_artifacts in artifacts.items():
+        target_context = f"{resource_path}:artifacts.{target_name}"
+        if not isinstance(target_name, str) or target_name == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    resource_path,
+                    "Runtime shader artifact target name must be a non-empty string",
+                )
+            )
+            continue
+        if not isinstance(target_artifacts, dict) or not target_artifacts:
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    target_context,
+                    "Runtime shader artifact target entry must be a non-empty object",
+                )
+            )
+            continue
+
+        for stage_name, artifact_path in target_artifacts.items():
+            stage_context = f"{target_context}.{stage_name}"
+            if not isinstance(stage_name, str) or stage_name == "":
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        target_context,
+                        "Runtime shader artifact stage name must be a non-empty string",
+                    )
+                )
+                continue
+            if not isinstance(artifact_path, str) or artifact_path == "":
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        stage_context,
+                        "Runtime shader artifact path must be a non-empty string",
+                    )
+                )
+                continue
+            _validate_relative_existing_path(package_root, artifact_path, stage_context, diagnostics)
+
+
+def _read_json_file(
+    path: Path,
+    context: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> dict[str, Any] | None:
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except OSError as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                context,
+                f"Runtime package JSON file cannot be read: {exc}",
+            )
+        )
+        return None
+    except json.JSONDecodeError as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                context,
+                f"Runtime package JSON file is not valid JSON: {exc}",
+            )
+        )
+        return None
+
+    if not isinstance(data, dict):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                context,
+                "Runtime package JSON file root must be an object",
+            )
+        )
+        return None
+    return data
 
 
 def _validate_relative_existing_path(
@@ -230,4 +339,3 @@ def _validate_relative_existing_path(
         )
         return None
     return resolved
-
