@@ -1,5 +1,5 @@
 """Compatibility re-export for VoxelGridAsset."""
 
-from termin.voxels.asset import VoxelGridAsset
+from termin.default_assets.voxels.asset import VoxelGridAsset
 
 __all__ = ["VoxelGridAsset"]

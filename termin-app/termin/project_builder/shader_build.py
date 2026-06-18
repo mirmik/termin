@@ -213,7 +213,7 @@ def _parse_shader_program(path: Path) -> object:
 
 
 def _phase_uuid(shader_uuid: str, phase_mark: str) -> str:
-    from termin.render.shader_asset import make_phase_uuid
+    from termin.default_assets.render.shader_asset import make_phase_uuid
 
     return make_phase_uuid(shader_uuid, phase_mark)
 

@@ -8,22 +8,22 @@ from termin_assets import AssetRuntimeManager
 
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
-    from termin.render.material_asset import MaterialAsset
+    from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.mesh.asset import MeshAsset
-    from termin.render.texture_asset import TextureAsset
+    from termin.default_assets.render.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
-    from termin.render.shader_asset import ShaderAsset
+    from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
-    from termin.voxels.asset import VoxelGridAsset
+    from termin.default_assets.voxels.asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
-    from termin.navmesh.asset import NavMeshAsset
+    from termin.default_assets.navmesh.asset import NavMeshAsset
     from termin.animation import TcAnimationClip
     from termin.animation.asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.assets.glb_asset import GLBAsset
-    from termin.audio.asset import AudioClipAsset
+    from termin.default_assets.audio.asset import AudioClipAsset
 
 
 class ResourceManagerBase(AssetRuntimeManager):
@@ -117,7 +117,7 @@ class ResourceManagerBase(AssetRuntimeManager):
     def _create_texture_registry(self):
         """Create AssetRegistry for textures."""
         from termin_assets import AssetRegistry
-        from termin.render.texture_asset import TextureAsset
+        from termin.default_assets.render.texture_asset import TextureAsset
         from termin.render.texture_handle import TextureHandle
 
         def data_from_asset(asset: TextureAsset) -> TextureHandle:
@@ -149,7 +149,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.voxels.asset import VoxelGridAsset
+            from termin.default_assets.voxels.asset import VoxelGridAsset
             return VoxelGridAsset
 
         return AssetRegistry(
@@ -175,7 +175,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.navmesh.asset import NavMeshAsset
+            from termin.default_assets.navmesh.asset import NavMeshAsset
             return NavMeshAsset
 
         return AssetRegistry(
@@ -251,7 +251,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.render.glsl_asset import GlslAsset
+            from termin.default_assets.render.glsl_asset import GlslAsset
             return GlslAsset
 
         return AssetRegistry(
@@ -266,7 +266,7 @@ class ResourceManagerBase(AssetRuntimeManager):
         from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
-            from termin.audio.handle import AudioClipHandle
+            from termin.default_assets.audio.handle import AudioClipHandle
             return AudioClipHandle.from_asset(asset)
 
         def data_to_asset(handle):
@@ -275,7 +275,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.audio.asset import AudioClipAsset
+            from termin.default_assets.audio.asset import AudioClipAsset
             return AudioClipAsset
 
         return AssetRegistry(
@@ -325,7 +325,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.render.pipeline_asset import PipelineAsset
+            from termin.default_assets.render.pipeline_asset import PipelineAsset
             return PipelineAsset
 
         return AssetRegistry(
@@ -351,7 +351,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.render.scene_pipeline_asset import ScenePipelineAsset
+            from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
             return ScenePipelineAsset
 
         return AssetRegistry(

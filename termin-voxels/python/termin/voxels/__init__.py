@@ -32,7 +32,7 @@ def __getattr__(name: str):
         return VoxelGridHandle
 
     if name == "VoxelGridAsset":
-        from termin.voxels.asset import VoxelGridAsset
+        from termin.default_assets.voxels.asset import VoxelGridAsset
         return VoxelGridAsset
 
     if name == "VoxelGridComponent":
@@ -73,7 +73,6 @@ __all__ = [
     "VoxelChunk",
     "VoxelGrid",
     "VoxelGridHandle",
-    "VoxelGridAsset",
     "VoxelGridComponent",
     "VoxelVisualizer",
     "MeshVoxelizer",

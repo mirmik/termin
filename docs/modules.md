@@ -53,9 +53,9 @@ not own domain-specific asset classes.
 Source of truth: [termin-default-assets docs](../termin-default-assets/docs/index.md)
 
 Default asset adapters that connect `termin-assets` to domain packages without
-making those domain packages depend on the asset runtime. Standard mesh asset
-support (`MeshAsset`, `MeshSpec`, OBJ/STL loaders, mesh plugin entry points)
-belongs here, while `termin-mesh` stays focused on `tmesh`.
+making those domain packages depend on the asset runtime. Standard mesh,
+navmesh, voxel, audio, and render asset adapters belong here; domain packages
+stay focused on runtime/data APIs.
 
 ## Graphics And Rendering
 

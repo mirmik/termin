@@ -8,13 +8,13 @@ from termin.audio.audio_engine import AudioEngine
 
 def __getattr__(name: str):
     if name == "AudioClipAsset":
-        from termin.audio.asset import AudioClipAsset
+        from termin.default_assets.audio.asset import AudioClipAsset
 
         globals()["AudioClipAsset"] = AudioClipAsset
         return AudioClipAsset
 
     if name == "AudioClipHandle":
-        from termin.audio.handle import AudioClipHandle
+        from termin.default_assets.audio.handle import AudioClipHandle
 
         globals()["AudioClipHandle"] = AudioClipHandle
         return AudioClipHandle
@@ -35,8 +35,6 @@ def __getattr__(name: str):
 __all__ = [
     "AudioEngine",
     "AudioClip",
-    "AudioClipAsset",
-    "AudioClipHandle",
     "AudioSource",
     "AudioListener",
 ]

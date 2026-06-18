@@ -1,9 +1,9 @@
 """Compatibility re-export for material assets.
 
-Canonical module: :mod:`termin.render.material_asset`.
+Canonical module: :mod:`termin.default_assets.render.material_asset`.
 """
 
-from termin.render.material_asset import (
+from termin.default_assets.render.material_asset import (
     MaterialAsset,
     _apply_texture_defaults,
     _apply_uniform_defaults,

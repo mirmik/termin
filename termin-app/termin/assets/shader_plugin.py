@@ -1,9 +1,9 @@
 """Compatibility re-export for shader asset plugins.
 
-Canonical module: :mod:`termin.render.shader_plugin`.
+Canonical module: :mod:`termin.default_assets.render.shader_plugin`.
 """
 
-from termin.render.shader_plugin import (
+from termin.default_assets.render.shader_plugin import (
     ShaderAssetPlugin,
     ShaderImportPlugin,
     ShaderRuntimePlugin,

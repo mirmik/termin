@@ -1,9 +1,9 @@
 """Compatibility re-export for shader interface helpers.
 
-Canonical module: :mod:`termin.render.shader_interface`.
+Canonical module: :mod:`termin.default_assets.render.shader_interface`.
 """
 
-from termin.render.shader_interface import (
+from termin.default_assets.render.shader_interface import (
     GraphInputSignature,
     PhaseSignature,
     PropertySignature,

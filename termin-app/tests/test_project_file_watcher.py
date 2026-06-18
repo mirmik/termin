@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Set
 
-from termin.render.texture_plugin import TextureImportPlugin
+from termin.default_assets.render.texture_plugin import TextureImportPlugin
 from termin.assets.project_file_watcher import ProjectFileWatcher
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader

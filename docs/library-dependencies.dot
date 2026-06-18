@@ -154,12 +154,11 @@ digraph termin_dependencies {
 	"termin" -> "termin-voxels";
 	"termin-animation" -> "termin-components-animation";
 	"termin-app" -> "termin-csharp";
-	"termin-assets" -> "termin-audio";
+	"termin-assets" -> "termin-components-foliage";
 	"termin-assets" -> "termin-default-assets";
-	"termin-assets" -> "termin-render";
 	"termin-assets" -> "termin-skeleton";
-	"termin-assets" -> "termin-voxels";
 	"termin-base" -> "termin-assets";
+	"termin-base" -> "termin-audio";
 	"termin-base" -> "termin-inspect";
 	"termin-base" -> "termin-lighting";
 	"termin-base" -> "termin-mesh";
@@ -199,11 +198,11 @@ digraph termin_dependencies {
 	"termin-input" -> "termin-display";
 	"termin-inspect" -> "termin-scene";
 	"termin-lighting" -> "termin-render";
-	"termin-mesh" -> "termin-default-assets";
 	"termin-mesh" -> "termin-graphics";
 	"termin-modules" -> "termin-app";
 	"termin-nanobind-sdk" -> "termin-base";
 	"termin-navmesh" -> "termin-app";
+	"termin-navmesh" -> "termin-default-assets";
 	"termin-nodegraph" -> "termin-app";
 	"termin-physics" -> "termin-components-physics";
 	"termin-render" -> "termin-components-foliage";
