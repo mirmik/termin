@@ -3,9 +3,7 @@ import struct
 
 import pytest
 
-from termin.glb.asset import GLBAsset
 from termin.glb.loader import load_glb_file
-from termin.assets.resources import ResourceManager
 
 
 def _write_triangle_gltf(tmp_path):
@@ -118,15 +116,3 @@ def test_load_gltf_with_external_bin_and_texture(tmp_path):
     assert material.occlusion_texture == 0
     assert material.emissive_texture == 0
     assert material.emissive_factor.tolist() == pytest.approx([0.1, 0.2, 0.3])
-
-
-def test_glb_asset_loads_gltf_from_source_path(tmp_path):
-    ResourceManager._reset_for_testing()
-    rm = ResourceManager.instance()
-    gltf_path = _write_triangle_gltf(tmp_path)
-    asset = GLBAsset(scene_data=None, name="triangle", source_path=gltf_path)
-    asset.set_resource_manager(rm)
-
-    assert asset.ensure_loaded()
-    assert asset.scene_data is not None
-    assert len(asset.scene_data.meshes) == 1

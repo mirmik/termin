@@ -14,4 +14,5 @@ Skeleton component package for attaching skeleton state/controllers to entities.
 
 ## Публичный API
 
-Component-level skeleton API is installed through this package and participates in the canonical `termin.skeleton_components` namespace.
+The native component implementation lives here. The Python wrapper namespace is
+shipped by `termin-skeleton` as `termin.skeleton_components`.

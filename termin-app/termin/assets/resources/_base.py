@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
     from termin.prefab.asset import PrefabAsset
-    from termin.assets.glb_asset import GLBAsset
+    from termin.glb.asset import GLBAsset
     from termin.default_assets.audio.asset import AudioClipAsset
 
 

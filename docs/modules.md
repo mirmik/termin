@@ -67,6 +67,20 @@ import/runtime plugins. The package is separate from `termin-default-assets`
 because prefab behavior is scene-composition runtime, not a thin default
 adapter over a lower-level domain package.
 
+### termin-glb
+
+Source of truth: [termin-glb docs](../termin-glb/docs/index.md)
+
+Owns GLB/glTF parsing, `GLBAsset`, GLB import/runtime plugin entry points,
+runtime scene instantiation, and extraction helpers. GLB is a multi-domain
+importer: it may create mesh, texture/material, skeleton, animation, and scene
+hierarchy data, so it belongs in an explicit importer package rather than in
+`termin-mesh` or `termin-default-assets`.
+
+Editor drag/drop, inspectors, and project-browser commands stay in
+`termin-app`; they should call `termin.glb.*` APIs instead of owning importer
+logic.
+
 ## Graphics And Rendering
 
 ### termin-graphics / tgfx
