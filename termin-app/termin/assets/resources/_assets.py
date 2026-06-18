@@ -1,100 +1,26 @@
-"""Asset management mixin for all resource types."""
+"""Application-specific asset management mixin."""
 
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
-from tcbase import log
+from termin.default_assets.resource_api import DefaultAssetResourceMixin
 
 if TYPE_CHECKING:
-    from termin.materials import TcMaterial as Material
-    from termin.default_assets.render.material_asset import MaterialAsset
-    from termin.default_assets.mesh.asset import MeshAsset
-    from tmesh import TcMesh
-    from termin.render.texture_handle import TextureHandle
-    from termin.glb.asset import GLBAsset
-    from termin.render.texture import Texture
-    from termin.default_assets.render.texture_asset import TextureAsset
-    from termin.materials import ShaderMultyPhaseProgramm
-    from termin.default_assets.render.shader_asset import ShaderAsset
-    from termin.voxels.grid import VoxelGrid
-    from termin.default_assets.voxels.asset import VoxelGridAsset
-    from termin.navmesh.types import NavMesh
-    from termin.default_assets.navmesh.asset import NavMeshAsset
+    from termin_assets import Asset
     from termin.animation import TcAnimationClip
     from termin.animation.asset import AnimationClipAsset
+    from termin.default_assets.render.material_asset import MaterialAsset
+    from termin.glb.asset import GLBAsset
+    from termin.materials import TcMaterial as Material
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
-    from termin.prefab.asset import PrefabAsset
-    from termin.kinematic.general_transform import GeneralTransform3
-    from termin.default_assets.audio.asset import AudioClipAsset
-    from termin.default_assets.audio.handle import AudioClipHandle
-    from termin.visualization.core.entity import Entity
-    from termin.assets.asset import Asset
 
 
-class AssetsMixin:
-    """Mixin for all asset type management methods."""
+class AssetsMixin(DefaultAssetResourceMixin):
+    """App-layer asset methods that still depend on termin-app or domain packages."""
 
-    # --------- Prefabs ---------
-    def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:
-        """Get PrefabAsset by name."""
-        return self._prefab_registry.get_asset(name)
-
-    def get_prefab(self, name: str) -> Optional["PrefabAsset"]:
-        """Get PrefabAsset by name (alias for get_prefab_asset)."""
-        return self._prefab_registry.get(name)
-
-    def get_prefab_by_uuid(self, uuid: str) -> Optional["PrefabAsset"]:
-        """Get PrefabAsset by UUID."""
-        return self._prefab_registry.get_asset_by_uuid(uuid)
-
-    def register_prefab(
-        self,
-        name: str,
-        asset: "PrefabAsset",
-        source_path: str | None = None,
-    ) -> None:
-        """Register a PrefabAsset."""
-        self._prefab_registry.register(name, asset, source_path=source_path)
-
-    def list_prefab_names(self) -> list[str]:
-        """List all registered prefab names."""
-        return self._prefab_registry.list_names()
-
-    def find_prefab_name(self, asset: "PrefabAsset") -> Optional[str]:
-        """Find name of a PrefabAsset."""
-        return self._prefab_registry.find_name(asset)
-
-    def find_prefab_uuid(self, asset: "PrefabAsset") -> Optional[str]:
-        """Find UUID of a PrefabAsset."""
-        return self._prefab_registry.find_uuid(asset)
-
-    def instantiate_prefab(
-        self,
-        name_or_uuid: str,
-        parent: "GeneralTransform3 | None" = None,
-        position: tuple[float, float, float] | None = None,
-        instance_name: str | None = None,
-    ) -> Optional["Entity"]:
-        """Instantiate a prefab by name or UUID."""
-        asset = self.get_prefab_asset(name_or_uuid)
-        if asset is None:
-            asset = self.get_prefab_by_uuid(name_or_uuid)
-        if asset is None:
-            return None
-        if not asset.is_loaded:
-            asset.ensure_loaded()
-        return asset.instantiate(parent=parent, position=position, name=instance_name)
-
-    def unregister_prefab(self, name: str) -> None:
-        """Remove prefab by name."""
-        self._prefab_registry.unregister(name)
-
-    def get_glsl(self, name: str) -> Optional[str]:
-        """Get GLSL source by include name."""
-        return self._glsl_registry.get(name)
-
+    # --------- GLB ---------
     def get_glb_asset(self, name: str) -> Optional["GLBAsset"]:
         """Get GLBAsset by name."""
         return self._glb_registry.get_asset(name)
@@ -120,31 +46,7 @@ class AssetsMixin:
         """List all registered GLB asset names."""
         return self._glb_registry.list_names()
 
-    # --------- Materials ---------
-    def get_material_asset(self, name: str) -> Optional["MaterialAsset"]:
-        """Get MaterialAsset by name."""
-        return self._material_registry.get_asset(name)
-
-    def register_material_asset(
-        self,
-        name: str,
-        asset: "MaterialAsset",
-        source_path: str | None = None,
-        uuid: str | None = None,
-    ) -> None:
-        """Register MaterialAsset."""
-        self._material_registry.register(name, asset, source_path=source_path, uuid=uuid)
-        if asset.material is not None:
-            self.materials[name] = asset.material
-
-    def register_material(
-        self, name: str, mat: "Material", source_path: str | None = None, uuid: str | None = None
-    ):
-        """Register a material."""
-        from termin.default_assets.render.material_asset import MaterialAsset
-        asset = MaterialAsset.from_material(mat, name=name, source_path=source_path, uuid=uuid)
-        self.register_material_asset(name, asset, source_path=source_path, uuid=uuid)
-
+    # --------- Materials with app fallback ---------
     def get_material(self, name: str) -> "Material":
         """
         Get material by name (lazy loading).
@@ -167,22 +69,6 @@ class AssetsMixin:
             return asset.material
         return UnknownMaterial.for_missing_material(name)
 
-    def list_material_names(self) -> list[str]:
-        names = set(self._material_registry.assets.keys()) | set(self.materials.keys())
-        return sorted(names)
-
-    def find_material_name(self, mat: "Material") -> Optional[str]:
-        name = self._material_registry.find_name(mat)
-        if name is not None:
-            return name
-        for n, m in self.materials.items():
-            if m is mat:
-                return n
-        return None
-
-    def find_material_uuid(self, mat: "Material") -> Optional[str]:
-        return self._material_registry.find_uuid(mat)
-
     def get_material_by_uuid(self, uuid: str) -> "Material":
         """
         Get Material by UUID (lazy loading).
@@ -191,7 +77,7 @@ class AssetsMixin:
         """
         from termin.visualization.render.materials.unknown_material import UnknownMaterial
 
-        asset = self._material_registry.get_asset_by_uuid(uuid)
+        asset: "MaterialAsset | None" = self._material_registry.get_asset_by_uuid(uuid)
         if asset is None:
             return UnknownMaterial.for_missing_material(f"uuid:{uuid}")
         if asset.material is None:
@@ -203,255 +89,37 @@ class AssetsMixin:
             return asset.material
         return UnknownMaterial.for_missing_material(asset.name or f"uuid:{uuid}")
 
-    def get_material_asset_by_uuid(self, uuid: str) -> Optional["MaterialAsset"]:
-        """Get MaterialAsset by UUID."""
-        return self._material_registry.get_asset_by_uuid(uuid)
-
-    def get_texture_asset_by_uuid(self, uuid: str) -> Optional["TextureAsset"]:
-        """Get TextureAsset by UUID."""
-        from termin.default_assets.render.texture_asset import TextureAsset
-        asset = self._assets_by_uuid.get(uuid)
-        if asset is not None and isinstance(asset, TextureAsset):
-            return asset
-        return None
-
-    # --------- Shaders ---------
-    def get_shader_asset(self, name: str) -> Optional["ShaderAsset"]:
-        """Get ShaderAsset by name."""
-        return self._shader_registry.get_asset(name)
-
-    def register_shader_asset(
-        self,
-        name: str,
-        asset: "ShaderAsset",
-        source_path: str | None = None,
-        uuid: str | None = None,
-    ) -> None:
-        """Register ShaderAsset."""
-        self._shader_registry.register(name, asset, source_path=source_path, uuid=uuid)
-        if asset.program is not None:
-            self.shaders[name] = asset.program
-
-    def register_shader(
-        self, name: str, shader: "ShaderMultyPhaseProgramm", source_path: str | None = None, uuid: str | None = None
-    ):
-        """Register a shader."""
-        from termin.default_assets.render.shader_asset import ShaderAsset
-        asset = ShaderAsset.from_program(shader, name=name, source_path=source_path, uuid=uuid)
-        self.register_shader_asset(name, asset, source_path=source_path, uuid=uuid)
-        if source_path:
-            shader.source_path = source_path
-
-    def get_shader(self, name: str) -> Optional["ShaderMultyPhaseProgramm"]:
-        """Get shader by name (lazy loading)."""
-        shader = self.shaders.get(name)
-        if shader is not None:
-            return shader
-        asset = self._shader_registry.get_asset(name)
-        if asset is None:
-            return None
-        if asset.program is None:
-            if not asset.ensure_loaded():
-                return None
-        if asset.program is not None:
-            self.shaders[name] = asset.program
-        return asset.program
-
-    def get_shader_by_uuid(self, uuid: str) -> Optional["ShaderMultyPhaseProgramm"]:
-        """Get shader by UUID (lazy loading)."""
-        asset = self._shader_registry.get_asset_by_uuid(uuid)
-        if asset is None:
-            return None
-        if asset.program is None:
-            if not asset.ensure_loaded():
-                return None
-        return asset.program
-
-    def list_shader_names(self) -> list[str]:
-        names = set(self._shader_registry.assets.keys()) | set(self.shaders.keys())
-        return sorted(names)
-
     def register_builtin_materials(self) -> None:
         """Register builtin materials."""
         from termin.assets.builtin_resources import register_builtin_materials
+
         register_builtin_materials(self)
 
     def register_builtin_textures(self) -> None:
         """Register builtin placeholder textures."""
         from termin.assets.builtin_resources import register_builtin_textures
+
         register_builtin_textures(self)
 
-    def register_builtin_meshes(self) -> List[str]:
+    def register_builtin_meshes(self) -> list[str]:
         """Register builtin primitive meshes."""
         from termin.assets.builtin_resources import register_builtin_meshes
+
         return register_builtin_meshes(self)
-
-    # --------- Meshes ---------
-    def get_mesh_asset(self, name: str) -> Optional["MeshAsset"]:
-        """Get MeshAsset by name."""
-        return self._mesh_registry.get_asset(name)
-
-    def register_mesh_asset(
-        self, name: str, asset: "MeshAsset", source_path: str | None = None, uuid: str | None = None
-    ) -> None:
-        """Register MeshAsset."""
-        self._mesh_registry.register(name, asset, source_path, uuid)
-
-    def get_mesh(self, name: str) -> Optional["TcMesh"]:
-        """Get TcMesh by name."""
-        return self._mesh_registry.get(name)
-
-    def list_mesh_names(self) -> list[str]:
-        return list(self._mesh_assets.keys())
-
-    def find_mesh_name(self, mesh: "TcMesh") -> Optional[str]:
-        """Find mesh name by TcMesh."""
-        if mesh is None:
-            return None
-        name = self._mesh_registry.find_name(mesh)
-        if name:
-            return name
-        if mesh.is_valid and mesh.name and mesh.name in self._mesh_assets:
-            return mesh.name
-        return None
-
-    def find_mesh_uuid(self, mesh: "TcMesh") -> Optional[str]:
-        """Find mesh UUID by TcMesh."""
-        if mesh is None:
-            return None
-        return self._mesh_registry.find_uuid(mesh)
-
-    def get_mesh_by_uuid(self, uuid: str) -> Optional["TcMesh"]:
-        """Get TcMesh by UUID."""
-        return self._mesh_registry.get_by_uuid(uuid)
-
-    def get_mesh_asset_by_uuid(self, uuid: str) -> Optional["MeshAsset"]:
-        """Get MeshAsset by UUID."""
-        return self._mesh_registry.get_asset_by_uuid(uuid)
-
-    def get_or_create_mesh_asset(
-        self,
-        name: str,
-        source_path: str | None = None,
-        uuid: str | None = None,
-        parent: "Asset | None" = None,
-        parent_key: str | None = None,
-    ) -> "MeshAsset":
-        """Get MeshAsset by name, creating if needed."""
-        return self._mesh_registry.get_or_create_asset(
-            name=name, source_path=source_path, uuid=uuid, parent=parent, parent_key=parent_key,
-        )
-
-    def unregister_mesh(self, name: str) -> None:
-        """Remove mesh."""
-        self._mesh_registry.unregister(name)
-
-    # --------- Voxel Grids ---------
-    def get_voxel_grid_asset(self, name: str) -> Optional["VoxelGridAsset"]:
-        """Get VoxelGridAsset by name."""
-        return self._voxel_grid_registry.get_asset(name)
-
-    def register_voxel_grid(self, name: str, grid: "VoxelGrid", source_path: str | None = None) -> None:
-        """Register voxel grid."""
-        from termin.default_assets.voxels.asset import VoxelGridAsset
-        grid.name = name
-        existing_asset = self._voxel_grid_registry.get_asset(name)
-        if existing_asset is not None:
-            existing_asset.data = grid
-            self.voxel_grids[name] = grid
-            return
-        asset = VoxelGridAsset.from_grid(grid, name=name, source_path=source_path)
-        self._voxel_grid_registry.register(name, asset, source_path)
-        self.voxel_grids[name] = grid
-
-    def get_voxel_grid(self, name: str) -> Optional["VoxelGrid"]:
-        """Get voxel grid by name (lazy loading)."""
-        grid = self.voxel_grids.get(name)
-        if grid is not None:
-            return grid
-        grid = self._voxel_grid_registry.get(name)
-        if grid is not None:
-            self.voxel_grids[name] = grid
-        return grid
-
-    def list_voxel_grid_names(self) -> list[str]:
-        return self._voxel_grid_registry.list_names()
-
-    def find_voxel_grid_name(self, grid: "VoxelGrid") -> Optional[str]:
-        return self._voxel_grid_registry.find_name(grid)
-
-    def find_voxel_grid_uuid(self, grid: "VoxelGrid") -> Optional[str]:
-        return self._voxel_grid_registry.find_uuid(grid)
-
-    def get_voxel_grid_by_uuid(self, uuid: str) -> Optional["VoxelGrid"]:
-        grid = self._voxel_grid_registry.get_by_uuid(uuid)
-        if grid is not None:
-            asset = self._voxel_grid_registry.get_asset_by_uuid(uuid)
-            if asset is not None and asset.name:
-                self.voxel_grids[asset.name] = grid
-        return grid
-
-    def get_voxel_grid_asset_by_uuid(self, uuid: str) -> Optional["VoxelGridAsset"]:
-        return self._voxel_grid_registry.get_asset_by_uuid(uuid)
-
-    def unregister_voxel_grid(self, name: str) -> None:
-        self._voxel_grid_registry.unregister(name)
-        if name in self.voxel_grids:
-            del self.voxel_grids[name]
-
-    # --------- NavMeshes ---------
-    def get_navmesh_asset(self, name: str) -> Optional["NavMeshAsset"]:
-        return self._navmesh_registry.get_asset(name)
-
-    def register_navmesh(self, name: str, navmesh: "NavMesh", source_path: str | None = None) -> None:
-        from termin.default_assets.navmesh.asset import NavMeshAsset
-        navmesh.name = name
-        asset = NavMeshAsset.from_navmesh(navmesh, name=name, source_path=source_path)
-        self._navmesh_registry.register(name, asset, source_path)
-        self.navmeshes[name] = navmesh
-
-    def get_navmesh(self, name: str) -> Optional["NavMesh"]:
-        navmesh = self.navmeshes.get(name)
-        if navmesh is not None:
-            return navmesh
-        navmesh = self._navmesh_registry.get(name)
-        if navmesh is not None:
-            self.navmeshes[name] = navmesh
-        return navmesh
-
-    def list_navmesh_names(self) -> list[str]:
-        return self._navmesh_registry.list_names()
-
-    def find_navmesh_name(self, navmesh: "NavMesh") -> Optional[str]:
-        return self._navmesh_registry.find_name(navmesh)
-
-    def find_navmesh_uuid(self, navmesh: "NavMesh") -> Optional[str]:
-        return self._navmesh_registry.find_uuid(navmesh)
-
-    def get_navmesh_by_uuid(self, uuid: str) -> Optional["NavMesh"]:
-        navmesh = self._navmesh_registry.get_by_uuid(uuid)
-        if navmesh is not None:
-            asset = self._navmesh_registry.get_asset_by_uuid(uuid)
-            if asset is not None and asset.name:
-                self.navmeshes[asset.name] = navmesh
-        return navmesh
-
-    def get_navmesh_asset_by_uuid(self, uuid: str) -> Optional["NavMeshAsset"]:
-        return self._navmesh_registry.get_asset_by_uuid(uuid)
-
-    def unregister_navmesh(self, name: str) -> None:
-        self._navmesh_registry.unregister(name)
-        if name in self.navmeshes:
-            del self.navmeshes[name]
 
     # --------- Animation Clips ---------
     def get_animation_clip_asset(self, name: str) -> Optional["AnimationClipAsset"]:
         return self._animation_clip_registry.get_asset(name)
 
     def register_animation_clip(
-        self, name: str, clip: "TcAnimationClip", source_path: str | None = None, uuid: str | None = None
+        self,
+        name: str,
+        clip: "TcAnimationClip",
+        source_path: str | None = None,
+        uuid: str | None = None,
     ) -> None:
         from termin.animation.asset import AnimationClipAsset
+
         asset = AnimationClipAsset(clip=clip, name=name, source_path=source_path, uuid=uuid)
         self._animation_clip_registry.register(name, asset, source_path, uuid)
         self.animation_clips[name] = clip
@@ -493,9 +161,14 @@ class AssetsMixin:
         return self._skeleton_registry.get_asset(name)
 
     def register_skeleton(
-        self, name: str, skeleton: "TcSkeleton", source_path: str | None = None, uuid: str | None = None
+        self,
+        name: str,
+        skeleton: "TcSkeleton",
+        source_path: str | None = None,
+        uuid: str | None = None,
     ) -> None:
         from termin.skeleton.asset import SkeletonAsset
+
         asset = SkeletonAsset.from_tc_skeleton(skeleton, name=name, source_path=source_path, uuid=uuid)
         self._skeleton_registry.register(name, asset, source_path, uuid)
         self.skeletons[name] = skeleton
@@ -545,118 +218,3 @@ class AssetsMixin:
         self._skeleton_registry.unregister(name)
         if name in self.skeletons:
             del self.skeletons[name]
-
-    # --------- Audio Clips ---------
-    def get_audio_clip_asset(self, name: str) -> Optional["AudioClipAsset"]:
-        return self._audio_clip_registry.get_asset(name)
-
-    def get_audio_clip(self, name: str) -> Optional["AudioClipHandle"]:
-        return self._audio_clip_registry.get(name)
-
-    def register_audio_clip_asset(
-        self, name: str, asset: "AudioClipAsset", source_path: str | None = None, uuid: str | None = None,
-    ) -> None:
-        self._audio_clip_registry.register(name, asset, source_path, uuid)
-
-    def list_audio_clip_names(self) -> list[str]:
-        return self._audio_clip_registry.list_names()
-
-    def find_audio_clip_name(self, handle: "AudioClipHandle") -> Optional[str]:
-        return self._audio_clip_registry.find_name(handle)
-
-    def find_audio_clip_uuid(self, handle: "AudioClipHandle") -> Optional[str]:
-        return self._audio_clip_registry.find_uuid(handle)
-
-    def get_audio_clip_by_uuid(self, uuid: str) -> Optional["AudioClipHandle"]:
-        return self._audio_clip_registry.get_by_uuid(uuid)
-
-    def get_audio_clip_asset_by_uuid(self, uuid: str) -> Optional["AudioClipAsset"]:
-        return self._audio_clip_registry.get_asset_by_uuid(uuid)
-
-    def get_or_create_audio_clip_asset(
-        self, name: str, source_path: str | None = None, uuid: str | None = None,
-    ) -> "AudioClipAsset":
-        return self._audio_clip_registry.get_or_create_asset(name=name, source_path=source_path, uuid=uuid)
-
-    def unregister_audio_clip(self, name: str) -> None:
-        self._audio_clip_registry.unregister(name)
-
-    # --------- UI Layouts ---------
-    def get_ui_asset(self, name: str):
-        return self._ui_registry.get_asset(name)
-
-    def get_ui_handle(self, name: str):
-        from termin.default_assets.ui.handle import UIHandle
-        asset = self._ui_registry.get_asset(name)
-        if asset is not None:
-            return UIHandle.from_asset(asset)
-        return None
-
-    def list_ui_names(self) -> list[str]:
-        return self._ui_registry.list_names()
-
-    def get_ui_asset_by_uuid(self, uuid: str):
-        return self._ui_registry.get_asset_by_uuid(uuid)
-
-    def unregister_ui(self, name: str) -> None:
-        self._ui_registry.unregister(name)
-
-    # --------- Textures ---------
-    def get_texture_asset(self, name: str) -> Optional["TextureAsset"]:
-        return self._texture_registry.get_asset(name)
-
-    def get_texture_handle(self, name: str) -> Optional["TextureHandle"]:
-        return self._texture_registry.get(name)
-
-    def get_texture(self, name: str) -> Optional["Texture"]:
-        from termin.render.texture import Texture
-        asset = self._texture_registry.get_asset(name)
-        if asset is not None:
-            return Texture.from_asset(asset)
-        return None
-
-    def register_texture_asset(
-        self, name: str, asset: "TextureAsset", source_path: str | None = None, uuid: str | None = None,
-    ) -> None:
-        self._texture_registry.register(name, asset, source_path, uuid)
-
-    def list_texture_names(self) -> list[str]:
-        return self._texture_registry.list_names()
-
-    def find_texture_name(self, texture) -> Optional[str]:
-        from termin.render.texture_handle import TextureHandle
-        from tgfx import TcTexture
-
-        if isinstance(texture, TextureHandle):
-            # Get asset from handle and compare by uuid
-            asset = texture.asset
-            if asset is not None and not isinstance(asset, type(None)):
-                try:
-                    asset_uuid = asset.uuid
-                    for name, a in self._texture_registry.assets.items():
-                        if a.uuid == asset_uuid:
-                            return name
-                except (AttributeError, TypeError) as e:
-                    log.debug(f"[AssetsMixin] Failed to get asset uuid for texture lookup: {e}")
-            # Fallback to registry method
-            return self._texture_registry.find_name(texture)
-        elif isinstance(texture, TcTexture):
-            # TcTexture from material bindings - find by uuid
-            tex_uuid = texture.uuid
-            if tex_uuid:
-                for name, a in self._texture_registry.assets.items():
-                    if a.uuid == tex_uuid:
-                        return name
-            # Fallback to name match
-            tex_name = texture.name
-            if tex_name and tex_name in self._texture_registry.assets:
-                return tex_name
-            return None
-        else:
-            for n, a in self._texture_assets.items():
-                if a is texture:
-                    return n
-        return None
-
-    def unregister_texture(self, name: str) -> None:
-        self._texture_registry.unregister(name)
