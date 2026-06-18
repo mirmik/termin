@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 
 from termin.assets.resources import ResourceManager
-from termin.editor_core.default_preloaders import create_default_preloaders
+from termin.default_assets.default_preloaders import create_default_preloaders
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets import PreLoadResult, get_resource_manager, set_resource_manager_factory
 

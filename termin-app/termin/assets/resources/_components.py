@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from termin.visualization.core.entity import Component
+    from termin.scene import Component
 
 
 class ComponentsMixin:
