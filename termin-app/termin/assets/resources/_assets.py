@@ -8,27 +8,27 @@ from tcbase import log
 
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
-    from termin.render.material_asset import MaterialAsset
+    from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.mesh.asset import MeshAsset
     from tmesh import TcMesh
     from termin.render.texture_handle import TextureHandle
     from termin.assets.glb_asset import GLBAsset
     from termin.render.texture import Texture
-    from termin.render.texture_asset import TextureAsset
+    from termin.default_assets.render.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
-    from termin.render.shader_asset import ShaderAsset
+    from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.voxels.grid import VoxelGrid
-    from termin.voxels.asset import VoxelGridAsset
+    from termin.default_assets.voxels.asset import VoxelGridAsset
     from termin.navmesh.types import NavMesh
-    from termin.navmesh.asset import NavMeshAsset
+    from termin.default_assets.navmesh.asset import NavMeshAsset
     from termin.animation import TcAnimationClip
     from termin.animation.asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
     from termin.assets.prefab_asset import PrefabAsset
     from termin.kinematic.general_transform import GeneralTransform3
-    from termin.audio.asset import AudioClipAsset
-    from termin.audio.handle import AudioClipHandle
+    from termin.default_assets.audio.asset import AudioClipAsset
+    from termin.default_assets.audio.handle import AudioClipHandle
     from termin.visualization.core.entity import Entity
     from termin.assets.asset import Asset
 
@@ -120,7 +120,7 @@ class AssetsMixin:
         self, name: str, mat: "Material", source_path: str | None = None, uuid: str | None = None
     ):
         """Register a material."""
-        from termin.render.material_asset import MaterialAsset
+        from termin.default_assets.render.material_asset import MaterialAsset
         asset = MaterialAsset.from_material(mat, name=name, source_path=source_path, uuid=uuid)
         self._material_assets[name] = asset
         self._assets_by_uuid[asset.uuid] = asset
@@ -173,7 +173,7 @@ class AssetsMixin:
 
         Returns UnknownMaterial if material is not found or failed to load.
         """
-        from termin.render.material_asset import MaterialAsset
+        from termin.default_assets.render.material_asset import MaterialAsset
         from termin.visualization.render.materials.unknown_material import UnknownMaterial
 
         asset = self._assets_by_uuid.get(uuid)
@@ -190,7 +190,7 @@ class AssetsMixin:
 
     def get_material_asset_by_uuid(self, uuid: str) -> Optional["MaterialAsset"]:
         """Get MaterialAsset by UUID."""
-        from termin.render.material_asset import MaterialAsset
+        from termin.default_assets.render.material_asset import MaterialAsset
         asset = self._assets_by_uuid.get(uuid)
         if asset is not None and isinstance(asset, MaterialAsset):
             return asset
@@ -198,7 +198,7 @@ class AssetsMixin:
 
     def get_texture_asset_by_uuid(self, uuid: str) -> Optional["TextureAsset"]:
         """Get TextureAsset by UUID."""
-        from termin.render.texture_asset import TextureAsset
+        from termin.default_assets.render.texture_asset import TextureAsset
         asset = self._assets_by_uuid.get(uuid)
         if asset is not None and isinstance(asset, TextureAsset):
             return asset
@@ -213,7 +213,7 @@ class AssetsMixin:
         self, name: str, shader: "ShaderMultyPhaseProgramm", source_path: str | None = None, uuid: str | None = None
     ):
         """Register a shader."""
-        from termin.render.shader_asset import ShaderAsset
+        from termin.default_assets.render.shader_asset import ShaderAsset
         asset = ShaderAsset.from_program(shader, name=name, source_path=source_path, uuid=uuid)
         self._shader_assets[name] = asset
         self._assets_by_uuid[asset.uuid] = asset
@@ -238,7 +238,7 @@ class AssetsMixin:
 
     def get_shader_by_uuid(self, uuid: str) -> Optional["ShaderMultyPhaseProgramm"]:
         """Get shader by UUID (lazy loading)."""
-        from termin.render.shader_asset import ShaderAsset
+        from termin.default_assets.render.shader_asset import ShaderAsset
         asset = self._assets_by_uuid.get(uuid)
         if asset is None or not isinstance(asset, ShaderAsset):
             return None
@@ -333,7 +333,7 @@ class AssetsMixin:
 
     def register_voxel_grid(self, name: str, grid: "VoxelGrid", source_path: str | None = None) -> None:
         """Register voxel grid."""
-        from termin.voxels.asset import VoxelGridAsset
+        from termin.default_assets.voxels.asset import VoxelGridAsset
         grid.name = name
         existing_asset = self._voxel_grid_registry.get_asset(name)
         if existing_asset is not None:
@@ -384,7 +384,7 @@ class AssetsMixin:
         return self._navmesh_registry.get_asset(name)
 
     def register_navmesh(self, name: str, navmesh: "NavMesh", source_path: str | None = None) -> None:
-        from termin.navmesh.asset import NavMeshAsset
+        from termin.default_assets.navmesh.asset import NavMeshAsset
         navmesh.name = name
         asset = NavMeshAsset.from_navmesh(navmesh, name=name, source_path=source_path)
         self._navmesh_registry.register(name, asset, source_path)

@@ -6,7 +6,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline
-    from termin.render.pipeline_asset import PipelineAsset
+    from termin.default_assets.render.pipeline_asset import PipelineAsset
 
 
 class PipelinesMixin:
@@ -14,7 +14,7 @@ class PipelinesMixin:
 
     def register_pipeline(self, name: str, pipeline: "RenderPipeline", uuid: str | None = None):
         """Register a RenderPipeline by name."""
-        from termin.render.pipeline_asset import PipelineAsset
+        from termin.default_assets.render.pipeline_asset import PipelineAsset
 
         # Check if already exists
         asset = self._pipeline_registry.get_asset(name)

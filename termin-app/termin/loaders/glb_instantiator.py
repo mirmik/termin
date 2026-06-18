@@ -415,7 +415,7 @@ def _texture_asset_matches_source_content(asset, source_path: Path) -> bool:
 
 def _register_external_texture_asset(rm, source_path: Path, texture: "GLBTcTexture") -> str | None:
     from tcbase import log
-    from termin.render.texture_asset import TextureAsset
+    from termin.default_assets.render.texture_asset import TextureAsset
     from termin_assets import read_spec_file
 
     if not source_path.exists():
@@ -483,7 +483,7 @@ def _decode_glb_texture(rm, texture: "GLBTcTexture"):
     import io
 
     from PIL import Image
-    from termin.render.texture_asset import TextureAsset
+    from termin.default_assets.render.texture_asset import TextureAsset
     from tgfx import TcTexture
     from tcbase import log
 

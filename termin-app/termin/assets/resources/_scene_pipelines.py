@@ -6,7 +6,7 @@ from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.pipeline import RenderPipeline
-    from termin.render.scene_pipeline_asset import ScenePipelineAsset
+    from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
 
 
 class ScenePipelinesMixin:
@@ -31,7 +31,7 @@ class ScenePipelinesMixin:
         Returns:
             ScenePipelineAsset.
         """
-        from termin.render.scene_pipeline_asset import ScenePipelineAsset
+        from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
 
         # Check if already exists
         asset = self._scene_pipeline_registry.get_asset(name)

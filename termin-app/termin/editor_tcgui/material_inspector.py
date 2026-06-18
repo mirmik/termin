@@ -456,7 +456,7 @@ class MaterialInspectorTcgui(VStack):
                         selected_name = tname
                         selected_tag = "file"
                     else:
-                        from termin.render.material_asset import _classify_render_target_texture
+                        from termin.default_assets.render.material_asset import _classify_render_target_texture
                         ref = _classify_render_target_texture(tex)
                         if ref is not None:
                             selected_tag = f"rt_{ref['channel']}"
@@ -540,7 +540,7 @@ class MaterialInspectorTcgui(VStack):
         if shader_name == self._material.shader_name:
             return
         try:
-            from termin.render.shader_asset import update_material_shader
+            from termin.default_assets.render.shader_asset import update_material_shader
             program = self._rm.get_shader(shader_name)
             if program is None:
                 log.error(f"[MaterialInspectorTcgui] Shader not found: {shader_name}")

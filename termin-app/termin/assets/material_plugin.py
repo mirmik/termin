@@ -1,9 +1,9 @@
 """Compatibility re-export for material asset plugins.
 
-Canonical module: :mod:`termin.render.material_plugin`.
+Canonical module: :mod:`termin.default_assets.render.material_plugin`.
 """
 
-from termin.render.material_plugin import (
+from termin.default_assets.render.material_plugin import (
     MaterialAssetPlugin,
     MaterialImportPlugin,
     MaterialRuntimePlugin,

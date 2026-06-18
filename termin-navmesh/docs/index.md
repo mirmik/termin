@@ -26,13 +26,15 @@ Recast/Detour компоненты загружаются только при о
 
 ## Asset integration
 
-Navmesh asset ownership живет в доменном пакете:
+Navmesh asset ownership живет в `termin-default-assets`:
 
-- `termin.navmesh.asset.NavMeshAsset`
-- `termin.navmesh.handle.NavMeshHandle`
-- `termin.navmesh.asset_plugin.NavMeshImportPlugin`
-- `termin.navmesh.asset_plugin.NavMeshRuntimePlugin`
+- `termin.default_assets.navmesh.asset.NavMeshAsset`
+- `termin.default_assets.navmesh.handle.NavMeshHandle`
+- `termin.default_assets.navmesh.asset_plugin.NavMeshImportPlugin`
+- `termin.default_assets.navmesh.asset_plugin.NavMeshRuntimePlugin`
 
 Старые пути `termin.assets.navmesh_asset`, `termin.assets.navmesh_plugin`,
-`termin.assets.navmesh_handle` и `termin.navmesh.navmesh_asset` остаются
-compatibility re-exports на время миграции `termin-app`.
+`termin.assets.navmesh_handle`, `termin.navmesh.asset`,
+`termin.navmesh.asset_plugin`, `termin.navmesh.handle` и
+`termin.navmesh.navmesh_asset` остаются compatibility re-exports на время
+миграции.

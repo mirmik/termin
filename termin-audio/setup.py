@@ -22,15 +22,6 @@ setup(
     install_requires=[
         "numpy",
         "tcbase",
-        "termin-assets",
     ],
-    entry_points={
-        "termin.asset_import_plugins": [
-            "audio_clip = termin.audio.asset_plugin:create_import_plugin",
-        ],
-        "termin.asset_runtime_plugins": [
-            "audio_clip = termin.audio.asset_plugin:create_runtime_plugin",
-        ],
-    },
     zip_safe=False,
 )

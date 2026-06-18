@@ -1,6 +1,6 @@
 """Compatibility re-export for texture asset plugins."""
 
-from termin.render.texture_plugin import (
+from termin.default_assets.render.texture_plugin import (
     TextureAssetPlugin,
     TextureImportPlugin,
     TextureRuntimePlugin,

@@ -108,6 +108,16 @@ modules `termin.assets.mesh_asset`, `termin.assets.mesh_plugin`,
 import/runtime plugin entry points for `mesh`; GLB remains app-owned until the
 importer package boundary is decided.
 
+Status 2026-06-18: the same default-adapter boundary was applied to navmesh,
+voxel, audio, and render asset families. `NavMeshAsset`, `NavMeshHandle`,
+navmesh plugins, `VoxelGridAsset`, voxel plugins, `AudioClipAsset`,
+`AudioClipHandle`, audio plugins, and render texture/GLSL/material/shader/
+pipeline/scene-pipeline asset helpers and plugins now live under
+`termin.default_assets.{navmesh,voxels,audio,render}`. The domain packages
+`termin-navmesh`, `termin-voxels`, `termin-audio`, and `termin-render` no
+longer declare `termin-assets` dependencies or asset plugin entry points. Old
+domain paths remain compatibility re-exports.
+
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
 `termin-app` now declares its remaining app-owned asset plugins through
@@ -134,16 +144,17 @@ lookup, listing, and scanning to the domain registries. The old app
 `visualization.core.plugin_loader` is now a compatibility re-export for
 `termin.scene.class_scanner`.
 
-Status 2026-06-18: texture and GLSL include asset classes/plugins moved to
-`termin-render` as `termin.render.texture_asset`, `termin.render.texture_plugin`,
-`termin.render.glsl_asset`, and `termin.render.glsl_plugin`. Texture import
-settings moved to `termin.render.texture_spec`. The old app modules
+Status 2026-06-18: texture and GLSL include asset classes/plugins first moved
+to `termin-render`, then to `termin-default-assets` as
+`termin.default_assets.render.texture_asset`,
+`termin.default_assets.render.texture_plugin`,
+`termin.default_assets.render.glsl_asset`, and
+`termin.default_assets.render.glsl_plugin`. Texture import settings moved to
+`termin.default_assets.render.texture_spec`. The old app modules
 `termin.assets.texture_asset`, `termin.assets.texture_plugin`,
 `termin.assets.glsl_asset`, `termin.assets.glsl_plugin`, and
-`termin.loaders.texture_spec` remain compatibility re-exports. `termin-render`
-now declares the `texture` and `glsl` asset plugin entry points; shader,
-material, and pipeline assets remain app-owned until their hot-reload boundary
-is separated from app material/pipeline code.
+`termin.loaders.texture_spec`, plus old `termin.render.*` asset paths, remain
+compatibility re-exports.
 
 Status 2026-06-18: texture handles and simple texture helper/singleton wrappers
 moved to `termin-render` as `termin.render.texture_handle` and
@@ -153,26 +164,32 @@ Python API is now canonical in `termin-render`; the underlying native
 `TextureHandle` binding still comes from the transitional app-owned
 `termin._native.assets` module and remains a C++ extraction follow-up.
 
-Status 2026-06-18: material and shader asset runtime moved to `termin-render`.
+Status 2026-06-18: material and shader asset runtime moved to `termin-render`,
+then to `termin-default-assets`.
 `MaterialAsset`, `ShaderAsset`, material/shader asset plugins, shader interface
 comparison helpers, and shader-to-material/pipeline hot-reload dependency
-helpers now live under `termin.render.material_asset`,
-`termin.render.shader_asset`, `termin.render.material_plugin`,
-`termin.render.shader_plugin`, `termin.render.shader_interface`, and
-`termin.render.pipeline_dependencies`. The old app modules remain
-compatibility re-exports, and `termin-render` now declares the `material` and
-`shader` asset plugin entry points.
+helpers now live under `termin.default_assets.render.material_asset`,
+`termin.default_assets.render.shader_asset`,
+`termin.default_assets.render.material_plugin`,
+`termin.default_assets.render.shader_plugin`,
+`termin.default_assets.render.shader_interface`, and
+`termin.default_assets.render.pipeline_dependencies`. The old app and
+`termin.render.*` modules remain compatibility re-exports.
 
-Status 2026-06-18: render pipeline asset runtime moved to `termin-render`.
+Status 2026-06-18: render pipeline asset runtime moved to `termin-render`,
+then to `termin-default-assets`.
 `PipelineAsset`, `ScenePipelineAsset`, their import/runtime plugins, and the
 `pipeline`/`scene_pipeline` entry points now live under
-`termin.render.pipeline_asset`, `termin.render.scene_pipeline_asset`,
-`termin.render.pipeline_plugin`, and `termin.render.scene_pipeline_plugin`.
-The old `termin.assets.pipeline_*` and `termin.assets.scene_pipeline_*` modules
-remain compatibility re-exports. Remaining render asset follow-ups: material
-file parse/save and pipeline pass-list deserialization still use the app
-`ResourceManager` facade at runtime for typed lookups, and live pipeline reload
-notifications still bridge through the app `RenderingManager` when available.
+`termin.default_assets.render.pipeline_asset`,
+`termin.default_assets.render.scene_pipeline_asset`,
+`termin.default_assets.render.pipeline_plugin`, and
+`termin.default_assets.render.scene_pipeline_plugin`. The old
+`termin.assets.pipeline_*`, `termin.assets.scene_pipeline_*`, and
+`termin.render.*` modules remain compatibility re-exports. Remaining render
+asset follow-ups: material file parse/save and pipeline pass-list
+deserialization still use the app `ResourceManager` facade at runtime for
+typed lookups, and live pipeline reload notifications still bridge through the
+app `RenderingManager` when available.
 
 ### Domain Packages
 
@@ -187,8 +204,7 @@ packages to depend on `termin-assets`.
 - `termin-skeleton`: `SkeletonAsset`; add `SkeletonAssetPlugin` only when a
   standalone skeleton file pipeline exists.
 - `termin-navmesh`: navmesh runtime/data.
-- `termin-audio`: `AudioClipAsset`, `AudioClipHandle`, `AudioClipAssetPlugin`,
-  `AudioEngine`, `AudioClip`, audio scene components.
+- `termin-audio`: `AudioEngine`, `AudioClip`, audio scene components.
 - `termin-gui` or a future UI package: UI runtime/data.
 
 ### Default Asset Packages
@@ -199,10 +215,16 @@ back on it.
 
 - `termin.default_assets.mesh`: `MeshAsset`, `MeshAssetPlugin`, `MeshSpec`,
   OBJ/STL loaders, and mesh import/runtime plugin entry points.
-- Future slices should move default material/shader/texture/pipeline,
-  navmesh, audio, prefab, UI, animation, and skeleton adapters here or into a
-  similarly explicit default-adapter package when they are not pure domain
-  runtime.
+- `termin.default_assets.navmesh`: `NavMeshAsset`, `NavMeshHandle`, navmesh
+  import/runtime plugin entry points.
+- `termin.default_assets.voxels`: `VoxelGridAsset`, voxel-grid import/runtime
+  plugin entry points.
+- `termin.default_assets.audio`: `AudioClipAsset`, `AudioClipHandle`,
+  audio-clip import/runtime plugin entry points.
+- `termin.default_assets.render`: texture, GLSL, material, shader, pipeline,
+  and scene-pipeline default asset adapters and plugin entry points.
+- Future slices should move prefab, UI, animation, and skeleton adapters here
+  when they are not pure domain runtime.
 
 ### Importer Packages
 

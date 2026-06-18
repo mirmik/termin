@@ -1,6 +1,6 @@
 """Compatibility re-export for voxel grid asset plugins."""
 
-from termin.voxels.asset_plugin import (
+from termin.default_assets.voxels.asset_plugin import (
     VoxelGridAssetPlugin,
     VoxelGridImportPlugin,
     VoxelGridRuntimePlugin,

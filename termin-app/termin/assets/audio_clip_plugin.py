@@ -1,6 +1,6 @@
 """Compatibility re-export for audio clip asset plugins."""
 
-from termin.audio.asset_plugin import (
+from termin.default_assets.audio.asset_plugin import (
     AudioClipAssetPlugin,
     AudioClipImportPlugin,
     AudioClipRuntimePlugin,

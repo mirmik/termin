@@ -12,7 +12,7 @@ from ._handle_accessors import HandleAccessors
 if TYPE_CHECKING:
     from termin.materials import TcMaterial
     from termin.assets.voxel_grid_handle import VoxelGridHandle
-    from termin.navmesh.handle import NavMeshHandle
+    from termin.default_assets.navmesh.handle import NavMeshHandle
     from termin.assets.skeleton_handle import TcSkeleton
     from termin.assets.ui_handle import UIHandle
     from termin.mesh import TcMesh
@@ -174,12 +174,12 @@ class AccessorsMixin:
     # Handle accessors for NavMeshHandle
     def _get_navmesh_handle(self, name: str) -> Optional["NavMeshHandle"]:
         """Get NavMeshHandle by name."""
-        from termin.navmesh.handle import NavMeshHandle
+        from termin.default_assets.navmesh.handle import NavMeshHandle
         return NavMeshHandle.from_name(name)
 
     def _find_navmesh_handle_name(self, handle: Any) -> Optional[str]:
         """Find name for a NavMeshHandle or NavMesh."""
-        from termin.navmesh.handle import NavMeshHandle
+        from termin.default_assets.navmesh.handle import NavMeshHandle
         if isinstance(handle, NavMeshHandle):
             asset = handle.get_asset()
             if asset:
@@ -325,7 +325,7 @@ class AccessorsMixin:
             return None
 
         if kind == "navmesh":
-            from termin.navmesh.handle import NavMeshHandle
+            from termin.default_assets.navmesh.handle import NavMeshHandle
             asset = self.get_navmesh_asset_by_uuid(uuid)
             if asset:
                 return NavMeshHandle.from_asset(asset)

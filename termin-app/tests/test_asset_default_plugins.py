@@ -72,10 +72,10 @@ def test_render_pipeline_asset_legacy_paths_reexport_canonical_classes() -> None
     from termin.assets.scene_pipeline_plugin import (
         ScenePipelineImportPlugin as AppScenePipelineImportPlugin,
     )
-    from termin.render.pipeline_asset import PipelineAsset
-    from termin.render.pipeline_plugin import PipelineImportPlugin
-    from termin.render.scene_pipeline_asset import ScenePipelineAsset
-    from termin.render.scene_pipeline_plugin import ScenePipelineImportPlugin
+    from termin.default_assets.render.pipeline_asset import PipelineAsset
+    from termin.default_assets.render.pipeline_plugin import PipelineImportPlugin
+    from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
+    from termin.default_assets.render.scene_pipeline_plugin import ScenePipelineImportPlugin
 
     assert AppPipelineAsset is PipelineAsset
     assert AppPipelineImportPlugin is PipelineImportPlugin

@@ -136,14 +136,14 @@ class NavMeshHandleKind:
 
     @staticmethod
     def serialize(obj):
-        from termin.navmesh.handle import NavMeshHandle
+        from termin.default_assets.navmesh.handle import NavMeshHandle
         if isinstance(obj, NavMeshHandle):
             return obj.serialize()
         return None
 
     @staticmethod
     def deserialize(data):
-        from termin.navmesh.handle import NavMeshHandle
+        from termin.default_assets.navmesh.handle import NavMeshHandle
         if isinstance(data, dict):
             return NavMeshHandle.deserialize(data)
         return NavMeshHandle()

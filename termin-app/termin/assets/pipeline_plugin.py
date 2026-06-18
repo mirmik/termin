@@ -1,9 +1,9 @@
 """Compatibility re-export for render pipeline asset plugins.
 
-Canonical module: :mod:`termin.render.pipeline_plugin`.
+Canonical module: :mod:`termin.default_assets.render.pipeline_plugin`.
 """
 
-from termin.render.pipeline_plugin import (
+from termin.default_assets.render.pipeline_plugin import (
     PipelineAssetPlugin,
     PipelineImportPlugin,
     PipelineRuntimePlugin,

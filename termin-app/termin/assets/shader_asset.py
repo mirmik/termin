@@ -1,9 +1,9 @@
 """Compatibility re-export for shader assets.
 
-Canonical module: :mod:`termin.render.shader_asset`.
+Canonical module: :mod:`termin.default_assets.render.shader_asset`.
 """
 
-from termin.render.shader_asset import (
+from termin.default_assets.render.shader_asset import (
     ShaderAsset,
     make_phase_uuid,
     shader_language_enum,

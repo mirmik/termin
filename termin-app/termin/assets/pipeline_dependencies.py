@@ -1,9 +1,9 @@
 """Compatibility re-export for pipeline dependency helpers.
 
-Canonical module: :mod:`termin.render.pipeline_dependencies`.
+Canonical module: :mod:`termin.default_assets.render.pipeline_dependencies`.
 """
 
-from termin.render.pipeline_dependencies import (
+from termin.default_assets.render.pipeline_dependencies import (
     material_pass_materials,
     refresh_loaded_materials_for_shader,
     reload_pipelines_for_material_dependencies,

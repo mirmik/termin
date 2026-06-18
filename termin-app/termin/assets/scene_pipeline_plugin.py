@@ -1,9 +1,9 @@
 """Compatibility re-export for scene pipeline asset plugins.
 
-Canonical module: :mod:`termin.render.scene_pipeline_plugin`.
+Canonical module: :mod:`termin.default_assets.render.scene_pipeline_plugin`.
 """
 
-from termin.render.scene_pipeline_plugin import (
+from termin.default_assets.render.scene_pipeline_plugin import (
     ScenePipelineAssetPlugin,
     ScenePipelineImportPlugin,
     ScenePipelineRuntimePlugin,

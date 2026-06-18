@@ -1,6 +1,6 @@
 """Compatibility re-export for GLSL include asset plugins."""
 
-from termin.render.glsl_plugin import (
+from termin.default_assets.render.glsl_plugin import (
     GlslAssetPlugin,
     GlslImportPlugin,
     GlslRuntimePlugin,

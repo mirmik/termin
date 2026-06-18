@@ -1,9 +1,9 @@
 """Compatibility re-export for navmesh asset plugins.
 
-Canonical implementation lives in :mod:`termin.navmesh.asset_plugin`.
+Canonical implementation lives in :mod:`termin.default_assets.navmesh.asset_plugin`.
 """
 
-from termin.navmesh.asset_plugin import (
+from termin.default_assets.navmesh.asset_plugin import (
     NavMeshAssetPlugin,
     NavMeshImportPlugin,
     NavMeshRuntimePlugin,

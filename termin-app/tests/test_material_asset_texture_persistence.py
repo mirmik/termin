@@ -5,10 +5,10 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from termin.render.material_asset import _parse_material_content, _save_material_file
+from termin.default_assets.render.material_asset import _parse_material_content, _save_material_file
 from termin.assets.resources import ResourceManager
-from termin.render.shader_asset import ShaderAsset
-from termin.render.texture_asset import TextureAsset
+from termin.default_assets.render.shader_asset import ShaderAsset
+from termin.default_assets.render.texture_asset import TextureAsset
 from tgfx import TcTexture
 
 

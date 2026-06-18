@@ -18,7 +18,7 @@ from tcgui.widgets.separator import Separator
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.units import px
 
-from termin.render.texture_spec import TextureSpec
+from termin.default_assets.render.texture_spec import TextureSpec
 
 
 class _TexturePreview(Widget):
