@@ -58,24 +58,36 @@ class AssetRegistry(Generic[AssetT, DataT]):
         if uuid is not None:
             asset = self._uuid_registry.get(uuid)
             if asset is not None and isinstance(asset, self._asset_class):
+                self._set_parent_if_applicable(asset, parent, parent_key)
                 return asset
 
         if uuid is None:
             asset = self._assets.get(name)
             if asset is not None:
+                self._set_parent_if_applicable(asset, parent, parent_key)
                 return asset
 
         asset = self._asset_class(name=name, source_path=source_path, uuid=uuid)
 
-        if parent is not None and parent_key is not None:
-            from termin_assets.data_asset import DataAsset
-
-            if isinstance(asset, DataAsset):
-                asset.set_parent(parent, parent_key)
+        self._set_parent_if_applicable(asset, parent, parent_key)
 
         self._assets[name] = asset
         self._uuid_registry[asset.uuid] = asset
         return asset
+
+    def _set_parent_if_applicable(
+        self,
+        asset: AssetT,
+        parent: "Asset | None",
+        parent_key: str | None,
+    ) -> None:
+        if parent is None or parent_key is None:
+            return
+
+        from termin_assets.data_asset import DataAsset
+
+        if isinstance(asset, DataAsset):
+            asset.set_parent(parent, parent_key)
 
     def register(
         self,

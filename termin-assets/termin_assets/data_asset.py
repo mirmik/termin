@@ -32,7 +32,7 @@ class DataAsset(Asset, Generic[T]):
         super().__init__(name=name, source_path=source_path, uuid=uuid)
         self._data: T | None = data
         self._loaded = data is not None
-        self._parent_asset: "DataAsset | None" = None
+        self._parent_asset: Asset | None = None
         self._parent_key: str | None = None
         self._has_uuid_in_spec: bool = False
 
@@ -47,6 +47,31 @@ class DataAsset(Asset, Generic[T]):
     def data(self, value: T | None) -> None:
         self._data = value
         self._loaded = value is not None
+        self._bump_version()
+
+    @property
+    def cached_data(self) -> T | None:
+        """Return cached data without triggering lazy loading."""
+        return self._data
+
+    @property
+    def embedded_parent(self) -> Asset | None:
+        """Parent asset that owns this embedded asset, if any."""
+        return self._parent_asset
+
+    @property
+    def embedded_parent_key(self) -> str | None:
+        """Stable key of this embedded asset inside its parent."""
+        return self._parent_key
+
+    def set_runtime_data(self, data: T | None, *, loaded: bool | None = None) -> None:
+        """Set cached runtime data and explicit loaded state.
+
+        This is the public replacement for callers that need to install a
+        declared native handle while keeping the asset lazy.
+        """
+        self._data = data
+        self._loaded = data is not None if loaded is None else loaded
         self._bump_version()
 
     @property
@@ -141,7 +166,7 @@ class DataAsset(Asset, Generic[T]):
         """Extract data from loaded parent."""
         return False
 
-    def set_parent(self, parent: "DataAsset", key: str) -> None:
+    def set_parent(self, parent: Asset, key: str) -> None:
         """Set parent asset for embedded assets."""
         self._parent_asset = parent
         self._parent_key = key

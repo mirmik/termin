@@ -143,8 +143,9 @@ GLB import/runtime plugins, runtime instantiator, and extractor helpers.
 `termin.assets.glb_asset`, `termin.assets.glb_plugin`, and
 `termin.loaders.glb_*` modules are compatibility re-exports. `GLBAsset` and
 `instantiate_glb` use the process resource-manager factory from
-`termin-assets`; the app `ResourceManager` still provides the concrete typed
-child-asset and material/texture lookup methods.
+`termin-assets`; child mesh/skeleton/animation registration now goes through
+the generic embedded-asset API. Material/texture lookup still goes through the
+app `ResourceManager` facade.
 
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
@@ -377,12 +378,14 @@ These can remain as compatibility/domain convenience facades during the first mi
 ### GLB Child Assets
 
 GLB currently creates child assets for meshes, skeletons, and animations.
-`termin-glb` uses the app `ResourceManager` public child-asset factory methods
-for this during the migration. The plugin API should eventually support
-registering additional child assets into the shared UUID/name index without a
-GLB-specific typed manager surface.
+`termin-glb` uses `termin_assets.EmbeddedAssetSpec` and
+`AssetRuntimeManager.get_or_create_embedded_asset()` during spec parsing and
+load, so GLB no longer needs mesh/skeleton/animation-specific factory methods
+on its resource-manager contract.
 
-This should be designed intentionally; otherwise GLB will keep forcing type-specific knowledge back into the central manager.
+Remaining work: the concrete registries still live behind the app
+`ResourceManager` facade, and `instantiate_glb` still asks that facade for
+materials and textures.
 
 ### Shader/Material/Pipeline Dependencies
 

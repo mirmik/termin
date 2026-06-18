@@ -3,6 +3,7 @@
 from termin_assets.asset import Asset
 from termin_assets.asset_registry import AssetRegistry
 from termin_assets.data_asset import DataAsset
+from termin_assets.embedded_asset import EmbeddedAssetSpec
 from termin_assets.identifiable import Identifiable
 from termin_assets.plugin import (
     AssetContext,
@@ -55,6 +56,7 @@ __all__ = [
     "AssetTypeRegistry",
     "build_import_plugin_extension_map",
     "DataAsset",
+    "EmbeddedAssetSpec",
     "Identifiable",
     "PreLoadResult",
     "FilePreLoader",
