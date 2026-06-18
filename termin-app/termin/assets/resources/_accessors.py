@@ -255,7 +255,7 @@ class AccessorsMixin:
     # UUID lookup by name helpers
     def _find_material_uuid_by_name(self, name: str) -> Optional[str]:
         """Find UUID for material by name."""
-        asset = self._material_assets.get(name)
+        asset = self.get_material_asset(name)
         return asset.uuid if asset else None
 
     def _find_mesh_uuid_by_name(self, name: str) -> Optional[str]:
