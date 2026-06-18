@@ -33,8 +33,10 @@ Navmesh asset ownership живет в `termin-default-assets`:
 - `termin.default_assets.navmesh.asset_plugin.NavMeshImportPlugin`
 - `termin.default_assets.navmesh.asset_plugin.NavMeshRuntimePlugin`
 
-Старые пути `termin.assets.navmesh_asset`, `termin.assets.navmesh_plugin`,
-`termin.assets.navmesh_handle`, `termin.navmesh.asset`,
-`termin.navmesh.asset_plugin`, `termin.navmesh.handle` и
-`termin.navmesh.navmesh_asset` остаются compatibility re-exports на время
-миграции.
+Compatibility status:
+- `termin.assets.navmesh_asset`, `termin.assets.navmesh_handle`,
+  `termin.navmesh.asset`, `termin.navmesh.asset_plugin`,
+  `termin.navmesh.handle`, and `termin.navmesh.navmesh_asset` remain temporary
+  compatibility re-exports during migration.
+- `termin.assets.navmesh_plugin` was removed on 2026-06-18. Use
+  `termin.default_assets.navmesh.asset_plugin` directly.

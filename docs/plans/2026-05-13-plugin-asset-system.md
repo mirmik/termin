@@ -57,22 +57,25 @@ Status 2026-06-17: `FilePreLoader`, `ProjectFileWatcher`, and `PluginPreLoader`
 were moved into `termin-assets`. The generic watcher now accepts an injected
 ignored-root policy instead of importing project settings. `termin-app` keeps
 the editor/project behavior through compatibility wrappers in
-`termin.assets.project_file_watcher` and `termin.assets.plugin_preloader`.
+`termin.assets.project_file_watcher`. The unused `termin.assets.plugin_preloader`
+shim was removed on 2026-06-18; use `termin_assets.plugin_preloader` directly.
 
 Status 2026-06-17: `VoxelGridAsset` and voxel-grid asset plugins were moved to
 `termin-voxels` as `termin.voxels.asset` and `termin.voxels.asset_plugin`.
-`termin-app` now keeps `termin.assets.voxel_grid_asset` and
-`termin.assets.voxel_grid_plugin` only as compatibility re-exports. Default
-registration calls the domain registration helpers from `termin-voxels`, and
-the package also exposes entry points for external plugin discovery.
+`termin-app` now keeps `termin.assets.voxel_grid_asset` as a compatibility
+re-export. The unused `termin.assets.voxel_grid_plugin` shim was removed on
+2026-06-18; use `termin.default_assets.voxels.asset_plugin` directly. Default
+registration calls the default asset registration helpers, and the package also
+exposes entry points for external plugin discovery.
 
 Status 2026-06-17: `NavMeshAsset` and navmesh asset plugins were moved to
 `termin-navmesh` as `termin.navmesh.asset` and
 `termin.navmesh.asset_plugin`. `termin-app` now keeps
-`termin.assets.navmesh_asset` and `termin.assets.navmesh_plugin` only as
-compatibility re-exports. Default registration calls the domain registration
-helpers from `termin-navmesh`, and the package exposes entry points for
-external plugin discovery.
+`termin.assets.navmesh_asset` as a compatibility re-export. The unused
+`termin.assets.navmesh_plugin` shim was removed on 2026-06-18; use
+`termin.default_assets.navmesh.asset_plugin` directly. Default registration
+calls the default asset registration helpers, and the package exposes entry
+points for external plugin discovery.
 
 Status 2026-06-17: `NavMeshHandle` was moved to `termin-navmesh` as
 `termin.navmesh.handle.NavMeshHandle`. The app path
@@ -90,10 +93,11 @@ GLB import continues to create their child assets through the shared
 
 Status 2026-06-17: audio runtime, audio clip assets, audio clip handles, audio
 asset plugins, and audio scene components were moved to a new `termin-audio`
-package. `termin-app` now keeps the old `termin.assets.audio_clip_*` modules
-only as compatibility re-exports and no longer owns the `termin.audio`
-namespace. `termin-audio` exposes import/runtime plugin entry points for
-`audio_clip`.
+package. `termin-app` keeps old asset/handle paths as compatibility re-exports,
+but the unused `termin.assets.audio_clip_plugin` shim was removed on
+2026-06-18; use `termin.default_assets.audio.asset_plugin` directly.
+`termin-app` no longer owns the `termin.audio` namespace. `termin-audio`
+exposes import/runtime plugin entry points for `audio_clip`.
 
 Status 2026-06-17: `MeshAsset`, standalone mesh import/runtime plugins, mesh
 specs, and OBJ/STL loaders were moved out of `termin-app`.
@@ -102,11 +106,12 @@ Status 2026-06-18: the mesh asset adapter was moved again from `termin-mesh`
 to `termin-default-assets` under `termin.default_assets.mesh`. `termin-mesh`
 now stays focused on `tmesh`/mesh resource data and does not declare a
 `termin-assets` dependency or mesh asset plugin entry points. The old app
-modules `termin.assets.mesh_asset`, `termin.assets.mesh_plugin`,
-`termin.loaders.{mesh_spec,obj_loader,stl_loader}`, and old domain paths under
-`termin.mesh` are compatibility re-exports. `termin-default-assets` exposes
-import/runtime plugin entry points for `mesh`; GLB remains app-owned until the
-importer package boundary is decided.
+modules `termin.assets.mesh_asset` and `termin.loaders.mesh_spec` remain
+compatibility re-exports. The unused `termin.assets.mesh_plugin`,
+`termin.loaders.obj_loader`, and `termin.loaders.stl_loader` shims were removed
+on 2026-06-18; use `termin.default_assets.mesh.*` paths directly.
+`termin-default-assets` exposes import/runtime plugin entry points for `mesh`;
+GLB remains app-owned until the importer package boundary is decided.
 
 Status 2026-06-18: the same default-adapter boundary was applied to navmesh,
 voxel, audio, and render asset families. `NavMeshAsset`, `NavMeshHandle`,
@@ -129,8 +134,9 @@ default-adapter layer to a dedicated `termin-prefab` package. `termin.prefab`
 now owns
 `PrefabAsset`, prefab import/runtime plugins, `PrefabInstanceMarker`,
 `PrefabRegistry`, and `PropertyPath`. `termin.default_assets.prefab`,
-`termin.assets.prefab_asset`, `termin.assets.prefab_plugin`, and the old
-`termin.visualization.core` prefab modules are compatibility re-exports.
+`termin.assets.prefab_asset`, and `termin.assets.prefab_plugin` are
+compatibility re-exports. The unused old `termin.visualization.core` prefab
+modules were removed on 2026-06-18; use `termin.prefab.*` directly.
 `PrefabAsset` deserializes entities through `termin.scene.Entity`, and
 `PrefabInstanceMarker` depends on `termin.scene.python_component` directly.
 Prefab resource lookups use the process resource-manager factory from
@@ -142,8 +148,8 @@ Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
 `termin-app` now declares its remaining app-owned asset plugins through
 `termin.asset_import_plugins` and `termin.asset_runtime_plugins` entry points,
-and the old app module is only a compatibility re-export. This removes the app
-as the central registry hub for already-extracted domain plugins; the remaining
+and the old app module was removed on 2026-06-18. This removes the app as the
+central registry hub for already-extracted domain plugins; the remaining
 technical debt is the GLB/importer ownership and app facade boundaries.
 
 Status 2026-06-17: the shared runtime-management core moved to
@@ -161,8 +167,8 @@ now owns `ComponentClassRegistry`, while
 `termin.assets.resources.ResourceManager` keeps compatibility facade methods and
 the old `components`/`frame_passes` dict views, but delegates registration,
 lookup, listing, and scanning to the domain registries. The old app
-`visualization.core.plugin_loader` is now a compatibility re-export for
-`termin.scene.class_scanner`.
+`visualization.core.plugin_loader` compatibility re-export was removed on
+2026-06-18 after internal imports moved to `termin.scene.class_scanner`.
 
 Status 2026-06-18: texture and GLSL include asset classes/plugins first moved
 to `termin-render`, then to `termin-default-assets` as
@@ -170,19 +176,22 @@ to `termin-render`, then to `termin-default-assets` as
 `termin.default_assets.render.texture_plugin`,
 `termin.default_assets.render.glsl_asset`, and
 `termin.default_assets.render.glsl_plugin`. Texture import settings moved to
-`termin.default_assets.render.texture_spec`. The old app modules
+`termin.default_assets.render.texture_spec`.
+
+Status 2026-06-18 cleanup: unused app compatibility modules
 `termin.assets.texture_asset`, `termin.assets.texture_plugin`,
 `termin.assets.glsl_asset`, `termin.assets.glsl_plugin`, and
-`termin.loaders.texture_spec`, plus old `termin.render.*` asset paths, remain
-compatibility re-exports.
+`termin.loaders.texture_spec` were removed. Use the
+`termin.default_assets.render.*` paths directly.
 
 Status 2026-06-18: texture handles and simple texture helper/singleton wrappers
 moved to `termin-render` as `termin.render.texture_handle` and
-`termin.render.texture`. The old app modules `termin.assets.texture_handle` and
-`termin.visualization.render.texture` remain compatibility re-exports. The
-Python API is now canonical in `termin-render`; the underlying native
-`TextureHandle` binding still comes from the transitional app-owned
-`termin._native.assets` module and remains a C++ extraction follow-up.
+`termin.render.texture`. The old app module `termin.visualization.render.texture`
+was removed on 2026-06-18. `termin.assets.texture_handle` remains temporarily
+because app C++ handle helpers still import it by string. The Python API is now
+canonical in `termin-render`; the underlying native `TextureHandle` binding
+still comes from the transitional app-owned `termin._native.assets` module and
+remains a C++ extraction follow-up.
 
 Status 2026-06-18: material and shader asset runtime moved to `termin-render`,
 then to `termin-default-assets`.
@@ -193,8 +202,13 @@ helpers now live under `termin.default_assets.render.material_asset`,
 `termin.default_assets.render.material_plugin`,
 `termin.default_assets.render.shader_plugin`,
 `termin.default_assets.render.shader_interface`, and
-`termin.default_assets.render.pipeline_dependencies`. The old app and
-`termin.render.*` modules remain compatibility re-exports.
+`termin.default_assets.render.pipeline_dependencies`.
+
+Status 2026-06-18 cleanup: unused app compatibility modules
+`termin.assets.material_asset`, `termin.assets.material_plugin`,
+`termin.assets.shader_asset`, `termin.assets.shader_plugin`,
+`termin.assets.shader_interface`, and `termin.assets.pipeline_dependencies`
+were removed. Use the `termin.default_assets.render.*` paths directly.
 
 Status 2026-06-18: render pipeline asset runtime moved to `termin-render`,
 then to `termin-default-assets`.
