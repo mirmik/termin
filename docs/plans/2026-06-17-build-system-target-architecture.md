@@ -460,6 +460,11 @@ separate configurations:
 - `quest_openxr_smoke` - validates OpenXR stack;
 - `quest_openxr` - runs project runtime package.
 
+Status 2026-06-18: Android and Quest/OpenXR Python wrappers no longer share
+private target-specific helpers. Common root discovery, Gradle discovery and log
+tail helpers live in `termin.project_build.target_build_common`; Quest/OpenXR
+root discovery keys off `build-quest-openxr-apk.sh`, not Android APK scripts.
+
 ## Runtime Package Contract
 
 Runtime package should be target-independent where possible, target-aware where
