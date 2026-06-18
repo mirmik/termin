@@ -65,3 +65,45 @@ def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
     assert rm.frame_passes["ProbeFramePass"] is ProbeFramePass
     assert rm.get_frame_pass("ProbeFramePass") is ProbeFramePass
     assert rm.list_frame_pass_names() == ["ProbeFramePass"]
+
+
+def test_default_builtin_specs_live_below_app_layer() -> None:
+    from termin.default_assets.builtin_types import (
+        get_default_builtin_component_specs,
+        get_default_builtin_frame_pass_specs,
+    )
+
+    component_specs = get_default_builtin_component_specs()
+    frame_pass_specs = get_default_builtin_frame_pass_specs()
+
+    assert ("termin.render_components", "CameraComponent") in component_specs
+    assert ("termin.components.teleport_component", "TeleportComponent") not in component_specs
+    assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
+    assert (
+        "termin.visualization.render.framegraph.passes.ui_widget",
+        "UIWidgetPass",
+    ) not in frame_pass_specs
+
+
+def test_app_builtin_specs_extend_default_specs() -> None:
+    from termin.assets.resources._builtins import (
+        APP_BUILTIN_COMPONENTS,
+        APP_BUILTIN_FRAME_PASSES,
+        get_builtin_component_specs,
+        get_builtin_frame_pass_specs,
+    )
+
+    component_specs = get_builtin_component_specs()
+    frame_pass_specs = get_builtin_frame_pass_specs()
+
+    assert ("termin.components.teleport_component", "TeleportComponent") in APP_BUILTIN_COMPONENTS
+    assert ("termin.components.teleport_component", "TeleportComponent") in component_specs
+    assert ("termin.render_components", "CameraComponent") in component_specs
+
+    app_ui_spec = (
+        "termin.visualization.render.framegraph.passes.ui_widget",
+        "UIWidgetPass",
+    )
+    assert app_ui_spec in APP_BUILTIN_FRAME_PASSES
+    assert app_ui_spec in frame_pass_specs
+    assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
