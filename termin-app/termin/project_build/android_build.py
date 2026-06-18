@@ -16,7 +16,7 @@ from termin.project_build.runtime_package_exporter import (
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
 from termin.project_build.target_build_common import read_log_tail
-from termin.project_build.target_preflight import preflight_android_build
+from termin.project_build.target_preflight import preflight_android_build, preflight_project_build_context
 
 
 @dataclass
@@ -45,6 +45,12 @@ def build_android_project(
     project_root_path = Path(project_root).resolve()
     project_name = read_project_name(project_root_path)
     dist_dir = _resolve_dist_dir(project_root_path, project_name, output_dir)
+    project_preflight_result = preflight_project_build_context(
+        project_root=project_root_path,
+        entry_scene=entry_scene,
+        output_dir=dist_dir,
+        target_name="Android",
+    )
     package_dir = dist_dir / "package"
     apk_dir = dist_dir / "apk"
     logs_dir = dist_dir / "logs"
@@ -106,6 +112,7 @@ def build_android_project(
         application_id=application_id,
         launch_activity=launch_activity,
         diagnostics=[
+            *project_preflight_result.diagnostics,
             *preflight_result.diagnostics,
             *package_result.diagnostics,
             *package_validation_diagnostics,

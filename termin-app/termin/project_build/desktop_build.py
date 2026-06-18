@@ -19,6 +19,7 @@ from termin.project_build.runtime_package_exporter import (
     export_runtime_package,
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
+from termin.project_build.target_preflight import preflight_project_build_context
 
 
 @dataclass
@@ -42,6 +43,12 @@ def build_desktop_project(
     project_root_path = Path(project_root).resolve()
     project_name = read_project_name(project_root_path)
     dist_dir = _resolve_dist_dir(project_root_path, project_name, output_dir)
+    project_preflight_result = preflight_project_build_context(
+        project_root=project_root_path,
+        entry_scene=entry_scene,
+        output_dir=dist_dir,
+        target_name="Desktop",
+    )
     _prepare_dist_dir(project_root_path, dist_dir)
 
     package_dir = dist_dir / "package"
@@ -123,6 +130,7 @@ def build_desktop_project(
         runtime_result=runtime_result,
         app_manifest_path=app_manifest_path,
         diagnostics=[
+            *project_preflight_result.diagnostics,
             *package_result.diagnostics,
             *package_validation_diagnostics,
             *python_result.diagnostics,

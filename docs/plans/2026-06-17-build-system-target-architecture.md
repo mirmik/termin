@@ -245,15 +245,17 @@ Output:
 - fatal diagnostics if target cannot be built.
 
 Status 2026-06-18: initial Android and Quest/OpenXR target preflight exists in
-`termin.project_build.target_preflight`. Build wrappers now resolve required
-target scripts and Gradle paths before package export, and fatal environment
-problems are reported through structured diagnostics carried by
-`TargetPreflightError`. Android checks cover target root marker, build script and
-explicitly configured Gradle paths. Quest/OpenXR additionally checks Android SDK
-root, requested ABI, ABI `lib` directory and OpenXR CMake package. Remaining
-Phase 0 work: deeper Android SDK/NDK capability checks, desktop SDK/Python
-runtime preflight, profile entry/output safety and SDK capability manifest
-integration.
+`termin.project_build.target_preflight`, alongside shared project-context
+preflight for desktop, Android and Quest/OpenXR. Build wrappers now validate
+project root, entry scene containment/existence and output directory safety
+before package export; Android/Quest wrappers also resolve required target
+scripts and Gradle paths before export. Fatal environment/context problems are
+reported through structured diagnostics carried by `TargetPreflightError`.
+Android checks cover target root marker, build script and explicitly configured
+Gradle paths. Quest/OpenXR additionally checks Android SDK root, requested ABI,
+ABI `lib` directory and OpenXR CMake package. Remaining Phase 0 work: deeper
+Android SDK/NDK capability checks, desktop SDK/Python runtime preflight, profile
+schema-to-context normalization and SDK capability manifest integration.
 
 ### Phase 1: Project Graph Analysis
 
