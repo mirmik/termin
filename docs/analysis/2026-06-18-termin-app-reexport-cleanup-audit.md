@@ -221,13 +221,15 @@ Recommended cleanup:
 
 ## Core And Profiler Facades
 
-Production-used shims:
+Removed after internal consumers were redirected:
 - `termin.core.profiler` -> `tcbase.profiler`
 - `termin.core.identifiable` -> `termin_assets.identifiable`
 
-Recommended cleanup:
-- Redirect app imports to canonical paths.
-- Keep or remove package-level `termin.core` facade based on public API policy after internal consumers are gone.
+Current status:
+- App imports now use canonical paths directly.
+- Package-level `from termin.core import Identifiable` still works through
+  `termin.core.__init__`, but the removed `termin.core.identifiable` submodule
+  no longer exists.
 
 ## Test-Only Compatibility Contracts
 
@@ -255,8 +257,10 @@ Policy decision needed:
 Low-risk cleanup batch:
 - Converted tests away from `termin.loaders.mesh_spec` and removed the shim.
 - Removed unused `termin.loaders.obj_loader`, `termin.loaders.stl_loader`, and `termin.loaders.texture_spec`.
-- Redirect `termin.core.profiler` production imports to `tcbase.profiler`.
-- Redirect `termin.core.identifiable` production imports to `termin_assets.identifiable`.
+- Redirected `termin.core.profiler` production imports to `tcbase.profiler`
+  and removed the shim.
+- Redirected `termin.core.identifiable` package import to
+  `termin_assets.identifiable` and removed the submodule shim.
 - Fixed the C++ `termin.visualization.render.texture_asset` import to
   `termin.default_assets.render.texture_asset`.
 

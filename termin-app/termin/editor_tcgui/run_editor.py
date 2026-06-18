@@ -320,7 +320,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     sdl2.SDL_StartTextInput()
 
-    from termin.core.profiler import Profiler
+    from tcbase.profiler import Profiler
     profiler = Profiler.instance()
 
     def poll_events() -> None:
