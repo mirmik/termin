@@ -55,7 +55,7 @@ if __name__ == "__main__":
                 "termin.skeleton_components", "termin.skeleton_components.*",  # termin-skeleton
                 "termin.animation", "termin.animation.*",       # termin-animation
                 "termin.animation_components", "termin.animation_components.*",  # termin-animation
-                "termin.audio",                                 # termin-audio core
+                "termin.audio", "termin.audio.*",               # termin-audio core
                 "termin.physics", "termin.physics.*",           # termin-physics
                 "termin.navmesh", "termin.navmesh.*",           # termin-navmesh
                 "termin.tween", "termin.tween.*",               # termin-tween / termin-components-tween
