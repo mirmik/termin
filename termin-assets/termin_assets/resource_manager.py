@@ -62,6 +62,22 @@ class AssetRuntimeManager:
             return None
         return registry.get_asset_by_uuid(uuid)
 
+    def list_runtime_asset_names(self, type_id: str) -> list[str]:
+        """List registered runtime asset names by plugin type id."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
+            return []
+        return registry.list_names()
+
+    def find_runtime_asset_name(self, type_id: str, data) -> str | None:
+        """Find a registered runtime asset name by plugin type id and data value."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
+            return None
+        return registry.find_name(data)
+
     def register_runtime_asset(
         self,
         type_id: str,

@@ -95,6 +95,33 @@ def test_runtime_manager_get_or_create_embedded_asset_uses_runtime_registry() ->
     assert child.embedded_parent_key == "child-renamed"
 
 
+def test_runtime_manager_can_list_and_find_runtime_asset_names() -> None:
+    manager = AssetRuntimeManager()
+
+    def data_to_asset(data: str) -> MemoryAsset | None:
+        for asset in registry.assets.values():
+            if asset.cached_data == data:
+                return asset
+        return None
+
+    registry = AssetRegistry(
+        asset_class=MemoryAsset,
+        uuid_registry=manager._assets_by_uuid,
+        data_from_asset=lambda asset: asset.data,
+        data_to_asset=data_to_asset,
+    )
+    manager.register_runtime_asset_registry("memory", registry)
+
+    first = MemoryAsset(data="alpha-data", name="alpha", uuid="alpha-uuid")
+    second = MemoryAsset(data="beta-data", name="beta", uuid="beta-uuid")
+    manager.register_runtime_asset("memory", "alpha", first, uuid=first.uuid)
+    manager.register_runtime_asset("memory", "beta", second, uuid=second.uuid)
+
+    assert manager.list_runtime_asset_names("memory") == ["alpha", "beta"]
+    assert manager.find_runtime_asset_name("memory", "beta-data") == "beta"
+    assert manager.find_runtime_asset_name("memory", "missing") is None
+
+
 def test_resource_handle_can_lookup_assets_by_uuid() -> None:
     asset = Asset(name="probe", uuid="probe-uuid")
 
