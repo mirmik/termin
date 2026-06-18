@@ -16,6 +16,7 @@ from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportResult,
     export_runtime_package,
 )
+from termin.project_build.runtime_package_validator import validate_runtime_package
 
 __all__ = [
     "AndroidBuildResult",
@@ -32,4 +33,5 @@ __all__ = [
     "export_runtime_package",
     "install_quest_openxr_apk",
     "launch_quest_openxr_app",
+    "validate_runtime_package",
 ]
