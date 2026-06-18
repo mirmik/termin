@@ -147,6 +147,13 @@ GLB import/runtime plugins, runtime instantiator, and extractor helpers.
 the generic embedded-asset API. Material/texture lookup still goes through the
 app `ResourceManager` facade.
 
+Status 2026-06-18: `termin-glb` texture lookup/registration during
+instantiation now uses generic runtime registry methods on `termin-assets`
+(`get_runtime_asset`, `register_runtime_asset`, `list_runtime_asset_names`,
+and `get_runtime_asset_by_uuid`) with `type_id="texture"`. The remaining
+`instantiate_glb` app-facade dependency is the builtin material lookup
+`get_material("NormalizedPBR")`.
+
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
 `termin-app` now declares its remaining app-owned asset plugins through
