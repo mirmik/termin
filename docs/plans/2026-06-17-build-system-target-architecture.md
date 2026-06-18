@@ -351,10 +351,10 @@ Status 2026-06-18: initial Python validator exists as
 It validates manifest readability/object shape, schema `version: 1`, relative
 scene/resource paths staying inside the package root, listed file existence,
 duplicate resource UUIDs, and listed shader resource artifact paths under
-`*.shader.json`. `build_desktop_project(...)` now runs this validator after
-`export_runtime_package(...)` and aggregates diagnostics before desktop runtime
-packaging. Remaining Phase 3 work: material/pipeline graph checks, target
-capability checks, and reuse from Android/Quest/runtime loader paths.
+`*.shader.json`. Desktop, Android and Quest/OpenXR build wrappers now run this
+validator after `export_runtime_package(...)` and aggregate diagnostics before
+target packaging. Remaining Phase 3 work: material/pipeline graph checks,
+target capability checks, and reuse from runtime loader paths.
 
 ### Phase 4: Target Packaging
 

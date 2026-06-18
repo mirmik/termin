@@ -21,6 +21,7 @@ from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportResult,
     export_runtime_package,
 )
+from termin.project_build.runtime_package_validator import validate_runtime_package
 
 
 QUEST_OPENXR_APPLICATION_ID = "org.termin.openxr"
@@ -76,6 +77,7 @@ def build_quest_openxr_project(
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
     )
+    package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
 
     termin_root_path = _resolve_termin_root(termin_root)
     build_script_path = _resolve_quest_build_script(termin_root_path, build_script)
@@ -114,7 +116,10 @@ def build_quest_openxr_project(
         package_result=package_result,
         apk_path=apk_path,
         log_path=log_path,
-        diagnostics=list(package_result.diagnostics),
+        diagnostics=[
+            *package_result.diagnostics,
+            *package_validation_diagnostics,
+        ],
     )
 
 
