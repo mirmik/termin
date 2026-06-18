@@ -290,7 +290,7 @@ class ResourceManagerBase(AssetRuntimeManager):
         from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
-            from termin.assets.ui_handle import UIHandle
+            from termin.default_assets.ui.handle import UIHandle
             return UIHandle.from_asset(asset)
 
         def data_to_asset(handle):
@@ -299,7 +299,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.assets.ui_asset import UIAsset
+            from termin.default_assets.ui.asset import UIAsset
             return UIAsset
 
         return AssetRegistry(

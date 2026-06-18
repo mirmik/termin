@@ -123,12 +123,10 @@ if __name__ == "__main__":
             "termin.asset_import_plugins": [
                 "glb = termin.assets.glb_plugin:GLBImportPlugin",
                 "prefab = termin.assets.prefab_plugin:PrefabImportPlugin",
-                "ui = termin.assets.ui_plugin:UIImportPlugin",
             ],
             "termin.asset_runtime_plugins": [
                 "glb = termin.assets.glb_plugin:GLBRuntimePlugin",
                 "prefab = termin.assets.prefab_plugin:PrefabRuntimePlugin",
-                "ui = termin.assets.ui_plugin:UIRuntimePlugin",
             ],
         },
         zip_safe=False,

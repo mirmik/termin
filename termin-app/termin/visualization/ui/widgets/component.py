@@ -13,7 +13,7 @@ from tgfx.font import FontTextureAtlas
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.assets.ui_handle import UIHandle
+    from termin.default_assets.ui.handle import UIHandle
 
 
 class UIComponent(InputComponent):
@@ -154,7 +154,7 @@ class UIComponent(InputComponent):
 
     def set_ui_layout_by_name(self, name: str) -> None:
         """Set UI layout by name from ResourceManager."""
-        from termin.assets.ui_handle import UIHandle
+        from termin.default_assets.ui.handle import UIHandle
 
         if name:
             self._ui_handle = UIHandle.from_name(name)
