@@ -54,8 +54,8 @@ Source of truth: [termin-default-assets docs](../termin-default-assets/docs/inde
 
 Default asset adapters that connect `termin-assets` to domain packages without
 making those domain packages depend on the asset runtime. Standard mesh,
-navmesh, voxel, audio, and render asset adapters belong here; domain packages
-stay focused on runtime/data APIs.
+navmesh, voxel, audio, render, and UI asset adapters belong here; domain
+packages stay focused on runtime/data APIs.
 
 ## Graphics And Rendering
 

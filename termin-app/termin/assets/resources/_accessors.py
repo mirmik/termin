@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from termin.assets.voxel_grid_handle import VoxelGridHandle
     from termin.default_assets.navmesh.handle import NavMeshHandle
     from termin.assets.skeleton_handle import TcSkeleton
-    from termin.assets.ui_handle import UIHandle
+    from termin.default_assets.ui.handle import UIHandle
     from termin.mesh import TcMesh
 
 
@@ -221,12 +221,12 @@ class AccessorsMixin:
     # Handle accessors for UIHandle
     def _get_ui_handle(self, name: str) -> Optional["UIHandle"]:
         """Get UIHandle by name."""
-        from termin.assets.ui_handle import UIHandle
+        from termin.default_assets.ui.handle import UIHandle
         return UIHandle.from_name(name)
 
     def _find_ui_handle_name(self, handle: Any) -> Optional[str]:
         """Find name for a UIHandle."""
-        from termin.assets.ui_handle import UIHandle
+        from termin.default_assets.ui.handle import UIHandle
         if isinstance(handle, UIHandle):
             asset = handle.get_asset()
             if asset is not None:

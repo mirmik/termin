@@ -1,9 +1,8 @@
-"""Compatibility re-export for UI asset plugins.
+"""Default UI asset adapters."""
 
-Canonical module: :mod:`termin.default_assets.ui.asset_plugin`.
-"""
-
-from termin.default_assets.ui.asset_plugin import (
+from .asset import UIAsset
+from .handle import UIHandle
+from .asset_plugin import (
     UIAssetPlugin,
     UIImportPlugin,
     UIRuntimePlugin,
@@ -15,6 +14,8 @@ from termin.default_assets.ui.asset_plugin import (
 )
 
 __all__ = [
+    "UIAsset",
+    "UIHandle",
     "UIAssetPlugin",
     "UIImportPlugin",
     "UIRuntimePlugin",

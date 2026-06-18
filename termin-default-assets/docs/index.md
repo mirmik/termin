@@ -18,3 +18,5 @@ Current adapters:
   audio-clip import/runtime plugins.
 - `termin.default_assets.render`: texture, GLSL, material, shader, pipeline
   and scene-pipeline asset adapters/plugins plus render asset helper modules.
+- `termin.default_assets.ui`: `UIAsset`, `UIHandle`, and UI import/runtime
+  plugins for `.uiscript` layouts backed by `tcgui`.

@@ -19,6 +19,7 @@ setup(
         "termin-navmesh",
         "termin-render",
         "termin-voxels",
+        "tcgui",
         "tmesh",
         "numpy",
     ],
@@ -33,6 +34,7 @@ setup(
             "scene_pipeline = termin.default_assets.render.scene_pipeline_plugin:create_import_plugin",
             "shader = termin.default_assets.render.shader_plugin:create_import_plugin",
             "texture = termin.default_assets.render.texture_plugin:create_import_plugin",
+            "ui = termin.default_assets.ui.asset_plugin:create_import_plugin",
             "voxel_grid = termin.default_assets.voxels.asset_plugin:create_import_plugin",
         ],
         "termin.asset_runtime_plugins": [
@@ -45,6 +47,7 @@ setup(
             "scene_pipeline = termin.default_assets.render.scene_pipeline_plugin:create_runtime_plugin",
             "shader = termin.default_assets.render.shader_plugin:create_runtime_plugin",
             "texture = termin.default_assets.render.texture_plugin:create_runtime_plugin",
+            "ui = termin.default_assets.ui.asset_plugin:create_runtime_plugin",
             "voxel_grid = termin.default_assets.voxels.asset_plugin:create_runtime_plugin",
         ],
     },

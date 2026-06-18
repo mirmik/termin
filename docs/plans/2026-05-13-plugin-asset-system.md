@@ -118,6 +118,12 @@ pipeline/scene-pipeline asset helpers and plugins now live under
 longer declare `termin-assets` dependencies or asset plugin entry points. Old
 domain paths remain compatibility re-exports.
 
+Status 2026-06-18: `UIAsset`, `UIHandle`, and UI import/runtime plugins moved
+from `termin-app` to `termin-default-assets` under `termin.default_assets.ui`.
+The `ui` entry points now come from `termin-default-assets`; old
+`termin.assets.ui_asset`, `termin.assets.ui_handle`, and
+`termin.assets.ui_plugin` modules remain compatibility re-exports.
+
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
 `termin-app` now declares its remaining app-owned asset plugins through
@@ -223,8 +229,10 @@ back on it.
   audio-clip import/runtime plugin entry points.
 - `termin.default_assets.render`: texture, GLSL, material, shader, pipeline,
   and scene-pipeline default asset adapters and plugin entry points.
-- Future slices should move prefab, UI, animation, and skeleton adapters here
-  when they are not pure domain runtime.
+- `termin.default_assets.ui`: `UIAsset`, `UIHandle`, and `.uiscript`
+  import/runtime plugin entry points.
+- Future slices should move prefab and importer-style adapters here or to a
+  dedicated importer package when they are not pure domain runtime.
 
 ### Importer Packages
 
@@ -386,7 +394,7 @@ Move plugins gradually:
 - Animation support to `termin-animation`.
 - Skeleton support to `termin-skeleton`.
 - Navmesh support to `termin-default-assets`.
-- UI support to `termin-default-assets` or future UI adapter package.
+- UI support to `termin-default-assets`.
 - GLB/FBX importers to `termin-importers` or equivalent.
 
 Each adapter package should expose asset plugin entry points:

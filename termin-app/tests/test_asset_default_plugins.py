@@ -81,3 +81,16 @@ def test_render_pipeline_asset_legacy_paths_reexport_canonical_classes() -> None
     assert AppPipelineImportPlugin is PipelineImportPlugin
     assert AppScenePipelineAsset is ScenePipelineAsset
     assert AppScenePipelineImportPlugin is ScenePipelineImportPlugin
+
+
+def test_ui_asset_legacy_paths_reexport_canonical_classes() -> None:
+    from termin.assets.ui_asset import UIAsset as AppUIAsset
+    from termin.assets.ui_handle import UIHandle as AppUIHandle
+    from termin.assets.ui_plugin import UIImportPlugin as AppUIImportPlugin
+    from termin.default_assets.ui.asset import UIAsset
+    from termin.default_assets.ui.asset_plugin import UIImportPlugin
+    from termin.default_assets.ui.handle import UIHandle
+
+    assert AppUIAsset is UIAsset
+    assert AppUIHandle is UIHandle
+    assert AppUIImportPlugin is UIImportPlugin

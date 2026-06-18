@@ -566,7 +566,7 @@ class AssetsMixin:
         return self._ui_registry.get_asset(name)
 
     def get_ui_handle(self, name: str):
-        from termin.assets.ui_handle import UIHandle
+        from termin.default_assets.ui.handle import UIHandle
         asset = self._ui_registry.get_asset(name)
         if asset is not None:
             return UIHandle.from_asset(asset)

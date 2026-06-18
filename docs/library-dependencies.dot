@@ -194,6 +194,7 @@ digraph termin_dependencies {
 	"termin-graphics" -> "termin-voxels";
 	"termin-gui" -> "tcplot";
 	"termin-gui" -> "termin-csg";
+	"termin-gui" -> "termin-default-assets";
 	"termin-gui" -> "termin-nodegraph";
 	"termin-input" -> "termin-display";
 	"termin-inspect" -> "termin-scene";
