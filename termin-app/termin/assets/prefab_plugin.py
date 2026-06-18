@@ -1,9 +1,9 @@
 """Compatibility re-export for prefab asset plugins.
 
-Canonical module: :mod:`termin.default_assets.prefab.asset_plugin`.
+Canonical module: :mod:`termin.prefab.asset_plugin`.
 """
 
-from termin.default_assets.prefab.asset_plugin import (
+from termin.prefab.asset_plugin import (
     PrefabAssetPlugin,
     PrefabImportPlugin,
     PrefabRuntimePlugin,

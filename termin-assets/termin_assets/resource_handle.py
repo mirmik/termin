@@ -18,6 +18,13 @@ def set_resource_manager_factory(factory: Callable[[], object] | None) -> None:
     _resource_manager_factory = factory
 
 
+def get_resource_manager() -> object | None:
+    """Return the configured process resource manager, if one is registered."""
+    if _resource_manager_factory is None:
+        return None
+    return _resource_manager_factory()
+
+
 class ResourceHandle(Generic[T, AssetT]):
     """
     Base smart reference to a resource.
@@ -37,10 +44,9 @@ class ResourceHandle(Generic[T, AssetT]):
         """Create handle by name using the configured resource manager factory."""
         if not cls._asset_getter:
             return cls()
-        if _resource_manager_factory is None:
+        resource_manager = get_resource_manager()
+        if resource_manager is None:
             return cls()
-
-        resource_manager = _resource_manager_factory()
         getter = getattr(resource_manager, cls._asset_getter, None)
         if getter is None:
             return cls()
@@ -62,10 +68,9 @@ class ResourceHandle(Generic[T, AssetT]):
         """Create handle by UUID using the configured resource manager factory."""
         if not cls._asset_by_uuid_getter:
             return cls()
-        if _resource_manager_factory is None:
+        resource_manager = get_resource_manager()
+        if resource_manager is None:
             return cls()
-
-        resource_manager = _resource_manager_factory()
         getter = getattr(resource_manager, cls._asset_by_uuid_getter, None)
         if getter is None:
             return cls()

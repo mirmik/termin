@@ -23,6 +23,7 @@ EXTRA_IGNORES=()
 
 DEFAULT_TARGETS=(
     termin-assets
+    termin-prefab
     termin-scene
     termin-display
     termin-render

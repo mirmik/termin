@@ -54,8 +54,18 @@ Source of truth: [termin-default-assets docs](../termin-default-assets/docs/inde
 
 Default asset adapters that connect `termin-assets` to domain packages without
 making those domain packages depend on the asset runtime. Standard mesh,
-navmesh, voxel, audio, render, UI, and prefab asset adapters belong here;
-domain packages stay focused on runtime/data APIs.
+navmesh, voxel, audio, render, and UI asset adapters belong here; domain
+packages stay focused on runtime/data APIs.
+
+### termin-prefab
+
+Source of truth: [termin-prefab docs](../termin-prefab/docs/index.md)
+
+Owns prefab runtime and `.prefab` asset integration: `PrefabAsset`,
+`PrefabInstanceMarker`, `PrefabRegistry`, property override paths, and prefab
+import/runtime plugins. The package is separate from `termin-default-assets`
+because prefab behavior is scene-composition runtime, not a thin default
+adapter over a lower-level domain package.
 
 ## Graphics And Rendering
 

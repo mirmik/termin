@@ -124,13 +124,19 @@ The `ui` entry points now come from `termin-default-assets`; old
 `termin.assets.ui_asset`, `termin.assets.ui_handle`, and
 `termin.assets.ui_plugin` modules remain compatibility re-exports.
 
-Status 2026-06-18: `PrefabAsset` and prefab import/runtime plugins moved from
-`termin-app` to `termin-default-assets` under `termin.default_assets.prefab`.
-The `prefab` entry points now come from `termin-default-assets`; old
-`termin.assets.prefab_asset` and `termin.assets.prefab_plugin` modules remain
-compatibility re-exports. The prefab adapter still calls app scene/prefab
-runtime APIs at instantiation and hot-reload time, because entity hierarchy
-ownership has not moved out of the app layer.
+Status 2026-06-18: prefab ownership moved from `termin-app`/the
+default-adapter layer to a dedicated `termin-prefab` package. `termin.prefab`
+now owns
+`PrefabAsset`, prefab import/runtime plugins, `PrefabInstanceMarker`,
+`PrefabRegistry`, and `PropertyPath`. `termin.default_assets.prefab`,
+`termin.assets.prefab_asset`, `termin.assets.prefab_plugin`, and the old
+`termin.visualization.core` prefab modules are compatibility re-exports.
+`PrefabAsset` deserializes entities through `termin.scene.Entity`, and
+`PrefabInstanceMarker` depends on `termin.scene.python_component` directly.
+Prefab resource lookups use the process resource-manager factory from
+`termin-assets` instead of importing app resources directly. The remaining
+app-owned boundary is the concrete typed lookup surface still implemented by
+the app `ResourceManager`.
 
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
@@ -239,8 +245,8 @@ back on it.
   and scene-pipeline default asset adapters and plugin entry points.
 - `termin.default_assets.ui`: `UIAsset`, `UIHandle`, and `.uiscript`
   import/runtime plugin entry points.
-- `termin.default_assets.prefab`: `PrefabAsset` and `.prefab` import/runtime
-  plugin entry points.
+- `termin.prefab`: `PrefabAsset`, `.prefab` import/runtime plugin entry
+  points, prefab instance markers, registry, and override path helpers.
 - Future importer-style adapters should move here or to a dedicated importer
   package when they are not pure domain runtime.
 

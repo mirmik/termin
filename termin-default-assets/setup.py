@@ -16,6 +16,7 @@ setup(
     install_requires=[
         "termin-assets",
         "termin-audio",
+        "termin-prefab",
         "termin-navmesh",
         "termin-render",
         "termin-voxels",
@@ -31,7 +32,6 @@ setup(
             "mesh = termin.default_assets.mesh.asset_plugin:create_import_plugin",
             "navmesh = termin.default_assets.navmesh.asset_plugin:create_import_plugin",
             "pipeline = termin.default_assets.render.pipeline_plugin:create_import_plugin",
-            "prefab = termin.default_assets.prefab.asset_plugin:create_import_plugin",
             "scene_pipeline = termin.default_assets.render.scene_pipeline_plugin:create_import_plugin",
             "shader = termin.default_assets.render.shader_plugin:create_import_plugin",
             "texture = termin.default_assets.render.texture_plugin:create_import_plugin",
@@ -45,7 +45,6 @@ setup(
             "mesh = termin.default_assets.mesh.asset_plugin:create_runtime_plugin",
             "navmesh = termin.default_assets.navmesh.asset_plugin:create_runtime_plugin",
             "pipeline = termin.default_assets.render.pipeline_plugin:create_runtime_plugin",
-            "prefab = termin.default_assets.prefab.asset_plugin:create_runtime_plugin",
             "scene_pipeline = termin.default_assets.render.scene_pipeline_plugin:create_runtime_plugin",
             "shader = termin.default_assets.render.shader_plugin:create_runtime_plugin",
             "texture = termin.default_assets.render.texture_plugin:create_runtime_plugin",
