@@ -169,7 +169,7 @@ def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
     from tcbase import log
     from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
     from termin.default_assets.mesh.asset import MeshAsset
-    from termin.assets.resources import ResourceManager
+    from termin.default_assets.resource_manager import DefaultResourceManager
 
     uuid_value = _string(spec, "uuid")
     name = _string(spec, "name", uuid_value)
@@ -219,7 +219,7 @@ def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
         log.error(f"[PlayerRuntime] Failed to create runtime mesh: {uuid_value}")
         return False
 
-    rm = ResourceManager.instance()
+    rm = DefaultResourceManager.instance()
     rm.register_mesh_asset(name, MeshAsset(mesh_data=mesh, name=name, source_path=path, uuid=uuid_value), str(path), uuid_value)
     return True
 
@@ -227,7 +227,7 @@ def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
 def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, _RuntimeShader]) -> bool:
     from tcbase import log
     from termin.default_assets.render.material_asset import MaterialAsset
-    from termin.assets.resources import ResourceManager
+    from termin.default_assets.resource_manager import DefaultResourceManager
     from termin.materials import TcMaterial
 
     uuid_value = _string(spec, "uuid")
@@ -265,7 +265,7 @@ def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, _Runtime
     _apply_material_uniforms(material, spec.get("uniforms"), uuid_value)
     _apply_material_textures(material, spec.get("textures"), uuid_value)
 
-    rm = ResourceManager.instance()
+    rm = DefaultResourceManager.instance()
     rm.register_material(name, material, str(path), uuid_value)
     rm._assets_by_uuid[uuid_value] = MaterialAsset(material=material, name=name, source_path=path, uuid=uuid_value)
     return True
@@ -332,7 +332,7 @@ def _builtin_texture_for_material_slot(name: str) -> Any | None:
 
 def _apply_material_textures(material: Any, textures: object, uuid_value: str) -> None:
     from tcbase import log
-    from termin.assets.resources import ResourceManager
+    from termin.default_assets.resource_manager import DefaultResourceManager
 
     if textures is None:
         return
@@ -340,7 +340,7 @@ def _apply_material_textures(material: Any, textures: object, uuid_value: str) -
         log.error(f"[PlayerRuntime] Runtime material textures must be an object: {uuid_value}")
         return
 
-    rm = ResourceManager.instance()
+    rm = DefaultResourceManager.instance()
     for name, value in textures.items():
         if not isinstance(name, str):
             log.error(f"[PlayerRuntime] Runtime material texture name must be a string: {uuid_value}")
