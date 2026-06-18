@@ -1066,10 +1066,6 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
     sdk_config.parent.mkdir(parents=True)
     sdk_config.write_text("# fake OpenXR CMake package\n", encoding="utf-8")
 
-    marker_script = termin_root / "build-android-apk.sh"
-    marker_script.parent.mkdir(parents=True, exist_ok=True)
-    marker_script.write_text("# marker for termin root discovery\n", encoding="utf-8")
-
     build_script = termin_root / ("build-quest-openxr-apk.cmd" if os.name == "nt" else "build-quest-openxr-apk.sh")
     if os.name == "nt":
         build_script.write_text(

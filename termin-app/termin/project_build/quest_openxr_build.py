@@ -9,19 +9,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from termin.project_build.android_build import (
-    _preload_project_resources,
-    _read_log_tail,
-    _read_project_name,
-    _resolve_gradle,
-    _resolve_termin_root,
-)
+from termin.project_build.common import preload_project_resources, read_project_name
 from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportDiagnostic,
     RuntimePackageExportResult,
     export_runtime_package,
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
+from termin.project_build.target_build_common import read_log_tail, resolve_gradle, resolve_termin_root
 
 
 QUEST_OPENXR_APPLICATION_ID = "org.termin.openxr"
@@ -60,7 +55,7 @@ def build_quest_openxr_project(
     log_callback: Callable[[str], None] | None = None,
 ) -> QuestOpenXRBuildResult:
     project_root_path = Path(project_root).resolve()
-    project_name = _read_project_name(project_root_path)
+    project_name = read_project_name(project_root_path)
     dist_dir = _resolve_quest_dist_dir(project_root_path, project_name, output_dir)
     package_dir = dist_dir / "package"
     apk_dir = dist_dir / "apk"
@@ -68,7 +63,7 @@ def build_quest_openxr_project(
     apk_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    _preload_project_resources(project_root_path)
+    preload_project_resources(project_root_path, "[QuestOpenXRBuild]")
 
     package_result = export_runtime_package(
         project_root=project_root_path,
@@ -79,7 +74,7 @@ def build_quest_openxr_project(
     )
     package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
 
-    termin_root_path = _resolve_termin_root(termin_root)
+    termin_root_path = _resolve_quest_termin_root(termin_root)
     build_script_path = _resolve_quest_build_script(termin_root_path, build_script)
     android_sdk_root = _resolve_termin_android_sdk_root(termin_root_path)
     _validate_termin_android_sdk(android_sdk_root, abi, platform, termin_root_path)
@@ -88,7 +83,7 @@ def build_quest_openxr_project(
         build_script=build_script_path,
         package_dir=package_result.package_dir,
         log_path=log_path,
-        gradle=_resolve_gradle(gradle),
+        gradle=resolve_gradle(gradle),
         android_sdk_root=android_sdk_root,
         abi=abi,
         platform=platform,
@@ -163,7 +158,7 @@ def default_quest_openxr_apk_path(
     output_dir: str | Path | None = None,
 ) -> Path:
     project_root_path = Path(project_root).resolve()
-    project_name = _read_project_name(project_root_path)
+    project_name = read_project_name(project_root_path)
     dist_dir = _resolve_quest_dist_dir(project_root_path, project_name, output_dir)
     return dist_dir / "apk" / f"{project_name}-quest-openxr-debug.apk"
 
@@ -173,7 +168,7 @@ def default_quest_openxr_log_path(
     output_dir: str | Path | None = None,
 ) -> Path:
     project_root_path = Path(project_root).resolve()
-    project_name = _read_project_name(project_root_path)
+    project_name = read_project_name(project_root_path)
     dist_dir = _resolve_quest_dist_dir(project_root_path, project_name, output_dir)
     return dist_dir / "logs" / "quest-openxr-deploy.log"
 
@@ -182,6 +177,14 @@ def _resolve_quest_dist_dir(project_root: Path, project_name: str, output_dir: s
     if output_dir is not None:
         return Path(output_dir).resolve()
     return (project_root / "dist" / "quest_openxr" / project_name).resolve()
+
+
+def _resolve_quest_termin_root(termin_root: str | Path | None) -> Path:
+    return resolve_termin_root(
+        termin_root,
+        marker_script_name="build-quest-openxr-apk.sh",
+        target_name="Quest/OpenXR",
+    )
 
 
 def _resolve_quest_build_script(termin_root: Path, build_script: str | Path | None) -> Path:
@@ -274,7 +277,7 @@ def _run_quest_build_script(
     log_path.write_text("", encoding="utf-8")
     returncode = _run_logged_process(cmd, log_path, log_callback)
     if returncode != 0:
-        log_tail = _read_log_tail(log_path)
+        log_tail = read_log_tail(log_path)
         raise RuntimeError(
             f"Quest/OpenXR build failed with exit code {returncode}; see {log_path}\n{log_tail}"
         )
