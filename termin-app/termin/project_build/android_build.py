@@ -15,6 +15,7 @@ from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportResult,
     export_runtime_package,
 )
+from termin.project_build.runtime_package_validator import validate_runtime_package
 
 
 @dataclass
@@ -58,6 +59,7 @@ def build_android_project(
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
     )
+    package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
 
     termin_root_path = _resolve_termin_root(termin_root)
     build_script_path = _resolve_build_script(termin_root_path, build_script)
@@ -89,7 +91,10 @@ def build_android_project(
         log_path=log_path,
         application_id=application_id,
         launch_activity=launch_activity,
-        diagnostics=list(package_result.diagnostics),
+        diagnostics=[
+            *package_result.diagnostics,
+            *package_validation_diagnostics,
+        ],
     )
 
 
