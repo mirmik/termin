@@ -34,12 +34,6 @@ class ResourceManagerBase(AssetRuntimeManager):
     def __init__(self):
         super().__init__()
 
-        self.materials: Dict[str, "Material"] = {}
-        self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
-        self.voxel_grids: Dict[str, "VoxelGrid"] = {}
-        self.navmeshes: Dict[str, "NavMesh"] = {}
-        self.animation_clips: Dict[str, "TcAnimationClip"] = {}
-        self.skeletons: Dict[str, "TcSkeleton"] = {}
         from termin.scene.component_registry import ComponentClassRegistry
         from termin.render_framework.frame_pass_registry import FramePassRegistry
 
@@ -48,7 +42,20 @@ class ResourceManagerBase(AssetRuntimeManager):
         self.components = self.component_registry.classes
         self.frame_passes = self.frame_pass_registry.classes
 
+        # Runtime caches for direct data objects. AssetRegistry remains the
+        # authoritative asset storage; these preserve legacy fast paths.
+        self.materials: Dict[str, "Material"] = {}
+        self.shaders: Dict[str, "ShaderMultyPhaseProgramm"] = {}
+        self.voxel_grids: Dict[str, "VoxelGrid"] = {}
+        self.navmeshes: Dict[str, "NavMesh"] = {}
+        self.animation_clips: Dict[str, "TcAnimationClip"] = {}
+        self.skeletons: Dict[str, "TcSkeleton"] = {}
+
         # Asset registries
+        self._prefab_registry = self._create_prefab_registry()
+        self._glb_registry = self._create_glb_registry()
+        self._material_registry = self._create_material_registry()
+        self._shader_registry = self._create_shader_registry()
         self._mesh_registry = self._create_mesh_registry()
         self._texture_registry = self._create_texture_registry()
         self._voxel_grid_registry = self._create_voxel_grid_registry()
@@ -61,13 +68,11 @@ class ResourceManagerBase(AssetRuntimeManager):
         self._pipeline_registry = self._create_pipeline_registry()
         self._scene_pipeline_registry = self._create_scene_pipeline_registry()
 
-        # Legacy dicts (for types without registry)
-        self._material_assets: Dict[str, "MaterialAsset"] = {}
-        self._shader_assets: Dict[str, "ShaderAsset"] = {}
-        self._glb_assets: Dict[str, "GLBAsset"] = {}
-        self._prefab_assets: Dict[str, "PrefabAsset"] = {}
-
         for type_id, registry in {
+            "prefab": self._prefab_registry,
+            "glb": self._glb_registry,
+            "material": self._material_registry,
+            "shader": self._shader_registry,
             "mesh": self._mesh_registry,
             "texture": self._texture_registry,
             "voxel_grid": self._voxel_grid_registry,
@@ -87,6 +92,106 @@ class ResourceManagerBase(AssetRuntimeManager):
     def _register_builtin_asset_type_plugins(self) -> None:
         """Register asset plugins that have already migrated off hard-coded dispatch."""
         self.register_default_asset_type_plugins()
+
+    def _create_prefab_registry(self):
+        """Create AssetRegistry for prefabs."""
+        from termin_assets import AssetRegistry
+
+        def data_from_asset(asset):
+            return asset
+
+        def data_to_asset(data):
+            for asset in self._prefab_registry.assets.values():
+                if asset is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.prefab.asset import PrefabAsset
+            return PrefabAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
+    def _create_glb_registry(self):
+        """Create AssetRegistry for GLB model assets."""
+        from termin_assets import AssetRegistry
+
+        def data_from_asset(asset):
+            return asset
+
+        def data_to_asset(data):
+            for asset in self._glb_registry.assets.values():
+                if asset is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.glb.asset import GLBAsset
+            return GLBAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
+    def _create_material_registry(self):
+        """Create AssetRegistry for materials."""
+        from termin_assets import AssetRegistry
+
+        def data_from_asset(asset):
+            if asset.material is None:
+                asset.ensure_loaded()
+            return asset.material
+
+        def data_to_asset(data):
+            for asset in self._material_registry.assets.values():
+                if asset.material is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.default_assets.render.material_asset import MaterialAsset
+            return MaterialAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
+    def _create_shader_registry(self):
+        """Create AssetRegistry for shader programs."""
+        from termin_assets import AssetRegistry
+
+        def data_from_asset(asset):
+            if asset.program is None:
+                asset.ensure_loaded()
+            return asset.program
+
+        def data_to_asset(data):
+            for asset in self._shader_registry.assets.values():
+                if asset.program is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.default_assets.render.shader_asset import ShaderAsset
+            return ShaderAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
 
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
@@ -362,6 +467,26 @@ class ResourceManagerBase(AssetRuntimeManager):
         )
 
     # Legacy property accessors
+    @property
+    def _prefab_assets(self) -> Dict[str, "PrefabAsset"]:
+        """Legacy access to prefab assets dict."""
+        return self._prefab_registry.assets
+
+    @property
+    def _glb_assets(self) -> Dict[str, "GLBAsset"]:
+        """Legacy access to GLB assets dict."""
+        return self._glb_registry.assets
+
+    @property
+    def _material_assets(self) -> Dict[str, "MaterialAsset"]:
+        """Legacy access to material assets dict."""
+        return self._material_registry.assets
+
+    @property
+    def _shader_assets(self) -> Dict[str, "ShaderAsset"]:
+        """Legacy access to shader assets dict."""
+        return self._shader_registry.assets
+
     @property
     def _mesh_assets(self) -> Dict[str, "MeshAsset"]:
         """Legacy access to mesh assets dict."""
