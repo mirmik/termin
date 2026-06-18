@@ -54,7 +54,7 @@ class MaterialRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        if name in rm._material_assets:
+        if rm.get_material_asset(name) is not None:
             return
 
         asset = None
@@ -70,18 +70,14 @@ class MaterialRuntimePlugin:
                 source_path=result.path,
                 uuid=result.uuid,
             )
-            rm._assets_by_uuid[asset.uuid] = asset
 
-        rm._material_assets[name] = asset
         asset.load_from_content(result.content)
-
-        if asset.material is not None:
-            rm.materials[name] = asset.material
+        rm.register_material_asset(name, asset, source_path=result.path)
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
         name = context.name
-        asset = rm._material_assets.get(name)
+        asset = rm.get_material_asset(name)
         if asset is None:
             return
 

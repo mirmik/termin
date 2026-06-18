@@ -39,7 +39,7 @@ class ShaderRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        if name in rm._shader_assets:
+        if rm.get_shader_asset(name) is not None:
             return
 
         asset = None
@@ -57,13 +57,12 @@ class ShaderRuntimePlugin:
             )
 
         asset.parse_spec(result.spec_data)
-        rm._assets_by_uuid[asset.uuid] = asset
-        rm._shader_assets[name] = asset
+        rm.register_shader_asset(name, asset, source_path=result.path)
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
         name = context.name
-        asset = rm._shader_assets.get(name)
+        asset = rm.get_shader_asset(name)
         if asset is None:
             return
 
