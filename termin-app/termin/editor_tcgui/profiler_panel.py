@@ -17,7 +17,7 @@ from tcgui.widgets.tree import TreeWidget, TreeNode
 from tcgui.widgets.frame_time_graph import FrameTimeGraph
 from tcgui.widgets.units import px
 
-from termin.core.profiler import Profiler, SectionStats
+from tcbase.profiler import Profiler, SectionStats
 
 
 # Colors

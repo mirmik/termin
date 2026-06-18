@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 
-from termin.loaders.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z, MeshSpec
+from termin.default_assets.mesh.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z, MeshSpec
 
 
 def test_mesh_spec_defaults_convert_unity_style_to_termin_axes() -> None:

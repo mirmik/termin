@@ -42,7 +42,7 @@ inline TextureHandle TextureHandle::from_file(
     const std::string& name
 ) {
     try {
-        nb::object texture_asset_module = nb::module_::import_("termin.visualization.render.texture_asset");
+        nb::object texture_asset_module = nb::module_::import_("termin.default_assets.render.texture_asset");
         nb::object TextureAsset = texture_asset_module.attr("TextureAsset");
 
         nb::object asset;
@@ -63,7 +63,7 @@ inline TextureHandle TextureHandle::from_texture_data(
     const std::string& name
 ) {
     try {
-        nb::object texture_asset_module = nb::module_::import_("termin.visualization.render.texture_asset");
+        nb::object texture_asset_module = nb::module_::import_("termin.default_assets.render.texture_asset");
         nb::object TextureAsset = texture_asset_module.attr("TextureAsset");
 
         nb::object asset = TextureAsset(
@@ -163,7 +163,7 @@ inline void TextureHandle::deserialize_from(const tc_value* data, void*) {
 inline TextureHandle get_white_texture_handle() {
     // Use Python singleton instead of C++ static to ensure consistency across modules
     try {
-        nb::object texture_handle_module = nb::module_::import_("termin.assets.texture_handle");
+        nb::object texture_handle_module = nb::module_::import_("termin.render.texture_handle");
         nb::object handle = texture_handle_module.attr("get_white_texture_handle")();
         return nb::cast<TextureHandle>(handle);
     } catch (const nb::python_error& e) {
