@@ -18,7 +18,7 @@ from termin_assets import DataAsset
 from termin.render_framework import TcScenePipelineTemplate
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph import RenderPipeline
+    from termin.render_framework import RenderPipeline
 
 
 class PipelineAsset(DataAsset["RenderPipeline"]):
@@ -137,7 +137,7 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
     def _parse_pass_list(self, data: dict) -> "RenderPipeline | None":
         """Parse pass-list pipeline format directly."""
         from termin_assets import get_resource_manager
-        from termin.visualization.render.framegraph.pipeline import RenderPipeline
+        from termin.render_framework import RenderPipeline
 
         self._graph_data = None
         self._template = None
