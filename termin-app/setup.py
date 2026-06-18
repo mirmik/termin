@@ -122,11 +122,9 @@ if __name__ == "__main__":
         entry_points={
             "termin.asset_import_plugins": [
                 "glb = termin.assets.glb_plugin:GLBImportPlugin",
-                "prefab = termin.assets.prefab_plugin:PrefabImportPlugin",
             ],
             "termin.asset_runtime_plugins": [
                 "glb = termin.assets.glb_plugin:GLBRuntimePlugin",
-                "prefab = termin.assets.prefab_plugin:PrefabRuntimePlugin",
             ],
         },
         zip_safe=False,

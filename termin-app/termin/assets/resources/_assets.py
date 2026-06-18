@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from termin.animation.asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
-    from termin.assets.prefab_asset import PrefabAsset
+    from termin.default_assets.prefab.asset import PrefabAsset
     from termin.kinematic.general_transform import GeneralTransform3
     from termin.default_assets.audio.asset import AudioClipAsset
     from termin.default_assets.audio.handle import AudioClipHandle
@@ -47,7 +47,7 @@ class AssetsMixin:
 
     def get_prefab_by_uuid(self, uuid: str) -> Optional["PrefabAsset"]:
         """Get PrefabAsset by UUID."""
-        from termin.assets.prefab_asset import PrefabAsset
+        from termin.default_assets.prefab.asset import PrefabAsset
         asset = self._assets_by_uuid.get(uuid)
         if asset is not None and isinstance(asset, PrefabAsset):
             return asset

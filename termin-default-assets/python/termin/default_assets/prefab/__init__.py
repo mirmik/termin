@@ -1,9 +1,7 @@
-"""Compatibility re-export for prefab asset plugins.
+"""Default prefab asset adapters."""
 
-Canonical module: :mod:`termin.default_assets.prefab.asset_plugin`.
-"""
-
-from termin.default_assets.prefab.asset_plugin import (
+from .asset import PrefabAsset
+from .asset_plugin import (
     PrefabAssetPlugin,
     PrefabImportPlugin,
     PrefabRuntimePlugin,
@@ -15,6 +13,7 @@ from termin.default_assets.prefab.asset_plugin import (
 )
 
 __all__ = [
+    "PrefabAsset",
     "PrefabAssetPlugin",
     "PrefabImportPlugin",
     "PrefabRuntimePlugin",
