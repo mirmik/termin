@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import List, Optional, TYPE_CHECKING
 
-from ._builtins import BUILTIN_COMPONENTS, BUILTIN_FRAME_PASSES
-
 if TYPE_CHECKING:
     from termin.visualization.core.entity import Component
 
@@ -25,7 +23,7 @@ class ComponentsMixin:
 
     def register_builtin_components(self) -> List[str]:
         """
-        Регистрирует все встроенные компоненты из BUILTIN_COMPONENTS.
+        Регистрирует все встроенные компоненты из default providers и app additions.
 
         Вызывается при инициализации редактора, чтобы гарантировать
         доступность стандартных компонентов независимо от порядка импортов.
@@ -33,7 +31,9 @@ class ComponentsMixin:
         Returns:
             Список имён успешно зарегистрированных компонентов.
         """
-        return self.component_registry.register_builtins(BUILTIN_COMPONENTS)
+        from ._builtins import get_builtin_component_specs
+
+        return self.component_registry.register_builtins(get_builtin_component_specs())
 
     def scan_components(self, paths: list[str]) -> list[str]:
         """
@@ -62,12 +62,14 @@ class ComponentsMixin:
 
     def register_builtin_frame_passes(self) -> List[str]:
         """
-        Регистрирует все встроенные FramePass'ы из BUILTIN_FRAME_PASSES.
+        Регистрирует все встроенные FramePass'ы из default providers и app additions.
 
         Returns:
             Список имён успешно зарегистрированных FramePass'ов.
         """
-        return self.frame_pass_registry.register_builtins(BUILTIN_FRAME_PASSES)
+        from ._builtins import get_builtin_frame_pass_specs
+
+        return self.frame_pass_registry.register_builtins(get_builtin_frame_pass_specs())
 
     def scan_frame_passes(self, paths: list[str]) -> list[str]:
         """
