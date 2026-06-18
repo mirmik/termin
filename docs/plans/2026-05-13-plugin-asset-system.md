@@ -124,13 +124,21 @@ The `ui` entry points now come from `termin-default-assets`; old
 `termin.assets.ui_asset`, `termin.assets.ui_handle`, and
 `termin.assets.ui_plugin` modules remain compatibility re-exports.
 
+Status 2026-06-18: `PrefabAsset` and prefab import/runtime plugins moved from
+`termin-app` to `termin-default-assets` under `termin.default_assets.prefab`.
+The `prefab` entry points now come from `termin-default-assets`; old
+`termin.assets.prefab_asset` and `termin.assets.prefab_plugin` modules remain
+compatibility re-exports. The prefab adapter still calls app scene/prefab
+runtime APIs at instantiation and hot-reload time, because entity hierarchy
+ownership has not moved out of the app layer.
+
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
 `termin-app` now declares its remaining app-owned asset plugins through
 `termin.asset_import_plugins` and `termin.asset_runtime_plugins` entry points,
 and the old app module is only a compatibility re-export. This removes the app
 as the central registry hub for already-extracted domain plugins; the remaining
-technical debt is the concrete render/UI/GLB/prefab plugin ownership itself.
+technical debt is the GLB/importer ownership and app facade boundaries.
 
 Status 2026-06-17: the shared runtime-management core moved to
 `termin_assets.resource_manager.AssetRuntimeManager`. It owns the UUID index,
@@ -231,8 +239,10 @@ back on it.
   and scene-pipeline default asset adapters and plugin entry points.
 - `termin.default_assets.ui`: `UIAsset`, `UIHandle`, and `.uiscript`
   import/runtime plugin entry points.
-- Future slices should move prefab and importer-style adapters here or to a
-  dedicated importer package when they are not pure domain runtime.
+- `termin.default_assets.prefab`: `PrefabAsset` and `.prefab` import/runtime
+  plugin entry points.
+- Future importer-style adapters should move here or to a dedicated importer
+  package when they are not pure domain runtime.
 
 ### Importer Packages
 
@@ -329,7 +339,7 @@ The migrated runtime/import plugins currently cover:
 - `scene_pipeline`
 
 Remaining work is no longer central dispatch replacement. The next pressure points are
-moving concrete plugins out of `termin-app`, reducing direct plugin access to
+moving GLB/importer plugins out of `termin-app`, reducing direct plugin access to
 `ResourceManager` private registries, and deciding the long-term home for render
 asset dependency refresh.
 

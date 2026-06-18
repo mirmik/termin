@@ -20,3 +20,5 @@ Current adapters:
   and scene-pipeline asset adapters/plugins plus render asset helper modules.
 - `termin.default_assets.ui`: `UIAsset`, `UIHandle`, and UI import/runtime
   plugins for `.uiscript` layouts backed by `tcgui`.
+- `termin.default_assets.prefab`: `PrefabAsset` and prefab import/runtime
+  plugins for `.prefab` entity hierarchy documents.

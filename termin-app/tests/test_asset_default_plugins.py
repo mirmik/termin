@@ -94,3 +94,13 @@ def test_ui_asset_legacy_paths_reexport_canonical_classes() -> None:
     assert AppUIAsset is UIAsset
     assert AppUIHandle is UIHandle
     assert AppUIImportPlugin is UIImportPlugin
+
+
+def test_prefab_asset_legacy_paths_reexport_canonical_classes() -> None:
+    from termin.assets.prefab_asset import PrefabAsset as AppPrefabAsset
+    from termin.assets.prefab_plugin import PrefabImportPlugin as AppPrefabImportPlugin
+    from termin.default_assets.prefab.asset import PrefabAsset
+    from termin.default_assets.prefab.asset_plugin import PrefabImportPlugin
+
+    assert AppPrefabAsset is PrefabAsset
+    assert AppPrefabImportPlugin is PrefabImportPlugin
