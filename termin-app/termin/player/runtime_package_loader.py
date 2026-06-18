@@ -168,7 +168,7 @@ def _load_shader(package_dir: Path, spec: dict[str, Any], path: Path) -> _Runtim
 def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
     from tcbase import log
     from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
-    from termin.mesh.asset import MeshAsset
+    from termin.default_assets.mesh.asset import MeshAsset
     from termin.assets.resources import ResourceManager
 
     uuid_value = _string(spec, "uuid")

@@ -102,6 +102,7 @@ if __name__ == "__main__":
         install_requires=[
             "tcbase",
             "termin-assets",
+            "termin-default-assets",
             "termin-tween",
             "termin-components-tween",
             "termin-audio",

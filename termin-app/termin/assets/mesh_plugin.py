@@ -1,6 +1,9 @@
-"""Compatibility re-export for mesh asset plugins."""
+"""Compatibility re-export for mesh asset plugins.
 
-from termin.mesh.asset_plugin import (
+Canonical module: :mod:`termin.default_assets.mesh.asset_plugin`.
+"""
+
+from termin.default_assets.mesh.asset_plugin import (
     MeshAssetPlugin,
     MeshImportPlugin,
     MeshRuntimePlugin,

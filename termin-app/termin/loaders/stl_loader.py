@@ -1,6 +1,9 @@
-"""Compatibility re-export for STL loading helpers."""
+"""Compatibility re-export for STL loading helpers.
 
-from termin.mesh.stl_loader import (
+Canonical module: :mod:`termin.default_assets.mesh.stl_loader`.
+"""
+
+from termin.default_assets.mesh.stl_loader import (
     STLMeshData,
     STLSceneData,
     _load_ascii_stl,
