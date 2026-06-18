@@ -6,6 +6,7 @@ from termin_assets import (
     AssetRuntimeManager,
     AssetTypeRegistry,
     DataAsset,
+    EmbeddedAssetSpec,
     Identifiable,
     PreLoadResult,
     ResourceHandle,
@@ -25,8 +26,73 @@ def test_asset_core_classes_are_exported() -> None:
     assert Identifiable is not None
     assert Asset is not None
     assert DataAsset is not None
+    assert EmbeddedAssetSpec is not None
     assert AssetRegistry is not None
     assert ResourceHandle is not None
+
+
+class MemoryAsset(DataAsset[str]):
+    def _parse_content(self, content: bytes | str) -> str | None:
+        return str(content)
+
+
+def test_data_asset_can_store_lazy_runtime_data_without_private_mutation() -> None:
+    asset = MemoryAsset(name="probe")
+
+    asset.set_runtime_data("declared-handle", loaded=False)
+
+    assert asset.cached_data == "declared-handle"
+    assert not asset.is_loaded
+
+    asset.set_runtime_data("ready-data")
+
+    assert asset.cached_data == "ready-data"
+    assert asset.data == "ready-data"
+    assert asset.is_loaded
+
+
+def test_runtime_manager_get_or_create_embedded_asset_uses_runtime_registry() -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=MemoryAsset,
+        uuid_registry=manager._assets_by_uuid,
+        data_from_asset=lambda asset: asset.data,
+    )
+    manager.register_runtime_asset_registry("memory", registry)
+
+    parent = MemoryAsset(name="bundle", uuid="bundle-uuid")
+    child = manager.get_or_create_embedded_asset(
+        EmbeddedAssetSpec(
+            type_id="memory",
+            name="bundle/child",
+            parent=parent,
+            parent_key="child",
+            source_path="/tmp/bundle.memory",
+            uuid="child-uuid",
+        )
+    )
+
+    assert child is registry.get_asset("bundle/child")
+    assert child is manager.get_runtime_asset_by_uuid("memory", "child-uuid")
+    assert child.embedded_parent is parent
+    assert child.embedded_parent_key == "child"
+    assert child.source_path == Path("/tmp/bundle.memory")
+
+    reloaded_parent = MemoryAsset(name="bundle-reloaded", uuid="bundle-reloaded-uuid")
+    same_child = manager.get_or_create_embedded_asset(
+        EmbeddedAssetSpec(
+            type_id="memory",
+            name="bundle/child-renamed",
+            parent=reloaded_parent,
+            parent_key="child-renamed",
+            source_path="/tmp/bundle.memory",
+            uuid="child-uuid",
+        )
+    )
+
+    assert same_child is child
+    assert child.embedded_parent is reloaded_parent
+    assert child.embedded_parent_key == "child-renamed"
 
 
 def test_resource_handle_can_lookup_assets_by_uuid() -> None:

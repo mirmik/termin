@@ -10,6 +10,7 @@ from tcbase import log
 from termin_assets.asset import Asset
 from termin_assets.catalog import AssetCatalog
 from termin_assets.default_plugins import register_default_asset_plugins
+from termin_assets.embedded_asset import EmbeddedAssetSpec
 from termin_assets.plugin import AssetContext, AssetTypeRegistry
 
 if TYPE_CHECKING:
@@ -96,6 +97,24 @@ class AssetRuntimeManager:
             uuid=uuid,
             parent=parent,
             parent_key=parent_key,
+        )
+
+    def get_or_create_embedded_asset(self, spec: EmbeddedAssetSpec):
+        """Get or create an asset embedded inside another asset file."""
+        if not spec.parent_key:
+            log.error(
+                f"[AssetRuntimeManager] Embedded asset '{spec.name}' "
+                f"of type '{spec.type_id}' has an empty parent key"
+            )
+            raise ValueError("Embedded asset parent_key must be non-empty")
+
+        return self.get_or_create_runtime_asset(
+            spec.type_id,
+            spec.name,
+            source_path=spec.source_path,
+            uuid=spec.uuid,
+            parent=spec.parent,
+            parent_key=spec.parent_key,
         )
 
     def get_asset_by_uuid(self, uuid: str) -> Asset | None:

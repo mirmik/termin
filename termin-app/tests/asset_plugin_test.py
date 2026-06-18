@@ -207,10 +207,16 @@ def test_glb_register_file_creates_spec_child_assets() -> None:
 
     assert mesh_asset is not None
     assert mesh_asset.name == "robot_Body"
+    assert mesh_asset.embedded_parent is glb_asset
+    assert mesh_asset.embedded_parent_key == "Body"
     assert skeleton_asset is not None
     assert skeleton_asset.name == "robot_skeleton"
+    assert skeleton_asset.embedded_parent is glb_asset
+    assert skeleton_asset.embedded_parent_key == "skeleton"
     assert animation_asset is not None
     assert animation_asset.name == "Walk"
+    assert animation_asset.embedded_parent is glb_asset
+    assert animation_asset.embedded_parent_key == "Walk"
 
 
 def test_default_preloaders_use_plugin_adapters_for_direct_asset_files() -> None:
