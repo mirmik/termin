@@ -32,6 +32,7 @@ def test_profile_build_routes_desktop_profile(tmp_path: Path, monkeypatch) -> No
     _write_json(
         profiles_path,
         {
+            "version": 1,
             "profiles": {
                 "dev": {
                     "target": "desktop",
@@ -87,6 +88,7 @@ def test_profile_build_routes_android_profile(tmp_path: Path, monkeypatch) -> No
     _write_json(
         profiles_path,
         {
+            "version": 1,
             "profiles": {
                 "mobile": {
                     "target": "android",
@@ -151,6 +153,7 @@ def test_profile_build_routes_quest_openxr_profile(tmp_path: Path, monkeypatch) 
     _write_json(
         profiles_path,
         {
+            "version": 1,
             "profiles": {
                 "quest": {
                     "target": "quest_openxr",
@@ -218,6 +221,7 @@ def test_profile_build_rejects_unsupported_target_with_supported_list(tmp_path: 
     _write_json(
         profiles_path,
         {
+            "version": 1,
             "profiles": {
                 "web": {
                     "target": "web",
@@ -252,6 +256,7 @@ def test_profile_build_rejects_launcher_target_mismatch(tmp_path: Path, capsys) 
     _write_json(
         profiles_path,
         {
+            "version": 1,
             "profiles": {
                 "dev": {
                     "target": "desktop",
@@ -278,3 +283,66 @@ def test_profile_build_rejects_launcher_target_mismatch(tmp_path: Path, capsys) 
 
     captured = capsys.readouterr()
     assert "target mismatch" in captured.err
+
+
+def test_profile_build_rejects_missing_schema_version(tmp_path: Path, capsys) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                }
+            }
+        },
+    )
+
+    assert profile_build.main(
+        [
+            "build",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+            "--profile",
+            "dev",
+        ]
+    ) == 2
+
+    captured = capsys.readouterr()
+    assert "must contain integer field 'version' with value 1" in captured.err
+
+
+def test_profile_build_rejects_unsupported_schema_version(tmp_path: Path, capsys) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 2,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                }
+            },
+        },
+    )
+
+    assert profile_build.main(
+        [
+            "build",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+            "--profile",
+            "dev",
+        ]
+    ) == 2
+
+    captured = capsys.readouterr()
+    assert "unsupported build profile schema version 2" in captured.err
