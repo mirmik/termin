@@ -36,6 +36,30 @@ class DefaultAssetRegistryFactoryMixin:
             data_to_asset=data_to_asset,
         )
 
+    def _create_glb_registry(self):
+        """Create AssetRegistry for GLB model assets."""
+        from termin_assets import AssetRegistry
+
+        def data_from_asset(asset):
+            return asset
+
+        def data_to_asset(data):
+            for asset in self._glb_registry.assets.values():
+                if asset is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.glb.asset import GLBAsset
+            return GLBAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
     def _create_material_registry(self):
         """Create AssetRegistry for materials."""
         from termin_assets import AssetRegistry
@@ -177,6 +201,56 @@ class DefaultAssetRegistryFactoryMixin:
         def get_asset_class():
             from termin.default_assets.navmesh.asset import NavMeshAsset
             return NavMeshAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
+    def _create_animation_clip_registry(self):
+        """Create AssetRegistry for animation clips."""
+        from termin_assets import AssetRegistry
+
+        def data_from_asset(asset):
+            return asset.clip
+
+        def data_to_asset(data):
+            for asset in self._animation_clip_registry.assets.values():
+                if asset.clip is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.animation.asset import AnimationClipAsset
+            return AnimationClipAsset
+
+        return AssetRegistry(
+            asset_class=get_asset_class,
+            uuid_registry=self._assets_by_uuid,
+            data_from_asset=data_from_asset,
+            data_to_asset=data_to_asset,
+        )
+
+    def _create_skeleton_registry(self):
+        """Create AssetRegistry for skeletons."""
+        from termin_assets import AssetRegistry
+
+        def data_from_asset(asset):
+            if asset.skeleton_data is None:
+                asset.ensure_loaded()
+            return asset.skeleton_data
+
+        def data_to_asset(data):
+            for asset in self._skeleton_registry.assets.values():
+                if asset.skeleton_data is data:
+                    return asset
+            return None
+
+        def get_asset_class():
+            from termin.skeleton.asset import SkeletonAsset
+            return SkeletonAsset
 
         return AssetRegistry(
             asset_class=get_asset_class,

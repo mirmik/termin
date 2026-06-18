@@ -8,6 +8,8 @@ from tcbase import log
 
 if TYPE_CHECKING:
     from termin_assets import Asset
+    from termin.animation import TcAnimationClip
+    from termin.animation.asset import AnimationClipAsset
     from termin.default_assets.audio.asset import AudioClipAsset
     from termin.default_assets.audio.handle import AudioClipHandle
     from termin.default_assets.mesh.asset import MeshAsset
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin.default_assets.ui.handle import UIHandle
     from termin.default_assets.voxels.asset import VoxelGridAsset
+    from termin.glb.asset import GLBAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.materials import TcMaterial as Material
     from termin.navmesh.types import NavMesh
@@ -28,6 +31,8 @@ if TYPE_CHECKING:
     from termin.scene import Entity, GeneralTransform3
     from termin.render_framework import RenderPipeline
     from termin.voxels.grid import VoxelGrid
+    from termin.skeleton import TcSkeleton
+    from termin.skeleton.asset import SkeletonAsset
     from tmesh import TcMesh
 
 
@@ -89,6 +94,32 @@ class DefaultAssetResourceMixin:
         """Remove prefab by name."""
         self._prefab_registry.unregister(name)
 
+    # --------- GLB ---------
+    def get_glb_asset(self, name: str) -> Optional["GLBAsset"]:
+        """Get GLBAsset by name."""
+        return self._glb_registry.get_asset(name)
+
+    def get_glb_asset_by_uuid(self, uuid: str) -> Optional["GLBAsset"]:
+        """Get GLBAsset by UUID."""
+        return self._glb_registry.get_asset_by_uuid(uuid)
+
+    def register_glb_asset(
+        self,
+        name: str,
+        asset: "GLBAsset",
+        source_path: str | None = None,
+    ) -> None:
+        """Register a GLBAsset."""
+        self._glb_registry.register(name, asset, source_path=source_path)
+
+    def unregister_glb_asset(self, name: str) -> None:
+        """Remove a GLBAsset by name."""
+        self._glb_registry.unregister(name)
+
+    def list_glb_names(self) -> list[str]:
+        """List all registered GLB asset names."""
+        return self._glb_registry.list_names()
+
     # --------- GLSL ---------
     def get_glsl(self, name: str) -> Optional[str]:
         """Get GLSL source by include name."""
@@ -143,6 +174,33 @@ class DefaultAssetResourceMixin:
     def get_material_asset_by_uuid(self, uuid: str) -> Optional["MaterialAsset"]:
         """Get MaterialAsset by UUID."""
         return self._material_registry.get_asset_by_uuid(uuid)
+
+    def get_material(self, name: str) -> Optional["Material"]:
+        """Get material by name, loading its asset lazily when needed."""
+        mat = self.materials.get(name)
+        if mat is not None:
+            return mat
+        asset = self._material_registry.get_asset(name)
+        if asset is None:
+            return None
+        if asset.material is None:
+            if not asset.ensure_loaded():
+                return None
+        if asset.material is not None:
+            self.materials[name] = asset.material
+        return asset.material
+
+    def get_material_by_uuid(self, uuid: str) -> Optional["Material"]:
+        """Get material by UUID, loading its asset lazily when needed."""
+        asset: "MaterialAsset | None" = self._material_registry.get_asset_by_uuid(uuid)
+        if asset is None:
+            return None
+        if asset.material is None:
+            if not asset.ensure_loaded():
+                return None
+        if asset.material is not None and asset.name:
+            self.materials[asset.name] = asset.material
+        return asset.material
 
     # --------- Shaders ---------
     def get_shader_asset(self, name: str) -> Optional["ShaderAsset"]:
@@ -368,6 +426,118 @@ class DefaultAssetResourceMixin:
         self._navmesh_registry.unregister(name)
         if name in self.navmeshes:
             del self.navmeshes[name]
+
+    # --------- Animation Clips ---------
+    def get_animation_clip_asset(self, name: str) -> Optional["AnimationClipAsset"]:
+        return self._animation_clip_registry.get_asset(name)
+
+    def register_animation_clip(
+        self,
+        name: str,
+        clip: "TcAnimationClip",
+        source_path: str | None = None,
+        uuid: str | None = None,
+    ) -> None:
+        from termin.animation.asset import AnimationClipAsset
+
+        asset = AnimationClipAsset(clip=clip, name=name, source_path=source_path, uuid=uuid)
+        self._animation_clip_registry.register(name, asset, source_path, uuid)
+        self.animation_clips[name] = clip
+
+    def get_animation_clip(self, name: str) -> Optional["TcAnimationClip"]:
+        clip = self.animation_clips.get(name)
+        if clip is not None:
+            return clip
+        return self._animation_clip_registry.get(name)
+
+    def get_animation_clip_asset_by_uuid(self, uuid: str) -> Optional["AnimationClipAsset"]:
+        return self._animation_clip_registry.get_asset_by_uuid(uuid)
+
+    def get_or_create_animation_clip_asset(
+        self,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+        parent: "Asset | None" = None,
+        parent_key: str | None = None,
+    ) -> "AnimationClipAsset":
+        return self._animation_clip_registry.get_or_create_asset(
+            name=name, source_path=source_path, uuid=uuid, parent=parent, parent_key=parent_key,
+        )
+
+    def list_animation_clip_names(self) -> list[str]:
+        return self._animation_clip_registry.list_names()
+
+    def find_animation_clip_name(self, clip: "TcAnimationClip") -> Optional[str]:
+        return self._animation_clip_registry.find_name(clip)
+
+    def unregister_animation_clip(self, name: str) -> None:
+        self._animation_clip_registry.unregister(name)
+        if name in self.animation_clips:
+            del self.animation_clips[name]
+
+    # --------- Skeletons ---------
+    def get_skeleton_asset(self, name: str) -> Optional["SkeletonAsset"]:
+        return self._skeleton_registry.get_asset(name)
+
+    def register_skeleton(
+        self,
+        name: str,
+        skeleton: "TcSkeleton",
+        source_path: str | None = None,
+        uuid: str | None = None,
+    ) -> None:
+        from termin.skeleton.asset import SkeletonAsset
+
+        asset = SkeletonAsset.from_tc_skeleton(skeleton, name=name, source_path=source_path, uuid=uuid)
+        self._skeleton_registry.register(name, asset, source_path, uuid)
+        self.skeletons[name] = skeleton
+
+    def get_skeleton(self, name: str) -> Optional["TcSkeleton"]:
+        skeleton = self.skeletons.get(name)
+        if skeleton is not None:
+            return skeleton
+        skeleton = self._skeleton_registry.get(name)
+        if skeleton is not None:
+            self.skeletons[name] = skeleton
+        return skeleton
+
+    def list_skeleton_names(self) -> list[str]:
+        return self._skeleton_registry.list_names()
+
+    def find_skeleton_name(self, skeleton: "TcSkeleton") -> Optional[str]:
+        return self._skeleton_registry.find_name(skeleton)
+
+    def find_skeleton_uuid(self, skeleton: "TcSkeleton") -> Optional[str]:
+        return self._skeleton_registry.find_uuid(skeleton)
+
+    def get_skeleton_by_uuid(self, uuid: str) -> Optional["TcSkeleton"]:
+        skeleton = self._skeleton_registry.get_by_uuid(uuid)
+        if skeleton is not None:
+            asset = self._skeleton_registry.get_asset_by_uuid(uuid)
+            if asset is not None and asset.name:
+                self.skeletons[asset.name] = skeleton
+        return skeleton
+
+    def get_skeleton_asset_by_uuid(self, uuid: str) -> Optional["SkeletonAsset"]:
+        return self._skeleton_registry.get_asset_by_uuid(uuid)
+
+    def get_or_create_skeleton_asset(
+        self,
+        name: str,
+        source_path: str | None = None,
+        uuid: str | None = None,
+        parent: "Asset | None" = None,
+        parent_key: str | None = None,
+    ) -> "SkeletonAsset":
+        return self._skeleton_registry.get_or_create_asset(
+            name=name, source_path=source_path, uuid=uuid, parent=parent, parent_key=parent_key,
+        )
+
+    def unregister_skeleton(self, name: str) -> None:
+        self._skeleton_registry.unregister(name)
+        if name in self.skeletons:
+            del self.skeletons[name]
 
     # --------- Audio Clips ---------
     def get_audio_clip_asset(self, name: str) -> Optional["AudioClipAsset"]:

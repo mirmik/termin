@@ -10,10 +10,10 @@ from pathlib import Path
 def preload_project_resources(project_root: Path, log_prefix: str) -> None:
     """Load project resources into runtime registries for non-editor builds."""
     try:
-        from termin.assets.resources import ResourceManager
-        from termin.editor_core.default_preloaders import create_default_preloaders
+        from termin.default_assets.default_preloaders import create_default_preloaders
+        from termin.default_assets.resource_manager import DefaultResourceManager
 
-        resource_manager = ResourceManager.instance()
+        resource_manager = DefaultResourceManager.instance()
         processors = create_default_preloaders(resource_manager)
         by_extension = {
             extension: processor
