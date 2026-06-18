@@ -125,8 +125,8 @@ def register_triangle_pipeline(rm: "ResourceManager") -> None:
     if rm.get_pipeline("Triangle") is not None:
         return
 
-    from termin.visualization.render.framegraph import RenderPipeline
-    from termin.visualization.render.framegraph.passes.debug_triangle import DebugTrianglePass
+    from termin.render_framework import RenderPipeline
+    from termin.render_passes import DebugTrianglePass
 
     pipeline = RenderPipeline(
         name="Triangle",
