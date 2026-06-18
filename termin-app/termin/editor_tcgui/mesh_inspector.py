@@ -18,7 +18,7 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
 
-from termin.mesh.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z, MeshSpec
+from termin.default_assets.mesh.mesh_spec import DEFAULT_AXIS_X, DEFAULT_AXIS_Y, DEFAULT_AXIS_Z, MeshSpec
 
 
 class MeshInspectorTcgui(VStack):

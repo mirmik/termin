@@ -40,6 +40,23 @@ Canonical mesh/data layer. `tc_mesh` относится к ядру данных
 
 Код, который адаптирует mesh к конкретному renderer/device, должен жить выше: например в [termin-graphics](#termin-graphics) как adapter к tgfx2 или в [termin-render](#termin-render), если он зависит от render framework.
 
+### termin-assets
+
+Source of truth: [plugin asset system plan](./plans/2026-05-13-plugin-asset-system.md)
+
+Shared asset runtime contracts: base asset classes, typed asset registries,
+preload/watch/reload core, and entry-point based plugin discovery. It should
+not own domain-specific asset classes.
+
+### termin-default-assets
+
+Source of truth: [termin-default-assets docs](../termin-default-assets/docs/index.md)
+
+Default asset adapters that connect `termin-assets` to domain packages without
+making those domain packages depend on the asset runtime. Standard mesh asset
+support (`MeshAsset`, `MeshSpec`, OBJ/STL loaders, mesh plugin entry points)
+belongs here, while `termin-mesh` stays focused on `tmesh`.
+
 ## Graphics And Rendering
 
 ### termin-graphics / tgfx

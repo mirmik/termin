@@ -21,7 +21,7 @@ from termin.mesh.surface_edge_query import (
 
 def __getattr__(name: str):
     if name == "MeshAsset":
-        from termin.mesh.asset import MeshAsset
+        from termin.default_assets.mesh.asset import MeshAsset
 
         globals()["MeshAsset"] = MeshAsset
         return MeshAsset
@@ -32,7 +32,6 @@ def __getattr__(name: str):
 __all__ = [
     "Mesh3",
     "TcMesh",
-    "MeshAsset",
     "MeshComponent",
     "ProceduralMeshComponent",
     "ScriptMeshComponent",

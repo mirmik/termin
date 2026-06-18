@@ -23,6 +23,7 @@
 | [termin-app](./modules.md#termin-app) | Основное приложение/редактор |
 | [termin-base](../termin-base/docs/index.md) | Базовые типы, logging, settings, geometry, low-level utilities |
 | [termin-mesh](../termin-mesh/docs/index.md) | Canonical mesh/resource data layer |
+| [termin-default-assets](../termin-default-assets/docs/index.md) | Default asset adapters for domain packages |
 | [termin-graphics](../termin-graphics/docs/index.md) | tgfx/tgfx2, backend-neutral GPU API |
 | [termin-render](../termin-render/docs/index.md) | Render framework, pipelines, frame graph |
 | [termin-display](../termin-display/docs/index.md) | Windows/display/platform integration |

@@ -24,7 +24,7 @@ from termin.render_components.skinned_mesh_renderer import SkinnedMeshRenderer
 
 if TYPE_CHECKING:
     from termin.assets.glb_asset import GLBAsset
-    from termin.mesh.asset import MeshAsset
+    from termin.default_assets.mesh.asset import MeshAsset
     from termin.visualization.core.scene import Scene
     from termin.loaders.glb_loader import GLBSceneData, GLBMeshData, GLBMaterialData, GLBTcTexture
 

@@ -1,6 +1,9 @@
-"""Compatibility re-export for OBJ loading helpers."""
+"""Compatibility re-export for OBJ loading helpers.
 
-from termin.mesh.obj_loader import (
+Canonical module: :mod:`termin.default_assets.mesh.obj_loader`.
+"""
+
+from termin.default_assets.mesh.obj_loader import (
     OBJMeshData,
     OBJSceneData,
     load_obj_file,

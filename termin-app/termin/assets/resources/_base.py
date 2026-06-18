@@ -9,7 +9,7 @@ from termin_assets import AssetRuntimeManager
 if TYPE_CHECKING:
     from termin.materials import TcMaterial as Material
     from termin.render.material_asset import MaterialAsset
-    from termin.mesh.asset import MeshAsset
+    from termin.default_assets.mesh.asset import MeshAsset
     from termin.render.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.render.shader_asset import ShaderAsset
@@ -91,7 +91,7 @@ class ResourceManagerBase(AssetRuntimeManager):
     def _create_mesh_registry(self):
         """Create AssetRegistry for meshes."""
         from termin_assets import AssetRegistry
-        from termin.mesh.asset import MeshAsset
+        from termin.default_assets.mesh.asset import MeshAsset
         from tmesh import TcMesh
 
         def data_from_asset(asset: MeshAsset) -> TcMesh | None:

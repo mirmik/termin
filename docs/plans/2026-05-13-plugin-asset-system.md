@@ -96,11 +96,17 @@ namespace. `termin-audio` exposes import/runtime plugin entry points for
 `audio_clip`.
 
 Status 2026-06-17: `MeshAsset`, standalone mesh import/runtime plugins, mesh
-specs, and OBJ/STL loaders were moved to `termin-mesh` under `termin.mesh`.
-The old app modules `termin.assets.mesh_asset`, `termin.assets.mesh_plugin`,
-and `termin.loaders.{mesh_spec,obj_loader,stl_loader}` are compatibility
-re-exports. `termin-mesh` exposes import/runtime plugin entry points for
-`mesh`; GLB remains app-owned until the importer package boundary is decided.
+specs, and OBJ/STL loaders were moved out of `termin-app`.
+
+Status 2026-06-18: the mesh asset adapter was moved again from `termin-mesh`
+to `termin-default-assets` under `termin.default_assets.mesh`. `termin-mesh`
+now stays focused on `tmesh`/mesh resource data and does not declare a
+`termin-assets` dependency or mesh asset plugin entry points. The old app
+modules `termin.assets.mesh_asset`, `termin.assets.mesh_plugin`,
+`termin.loaders.{mesh_spec,obj_loader,stl_loader}`, and old domain paths under
+`termin.mesh` are compatibility re-exports. `termin-default-assets` exposes
+import/runtime plugin entry points for `mesh`; GLB remains app-owned until the
+importer package boundary is decided.
 
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
@@ -170,18 +176,33 @@ notifications still bridge through the app `RenderingManager` when available.
 
 ### Domain Packages
 
-Concrete plugins should live near the domain implementation:
+Domain packages should own engine/domain data and remain usable without the
+project asset runtime. Concrete default asset adapters should not force these
+packages to depend on `termin-assets`.
 
-- `termin-mesh`: `MeshAsset`, `MeshAssetPlugin`, mesh file loaders/specs for mesh-owned formats.
-- `termin-render` or a render-facing package: `TextureAssetPlugin`, `ShaderAssetPlugin`, `MaterialAssetPlugin`, `PipelineAssetPlugin`, render pipeline asset support.
+- `termin-mesh`: `tmesh`, mesh resource containers and mesh bindings.
+- `termin-render`: render runtime, render bindings, shader/material/pipeline domain logic.
 - `termin-animation`: `AnimationClipAsset`; add `AnimationClipAssetPlugin` only
   when a standalone animation file pipeline exists.
 - `termin-skeleton`: `SkeletonAsset`; add `SkeletonAssetPlugin` only when a
   standalone skeleton file pipeline exists.
-- `termin-navmesh`: `NavMeshAsset`, `NavMeshAssetPlugin`.
+- `termin-navmesh`: navmesh runtime/data.
 - `termin-audio`: `AudioClipAsset`, `AudioClipHandle`, `AudioClipAssetPlugin`,
   `AudioEngine`, `AudioClip`, audio scene components.
-- `termin-gui` or a future UI package: `UIAsset`, `UIAssetPlugin`.
+- `termin-gui` or a future UI package: UI runtime/data.
+
+### Default Asset Packages
+
+Default asset adapters live in `termin-default-assets`. It may depend on
+`termin-assets` and on domain packages, but domain packages should not depend
+back on it.
+
+- `termin.default_assets.mesh`: `MeshAsset`, `MeshAssetPlugin`, `MeshSpec`,
+  OBJ/STL loaders, and mesh import/runtime plugin entry points.
+- Future slices should move default material/shader/texture/pipeline,
+  navmesh, audio, prefab, UI, animation, and skeleton adapters here or into a
+  similarly explicit default-adapter package when they are not pure domain
+  runtime.
 
 ### Importer Packages
 
@@ -333,25 +354,26 @@ Possible homes:
 - Keep existing typed APIs in `ResourceManager`.
 - Keep behavior equivalent for current editor/player asset scanning.
 
-### Phase 3: Move Concrete Plugins To Domain Modules
+### Phase 3: Move Concrete Plugins To Default Adapter Modules
 
 Move plugins gradually:
 
-- Mesh support to `termin-mesh`.
-- Render asset support to `termin-render` or a dedicated render asset package.
+- Mesh support to `termin-default-assets`.
+- Render asset support to `termin-default-assets` or a dedicated render asset
+  adapter package.
 - Animation support to `termin-animation`.
 - Skeleton support to `termin-skeleton`.
-- Navmesh support to `termin-navmesh`.
-- UI support to `termin-gui` or future UI package.
+- Navmesh support to `termin-default-assets`.
+- UI support to `termin-default-assets` or future UI adapter package.
 - GLB/FBX importers to `termin-importers` or equivalent.
 
-Each domain package should expose asset plugin entry points:
+Each adapter package should expose asset plugin entry points:
 
 ```toml
 termin.asset_import_plugins:
-  mesh = termin.mesh.asset_plugin:create_import_plugin
+  mesh = termin.default_assets.mesh.asset_plugin:create_import_plugin
 termin.asset_runtime_plugins:
-  mesh = termin.mesh.asset_plugin:create_runtime_plugin
+  mesh = termin.default_assets.mesh.asset_plugin:create_runtime_plugin
 ```
 
 ### Phase 4: Composition Layer
