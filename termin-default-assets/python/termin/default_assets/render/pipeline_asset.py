@@ -136,13 +136,16 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
 
     def _parse_pass_list(self, data: dict) -> "RenderPipeline | None":
         """Parse pass-list pipeline format directly."""
-        from termin.assets.resources import ResourceManager
+        from termin_assets import get_resource_manager
         from termin.visualization.render.framegraph.pipeline import RenderPipeline
 
         self._graph_data = None
         self._template = None
 
-        rm = ResourceManager.instance()
+        rm = get_resource_manager()
+        if rm is None:
+            log.error(f"[PipelineAsset] Resource manager is not configured for '{self._name}'")
+            return None
         pipeline = RenderPipeline.deserialize(data, rm)
         if pipeline is not None:
             pipeline.name = self._name

@@ -85,7 +85,7 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
         shader_uuid: Shader asset UUID
     """
     from termin.default_assets.render.material_asset import _build_render_state, _apply_uniform_defaults, _apply_texture_defaults
-    from termin.assets.resources import ResourceManager
+    from termin_assets import get_resource_manager
 
     if not program.phases:
         raise ValueError("Program has no phases")
@@ -98,7 +98,10 @@ def update_material_shader(material, program, shader_name: str, shader_uuid: str
     material.clear_phases()
     material.shader_name = shader_name or program.program
 
-    rm = ResourceManager.instance()
+    rm = get_resource_manager()
+    if rm is None:
+        log.error("[update_material_shader] Resource manager is not configured")
+        raise RuntimeError("Resource manager is not configured")
 
     for shader_phase in program.phases:
         if "vertex" not in shader_phase.stages or "fragment" not in shader_phase.stages:
