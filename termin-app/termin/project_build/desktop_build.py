@@ -18,6 +18,7 @@ from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportResult,
     export_runtime_package,
 )
+from termin.project_build.runtime_package_validator import validate_runtime_package
 
 
 @dataclass
@@ -54,6 +55,7 @@ def build_desktop_project(
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
     )
+    package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
     python_result = package_python_modules(
         project_root=project_root_path,
         output_dir=package_dir / "python",
@@ -122,6 +124,7 @@ def build_desktop_project(
         app_manifest_path=app_manifest_path,
         diagnostics=[
             *package_result.diagnostics,
+            *package_validation_diagnostics,
             *python_result.diagnostics,
             *runtime_result.diagnostics,
         ],
