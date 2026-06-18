@@ -87,8 +87,13 @@ def _build_line_ribbon(
 
 def _get_navmesh_choices() -> list[tuple[str, str]]:
     """Получить список NavMesh для комбобокса."""
-    from termin.assets.resources import ResourceManager
-    rm = ResourceManager.instance()
+    from tcbase import log
+    from termin_assets import get_resource_manager
+
+    rm = get_resource_manager()
+    if rm is None:
+        log.error("[NavMeshDisplayComponent] Resource manager is not configured")
+        return []
     names = rm.list_navmesh_names()
     return [(name, name) for name in names]
 

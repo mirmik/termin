@@ -69,8 +69,14 @@ class NavMeshMaterialComponent(DrawableComponent):
 
     def set_material_by_name(self, name: str) -> None:
         """Set material by name from ResourceManager."""
-        from termin.assets.resources import ResourceManager
-        rm = ResourceManager.instance()
+        from tcbase import log
+        from termin_assets import get_resource_manager
+
+        rm = get_resource_manager()
+        if rm is None:
+            log.error("[NavMeshMaterialComponent] Resource manager is not configured")
+            self._material = None
+            return
         asset = rm.get_material_asset(name)
         if asset is not None:
             self._material = asset.material

@@ -36,6 +36,7 @@ setup(
     packages=["termin.navmesh"],
     package_dir={"termin.navmesh": "python/termin/navmesh"},
     install_requires=[
+        "termin-assets",
         "termin-nanobind",
         "termin-voxels",
         "termin-components-voxels",

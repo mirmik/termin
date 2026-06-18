@@ -293,8 +293,8 @@ def _parse_material_content(
     Returns:
         Tuple of (TcMaterial, uuid or None)
     """
-    from termin.assets.resources import ResourceManager
     from termin.default_assets.render.texture_asset import TextureAsset
+    from termin_assets import get_resource_manager
     from termin.geombase import Vec3, Vec4
     from termin.materials import TcMaterial
 
@@ -305,7 +305,14 @@ def _parse_material_content(
     file_uuid = data.get("uuid")
     phase_marks = data.get("phase_marks", [])  # Per-phase mark overrides
 
-    rm = ResourceManager.instance()
+    rm = get_resource_manager()
+    if rm is None:
+        log.error("[MaterialAsset] Resource manager is not configured; creating empty material")
+        mat = TcMaterial.create(name or "unknown", file_uuid or "")
+        mat.shader_name = shader_name
+        if source_path:
+            mat.source_path = source_path
+        return mat, file_uuid
 
     # Try to load shader by UUID first, fallback to name
     program = None
@@ -456,17 +463,20 @@ def _save_material_file(material, path: str | Path, uuid: str) -> None:
     """
     from termin.materials import TcMaterial
     from termin.geombase import Vec3, Vec4
-    from termin.assets.resources import ResourceManager
+    from termin_assets import get_resource_manager
 
     shader_name = material.shader_name
 
     # Get shader UUID from ResourceManager
     shader_uuid = ""
     if shader_name:
-        rm = ResourceManager.instance()
-        shader_asset = rm.get_shader_asset(shader_name)
-        if shader_asset is not None:
-            shader_uuid = shader_asset.uuid
+        rm = get_resource_manager()
+        if rm is None:
+            log.warning(f"[MaterialAsset] Resource manager is not configured; saving '{shader_name}' without shader UUID")
+        else:
+            shader_asset = rm.get_shader_asset(shader_name)
+            if shader_asset is not None:
+                shader_uuid = shader_asset.uuid
 
     result: Dict[str, Any] = {
         "uuid": uuid,

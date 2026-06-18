@@ -792,7 +792,7 @@ class VoxelizerComponent(DrawableComponent):
         Returns:
             True если успешно, False если ошибка.
         """
-        from termin.assets.resources import ResourceManager
+        from termin_assets import get_resource_manager
         from termin.navmesh import PolygonBuilder, NavMeshConfig
         from termin.navmesh.persistence import NavMeshPersistence
 
@@ -805,7 +805,10 @@ class VoxelizerComponent(DrawableComponent):
                 name = "voxel_grid"
 
         # Получаем воксельную сетку из ResourceManager
-        rm = ResourceManager.instance()
+        rm = get_resource_manager()
+        if rm is None:
+            log.error("VoxelizerComponent: resource manager is not configured.")
+            return False
         grid = rm.get_voxel_grid(name)
 
         if grid is None:

@@ -22,6 +22,7 @@ setup(
         "numpy",
         "tcbase",
         "tmesh",
+        "termin-assets",
         "termin-components-mesh",
         "termin-components-render",
         "termin-inspect",
