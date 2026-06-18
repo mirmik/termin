@@ -10,6 +10,7 @@ from termin.project_build.runtime_package_exporter import RuntimePackageExportDi
 from termin.project_build.target_build_common import resolve_gradle, resolve_termin_root
 
 
+ANDROID_BUILD_SCRIPT = "build-android-apk.sh"
 QUEST_OPENXR_BUILD_SCRIPT = "build-quest-openxr-apk.sh"
 
 
@@ -21,12 +22,54 @@ class TargetPreflightError(RuntimeError):
 
 
 @dataclass
+class AndroidPreflightResult:
+    termin_root: Path
+    build_script: Path
+    gradle: Path | None
+    diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
+
+
+@dataclass
 class QuestOpenXRPreflightResult:
     termin_root: Path
     build_script: Path
     android_sdk_root: Path
     gradle: Path | None
     diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
+
+
+def preflight_android_build(
+    termin_root: str | Path | None,
+    build_script: str | Path | None,
+    gradle: str | Path | None,
+) -> AndroidPreflightResult:
+    target_name = "Android"
+    diagnostics: list[RuntimePackageExportDiagnostic] = []
+
+    resolved_termin_root = _resolve_required_termin_root(
+        termin_root,
+        ANDROID_BUILD_SCRIPT,
+        target_name,
+        diagnostics,
+    )
+    _raise_if_errors(target_name, diagnostics)
+
+    resolved_build_script = _resolve_build_script(
+        resolved_termin_root,
+        build_script,
+        ANDROID_BUILD_SCRIPT,
+        target_name,
+        diagnostics,
+    )
+    resolved_gradle = _resolve_checked_gradle(gradle, target_name, diagnostics)
+    _raise_if_errors(target_name, diagnostics)
+
+    return AndroidPreflightResult(
+        termin_root=resolved_termin_root,
+        build_script=resolved_build_script,
+        gradle=resolved_gradle,
+        diagnostics=diagnostics,
+    )
 
 
 def preflight_quest_openxr_build(
@@ -41,6 +84,7 @@ def preflight_quest_openxr_build(
 
     resolved_termin_root = _resolve_required_termin_root(
         termin_root,
+        QUEST_OPENXR_BUILD_SCRIPT,
         target_name,
         diagnostics,
     )
@@ -49,6 +93,7 @@ def preflight_quest_openxr_build(
     resolved_build_script = _resolve_build_script(
         resolved_termin_root,
         build_script,
+        QUEST_OPENXR_BUILD_SCRIPT,
         target_name,
         diagnostics,
     )
@@ -74,13 +119,14 @@ def preflight_quest_openxr_build(
 
 def _resolve_required_termin_root(
     termin_root: str | Path | None,
+    marker_script_name: str,
     target_name: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> Path:
     try:
         return resolve_termin_root(
             termin_root,
-            marker_script_name=QUEST_OPENXR_BUILD_SCRIPT,
+            marker_script_name=marker_script_name,
             target_name=target_name,
         )
     except FileNotFoundError as exc:
@@ -97,13 +143,14 @@ def _resolve_required_termin_root(
 def _resolve_build_script(
     termin_root: Path,
     build_script: str | Path | None,
+    default_script_name: str,
     target_name: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> Path:
     if build_script is not None:
         script = Path(build_script).expanduser().resolve()
     else:
-        script = termin_root / QUEST_OPENXR_BUILD_SCRIPT
+        script = termin_root / default_script_name
 
     if not script.exists():
         diagnostics.append(
