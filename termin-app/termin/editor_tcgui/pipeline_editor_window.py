@@ -490,11 +490,11 @@ def _save_graph_to_pipeline_dict(graph) -> dict:
     }
 
 
-def _legacy_pipeline_to_graph(data: dict):
-    """Convert legacy pipeline format (passes) to a node graph.
+def _pass_list_pipeline_to_graph(data: dict):
+    """Convert pass-list pipeline format (passes) to a node graph.
 
     Creates nodes for each pass, positioned vertically. Connections are not
-    reconstructed since the legacy format doesn't store them explicitly.
+    reconstructed since the pass-list format doesn't store them explicitly.
     """
     from tcnodegraph import Graph, GraphController
 
@@ -637,11 +637,11 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
                 data = json.load(f)
             current_file_uuid = data.get("uuid")
 
-            # Legacy format: convert passes to graph nodes
+            # Pass-list format: convert passes to graph nodes.
             if "passes" in data and "nodes" not in data:
-                current_graph = _legacy_pipeline_to_graph(data)
+                current_graph = _pass_list_pipeline_to_graph(data)
                 _set_file(path)
-                _set_status(f"Loaded (legacy, converted): {path}")
+                _set_status(f"Loaded (pass-list, converted): {path}")
             else:
                 current_graph = _load_graph_from_pipeline_dict(data)
                 _set_file(path)
@@ -798,7 +798,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
                 MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
                 MenuItem("Add FBO Split", on_click=lambda: _create_fbo_split_node(wx, wy)),
                 MenuItem("Add FBO Join", on_click=lambda: _create_fbo_join_node(wx, wy)),
-                MenuItem("Add Legacy Render Target", on_click=lambda: _create_output_node(wx, wy)),
+                MenuItem("Add Output Render Target", on_click=lambda: _create_output_node(wx, wy)),
             ]
             return items
 
@@ -824,7 +824,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         items: list[MenuItem] = [
             MenuItem("Add Render Target Input", on_click=lambda: _create_render_target_input_node(wx, wy)),
             MenuItem("Add Pipeline Output", on_click=lambda: _create_pipeline_output_node(wx, wy)),
-            MenuItem("Add Legacy Render Target", on_click=lambda: _create_output_node(wx, wy)),
+            MenuItem("Add Output Render Target", on_click=lambda: _create_output_node(wx, wy)),
             MenuItem.sep(),
             MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
             MenuItem("Add Color Texture", on_click=lambda: _create_resource_node("Color Texture", wx, wy)),

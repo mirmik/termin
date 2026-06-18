@@ -1,6 +1,6 @@
 from termin.editor_tcgui.pipeline_editor_window import (
-    _legacy_pipeline_to_graph,
     _load_graph_from_pipeline_dict,
+    _pass_list_pipeline_to_graph,
     _save_graph_to_pipeline_dict,
 )
 from tcgui.scene import GraphicsWidgetItem
@@ -31,8 +31,8 @@ def test_pipeline_graph_load_populates_node_params_and_sockets():
     assert [socket.name for socket in pass_node.outputs] == ["output_res"]
 
 
-def test_legacy_pipeline_to_graph_populates_pass_params():
-    graph = _legacy_pipeline_to_graph(
+def test_pass_list_pipeline_to_graph_populates_pass_params():
+    graph = _pass_list_pipeline_to_graph(
         {
             "passes": [
                 {

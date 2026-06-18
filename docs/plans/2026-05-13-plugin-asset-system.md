@@ -155,10 +155,18 @@ helpers now live under `termin.render.material_asset`,
 `termin.render.shader_plugin`, `termin.render.shader_interface`, and
 `termin.render.pipeline_dependencies`. The old app modules remain
 compatibility re-exports, and `termin-render` now declares the `material` and
-`shader` asset plugin entry points. Remaining render asset follow-ups:
-`PipelineAsset`/`ScenePipelineAsset` still live in `termin-app`, and material
-file parse/save paths still use the app `ResourceManager` facade at runtime for
-typed lookups.
+`shader` asset plugin entry points.
+
+Status 2026-06-18: render pipeline asset runtime moved to `termin-render`.
+`PipelineAsset`, `ScenePipelineAsset`, their import/runtime plugins, and the
+`pipeline`/`scene_pipeline` entry points now live under
+`termin.render.pipeline_asset`, `termin.render.scene_pipeline_asset`,
+`termin.render.pipeline_plugin`, and `termin.render.scene_pipeline_plugin`.
+The old `termin.assets.pipeline_*` and `termin.assets.scene_pipeline_*` modules
+remain compatibility re-exports. Remaining render asset follow-ups: material
+file parse/save and pipeline pass-list deserialization still use the app
+`ResourceManager` facade at runtime for typed lookups, and live pipeline reload
+notifications still bridge through the app `RenderingManager` when available.
 
 ### Domain Packages
 
