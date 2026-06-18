@@ -56,6 +56,7 @@ Initial schema:
 
 ```json
 {
+  "version": 1,
   "profiles": {
     "dev": {
       "target": "desktop",

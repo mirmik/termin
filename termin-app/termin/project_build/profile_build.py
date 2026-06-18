@@ -13,6 +13,7 @@ from termin.project_build import build_android_project, build_desktop_project, b
 
 
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
+BUILD_PROFILE_SCHEMA_VERSION = 1
 
 
 class ProfileBuildError(RuntimeError):
@@ -74,6 +75,7 @@ def load_build_profile(project_root: Path, profiles_path: Path, profile_name: st
     project_root = project_root.resolve()
     profiles_path = profiles_path.resolve()
     root = _read_json_object(profiles_path)
+    _validate_schema_version(root, context=str(profiles_path))
     profiles = _required_object(root, "profiles", context=str(profiles_path))
     raw_profile = _required_object(profiles, profile_name, context="profiles")
 
@@ -222,6 +224,22 @@ def _read_json_object(path: Path) -> Mapping[str, Any]:
     if not isinstance(data, dict):
         raise ProfileBuildError(f"build profiles root must be a JSON object: {path}")
     return data
+
+
+def _validate_schema_version(data: Mapping[str, Any], context: str) -> None:
+    value = data.get("version")
+    if value is None:
+        raise ProfileBuildError(
+            f"{context} must contain integer field 'version' with value "
+            f"{BUILD_PROFILE_SCHEMA_VERSION}"
+        )
+    if not isinstance(value, int):
+        raise ProfileBuildError(f"{context} field 'version' must be an integer")
+    if value != BUILD_PROFILE_SCHEMA_VERSION:
+        raise ProfileBuildError(
+            f"{context} has unsupported build profile schema version {value}; "
+            f"supported version is {BUILD_PROFILE_SCHEMA_VERSION}"
+        )
 
 
 def _required_object(data: Mapping[str, Any], key: str, context: str) -> Mapping[str, Any]:
