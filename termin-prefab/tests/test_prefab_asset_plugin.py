@@ -2,7 +2,7 @@ from pathlib import Path
 
 from termin.prefab.asset import PrefabAsset
 from termin.prefab.asset_plugin import create_import_plugin, create_runtime_plugin
-from termin_assets import AssetContext, PreLoadResult
+from termin_assets import AssetContext, PreLoadResult, set_resource_manager_factory
 
 
 class FakeResourceManager:
@@ -78,11 +78,28 @@ def test_prefab_entry_point_factories() -> None:
     assert create_runtime_plugin().type_id == "prefab"
 
 
+def test_prefab_instance_marker_uses_configured_resource_manager() -> None:
+    from termin.prefab.instance_marker import PrefabInstanceMarker
+
+    asset = PrefabAsset(name="Enemy", uuid="prefab-uuid")
+    resource_manager = FakeResourceManager()
+    resource_manager.by_uuid[asset.uuid] = asset
+
+    set_resource_manager_factory(lambda: resource_manager)
+    try:
+        marker = PrefabInstanceMarker(prefab_uuid=asset.uuid)
+        assert marker.get_prefab_asset() is asset
+    finally:
+        set_resource_manager_factory(None)
+
+
 def test_prefab_legacy_paths_reexport_canonical_classes() -> None:
     from termin.assets.prefab_asset import PrefabAsset as AppPrefabAsset
     from termin.assets.prefab_plugin import PrefabImportPlugin as AppPrefabImportPlugin
-
-    from termin.prefab.asset_plugin import PrefabImportPlugin
+    from termin.default_assets.prefab.asset import PrefabAsset as DefaultPrefabAsset
+    from termin.default_assets.prefab.asset_plugin import PrefabImportPlugin as DefaultPrefabImportPlugin
 
     assert AppPrefabAsset is PrefabAsset
-    assert AppPrefabImportPlugin is PrefabImportPlugin
+    assert AppPrefabImportPlugin is DefaultPrefabImportPlugin
+    assert DefaultPrefabAsset is PrefabAsset
+    assert DefaultPrefabImportPlugin is type(create_import_plugin())

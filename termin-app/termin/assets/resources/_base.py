@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from termin.animation.asset import AnimationClipAsset
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
-    from termin.default_assets.prefab.asset import PrefabAsset
+    from termin.prefab.asset import PrefabAsset
     from termin.assets.glb_asset import GLBAsset
     from termin.default_assets.audio.asset import AudioClipAsset
 

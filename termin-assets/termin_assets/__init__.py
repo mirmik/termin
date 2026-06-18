@@ -30,7 +30,11 @@ from termin_assets.default_plugins import (
 from termin_assets.preload import PreLoadResult
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
-from termin_assets.resource_handle import ResourceHandle, set_resource_manager_factory
+from termin_assets.resource_handle import (
+    ResourceHandle,
+    get_resource_manager,
+    set_resource_manager_factory,
+)
 from termin_assets.resource_manager import AssetRuntimeManager
 from termin_assets.spec_file import get_uuid_from_spec, read_spec_file, write_spec_file
 
@@ -58,6 +62,7 @@ __all__ = [
     "ProjectFileWatcher",
     "ResourceHandle",
     "get_uuid_from_spec",
+    "get_resource_manager",
     "register_combined_plugins_from_entry_points",
     "register_default_asset_plugins",
     "register_default_import_asset_plugins",

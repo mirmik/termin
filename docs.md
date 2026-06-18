@@ -20,6 +20,7 @@
 - [termin-gui](termin-gui/docs/index.md) - tcgui widgets, layout, dialogs, canvas.
 - [tcplot](docs/modules.md#tcplot) - plotting поверх tgfx/tcgui.
 - [termin-scene](termin-scene/docs/index.md) - scene/ECS ownership, handles, lifecycle.
+- [termin-prefab](termin-prefab/docs/index.md) - prefab runtime, asset integration, overrides.
 - [termin-inspect](termin-inspect/docs/index.md) - inspect/kind/field metadata.
 - [termin-collision](termin-collision/docs/index.md) - collision world, colliders, algorithms.
 - [termin-modules](termin-modules/docs/index.md) - module descriptors, lifecycle, callbacks.

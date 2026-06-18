@@ -10,6 +10,7 @@ from termin_assets import (
     PreLoadResult,
     ResourceHandle,
     build_import_plugin_extension_map,
+    get_resource_manager,
     get_uuid_from_spec,
     register_default_import_asset_plugins,
     register_default_runtime_asset_plugins,
@@ -49,6 +50,23 @@ def test_resource_handle_can_lookup_assets_by_uuid() -> None:
 
     assert handle.get_asset() is asset
     assert missing.get_asset() is None
+
+
+def test_resource_manager_factory_is_publicly_readable() -> None:
+    class FakeResourceManager:
+        pass
+
+    manager = FakeResourceManager()
+
+    from termin_assets import set_resource_manager_factory
+
+    set_resource_manager_factory(lambda: manager)
+    try:
+        assert get_resource_manager() is manager
+    finally:
+        set_resource_manager_factory(None)
+
+    assert get_resource_manager() is None
 
 
 class DummyPlugin:
