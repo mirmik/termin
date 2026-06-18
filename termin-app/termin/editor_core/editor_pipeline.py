@@ -1,6 +1,6 @@
 """Editor render pipeline factory."""
 
-from termin.visualization.render.framegraph import RenderPipeline
+from termin.render_framework import RenderPipeline
 
 
 def make_editor_pipeline() -> RenderPipeline:
@@ -11,23 +11,23 @@ def make_editor_pipeline() -> RenderPipeline:
         RenderPipeline configured for editor use.
     """
     from termin._native.editor import EditorInteractionSystem
-    from termin.visualization.render.framegraph import (
+    from termin.render_components import DepthPass
+    from termin.render_framework import ResourceSpec
+    from termin.render_passes import (
+        BloomPass,
         ColorPass,
+        HighlightPass,
         IdPass,
         PresentToScreenPass,
+        ResolvePass,
+        ShadowPass,
+        SkyBoxPass,
+        TonemapPass,
     )
-    from termin.visualization.render.framegraph.passes.present import ResolvePass
-    from termin.visualization.render.framegraph.resource_spec import ResourceSpec
     from termin.visualization.render.framegraph.passes.unified_gizmo import UnifiedGizmoPass
     from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
     from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
-    from termin.visualization.render.framegraph.passes.depth import DepthPass
-    from termin.visualization.render.framegraph.passes.skybox import SkyBoxPass
-    from termin.visualization.render.framegraph.passes.shadow import ShadowPass
     from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
-    from termin.visualization.render.framegraph.passes.tonemap import TonemapPass
-    from termin.visualization.render.framegraph.passes.bloom_pass import BloomPass
-    from termin.visualization.render.framegraph.passes.highlight import HighlightPass
 
     def get_gizmo_manager():
         sys = EditorInteractionSystem.instance()
