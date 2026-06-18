@@ -28,3 +28,5 @@
 - [Layout-only ColorPass binding migration](2026-06-11-layout-only-color-pass-binding.md)
 - [Material Pipeline Slang migration](2026-06-12-material-pipeline-slang-plan.md)
 - [D3D11 backend readiness](2026-06-15-d3d11-backend-readiness-plan.md)
+- [Project build/runtime packaging target architecture](2026-06-17-build-system-target-architecture.md)
+- [Project build pipeline execution plan](2026-06-18-project-build-pipeline-execution-plan.md)
