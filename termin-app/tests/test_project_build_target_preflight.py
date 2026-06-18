@@ -2,7 +2,20 @@ from pathlib import Path
 
 import pytest
 
-from termin.project_build.target_preflight import TargetPreflightError, preflight_quest_openxr_build
+from termin.project_build.target_preflight import (
+    TargetPreflightError,
+    preflight_android_build,
+    preflight_quest_openxr_build,
+)
+
+
+def _write_android_root(tmp_path: Path) -> Path:
+    termin_root = tmp_path / "termin-root"
+    termin_root.mkdir()
+    build_script = termin_root / "build-android-apk.sh"
+    build_script.write_text("#!/bin/sh\n", encoding="utf-8")
+    build_script.chmod(0o755)
+    return termin_root
 
 
 def _write_quest_root(tmp_path: Path) -> Path:
@@ -43,6 +56,66 @@ def _assert_single_error(exc: TargetPreflightError, path_part: str, message_part
     assert diagnostic.level == "error"
     assert path_part in diagnostic.path
     assert message_part in diagnostic.message
+
+
+def test_preflight_android_accepts_valid_environment(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("GRADLE_BIN", raising=False)
+    termin_root = _write_android_root(tmp_path)
+    gradle = _write_fake_gradle(tmp_path)
+
+    result = preflight_android_build(
+        termin_root=termin_root,
+        build_script=None,
+        gradle=gradle,
+    )
+
+    assert result.termin_root == termin_root.resolve()
+    assert result.build_script == termin_root.resolve() / "build-android-apk.sh"
+    assert result.gradle == gradle.resolve()
+    assert result.diagnostics == []
+
+
+def test_preflight_android_reports_missing_root_marker(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("GRADLE_BIN", raising=False)
+    termin_root = tmp_path / "termin-root"
+    termin_root.mkdir()
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_android_build(
+            termin_root=termin_root,
+            build_script=None,
+            gradle=None,
+        )
+
+    _assert_single_error(exc_info.value, "termin_root", "build-android-apk.sh")
+
+
+def test_preflight_android_reports_missing_explicit_build_script(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("GRADLE_BIN", raising=False)
+    termin_root = _write_android_root(tmp_path)
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_android_build(
+            termin_root=termin_root,
+            build_script=tmp_path / "missing-build-android-apk.sh",
+            gradle=None,
+        )
+
+    _assert_single_error(exc_info.value, "missing-build-android-apk.sh", "build script does not exist")
+
+
+def test_preflight_android_reports_missing_explicit_gradle(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("GRADLE_BIN", raising=False)
+    termin_root = _write_android_root(tmp_path)
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_android_build(
+            termin_root=termin_root,
+            build_script=None,
+            gradle=tmp_path / "missing-gradle",
+        )
+
+    _assert_single_error(exc_info.value, "missing-gradle", "Gradle executable does not exist")
 
 
 def test_preflight_quest_openxr_accepts_valid_environment(tmp_path: Path, monkeypatch) -> None:
