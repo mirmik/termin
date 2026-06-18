@@ -106,10 +106,10 @@ Status 2026-06-18: the mesh asset adapter was moved again from `termin-mesh`
 to `termin-default-assets` under `termin.default_assets.mesh`. `termin-mesh`
 now stays focused on `tmesh`/mesh resource data and does not declare a
 `termin-assets` dependency or mesh asset plugin entry points. The old app
-modules `termin.assets.mesh_asset` and `termin.loaders.mesh_spec` remain
-compatibility re-exports. The unused `termin.assets.mesh_plugin`,
-`termin.loaders.obj_loader`, and `termin.loaders.stl_loader` shims were removed
-on 2026-06-18; use `termin.default_assets.mesh.*` paths directly.
+module `termin.assets.mesh_asset` remains a compatibility re-export. Obsolete
+app-path shims for `termin.assets.mesh_plugin`, `termin.loaders.mesh_spec`,
+`termin.loaders.obj_loader`, and `termin.loaders.stl_loader` were removed on
+2026-06-18; use `termin.default_assets.mesh.*` paths directly.
 `termin-default-assets` exposes import/runtime plugin entry points for `mesh`;
 GLB remains app-owned until the importer package boundary is decided.
 
@@ -186,10 +186,10 @@ Status 2026-06-18 cleanup: unused app compatibility modules
 
 Status 2026-06-18: texture handles and simple texture helper/singleton wrappers
 moved to `termin-render` as `termin.render.texture_handle` and
-`termin.render.texture`. The old app module `termin.visualization.render.texture`
-was removed on 2026-06-18. `termin.assets.texture_handle` remains temporarily
-because app C++ handle helpers still import it by string. The Python API is now
-canonical in `termin-render`; the underlying native `TextureHandle` binding
+`termin.render.texture`. The old app modules `termin.visualization.render.texture`
+and `termin.assets.texture_handle` were removed on 2026-06-18 after app C++
+handle helpers were redirected to canonical Python modules. The Python API is
+now canonical in `termin-render`; the underlying native `TextureHandle` binding
 still comes from the transitional app-owned `termin._native.assets` module and
 remains a C++ extraction follow-up.
 

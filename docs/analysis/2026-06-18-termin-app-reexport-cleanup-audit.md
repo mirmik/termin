@@ -26,7 +26,8 @@ Audit counts:
 Cleanup status:
 - First unused cleanup batch started on 2026-06-18.
 - Removed `31` unused app compatibility modules with no live direct code imports.
-- Kept `termin.assets.texture_handle` because C++ still imports it by string.
+- Follow-up cleanup removed `termin.loaders.mesh_spec` and
+  `termin.assets.texture_handle` after redirecting their remaining consumers.
 - Kept CLI/entrypoint compatibility paths because they may be used outside normal Python import scans.
 
 There are enough leftovers to justify a dedicated cleanup pass, but they should not all be removed in one sweep. `termin.assets.resources` is still an active app-owned runtime implementation, and `termin.visualization.*` is still used as a shared runtime facade by app code and external component packages.
@@ -68,12 +69,12 @@ Native anchors:
 
 These C++ inline handle helpers import `termin.assets.resources` directly. They need a stable bridge or canonical resource-runtime package before the old app path can be removed.
 
-Broken or suspicious legacy path:
-- `termin-app/cpp/termin/assets/handles_inline.hpp` imports `termin.visualization.render.texture_asset`.
-- No `termin-app/termin/visualization/render/texture_asset.py` exists.
-- Visible canonical candidates are:
-  - `termin.render.texture_asset`
-  - `termin.default_assets.render.texture_asset`
+C++ texture handle cleanup:
+- `termin-app/cpp/termin/assets/handles_inline.hpp` now imports
+  `termin.default_assets.render.texture_asset` for `TextureAsset`.
+- `get_white_texture_handle()` now imports `termin.render.texture_handle`.
+- `termin.assets.texture_handle` was removed after the string import was
+  redirected.
 
 Clean after tests-only usage is redirected:
 - `termin.assets.animation_clip_asset` -> `termin.animation.asset`
@@ -94,7 +95,7 @@ Clean after tests-only usage is redirected:
 - `termin.assets.ui_plugin` -> `termin.default_assets.ui.asset_plugin`
 - `termin.assets.voxel_grid_asset` -> `termin.default_assets.voxels.asset`
 
-Removed in the first unused cleanup batch:
+Removed app asset shims:
 - `termin.assets.audio_clip_plugin`
 - `termin.assets.default_plugins`
 - `termin.assets.glsl_asset`
@@ -110,11 +111,9 @@ Removed in the first unused cleanup batch:
 - `termin.assets.shader_interface`
 - `termin.assets.shader_plugin`
 - `termin.assets.texture_asset`
+- `termin.assets.texture_handle`
 - `termin.assets.texture_plugin`
 - `termin.assets.voxel_grid_plugin`
-
-Unused direct-import shims still blocked or deferred:
-- `termin.assets.texture_handle` is still imported from C++ in `termin-app/cpp/termin/assets/handles_inline.hpp`.
 
 Still production-used app asset shims:
 - `termin.assets.asset`
@@ -187,7 +186,8 @@ Explicit compatibility modules:
 - `termin.loaders.texture_spec` -> `termin.default_assets.render.texture_spec`
 
 Current status:
-- `termin.loaders.mesh_spec` is test-only.
+- `termin.loaders.mesh_spec` was removed after tests moved to
+  `termin.default_assets.mesh.mesh_spec`.
 - `termin.loaders.obj_loader` was removed in the first unused cleanup batch.
 - `termin.loaders.stl_loader` was removed in the first unused cleanup batch.
 - `termin.loaders.texture_spec` was removed in the first unused cleanup batch.
@@ -253,11 +253,12 @@ Policy decision needed:
 ## Suggested First Pass
 
 Low-risk cleanup batch:
-- Convert tests away from `termin.loaders.mesh_spec`.
+- Converted tests away from `termin.loaders.mesh_spec` and removed the shim.
 - Removed unused `termin.loaders.obj_loader`, `termin.loaders.stl_loader`, and `termin.loaders.texture_spec`.
 - Redirect `termin.core.profiler` production imports to `tcbase.profiler`.
 - Redirect `termin.core.identifiable` production imports to `termin_assets.identifiable`.
-- Fix the C++ `termin.visualization.render.texture_asset` import to a real canonical module.
+- Fixed the C++ `termin.visualization.render.texture_asset` import to
+  `termin.default_assets.render.texture_asset`.
 
 Asset cleanup batch:
 - Convert test-only `termin.assets.<domain asset/plugin>` imports to canonical domain packages.
