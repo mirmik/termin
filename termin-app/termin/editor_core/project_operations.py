@@ -296,7 +296,7 @@ class ProjectOperations:
     ) -> None:
         if choice != "Yes":
             return
-        from termin.loaders.glb_extractor import extract_glb
+        from termin.glb.extractor import extract_glb
         try:
             output_dir, _created = extract_glb(glb_path, output_dir)
         except Exception as e:

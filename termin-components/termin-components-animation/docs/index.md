@@ -14,4 +14,5 @@ Animation component package for entity-level animation playback/control.
 
 ## Публичный API
 
-Component-level animation API is installed through this package and participates in the canonical `termin.animation_components` namespace.
+The native component implementation lives here. The Python wrapper namespace is
+shipped by `termin-animation` as `termin.animation_components`.

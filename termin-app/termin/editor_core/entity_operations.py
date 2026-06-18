@@ -240,7 +240,7 @@ class EntityOperations:
         parent: Entity | None,
         world_position: tuple[float, float, float] | None = None,
     ) -> None:
-        from termin.loaders.glb_instantiator import instantiate_glb
+        from termin.glb.instantiator import instantiate_glb
         from termin.assets.resources import ResourceManager
 
         rm = ResourceManager.instance()

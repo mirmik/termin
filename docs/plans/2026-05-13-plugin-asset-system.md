@@ -105,8 +105,7 @@ now stays focused on `tmesh`/mesh resource data and does not declare a
 modules `termin.assets.mesh_asset`, `termin.assets.mesh_plugin`,
 `termin.loaders.{mesh_spec,obj_loader,stl_loader}`, and old domain paths under
 `termin.mesh` are compatibility re-exports. `termin-default-assets` exposes
-import/runtime plugin entry points for `mesh`; GLB remains app-owned until the
-importer package boundary is decided.
+import/runtime plugin entry points for `mesh`.
 
 Status 2026-06-18: the same default-adapter boundary was applied to navmesh,
 voxel, audio, and render asset families. `NavMeshAsset`, `NavMeshHandle`,
@@ -138,13 +137,23 @@ Prefab resource lookups use the process resource-manager factory from
 app-owned boundary is the concrete typed lookup surface still implemented by
 the app `ResourceManager`.
 
+Status 2026-06-18: GLB/glTF ownership moved from `termin-app` to a dedicated
+`termin-glb` importer package. `termin.glb` now owns the loader, `GLBAsset`,
+GLB import/runtime plugins, runtime instantiator, and extractor helpers.
+`termin.assets.glb_asset`, `termin.assets.glb_plugin`, and
+`termin.loaders.glb_*` modules are compatibility re-exports. `GLBAsset` and
+`instantiate_glb` use the process resource-manager factory from
+`termin-assets`; the app `ResourceManager` still provides the concrete typed
+child-asset and material/texture lookup methods.
+
 Status 2026-06-17: default asset plugin composition moved from
 `termin.assets.default_plugins` to `termin_assets.default_plugins`.
 `termin-app` now declares its remaining app-owned asset plugins through
 `termin.asset_import_plugins` and `termin.asset_runtime_plugins` entry points,
 and the old app module is only a compatibility re-export. This removes the app
 as the central registry hub for already-extracted domain plugins; the remaining
-technical debt is the GLB/importer ownership and app facade boundaries.
+technical debt is the app facade boundary and the concrete typed lookup
+surface still implemented by the app `ResourceManager`.
 
 Status 2026-06-17: the shared runtime-management core moved to
 `termin_assets.resource_manager.AssetRuntimeManager`. It owns the UUID index,
@@ -247,8 +256,10 @@ back on it.
   import/runtime plugin entry points.
 - `termin.prefab`: `PrefabAsset`, `.prefab` import/runtime plugin entry
   points, prefab instance markers, registry, and override path helpers.
-- Future importer-style adapters should move here or to a dedicated importer
-  package when they are not pure domain runtime.
+- `termin.glb`: GLB/glTF loader, `GLBAsset`, GLB import/runtime plugin entry
+  points, runtime instantiator, and extraction helpers.
+- Future importer-style adapters should move to dedicated importer packages
+  when they are not pure domain runtime.
 
 ### Importer Packages
 
@@ -261,7 +272,8 @@ Examples:
 
 Good homes:
 
-- `termin-importers`
+- `termin-glb` for GLB/glTF
+- `termin-importers` if several importer formats need a shared umbrella later
 - `termin-scene-assets`
 - another explicit multi-domain importer package
 
@@ -344,10 +356,10 @@ The migrated runtime/import plugins currently cover:
 - `pipeline`
 - `scene_pipeline`
 
-Remaining work is no longer central dispatch replacement. The next pressure points are
-moving GLB/importer plugins out of `termin-app`, reducing direct plugin access to
-`ResourceManager` private registries, and deciding the long-term home for render
-asset dependency refresh.
+Remaining work is no longer central dispatch replacement. The next pressure
+points are reducing typed `ResourceManager` surface area, formalizing GLB child
+asset registration, and deciding the long-term home for render asset dependency
+refresh.
 
 ### Typed ResourceManager API
 
@@ -364,7 +376,11 @@ These can remain as compatibility/domain convenience facades during the first mi
 
 ### GLB Child Assets
 
-GLB currently creates child assets for meshes, skeletons, and animations. The plugin API must support registering additional child assets into the shared UUID/name index.
+GLB currently creates child assets for meshes, skeletons, and animations.
+`termin-glb` uses the app `ResourceManager` public child-asset factory methods
+for this during the migration. The plugin API should eventually support
+registering additional child assets into the shared UUID/name index without a
+GLB-specific typed manager surface.
 
 This should be designed intentionally; otherwise GLB will keep forcing type-specific knowledge back into the central manager.
 
@@ -411,7 +427,8 @@ Move plugins gradually:
 - Skeleton support to `termin-skeleton`.
 - Navmesh support to `termin-default-assets`.
 - UI support to `termin-default-assets`.
-- GLB/FBX importers to `termin-importers` or equivalent.
+- GLB support to `termin-glb`; FBX and future multi-domain importers to
+  equivalent dedicated importer packages.
 
 Each adapter package should expose asset plugin entry points:
 
@@ -465,7 +482,8 @@ termin-render
 termin-animation
 termin-skeleton
 termin-navmesh
-termin-importers
+termin-default-assets
+termin-glb
   ↑
 termin-app
 ```
@@ -476,7 +494,7 @@ termin-app
 
 - Namespace packaging: `termin.*` packages already share a namespace. Moving modules between packages needs careful `setup.py`/package exclusion updates.
 - Build order: plugin packages must be installed after `termin-assets` and before `termin-app`.
-- GLB/FBX ownership: multi-domain importers need a deliberate home.
+- FBX/future importer ownership: multi-domain importers need deliberate homes.
 - Hot reload behavior: shader/material/pipeline dependency refresh must remain intact.
 - Existing code may rely on typed `ResourceManager` methods; do not remove them in the first pass.
 - Tests may be hard to run on Windows until native DLL environment setup is reliable.

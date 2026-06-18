@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from termin.default_assets.mesh.asset import MeshAsset
     from tmesh import TcMesh
     from termin.render.texture_handle import TextureHandle
-    from termin.assets.glb_asset import GLBAsset
+    from termin.glb.asset import GLBAsset
     from termin.render.texture import Texture
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin.materials import ShaderMultyPhaseProgramm
@@ -110,6 +110,37 @@ class AssetsMixin:
     def get_glb_asset(self, name: str) -> Optional["GLBAsset"]:
         """Get GLBAsset by name."""
         return self._glb_assets.get(name)
+
+    def get_glb_asset_by_uuid(self, uuid: str) -> Optional["GLBAsset"]:
+        """Get GLBAsset by UUID."""
+        from termin.glb.asset import GLBAsset
+
+        asset = self._assets_by_uuid.get(uuid)
+        if asset is not None and isinstance(asset, GLBAsset):
+            return asset
+        return None
+
+    def register_glb_asset(
+        self,
+        name: str,
+        asset: "GLBAsset",
+        source_path: str | None = None,
+    ) -> None:
+        """Register a GLBAsset."""
+        self._glb_assets[name] = asset
+        self._assets_by_uuid[asset.uuid] = asset
+        if source_path:
+            asset.source_path = source_path
+
+    def unregister_glb_asset(self, name: str) -> None:
+        """Remove a GLBAsset by name."""
+        asset = self._glb_assets.pop(name, None)
+        if asset is not None:
+            self._assets_by_uuid.pop(asset.uuid, None)
+
+    def list_glb_names(self) -> list[str]:
+        """List all registered GLB asset names."""
+        return sorted(self._glb_assets.keys())
 
     # --------- Materials ---------
     def get_material_asset(self, name: str) -> Optional["MaterialAsset"]:

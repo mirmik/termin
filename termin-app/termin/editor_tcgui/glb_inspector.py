@@ -93,7 +93,7 @@ class GLBInspectorTcgui(VStack):
             self._path_v.text = file_path
 
             try:
-                from termin.loaders.glb_loader import load_glb_file
+                from termin.glb.loader import load_glb_file
                 data = load_glb_file(file_path)
                 self._meshes_v.text = str(len(data.meshes))
                 self._textures_v.text = str(len(data.textures))

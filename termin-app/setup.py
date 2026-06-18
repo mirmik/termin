@@ -52,7 +52,9 @@ if __name__ == "__main__":
                 "termin.mesh", "termin.mesh.*",                 # termin-components-mesh
                 "termin.engine", "termin.engine.*",             # termin-engine
                 "termin.skeleton", "termin.skeleton.*",         # termin-skeleton
+                "termin.skeleton_components", "termin.skeleton_components.*",  # termin-skeleton
                 "termin.animation", "termin.animation.*",       # termin-animation
+                "termin.animation_components", "termin.animation_components.*",  # termin-animation
                 "termin.audio",                                 # termin-audio core
                 "termin.physics", "termin.physics.*",           # termin-physics
                 "termin.navmesh", "termin.navmesh.*",           # termin-navmesh
@@ -104,6 +106,7 @@ if __name__ == "__main__":
             "termin-assets",
             "termin-default-assets",
             "termin-prefab",
+            "termin-glb",
             "termin-tween",
             "termin-components-tween",
             "termin-audio",
@@ -120,13 +123,5 @@ if __name__ == "__main__":
         ],
         ext_modules=native_extensions_for_source(_DIR),
         cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
-        entry_points={
-            "termin.asset_import_plugins": [
-                "glb = termin.assets.glb_plugin:GLBImportPlugin",
-            ],
-            "termin.asset_runtime_plugins": [
-                "glb = termin.assets.glb_plugin:GLBRuntimePlugin",
-            ],
-        },
         zip_safe=False,
     )
