@@ -244,6 +244,16 @@ Output:
 - normalized `BuildContext`;
 - fatal diagnostics if target cannot be built.
 
+Status 2026-06-18: initial Quest/OpenXR target preflight exists as
+`termin.project_build.target_preflight.preflight_quest_openxr_build`. It resolves
+the Quest build script, Android SDK root and Gradle path before package export,
+and reports fatal environment problems through structured diagnostics carried by
+`TargetPreflightError`. Current checks cover target root marker, build script
+existence, Android SDK root, requested ABI, ABI `lib` directory, OpenXR CMake
+package and explicitly configured Gradle paths. Remaining Phase 0 work: Android
+preflight, desktop SDK/Python runtime preflight, profile entry/output safety and
+SDK capability manifest integration.
+
 ### Phase 1: Project Graph Analysis
 
 Input:

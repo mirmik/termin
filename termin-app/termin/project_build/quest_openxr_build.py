@@ -16,7 +16,8 @@ from termin.project_build.runtime_package_exporter import (
     export_runtime_package,
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
-from termin.project_build.target_build_common import read_log_tail, resolve_gradle, resolve_termin_root
+from termin.project_build.target_build_common import read_log_tail
+from termin.project_build.target_preflight import preflight_quest_openxr_build
 
 
 QUEST_OPENXR_APPLICATION_ID = "org.termin.openxr"
@@ -63,6 +64,14 @@ def build_quest_openxr_project(
     apk_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
+    preflight_result = preflight_quest_openxr_build(
+        termin_root=termin_root,
+        build_script=build_script,
+        gradle=gradle,
+        abi=abi,
+        platform=platform,
+    )
+
     preload_project_resources(project_root_path, "[QuestOpenXRBuild]")
 
     package_result = export_runtime_package(
@@ -74,24 +83,20 @@ def build_quest_openxr_project(
     )
     package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
 
-    termin_root_path = _resolve_quest_termin_root(termin_root)
-    build_script_path = _resolve_quest_build_script(termin_root_path, build_script)
-    android_sdk_root = _resolve_termin_android_sdk_root(termin_root_path)
-    _validate_termin_android_sdk(android_sdk_root, abi, platform, termin_root_path)
     log_path = logs_dir / "quest-openxr-build.log"
     _run_quest_build_script(
-        build_script=build_script_path,
+        build_script=preflight_result.build_script,
         package_dir=package_result.package_dir,
         log_path=log_path,
-        gradle=resolve_gradle(gradle),
-        android_sdk_root=android_sdk_root,
+        gradle=preflight_result.gradle,
+        android_sdk_root=preflight_result.android_sdk_root,
         abi=abi,
         platform=platform,
         log_callback=log_callback,
     )
 
     source_apk = (
-        termin_root_path
+        preflight_result.termin_root
         / "build"
         / "android-gradle-openxr"
         / "app"
@@ -112,6 +117,7 @@ def build_quest_openxr_project(
         apk_path=apk_path,
         log_path=log_path,
         diagnostics=[
+            *preflight_result.diagnostics,
             *package_result.diagnostics,
             *package_validation_diagnostics,
         ],
@@ -177,76 +183,6 @@ def _resolve_quest_dist_dir(project_root: Path, project_name: str, output_dir: s
     if output_dir is not None:
         return Path(output_dir).resolve()
     return (project_root / "dist" / "quest_openxr" / project_name).resolve()
-
-
-def _resolve_quest_termin_root(termin_root: str | Path | None) -> Path:
-    return resolve_termin_root(
-        termin_root,
-        marker_script_name="build-quest-openxr-apk.sh",
-        target_name="Quest/OpenXR",
-    )
-
-
-def _resolve_quest_build_script(termin_root: Path, build_script: str | Path | None) -> Path:
-    if build_script is not None:
-        script = Path(build_script).resolve()
-    else:
-        script = termin_root / "build-quest-openxr-apk.sh"
-    if not script.exists():
-        raise FileNotFoundError(f"Quest/OpenXR build script does not exist: {script}")
-    return script
-
-
-def _resolve_termin_android_sdk_root(termin_root: Path) -> Path:
-    env_sdk_root = os.environ.get("TERMIN_ANDROID_SDK_ROOT")
-    if env_sdk_root:
-        return Path(env_sdk_root).expanduser().resolve()
-    return (termin_root / "sdk" / "android").resolve()
-
-
-def _validate_termin_android_sdk(
-    android_sdk_root: Path,
-    abi: str,
-    platform: str,
-    termin_root: Path,
-) -> None:
-    sdk_prefix = android_sdk_root / abi
-    sdk_lib_dir = sdk_prefix / "lib"
-    openxr_config = sdk_lib_dir / "cmake" / "termin_openxr" / "termin_openxrConfig.cmake"
-
-    if not android_sdk_root.exists():
-        raise FileNotFoundError(
-            "Termin Android SDK is not installed.\n"
-            f"Expected SDK root: {android_sdk_root}\n"
-            "Build and install it first:\n"
-            f"  {termin_root / 'build-sdk-android.sh'} --abi {abi} --platform {platform}\n"
-            "Or set TERMIN_ANDROID_SDK_ROOT to another Android SDK root."
-        )
-
-    if not sdk_prefix.exists():
-        raise FileNotFoundError(
-            "Termin Android SDK is missing the requested ABI.\n"
-            f"Expected ABI prefix: {sdk_prefix}\n"
-            "Build and install it first:\n"
-            f"  {termin_root / 'build-sdk-android.sh'} --abi {abi} --platform {platform}\n"
-            "Or choose an ABI that exists in the Termin Android SDK."
-        )
-
-    if not sdk_lib_dir.is_dir():
-        raise FileNotFoundError(
-            "Termin Android SDK ABI prefix is incomplete: lib directory is missing.\n"
-            f"Expected lib directory: {sdk_lib_dir}\n"
-            "Rebuild and reinstall the Android SDK:\n"
-            f"  {termin_root / 'build-sdk-android.sh'} --abi {abi} --platform {platform}"
-        )
-
-    if not openxr_config.is_file():
-        raise FileNotFoundError(
-            "Termin Android SDK is installed, but OpenXR support is missing.\n"
-            f"Expected CMake package: {openxr_config}\n"
-            "Rebuild and reinstall the Android SDK with termin-openxr enabled:\n"
-            f"  {termin_root / 'build-sdk-android.sh'} --abi {abi} --platform {platform}"
-        )
 
 
 def _run_quest_build_script(

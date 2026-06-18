@@ -1085,6 +1085,9 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
             encoding="utf-8",
         )
     build_script.chmod(0o755)
+    fake_gradle = tmp_path / "fake-gradle"
+    fake_gradle.write_text("# fake gradle\n", encoding="utf-8")
+    fake_gradle.chmod(0o755)
 
     validation_diagnostic = RuntimePackageExportDiagnostic(
         "warning",
@@ -1104,7 +1107,7 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
         entry_scene="Main.scene",
         termin_root=termin_root,
         build_script=build_script,
-        gradle="/tmp/fake-gradle",
+        gradle=fake_gradle,
         shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
