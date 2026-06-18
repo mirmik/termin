@@ -73,7 +73,10 @@ def refresh_loaded_materials_for_shader(
     from termin.default_assets.render.shader_asset import update_material_shader
 
     updated: set[str] = set()
-    for material_name, material_asset in resource_manager._material_assets.items():
+    for material_name in resource_manager.list_material_names():
+        material_asset = resource_manager.get_material_asset(material_name)
+        if material_asset is None:
+            continue
         if not material_asset.is_loaded:
             continue
 
@@ -108,7 +111,10 @@ def reload_pipelines_for_material_dependencies(resource_manager, material_names:
         return
 
     reloaded_pipelines: list[str] = []
-    for pipeline_name, pipeline_asset in resource_manager._pipeline_registry.assets.items():
+    for pipeline_name in resource_manager.list_pipeline_names():
+        pipeline_asset = resource_manager.get_pipeline_asset(pipeline_name)
+        if pipeline_asset is None:
+            continue
         if not pipeline_asset.uses_material_names(material_names):
             continue
         if pipeline_asset.reload():
@@ -120,7 +126,10 @@ def reload_pipelines_for_material_dependencies(resource_manager, material_names:
             )
 
     reloaded_scene_pipelines: list[str] = []
-    for pipeline_name, pipeline_asset in resource_manager._scene_pipeline_registry.assets.items():
+    for pipeline_name in resource_manager.list_scene_pipeline_names():
+        pipeline_asset = resource_manager.get_scene_pipeline_asset(pipeline_name)
+        if pipeline_asset is None:
+            continue
         if not pipeline_asset.uses_material_names(material_names):
             continue
         if pipeline_asset.reload():

@@ -136,6 +136,14 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
             names.append(name)
         _set_tab(tab_name, rows, names)
 
+    def _asset_map(list_names, get_asset):
+        result = {}
+        for name in list_names():
+            asset = get_asset(name)
+            if asset is not None:
+                result[name] = asset
+        return result
+
     # --- Materials ---
     def _refresh_materials():
         rows = []
@@ -148,7 +156,7 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
 
     # --- Asset tabs ---
     def _refresh_shaders():
-        _refresh_asset_tab("Shaders", rm._shader_assets)
+        _refresh_asset_tab("Shaders", _asset_map(rm.list_shader_names, rm.get_shader_asset))
 
     def _refresh_meshes():
         _refresh_asset_tab("Meshes", rm._mesh_assets)
@@ -341,7 +349,7 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
         details.text = "\n".join(lines)
 
     def _show_shader_details(name: str):
-        asset = rm._shader_assets.get(name)
+        asset = rm.get_shader_asset(name)
         if asset is None:
             details.text = f"Shader '{name}' not found"
             return
@@ -529,7 +537,7 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
 
         asset = None
         if tab == "Shaders":
-            asset = rm._shader_assets.get(name)
+            asset = rm.get_shader_asset(name)
         elif tab == "Meshes":
             asset = rm._mesh_assets.get(name)
         elif tab == "Textures":
