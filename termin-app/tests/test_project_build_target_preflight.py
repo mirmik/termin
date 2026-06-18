@@ -4,6 +4,7 @@ import pytest
 
 from termin.project_build.target_preflight import (
     TargetPreflightError,
+    preflight_project_build_context,
     preflight_android_build,
     preflight_quest_openxr_build,
 )
@@ -56,6 +57,126 @@ def _assert_single_error(exc: TargetPreflightError, path_part: str, message_part
     assert diagnostic.level == "error"
     assert path_part in diagnostic.path
     assert message_part in diagnostic.message
+
+
+def test_preflight_project_context_accepts_project_dist_output(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    scene = project / "Main.scene"
+    scene.write_text("{}", encoding="utf-8")
+
+    result = preflight_project_build_context(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "android" / "Game",
+        target_name="Android",
+    )
+
+    assert result.project_root == project.resolve()
+    assert result.entry_scene == scene.resolve()
+    assert result.output_dir == (project / "dist" / "android" / "Game").resolve()
+    assert result.diagnostics == []
+
+
+def test_preflight_project_context_accepts_empty_external_output(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    (project / "Main.scene").write_text("{}", encoding="utf-8")
+    output_dir = tmp_path / "external-output"
+    output_dir.mkdir()
+
+    result = preflight_project_build_context(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=output_dir,
+        target_name="Desktop",
+    )
+
+    assert result.output_dir == output_dir.resolve()
+    assert result.diagnostics == []
+
+
+def test_preflight_project_context_reports_missing_entry_scene(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_project_build_context(
+            project_root=project,
+            entry_scene="Missing.scene",
+            output_dir=project / "dist" / "android" / "Game",
+            target_name="Android",
+        )
+
+    _assert_single_error(exc_info.value, "Missing.scene", "Entry scene does not exist")
+
+
+def test_preflight_project_context_reports_entry_scene_escape(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    outside_scene = tmp_path / "Outside.scene"
+    outside_scene.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_project_build_context(
+            project_root=project,
+            entry_scene=outside_scene,
+            output_dir=project / "dist" / "android" / "Game",
+            target_name="Android",
+        )
+
+    _assert_single_error(exc_info.value, "Outside.scene", "Entry scene must stay inside project root")
+
+
+def test_preflight_project_context_reports_project_root_output(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    (project / "Main.scene").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_project_build_context(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=project,
+            target_name="Android",
+        )
+
+    _assert_single_error(exc_info.value, str(project), "Refusing to use project root")
+
+
+def test_preflight_project_context_reports_project_internal_output_outside_dist(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    (project / "Main.scene").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_project_build_context(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=project / "BuildOutput",
+            target_name="Android",
+        )
+
+    _assert_single_error(exc_info.value, "BuildOutput", "outside dist/")
+
+
+def test_preflight_project_context_reports_non_empty_external_output(tmp_path: Path) -> None:
+    project = tmp_path / "Game"
+    project.mkdir()
+    (project / "Main.scene").write_text("{}", encoding="utf-8")
+    output_dir = tmp_path / "external-output"
+    output_dir.mkdir()
+    (output_dir / "existing.txt").write_text("keep me\n", encoding="utf-8")
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_project_build_context(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=output_dir,
+            target_name="Desktop",
+        )
+
+    _assert_single_error(exc_info.value, "external-output", "non-empty external build output")
 
 
 def test_preflight_android_accepts_valid_environment(tmp_path: Path, monkeypatch) -> None:

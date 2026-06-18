@@ -17,7 +17,7 @@ from termin.project_build.runtime_package_exporter import (
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
 from termin.project_build.target_build_common import read_log_tail
-from termin.project_build.target_preflight import preflight_quest_openxr_build
+from termin.project_build.target_preflight import preflight_project_build_context, preflight_quest_openxr_build
 
 
 QUEST_OPENXR_APPLICATION_ID = "org.termin.openxr"
@@ -58,6 +58,12 @@ def build_quest_openxr_project(
     project_root_path = Path(project_root).resolve()
     project_name = read_project_name(project_root_path)
     dist_dir = _resolve_quest_dist_dir(project_root_path, project_name, output_dir)
+    project_preflight_result = preflight_project_build_context(
+        project_root=project_root_path,
+        entry_scene=entry_scene,
+        output_dir=dist_dir,
+        target_name="Quest/OpenXR",
+    )
     package_dir = dist_dir / "package"
     apk_dir = dist_dir / "apk"
     logs_dir = dist_dir / "logs"
@@ -117,6 +123,7 @@ def build_quest_openxr_project(
         apk_path=apk_path,
         log_path=log_path,
         diagnostics=[
+            *project_preflight_result.diagnostics,
             *preflight_result.diagnostics,
             *package_result.diagnostics,
             *package_validation_diagnostics,
