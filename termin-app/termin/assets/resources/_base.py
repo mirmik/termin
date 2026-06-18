@@ -325,7 +325,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.assets.pipeline_asset import PipelineAsset
+            from termin.render.pipeline_asset import PipelineAsset
             return PipelineAsset
 
         return AssetRegistry(
@@ -351,7 +351,7 @@ class ResourceManagerBase(AssetRuntimeManager):
             return None
 
         def get_asset_class():
-            from termin.assets.scene_pipeline_asset import ScenePipelineAsset
+            from termin.render.scene_pipeline_asset import ScenePipelineAsset
             return ScenePipelineAsset
 
         return AssetRegistry(

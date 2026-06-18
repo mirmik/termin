@@ -63,3 +63,21 @@ def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
     assert extension_map[".uiscript"].type_id == "ui"
     assert extension_map[".glb"].type_id == "glb"
     assert extension_map[".gltf"].type_id == "glb"
+
+
+def test_render_pipeline_asset_legacy_paths_reexport_canonical_classes() -> None:
+    from termin.assets.pipeline_asset import PipelineAsset as AppPipelineAsset
+    from termin.assets.pipeline_plugin import PipelineImportPlugin as AppPipelineImportPlugin
+    from termin.assets.scene_pipeline_asset import ScenePipelineAsset as AppScenePipelineAsset
+    from termin.assets.scene_pipeline_plugin import (
+        ScenePipelineImportPlugin as AppScenePipelineImportPlugin,
+    )
+    from termin.render.pipeline_asset import PipelineAsset
+    from termin.render.pipeline_plugin import PipelineImportPlugin
+    from termin.render.scene_pipeline_asset import ScenePipelineAsset
+    from termin.render.scene_pipeline_plugin import ScenePipelineImportPlugin
+
+    assert AppPipelineAsset is PipelineAsset
+    assert AppPipelineImportPlugin is PipelineImportPlugin
+    assert AppScenePipelineAsset is ScenePipelineAsset
+    assert AppScenePipelineImportPlugin is ScenePipelineImportPlugin

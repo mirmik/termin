@@ -311,7 +311,7 @@ class PipelineInspectorTcgui(VStack):
 
         if pipeline is None:
             if path.suffix.lower() == ".scene_pipeline":
-                from termin.assets.scene_pipeline_asset import ScenePipelineAsset
+                from termin.render.scene_pipeline_asset import ScenePipelineAsset
 
                 asset = ScenePipelineAsset(name=name, source_path=path)
                 try:
@@ -323,7 +323,7 @@ class PipelineInspectorTcgui(VStack):
                     log.error(f"[PipelineInspectorTcgui] failed to load scene pipeline {file_path}: {e}")
                     pipeline = None
             else:
-                from termin.assets.pipeline_asset import PipelineAsset
+                from termin.render.pipeline_asset import PipelineAsset
 
                 asset = PipelineAsset(name=name, source_path=path)
                 pipeline = asset.pipeline

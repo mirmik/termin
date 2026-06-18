@@ -121,16 +121,12 @@ if __name__ == "__main__":
         entry_points={
             "termin.asset_import_plugins": [
                 "glb = termin.assets.glb_plugin:GLBImportPlugin",
-                "pipeline = termin.assets.pipeline_plugin:PipelineImportPlugin",
                 "prefab = termin.assets.prefab_plugin:PrefabImportPlugin",
-                "scene_pipeline = termin.assets.scene_pipeline_plugin:ScenePipelineImportPlugin",
                 "ui = termin.assets.ui_plugin:UIImportPlugin",
             ],
             "termin.asset_runtime_plugins": [
                 "glb = termin.assets.glb_plugin:GLBRuntimePlugin",
-                "pipeline = termin.assets.pipeline_plugin:PipelineRuntimePlugin",
                 "prefab = termin.assets.prefab_plugin:PrefabRuntimePlugin",
-                "scene_pipeline = termin.assets.scene_pipeline_plugin:ScenePipelineRuntimePlugin",
                 "ui = termin.assets.ui_plugin:UIRuntimePlugin",
             ],
         },
