@@ -18,7 +18,7 @@ from tcbase import log
 from termin.render_framework import TcScenePipelineTemplate
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph.pipeline import RenderPipeline
+    from termin.render_framework import RenderPipeline
 
 
 class ScenePipelineAsset(Asset):
@@ -145,7 +145,7 @@ class ScenePipelineAsset(Asset):
     def _deserialize_pipeline(self, data: dict) -> "RenderPipeline | None":
         """Deserialize pipeline format directly."""
         try:
-            from termin.visualization.render.framegraph.pipeline import RenderPipeline
+            from termin.render_framework import RenderPipeline
             from termin_assets import get_resource_manager
 
             rm = get_resource_manager()

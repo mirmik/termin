@@ -238,6 +238,8 @@ class ResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeManager)
     def instance(cls) -> "ResourceManagerBase":
         if cls._instance is None:
             cls._instance = cls()
+            from termin_assets import set_resource_manager_factory
+            set_resource_manager_factory(cls.instance)
             from termin.assets.builtin_resources import register_all_builtins
             register_all_builtins(cls._instance)
         return cls._instance
@@ -246,3 +248,5 @@ class ResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeManager)
     def _reset_for_testing(cls) -> None:
         """Reset singleton instance. For testing only."""
         cls._instance = None
+        from termin_assets import set_resource_manager_factory
+        set_resource_manager_factory(cls.instance)

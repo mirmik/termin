@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from termin.render.texture import Texture
     from termin.render.texture_handle import TextureHandle
     from termin.scene import Entity, GeneralTransform3
-    from termin.visualization.render.framegraph.pipeline import RenderPipeline
+    from termin.render_framework import RenderPipeline
     from termin.voxels.grid import VoxelGrid
     from tmesh import TcMesh
 
