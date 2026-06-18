@@ -50,8 +50,11 @@ Base infrastructure:
 Status 2026-05-27: `Identifiable`, `Asset`, `DataAsset`, `AssetRegistry`, and
 `ResourceHandle` were moved into `termin-assets`. The old
 `termin.assets.asset`, `termin.assets.data_asset`, `termin.assets.asset_registry`,
-`termin.assets.resource_handle`, and `termin.core.identifiable` modules are now
-compatibility re-exports so existing imports keep working during the migration.
+and `termin.assets.resource_handle` modules are now compatibility re-exports so
+existing imports keep working during the migration. The
+`termin.core.identifiable` submodule shim was removed on 2026-06-18; use
+`termin_assets.identifiable` directly. `from termin.core import Identifiable`
+still works through the package facade.
 
 Status 2026-06-17: `FilePreLoader`, `ProjectFileWatcher`, and `PluginPreLoader`
 were moved into `termin-assets`. The generic watcher now accepts an injected

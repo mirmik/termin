@@ -32,7 +32,7 @@ class World:
 
     def update(self, dt: float) -> None:
         """Обновляет все сцены."""
-        from termin.core.profiler import Profiler
+        from tcbase.profiler import Profiler
         profiler = Profiler.instance()
 
         with profiler.section("World"):
