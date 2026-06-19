@@ -74,6 +74,12 @@ tgfx::Text3DRenderer::Anchor to_tgfx_anchor(WorldTextAnchor anchor) {
     }
 }
 
+void extract_view_row3(const Mat44f& view, int row, float out[3]) {
+    out[0] = view(0, row);
+    out[1] = view(1, row);
+    out[2] = view(2, row);
+}
+
 std::string sanitize_phase_mark(const std::string& value) {
     if (value.empty()) {
         return "transparent";
@@ -302,16 +308,10 @@ bool WorldTextComponent::draw_tgfx2(tgfx::RenderContext2& ctx2,
     }
 
     Mat44f mvp = context.projection * context.view;
-    float cam_right[3] = {
-        context.view(0, 0),
-        context.view(0, 1),
-        context.view(0, 2),
-    };
-    float cam_up[3] = {
-        context.view(1, 0),
-        context.view(1, 1),
-        context.view(1, 2),
-    };
+    float cam_right[3]{};
+    float cam_up[3]{};
+    extract_view_row3(context.view, 0, cam_right);
+    extract_view_row3(context.view, 1, cam_up);
 
     Vec3 world_pos = context.model.transform_point(local_offset);
     float position[3] = {

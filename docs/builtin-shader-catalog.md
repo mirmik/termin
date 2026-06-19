@@ -54,6 +54,17 @@ reflection-derived metadata for generated Slang artifacts. It is intentionally
 named as a layout sidecar so the runtime can migrate toward the scope-first
 bind-by-name model without changing the package shape later.
 
+## Resource scope policy
+
+Resources that need stable engine buckets must declare `scope` explicitly in
+the catalog or via Slang `[[TerminScope("...")]]` reflection metadata. This
+includes `frame`, `pass`, `material`, and `draw` resources.
+
+Resources without an explicit scope are treated as `transient`. The shader
+compiler, sidecar loader, and live built-in catalog loader share this default;
+they must not infer non-transient scopes from resource names such as
+`material`, `draw_data`, or `u_params`.
+
 ## Current entries
 
 | UUID | Name | Stage | Language | Source |
