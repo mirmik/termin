@@ -41,8 +41,13 @@ phases such as depth, normal, and id remain mesh-only.
 `WorldTextComponent` draws stable world-space labels through the existing
 `termin-graphics` Text3D renderer. It is a C++ drawable component exported as
 `termin.render_components.WorldTextComponent`, with inspectable fields for
-`text`, `font_path`, `local_offset`, `color`, `size`, `anchor`, `phase_mark`,
-and render-state flags.
+`text`, `font_path`, `local_offset`, `plane_normal`, `text_up`, `color`,
+`size`, `anchor`, `orientation`, `phase_mark`, and render-state flags.
+
+`orientation="billboard"` faces the text toward the active camera.
+`orientation="fixed"` builds the text plane from `plane_normal` and `text_up`:
+`plane_normal` is the plane normal, while `text_up` defines where the top of
+the glyphs points after being projected into that plane.
 
 The component uses direct tgfx2 rendering in the selected material phase
 (`transparent` by default) and exports the `termin-engine-text3d` built-in
