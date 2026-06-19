@@ -437,3 +437,61 @@ def test_build_project_compiles_slang_shader_usages_for_vulkan_and_opengl(tmp_pa
     assert all("--language" in call and call[call.index("--language") + 1] == "slang" for call in calls)
     assert {call[call.index("--target") + 1] for call in calls} == {"vulkan", "opengl"}
     assert all("--layout-scheme" not in call for call in calls)
+
+
+def test_build_project_can_compile_slang_shader_usages_for_d3d11(tmp_path: Path) -> None:
+    project = tmp_path / "D3D11ShaderGame"
+    project.mkdir()
+    _write_json(project / "game.terminproj", {"version": 1, "name": "D3D11ShaderGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+
+    calls_path = tmp_path / "shaderc_calls.jsonl"
+    compiler = tmp_path / "fake_termin_shaderc.py"
+    compiler.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, pathlib, sys\n"
+        f"calls = pathlib.Path({str(calls_path)!r})\n"
+        "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
+        "target = sys.argv[sys.argv.index('--target') + 1]\n"
+        "out.parent.mkdir(parents=True, exist_ok=True)\n"
+        "out.write_bytes(('ARTIFACT-' + target).encode('ascii'))\n"
+        "with calls.open('a', encoding='utf-8') as f:\n"
+        "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n",
+        encoding="utf-8",
+    )
+    compiler.chmod(0o755)
+
+    result = build_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "D3D11ShaderGame",
+        compile_shaders=True,
+        shader_usages=[_FakeSlangShader()],
+        shader_compiler=compiler,
+        shader_targets=("vulkan", "opengl", "d3d11"),
+    )
+
+    assert (
+        result.output_dir / "assets" / "shaders" / "d3d11" / "slang-shader-phase-uuid.vs.cso"
+    ).read_bytes() == b"ARTIFACT-d3d11"
+    assert (
+        result.output_dir / "assets" / "shaders" / "d3d11" / "slang-shader-phase-uuid.ps.cso"
+    ).read_bytes() == b"ARTIFACT-d3d11"
+
+    by_type = {}
+    for resource in result.manifest.resources:
+        by_type.setdefault(resource.type, set()).add(resource.build_path)
+    assert by_type["shader_dxbc"] == {
+        "assets/shaders/d3d11/slang-shader-phase-uuid.vs.cso",
+        "assets/shaders/d3d11/slang-shader-phase-uuid.ps.cso",
+    }
+
+    calls = [
+        json.loads(line)
+        for line in calls_path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert {call[call.index("--target") + 1] for call in calls} == {
+        "vulkan",
+        "opengl",
+        "d3d11",
+    }

@@ -33,6 +33,12 @@ D3D11 shader artifact and layout path that a future backend can consume.
 - Status update 2026-06-19: the Windows-only builtin shader matrix compiles
   82 Slang stages from `termin-graphics/resources/builtin_shaders` to D3D11
   `.cso` artifacts with real `slangc` and `fxc`, including layout sidecars.
+- Status update 2026-06-19: project-builder and runtime-package export paths
+  can explicitly request `shader_targets=["vulkan", "opengl", "d3d11"]`.
+  D3D11 artifacts are emitted as `shaders/d3d11/<uuid>.vs.cso` and
+  `shaders/d3d11/<uuid>.ps.cso`, and runtime manifests record the requested
+  shader target requirements. D3D11 is still opt-in so Linux/Android builds do
+  not require Windows SDK `fxc`.
 - `BackendType::D3D11` exists and `TERMIN_BACKEND=d3d11` / `dx11` parses.
 - Runtime artifact paths already reserve `shaders/d3d11/<uuid>.<stage>.cso`
   with D3D stage suffixes such as `.vs.cso` and `.ps.cso`.
@@ -305,6 +311,9 @@ Tasks:
    - simple material pass;
    - skinned or `bone_block` shader after basic material path works.
 4. Extend runtime package/export paths to optionally include D3D11 artifacts.
+   Status: optional D3D11 artifact output is wired for project-builder and
+   runtime-package exporter APIs; target wrappers still need a user-facing
+   profile/CLI option for selecting it.
 5. Add CI/build documentation for required Windows SDK tools.
 
 Acceptance:

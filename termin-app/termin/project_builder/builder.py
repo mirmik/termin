@@ -22,10 +22,12 @@ def build_project(
     include_engine_shaders: bool = False,
     shader_usages: Iterable[object] | None = None,
     shader_compiler: str | Path | None = None,
+    shader_targets: Iterable[str] | None = None,
 ) -> BuildProjectResult:
     project_root_path = Path(project_root).resolve()
     output_dir_path = Path(output_dir).resolve()
     entry_scene_path = Path(entry_scene)
+    shader_targets_tuple = tuple(shader_targets) if shader_targets is not None else None
 
     scanner = ProjectScanner(
         project_root=project_root_path,
@@ -44,6 +46,7 @@ def build_project(
                 shader_usages=shader_usages,
                 output_dir=output_dir_path,
                 shader_compiler=Path(shader_compiler) if shader_compiler is not None else None,
+                shader_targets=shader_targets_tuple,
             )
         )
 
@@ -54,6 +57,7 @@ def build_project(
                 project_root=project_root_path,
                 output_dir=output_dir_path,
                 shader_compiler=Path(shader_compiler) if shader_compiler is not None else None,
+                shader_targets=shader_targets_tuple,
             )
         )
 
@@ -68,6 +72,7 @@ def build_project(
             output_dir_path / "assets",
             diagnostics,
             Path(shader_compiler) if shader_compiler is not None else None,
+            shader_targets_tuple,
         )
         for diagnostic in diagnostics:
             manifest.diagnostics.append(_build_diagnostic_from_runtime(diagnostic))
