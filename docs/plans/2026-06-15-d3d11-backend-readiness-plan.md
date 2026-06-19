@@ -30,6 +30,9 @@ D3D11 shader artifact and layout path that a future backend can consume.
   graphics pipeline creation, resource set binding, `tc_shader` artifact
   loading, canonical `tc_texture`/`tc_mesh` materialization, and a
   `RenderContext2` fullscreen-quad path.
+- Status update 2026-06-19: the Windows-only builtin shader matrix compiles
+  82 Slang stages from `termin-graphics/resources/builtin_shaders` to D3D11
+  `.cso` artifacts with real `slangc` and `fxc`, including layout sidecars.
 - `BackendType::D3D11` exists and `TERMIN_BACKEND=d3d11` / `dx11` parses.
 - Runtime artifact paths already reserve `shaders/d3d11/<uuid>.<stage>.cso`
   with D3D stage suffixes such as `.vs.cso` and `.ps.cso`.
