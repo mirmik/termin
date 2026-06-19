@@ -272,14 +272,18 @@ a window, `RenderingManager`, display surfaces, or render passes. It is intended
 for tests and simulation-only checks:
 
 ```bash
+termin play --headless
 termin play --headless --frames 10 --dt 0.0166667
 ```
 
-In headless mode `termin.player` loads the scene with no render scene
-extensions by default and calls `scene.update(dt)` for the requested frame
-count. It does not call `scene.before_render()` or `RenderingManager.render_all`.
-Use `--no-assets` and `--no-modules` for narrow smoke tests that do not need
-project asset discovery or module loading.
+In headless mode `termin.player` loads the scene without render scene
+extensions and calls `scene.update(dt)` in a loop until the project requests
+quit or the process is interrupted. `--frames` adds an explicit frame limit for
+finite smoke checks. It attaches the collision world scene extension by default
+so simulation-only physics can run without a window or `RenderingManager`. It
+does not call `scene.before_render()` or `RenderingManager.render_all`. Use
+`--no-assets` and `--no-modules` for narrow smoke tests that do not need project
+asset discovery or module loading.
 
 `termin_runner run --mode project` remains only as a lower-level compatibility
 path. The user-facing command for source project playback is `termin play`.

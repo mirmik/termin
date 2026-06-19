@@ -241,7 +241,7 @@ void print_help() {
         << "  --backend <name>          Set TERMIN_BACKEND for the player process.\n"
         << "  --scene <path>            Select source scene for play/project mode.\n"
         << "  --headless                Forward to termin.player source project headless mode.\n"
-        << "  --frames <count>          Forward to termin.player --headless frame count.\n"
+        << "  --frames <count>          Limit termin.player --headless to a finite frame count.\n"
         << "  --dt <seconds>            Forward to termin.player --headless timestep.\n"
         << "  --width <pixels>          Forward to termin.player.\n"
         << "  --height <pixels>         Forward to termin.player.\n"

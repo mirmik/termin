@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -22,6 +23,7 @@ class HeadlessRuntimeError(RuntimeError):
 class HeadlessRunStats:
     frames: int
     simulated_time: float
+    exit_code: int = 0
 
 
 class HeadlessRuntime:
@@ -36,7 +38,7 @@ class HeadlessRuntime:
         load_assets: bool = True,
         register_builtin_resources: bool = True,
         include_render_resources: bool = False,
-        scene_extensions: Sequence[int] = (),
+        scene_extensions: Sequence[int] | None = None,
     ) -> None:
         self.project_path = Path(project_path)
         self.scene_name = scene_name
@@ -44,11 +46,17 @@ class HeadlessRuntime:
         self.load_assets = load_assets
         self.register_builtin_resources = register_builtin_resources
         self.include_render_resources = include_render_resources
-        self.scene_extensions = tuple(scene_extensions)
+        self.scene_extensions = (
+            _default_headless_scene_extensions()
+            if scene_extensions is None
+            else tuple(scene_extensions)
+        )
         self.scene = None
         self.frames = 0
         self.simulated_time = 0.0
         self.initialized = False
+        self.running = False
+        self.exit_code = 0
 
     def initialize(self) -> None:
         from tcbase import log
@@ -87,17 +95,67 @@ class HeadlessRuntime:
     def run_frames(self, frames: int, dt: float = 1.0 / 60.0) -> HeadlessRunStats:
         if frames < 0:
             raise ValueError("frames must be non-negative")
-        if not self.initialized:
-            self.initialize()
-        for _index in range(frames):
-            self.step(dt)
-        return HeadlessRunStats(frames=self.frames, simulated_time=self.simulated_time)
+        return self._run_loop(frame_limit=frames, dt=dt, realtime=False)
+
+    def run_forever(
+        self,
+        dt: float = 1.0 / 60.0,
+        *,
+        realtime: bool = True,
+    ) -> HeadlessRunStats:
+        return self._run_loop(frame_limit=None, dt=dt, realtime=realtime)
+
+    def request_quit(self, exit_code: int = 0) -> None:
+        self.exit_code = int(exit_code)
+        self.running = False
 
     def shutdown(self) -> None:
         if self.scene is not None and self.scene.is_alive():
             self.scene.destroy()
         self.scene = None
         self.initialized = False
+        self.running = False
+
+    def _run_loop(
+        self,
+        *,
+        frame_limit: int | None,
+        dt: float,
+        realtime: bool,
+    ) -> HeadlessRunStats:
+        if dt < 0.0:
+            raise ValueError("dt must be non-negative")
+        if not self.initialized:
+            self.initialize()
+
+        from tcbase import log
+        import termin.player.runtime as player_runtime
+
+        previous_runtime = player_runtime._active_runtime
+        player_runtime._active_runtime = self
+        self.running = True
+        completed = 0
+        try:
+            while self.running and (frame_limit is None or completed < frame_limit):
+                frame_started_at = time.perf_counter()
+                self.step(dt)
+                completed += 1
+                if realtime and dt > 0.0:
+                    elapsed = time.perf_counter() - frame_started_at
+                    remaining = dt - elapsed
+                    if remaining > 0.0:
+                        time.sleep(remaining)
+        except KeyboardInterrupt:
+            log.info("[HeadlessRuntime] Interrupted by user")
+        finally:
+            player_runtime._active_runtime = previous_runtime
+            self.running = False
+
+        return HeadlessRunStats(
+            frames=self.frames,
+            simulated_time=self.simulated_time,
+            exit_code=self.exit_code,
+        )
 
     def _load_scene(self):
         scene_path = self.project_path / self.scene_name
@@ -143,11 +201,19 @@ def _extract_scene_data(data: object) -> dict:
     return scene_data
 
 
+def _default_headless_scene_extensions() -> tuple[int, ...]:
+    from termin._native import register_default_scene_extensions
+    from termin.visualization.core.scene import SCENE_EXT_TYPE_COLLISION_WORLD
+
+    register_default_scene_extensions()
+    return (SCENE_EXT_TYPE_COLLISION_WORLD,)
+
+
 def run_headless_project(
     project_path: str | Path,
     scene_name: str,
     *,
-    frames: int = 1,
+    frames: int | None = None,
     dt: float = 1.0 / 60.0,
     load_modules: bool = True,
     load_assets: bool = True,
@@ -159,6 +225,8 @@ def run_headless_project(
         load_assets=load_assets,
     )
     try:
+        if frames is None:
+            return runtime.run_forever(dt=dt)
         return runtime.run_frames(frames=frames, dt=dt)
     finally:
         runtime.shutdown()
