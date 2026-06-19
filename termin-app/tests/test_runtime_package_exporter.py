@@ -6,7 +6,12 @@ import numpy as np
 import pytest
 
 from termin.project_build import android_build, build_desktop_project, export_runtime_package, quest_openxr_build
-from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic, _material_textures_to_json
+from termin.project_build.runtime_package_exporter import (
+    ENGINE_TEXT3D_SHADER_UUID,
+    RuntimePackageExportDiagnostic,
+    _default_pipeline_engine_shaders,
+    _material_textures_to_json,
+)
 from termin.player.runtime_package_loader import _material_texture_resources_from_shader_spec
 
 
@@ -117,6 +122,12 @@ def test_runtime_material_texture_export_records_builtin_placeholders() -> None:
         "u_albedo_texture": {"kind": "builtin", "name": "white"},
         "u_normal_texture": {"kind": "builtin", "name": "normal"},
     }
+
+
+def test_default_pipeline_exports_world_text_shader() -> None:
+    shader_uuids = {shader.uuid for shader in _default_pipeline_engine_shaders()}
+
+    assert ENGINE_TEXT3D_SHADER_UUID in shader_uuids
 
 
 def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:

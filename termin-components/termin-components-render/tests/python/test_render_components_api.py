@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from termin.materials import TcMaterial
-from termin.render_components import LineRenderer, LineRenderMode
+from termin.render_components import LineRenderer, LineRenderMode, WorldTextAnchor, WorldTextComponent
 
 
 VERTEX = """
@@ -152,6 +152,67 @@ def test_line_renderer_points_are_inspectable():
     assert component.get_field("render_mode") == 4
     assert component.to_python().points == [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
     assert component.to_python().render_mode == LineRenderMode.WorldTube
+
+
+def test_world_text_component_defaults_to_transparent_direct_draw():
+    text = WorldTextComponent("e4", size=0.5)
+
+    assert text.text == "e4"
+    assert text.size == 0.5
+    assert text.anchor == WorldTextAnchor.Center
+    assert text.anchor_name == "center"
+    assert text.depth_test is True
+    assert text.depth_write is False
+    assert text.blend is True
+    assert text.phase_marks == {"transparent"}
+    assert text.get_geometry_draws("opaque") == []
+    assert len(text.get_geometry_draws("transparent")) == 1
+
+
+def test_world_text_component_hides_empty_text_from_draw_contract():
+    text = WorldTextComponent()
+
+    assert text.phase_marks == set()
+    assert text.get_geometry_draws() == []
+
+    text.text = "A"
+    text.phase_mark = "overlay"
+    assert text.phase_marks == {"overlay"}
+    assert len(text.get_geometry_draws()) == 1
+
+
+def test_world_text_component_is_inspectable():
+    from termin.inspect import InspectRegistry
+    from termin.scene import Entity
+
+    registry = InspectRegistry.instance()
+    fields = {field.path: field for field in registry.all_fields("WorldTextComponent")}
+
+    assert fields["text"].label == "Text"
+    assert fields["text"].kind == "string"
+    assert fields["local_offset"].label == "Local Offset"
+    assert fields["local_offset"].kind == "vec3"
+    assert fields["color"].label == "Color"
+    assert fields["color"].kind == "color"
+    assert fields["anchor"].label == "Anchor"
+    assert fields["anchor"].kind == "enum"
+    assert [(choice.value, choice.label) for choice in fields["anchor"].choices] == [
+        ("0", "Left"),
+        ("1", "Center"),
+        ("2", "Right"),
+    ]
+
+    entity = Entity(name="world text")
+    component = entity.add_component_by_name("WorldTextComponent")
+    component.set_field("text", "Nf3")
+    component.set_field("anchor", "2")
+    component.set_field("size", 0.75)
+
+    assert component.get_field("text") == "Nf3"
+    assert component.get_field("anchor") == 2
+    assert component.get_field("size") == 0.75
+    assert component.to_python().anchor == WorldTextAnchor.Right
+    assert component.to_python().anchor_name == "right"
 
 
 def test_depth_conversion_passes_bind_textures_by_reflected_name():

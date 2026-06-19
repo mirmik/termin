@@ -77,6 +77,7 @@ termin_add_module(
         src/mesh_renderer.cpp
         src/skinned_mesh_renderer.cpp
         src/shader_skinning.cpp
+        src/world_text_component.cpp
         src/material_pass.cpp
         src/depth_pass.cpp
         src/normal_pass.cpp
