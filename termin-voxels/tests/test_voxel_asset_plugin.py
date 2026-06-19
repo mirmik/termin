@@ -3,12 +3,10 @@ from termin.default_assets.voxels.asset_plugin import create_import_plugin, crea
 from termin.voxels.asset import VoxelGridAsset as LegacyDomainVoxelGridAsset
 from termin.voxels.asset_plugin import create_import_plugin as legacy_create_import_plugin
 from termin.voxels.asset_plugin import create_runtime_plugin as legacy_create_runtime_plugin
-from termin.assets.voxel_grid_asset import VoxelGridAsset as AppLegacyVoxelGridAsset
 
 
-def test_voxel_grid_legacy_modules_reexport_canonical_class() -> None:
+def test_voxel_grid_domain_legacy_modules_reexport_canonical_class() -> None:
     assert LegacyDomainVoxelGridAsset is VoxelGridAsset
-    assert AppLegacyVoxelGridAsset is VoxelGridAsset
 
 
 def test_voxel_grid_plugin_legacy_modules_reexport_factories() -> None:

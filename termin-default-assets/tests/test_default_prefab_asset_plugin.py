@@ -78,11 +78,7 @@ def test_prefab_entry_point_factories() -> None:
     assert create_runtime_plugin().type_id == "prefab"
 
 
-def test_prefab_legacy_paths_reexport_canonical_classes() -> None:
-    from termin.assets.prefab_asset import PrefabAsset as AppPrefabAsset
-    from termin.assets.prefab_plugin import PrefabImportPlugin as AppPrefabImportPlugin
-
+def test_prefab_plugin_factories_use_canonical_classes() -> None:
     from termin.prefab.asset_plugin import PrefabImportPlugin
 
-    assert AppPrefabAsset is PrefabAsset
-    assert AppPrefabImportPlugin is PrefabImportPlugin
+    assert type(create_import_plugin()) is PrefabImportPlugin

@@ -13,7 +13,7 @@ from termin.visualization.core.python_component import PythonComponent
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph.pipeline import RenderPipeline
+    from termin.render_framework import RenderPipeline
     from termin.visualization.render.framegraph import FramePass
 
 

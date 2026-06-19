@@ -66,13 +66,7 @@ def test_ui_entry_point_factories() -> None:
     assert create_runtime_plugin().type_id == "ui"
 
 
-def test_ui_legacy_paths_reexport_canonical_classes() -> None:
-    from termin.assets.ui_asset import UIAsset as AppUIAsset
-    from termin.assets.ui_handle import UIHandle as AppUIHandle
-    from termin.assets.ui_plugin import UIImportPlugin as AppUIImportPlugin
-
+def test_ui_plugin_factories_use_canonical_classes() -> None:
     from termin.default_assets.ui.asset_plugin import UIImportPlugin
 
-    assert AppUIAsset is UIAsset
-    assert AppUIHandle is UIHandle
-    assert AppUIImportPlugin is UIImportPlugin
+    assert type(create_import_plugin()) is UIImportPlugin

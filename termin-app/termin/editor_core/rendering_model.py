@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Iterator
 from termin.editor_core.signal import Signal
 
 if TYPE_CHECKING:
-    from termin.visualization.core.display import Display
+    from termin.display import Display
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.render_pipeline import RenderPipeline

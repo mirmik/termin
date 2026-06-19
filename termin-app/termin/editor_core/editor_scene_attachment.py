@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from termin.visualization.core.scene import Scene
     from termin.visualization.core.camera import CameraComponent
-    from termin.visualization.core.display import Display
+    from termin.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.entity import Entity
     from termin.visualization.render.framegraph import RenderPipeline

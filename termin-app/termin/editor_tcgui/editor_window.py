@@ -22,13 +22,13 @@ from tcgui.widgets.text_area import TextArea
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
 from termin.engine import SceneManager, scene as engine_scene
 from termin.editor_core.resource_loader import ResourceLoader
-from termin.editor_core.project_file_watcher import ProjectFileWatcher
+from termin.assets.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.default_preloaders import register_default_preloaders
 from termin.editor_core.prefab_edit_controller import PrefabEditController
 from termin.editor_core.settings import EditorSettings
 from termin.editor_core.signal import Signal
 from termin.assets.resources import ResourceManager
-from termin.visualization.platform.backends.fbo_backend import FBOSurface
+from termin.display import FBOSurface
 from termin.visualization.core.scene import default_scene_extensions
 
 from termin.editor_core.editor_state_io import EditorStateIO
@@ -709,7 +709,7 @@ class EditorWindowTcgui:
         self._fbo_surface = FBOSurface(self._ctx.device, 800, 600)
 
         try:
-            from termin.visualization.core.display import Display
+            from termin.display import Display
             display = Display(surface=self._fbo_surface, name="Editor")
             display.connect_input()
             self._editor_display = display

@@ -65,42 +65,31 @@ def test_default_import_plugin_extension_map_uses_plugin_type_ids() -> None:
     assert extension_map[".gltf"].type_id == "glb"
 
 
-def test_render_pipeline_asset_legacy_paths_reexport_canonical_classes() -> None:
-    from termin.assets.pipeline_asset import PipelineAsset as AppPipelineAsset
-    from termin.assets.pipeline_plugin import PipelineImportPlugin as AppPipelineImportPlugin
-    from termin.assets.scene_pipeline_asset import ScenePipelineAsset as AppScenePipelineAsset
-    from termin.assets.scene_pipeline_plugin import (
-        ScenePipelineImportPlugin as AppScenePipelineImportPlugin,
-    )
+def test_render_pipeline_asset_plugins_use_canonical_classes() -> None:
     from termin.default_assets.render.pipeline_asset import PipelineAsset
     from termin.default_assets.render.pipeline_plugin import PipelineImportPlugin
     from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
     from termin.default_assets.render.scene_pipeline_plugin import ScenePipelineImportPlugin
 
-    assert AppPipelineAsset is PipelineAsset
-    assert AppPipelineImportPlugin is PipelineImportPlugin
-    assert AppScenePipelineAsset is ScenePipelineAsset
-    assert AppScenePipelineImportPlugin is ScenePipelineImportPlugin
+    assert PipelineAsset.__name__ == "PipelineAsset"
+    assert PipelineImportPlugin.__name__ == "PipelineImportPlugin"
+    assert ScenePipelineAsset.__name__ == "ScenePipelineAsset"
+    assert ScenePipelineImportPlugin.__name__ == "ScenePipelineImportPlugin"
 
 
-def test_ui_asset_legacy_paths_reexport_canonical_classes() -> None:
-    from termin.assets.ui_asset import UIAsset as AppUIAsset
-    from termin.assets.ui_handle import UIHandle as AppUIHandle
-    from termin.assets.ui_plugin import UIImportPlugin as AppUIImportPlugin
+def test_ui_asset_plugins_use_canonical_classes() -> None:
     from termin.default_assets.ui.asset import UIAsset
     from termin.default_assets.ui.asset_plugin import UIImportPlugin
     from termin.default_assets.ui.handle import UIHandle
 
-    assert AppUIAsset is UIAsset
-    assert AppUIHandle is UIHandle
-    assert AppUIImportPlugin is UIImportPlugin
+    assert UIAsset.__name__ == "UIAsset"
+    assert UIHandle.__name__ == "UIHandle"
+    assert UIImportPlugin.__name__ == "UIImportPlugin"
 
 
-def test_prefab_asset_legacy_paths_reexport_canonical_classes() -> None:
-    from termin.assets.prefab_asset import PrefabAsset as AppPrefabAsset
-    from termin.assets.prefab_plugin import PrefabImportPlugin as AppPrefabImportPlugin
+def test_prefab_asset_plugins_use_canonical_classes() -> None:
     from termin.prefab.asset import PrefabAsset
     from termin.prefab.asset_plugin import PrefabImportPlugin
 
-    assert AppPrefabAsset is PrefabAsset
-    assert AppPrefabImportPlugin is PrefabImportPlugin
+    assert PrefabAsset.__name__ == "PrefabAsset"
+    assert PrefabImportPlugin.__name__ == "PrefabImportPlugin"

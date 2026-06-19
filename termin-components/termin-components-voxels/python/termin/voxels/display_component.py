@@ -23,7 +23,7 @@ from termin.inspect import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.render.render_context import RenderContext
+    from termin.render_framework import RenderContext
 
 
 # Вершины единичного куба (центрирован в origin)

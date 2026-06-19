@@ -206,7 +206,7 @@ class PlayerRuntime:
         # host tgfx2 device so RenderEngine reuses it instead of creating a
         # second device with incompatible texture handles.
         from termin.display._platform_native import SDLBackendWindow
-        from termin.visualization.platform.backends.fbo_backend import FBOSurface
+        from termin.display import FBOSurface
 
         try:
             self.window = SDLBackendWindow(self.title, self.width, self.height)
@@ -215,7 +215,7 @@ class PlayerRuntime:
             return False
 
         # Create display
-        from termin.visualization.core.display import Display
+        from termin.display import Display
 
         self._surface_size = self.window.framebuffer_size()
         surface_width, surface_height = self._surface_size

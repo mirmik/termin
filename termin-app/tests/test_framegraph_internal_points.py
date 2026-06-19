@@ -4,7 +4,7 @@ from typing import List, Tuple
 
 from termin.render_framework.frame_graph_view import PipelineFrameGraphView
 from termin.render_framework.python_pass import PythonFramePass
-from termin.visualization.render.framegraph.pipeline import RenderPipeline
+from termin.render_framework import RenderPipeline
 
 
 def build_pipeline(passes):

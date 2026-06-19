@@ -128,7 +128,7 @@ def test_asset_plugin_registry_can_find_default_import_plugins_by_extension() ->
 
 
 def test_resource_manager_runtime_asset_api_registers_mesh(tmp_path) -> None:
-    from termin.assets.mesh_asset import MeshAsset
+    from termin.default_assets.mesh.asset import MeshAsset
 
     mesh_path = tmp_path / "runtime_api_probe.obj"
     mesh_path.write_text("", encoding="utf-8")

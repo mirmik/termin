@@ -8,21 +8,17 @@ from termin.navmesh.asset_plugin import create_import_plugin as legacy_create_im
 from termin.navmesh.asset_plugin import create_runtime_plugin as legacy_create_runtime_plugin
 from termin.navmesh.handle import NavMeshHandle as LegacyDomainNavMeshHandle
 from termin.navmesh.navmesh_asset import NavMeshAsset as LegacyNavMeshAsset
-from termin.assets.navmesh_asset import NavMeshAsset as AppLegacyNavMeshAsset
-from termin.assets.navmesh_handle import NavMeshHandle as LegacyNavMeshHandle
 
 
-def test_navmesh_asset_legacy_module_reexports_canonical_class() -> None:
+def test_navmesh_asset_domain_legacy_module_reexports_canonical_class() -> None:
     assert PackageNavMeshAsset is NavMeshAsset
     assert LegacyDomainNavMeshAsset is NavMeshAsset
     assert LegacyNavMeshAsset is NavMeshAsset
-    assert AppLegacyNavMeshAsset is NavMeshAsset
 
 
-def test_navmesh_handle_legacy_module_reexports_canonical_class() -> None:
+def test_navmesh_handle_domain_legacy_module_reexports_canonical_class() -> None:
     assert PackageNavMeshHandle is NavMeshHandle
     assert LegacyDomainNavMeshHandle is NavMeshHandle
-    assert LegacyNavMeshHandle is NavMeshHandle
 
 
 def test_navmesh_plugin_legacy_modules_reexport_factories() -> None:

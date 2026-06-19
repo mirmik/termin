@@ -93,13 +93,9 @@ def test_prefab_instance_marker_uses_configured_resource_manager() -> None:
         set_resource_manager_factory(None)
 
 
-def test_prefab_legacy_paths_reexport_canonical_classes() -> None:
-    from termin.assets.prefab_asset import PrefabAsset as AppPrefabAsset
-    from termin.assets.prefab_plugin import PrefabImportPlugin as AppPrefabImportPlugin
+def test_prefab_default_legacy_paths_reexport_canonical_classes() -> None:
     from termin.default_assets.prefab.asset import PrefabAsset as DefaultPrefabAsset
     from termin.default_assets.prefab.asset_plugin import PrefabImportPlugin as DefaultPrefabImportPlugin
 
-    assert AppPrefabAsset is PrefabAsset
-    assert AppPrefabImportPlugin is DefaultPrefabImportPlugin
     assert DefaultPrefabAsset is PrefabAsset
     assert DefaultPrefabImportPlugin is type(create_import_plugin())

@@ -6,7 +6,7 @@ import numpy as np
 
 from termin.geombase import Pose3
 from termin.render_components import MeshRenderer
-from termin.visualization.render.render_context import RenderContext
+from termin.render_framework import RenderContext
 
 
 class SkyboxRenderer(MeshRenderer):
