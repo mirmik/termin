@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from termin.scene import Entity
     from termin.physics.fem_physics_world_component import FEMPhysicsWorldComponent
     from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent
-    from termin.visualization.render.immediate import ImmediateRenderer
+    from termin.render import ImmediateRenderer
 
 
 class FEMRevoluteJointComponent(PythonComponent):

@@ -4,7 +4,7 @@
 // Core ECS types (Entity, Component, ComponentRegistry, TcScene, TcComponentRef,
 // TcComponent) are owned by _scene_native and should be imported from there.
 // This module provides domain-specific bindings: EntityRegistry,
-// OrbitCameraController, InputEvents, TcScene render extensions.
+// OrbitCameraController, TcScene render extensions.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -15,7 +15,6 @@
 #include <tcbase/tc_log.hpp>
 
 #include "../camera/orbit_camera_bindings.hpp"
-#include "../input/input_events_bindings.hpp"
 #include "../../scene_bindings.hpp"
 
 #include <termin/entity/component.hpp>
@@ -50,10 +49,18 @@ void bind_entity_domain(nb::module_& m) {
     // SceneRenderState::skybox_mesh() bindings are attached.
     nb::module_::import_("tmesh._tmesh_native");
 
-    // Import _viewport_native for TcViewport type (used by input events)
+    // Import display native so viewport-bound input event types are registered
+    // before OrbitCameraController bindings reference them.
+    nb::module_ display_native = nb::module_::import_("termin.display._display_native");
+    m.attr("MouseButtonEvent") = display_native.attr("MouseButtonEvent");
+    m.attr("MouseMoveEvent") = display_native.attr("MouseMoveEvent");
+    m.attr("ScrollEvent") = display_native.attr("ScrollEvent");
+    m.attr("KeyEvent") = display_native.attr("KeyEvent");
+
+    // Import _viewport_native for TcViewport type.
     nb::module_::import_("termin.viewport._viewport_native");
 
-    // Import tcbase for Action, MouseButton, Mods enums (used by input events)
+    // Import tcbase for Action, MouseButton, Mods enums.
     nb::module_::import_("tcbase._tcbase_native");
 
     // --- TcScene render extensions (ViewportConfig, background_color, pipelines, etc.) ---
@@ -62,9 +69,6 @@ void bind_entity_domain(nb::module_& m) {
 
     // --- OrbitCameraController ---
     bind_orbit_camera_controller(m);
-
-    // --- Input Events ---
-    bind_input_events(m);
 
     // --- EntityRegistry ---
     nb::class_<EntityRegistry>(m, "EntityRegistry")

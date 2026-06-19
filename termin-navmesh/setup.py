@@ -32,6 +32,7 @@ setup(
         "termin-assets",
         "termin-components-mesh",
         "termin-inspect",
+        "termin-input",
         "termin-materials",
         "termin-nanobind",
         "termin-render",

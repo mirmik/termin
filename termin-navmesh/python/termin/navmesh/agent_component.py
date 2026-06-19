@@ -12,7 +12,7 @@ import numpy as np
 
 from tcbase import log, MouseButton, Action
 from termin.input import InputComponent
-from termin.visualization.core.input_events import MouseButtonEvent
+from termin.input import MouseButtonEvent
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:

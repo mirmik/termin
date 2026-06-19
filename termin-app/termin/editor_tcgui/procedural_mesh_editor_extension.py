@@ -637,7 +637,7 @@ class ProceduralMeshEditorExtension:
             log.error(f"[ProceduralMeshEditor] overlay failed: {e}")
             return
 
-        from termin.visualization.render.immediate import ImmediateRenderer
+        from termin.render import ImmediateRenderer
 
         renderer = ImmediateRenderer.instance()
         anchor_color = Color4(0.1, 0.9, 1.0, 1.0)
