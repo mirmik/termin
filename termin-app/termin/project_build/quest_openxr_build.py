@@ -66,12 +66,16 @@ def build_quest_openxr_project(
     abi: str = "arm64-v8a",
     platform: str = "android-26",
     log_callback: Callable[[str], None] | None = None,
+    configuration: str = "dev",
+    resource_policy: str = "strict",
 ) -> QuestOpenXRBuildResult:
     context = create_build_context(
         project_root=project_root,
         entry_scene=entry_scene,
         target="quest_openxr",
         output_dir=output_dir,
+        configuration=configuration,
+        resource_policy=resource_policy,
     )
     pipeline_result = run_project_build_pipeline(
         context=context,

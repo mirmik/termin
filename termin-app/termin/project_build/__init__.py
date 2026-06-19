@@ -13,6 +13,7 @@ from termin.project_build.capabilities import (
 from termin.project_build.desktop_build import DesktopBuildResult, build_desktop_project
 from termin.project_build.diagnostics import BuildDiagnostic, DiagnosticLike
 from termin.project_build.pipeline import (
+    ProjectBuildPipelineError,
     ProjectBuildPipelineResult,
     TargetPackageStepResult,
     TargetPreflightStepResult,
@@ -43,6 +44,7 @@ __all__ = [
     "DesktopSDKCapabilities",
     "DiagnosticLike",
     "ProjectBuildPipelineResult",
+    "ProjectBuildPipelineError",
     "QuestOpenXRBuildResult",
     "QuestOpenXRDeployResult",
     "QuestOpenXRSDKCapabilities",
