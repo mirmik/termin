@@ -24,20 +24,24 @@ D3D11 shader artifact and layout path that a future backend can consume.
 
 ## Current State
 
-- `BackendType::D3D11` exists and `TERMIN_BACKEND=d3d11` / `dx11` parses, but
-  `create_device(BackendType::D3D11)` currently throws `Backend not yet
-  implemented`.
+- Status update 2026-06-19: `create_device(BackendType::D3D11)` is wired on
+  Windows when `TGFX2_ENABLE_D3D11` is enabled. The backend has a smoke-tested
+  device, immediate command list, render pass clear, shader bytecode loading,
+  graphics pipeline creation, resource set binding, `tc_shader` artifact
+  loading, canonical `tc_texture`/`tc_mesh` materialization, and a
+  `RenderContext2` fullscreen-quad path.
+- `BackendType::D3D11` exists and `TERMIN_BACKEND=d3d11` / `dx11` parses.
 - Runtime artifact paths already reserve `shaders/d3d11/<uuid>.<stage>.cso`
   with D3D stage suffixes such as `.vs.cso` and `.ps.cso`.
-- `termin_shaderc --target d3d11` is intentionally rejected until the Windows
-  FXC/DXBC phase is implemented.
+- `termin_shaderc --target d3d11` can produce `.cso` artifacts on Windows via
+  the Slang-to-HLSL-to-FXC path.
 - Slang shaders are already authored in a mostly HLSL-like style with semantic
   stage IO and logical resource declarations.
 - `termin_shaderc` owns scope-first backend placement for migrated Slang
-  artifacts on the Vulkan path and patches SPIR-V descriptor decorations to
-  match sidecar metadata.
+  artifacts and emits D3D11 register-class/index metadata for `.cso` sidecars.
 - The current shader resource sidecar and `tc_shader_resource_binding` model
-  expose `set` and `binding`, but not an explicit D3D register class.
+  expose D3D register class/index metadata, but editor/runtime coverage is
+  still being expanded through the D3D11 backend.
 - `RenderContext2` has bind-by-name paths for constant buffers, storage
   buffers, and sampled textures. Standalone samplers and storage textures need
   either first-class support or explicit MVP rejection.
