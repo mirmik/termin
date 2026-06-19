@@ -80,7 +80,8 @@ Initial schema:
     "dev": {
       "target": "desktop",
       "entry_scene": "Main.scene",
-      "output_dir": "dist/dev"
+      "output_dir": "dist/dev",
+      "shader_targets": ["vulkan", "opengl"]
     },
     "quest": {
       "target": "quest_openxr",
@@ -105,6 +106,10 @@ Supported build targets:
 - `quest_openxr` - exports the shared runtime package and assembles a
   Quest/OpenXR APK.
 
+Profiles may set `shader_targets` to a list of `vulkan`, `opengl`, and `d3d11`.
+When present, the runtime package manifest records those target requirements
+and the exporter emits only the requested shader artifact families.
+
 `termin_builder` resolves the project and profile, then delegates to the
 canonical Python backend:
 
@@ -116,8 +121,12 @@ python -m termin.project_build.profile_build build \
   --target TARGET
 ```
 
-Use `--dry-run` to check profile loading without running the backend. Unknown
-targets fail before build work starts and print the supported target list.
+Unknown targets fail before build work starts and print the supported target
+list.
+
+The backend-only `python -m termin.project_build.profile_build desktop ...`
+entrypoint also accepts repeated `--shader-target` values for direct desktop
+package experiments.
 
 Desktop builds are written as runtime bundles:
 

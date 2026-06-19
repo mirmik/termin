@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import json
 import shutil
 from dataclasses import dataclass, field
@@ -46,6 +47,7 @@ def build_desktop_project(
     output_dir: str | Path | None = None,
     shader_compiler: str | Path | None = None,
     default_shader_language: str = "slang",
+    shader_targets: Iterable[str] | None = None,
     sdk_root: str | Path | None = None,
     configuration: str = "dev",
     resource_policy: str = "strict",
@@ -74,6 +76,7 @@ def build_desktop_project(
         ),
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
+        shader_targets=shader_targets,
     )
     target_payload = pipeline_result.target_package_result.payload
 

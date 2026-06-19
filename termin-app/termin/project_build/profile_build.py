@@ -19,6 +19,7 @@ SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
 BUILD_PROFILE_SCHEMA_VERSION = 1
 SUPPORTED_CONFIGURATIONS = ("dev", "debug", "release")
 SUPPORTED_RESOURCE_POLICIES = ("dev", "dev_smoke", "strict")
+SUPPORTED_SHADER_TARGETS = ("vulkan", "opengl", "d3d11")
 COMMON_PROFILE_KEYS = {
     "target",
     "configuration",
@@ -27,6 +28,7 @@ COMMON_PROFILE_KEYS = {
     "resource_policy",
     "shader_compiler",
     "default_shader_language",
+    "shader_targets",
     "termin_root",
     "build_script",
     "python",
@@ -71,6 +73,7 @@ class ProfileBuildRequest:
     context: BuildContext
     shader_compiler: Path | None
     default_shader_language: str
+    shader_targets: tuple[str, ...] | None
     sdk_root: Path | None
     termin_root: Path | None
     build_script: Path | None
@@ -148,6 +151,7 @@ def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) ->
                 output_dir=request.context.dist_dir,
                 shader_compiler=request.shader_compiler,
                 default_shader_language=request.default_shader_language,
+                shader_targets=request.shader_targets,
                 sdk_root=request.sdk_root,
                 configuration=request.context.configuration,
                 resource_policy=request.context.resource_policy,
@@ -165,6 +169,7 @@ def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) ->
                 gradle=request.gradle,
                 shader_compiler=request.shader_compiler,
                 default_shader_language=request.default_shader_language,
+                shader_targets=request.shader_targets,
                 abi=request.abi,
                 platform=request.platform,
                 configuration=request.context.configuration,
@@ -183,6 +188,7 @@ def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) ->
                 gradle=request.gradle,
                 shader_compiler=request.shader_compiler,
                 default_shader_language=request.default_shader_language,
+                shader_targets=request.shader_targets,
                 abi=request.abi,
                 platform=request.platform,
                 configuration=request.context.configuration,
@@ -240,6 +246,7 @@ def normalize_profile_build_request(
         context=context,
         shader_compiler=_profile_path(profile, "shader_compiler", shader_compiler),
         default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
+        shader_targets=_profile_shader_targets(profile),
         sdk_root=_desktop_path(profile, "sdk_root") if profile.target == "desktop" else None,
         termin_root=_target_termin_root(profile, android),
         build_script=_target_build_script(profile, android, openxr),
@@ -349,6 +356,14 @@ def _create_parser() -> argparse.ArgumentParser:
     desktop_parser.add_argument("--output-dir", type=Path, required=True)
     desktop_parser.add_argument("--shader-compiler", type=Path, default=None)
     desktop_parser.add_argument(
+        "--shader-target",
+        action="append",
+        dest="shader_targets",
+        choices=SUPPORTED_SHADER_TARGETS,
+        default=None,
+        help="Add a runtime shader artifact target. Repeat for multiple targets.",
+    )
+    desktop_parser.add_argument(
         "--manifest-only",
         action="store_true",
         help="Write build.json and manifest.json without copying resource files",
@@ -367,6 +382,7 @@ def _build_legacy_desktop(args: argparse.Namespace) -> int:
         entry_scene=_resolve_project_path(project_root, args.entry_scene),
         output_dir=_resolve_project_path(project_root, args.output_dir),
         shader_compiler=args.shader_compiler,
+        shader_targets=tuple(args.shader_targets) if args.shader_targets is not None else None,
     )
     _print_desktop_result(result)
     return _exit_code_for_diagnostics(result.diagnostics)
@@ -447,6 +463,36 @@ def _profile_string_choice(
             f"Supported values: {supported}"
         )
     return value
+
+
+def _profile_shader_targets(profile: BuildProfile) -> tuple[str, ...] | None:
+    value = profile.data.get("shader_targets")
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise ProfileBuildError(f"profile '{profile.name}' field 'shader_targets' must be a list")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for index, target in enumerate(value):
+        if not isinstance(target, str) or target == "":
+            raise ProfileBuildError(
+                f"profile '{profile.name}' field 'shader_targets[{index}]' must be a non-empty string"
+            )
+        if target not in SUPPORTED_SHADER_TARGETS:
+            supported = ", ".join(SUPPORTED_SHADER_TARGETS)
+            raise ProfileBuildError(
+                f"profile '{profile.name}' field 'shader_targets[{index}]' has unsupported "
+                f"value '{target}'. Supported values: {supported}"
+            )
+        if target in seen:
+            continue
+        seen.add(target)
+        normalized.append(target)
+
+    if not normalized:
+        raise ProfileBuildError(f"profile '{profile.name}' field 'shader_targets' must not be empty")
+    return tuple(normalized)
 
 
 def _android_string(android: Mapping[str, Any], key: str, default: str) -> str:

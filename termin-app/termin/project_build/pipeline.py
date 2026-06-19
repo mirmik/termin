@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Generic, TypeVar
@@ -82,6 +83,7 @@ def run_project_build_pipeline(
     package_target: TargetPackageStep[PreflightPayloadT, TargetPayloadT],
     shader_compiler: str | Path | None = None,
     default_shader_language: str = "slang",
+    shader_targets: Iterable[str] | None = None,
     export_package: RuntimePackageExporter = export_runtime_package,
     validate_package: RuntimePackageValidator = validate_runtime_package,
 ) -> ProjectBuildPipelineResult[PreflightPayloadT, TargetPayloadT]:
@@ -100,6 +102,7 @@ def run_project_build_pipeline(
         output_dir=context.package_dir,
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
+        shader_targets=shader_targets,
         resource_policy=context.resource_policy,
     )
     package_validation_diagnostics = validate_package(package_result.package_dir)
