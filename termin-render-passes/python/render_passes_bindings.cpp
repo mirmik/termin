@@ -13,6 +13,7 @@ extern "C" {
 }
 
 #include <termin/render/bloom_pass.hpp>
+#include <termin/render/collider_gizmo_pass.hpp>
 #include <termin/render/color_pass.hpp>
 #include <termin/render/debug_triangle_pass.hpp>
 #include <termin/render/frame_pass.hpp>
@@ -82,6 +83,43 @@ void bind_render_passes(nb::module_& m) {
     m.attr("DebugTrianglePass").attr("node_inputs") = nb::make_tuple();
     m.attr("DebugTrianglePass").attr("node_outputs") = nb::make_tuple(
         nb::make_tuple("output_res", "fbo")
+    );
+
+    nb::class_<ColliderGizmoPass, CxxFramePass>(m, "ColliderGizmoPass")
+        .def("__init__", [](ColliderGizmoPass* self,
+                            const std::string& input_res,
+                            const std::string& output_res,
+                            const std::string& pass_name,
+                            bool depth_test) {
+            new (self) ColliderGizmoPass(input_res, output_res, pass_name, depth_test);
+            init_pass_from_python(self, "ColliderGizmoPass");
+        },
+             nb::arg("input_res") = "color",
+             nb::arg("output_res") = "color",
+             nb::arg("pass_name") = "ColliderGizmo",
+             nb::arg("depth_test") = false)
+        .def_rw("input_res", &ColliderGizmoPass::input_res)
+        .def_rw("output_res", &ColliderGizmoPass::output_res)
+        .def_rw("depth_test", &ColliderGizmoPass::depth_test)
+        .def("compute_reads", &ColliderGizmoPass::compute_reads)
+        .def("compute_writes", &ColliderGizmoPass::compute_writes)
+        .def("get_inplace_aliases", &ColliderGizmoPass::get_inplace_aliases)
+        .def_prop_ro("reads", &ColliderGizmoPass::compute_reads)
+        .def_prop_ro("writes", &ColliderGizmoPass::compute_writes)
+        .def("destroy", &ColliderGizmoPass::destroy)
+        .def("__repr__", [](const ColliderGizmoPass& p) {
+            return "<ColliderGizmoPass '" + p.get_pass_name() + "'>";
+        });
+
+    m.attr("ColliderGizmoPass").attr("category") = "Debug";
+    m.attr("ColliderGizmoPass").attr("node_inputs") = nb::make_tuple(
+        nb::make_tuple("input_res", "fbo")
+    );
+    m.attr("ColliderGizmoPass").attr("node_outputs") = nb::make_tuple(
+        nb::make_tuple("output_res", "fbo")
+    );
+    m.attr("ColliderGizmoPass").attr("node_inplace_pairs") = nb::make_tuple(
+        nb::make_tuple("input_res", "output_res")
     );
 
     nb::class_<PresentToScreenPass, CxxFramePass>(m, "PresentToScreenPass")

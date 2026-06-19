@@ -1,9 +1,9 @@
 """
 ColliderGizmoPass - Renders collider wireframes for editor visualization.
 
-Re-exports C++ implementation from termin._native.render.
+Re-exports C++ implementation from termin-render-passes.
 """
 
-from termin._native.render import ColliderGizmoPass
+from termin.render_passes import ColliderGizmoPass
 
 __all__ = ["ColliderGizmoPass"]

@@ -1,4 +1,4 @@
-#include "collider_gizmo_pass.hpp"
+#include <termin/render/collider_gizmo_pass.hpp>
 #include "tgfx/handles.hpp"
 #include "termin/camera/camera_component.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
