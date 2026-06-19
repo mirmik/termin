@@ -36,6 +36,16 @@ class RecordingGlslPreLoader(RecordingPreLoader):
         return "glsl"
 
 
+class RecordingPythonPreLoader(RecordingPreLoader):
+    @property
+    def extensions(self) -> Set[str]:
+        return {".py"}
+
+    @property
+    def resource_type(self) -> str:
+        return "python"
+
+
 def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> None:
     shader_path = tmp_path / "HotReload.shader"
     shader_path.write_text("@program HotReload\n@language slang\n", encoding="utf-8")
@@ -177,6 +187,30 @@ def test_project_file_watcher_initial_scan_ignores_project_setting_paths(tmp_pat
 
     assert [result.path for result in rm.registered] == [str(keep_path)]
     assert preloader.get_tracked_files() == {str(keep_path): {"Keep"}}
+
+
+def test_project_file_watcher_initial_scan_ignores_python_files_in_project_setting_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _set_project_settings(monkeypatch, ProjectSettings(ignored_resource_paths=["tests"]))
+
+    script_path = tmp_path / "Scripts" / "PlayerComponent.py"
+    script_path.parent.mkdir()
+    script_path.write_text("class PlayerComponent: pass\n", encoding="utf-8")
+
+    test_script_path = tmp_path / "tests" / "test_player_component.py"
+    test_script_path.parent.mkdir()
+    test_script_path.write_text("class TestOnlyComponent: pass\n", encoding="utf-8")
+
+    processor = RecordingPythonPreLoader()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+
+    watcher._project_path = str(tmp_path)
+    watcher._scan_directory(str(tmp_path))
+
+    assert watcher.watched_files == {str(script_path)}
 
 
 def test_project_file_watcher_rescan_removes_newly_ignored_plugin_asset(tmp_path: Path, monkeypatch) -> None:

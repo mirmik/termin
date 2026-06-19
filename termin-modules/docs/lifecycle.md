@@ -18,8 +18,13 @@
 Во время поиска пропускаются служебные директории:
 
 - `build`
+- `dist`
 - `__pycache__`
 - скрытые директории
+
+Хост-приложение может дополнительно передать корни, исключаемые из discovery,
+через `ModuleRuntime::set_discovery_ignored_roots(...)`. В editor/player туда
+попадают проектные `ignored_resource_paths`, `.termin` и `build_output_dir`.
 
 ## 2. построение порядка загрузки
 

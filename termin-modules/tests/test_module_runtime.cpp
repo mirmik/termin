@@ -267,6 +267,42 @@ void test_discovery_ignores_dist_directory() {
     expect(discovered_count == 1, "only root module should be discovered");
 }
 
+void test_discovery_ignores_configured_roots() {
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "game.pymodule",
+        "name: game\n"
+        "root: .\n"
+        "packages: [Scripts]\n"
+    );
+
+    write_text_file(
+        tmp.path / "tests" / "test_game.pymodule",
+        "name: test_game\n"
+        "root: .\n"
+        "packages: [tests]\n"
+    );
+
+    ModuleRuntime runtime;
+    std::vector<ModuleEvent> events;
+    make_runtime(runtime, &events);
+    runtime.set_discovery_ignored_roots({tmp.path / "tests"});
+    runtime.discover(tmp.path);
+
+    expect(runtime.last_error().empty(), "ignored module descriptor should be skipped");
+    expect(runtime.find("game") != nullptr, "root game module should be discovered");
+    expect(runtime.find("test_game") == nullptr, "ignored test module should not be discovered");
+
+    size_t discovered_count = 0;
+    for (const ModuleEvent& event : events) {
+        if (event.kind == ModuleEventKind::Discovered) {
+            discovered_count++;
+        }
+    }
+    expect(discovered_count == 1, "only non-ignored module should be discovered");
+}
+
 } // namespace
 
 TEST_CASE("module runtime parses descriptors and discovers modules") {
@@ -287,6 +323,10 @@ TEST_CASE("module runtime reports missing dependencies") {
 
 TEST_CASE("module runtime ignores dist build output") {
     test_discovery_ignores_dist_directory();
+}
+
+TEST_CASE("module runtime ignores configured discovery roots") {
+    test_discovery_ignores_configured_roots();
 }
 
 GUARD_TEST_MAIN();
