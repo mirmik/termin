@@ -38,6 +38,19 @@ termin_builder build PROFILE
 termin_runner run PROFILE
 ```
 
+Packaged build commands do not use the legacy broad-copy
+`termin.project_builder` path. That module remains available only as an
+explicit dev/play-mode export:
+
+```bash
+python -m termin.project_builder legacy-dev-export PROJECT \
+  --scene Main.scene \
+  --out dist/dev-legacy
+```
+
+The old `python -m termin.project_builder build ...` command is a compatibility
+alias for `legacy-dev-export` and prints a warning.
+
 `termin stdlib` currently delegates to:
 
 ```bash
@@ -191,7 +204,7 @@ Player screenshots captured through MCP default to:
 /tmp/termin-player-screenshots/
 ```
 
-Legacy builds resolve `output_dir` from the profile and launch:
+Explicit legacy dev exports resolve `output_dir` from the profile and launch:
 
 ```bash
 python -m termin.player --build <output_dir>/build.json
@@ -210,10 +223,19 @@ The host embeds CPython from `dist/<app>/lib/python3.10`, adds bundled
 `TERMIN_BACKEND` before CPython is initialized; display options such as
 `--width`, `--height`, and `--title` are forwarded to the Python player.
 
-By default `run` does not rebuild implicitly. Pass `--build-if-missing` to build
-when build output is absent, or `--rebuild` to rebuild before every launch.
-Pass `--dry-run` to inspect the resolved player command without starting a
-window.
+By default `run` does not rebuild implicitly and expects a packaged desktop
+bundle. Pass `--build-if-missing` to build when packaged output is absent, or
+`--rebuild` to rebuild before every launch. Pass `--dry-run` to inspect the
+resolved player command without starting a window.
+
+Legacy `build.json` launch is intentionally explicit:
+
+```bash
+termin run dev --mode legacy-build
+```
+
+Default `--mode build` no longer falls back to `build.json` when the packaged
+bundle is missing.
 
 `run` is intentionally not build-only. Source project mode launches the profile
 entry scene directly through the player, which keeps room for editor-like

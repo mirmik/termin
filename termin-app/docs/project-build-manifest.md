@@ -1,5 +1,11 @@
 # Project Build Manifest
 
+Status 2026-06-18: this document describes the historical broad-copy
+`build.json`/`assets/manifest.json` path. That path is now explicit legacy/dev
+export under `termin.project_builder legacy-dev-export`. Canonical packaged
+desktop, Android and Quest/OpenXR builds use `termin.project_build` and produce
+runtime packages plus target-specific artifacts.
+
 ## Problem
 
 Standalone player currently runs directly from a project directory. It scans files at runtime, uses editor file processors, and reconstructs resources from the source tree. This is enough for "Run Standalone" during development, but it is not a real project build:
@@ -25,7 +31,9 @@ Recommended split:
 
 ## Proposed Modules
 
-Create a runtime-safe build module, for example `termin.project_builder`.
+The historical first-stage implementation lives under `termin.project_builder`
+as legacy/dev export. New packaged build code should use
+`termin.project_build`.
 
 Suggested components:
 
@@ -33,7 +41,8 @@ Suggested components:
 - `AssetCollector`: uses shared file preloaders that are moved out of `termin.editor.file_processors` into a runtime-safe package.
 - `DependencyCollector`: follows scene, prefab, material, shader include, pipeline, and handle references by UUID.
 - `ProjectBuildManifestWriter`: writes `assets/manifest.json` and top-level `build.json`.
-- CLI entrypoint: `python -m termin.project_builder build <project> --scene Scenes/Main.scene --out dist/MyGame`.
+- CLI entrypoint:
+  `python -m termin.project_builder legacy-dev-export <project> --scene Scenes/Main.scene --out dist/MyGame`.
 
 ## First Implementation Stage
 
@@ -116,4 +125,3 @@ Player should support two modes during migration:
 - build mode: `python -m termin.player --build dist/MyGame/build.json`.
 
 Once build mode is stable, standalone distribution should use build mode exclusively.
-

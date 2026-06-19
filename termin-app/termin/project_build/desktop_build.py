@@ -7,19 +7,20 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from termin.project_build.common import preload_project_resources, read_project_name
+from termin.project_build.build_context import BuildContext, create_build_context
+from termin.project_build.diagnostics import DiagnosticLike
 from termin.project_build.desktop_runtime_packager import (
     DesktopRuntimeBundleResult,
     package_desktop_runtime,
 )
-from termin.project_build.python_module_packager import PythonModuleBundleResult, package_python_modules
-from termin.project_build.runtime_package_exporter import (
-    RuntimePackageExportDiagnostic,
-    RuntimePackageExportResult,
-    export_runtime_package,
+from termin.project_build.pipeline import (
+    TargetPackageStepResult,
+    TargetPreflightStepResult,
+    run_project_build_pipeline,
 )
-from termin.project_build.runtime_package_validator import validate_runtime_package
-from termin.project_build.target_preflight import preflight_project_build_context
+from termin.project_build.python_module_packager import PythonModuleBundleResult, package_python_modules
+from termin.project_build.runtime_package_exporter import RuntimePackageExportResult
+from termin.project_build.target_preflight import DesktopPreflightResult, preflight_desktop_build
 
 
 @dataclass
@@ -29,7 +30,14 @@ class DesktopBuildResult:
     python_result: PythonModuleBundleResult
     runtime_result: DesktopRuntimeBundleResult
     app_manifest_path: Path
-    diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
+    diagnostics: list[DiagnosticLike] = field(default_factory=list)
+
+
+@dataclass
+class _DesktopTargetPackagePayload:
+    python_result: PythonModuleBundleResult
+    runtime_result: DesktopRuntimeBundleResult
+    app_manifest_path: Path
 
 
 def build_desktop_project(
@@ -40,44 +48,71 @@ def build_desktop_project(
     default_shader_language: str = "slang",
     sdk_root: str | Path | None = None,
 ) -> DesktopBuildResult:
-    project_root_path = Path(project_root).resolve()
-    project_name = read_project_name(project_root_path)
-    dist_dir = _resolve_dist_dir(project_root_path, project_name, output_dir)
-    project_preflight_result = preflight_project_build_context(
-        project_root=project_root_path,
+    context = create_build_context(
+        project_root=project_root,
         entry_scene=entry_scene,
-        output_dir=dist_dir,
-        target_name="Desktop",
+        target="desktop",
+        output_dir=output_dir,
     )
-    _prepare_dist_dir(project_root_path, dist_dir)
-
-    package_dir = dist_dir / "package"
-
-    preload_project_resources(project_root_path, "[DesktopBuild]")
-
-    package_result = export_runtime_package(
-        project_root=project_root_path,
-        entry_scene=entry_scene,
-        output_dir=package_dir,
+    pipeline_result = run_project_build_pipeline(
+        context=context,
+        target_name="Desktop",
+        preload_log_tag="[DesktopBuild]",
+        prepare_output=lambda build_context: _prepare_dist_dir(
+            build_context.project_root,
+            build_context.dist_dir,
+        ),
+        run_target_preflight=lambda: _desktop_target_preflight(sdk_root),
+        package_target=lambda build_context, package_result, preflight_result: _package_desktop_target(
+            build_context,
+            package_result,
+            preflight_result,
+        ),
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
     )
-    package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
+    target_payload = pipeline_result.target_package_result.payload
+
+    return DesktopBuildResult(
+        dist_dir=context.dist_dir,
+        package_result=pipeline_result.package_result,
+        python_result=target_payload.python_result,
+        runtime_result=target_payload.runtime_result,
+        app_manifest_path=target_payload.app_manifest_path,
+        diagnostics=pipeline_result.diagnostics,
+    )
+
+
+def _desktop_target_preflight(
+    sdk_root: str | Path | None,
+) -> TargetPreflightStepResult[DesktopPreflightResult]:
+    preflight_result = preflight_desktop_build(sdk_root=sdk_root)
+    return TargetPreflightStepResult(
+        payload=preflight_result,
+        diagnostics=preflight_result.diagnostics,
+    )
+
+
+def _package_desktop_target(
+    context: BuildContext,
+    _package_result: RuntimePackageExportResult,
+    preflight_result: DesktopPreflightResult,
+) -> TargetPackageStepResult[_DesktopTargetPackagePayload]:
     python_result = package_python_modules(
-        project_root=project_root_path,
-        output_dir=package_dir / "python",
+        project_root=context.project_root,
+        output_dir=context.package_dir / "python",
     )
     runtime_result = package_desktop_runtime(
-        dist_dir=dist_dir,
+        dist_dir=context.dist_dir,
         requirements=[
             requirement
             for module in python_result.modules
             for requirement in module.requirements
         ],
-        sdk_root=sdk_root,
+        sdk_root=preflight_result.sdk_root,
     )
 
-    app_manifest_path = dist_dir / "app.json"
+    app_manifest_path = context.dist_dir / "app.json"
     python_descriptors = [
         f"package/python/{module.descriptor}"
         for module in python_result.modules
@@ -88,7 +123,7 @@ def build_desktop_project(
             "version": 1,
             "format": "termin.desktop_bundle",
             "target": "desktop",
-            "project_name": project_name,
+            "project_name": context.project_name,
             "package": {
                 "root": "package",
                 "manifest": "package/manifest.json",
@@ -123,26 +158,17 @@ def build_desktop_project(
         },
     )
 
-    return DesktopBuildResult(
-        dist_dir=dist_dir,
-        package_result=package_result,
-        python_result=python_result,
-        runtime_result=runtime_result,
-        app_manifest_path=app_manifest_path,
+    return TargetPackageStepResult(
+        payload=_DesktopTargetPackagePayload(
+            python_result=python_result,
+            runtime_result=runtime_result,
+            app_manifest_path=app_manifest_path,
+        ),
         diagnostics=[
-            *project_preflight_result.diagnostics,
-            *package_result.diagnostics,
-            *package_validation_diagnostics,
             *python_result.diagnostics,
             *runtime_result.diagnostics,
         ],
     )
-
-
-def _resolve_dist_dir(project_root: Path, project_name: str, output_dir: str | Path | None) -> Path:
-    if output_dir is not None:
-        return Path(output_dir).resolve()
-    return (project_root / "dist" / "desktop" / project_name).resolve()
 
 
 def _prepare_dist_dir(project_root: Path, dist_dir: Path) -> None:

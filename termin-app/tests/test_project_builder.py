@@ -1,7 +1,10 @@
 import json
+import inspect
 from pathlib import Path
 
-from termin.project_builder import build_project
+from termin.project_build import profile_build
+from termin.project_builder import build_project, export_legacy_project
+from termin.project_builder.__main__ import main as project_builder_main
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -108,6 +111,79 @@ def test_build_project_writes_manifest_and_copies_resources(tmp_path: Path) -> N
     assert build_data["project_name"] == "SampleGame"
     assert build_data["entry_scene"] == "assets/Scenes/Main.scene"
     assert build_data["asset_manifest"] == "assets/manifest.json"
+
+
+def test_export_legacy_project_is_canonical_name_for_broad_copy_path(tmp_path: Path) -> None:
+    project = tmp_path / "LegacyGame"
+    project.mkdir()
+    _write_json(project / "legacy.terminproj", {"version": 1, "name": "LegacyGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+
+    result = export_legacy_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "LegacyGame",
+        copy_files=False,
+    )
+
+    assert result.build_json_path == project / "dist" / "LegacyGame" / "build.json"
+    assert result.manifest_json_path == project / "dist" / "LegacyGame" / "assets" / "manifest.json"
+    assert result.build_json_path.exists()
+
+
+def test_project_builder_cli_uses_explicit_legacy_dev_export_command(tmp_path: Path, capsys) -> None:
+    project = tmp_path / "CliLegacyGame"
+    project.mkdir()
+    _write_json(project / "cli.terminproj", {"version": 1, "name": "CliLegacyGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+    output_dir = project / "dist" / "CliLegacyGame"
+
+    assert project_builder_main(
+        [
+            "legacy-dev-export",
+            str(project),
+            "--scene",
+            "Main.scene",
+            "--out",
+            str(output_dir),
+            "--manifest-only",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert "Legacy dev export:" in captured.out
+    assert "build.json" in captured.out
+    assert captured.err == ""
+    assert (output_dir / "build.json").exists()
+
+
+def test_project_builder_build_command_is_legacy_alias(tmp_path: Path, capsys) -> None:
+    project = tmp_path / "CliLegacyAliasGame"
+    project.mkdir()
+    _write_json(project / "cli.terminproj", {"version": 1, "name": "CliLegacyAliasGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+
+    assert project_builder_main(
+        [
+            "build",
+            str(project),
+            "--scene",
+            "Main.scene",
+            "--out",
+            str(project / "dist" / "CliLegacyAliasGame"),
+            "--manifest-only",
+        ]
+    ) == 0
+
+    captured = capsys.readouterr()
+    assert "Legacy dev export:" in captured.out
+    assert "legacy-dev-export compatibility alias" in captured.err
+
+
+def test_packaged_profile_backend_does_not_import_legacy_project_builder() -> None:
+    source = inspect.getsource(profile_build)
+
+    assert "termin.project_builder" not in source
 
 
 def test_build_project_excludes_output_directory(tmp_path: Path) -> None:
