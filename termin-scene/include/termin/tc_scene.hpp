@@ -31,7 +31,7 @@ enum class ComponentDeserializationMode : uint8_t;
 // This is the CORE TcSceneRef - contains entity management, update loop,
 // scene properties, and serialization. Render-specific methods
 // (background_color, skybox, ambient, pipeline, viewport_configs)
-// are in tc_scene_render_ext.hpp (in termin, not termin-scene).
+// are split between termin-render data helpers and termin-engine lifecycle helpers.
 class TERMIN_SCENE_API TcSceneRef {
 public:
     tc_scene_handle _h = TC_SCENE_HANDLE_INVALID;
@@ -46,11 +46,11 @@ public:
     ~TcSceneRef() = default;
 
     // Factory method to create a new scene in the pool (core only, no render extensions).
-    // For a scene with render extensions, use termin's create wrapper.
+    // For a scene with render extensions, use termin-engine's create wrapper.
     static TcSceneRef create(const std::string& name = "", const std::string& uuid = "");
 
     // Explicitly destroy the scene (removes from pool).
-    // Note: does NOT clean up render pipelines (that's done by termin's wrapper).
+    // Note: does NOT clean up render pipelines (that's done by termin-engine's wrapper).
     void destroy();
 
     // Get scene handle

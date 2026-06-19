@@ -17,12 +17,6 @@ target_link_libraries(_voxels_native PRIVATE entity_lib tcbase::termin_base)
 
 set(TERMIN_APP_NATIVE_SOURCES
     # Python bindings entry point + per-subsystem registration files.
-    # The actual C++ pass / renderer implementations live in render_lib —
-    # linking PUBLIC against render_lib below pulls their symbols in
-    # without compiling them a second time here. Listing them in both
-    # lists used to cause duplicate symbols (one copy in render_lib, one
-    # in _native.so) and led to silent "my latest changes aren't visible"
-    # bugs because the linker picked the local copy from _native.
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
     termin/bindings/render/shader_parser.cpp
@@ -51,8 +45,8 @@ set(TERMIN_APP_NATIVE_SOURCES
     termin/assets/assets_bindings.cpp
     termin/assets/handles.cpp
 
-    # Renderer sources unique to _native (NOT in RENDER_LIB_SOURCES).
-    # Keep this list tight — every file here compiled twice = duplicate symbols.
+    # Renderer sources unique to _native.
+    # Keep this list tight — most render implementations live in extracted packages.
     termin/render/solid_primitive_renderer.cpp
 
     # Entity domain bindings (migrated from _entity_native)
@@ -77,7 +71,7 @@ target_link_libraries(_native PRIVATE
     termin_inspect::termin_inspect_python
     termin_skeleton::termin_skeleton
     termin_components_skeleton::termin_components_skeleton
-    render_lib
+    termin_engine::termin_engine
     termin_render_passes::termin_render_passes
     tgfx::termin_graphics
     tgfx::termin_graphics2

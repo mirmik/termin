@@ -1,11 +1,24 @@
-// tc_scene_render_ext.cpp - Render extension functions for TcSceneRef
-#include "termin/tc_scene_render_ext.hpp"
+// tc_scene_render_ext.cpp - Engine-level render lifecycle helpers for TcSceneRef.
+#include <termin/scene/tc_scene_render_ext.hpp>
+
 #include <termin/render/rendering_manager.hpp>
-#include "core/tc_scene_extension.h"
-#include "core/tc_scene_extension_ids.h"
 #include <tcbase/tc_log.hpp>
 
+extern "C" {
+#include "core/tc_scene_extension.h"
+#include "core/tc_scene_extension_ids.h"
+#include "core/tc_scene_render_mount.h"
+#include "core/tc_scene_render_state.h"
+#include <termin_collision/termin_collision.h>
+}
+
 namespace termin {
+
+void register_default_scene_extensions() {
+    tc_scene_render_mount_extension_init();
+    tc_scene_render_state_extension_init();
+    termin_collision_runtime_init();
+}
 
 std::vector<tc_scene_ext_type_id> default_scene_extension_ids() {
     std::vector<tc_scene_ext_type_id> extensions = {
@@ -46,7 +59,9 @@ TcSceneRef create_scene_with_render(const std::string& name, const std::string& 
 
 void destroy_scene_with_render(TcSceneRef& scene) {
     if (scene.valid()) {
-        RenderingManager::instance().clear_scene_pipelines(scene.handle());
+        if (RenderingManager* manager = RenderingManager::instance_or_null()) {
+            manager->clear_scene_pipelines(scene.handle());
+        }
         scene.destroy();
     }
 }

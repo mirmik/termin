@@ -10,9 +10,9 @@ extern "C" {
 #include "core/tc_scene_extension_ids.h"
 #include "core/tc_scene_render_mount.h"
 #include "core/tc_scene_render_state.h"
-#include <termin_collision/termin_collision.h>
 }
 
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include "render_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
@@ -114,25 +114,6 @@ static void register_tc_mesh_kind() {
     );
 }
 
-static std::vector<tc_scene_ext_type_id> default_scene_extension_ids() {
-    std::vector<tc_scene_ext_type_id> extensions = {
-        TC_SCENE_EXT_TYPE_RENDER_MOUNT,
-        TC_SCENE_EXT_TYPE_RENDER_STATE,
-    };
-
-    if (tc_scene_ext_is_registered(TC_SCENE_EXT_TYPE_COLLISION_WORLD)) {
-        extensions.push_back(TC_SCENE_EXT_TYPE_COLLISION_WORLD);
-    }
-
-    return extensions;
-}
-
-static void register_default_scene_extensions() {
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
-    termin_collision_runtime_init();
-}
-
 NB_MODULE(_native, m) {
     nb::set_leak_warnings(false);
     m.doc() = "Native C++ module for termin";
@@ -165,8 +146,8 @@ NB_MODULE(_native, m) {
     m.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_MOUNT);
     m.attr("SCENE_EXT_TYPE_RENDER_STATE") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_STATE);
     m.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = nb::int_(TC_SCENE_EXT_TYPE_COLLISION_WORLD);
-    m.def("default_scene_extensions", &default_scene_extension_ids);
-    m.def("register_default_scene_extensions", &register_default_scene_extensions);
+    m.def("default_scene_extensions", &termin::default_scene_extension_ids);
+    m.def("register_default_scene_extensions", &termin::register_default_scene_extensions);
 
     m.def("get_render_sync_mode", []() {
         return tc_project_settings_get_render_sync_mode();

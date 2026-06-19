@@ -267,43 +267,6 @@ if(COMMAND termin_enable_unity_build_for)
     termin_enable_unity_build_for(entity_lib)
 endif()
 
-# ============== Render library ==============
-# Legacy app-side render glue that still depends on RenderingManager.
-set(RENDER_LIB_SOURCES
-    # Render extension for TcSceneRef (uses RenderingManager)
-    termin/tc_scene_render_ext.cpp
-)
-add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
-if(COMMAND termin_add_alias_if_missing)
-    termin_add_alias_if_missing(termin::render_lib render_lib)
-endif()
-target_include_directories(render_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/cpp>
-)
-target_link_libraries(render_lib PUBLIC entity_lib tcbase::termin_base tgfx::termin_graphics tgfx::termin_graphics2 termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_engine::termin_engine)
-if(TGFX2_ENABLE_OPENGL)
-    target_link_libraries(render_lib PUBLIC OpenGL::GL)
-endif()
-target_compile_definitions(render_lib PRIVATE TERMIN_RENDER_EXPORTS)
-target_compile_options(render_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-if(COMMAND termin_enable_pch_for)
-    termin_enable_pch_for(render_lib)
-else()
-    target_precompile_headers(render_lib PRIVATE termin/pch.hpp)
-endif()
-set_target_properties(render_lib PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
-)
-if(COMMAND termin_enable_unity_build_for)
-    termin_enable_unity_build_for(render_lib)
-endif()
-
 # ============== SDL2 (optional) ==============
 option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
 
@@ -533,7 +496,7 @@ if(BUILD_TESTS)
     )
     target_link_libraries(termin_tests PRIVATE
         entity_lib
-        render_lib
+        termin_engine::termin_engine
         termin_components_render::termin_components_render
         ${CMAKE_DL_LIBS}
     )
@@ -548,7 +511,7 @@ if(BUILD_TESTS)
 endif()
 
 # ============== Install shared libraries ==============
-set(TERMIN_INSTALL_TARGETS entity_lib termin_core render_lib)
+set(TERMIN_INSTALL_TARGETS entity_lib termin_core)
 install(TARGETS ${TERMIN_INSTALL_TARGETS}
     EXPORT terminTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

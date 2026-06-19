@@ -189,7 +189,7 @@ Input abstraction. UI event routing остается в [termin-gui](#termin-gui
 
 Source of truth: [termin-engine docs](../termin-engine/docs/index.md)
 
-Engine-level orchestration поверх scene/render/input/domain modules. Владеет runtime managers и интеграцией project modules с live scenes (`TermModulesIntegration`).
+Engine-level orchestration поверх scene/render/input/domain modules. Владеет runtime managers, scene render lifecycle helpers, builtin scene extension registration включая collision runtime, и интеграцией project modules с live scenes (`TermModulesIntegration`).
 
 > **termin-entity** был удалён — его биндинги мигрированы в `termin._native` (termin-app).
 ECS-типы (Entity, Component, ComponentRegistry, TcScene) импортируются из `termin.scene`.
