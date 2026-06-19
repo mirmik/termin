@@ -37,8 +37,10 @@ D3D11 shader artifact and layout path that a future backend can consume.
   can explicitly request `shader_targets=["vulkan", "opengl", "d3d11"]`.
   D3D11 artifacts are emitted as `shaders/d3d11/<uuid>.vs.cso` and
   `shaders/d3d11/<uuid>.ps.cso`, and runtime manifests record the requested
-  shader target requirements. D3D11 is still opt-in so Linux/Android builds do
-  not require Windows SDK `fxc`.
+  shader target requirements. The target wrappers and build profiles now pass
+  the requested shader target list through to runtime package export, and the
+  legacy direct desktop CLI accepts repeated `--shader-target` values. D3D11
+  is still opt-in so Linux/Android builds do not require Windows SDK `fxc`.
 - `BackendType::D3D11` exists and `TERMIN_BACKEND=d3d11` / `dx11` parses.
 - Runtime artifact paths already reserve `shaders/d3d11/<uuid>.<stage>.cso`
   with D3D stage suffixes such as `.vs.cso` and `.ps.cso`.
@@ -312,8 +314,8 @@ Tasks:
    - skinned or `bone_block` shader after basic material path works.
 4. Extend runtime package/export paths to optionally include D3D11 artifacts.
    Status: optional D3D11 artifact output is wired for project-builder and
-   runtime-package exporter APIs; target wrappers still need a user-facing
-   profile/CLI option for selecting it.
+   runtime-package exporter APIs. Target wrappers, build profiles, and the
+   legacy direct desktop CLI can now select explicit shader targets.
 5. Add CI/build documentation for required Windows SDK tools.
 
 Acceptance:

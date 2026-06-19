@@ -57,6 +57,7 @@ def test_project_build_pipeline_orders_export_validation_and_target_packaging(tm
         output_dir,
         shader_compiler,
         default_shader_language,
+        shader_targets,
         resource_policy,
     ):
         events.append("export")
@@ -65,6 +66,7 @@ def test_project_build_pipeline_orders_export_validation_and_target_packaging(tm
         assert output_dir == context.package_dir
         assert shader_compiler == tmp_path / "shaderc"
         assert default_shader_language == "slang"
+        assert shader_targets == ("vulkan", "opengl", "d3d11")
         assert resource_policy == "strict"
         output_dir.mkdir(parents=True)
         manifest_path = output_dir / "manifest.json"
@@ -102,6 +104,7 @@ def test_project_build_pipeline_orders_export_validation_and_target_packaging(tm
         package_target=package_target,
         shader_compiler=tmp_path / "shaderc",
         default_shader_language="slang",
+        shader_targets=("vulkan", "opengl", "d3d11"),
         export_package=export_package,
         validate_package=validate_package,
     )
@@ -163,9 +166,11 @@ def test_project_build_pipeline_stops_before_target_packaging_when_validation_fa
         output_dir,
         shader_compiler,
         default_shader_language,
+        shader_targets,
         resource_policy,
     ):
         events.append("export")
+        assert shader_targets is None
         output_dir.mkdir(parents=True)
         manifest_path = output_dir / "manifest.json"
         scene_path = output_dir / "scene.json"

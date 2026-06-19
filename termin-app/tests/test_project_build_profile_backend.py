@@ -80,6 +80,7 @@ def test_profile_build_routes_desktop_profile(tmp_path: Path, monkeypatch) -> No
             "output_dir": (project / "dist" / "dev").resolve(),
             "shader_compiler": None,
             "default_shader_language": "slang",
+            "shader_targets": None,
             "sdk_root": tmp_path / "sdk",
             "configuration": "dev",
             "resource_policy": "strict",
@@ -146,6 +147,7 @@ def test_profile_build_routes_android_profile(tmp_path: Path, monkeypatch) -> No
             "gradle": tmp_path / "gradle",
             "shader_compiler": None,
             "default_shader_language": "slang",
+            "shader_targets": None,
             "abi": "x86_64",
             "platform": "android-29",
             "configuration": "dev",
@@ -216,6 +218,7 @@ def test_profile_build_routes_quest_openxr_profile(tmp_path: Path, monkeypatch) 
             "gradle": tmp_path / "gradle",
             "shader_compiler": None,
             "default_shader_language": "slang",
+            "shader_targets": None,
             "abi": "arm64-v8a",
             "platform": "android-26",
             "configuration": "dev",
@@ -252,9 +255,90 @@ def test_profile_build_normalizes_desktop_request(tmp_path: Path) -> None:
     assert request.context.configuration == "dev"
     assert request.context.resource_policy == "strict"
     assert request.context.target_options == {"desktop": {"sdk_root": str(tmp_path / "sdk")}}
+    assert request.shader_targets is None
     assert request.sdk_root == tmp_path / "sdk"
     assert request.termin_root is None
     assert request.gradle is None
+
+
+def test_profile_build_routes_profile_shader_targets(tmp_path: Path, monkeypatch) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "d3d": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/d3d",
+                    "shader_targets": ["vulkan", "opengl", "d3d11", "d3d11"],
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            dist_dir=kwargs["output_dir"],
+            app_manifest_path=kwargs["output_dir"] / "app.json",
+            package_result=_package_result(tmp_path),
+            diagnostics=[],
+        )
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    assert profile_build.main(
+        [
+            "build",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+            "--profile",
+            "d3d",
+            "--target",
+            "desktop",
+        ]
+    ) == 0
+
+    assert calls[0]["shader_targets"] == ("vulkan", "opengl", "d3d11")
+
+
+def test_profile_build_routes_legacy_desktop_shader_targets(tmp_path: Path, monkeypatch) -> None:
+    project, _profiles_path = _write_project(tmp_path)
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            dist_dir=kwargs["output_dir"],
+            app_manifest_path=kwargs["output_dir"] / "app.json",
+            package_result=_package_result(tmp_path),
+            diagnostics=[],
+        )
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    assert profile_build.main(
+        [
+            "desktop",
+            "--project-root",
+            str(project),
+            "--entry-scene",
+            "Scenes/Main.scene",
+            "--output-dir",
+            "dist/d3d",
+            "--shader-target",
+            "vulkan",
+            "--shader-target",
+            "d3d11",
+        ]
+    ) == 0
+
+    assert calls[0]["shader_targets"] == ("vulkan", "d3d11")
 
 
 def test_profile_build_normalizes_explicit_profile_policy(tmp_path: Path) -> None:
@@ -280,6 +364,51 @@ def test_profile_build_normalizes_explicit_profile_policy(tmp_path: Path) -> Non
 
     assert request.context.configuration == "release"
     assert request.context.resource_policy == "dev_smoke"
+
+
+@pytest.mark.parametrize(
+    ("shader_targets", "message"),
+    [
+        ("d3d11", "field 'shader_targets' must be a list"),
+        ([], "field 'shader_targets' must not be empty"),
+        (["vulkan", ""], "field 'shader_targets\\[1\\]' must be a non-empty string"),
+        (["metal"], "Supported values: vulkan, opengl, d3d11"),
+    ],
+)
+def test_profile_build_rejects_invalid_shader_targets_before_wrapper(
+    tmp_path: Path,
+    monkeypatch,
+    shader_targets: object,
+    message: str,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                    "shader_targets": shader_targets,
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    with pytest.raises(profile_build.ProfileBuildError, match=message):
+        profile_build.build_profile(profile)
+
+    assert calls == []
 
 
 def test_profile_build_normalizes_android_request(tmp_path: Path) -> None:

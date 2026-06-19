@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import re
 import shutil
 import subprocess
@@ -52,6 +53,7 @@ def build_android_project(
     gradle: str | Path | None = None,
     shader_compiler: str | Path | None = None,
     default_shader_language: str = "slang",
+    shader_targets: Iterable[str] | None = None,
     abi: str = "arm64-v8a",
     platform: str = "android-26",
     configuration: str = "dev",
@@ -86,6 +88,7 @@ def build_android_project(
         ),
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
+        shader_targets=shader_targets,
         export_package=export_runtime_package,
         validate_package=validate_runtime_package,
     )
