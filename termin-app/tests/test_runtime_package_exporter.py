@@ -172,6 +172,7 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
         entry_scene=Path("Scenes") / "Main.scene",
         output_dir=project / "dist" / "android" / "RuntimeGame" / "package",
         shader_compiler=_write_fake_shader_compiler(tmp_path),
+        resource_policy="dev_smoke",
     )
 
     assert result.manifest_path.exists()
@@ -250,6 +251,7 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
         entry_scene="Main.scene",
         output_dir=project / "dist" / "desktop" / "DynamicMaterialGame" / "package",
         shader_compiler=_write_fake_shader_compiler(tmp_path),
+        resource_policy="dev_smoke",
     )
 
     assert (result.package_dir / "materials" / f"{material_uuid}.tmat.json").exists()
@@ -259,6 +261,62 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
         "uuid": material_uuid,
         "path": f"materials/{material_uuid}.tmat.json",
     } in manifest["resources"]
+
+
+def test_export_runtime_package_reports_missing_resources_as_errors_by_default(tmp_path: Path) -> None:
+    project = tmp_path / "StrictResourceGame"
+    project.mkdir()
+    _write_json(
+        project / "Main.scene",
+        {
+            "uuid": "scene-uuid",
+            "entities": [
+                {
+                    "uuid": "entity-uuid",
+                    "components": [
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
+                                "mesh": {
+                                    "uuid": "missing-mesh",
+                                    "name": "MissingMesh",
+                                    "type": "uuid",
+                                },
+                                "material": {
+                                    "uuid": "missing-material",
+                                    "name": "MissingMaterial",
+                                    "type": "uuid",
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "strict" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    assert not (result.package_dir / "meshes" / "missing-mesh.tmesh.json").exists()
+    assert not (result.package_dir / "materials" / "missing-material.tmat.json").exists()
+    assert {
+        "type": "mesh",
+        "uuid": "missing-mesh",
+        "path": "meshes/missing-mesh.tmesh.json",
+    } not in json.loads(result.manifest_path.read_text(encoding="utf-8"))["resources"]
+    assert [
+        (diagnostic.level, diagnostic.path)
+        for diagnostic in result.diagnostics
+        if diagnostic.level == "error"
+    ] == [
+        ("error", "meshes/missing-mesh.tmesh.json"),
+        ("error", "materials/missing-material.tmat.json"),
+    ]
 
 
 def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_path: Path) -> None:
@@ -1003,7 +1061,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     fake_gradle.chmod(0o755)
 
     validation_diagnostic = RuntimePackageExportDiagnostic(
-        "error",
+        "warning",
         "manifest.json",
         "synthetic validator diagnostic",
     )

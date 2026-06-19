@@ -11,11 +11,14 @@ from typing import Any, Mapping, Sequence
 
 from termin.project_build import build_android_project, build_desktop_project, build_quest_openxr_project
 from termin.project_build.build_context import BuildContext, create_build_context
+from termin.project_build.pipeline import ProjectBuildPipelineError
 from termin.project_build.target_preflight import TargetPreflightError, preflight_project_build_context
 
 
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
 BUILD_PROFILE_SCHEMA_VERSION = 1
+SUPPORTED_CONFIGURATIONS = ("dev", "debug", "release")
+SUPPORTED_RESOURCE_POLICIES = ("dev", "dev_smoke", "strict")
 COMMON_PROFILE_KEYS = {
     "target",
     "configuration",
@@ -137,49 +140,59 @@ def load_build_profile(project_root: Path, profiles_path: Path, profile_name: st
 def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) -> int:
     request = normalize_profile_build_request(profile, shader_compiler=shader_compiler)
 
-    if request.target == "desktop":
-        result = build_desktop_project(
-            project_root=request.context.project_root,
-            entry_scene=request.context.entry_scene,
-            output_dir=request.context.dist_dir,
-            shader_compiler=request.shader_compiler,
-            default_shader_language=request.default_shader_language,
-            sdk_root=request.sdk_root,
-        )
-        _print_desktop_result(result)
-        return 0
+    try:
+        if request.target == "desktop":
+            result = build_desktop_project(
+                project_root=request.context.project_root,
+                entry_scene=request.context.entry_scene,
+                output_dir=request.context.dist_dir,
+                shader_compiler=request.shader_compiler,
+                default_shader_language=request.default_shader_language,
+                sdk_root=request.sdk_root,
+                configuration=request.context.configuration,
+                resource_policy=request.context.resource_policy,
+            )
+            _print_desktop_result(result)
+            return _exit_code_for_diagnostics(result.diagnostics)
 
-    if request.target == "android":
-        result = build_android_project(
-            project_root=request.context.project_root,
-            entry_scene=request.context.entry_scene,
-            output_dir=request.context.dist_dir,
-            termin_root=request.termin_root,
-            build_script=request.build_script,
-            gradle=request.gradle,
-            shader_compiler=request.shader_compiler,
-            default_shader_language=request.default_shader_language,
-            abi=request.abi,
-            platform=request.platform,
-        )
-        _print_android_result(result)
-        return 0
+        if request.target == "android":
+            result = build_android_project(
+                project_root=request.context.project_root,
+                entry_scene=request.context.entry_scene,
+                output_dir=request.context.dist_dir,
+                termin_root=request.termin_root,
+                build_script=request.build_script,
+                gradle=request.gradle,
+                shader_compiler=request.shader_compiler,
+                default_shader_language=request.default_shader_language,
+                abi=request.abi,
+                platform=request.platform,
+                configuration=request.context.configuration,
+                resource_policy=request.context.resource_policy,
+            )
+            _print_android_result(result)
+            return _exit_code_for_diagnostics(result.diagnostics)
 
-    if request.target == "quest_openxr":
-        result = build_quest_openxr_project(
-            project_root=request.context.project_root,
-            entry_scene=request.context.entry_scene,
-            output_dir=request.context.dist_dir,
-            termin_root=request.termin_root,
-            build_script=request.build_script,
-            gradle=request.gradle,
-            shader_compiler=request.shader_compiler,
-            default_shader_language=request.default_shader_language,
-            abi=request.abi,
-            platform=request.platform,
-        )
-        _print_quest_openxr_result(result)
-        return 0
+        if request.target == "quest_openxr":
+            result = build_quest_openxr_project(
+                project_root=request.context.project_root,
+                entry_scene=request.context.entry_scene,
+                output_dir=request.context.dist_dir,
+                termin_root=request.termin_root,
+                build_script=request.build_script,
+                gradle=request.gradle,
+                shader_compiler=request.shader_compiler,
+                default_shader_language=request.default_shader_language,
+                abi=request.abi,
+                platform=request.platform,
+                configuration=request.context.configuration,
+                resource_policy=request.context.resource_policy,
+            )
+            _print_quest_openxr_result(result)
+            return _exit_code_for_diagnostics(result.diagnostics)
+    except ProjectBuildPipelineError as exc:
+        _print_diagnostics(exc.diagnostics)
+        return 1
 
     raise UnsupportedBuildTargetError(request.target)
 
@@ -192,11 +205,25 @@ def normalize_profile_build_request(
     _validate_target_option_blocks(profile)
 
     target_options = _target_options(profile)
+    configuration = _profile_string_choice(
+        profile,
+        "configuration",
+        "dev",
+        SUPPORTED_CONFIGURATIONS,
+    )
+    resource_policy = _profile_string_choice(
+        profile,
+        "resource_policy",
+        "strict",
+        SUPPORTED_RESOURCE_POLICIES,
+    )
     context = create_build_context(
         project_root=profile.project_root,
         entry_scene=profile.entry_scene,
         target=profile.target,
         output_dir=profile.output_dir,
+        configuration=configuration,
+        resource_policy=resource_policy,
         target_options=target_options,
     )
     try:
@@ -342,7 +369,7 @@ def _build_legacy_desktop(args: argparse.Namespace) -> int:
         shader_compiler=args.shader_compiler,
     )
     _print_desktop_result(result)
-    return 0
+    return _exit_code_for_diagnostics(result.diagnostics)
 
 
 def _read_json_object(path: Path) -> Mapping[str, Any]:
@@ -403,6 +430,22 @@ def _profile_string(profile: BuildProfile, key: str, default: str) -> str:
         return default
     if not isinstance(value, str) or value == "":
         raise ProfileBuildError(f"profile '{profile.name}' field '{key}' must be a non-empty string")
+    return value
+
+
+def _profile_string_choice(
+    profile: BuildProfile,
+    key: str,
+    default: str,
+    supported_values: Sequence[str],
+) -> str:
+    value = _profile_string(profile, key, default)
+    if value not in supported_values:
+        supported = ", ".join(supported_values)
+        raise ProfileBuildError(
+            f"profile '{profile.name}' field '{key}' has unsupported value '{value}'. "
+            f"Supported values: {supported}"
+        )
     return value
 
 
@@ -497,6 +540,12 @@ def _manifest_resources(manifest_path: Path) -> list[object]:
 def _print_diagnostics(diagnostics: Sequence[Any]) -> None:
     for diagnostic in diagnostics:
         print(f"{diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
+
+
+def _exit_code_for_diagnostics(diagnostics: Sequence[Any]) -> int:
+    if any(diagnostic.level == "error" for diagnostic in diagnostics):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
