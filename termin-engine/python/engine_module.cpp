@@ -1,6 +1,7 @@
 #include <nanobind/nanobind.h>
 
 #include "termin/bindings/engine/engine_core_bindings.hpp"
+#include "termin/bindings/modules/term_modules_integration_bindings.hpp"
 #include "termin/bindings/scene/scene_manager_bindings.hpp"
 
 namespace nb = nanobind;
@@ -19,8 +20,10 @@ NB_MODULE(_engine_native, m) {
 
     auto scene_module = m.def_submodule("scene", "Scene management");
     auto render_module = m.def_submodule("render", "Rendering management");
+    auto modules_module = m.def_submodule("modules", "Modules integration");
 
     termin::bind_scene_manager(scene_module);
     termin::bind_rendering_manager(render_module);
+    termin::bind_term_modules_integration(modules_module);
     termin::bind_engine_core(m);
 }

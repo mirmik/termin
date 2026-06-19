@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from tcbase import log
-from termin import _native
+from termin.engine import TermModulesIntegration
 from termin_modules import (
     CppModuleBackend,
     ModuleEnvironment,
@@ -14,8 +14,6 @@ from termin_modules import (
     ModuleRuntime,
     PythonModuleBackend,
 )
-
-TermModulesIntegration = _native.modules.TermModulesIntegration
 
 
 class ProjectModulesRuntime:

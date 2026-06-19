@@ -44,7 +44,6 @@ set(TERMIN_APP_NATIVE_SOURCES
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
-    termin/bindings/modules/term_modules_integration_bindings.cpp
     termin/tc_component_python_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp

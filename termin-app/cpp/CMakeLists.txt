@@ -268,12 +268,10 @@ if(COMMAND termin_enable_unity_build_for)
 endif()
 
 # ============== Render library ==============
-# Includes passes with TC_REGISTER_FRAME_PASS for static registration
+# Legacy app-side render glue that still depends on RenderingManager.
 set(RENDER_LIB_SOURCES
     # Render extension for TcSceneRef (uses RenderingManager)
     termin/tc_scene_render_ext.cpp
-    termin/modules/term_modules_integration.cpp
-    termin/camera/camera_viewport_component.cpp
 )
 add_library(render_lib SHARED ${RENDER_LIB_SOURCES})
 if(COMMAND termin_add_alias_if_missing)
@@ -283,7 +281,7 @@ target_include_directories(render_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/cpp>
 )
-target_link_libraries(render_lib PUBLIC entity_lib tcbase::termin_base tgfx::termin_graphics tgfx::termin_graphics2 termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_modules::termin_modules termin_engine::termin_engine)
+target_link_libraries(render_lib PUBLIC entity_lib tcbase::termin_base tgfx::termin_graphics tgfx::termin_graphics2 termin_materials::termin_materials termin_render::termin_render termin_render_passes::termin_render_passes termin_display::termin_display termin_components_collision::termin_components_collision termin_components_render::termin_components_render termin_engine::termin_engine)
 if(TGFX2_ENABLE_OPENGL)
     target_link_libraries(render_lib PUBLIC OpenGL::GL)
 endif()

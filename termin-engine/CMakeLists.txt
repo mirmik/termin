@@ -39,6 +39,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_input REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_modules termin_modules::termin_modules)
+else()
+    find_package(termin_modules REQUIRED)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
@@ -55,6 +60,7 @@ set(TERMIN_ENGINE_SOURCES
     src/render_state_store.cpp
     src/rendering_manager.cpp
     src/scene_pipeline_manager.cpp
+    src/modules/term_modules_integration.cpp
     src/pull_rendering_manager.cpp
     src/tc_scene_manager_instance.cpp
     src/tc_rendering_manager_instance.cpp
@@ -99,6 +105,7 @@ target_link_libraries(termin_engine
         termin_render::termin_render
         termin_display::termin_display
         termin_input::termin_input
+        termin_modules::termin_modules
 )
 
 if(UNIX AND NOT APPLE)
@@ -121,6 +128,7 @@ if(TERMIN_BUILD_PYTHON)
         bindings/engine_core_bindings.cpp
         bindings/scene_manager_bindings.cpp
         bindings/rendering_manager_bindings.cpp
+        bindings/term_modules_integration_bindings.cpp
     )
     target_link_libraries(_engine_native PRIVATE termin_engine)
     target_include_directories(_engine_native PRIVATE
