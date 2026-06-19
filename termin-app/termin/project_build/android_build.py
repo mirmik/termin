@@ -8,15 +8,20 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from termin.project_build.common import preload_project_resources, read_project_name
+from termin.project_build.build_context import BuildContext, create_build_context
+from termin.project_build.diagnostics import DiagnosticLike
+from termin.project_build.pipeline import (
+    TargetPackageStepResult,
+    TargetPreflightStepResult,
+    run_project_build_pipeline,
+)
 from termin.project_build.runtime_package_exporter import (
-    RuntimePackageExportDiagnostic,
     RuntimePackageExportResult,
     export_runtime_package,
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
 from termin.project_build.target_build_common import read_log_tail
-from termin.project_build.target_preflight import preflight_android_build, preflight_project_build_context
+from termin.project_build.target_preflight import AndroidPreflightResult, preflight_android_build
 
 
 @dataclass
@@ -27,7 +32,15 @@ class AndroidBuildResult:
     log_path: Path
     application_id: str
     launch_activity: str
-    diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
+    diagnostics: list[DiagnosticLike] = field(default_factory=list)
+
+
+@dataclass
+class _AndroidTargetPackagePayload:
+    apk_path: Path
+    log_path: Path
+    application_id: str
+    launch_activity: str
 
 
 def build_android_project(
@@ -42,50 +55,94 @@ def build_android_project(
     abi: str = "arm64-v8a",
     platform: str = "android-26",
 ) -> AndroidBuildResult:
-    project_root_path = Path(project_root).resolve()
-    project_name = read_project_name(project_root_path)
-    dist_dir = _resolve_dist_dir(project_root_path, project_name, output_dir)
-    project_preflight_result = preflight_project_build_context(
-        project_root=project_root_path,
+    context = create_build_context(
+        project_root=project_root,
         entry_scene=entry_scene,
-        output_dir=dist_dir,
-        target_name="Android",
+        target="android",
+        output_dir=output_dir,
     )
-    package_dir = dist_dir / "package"
-    apk_dir = dist_dir / "apk"
-    logs_dir = dist_dir / "logs"
-    apk_dir.mkdir(parents=True, exist_ok=True)
-    logs_dir.mkdir(parents=True, exist_ok=True)
+    pipeline_result = run_project_build_pipeline(
+        context=context,
+        target_name="Android",
+        preload_log_tag="[AndroidBuild]",
+        prepare_output=_prepare_android_output,
+        run_target_preflight=lambda: _android_target_preflight(
+            termin_root=termin_root,
+            build_script=build_script,
+            gradle=gradle,
+            abi=abi,
+            platform=platform,
+        ),
+        package_target=lambda build_context, package_result, preflight_result: _package_android_target(
+            build_context,
+            package_result,
+            preflight_result,
+            abi=abi,
+            platform=platform,
+        ),
+        shader_compiler=shader_compiler,
+        default_shader_language=default_shader_language,
+        export_package=export_runtime_package,
+        validate_package=validate_runtime_package,
+    )
+    target_payload = pipeline_result.target_package_result.payload
 
+    return AndroidBuildResult(
+        dist_dir=context.dist_dir,
+        package_result=pipeline_result.package_result,
+        apk_path=target_payload.apk_path,
+        log_path=target_payload.log_path,
+        application_id=target_payload.application_id,
+        launch_activity=target_payload.launch_activity,
+        diagnostics=pipeline_result.diagnostics,
+    )
+
+
+def _prepare_android_output(context: BuildContext) -> None:
+    (context.dist_dir / "apk").mkdir(parents=True, exist_ok=True)
+    context.logs_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _android_target_preflight(
+    termin_root: str | Path | None,
+    build_script: str | Path | None,
+    gradle: str | Path | None,
+    abi: str,
+    platform: str,
+) -> TargetPreflightStepResult[AndroidPreflightResult]:
     preflight_result = preflight_android_build(
         termin_root=termin_root,
         build_script=build_script,
         gradle=gradle,
+        abi=abi,
+        platform=platform,
+    )
+    return TargetPreflightStepResult(
+        payload=preflight_result,
+        diagnostics=preflight_result.diagnostics,
     )
 
-    preload_project_resources(project_root_path, "[AndroidBuild]")
 
-    package_result = export_runtime_package(
-        project_root=project_root_path,
-        entry_scene=entry_scene,
-        output_dir=package_dir,
-        shader_compiler=shader_compiler,
-        default_shader_language=default_shader_language,
-    )
-    package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
-
-    application_id = _android_application_id_from_project_name(project_name)
+def _package_android_target(
+    context: BuildContext,
+    package_result: RuntimePackageExportResult,
+    preflight_result: AndroidPreflightResult,
+    abi: str,
+    platform: str,
+) -> TargetPackageStepResult[_AndroidTargetPackagePayload]:
+    application_id = _android_application_id_from_project_name(context.project_name)
     launch_activity = "org.termin.android.TerminActivity"
-    log_path = logs_dir / "android-build.log"
+    log_path = context.logs_dir / "android-build.log"
     _run_android_build_script(
         build_script=preflight_result.build_script,
         package_dir=package_result.package_dir,
         log_path=log_path,
         gradle=preflight_result.gradle,
+        android_sdk_root=preflight_result.android_sdk_root,
         abi=abi,
         platform=platform,
         application_id=application_id,
-        app_label=project_name,
+        app_label=context.project_name,
     )
 
     source_apk = (
@@ -101,29 +158,17 @@ def build_android_project(
     if not source_apk.exists():
         raise FileNotFoundError(f"Android build did not produce APK: {source_apk}")
 
-    apk_path = apk_dir / f"{project_name}-debug.apk"
+    apk_path = context.dist_dir / "apk" / f"{context.project_name}-debug.apk"
     shutil.copy2(source_apk, apk_path)
 
-    return AndroidBuildResult(
-        dist_dir=dist_dir,
-        package_result=package_result,
-        apk_path=apk_path,
-        log_path=log_path,
-        application_id=application_id,
-        launch_activity=launch_activity,
-        diagnostics=[
-            *project_preflight_result.diagnostics,
-            *preflight_result.diagnostics,
-            *package_result.diagnostics,
-            *package_validation_diagnostics,
-        ],
+    return TargetPackageStepResult(
+        payload=_AndroidTargetPackagePayload(
+            apk_path=apk_path,
+            log_path=log_path,
+            application_id=application_id,
+            launch_activity=launch_activity,
+        ),
     )
-
-
-def _resolve_dist_dir(project_root: Path, project_name: str, output_dir: str | Path | None) -> Path:
-    if output_dir is not None:
-        return Path(output_dir).resolve()
-    return (project_root / "dist" / "android" / project_name).resolve()
 
 
 def _run_android_build_script(
@@ -131,6 +176,7 @@ def _run_android_build_script(
     package_dir: Path,
     log_path: Path,
     gradle: Path | None,
+    android_sdk_root: Path,
     abi: str,
     platform: str,
     application_id: str,
@@ -140,6 +186,8 @@ def _run_android_build_script(
         str(build_script),
         "--assets-dir",
         str(package_dir),
+        "--sdk-root",
+        str(android_sdk_root),
         "--abi",
         abi,
         "--platform",

@@ -88,17 +88,30 @@ As of 2026-06-18:
   package.
 - Architecture status is tracked in
   `2026-06-17-build-system-target-architecture.md`.
+- Shared build diagnostics exist as `termin.project_build.diagnostics`.
+- Project/target preflight uses `BuildDiagnostic` and no longer imports
+  runtime package exporter diagnostics.
+- Normalized build context exists as `termin.project_build.build_context`.
+- Desktop, Android and Quest/OpenXR wrappers construct and validate a
+  `BuildContext` internally while keeping their public APIs stable.
+- Build profiles are normalized into `ProfileBuildRequest` with a
+  `BuildContext` before target wrapper dispatch.
+- Runtime package export, runtime package validation and target packaging are
+  sequenced through `termin.project_build.pipeline.run_project_build_pipeline`
+  for desktop, Android and Quest/OpenXR.
+- SDK capabilities are loaded through
+  `termin.project_build.capabilities.load_sdk_capabilities`; the loader reads
+  `termin-sdk-capabilities.json` when present and synthesizes conservative
+  capabilities from the current SDK layout otherwise.
+- Runtime package validation now checks scene resource references, material
+  phase shader references, pipeline shader references, shader source/artifact
+  completeness and optional target shader requirements before target packaging.
 
 Known remaining shape problems:
 
-- Wrappers still own most pipeline sequencing.
-- Diagnostics reuse `RuntimePackageExportDiagnostic` outside runtime package
-  export.
-- Profile backend dispatches directly to wrappers instead of producing a single
-  normalized build request/context.
-- SDK capability checks are still mostly filesystem checks.
-- Legacy `termin.project_builder` broad-copy path is not fully isolated from
-  packaged build terminology.
+- Runtime package exporter/validator/packagers still use
+  `RuntimePackageExportDiagnostic`; this remains as a compatibility boundary
+  until later cleanup.
 
 ## Target Module Shape
 
@@ -370,37 +383,63 @@ If bindings or SDK artifacts change, follow repository instructions:
 
 Update this checklist as phases land.
 
-- [ ] Phase 1: shared build diagnostics
-- [ ] Phase 2: BuildContext and normalized request
-- [ ] Phase 3: profile backend normalization
-- [ ] Phase 4: pipeline orchestrator
-- [ ] Phase 5: SDK capability layer
-- [ ] Phase 6: runtime package contract hardening
-- [ ] Phase 7: legacy build path isolation
-- [ ] Documentation and Kanboard reflect final state
+- [x] Phase 1: shared build diagnostics
+- [x] Phase 2: BuildContext and normalized request
+- [x] Phase 3: profile backend normalization
+- [x] Phase 4: pipeline orchestrator
+- [x] Phase 5: SDK capability layer
+- [x] Phase 6: runtime package contract hardening
+- [x] Phase 7: legacy build path isolation
+- [x] Documentation and Kanboard reflect final state
 
 ## Risks And Decisions
 
 Diagnostics:
 
-- Decision needed: keep a compatibility alias for `RuntimePackageExportDiagnostic`
-  or migrate tests and result types to `BuildDiagnostic` in one larger step.
+- Phase 1 decision: generic project-build/preflight diagnostics use
+  `BuildDiagnostic`. Runtime package exporter/validator/packagers keep
+  `RuntimePackageExportDiagnostic` until their contracts are migrated or aliased
+  in a later cleanup.
 
 Pipeline migration:
 
 - Move one target at a time. Desktop is the safest first target because it has
   runtime package, Python packaging and runtime bundle steps in one place.
+- Phase 3 decision: `termin.project_build.profile_build` now has a single
+  profile-to-request normalization path. `build_profile` dispatches from
+  `ProfileBuildRequest`, and invalid targets, unsupported target option blocks,
+  missing entry scenes and unsafe outputs fail before wrapper invocation.
+- Phase 4 decision: `termin.project_build.pipeline.run_project_build_pipeline`
+  owns phase ordering for all three current targets. Wrappers keep compatibility
+  entry points and provide target preflight/package callbacks, but no longer
+  duplicate runtime package export/validation sequencing.
 
 SDK capabilities:
 
-- Do not over-design the manifest up front. Start with fields required by
-  existing preflight checks and let tests drive expansion.
+- Phase 5 decision: `termin.project_build.capabilities` owns the initial
+  machine-readable SDK model. It supports manifest-driven capabilities and
+  fallback synthesis from current `sdk/` layout. Desktop preflight checks
+  `termin_player`, native libs and bundled Python through capabilities; Android
+  and Quest/OpenXR preflight check SDK root, ABI and OpenXR support through the
+  same model.
+
+Runtime package validation:
+
+- Phase 6 decision: build-time validation remains the authoritative packaging
+  gate for now. Runtime loaders should still stay defensive, but this phase
+  does not introduce a generated validation report consumed at load time.
+  `validate_runtime_package(...)` now validates package JSON graph references
+  and optional `target_requirements.shader_targets` before target packaging.
 
 Legacy path:
 
-- Do not remove `termin.project_builder` until CLI/editor references are mapped.
-  First make it explicit whether it is dev export, old play-mode artifact or
-  unused code.
+- Phase 7 decision: `termin.project_builder` is retained as explicit
+  legacy/dev broad-copy export for one transition window. Its canonical command
+  is `python -m termin.project_builder legacy-dev-export ...`; `build` remains
+  a warning-emitting compatibility alias. Packaged `termin build PROFILE` uses
+  `termin.project_build.profile_build`, and `termin_runner --mode build` no
+  longer falls back to `build.json`; legacy launch is gated behind
+  `--mode legacy-build`.
 
 ## Definition Of Done
 

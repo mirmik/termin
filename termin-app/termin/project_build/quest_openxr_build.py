@@ -9,15 +9,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from termin.project_build.common import preload_project_resources, read_project_name
+from termin.project_build.build_context import BuildContext, create_build_context, resolve_build_dist_dir
+from termin.project_build.common import read_project_name
+from termin.project_build.diagnostics import DiagnosticLike
+from termin.project_build.pipeline import (
+    TargetPackageStepResult,
+    TargetPreflightStepResult,
+    run_project_build_pipeline,
+)
 from termin.project_build.runtime_package_exporter import (
-    RuntimePackageExportDiagnostic,
     RuntimePackageExportResult,
     export_runtime_package,
 )
 from termin.project_build.runtime_package_validator import validate_runtime_package
 from termin.project_build.target_build_common import read_log_tail
-from termin.project_build.target_preflight import preflight_project_build_context, preflight_quest_openxr_build
+from termin.project_build.target_preflight import QuestOpenXRPreflightResult, preflight_quest_openxr_build
 
 
 QUEST_OPENXR_APPLICATION_ID = "org.termin.openxr"
@@ -32,7 +38,7 @@ class QuestOpenXRBuildResult:
     log_path: Path
     application_id: str = QUEST_OPENXR_APPLICATION_ID
     launch_activity: str = QUEST_OPENXR_LAUNCH_ACTIVITY
-    diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
+    diagnostics: list[DiagnosticLike] = field(default_factory=list)
 
 
 @dataclass
@@ -40,6 +46,12 @@ class QuestOpenXRDeployResult:
     command: list[str]
     log_path: Path | None
     output: str
+
+
+@dataclass
+class _QuestOpenXRTargetPackagePayload:
+    apk_path: Path
+    log_path: Path
 
 
 def build_quest_openxr_project(
@@ -55,21 +67,60 @@ def build_quest_openxr_project(
     platform: str = "android-26",
     log_callback: Callable[[str], None] | None = None,
 ) -> QuestOpenXRBuildResult:
-    project_root_path = Path(project_root).resolve()
-    project_name = read_project_name(project_root_path)
-    dist_dir = _resolve_quest_dist_dir(project_root_path, project_name, output_dir)
-    project_preflight_result = preflight_project_build_context(
-        project_root=project_root_path,
+    context = create_build_context(
+        project_root=project_root,
         entry_scene=entry_scene,
-        output_dir=dist_dir,
-        target_name="Quest/OpenXR",
+        target="quest_openxr",
+        output_dir=output_dir,
     )
-    package_dir = dist_dir / "package"
-    apk_dir = dist_dir / "apk"
-    logs_dir = dist_dir / "logs"
-    apk_dir.mkdir(parents=True, exist_ok=True)
-    logs_dir.mkdir(parents=True, exist_ok=True)
+    pipeline_result = run_project_build_pipeline(
+        context=context,
+        target_name="Quest/OpenXR",
+        preload_log_tag="[QuestOpenXRBuild]",
+        prepare_output=_prepare_quest_openxr_output,
+        run_target_preflight=lambda: _quest_openxr_target_preflight(
+            termin_root=termin_root,
+            build_script=build_script,
+            gradle=gradle,
+            abi=abi,
+            platform=platform,
+        ),
+        package_target=lambda build_context, package_result, preflight_result: _package_quest_openxr_target(
+            build_context,
+            package_result,
+            preflight_result,
+            abi=abi,
+            platform=platform,
+            log_callback=log_callback,
+        ),
+        shader_compiler=shader_compiler,
+        default_shader_language=default_shader_language,
+        export_package=export_runtime_package,
+        validate_package=validate_runtime_package,
+    )
+    target_payload = pipeline_result.target_package_result.payload
 
+    return QuestOpenXRBuildResult(
+        dist_dir=context.dist_dir,
+        package_result=pipeline_result.package_result,
+        apk_path=target_payload.apk_path,
+        log_path=target_payload.log_path,
+        diagnostics=pipeline_result.diagnostics,
+    )
+
+
+def _prepare_quest_openxr_output(context: BuildContext) -> None:
+    (context.dist_dir / "apk").mkdir(parents=True, exist_ok=True)
+    context.logs_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _quest_openxr_target_preflight(
+    termin_root: str | Path | None,
+    build_script: str | Path | None,
+    gradle: str | Path | None,
+    abi: str,
+    platform: str,
+) -> TargetPreflightStepResult[QuestOpenXRPreflightResult]:
     preflight_result = preflight_quest_openxr_build(
         termin_root=termin_root,
         build_script=build_script,
@@ -77,19 +128,21 @@ def build_quest_openxr_project(
         abi=abi,
         platform=platform,
     )
-
-    preload_project_resources(project_root_path, "[QuestOpenXRBuild]")
-
-    package_result = export_runtime_package(
-        project_root=project_root_path,
-        entry_scene=entry_scene,
-        output_dir=package_dir,
-        shader_compiler=shader_compiler,
-        default_shader_language=default_shader_language,
+    return TargetPreflightStepResult(
+        payload=preflight_result,
+        diagnostics=preflight_result.diagnostics,
     )
-    package_validation_diagnostics = validate_runtime_package(package_result.package_dir)
 
-    log_path = logs_dir / "quest-openxr-build.log"
+
+def _package_quest_openxr_target(
+    context: BuildContext,
+    package_result: RuntimePackageExportResult,
+    preflight_result: QuestOpenXRPreflightResult,
+    abi: str,
+    platform: str,
+    log_callback: Callable[[str], None] | None,
+) -> TargetPackageStepResult[_QuestOpenXRTargetPackagePayload]:
+    log_path = context.logs_dir / "quest-openxr-build.log"
     _run_quest_build_script(
         build_script=preflight_result.build_script,
         package_dir=package_result.package_dir,
@@ -114,20 +167,14 @@ def build_quest_openxr_project(
     if not source_apk.exists():
         raise FileNotFoundError(f"Quest/OpenXR build did not produce APK: {source_apk}")
 
-    apk_path = apk_dir / f"{project_name}-quest-openxr-debug.apk"
+    apk_path = context.dist_dir / "apk" / f"{context.project_name}-quest-openxr-debug.apk"
     shutil.copy2(source_apk, apk_path)
 
-    return QuestOpenXRBuildResult(
-        dist_dir=dist_dir,
-        package_result=package_result,
-        apk_path=apk_path,
-        log_path=log_path,
-        diagnostics=[
-            *project_preflight_result.diagnostics,
-            *preflight_result.diagnostics,
-            *package_result.diagnostics,
-            *package_validation_diagnostics,
-        ],
+    return TargetPackageStepResult(
+        payload=_QuestOpenXRTargetPackagePayload(
+            apk_path=apk_path,
+            log_path=log_path,
+        ),
     )
 
 
@@ -172,7 +219,7 @@ def default_quest_openxr_apk_path(
 ) -> Path:
     project_root_path = Path(project_root).resolve()
     project_name = read_project_name(project_root_path)
-    dist_dir = _resolve_quest_dist_dir(project_root_path, project_name, output_dir)
+    dist_dir = resolve_build_dist_dir(project_root_path, project_name, "quest_openxr", output_dir)
     return dist_dir / "apk" / f"{project_name}-quest-openxr-debug.apk"
 
 
@@ -182,14 +229,8 @@ def default_quest_openxr_log_path(
 ) -> Path:
     project_root_path = Path(project_root).resolve()
     project_name = read_project_name(project_root_path)
-    dist_dir = _resolve_quest_dist_dir(project_root_path, project_name, output_dir)
+    dist_dir = resolve_build_dist_dir(project_root_path, project_name, "quest_openxr", output_dir)
     return dist_dir / "logs" / "quest-openxr-deploy.log"
-
-
-def _resolve_quest_dist_dir(project_root: Path, project_name: str, output_dir: str | Path | None) -> Path:
-    if output_dir is not None:
-        return Path(output_dir).resolve()
-    return (project_root / "dist" / "quest_openxr" / project_name).resolve()
 
 
 def _run_quest_build_script(

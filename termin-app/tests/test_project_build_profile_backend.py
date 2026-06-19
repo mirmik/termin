@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from termin.project_build import profile_build
 
 
@@ -214,6 +216,211 @@ def test_profile_build_routes_quest_openxr_profile(tmp_path: Path, monkeypatch) 
             "platform": "android-26",
         }
     ]
+
+
+def test_profile_build_normalizes_desktop_request(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                    "desktop": {"sdk_root": str(tmp_path / "sdk")},
+                }
+            },
+        },
+    )
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    request = profile_build.normalize_profile_build_request(profile)
+
+    assert request.name == "dev"
+    assert request.target == "desktop"
+    assert request.context.project_root == project.resolve()
+    assert request.context.entry_scene == (project / "Scenes" / "Main.scene").resolve()
+    assert request.context.dist_dir == (project / "dist" / "dev").resolve()
+    assert request.context.target_options == {"desktop": {"sdk_root": str(tmp_path / "sdk")}}
+    assert request.sdk_root == tmp_path / "sdk"
+    assert request.termin_root is None
+    assert request.gradle is None
+
+
+def test_profile_build_normalizes_android_request(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "mobile": {
+                    "target": "android",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/android/mobile",
+                    "android": {
+                        "abi": "x86_64",
+                        "platform": "android-29",
+                        "build_script": "tools/build-android.sh",
+                    },
+                }
+            },
+        },
+    )
+
+    profile = profile_build.load_build_profile(project, profiles_path, "mobile")
+    request = profile_build.normalize_profile_build_request(profile)
+
+    assert request.target == "android"
+    assert request.context.dist_dir == (project / "dist" / "android" / "mobile").resolve()
+    assert request.context.target_options == {
+        "android": {
+            "abi": "x86_64",
+            "platform": "android-29",
+            "build_script": "tools/build-android.sh",
+        }
+    }
+    assert request.build_script == project.resolve() / "tools" / "build-android.sh"
+    assert request.abi == "x86_64"
+    assert request.platform == "android-29"
+
+
+def test_profile_build_normalizes_quest_openxr_request(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "quest": {
+                    "target": "quest_openxr",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/quest",
+                    "android": {
+                        "gradle": str(tmp_path / "gradle"),
+                    },
+                    "openxr": {
+                        "build_script": str(tmp_path / "build-quest-openxr-apk.sh"),
+                    },
+                }
+            },
+        },
+    )
+
+    profile = profile_build.load_build_profile(project, profiles_path, "quest")
+    request = profile_build.normalize_profile_build_request(profile)
+
+    assert request.target == "quest_openxr"
+    assert request.context.target_options == {
+        "android": {"gradle": str(tmp_path / "gradle")},
+        "openxr": {"build_script": str(tmp_path / "build-quest-openxr-apk.sh")},
+    }
+    assert request.gradle == tmp_path / "gradle"
+    assert request.build_script == tmp_path / "build-quest-openxr-apk.sh"
+    assert request.abi == "arm64-v8a"
+    assert request.platform == "android-26"
+
+
+def test_profile_build_rejects_unsupported_target_block_before_wrapper(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                    "android": {"abi": "x86_64"},
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    with pytest.raises(profile_build.ProfileBuildError, match="does not support option block 'android'"):
+        profile_build.build_profile(profile)
+
+    assert calls == []
+
+
+def test_profile_build_rejects_unsafe_output_before_wrapper(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "build/dev",
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    with pytest.raises(profile_build.ProfileBuildError, match="Refusing to use project-internal"):
+        profile_build.build_profile(profile)
+
+    assert calls == []
+
+
+def test_profile_build_rejects_missing_entry_scene_before_wrapper(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Missing.scene",
+                    "output_dir": "dist/dev",
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    with pytest.raises(profile_build.ProfileBuildError, match="Entry scene does not exist"):
+        profile_build.build_profile(profile)
+
+    assert calls == []
 
 
 def test_profile_build_rejects_unsupported_target_with_supported_list(tmp_path: Path, capsys) -> None:

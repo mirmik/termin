@@ -10,10 +10,30 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from termin.project_build import build_android_project, build_desktop_project, build_quest_openxr_project
+from termin.project_build.build_context import BuildContext, create_build_context
+from termin.project_build.target_preflight import TargetPreflightError, preflight_project_build_context
 
 
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
 BUILD_PROFILE_SCHEMA_VERSION = 1
+COMMON_PROFILE_KEYS = {
+    "target",
+    "configuration",
+    "entry_scene",
+    "output_dir",
+    "resource_policy",
+    "shader_compiler",
+    "default_shader_language",
+    "termin_root",
+    "build_script",
+    "python",
+    "runtime",
+}
+TARGET_OPTION_BLOCKS = {
+    "android": {"android"},
+    "desktop": {"desktop"},
+    "quest_openxr": {"android", "openxr"},
+}
 
 
 class ProfileBuildError(RuntimeError):
@@ -39,6 +59,21 @@ class BuildProfile:
     entry_scene: Path
     output_dir: Path
     data: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class ProfileBuildRequest:
+    name: str
+    target: str
+    context: BuildContext
+    shader_compiler: Path | None
+    default_shader_language: str
+    sdk_root: Path | None
+    termin_root: Path | None
+    build_script: Path | None
+    gradle: Path | None
+    abi: str
+    platform: str
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -100,74 +135,171 @@ def load_build_profile(project_root: Path, profiles_path: Path, profile_name: st
 
 
 def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) -> int:
-    if profile.target == "desktop":
+    request = normalize_profile_build_request(profile, shader_compiler=shader_compiler)
+
+    if request.target == "desktop":
         result = build_desktop_project(
-            project_root=profile.project_root,
-            entry_scene=profile.entry_scene,
-            output_dir=profile.output_dir,
-            shader_compiler=_profile_path(profile, "shader_compiler", shader_compiler),
-            default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
-            sdk_root=_desktop_path(profile, "sdk_root"),
+            project_root=request.context.project_root,
+            entry_scene=request.context.entry_scene,
+            output_dir=request.context.dist_dir,
+            shader_compiler=request.shader_compiler,
+            default_shader_language=request.default_shader_language,
+            sdk_root=request.sdk_root,
         )
         _print_desktop_result(result)
         return 0
 
-    if profile.target == "android":
-        android = _optional_object(profile.data, "android", context=f"profile '{profile.name}'")
+    if request.target == "android":
         result = build_android_project(
-            project_root=profile.project_root,
-            entry_scene=profile.entry_scene,
-            output_dir=profile.output_dir,
-            termin_root=_path_from_mapping(
-                android,
-                "termin_root",
-                _profile_path(profile, "termin_root", None),
-                profile.project_root,
-            ),
-            build_script=_path_from_mapping(
-                android,
-                "build_script",
-                _profile_path(profile, "build_script", None),
-                profile.project_root,
-            ),
-            gradle=_android_path(profile, android, "gradle"),
-            shader_compiler=_profile_path(profile, "shader_compiler", shader_compiler),
-            default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
-            abi=_android_string(android, "abi", "arm64-v8a"),
-            platform=_android_string(android, "platform", "android-26"),
+            project_root=request.context.project_root,
+            entry_scene=request.context.entry_scene,
+            output_dir=request.context.dist_dir,
+            termin_root=request.termin_root,
+            build_script=request.build_script,
+            gradle=request.gradle,
+            shader_compiler=request.shader_compiler,
+            default_shader_language=request.default_shader_language,
+            abi=request.abi,
+            platform=request.platform,
         )
         _print_android_result(result)
         return 0
 
-    if profile.target == "quest_openxr":
-        android = _optional_object(profile.data, "android", context=f"profile '{profile.name}'")
-        openxr = _optional_object(profile.data, "openxr", context=f"profile '{profile.name}'")
+    if request.target == "quest_openxr":
         result = build_quest_openxr_project(
-            project_root=profile.project_root,
-            entry_scene=profile.entry_scene,
-            output_dir=profile.output_dir,
-            termin_root=_path_from_mapping(
-                android,
-                "termin_root",
-                _profile_path(profile, "termin_root", None),
-                profile.project_root,
-            ),
-            build_script=_path_from_mapping(
-                openxr,
-                "build_script",
-                _profile_path(profile, "build_script", None),
-                profile.project_root,
-            ),
-            gradle=_android_path(profile, android, "gradle"),
-            shader_compiler=_profile_path(profile, "shader_compiler", shader_compiler),
-            default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
-            abi=_android_string(android, "abi", "arm64-v8a"),
-            platform=_android_string(android, "platform", "android-26"),
+            project_root=request.context.project_root,
+            entry_scene=request.context.entry_scene,
+            output_dir=request.context.dist_dir,
+            termin_root=request.termin_root,
+            build_script=request.build_script,
+            gradle=request.gradle,
+            shader_compiler=request.shader_compiler,
+            default_shader_language=request.default_shader_language,
+            abi=request.abi,
+            platform=request.platform,
         )
         _print_quest_openxr_result(result)
         return 0
 
-    raise UnsupportedBuildTargetError(profile.target)
+    raise UnsupportedBuildTargetError(request.target)
+
+
+def normalize_profile_build_request(
+    profile: BuildProfile,
+    shader_compiler: Path | None = None,
+) -> ProfileBuildRequest:
+    _validate_supported_target(profile.target)
+    _validate_target_option_blocks(profile)
+
+    target_options = _target_options(profile)
+    context = create_build_context(
+        project_root=profile.project_root,
+        entry_scene=profile.entry_scene,
+        target=profile.target,
+        output_dir=profile.output_dir,
+        target_options=target_options,
+    )
+    try:
+        preflight_project_build_context(context, _target_display_name(profile.target))
+    except TargetPreflightError as exc:
+        raise ProfileBuildError(f"profile '{profile.name}' failed build preflight: {exc}") from exc
+
+    android = _optional_object(profile.data, "android", context=f"profile '{profile.name}'")
+    openxr = _optional_object(profile.data, "openxr", context=f"profile '{profile.name}'")
+
+    return ProfileBuildRequest(
+        name=profile.name,
+        target=profile.target,
+        context=context,
+        shader_compiler=_profile_path(profile, "shader_compiler", shader_compiler),
+        default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
+        sdk_root=_desktop_path(profile, "sdk_root") if profile.target == "desktop" else None,
+        termin_root=_target_termin_root(profile, android),
+        build_script=_target_build_script(profile, android, openxr),
+        gradle=_android_path(profile, android, "gradle")
+        if profile.target in ("android", "quest_openxr")
+        else None,
+        abi=_android_string(android, "abi", "arm64-v8a"),
+        platform=_android_string(android, "platform", "android-26"),
+    )
+
+
+def _validate_supported_target(target: str) -> None:
+    if target not in SUPPORTED_TARGETS:
+        raise UnsupportedBuildTargetError(target)
+
+
+def _validate_target_option_blocks(profile: BuildProfile) -> None:
+    allowed_blocks = TARGET_OPTION_BLOCKS[profile.target]
+    supported_block_names = set(TARGET_OPTION_BLOCKS["desktop"])
+    supported_block_names.update(TARGET_OPTION_BLOCKS["android"])
+    supported_block_names.update(TARGET_OPTION_BLOCKS["quest_openxr"])
+
+    for key, value in profile.data.items():
+        if key in COMMON_PROFILE_KEYS or key in allowed_blocks:
+            continue
+        if key in supported_block_names or isinstance(value, dict):
+            raise ProfileBuildError(
+                f"profile '{profile.name}' target '{profile.target}' does not support option block '{key}'"
+            )
+
+
+def _target_options(profile: BuildProfile) -> dict[str, object]:
+    options: dict[str, object] = {}
+    allowed_blocks = TARGET_OPTION_BLOCKS[profile.target]
+    for key in allowed_blocks:
+        value = profile.data.get(key)
+        if value is not None:
+            if not isinstance(value, dict):
+                raise ProfileBuildError(f"profile '{profile.name}' field '{key}' must be an object")
+            options[key] = dict(value)
+    return options
+
+
+def _target_display_name(target: str) -> str:
+    if target == "desktop":
+        return "Desktop"
+    if target == "android":
+        return "Android"
+    if target == "quest_openxr":
+        return "Quest/OpenXR"
+    return target
+
+
+def _target_termin_root(
+    profile: BuildProfile,
+    android: Mapping[str, Any],
+) -> Path | None:
+    if profile.target not in ("android", "quest_openxr"):
+        return None
+    return _path_from_mapping(
+        android,
+        "termin_root",
+        _profile_path(profile, "termin_root", None),
+        profile.project_root,
+    )
+
+
+def _target_build_script(
+    profile: BuildProfile,
+    android: Mapping[str, Any],
+    openxr: Mapping[str, Any],
+) -> Path | None:
+    if profile.target == "android":
+        return _path_from_mapping(
+            android,
+            "build_script",
+            _profile_path(profile, "build_script", None),
+            profile.project_root,
+        )
+    if profile.target == "quest_openxr":
+        return _path_from_mapping(
+            openxr,
+            "build_script",
+            _profile_path(profile, "build_script", None),
+            profile.project_root,
+        )
+    return None
 
 
 def _create_parser() -> argparse.ArgumentParser:

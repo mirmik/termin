@@ -198,6 +198,11 @@ Supported targets:
 - `quest_openxr`
 - future: `server`, `web`, `headless_test`, if needed.
 
+Current implementation note, 2026-06-18: the Python backend parses
+`build_profiles.json` into `BuildProfile`, then normalizes it into
+`ProfileBuildRequest` with a shared `BuildContext` before target wrapper
+dispatch. Target-specific option blocks are checked before wrapper invocation.
+
 Supported configurations:
 
 - `dev` - fastest local build, may allow explicit smoke fallbacks.
@@ -245,17 +250,22 @@ Output:
 - fatal diagnostics if target cannot be built.
 
 Status 2026-06-18: initial Android and Quest/OpenXR target preflight exists in
-`termin.project_build.target_preflight`, alongside shared project-context
-preflight for desktop, Android and Quest/OpenXR. Build wrappers now validate
-project root, entry scene containment/existence and output directory safety
-before package export; Android/Quest wrappers also resolve required target
-scripts and Gradle paths before export. Fatal environment/context problems are
-reported through structured diagnostics carried by `TargetPreflightError`.
-Android checks cover target root marker, build script and explicitly configured
-Gradle paths. Quest/OpenXR additionally checks Android SDK root, requested ABI,
-ABI `lib` directory and OpenXR CMake package. Remaining Phase 0 work: deeper
-Android SDK/NDK capability checks, desktop SDK/Python runtime preflight, profile
-schema-to-context normalization and SDK capability manifest integration.
+`termin.project_build.target_preflight`, alongside normalized
+`termin.project_build.build_context.BuildContext` construction and shared
+project-context preflight for desktop, Android and Quest/OpenXR. Build wrappers
+now validate project root, entry scene containment/existence and output
+directory safety before package export; Android/Quest wrappers also resolve
+required target scripts and Gradle paths before export. Fatal
+environment/context problems are reported as
+`termin.project_build.diagnostics.BuildDiagnostic` entries carried by
+`TargetPreflightError`.
+Android checks cover target root marker, build script, explicitly configured
+Gradle paths, Android SDK root and requested ABI through
+`termin.project_build.capabilities.SDKCapabilities`. Quest/OpenXR additionally
+checks OpenXR support through the same capability model. Desktop build preflight
+now checks SDK root, `termin_player`, native libraries and bundled Python before
+package export. Remaining Phase 0 work: deeper Android NDK/toolchain version
+checks and broader use of capability requirements from package/profile data.
 
 ### Phase 1: Project Graph Analysis
 
@@ -366,8 +376,16 @@ scene/resource paths staying inside the package root, listed file existence,
 duplicate resource UUIDs, and listed shader resource artifact paths under
 `*.shader.json`. Desktop, Android and Quest/OpenXR build wrappers now run this
 validator after `export_runtime_package(...)` and aggregate diagnostics before
-target packaging. Remaining Phase 3 work: material/pipeline graph checks,
-target capability checks, and reuse from runtime loader paths.
+target packaging.
+
+Status 2026-06-18 update: the validator now also reads package JSON specs and
+checks scene mesh/material/pipeline references against the packaged resource
+index, material phase shader references, pipeline shader references, shader
+source paths, required vertex/fragment artifacts per shader target, duplicate
+material/pipeline phase marks, and optional
+`target_requirements.shader_targets`. Reuse from runtime loader paths remains a
+later defensive validation improvement; build-time validation is currently the
+authoritative packaging gate.
 
 ### Phase 4: Target Packaging
 
@@ -477,6 +495,13 @@ Status 2026-06-18: Android and Quest/OpenXR Python wrappers no longer share
 private target-specific helpers. Common root discovery, Gradle discovery and log
 tail helpers live in `termin.project_build.target_build_common`; Quest/OpenXR
 root discovery keys off `build-quest-openxr-apk.sh`, not Android APK scripts.
+
+Status 2026-06-18 pipeline update: desktop, Android and Quest/OpenXR wrappers
+now call `termin.project_build.pipeline.run_project_build_pipeline`. The shared
+pipeline owns project preflight, target preflight, runtime package export,
+runtime package validation and target packaging order. Wrappers remain public
+compatibility entry points and provide target-specific preflight/package
+callbacks.
 
 ## Runtime Package Contract
 
@@ -637,6 +662,13 @@ Example:
 
 Build targets should check this before doing expensive work.
 
+Current implementation note, 2026-06-18: Python project builds load this file
+through `termin.project_build.capabilities.load_sdk_capabilities`. When the file
+is absent, the loader synthesizes conservative capabilities from the current SDK
+layout: `bin/termin_shaderc`, `bin/termin_player`, `lib/python3.*`, native
+libraries, `share/termin/builtin_shaders`, `android/<abi>/lib`, and
+`android/<abi>/lib/cmake/termin_openxr/termin_openxrConfig.cmake`.
+
 ## Cache and Incrementality
 
 The target system should support clean correctness first, then incremental
@@ -735,12 +767,14 @@ Minimum test matrix:
 
 ### Stage 1: Target profile backend
 
-Status target: short-term.
+Status target: partially implemented.
 
 Tasks:
 
 - move profile backend to `termin.project_build.profile_build`;
 - dispatch `desktop`, `android`, `quest_openxr`;
+- normalize profiles into `ProfileBuildRequest` before wrapper dispatch;
+- reject unsupported target option blocks before wrapper invocation;
 - make C++ `termin_builder` target-agnostic;
 - update `termin-cli.md`;
 - add fake-backend routing tests.
@@ -759,6 +793,8 @@ Tasks:
 
 ### Stage 3: Legacy build split
 
+Status 2026-06-18: implemented for the current transition window.
+
 Tasks:
 
 - rename old broad-copy `termin.project_builder` path as dev/legacy export;
@@ -766,6 +802,16 @@ Tasks:
 - remove implicit legacy run path from `termin_runner` or gate it behind
   explicit mode;
 - keep compatibility imports for one transition window.
+
+Current state:
+
+- `termin.project_builder` is documented as explicit legacy/dev export.
+- `python -m termin.project_builder legacy-dev-export ...` is the canonical
+  broad-copy command; `build` remains a warning-emitting compatibility alias.
+- `termin build PROFILE` routes through `termin.project_build.profile_build`.
+- `termin_runner --mode build` expects packaged desktop bundles and no longer
+  falls back to `build.json`; legacy `build.json` launch requires
+  `--mode legacy-build`.
 
 Related: #27.
 

@@ -975,9 +975,10 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
 
     termin_root = tmp_path / "termin-root"
     apk_source = termin_root / "build" / "android-gradle" / "app" / "outputs" / "apk" / "debug" / "app-debug.apk"
+    (termin_root / "sdk" / "android" / "arm64-v8a" / "lib").mkdir(parents=True)
     build_script = termin_root / ("build-android-apk.cmd" if os.name == "nt" else "build-android-apk.sh")
     marker_script = termin_root / "build-android-apk.sh"
-    build_script.parent.mkdir(parents=True)
+    build_script.parent.mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
         marker_script.write_text("# marker for termin root discovery\n", encoding="utf-8")
         build_script.write_text(
@@ -1031,6 +1032,8 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     log_text = result.log_path.read_text(encoding="utf-8")
     assert "--assets-dir" in log_text
     assert str(result.package_result.package_dir) in log_text
+    assert "--sdk-root" in log_text
+    assert str(termin_root / "sdk" / "android") in log_text
     assert "--application-id" in log_text
     assert "org.termin.builds.androidgame" in log_text
     assert "--app-label" in log_text
