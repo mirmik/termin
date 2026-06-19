@@ -1,17 +1,8 @@
 #!/usr/bin/env python3
 
-# termin-navmesh is a transitional pip facade.
-#
-# The C++ _navmesh_native binding currently lives inside main termin's build
-# (termin/cpp/python_bindings.cmake, guarded by TERMIN_HAS_RECAST). This pip
-# package does NOT build C++; it copies the pre-built _navmesh_native.so
-# from $TERMIN_SDK into the package directory via TerminCMakeBuildExt
-# (thin SDK-copy mode).
-#
-# Pure-Python algorithmic submodules (pathfinding, triangulation,
-# region_growing, builder_component, …) are bundled alongside the binding.
-# They depend on higher-level termin modules (visualization.core, etc.) and
-# may not be usable in environments without main termin installed.
+# termin-navmesh owns the C navmesh registry plus the Recast-backed C++
+# components and _navmesh_native Python extension. Some high-level Python
+# helper modules are still transitional and may import editor/render utilities.
 
 from setuptools import setup
 from termin_build.cmake_ext import TerminCMakeBuild, TerminCMakeBuildExt
@@ -36,8 +27,15 @@ setup(
     packages=["termin.navmesh"],
     package_dir={"termin.navmesh": "python/termin/navmesh"},
     install_requires=[
+        "tcbase",
+        "tgfx",
         "termin-assets",
+        "termin-components-mesh",
+        "termin-inspect",
+        "termin-materials",
         "termin-nanobind",
+        "termin-render",
+        "termin-scene",
         "termin-voxels",
         "termin-components-voxels",
     ],

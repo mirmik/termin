@@ -1,6 +1,6 @@
-#include "navmesh_keeper_component.hpp"
+#include <termin/navmesh/navmesh_keeper_component.hpp>
 
-#include "detour_navmesh_asset_utils.hpp"
+#include <termin/navmesh/detour_navmesh_asset_utils.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <utility>
 #include <tcbase/tc_log.hpp>

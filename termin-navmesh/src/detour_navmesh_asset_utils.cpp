@@ -1,4 +1,4 @@
-#include "detour_navmesh_asset_utils.hpp"
+#include <termin/navmesh/detour_navmesh_asset_utils.hpp>
 
 #include <termin/tc_scene.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>

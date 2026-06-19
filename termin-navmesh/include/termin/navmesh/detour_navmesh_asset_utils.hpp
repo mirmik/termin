@@ -6,9 +6,9 @@
 #include <vector>
 
 #include <termin/entity/entity.hpp>
-#include "../material/tc_material_handle.hpp"
+#include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
-#include "tc_navmesh_handle.hpp"
+#include <termin/navmesh/tc_navmesh_handle.hpp>
 
 namespace termin {
 

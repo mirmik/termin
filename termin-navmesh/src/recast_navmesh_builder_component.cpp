@@ -1,7 +1,7 @@
-#include "recast_navmesh_builder_component.hpp"
-#include "detour_navmesh_asset_utils.hpp"
-#include "navmesh_keeper_component.hpp"
-#include "off_mesh_link_component.hpp"
+#include <termin/navmesh/recast_navmesh_builder_component.hpp>
+#include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/navmesh_keeper_component.hpp>
+#include <termin/navmesh/off_mesh_link_component.hpp>
 #include <components/mesh_component.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/tc_scene.hpp>

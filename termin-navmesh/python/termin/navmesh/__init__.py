@@ -56,9 +56,9 @@ def _load_native_exports() -> dict[str, object]:
     try:
         from termin_nanobind.runtime import preload_sdk_libs
 
-        # _navmesh_native pulls in entity_lib, navmesh_lib, render_lib, Recast.
-        # Preloading entity_lib resolves the whole chain via SDK RPATH.
-        preload_sdk_libs("entity_lib")
+        # _navmesh_native is owned by termin-navmesh and pulls in the
+        # Recast-backed component library through SDK RPATH.
+        preload_sdk_libs("termin_navmesh_components")
 
         from termin.navmesh._navmesh_native import (
             DetourClosestPointResult,

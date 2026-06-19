@@ -311,8 +311,8 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 Пакеты `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh` импортируют из других пакетов, не объявленных в `install_requires`:
 
 - Импорты `termin.visualization.*` из пакетов, не являющихся termin-app
-- Импорты `termin.cache`, `termin.voxels` из termin-navmesh
-- termin-navmesh позиционируется как "thin facade", но содержит ~1300 строк компонентов редактора
+- Импорты `termin.cache`, `termin.voxels` из high-level Python слоя `termin-navmesh`
+- high-level Python слой `termin-navmesh` всё ещё смешивает navigation utilities, visual/editor components и voxel/cache integration
 
 **Проблема:** Работает в monorepo, но сломается при независимой установке pip-пакетов.
 
@@ -322,9 +322,9 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 - `termin-animation` → `tcbase`
 - `termin-components-mesh` → `tcbase`, `tmesh`, `termin-inspect`, `termin-scene` плюс уже существующие `tgfx`, `termin-csg`
 
-`termin-navmesh` не исправлен простым добавлением зависимостей: пакет смешивает навигационное ядро, editor/visual components, voxel/cache/render integration и требует отдельного разбиения.
+`termin-navmesh` исправлен на уровне native ownership: C registry, Recast/Detour-backed scene components и `_navmesh_native` больше не принадлежат `termin-app`; app-слой оставляет у себя только editor-specific visual glue. Python-пакет всё ещё смешивает navigation utilities, visual/editor components, voxel/cache/render integration и требует отдельного разбиения.
 
-**Новая проверка 2026-05-21:** `termin-navmesh/setup.py` всё ещё содержит только `install_requires=["termin-nanobind"]`, при этом код импортирует `termin.visualization.*`, `termin.voxels.*` и `termin.cache`. Самые крупные смешанные файлы: `builder_component.py` (~1355 строк), `pathfinding_world_component.py` (~1282 строки), `display_component.py` (~412 строк).
+**Новая проверка 2026-06-19:** `termin-navmesh/setup.py` содержит зависимости, нужные текущей смешанной публичной поверхности, но это фикс metadata, а не окончательная архитектурная граница. Самые крупные смешанные файлы остаются: `builder_component.py`, `pathfinding_world_component.py`, `display_component.py`.
 
 ---
 
@@ -452,11 +452,15 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 `termin-components-render` переключён с app-local `entity_helpers.hpp` на публичный helper из `termin-scene`.
 
-### 5.3 Обновить `termin-navmesh` packaging metadata после выбора границы пакета
+### 5.3 Разделить high-level Python слой `termin-navmesh`
 
-**Где смотреть:** `termin-navmesh/setup.py`
+**Где смотреть:**
+- `termin-navmesh/python/termin/navmesh/builder_component.py`
+- `termin-navmesh/python/termin/navmesh/pathfinding_world_component.py`
+- `termin-navmesh/python/termin/navmesh/display_component.py`
+- `termin-navmesh/setup.py`
 
-Простое добавление всех импортируемых зависимостей в `install_requires` технически лёгкое, но архитектурно спорное: оно закрепит смешение navmesh core, editor/visual и voxel/cache интеграций. Более чистый небольшой шаг — сначала разделить `termin.navmesh` exports на core-only и visual/editor submodules, а потом добавить metadata только для реально публичной поверхности пакета.
+Native ownership уже перенесён в `termin-navmesh`: `termin_navmesh_components` и `termin.navmesh._navmesh_native` собираются там, а `termin-app` держит только editor-specific визуализацию off-mesh links. Следующий шаг — разделить Python exports на core/navigation и visual/editor/cache integration, чтобы metadata отражала выбранную публичную поверхность, а не временно смешанный слой.
 
 ### 5.4 Вынести app/render pass binding дублирование в одного владельца
 
