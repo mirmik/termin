@@ -413,6 +413,11 @@ Verification:
 
 - If kept in app, document it as remaining app-owned debug pass, not forgotten debt.
 
+Status 2026-06-19: `GroundGridPass` moved to `termin-render-passes` and is built
+with the reusable pass library. `ColliderGizmoPass` and `SolidPrimitiveRenderer`
+remain app-owned editor/debug code until collision debug rendering gets a
+dedicated ownership decision.
+
 ### Phase 10: cleanup old app surfaces
 
 Goal: remove compatibility ownership once consumers are migrated.

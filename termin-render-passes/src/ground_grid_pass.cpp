@@ -1,5 +1,5 @@
-#include "ground_grid_pass.hpp"
-#include "termin/camera/camera_component.hpp"
+#include <termin/render/ground_grid_pass.hpp>
+#include <termin/camera/camera_component.hpp>
 #include <tcbase/tc_log.hpp>
 
 #include <tgfx2/render_context.hpp>

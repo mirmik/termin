@@ -1,8 +1,8 @@
 #pragma once
 
-#include "termin/render/frame_pass.hpp"
-#include "termin/render/execute_context.hpp"
-#include "tgfx2/handles.hpp"
+#include <termin/render/frame_pass.hpp>
+#include <termin/render/execute_context.hpp>
+#include <tgfx2/handles.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
 }
