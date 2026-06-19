@@ -123,9 +123,11 @@ from termin.display import _input_manager_on_mouse_button
 from termin.display import _input_manager_on_key
 ```
 
-Также `FBOSurface` импортируется из `termin.visualization.platform.backends.fbo_backend` (строка 25, TYPE_CHECKING).
-
-**Статус 2026-05-21:** частично исправлено. `Viewport3D` больше не использует app compatibility re-export `termin._native.render`, а импортирует функции напрямую из владельца `termin.display`. Остаточная проблема: виджет GUI-фреймворка всё ещё вызывает приватные underscored C-interop функции вместо публичного input adapter API.
+**Статус 2026-06-19:** частично исправлено. `Viewport3D` больше не использует
+app compatibility re-export `termin._native.render` и `FBOSurface` берет из
+канонического `termin.display`. Остаточная проблема: виджет GUI-фреймворка всё
+ещё вызывает приватные underscored C-interop функции вместо публичного input
+adapter API.
 
 ---
 

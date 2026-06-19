@@ -6,7 +6,7 @@ import os
 from typing import Set
 
 from tcbase import log
-from termin.editor_core.project_file_watcher import FilePreLoader
+from termin.assets.project_file_watcher import FilePreLoader
 
 
 def _is_inside_package(path: str) -> bool:

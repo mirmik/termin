@@ -9,7 +9,7 @@ from tgfx import TcShader
 
 from termin.visualization.core.scene import Scene
 from termin.visualization.core.entity import Entity, Component, InputComponent
-from termin.visualization.render.render_context import RenderContext
+from termin.render_framework import RenderContext
 from termin.visualization.core.input_events import (
     MouseButtonEvent,
     MouseMoveEvent,

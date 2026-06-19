@@ -22,7 +22,7 @@ from tcgui.widgets.widget import Widget
 from tcgui.widgets.events import DragEvent, MouseEvent, MouseWheelEvent, KeyEvent
 
 if TYPE_CHECKING:
-    from termin.visualization.platform.backends.fbo_backend import FBOSurface
+    from termin.display import FBOSurface
     from tcgui.widgets.renderer import UIRenderer
 
 

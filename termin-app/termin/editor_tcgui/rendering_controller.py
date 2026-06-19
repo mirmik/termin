@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Callable
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.display import Display
+    from termin.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.scene import Scene
     from termin.visualization.render.framegraph import RenderPipeline
@@ -230,8 +230,8 @@ class RenderingControllerTcgui:
         return None
 
     def _create_display_for_name(self, name: str) -> "Display | None":
-        from termin.visualization.core.display import Display
-        from termin.visualization.platform.backends.fbo_backend import FBOSurface
+        from termin.display import Display
+        from termin.display import FBOSurface
 
         if self._offscreen_context is not None:
             self._offscreen_context.make_current()

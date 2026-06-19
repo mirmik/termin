@@ -21,7 +21,7 @@ from tcgui.widgets.vstack import VStack
 from termin.editor_core.signal import Signal
 
 if TYPE_CHECKING:
-    from termin.visualization.core.display import Display
+    from termin.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.entity import Entity
 

@@ -11,9 +11,9 @@ from ._handle_accessors import HandleAccessors
 
 if TYPE_CHECKING:
     from termin.materials import TcMaterial
-    from termin.assets.voxel_grid_handle import VoxelGridHandle
+    from termin.voxels._voxels_native import VoxelGridHandle
     from termin.default_assets.navmesh.handle import NavMeshHandle
-    from termin.assets.skeleton_handle import TcSkeleton
+    from termin.skeleton._skeleton_native import TcSkeleton
     from termin.default_assets.ui.handle import UIHandle
     from termin.mesh import TcMesh
 
@@ -154,12 +154,12 @@ class AccessorsMixin:
     # Handle accessors for VoxelGridHandle (creates handle on-the-fly)
     def _get_voxel_grid_handle(self, name: str) -> Optional["VoxelGridHandle"]:
         """Get VoxelGridHandle by name."""
-        from termin.assets.voxel_grid_handle import VoxelGridHandle
+        from termin.voxels._voxels_native import VoxelGridHandle
         return VoxelGridHandle.from_name(name)
 
     def _find_voxel_grid_handle_name(self, handle: Any) -> Optional[str]:
         """Find name for a VoxelGridHandle or VoxelGrid."""
-        from termin.assets.voxel_grid_handle import VoxelGridHandle
+        from termin.voxels._voxels_native import VoxelGridHandle
         if isinstance(handle, VoxelGridHandle):
             asset = handle.get_asset()
             if asset:
@@ -194,7 +194,7 @@ class AccessorsMixin:
     # Handle accessors for TcSkeleton
     def _get_tc_skeleton(self, name: str) -> Optional["TcSkeleton"]:
         """Get TcSkeleton by name."""
-        from termin.assets.skeleton_handle import TcSkeleton
+        from termin.skeleton._skeleton_native import TcSkeleton
         # Look up asset by name to get UUID
         asset = self._skeleton_assets.get(name)
         if asset is None:
@@ -204,7 +204,7 @@ class AccessorsMixin:
 
     def _find_tc_skeleton_name(self, handle: Any) -> Optional[str]:
         """Find name for a TcSkeleton."""
-        from termin.assets.skeleton_handle import TcSkeleton
+        from termin.skeleton._skeleton_native import TcSkeleton
         if isinstance(handle, TcSkeleton):
             if handle.is_valid:
                 return handle.name
@@ -318,7 +318,7 @@ class AccessorsMixin:
             return TcMaterial.from_uuid(uuid)
 
         if kind == "voxel_grid":
-            from termin.assets.voxel_grid_handle import VoxelGridHandle
+            from termin.voxels._voxels_native import VoxelGridHandle
             asset = self.get_voxel_grid_asset_by_uuid(uuid)
             if asset:
                 return VoxelGridHandle.from_asset(asset)
@@ -332,7 +332,7 @@ class AccessorsMixin:
             return None
 
         if kind == "skeleton":
-            from termin.assets.skeleton_handle import TcSkeleton
+            from termin.skeleton._skeleton_native import TcSkeleton
             return TcSkeleton.from_uuid(uuid)
 
         if kind == "audio_clip":

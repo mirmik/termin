@@ -15,8 +15,8 @@ from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.signal import Signal
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph.pipeline import RenderPipeline
-    from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+    from termin.render_framework import RenderPipeline
+    from termin.render_framework import ResourceSpec
 
 
 class PipelineOperations:
@@ -109,7 +109,7 @@ class PipelineOperations:
                 f"Resource '{name}' already exists in the pipeline.",
             )
             return None
-        from termin.visualization.render.framegraph.resource_spec import ResourceSpec
+        from termin.render_framework import ResourceSpec
         spec = ResourceSpec(resource=name, resource_type="fbo", format="render_target")
         self._pipeline.pipeline_specs.append(spec)
         self.pipeline_changed.emit()
@@ -158,7 +158,7 @@ class PipelineOperations:
     # ------------------------------------------------------------------
 
     def load_from_file(self, path: str) -> "RenderPipeline | None":
-        from termin.visualization.render.framegraph.pipeline import RenderPipeline
+        from termin.render_framework import RenderPipeline
         from termin.assets.resources import ResourceManager
         try:
             with open(path, "r", encoding="utf-8") as f:

@@ -28,7 +28,14 @@ Cleanup status:
 - Removed `31` unused app compatibility modules with no live direct code imports.
 - Follow-up cleanup removed `termin.loaders.mesh_spec` and
   `termin.assets.texture_handle` after redirecting their remaining consumers.
-- Kept CLI/entrypoint compatibility paths because they may be used outside normal Python import scans.
+- Breaking cleanup on 2026-06-19 removed the remaining test-only app asset
+  shim modules and the GLB loader compatibility modules after moving tests to
+  canonical package paths.
+- A second breaking cleanup on 2026-06-19 removed small editor/project-build
+  and visualization shims after internal consumers were redirected to canonical
+  packages.
+- Kept editor CLI entrypoint compatibility paths because they may be used
+  outside normal Python import scans.
 
 There are enough leftovers to justify a dedicated cleanup pass, but they should not all be removed in one sweep. `termin.assets.resources` is still an active app-owned runtime implementation, and `termin.visualization.*` is still used as a shared runtime facade by app code and external component packages.
 
@@ -42,9 +49,17 @@ There are enough leftovers to justify a dedicated cleanup pass, but they should 
 
 ## Asset Compatibility Layer
 
-Largest cluster:
+Largest cluster at the start of the audit:
 - `termin.assets`: `43` explicit compatibility modules.
-- `40` are pure re-export shims.
+- `40` were pure re-export shims.
+
+Current status after the 2026-06-19 breaking cleanup:
+- `termin-app/termin/assets` contains only the package facade, the
+  app-specific `project_file_watcher` wrapper, and the active
+  `termin.assets.resources` runtime facade.
+- App-side `termin.assets.<asset/plugin/handle>` submodule compatibility paths
+  for default/domain asset types were removed. Internal tests now import
+  canonical paths directly.
 
 Keep for now:
 - `termin.assets.resources`
@@ -76,75 +91,72 @@ C++ texture handle cleanup:
 - `termin.assets.texture_handle` was removed after the string import was
   redirected.
 
-Clean after tests-only usage is redirected:
-- `termin.assets.animation_clip_asset` -> `termin.animation.asset`
-- `termin.assets.audio_clip_asset` -> `termin.default_assets.audio.asset`
-- `termin.assets.audio_clip_handle` -> `termin.default_assets.audio.handle`
-- `termin.assets.mesh_asset` -> `termin.default_assets.mesh.asset`
-- `termin.assets.navmesh_asset` -> `termin.default_assets.navmesh.asset`
-- `termin.assets.navmesh_handle` -> `termin.default_assets.navmesh.handle`
-- `termin.assets.pipeline_asset` -> `termin.default_assets.render.pipeline_asset`
-- `termin.assets.pipeline_plugin` -> `termin.default_assets.render.pipeline_plugin`
-- `termin.assets.prefab_asset` -> `termin.prefab.asset`
-- `termin.assets.prefab_plugin` -> `termin.prefab.asset_plugin`
-- `termin.assets.scene_pipeline_asset` -> `termin.default_assets.render.scene_pipeline_asset`
-- `termin.assets.scene_pipeline_plugin` -> `termin.default_assets.render.scene_pipeline_plugin`
-- `termin.assets.skeleton_asset` -> `termin.skeleton.asset`
-- `termin.assets.ui_asset` -> `termin.default_assets.ui.asset`
-- `termin.assets.ui_handle` -> `termin.default_assets.ui.handle`
-- `termin.assets.ui_plugin` -> `termin.default_assets.ui.asset_plugin`
-- `termin.assets.voxel_grid_asset` -> `termin.default_assets.voxels.asset`
-
 Removed app asset shims:
+- `termin.assets.animation_clip_asset`
+- `termin.assets.animation_clip_handle`
+- `termin.assets.asset`
+- `termin.assets.asset_plugin`
+- `termin.assets.asset_registry`
+- `termin.assets.audio_clip_asset`
+- `termin.assets.audio_clip_handle`
 - `termin.assets.audio_clip_plugin`
+- `termin.assets.builtin_resources`
+- `termin.assets.builtin_uuids`
+- `termin.assets.data_asset`
 - `termin.assets.default_plugins`
+- `termin.assets.glb_asset`
+- `termin.assets.glb_plugin`
 - `termin.assets.glsl_asset`
 - `termin.assets.glsl_plugin`
 - `termin.assets.material_asset`
 - `termin.assets.material_plugin`
+- `termin.assets.mesh_asset`
 - `termin.assets.mesh_plugin`
+- `termin.assets.navmesh_asset`
+- `termin.assets.navmesh_handle`
 - `termin.assets.navmesh_plugin`
+- `termin.assets.pipeline_asset`
 - `termin.assets.pipeline_dependencies`
+- `termin.assets.pipeline_plugin`
 - `termin.assets.plugin_preloader`
+- `termin.assets.prefab_asset`
+- `termin.assets.prefab_plugin`
+- `termin.assets.resource_handle`
 - `termin.assets.resources._registration`
+- `termin.assets.scene_pipeline_asset`
+- `termin.assets.scene_pipeline_plugin`
+- `termin.assets.skeleton_asset`
+- `termin.assets.skeleton_handle`
 - `termin.assets.shader_asset`
 - `termin.assets.shader_interface`
 - `termin.assets.shader_plugin`
 - `termin.assets.texture_asset`
 - `termin.assets.texture_handle`
 - `termin.assets.texture_plugin`
+- `termin.assets.ui_asset`
+- `termin.assets.ui_handle`
+- `termin.assets.ui_plugin`
+- `termin.assets.voxel_grid_asset`
+- `termin.assets.voxel_grid_handle`
 - `termin.assets.voxel_grid_plugin`
 
-Still production-used app asset shims:
-- `termin.assets.asset`
-- `termin.assets.asset_plugin`
-- `termin.assets.asset_registry`
-- `termin.assets.data_asset`
+Still retained app asset compatibility/runtime surface:
+- `termin.assets` package facade
 - `termin.assets.project_file_watcher`
-- `termin.assets.resource_handle`
-- `termin.assets.skeleton_handle`
-- `termin.assets.voxel_grid_handle`
+- `termin.assets.resources`
 
-These should be redirected internally before deletion. `project_file_watcher` has local wrapper behavior and should be reviewed separately from pure asset class shims.
+`project_file_watcher` has local wrapper behavior and should be reviewed separately from pure asset class shims. `termin.assets.resources` remains active runtime glue and should move only with the asset-runtime boundary.
 
 ## Visualization Facades
 
 Production-used facade paths:
 - `termin.visualization.core.entity`
 - `termin.visualization.core.component`
-- `termin.visualization.core.display`
-- `termin.visualization.render.render_context`
-- `termin.visualization.render.drawable`
-- `termin.visualization.render.framegraph.resource_spec`
-- `termin.visualization.platform.backends.fbo_backend`
 
 These are imported by:
 - `termin-app/termin/editor_core/*`
 - `termin-app/termin/editor_tcgui/*`
 - `termin-app/termin/player/*`
-- `termin-navmesh`
-- `termin-components-render`
-- `termin-components-voxels`
 - `termin-physics`
 - examples
 
@@ -159,15 +171,21 @@ Likely canonical replacements:
 - `termin.visualization.render.framegraph.resource_spec` -> `termin.render_framework.ResourceSpec`
 - `termin.visualization.platform.backends.fbo_backend` -> `termin.display.FBOSurface`
 
-Removed in the first unused cleanup batch:
+Removed after internal consumers were redirected:
 - `termin.visualization.core.entity_registry`
 - `termin.visualization.core.plugin_loader`
 - `termin.visualization.core.prefab_instance_marker`
 - `termin.visualization.core.prefab_registry`
 - `termin.visualization.core.property_path`
+- `termin.visualization.core.display`
+- `termin.visualization.render.drawable`
+- `termin.visualization.render.framegraph.pipeline`
+- `termin.visualization.render.framegraph.resource_spec`
+- `termin.visualization.render.render_context`
 - `termin.visualization.render.shader_parser`
 - `termin.visualization.render.solid_primitives`
 - `termin.visualization.render.texture`
+- `termin.visualization.platform.backends.fbo_backend`
 - `termin.visualization.ui.widgets.basic`
 - `termin.visualization.ui.widgets.containers`
 - `termin.visualization.ui.widgets.units`
@@ -184,6 +202,9 @@ Explicit compatibility modules:
 - `termin.loaders.obj_loader` -> `termin.default_assets.mesh.obj_loader`
 - `termin.loaders.stl_loader` -> `termin.default_assets.mesh.stl_loader`
 - `termin.loaders.texture_spec` -> `termin.default_assets.render.texture_spec`
+- `termin.loaders.glb_loader` -> `termin.glb.loader`
+- `termin.loaders.glb_extractor` -> `termin.glb.extractor`
+- `termin.loaders.glb_instantiator` -> `termin.glb.instantiator`
 
 Current status:
 - `termin.loaders.mesh_spec` was removed after tests moved to
@@ -191,31 +212,25 @@ Current status:
 - `termin.loaders.obj_loader` was removed in the first unused cleanup batch.
 - `termin.loaders.stl_loader` was removed in the first unused cleanup batch.
 - `termin.loaders.texture_spec` was removed in the first unused cleanup batch.
-
-Recommended cleanup:
-- Change tests to canonical `termin.default_assets.*` imports.
-- Remove the unused loader shims once external compatibility policy allows it.
-
-Do not include non-shim GLB loader/instantiator files in this small cleanup:
-- `termin.loaders.glb_loader`
-- `termin.loaders.glb_extractor`
-- `termin.loaders.glb_instantiator`
-
-Those still contain real loader/runtime logic.
+- `termin.loaders.glb_loader`, `termin.loaders.glb_extractor`, and
+  `termin.loaders.glb_instantiator` were removed on 2026-06-19 after GLB
+  runtime moved to the canonical `termin.glb.*` package and internal scans
+  showed no direct repository imports of the app loader paths.
 
 ## Editor And Project Build Entry Points
 
 Compatibility entry points:
 - `termin.editor`
 - `termin.editor.run_editor`
-- `termin.project_builder.profile_build`
 
 Current status:
 - `termin.editor` / `termin.editor.run_editor` are legacy editor entry points around `termin.editor_tcgui`.
-- `termin.project_builder.profile_build` delegates to the canonical `termin.project_build.profile_build`.
+- `termin.project_builder.profile_build` was removed on 2026-06-19 after the
+  C++ `termin_builder`, tests, and docs were already using
+  `termin.project_build.profile_build`.
 
 Recommended cleanup:
-- Keep command-line entry points until launcher/build scripts and docs are checked.
+- Keep editor command-line entry points until launcher/build scripts and docs are checked.
 - Prefer warning/deprecation before removal if these paths are part of user-visible CLI compatibility.
 - Check `setup.py`, script entry points, C++ launcher calls, docs, and user-facing examples before deleting.
 
@@ -233,24 +248,12 @@ Current status:
 
 ## Test-Only Compatibility Contracts
 
-Several tests intentionally assert that old app paths re-export canonical classes. These tests preserve compatibility, but they also keep migration shims alive.
-
-Review and either update or delete compatibility assertions in:
-- `termin-app/tests/test_asset_default_plugins.py`
-- `termin-app/tests/test_canonical_animation_imports.py`
-- `termin-animation/tests/test_animation_asset.py`
-- `termin-audio/tests/test_audio_asset_plugin.py`
-- `termin-default-assets/tests/test_default_prefab_asset_plugin.py`
-- `termin-default-assets/tests/test_default_ui_asset_plugin.py`
-- `termin-mesh/tests/python/test_mesh_asset_plugin.py`
-- `termin-navmesh/tests/test_navmesh_asset_plugin.py`
-- `termin-prefab/tests/test_prefab_asset_plugin.py`
-- `termin-skeleton/tests/test_skeleton_asset.py`
-- `termin-voxels/tests/test_voxel_asset_plugin.py`
-
-Policy decision needed:
-- If old `termin.assets.*` paths are no longer a supported external API, remove these compatibility assertions and convert tests to canonical package imports.
-- If old paths remain supported temporarily, add an explicit deprecation policy and target removal milestone.
+Several tests used to assert that old app paths re-export canonical classes.
+Those assertions were removed on 2026-06-19 for the app-owned
+`termin.assets.<asset/plugin/handle>` compatibility modules. Tests now import
+canonical package paths directly. Domain-level legacy paths such as
+`termin.mesh.mesh_asset` or `termin.audio.audio_clip_asset` were intentionally
+left out of this app cleanup.
 
 ## Suggested First Pass
 
@@ -265,8 +268,8 @@ Low-risk cleanup batch:
   `termin.default_assets.render.texture_asset`.
 
 Asset cleanup batch:
-- Convert test-only `termin.assets.<domain asset/plugin>` imports to canonical domain packages.
-- Remove pure unused app asset shims once test coverage no longer references them.
+- Converted test-only `termin.assets.<domain asset/plugin>` imports to canonical packages.
+- Removed pure app asset shims once test coverage no longer referenced them.
 - Keep `termin.assets.resources` until `#40` moves or bridges `ResourceManager`.
 
 Visualization cleanup batch:

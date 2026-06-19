@@ -9,19 +9,15 @@ from termin.audio.asset_plugin import create_runtime_plugin as legacy_create_run
 from termin.audio.audio_clip_asset import AudioClipAsset as LegacyAudioClipAsset
 from termin.audio.audio_clip_handle import AudioClipHandle as LegacyAudioClipHandle
 from termin.audio.handle import AudioClipHandle as LegacyDomainAudioClipHandle
-from termin.assets.audio_clip_asset import AudioClipAsset as AppLegacyAudioClipAsset
-from termin.assets.audio_clip_handle import AudioClipHandle as AppLegacyAudioClipHandle
 
 
-def test_audio_clip_asset_legacy_modules_reexport_canonical_class() -> None:
+def test_audio_clip_domain_legacy_modules_reexport_canonical_class() -> None:
     assert PackageAudioClipAsset is AudioClipAsset
     assert LegacyDomainAudioClipAsset is AudioClipAsset
     assert LegacyAudioClipAsset is AudioClipAsset
-    assert AppLegacyAudioClipAsset is AudioClipAsset
     assert PackageAudioClipHandle is AudioClipHandle
     assert LegacyDomainAudioClipHandle is AudioClipHandle
     assert LegacyAudioClipHandle is AudioClipHandle
-    assert AppLegacyAudioClipHandle is AudioClipHandle
 
 
 def test_audio_clip_plugin_legacy_modules_reexport_factories() -> None:

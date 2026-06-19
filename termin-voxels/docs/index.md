@@ -14,7 +14,8 @@ Voxel-grid asset adapters live in `termin-default-assets` under
 `termin.default_assets.voxels`.
 
 Compatibility status:
-- `termin.voxels.asset`, `termin.voxels.asset_plugin`, and
-  `termin.assets.voxel_grid_asset` remain temporary compatibility re-exports.
-- `termin.assets.voxel_grid_plugin` was removed on 2026-06-18. Use
-  `termin.default_assets.voxels.asset_plugin` directly.
+- `termin.voxels.asset` and `termin.voxels.asset_plugin` remain temporary
+  domain compatibility re-exports.
+- App compatibility modules `termin.assets.voxel_grid_asset` and
+  `termin.assets.voxel_grid_plugin` were removed. Use
+  `termin.default_assets.voxels.*` directly.

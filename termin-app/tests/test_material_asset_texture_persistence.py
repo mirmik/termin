@@ -108,7 +108,7 @@ def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:
 
 
 def test_builtin_registration_does_not_shadow_stdlib_shaders() -> None:
-    from termin.assets.builtin_resources import register_builtin_shaders
+    from termin.default_assets.builtin_resources import register_builtin_shaders
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()

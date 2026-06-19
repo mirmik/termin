@@ -16,11 +16,11 @@ from termin.render import DrawableComponent
 from termin.materials import TcMaterial as Material
 from termin.mesh import TcMesh
 from termin.navmesh.handle import NavMeshHandle
-from termin.visualization.render.drawable import GeometryDrawCall
+from termin.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.render.render_context import RenderContext
+    from termin.render_framework import RenderContext
     from termin.navmesh.types import NavMesh
 
 

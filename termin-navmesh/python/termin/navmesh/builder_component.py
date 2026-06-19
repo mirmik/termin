@@ -19,13 +19,13 @@ from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.voxels import VoxelizeSource
-from termin.visualization.render.drawable import GeometryDrawCall
+from termin.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField
 from termin.navmesh.settings import NavigationSettingsManager
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.render.render_context import RenderContext
+    from termin.render_framework import RenderContext
     from termin.voxels.grid import VoxelGrid
     from termin.navmesh.types import NavMesh
     from termin.navmesh.polygon_builder import PolygonBuilder

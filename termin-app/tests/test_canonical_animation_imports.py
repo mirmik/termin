@@ -46,8 +46,9 @@ def test_canonical_animation_components_import():
 
 
 def test_canonical_animation_clip_handle_import():
-    """termin.assets.animation_clip_handle should use canonical path."""
-    from termin.assets.animation_clip_handle import TcAnimationClip
+    """TcAnimationClip should be available through the canonical native module."""
+    from termin.animation._animation_native import TcAnimationClip
+
     assert TcAnimationClip is not None
 
 
