@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -42,8 +43,8 @@ void print_help() {
         << "  launcher               Run termin_launcher.\n"
         << "  shaderc [args...]      Run termin_shaderc.\n"
         << "  build <profile>        Run termin_builder build <profile>.\n"
-        << "  run <profile>          Run termin_runner run <profile>.\n"
-        << "  play <profile>         Alias for run <profile>.\n"
+        << "  run <profile>          Run packaged build output for a profile.\n"
+        << "  play <profile>         Run profile entry scene without building.\n"
         << "  profiles [args...]     Run termin_builder profiles [args...].\n"
         << "  profile <name>         Run termin_builder profile <name>.\n"
         << "  stdlib [args...]       Run termin_stdlib sync [args...].\n"
@@ -168,11 +169,20 @@ Dispatch resolve_dispatch(int argc, char** argv, const fs::path& own_dir) {
         dispatch.args.emplace_back("build");
         std::vector<std::string> rest = tail_args(argc, argv, 2);
         dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
-    } else if (command == "run" || command == "play") {
+    } else if (command == "run") {
         dispatch.executable = "termin_runner";
         dispatch.args.emplace_back("run");
         std::vector<std::string> rest = tail_args(argc, argv, 2);
         dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
+    } else if (command == "play") {
+        dispatch.executable = "termin_runner";
+        dispatch.args.emplace_back("run");
+        std::vector<std::string> rest = tail_args(argc, argv, 2);
+        auto player_args = std::find(rest.begin(), rest.end(), "--");
+        dispatch.args.insert(dispatch.args.end(), rest.begin(), player_args);
+        dispatch.args.emplace_back("--mode");
+        dispatch.args.emplace_back("project");
+        dispatch.args.insert(dispatch.args.end(), player_args, rest.end());
     } else if (command == "profiles") {
         dispatch.executable = "termin_builder";
         dispatch.args.emplace_back("profiles");

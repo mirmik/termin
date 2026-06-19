@@ -10,9 +10,10 @@ The exporter writes the package contract consumed by termin-runtime:
     shaders/*.shader.json
     shaders/vulkan/*.spv
 
-When a referenced mesh/material exists in the current runtime registries, the
-exporter writes real runtime artifacts. Missing registry entries are reported
-and receive a fallback artifact so early Android builds remain installable.
+When a referenced mesh/material exists in project sources or the current runtime
+registries, the exporter writes real runtime artifacts. Missing registry entries
+are build errors by default. Placeholder fallback artifacts are only emitted
+under the explicit `dev_smoke` resource policy.
 """
 
 from __future__ import annotations
@@ -33,6 +34,8 @@ DEFAULT_SHADER_UUID = "termin-runtime-default-color"
 DEFAULT_SHADER_NAME = "TerminRuntimeDefaultColor"
 DEFAULT_SHADER_SOURCE_PATH = "termin-runtime/default-color"
 DEFAULT_SHADER_LANGUAGE = "slang"
+DEFAULT_RESOURCE_POLICY = "strict"
+SUPPORTED_RESOURCE_POLICIES = {"dev", "dev_smoke", "strict"}
 
 
 ENGINE_SKYBOX_SHADER_UUID = "termin-engine-skybox"
@@ -88,7 +91,9 @@ def export_runtime_package(
     output_dir: str | Path,
     shader_compiler: str | Path | None = None,
     default_shader_language: str = DEFAULT_SHADER_LANGUAGE,
+    resource_policy: str = DEFAULT_RESOURCE_POLICY,
 ) -> RuntimePackageExportResult:
+    _validate_resource_policy(resource_policy)
     project_root_path = Path(project_root).resolve()
     entry_scene_path = _resolve_entry_scene(project_root_path, Path(entry_scene))
     output_dir_path = Path(output_dir).resolve()
@@ -104,7 +109,14 @@ def export_runtime_package(
 
     resources: list[dict[str, str]] = []
     shaders: dict[str, _ShaderSpec] = {}
-    _write_meshes(project_root_path, output_dir_path, refs.meshes, resources, diagnostics)
+    _write_meshes(
+        project_root_path,
+        output_dir_path,
+        refs.meshes,
+        resources,
+        diagnostics,
+        resource_policy,
+    )
     _write_materials(
         output_dir_path,
         refs.materials,
@@ -112,6 +124,7 @@ def export_runtime_package(
         diagnostics,
         shaders,
         default_shader_language,
+        resource_policy,
     )
     _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
     if not shaders:
@@ -136,6 +149,15 @@ def export_runtime_package(
         scene_path=scene_path,
         diagnostics=diagnostics,
     )
+
+
+def _validate_resource_policy(resource_policy: str) -> None:
+    if resource_policy not in SUPPORTED_RESOURCE_POLICIES:
+        supported = ", ".join(sorted(SUPPORTED_RESOURCE_POLICIES))
+        raise ValueError(
+            f"Unsupported runtime package resource_policy '{resource_policy}'. "
+            f"Supported values: {supported}"
+        )
 
 
 @dataclass
@@ -1042,13 +1064,16 @@ def _write_meshes(
     meshes: dict[str, str],
     resources: list[dict[str, str]],
     diagnostics: list[RuntimePackageExportDiagnostic],
+    resource_policy: str,
 ) -> None:
     mesh_dir = package_dir / "meshes"
     mesh_dir.mkdir(parents=True, exist_ok=True)
 
     for uuid_value, name in sorted(meshes.items()):
         path = mesh_dir / f"{uuid_value}.tmesh.json"
-        mesh_spec = _export_mesh_spec(project_root, uuid_value, name, diagnostics)
+        mesh_spec = _export_mesh_spec(project_root, uuid_value, name, diagnostics, resource_policy)
+        if mesh_spec is None:
+            continue
         _write_json(path, mesh_spec)
         resources.append(
             {
@@ -1066,6 +1091,7 @@ def _write_materials(
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
     default_shader_language: str,
+    resource_policy: str,
 ) -> None:
     material_dir = package_dir / "materials"
     material_dir.mkdir(parents=True, exist_ok=True)
@@ -1078,7 +1104,10 @@ def _write_materials(
             diagnostics,
             shaders,
             default_shader_language,
+            resource_policy,
         )
+        if material_spec is None:
+            continue
         _write_json(path, material_spec)
         resources.append(
             {
@@ -1094,7 +1123,8 @@ def _export_mesh_spec(
     uuid_value: str,
     name: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
-) -> dict[str, Any]:
+    resource_policy: str,
+) -> dict[str, Any] | None:
     mesh_source = _find_mesh_source(project_root, uuid_value, name)
     if mesh_source is not None:
         try:
@@ -1123,14 +1153,28 @@ def _export_mesh_spec(
             )
         )
 
+    if _resource_policy_allows_fallback(resource_policy):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="warning",
+                path=f"meshes/{uuid_value}.tmesh.json",
+                message="Runtime exporter used fallback mesh because registry entry is unavailable",
+            )
+        )
+        return _fallback_mesh_spec(uuid_value, name)
+
     diagnostics.append(
         RuntimePackageExportDiagnostic(
-            level="warning",
+            level="error",
             path=f"meshes/{uuid_value}.tmesh.json",
-            message="Runtime exporter used fallback mesh because registry entry is unavailable",
+            message=(
+                "Runtime exporter could not export mesh because no project source "
+                "or runtime registry entry was found; fallback mesh requires "
+                "resource_policy=dev_smoke"
+            ),
         )
     )
-    return _fallback_mesh_spec(uuid_value, name)
+    return None
 
 
 def _find_mesh_source(project_root: Path, uuid_value: str, name: str) -> Path | None:
@@ -1260,7 +1304,8 @@ def _export_material_spec(
     diagnostics: list[RuntimePackageExportDiagnostic],
     shaders: dict[str, _ShaderSpec],
     default_shader_language: str,
-) -> dict[str, Any]:
+    resource_policy: str,
+) -> dict[str, Any] | None:
     try:
         from termin.materials import TcMaterial
 
@@ -1276,15 +1321,33 @@ def _export_material_spec(
             )
         )
 
+    if _resource_policy_allows_fallback(resource_policy):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="warning",
+                path=f"materials/{uuid_value}.tmat.json",
+                message="Runtime exporter used fallback material because registry entry is unavailable",
+            )
+        )
+        shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
+        return _fallback_material_spec(uuid_value, name)
+
     diagnostics.append(
         RuntimePackageExportDiagnostic(
-            level="warning",
+            level="error",
             path=f"materials/{uuid_value}.tmat.json",
-            message="Runtime exporter used fallback material because registry entry is unavailable",
+            message=(
+                "Runtime exporter could not export material because no runtime "
+                "registry entry was found; fallback material requires "
+                "resource_policy=dev_smoke"
+            ),
         )
     )
-    shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
-    return _fallback_material_spec(uuid_value, name)
+    return None
+
+
+def _resource_policy_allows_fallback(resource_policy: str) -> bool:
+    return resource_policy == "dev_smoke"
 
 
 def _material_to_spec(material: Any, shaders: dict[str, _ShaderSpec]) -> dict[str, Any]:

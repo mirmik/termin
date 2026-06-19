@@ -8,7 +8,7 @@ from typing import Callable, Generic, TypeVar
 
 from termin.project_build.build_context import BuildContext
 from termin.project_build.common import preload_project_resources
-from termin.project_build.diagnostics import DiagnosticLike
+from termin.project_build.diagnostics import DiagnosticLike, format_diagnostics
 from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportResult,
     export_runtime_package,
@@ -45,6 +45,22 @@ class ProjectBuildPipelineResult(Generic[PreflightPayloadT, TargetPayloadT]):
     package_validation_diagnostics: list[DiagnosticLike]
     target_package_result: TargetPackageStepResult[TargetPayloadT]
     diagnostics: list[DiagnosticLike] = field(default_factory=list)
+
+
+class ProjectBuildPipelineError(RuntimeError):
+    def __init__(
+        self,
+        target_name: str,
+        diagnostics: list[DiagnosticLike],
+        *,
+        package_result: RuntimePackageExportResult | None = None,
+        package_validation_diagnostics: list[DiagnosticLike] | None = None,
+    ) -> None:
+        self.target_name = target_name
+        self.diagnostics = diagnostics
+        self.package_result = package_result
+        self.package_validation_diagnostics = list(package_validation_diagnostics or [])
+        super().__init__(format_diagnostics(f"{target_name} build failed:", diagnostics))
 
 
 PrepareOutputStep = Callable[[BuildContext], None]
@@ -84,8 +100,23 @@ def run_project_build_pipeline(
         output_dir=context.package_dir,
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
+        resource_policy=context.resource_policy,
     )
     package_validation_diagnostics = validate_package(package_result.package_dir)
+    pre_target_diagnostics = [
+        *project_preflight_result.diagnostics,
+        *target_preflight_result.diagnostics,
+        *package_result.diagnostics,
+        *package_validation_diagnostics,
+    ]
+    if _has_error_diagnostic(pre_target_diagnostics):
+        raise ProjectBuildPipelineError(
+            target_name,
+            pre_target_diagnostics,
+            package_result=package_result,
+            package_validation_diagnostics=package_validation_diagnostics,
+        )
+
     target_package_result = package_target(
         context,
         package_result,
@@ -100,10 +131,11 @@ def run_project_build_pipeline(
         package_validation_diagnostics=package_validation_diagnostics,
         target_package_result=target_package_result,
         diagnostics=[
-            *project_preflight_result.diagnostics,
-            *target_preflight_result.diagnostics,
-            *package_result.diagnostics,
-            *package_validation_diagnostics,
+            *pre_target_diagnostics,
             *target_package_result.diagnostics,
         ],
     )
+
+
+def _has_error_diagnostic(diagnostics: list[DiagnosticLike]) -> bool:
+    return any(diagnostic.level == "error" for diagnostic in diagnostics)

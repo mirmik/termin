@@ -47,12 +47,16 @@ def build_desktop_project(
     shader_compiler: str | Path | None = None,
     default_shader_language: str = "slang",
     sdk_root: str | Path | None = None,
+    configuration: str = "dev",
+    resource_policy: str = "strict",
 ) -> DesktopBuildResult:
     context = create_build_context(
         project_root=project_root,
         entry_scene=entry_scene,
         target="desktop",
         output_dir=output_dir,
+        configuration=configuration,
+        resource_policy=resource_policy,
     )
     pipeline_result = run_project_build_pipeline(
         context=context,
