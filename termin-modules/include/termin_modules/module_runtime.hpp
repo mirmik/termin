@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -25,6 +26,7 @@ private:
     std::vector<ModuleRecord> _records;
     ModuleEventCallback _event_callback;
     BuildOutputCallback _build_output_callback;
+    std::vector<std::filesystem::path> _discovery_ignored_roots;
     std::string _last_error;
 
 public:
@@ -34,6 +36,7 @@ public:
     void set_event_callback(ModuleEventCallback callback);
     void set_build_output_callback(BuildOutputCallback callback);
     void set_descriptor_parser(std::shared_ptr<ModuleDescriptorParser> parser);
+    void set_discovery_ignored_roots(std::vector<std::filesystem::path> roots);
     void register_backend(std::shared_ptr<IModuleBackend> backend);
 
     void discover(const std::filesystem::path& project_root);
@@ -66,6 +69,7 @@ private:
     IModuleBackend* get_backend(ModuleKind kind) const;
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;
+    bool is_discovery_ignored(const std::filesystem::path& path) const;
 };
 
 } // namespace termin_modules

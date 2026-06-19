@@ -17,6 +17,7 @@ from tcgui.widgets.menu import Menu, MenuItem
 
 from termin.editor_core.project_operations import ProjectOperations, sync_stdlib
 from termin.editor_core.project_context import set_current_project_path
+from termin.project.ignored_paths import is_path_ignored, project_ignored_roots
 
 
 # File extensions that are recognized as known asset types
@@ -127,7 +128,11 @@ class ProjectBrowserTcgui:
         if self._root_path is None:
             return
         self._rebuild_tree()
-        if self._selected_dir is not None and self._selected_dir.is_dir():
+        if (
+            self._selected_dir is not None
+            and self._selected_dir.is_dir()
+            and not self._is_ignored_path(self._selected_dir)
+        ):
             self._show_files(self._selected_dir)
         else:
             self._show_files(self._root_path)
@@ -164,7 +169,7 @@ class ProjectBrowserTcgui:
     def _populate_dir_node(self, node, directory: Path) -> None:
         try:
             entries = sorted(
-                (e for e in directory.iterdir() if e.is_dir() and not e.name.startswith(".")),
+                (e for e in directory.iterdir() if e.is_dir() and self._should_show_entry(e)),
                 key=lambda e: e.name.lower(),
             )
         except PermissionError:
@@ -186,7 +191,7 @@ class ProjectBrowserTcgui:
     def _has_subdirs(self, directory: Path) -> bool:
         try:
             for e in directory.iterdir():
-                if e.is_dir() and not e.name.startswith("."):
+                if e.is_dir() and self._should_show_entry(e):
                     return True
         except PermissionError:
             log.debug(f"[ProjectBrowserTcgui] permission denied checking subdirs: {directory}")
@@ -209,11 +214,13 @@ class ProjectBrowserTcgui:
     # ------------------------------------------------------------------
 
     def _show_files(self, directory: Path) -> None:
+        if self._root_path is not None and self._is_ignored_path(directory):
+            directory = self._root_path
         self._selected_dir = directory
         self._rebuild_breadcrumb()
         try:
             entries = sorted(
-                (e for e in directory.iterdir() if not e.name.startswith(".")),
+                (e for e in directory.iterdir() if self._should_show_entry(e)),
                 key=lambda e: (not e.is_dir(), e.name.lower()),
             )
         except PermissionError:
@@ -242,6 +249,19 @@ class ProjectBrowserTcgui:
         self._file_list.set_items(items)
         if self._file_list._ui is not None:
             self._file_list._ui.request_layout()
+
+    def _ignored_roots(self) -> tuple[Path, ...]:
+        if self._root_path is None:
+            return ()
+        return project_ignored_roots(self._root_path)
+
+    def _is_ignored_path(self, path: Path) -> bool:
+        return is_path_ignored(path, self._ignored_roots())
+
+    def _should_show_entry(self, path: Path) -> bool:
+        if path.name.startswith("."):
+            return False
+        return not self._is_ignored_path(path)
 
     def _rebuild_breadcrumb(self) -> None:
         from tcgui.widgets.button import Button

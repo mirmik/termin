@@ -103,6 +103,7 @@ NB_MODULE(_termin_modules_native, m) {
         .def("register_python_backend", [](ModuleRuntime& self, const PythonModuleBackend&) {
             self.register_backend(std::make_shared<PythonModuleBackend>());
         })
+        .def("set_discovery_ignored_roots", &ModuleRuntime::set_discovery_ignored_roots, nb::arg("roots"))
         .def("discover", &ModuleRuntime::discover, nb::arg("project_root"))
         .def("load_all", &ModuleRuntime::load_all)
         .def("load_module", &ModuleRuntime::load_module, nb::arg("module_id"))

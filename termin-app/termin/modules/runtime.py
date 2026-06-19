@@ -70,6 +70,7 @@ class ProjectModulesRuntime:
         self._update_environment()
         self._shutdown_runtime()
         self._recreate_runtime()
+        self._configure_discovery_ignored_roots()
         self._runtime.discover(self._project_root)
         if self._runtime.last_error:
             log.error(f"[ProjectModulesRuntime] discover failed: {self._runtime.last_error}")
@@ -86,6 +87,7 @@ class ProjectModulesRuntime:
         self._update_environment()
         self._shutdown_runtime()
         self._recreate_runtime()
+        self._configure_discovery_ignored_roots()
         self._runtime.discover(self._project_root)
         return not self._runtime.last_error
 
@@ -138,6 +140,7 @@ class ProjectModulesRuntime:
             self._project_root = descriptor.parent
 
         self._update_environment()
+        self._configure_discovery_ignored_roots()
         self._runtime.discover(self._project_root)
         record = self.find_by_descriptor(descriptor)
         if record is None:
@@ -214,6 +217,15 @@ class ProjectModulesRuntime:
         self._runtime = ModuleRuntime()
         self._runtime.set_environment(self._integration.environment)
         self._configure_runtime()
+
+    def _configure_discovery_ignored_roots(self) -> None:
+        if self._project_root is None:
+            self._runtime.set_discovery_ignored_roots([])
+            return
+
+        from termin.project.ignored_paths import project_ignored_roots
+
+        self._runtime.set_discovery_ignored_roots(list(project_ignored_roots(self._project_root)))
 
     def _shutdown_runtime(self) -> None:
         records_by_id: dict[str, ModuleRecord] = {}

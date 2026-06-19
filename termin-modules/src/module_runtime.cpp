@@ -20,6 +20,35 @@ bool is_hidden_dir(const std::filesystem::path& path) {
     return !name.empty() && name[0] == '.';
 }
 
+std::filesystem::path normalize_discovery_path(const std::filesystem::path& path) {
+    std::error_code ec;
+    auto normalized = std::filesystem::weakly_canonical(path, ec);
+    if (!ec) {
+        return normalized;
+    }
+
+    auto absolute = std::filesystem::absolute(path, ec);
+    if (!ec) {
+        return absolute.lexically_normal();
+    }
+
+    return path.lexically_normal();
+}
+
+bool is_same_or_child_path(
+    const std::filesystem::path& path,
+    const std::filesystem::path& parent
+) {
+    auto path_it = path.begin();
+    auto parent_it = parent.begin();
+    for (; parent_it != parent.end(); ++parent_it, ++path_it) {
+        if (path_it == path.end() || *path_it != *parent_it) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::vector<std::string> collect_loaded_dependents(
     const std::vector<ModuleRecord>& records,
     const std::string& module_id
@@ -71,6 +100,14 @@ void ModuleRuntime::set_descriptor_parser(std::shared_ptr<ModuleDescriptorParser
     _parser = std::move(parser);
 }
 
+void ModuleRuntime::set_discovery_ignored_roots(std::vector<std::filesystem::path> roots) {
+    _discovery_ignored_roots.clear();
+    _discovery_ignored_roots.reserve(roots.size());
+    for (const auto& root : roots) {
+        _discovery_ignored_roots.push_back(normalize_discovery_path(root));
+    }
+}
+
 void ModuleRuntime::register_backend(std::shared_ptr<IModuleBackend> backend) {
     if (!backend) {
         return;
@@ -99,6 +136,14 @@ void ModuleRuntime::discover(const std::filesystem::path& project_root) {
     std::filesystem::recursive_directory_iterator end;
     while (it != end) {
         const auto& entry = *it;
+        if (is_discovery_ignored(entry.path())) {
+            if (entry.is_directory()) {
+                it.disable_recursion_pending();
+            }
+            ++it;
+            continue;
+        }
+
         if (entry.is_directory()) {
             const std::string dirname = entry.path().filename().string();
             if (
@@ -594,6 +639,20 @@ bool ModuleRuntime::should_skip(const ModuleSpec& spec) const {
 
     const auto config = std::dynamic_pointer_cast<PythonModuleConfig>(spec.config);
     return config && config->ignored;
+}
+
+bool ModuleRuntime::is_discovery_ignored(const std::filesystem::path& path) const {
+    if (_discovery_ignored_roots.empty()) {
+        return false;
+    }
+
+    const auto normalized = normalize_discovery_path(path);
+    for (const auto& ignored_root : _discovery_ignored_roots) {
+        if (is_same_or_child_path(normalized, ignored_root)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 const CppModuleCallbacks* ModuleRuntime::get_cpp_callbacks() const {

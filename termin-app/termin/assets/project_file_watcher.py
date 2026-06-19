@@ -17,13 +17,9 @@ from termin_assets.project_file_watcher import (
 
 
 def _termin_app_ignored_roots(project_root: Path) -> tuple[Path, ...]:
-    from termin.project.settings import ProjectSettingsManager, SERVICE_RESOURCE_IGNORE_PATHS
+    from termin.project.ignored_paths import project_ignored_roots
 
-    settings = ProjectSettingsManager.instance().settings
-    build_output_root = project_root / settings.build_output_dir
-    service_roots = tuple(project_root / ignored_path for ignored_path in SERVICE_RESOURCE_IGNORE_PATHS)
-    user_roots = tuple(project_root / ignored_path for ignored_path in settings.ignored_resource_paths)
-    return (*service_roots, build_output_root, *user_roots)
+    return project_ignored_roots(project_root)
 
 
 class ProjectFileWatcher(BaseProjectFileWatcher):
