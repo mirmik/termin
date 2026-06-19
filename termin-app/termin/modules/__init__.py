@@ -1,6 +1,4 @@
-from termin import _native
-
-TermModulesIntegration = _native.modules.TermModulesIntegration
+from termin.engine import TermModulesIntegration
 
 from .runtime import (
     ProjectModulesRuntime,

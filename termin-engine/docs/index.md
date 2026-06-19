@@ -26,11 +26,12 @@
 - [SceneManager](scene-manager.md) - registry/lifecycle/update cycle сцен.
 - [RenderingManager](rendering-manager.md) - displays, viewports, render targets, pipelines и presentation.
 - [ViewportRenderState](viewport-render-state.md) - GPU output state для viewport/render target.
+- `TermModulesIntegration` - связывает `termin_modules::ModuleRuntime` с live scenes: при unload module деградирует module-owned components в unknown components, при load пробует поднять их обратно.
 
 Подробнее: [Engine Managers](managers.md).
 
 ## Публичный API
 
-Python package: `termin.engine` через пакет `termin-engine`.
+Python package: `termin.engine` через пакет `termin-engine`. Module runtime integration доступна как `termin.engine.TermModulesIntegration` и `termin.engine.modules.TermModulesIntegration`.
 
 Модуль связывает нижележащие подсистемы, но не является application/editor слоем. Application policy живет в `termin-app`.

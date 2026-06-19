@@ -189,7 +189,7 @@ Input abstraction. UI event routing остается в [termin-gui](#termin-gui
 
 Source of truth: [termin-engine docs](../termin-engine/docs/index.md)
 
-Engine-level orchestration поверх scene/render/input/domain modules.
+Engine-level orchestration поверх scene/render/input/domain modules. Владеет runtime managers и интеграцией project modules с live scenes (`TermModulesIntegration`).
 
 > **termin-entity** был удалён — его биндинги мигрированы в `termin._native` (termin-app).
 ECS-типы (Entity, Component, ComponentRegistry, TcScene) импортируются из `termin.scene`.
@@ -271,7 +271,7 @@ Source of truth: [termin-app docs](../termin-app/docs/index.md), [editor archite
 
 Основное приложение/редактор. tcgui является единственным поддерживаемым UI редактора; Qt/PyQt-версия удалена.
 
-Application-level code не должен протекать вниз в graphics/render/scene.
+Application-level code не должен протекать вниз в graphics/render/scene. `termin-app` может держать compatibility reexports для старых импортов, но canonical ownership таких API должен жить в доменных пакетах.
 
 ### diffusion-editor
 

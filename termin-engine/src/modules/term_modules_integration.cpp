@@ -1,11 +1,11 @@
-#include "term_modules_integration.hpp"
+#include <termin/modules/term_modules_integration.hpp>
 
 #include <tcbase/tc_log.hpp>
 
 #include <termin/entity/unknown_component_ops.hpp>
 #include <termin/tc_scene.hpp>
 
-#include "termin/scene/scene_manager.hpp"
+#include <termin/scene/scene_manager.hpp>
 
 namespace termin {
 namespace {

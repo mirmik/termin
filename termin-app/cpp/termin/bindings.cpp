@@ -14,7 +14,6 @@ extern "C" {
 }
 
 #include "render_bindings.hpp"
-#include "bindings/modules/term_modules_integration_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
 #include "kind_bindings.hpp"
@@ -196,7 +195,9 @@ NB_MODULE(_native, m) {
     termin::bind_gizmo(editor_module);
     termin::bind_editor_interaction(editor_module);
     termin::bind_frame_graph_debugger(editor_module);
-    termin::bind_term_modules_integration(modules_module);
+    nb::module_ engine_native = nb::module_::import_("termin.engine._engine_native");
+    modules_module.attr("TermModulesIntegration") =
+        engine_native.attr("modules").attr("TermModulesIntegration");
     termin::bind_skeleton(skeleton_module);
     termin::bind_inspect(inspect_module);
     // Import log and profiler from tcbase instead of keeping local bindings

@@ -1,10 +1,10 @@
-#include "term_modules_integration_bindings.hpp"
+#include <termin/bindings/modules/term_modules_integration_bindings.hpp>
 
 #include <nanobind/stl/filesystem.h>
 
 #include <termin_modules/module_runtime.hpp>
 
-#include "termin/modules/term_modules_integration.hpp"
+#include <termin/modules/term_modules_integration.hpp>
 
 namespace nb = nanobind;
 

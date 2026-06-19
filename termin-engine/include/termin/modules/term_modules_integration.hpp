@@ -2,11 +2,11 @@
 
 #include <termin_modules/module_runtime.hpp>
 
-#include "termin/render/render_export.hpp"
+#include <termin/engine/termin_engine_api.hpp>
 
 namespace termin {
 
-class RENDER_API TermModulesIntegration {
+class TERMIN_ENGINE_API TermModulesIntegration {
 public:
     termin_modules::ModuleEnvironment _environment;
 
