@@ -111,9 +111,9 @@ Source of truth: [termin-render-passes docs](../termin-render-passes/docs/index.
 
 Отвечает за concrete render pass implementations поверх `termin-render`, `termin-graphics`, `termin-materials` и render components.
 
-На 2026-05-21 сюда перенесены standard/scene/postprocess passes: `PresentToScreenPass`, `DebugTrianglePass`, `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`, `SkyBoxPass`, `IdPass`, picking RGB/id cache helper, shadow camera helpers, shader skinning injection, material UBO apply helper и Python API `termin.render_passes`.
+На 2026-06-19 сюда перенесены standard/scene/postprocess passes: `PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`, `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`, `SkyBoxPass`, `IdPass`, picking RGB/id cache helper, shadow camera helpers, shader skinning injection, material UBO apply helper и Python API `termin.render_passes`.
 
-Оставшийся долг миграции: `ColliderGizmoPass` требует отдельного решения по debug/editor ownership, потому что тянет collision/editor зависимости. `GroundGridPass`, `ImmediateRenderer` и editor solid primitive shader уже используют built-in shader catalog. App `_native` пока сохраняет compatibility bindings для `tc_picking_*`, но они вызывают те же символы из `termin-render-passes`.
+Оставшийся долг миграции: `ColliderGizmoPass` и `SolidPrimitiveRenderer` требуют отдельного решения по debug/editor ownership, потому что тянут collision/editor dependencies. App `_native` пока сохраняет compatibility bindings для `tc_picking_*`, но они вызывают те же символы из `termin-render-passes`.
 
 ### termin-display
 

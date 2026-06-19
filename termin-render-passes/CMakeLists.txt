@@ -60,6 +60,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/color_pass.cpp
     src/debug_triangle_pass.cpp
     src/grayscale_pass.cpp
+    src/ground_grid_pass.cpp
     src/id_pass.cpp
     src/present_pass.cpp
     src/resolve_pass.cpp
@@ -79,6 +80,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/color_pass.hpp
     include/termin/render/debug_triangle_pass.hpp
     include/termin/render/grayscale_pass.hpp
+    include/termin/render/ground_grid_pass.hpp
     include/termin/render/id_pass.hpp
     include/termin/render/present_pass.hpp
     include/termin/render/resolve_pass.hpp
