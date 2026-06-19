@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -86,16 +87,13 @@ def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
     project_path = Path(project_path)
     rm = ResourceManager.instance()
     ext_map = create_asset_import_plugin_map()
-    service_ignored_roots = tuple(
-        os.path.abspath(project_path / ignored_path)
-        for ignored_path in SERVICE_RESOURCE_IGNORE_PATHS
-    )
+    ignored_roots = _project_asset_ignored_roots(project_path)
 
     def is_service_ignored(path: str) -> bool:
         resolved = os.path.abspath(path)
         return any(
             resolved == ignored_root or resolved.startswith(ignored_root + os.sep)
-            for ignored_root in service_ignored_roots
+            for ignored_root in ignored_roots
         )
 
     pending = []
@@ -131,3 +129,40 @@ def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
 
     log.info(f"{log_prefix} Loaded {loaded_count} project assets")
     return loaded_count
+
+
+def _project_asset_ignored_roots(project_path: Path) -> tuple[str, ...]:
+    from termin.project.settings import ProjectSettings, SERVICE_RESOURCE_IGNORE_PATHS
+
+    settings = _load_project_settings(project_path)
+    ignored_roots = [
+        project_path / ignored_path
+        for ignored_path in SERVICE_RESOURCE_IGNORE_PATHS
+    ]
+    ignored_roots.append(project_path / settings.build_output_dir)
+    ignored_roots.extend(
+        project_path / ignored_path
+        for ignored_path in settings.ignored_resource_paths
+    )
+    return tuple(os.path.abspath(path) for path in ignored_roots)
+
+
+def _load_project_settings(project_path: Path) -> ProjectSettings:
+    from tcbase import log
+    from termin.project.settings import ProjectSettings
+
+    settings_path = project_path / "project_settings" / "project.json"
+    if not settings_path.exists():
+        return ProjectSettings()
+
+    try:
+        data = json.loads(settings_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.error(f"[PlayerRuntime] Failed to read project settings: {exc}")
+        return ProjectSettings()
+
+    if not isinstance(data, dict):
+        log.error("[PlayerRuntime] Project settings root must be an object")
+        return ProjectSettings()
+
+    return ProjectSettings.from_dict(data)
