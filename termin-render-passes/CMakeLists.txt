@@ -46,6 +46,11 @@ else()
     find_package(termin_components_mesh REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_components_collision termin_components_collision::termin_components_collision)
+else()
+    find_package(termin_components_collision REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_lighting termin_lighting::termin_lighting)
 else()
     find_package(termin_lighting REQUIRED)
@@ -57,6 +62,7 @@ include(TerminRpath)
 set(TERMIN_RENDER_PASSES_SOURCES
     src/termin_render_passes_version.c
     src/bloom_pass.cpp
+    src/collider_gizmo_pass.cpp
     src/color_pass.cpp
     src/debug_triangle_pass.cpp
     src/grayscale_pass.cpp
@@ -77,6 +83,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/lighting/lighting_ubo.hpp
     include/termin/lighting/lighting_upload.hpp
     include/termin/render/bloom_pass.hpp
+    include/termin/render/collider_gizmo_pass.hpp
     include/termin/render/color_pass.hpp
     include/termin/render/debug_triangle_pass.hpp
     include/termin/render/grayscale_pass.hpp
@@ -125,6 +132,9 @@ target_link_libraries(termin_render_passes PUBLIC
     termin_components_render::termin_components_render
     termin_components_mesh::termin_components_mesh
     termin_lighting::termin_lighting
+)
+target_link_libraries(termin_render_passes PRIVATE
+    termin_components_collision::termin_components_collision
 )
 target_compile_definitions(termin_render_passes PRIVATE
     TERMIN_RENDER_EXPORTS

@@ -109,11 +109,11 @@ Source of truth: [termin-render docs](../termin-render/docs/index.md)
 
 Source of truth: [termin-render-passes docs](../termin-render-passes/docs/index.md)
 
-Отвечает за concrete render pass implementations поверх `termin-render`, `termin-graphics`, `termin-materials` и render components.
+Отвечает за concrete render pass implementations поверх `termin-render`, `termin-graphics`, `termin-materials`, render components и debug/editor pass integrations.
 
-На 2026-06-19 сюда перенесены standard/scene/postprocess passes: `PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`, `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`, `SkyBoxPass`, `IdPass`, picking RGB/id cache helper, shadow camera helpers, shader skinning injection, material UBO apply helper и Python API `termin.render_passes`.
+На 2026-06-19 сюда перенесены standard/scene/postprocess/debug passes: `PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`, `ColliderGizmoPass`, `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`, `SkyBoxPass`, `IdPass`, picking RGB/id cache helper, shadow camera helpers, shader skinning injection, material UBO apply helper и Python API `termin.render_passes`.
 
-Оставшийся долг миграции: `ColliderGizmoPass` и `SolidPrimitiveRenderer` требуют отдельного решения по debug/editor ownership, потому что тянут collision/editor dependencies. App `_native` пока сохраняет compatibility bindings для `tc_picking_*`, но они вызывают те же символы из `termin-render-passes`.
+Оставшийся долг миграции: `SolidPrimitiveRenderer` требует отдельного решения по debug/editor ownership. App `_native` пока сохраняет compatibility bindings для некоторых перенесённых типов/functions, но они вызывают символы из `termin-render-passes`.
 
 ### termin-display
 

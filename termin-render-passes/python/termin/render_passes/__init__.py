@@ -7,6 +7,7 @@ preload_sdk_libs("nanobind", "termin_render", "termin_render_passes")
 from termin.render_passes._render_passes_native import (
     BlitPass,
     BloomPass,
+    ColliderGizmoPass,
     ColorPass,
     DebugTrianglePass,
     GrayscalePass,
@@ -31,6 +32,7 @@ from termin.render_passes.highlight import HighlightPass
 __all__ = [
     "BlitPass",
     "BloomPass",
+    "ColliderGizmoPass",
     "ColorPass",
     "DebugTrianglePass",
     "GrayscalePass",
