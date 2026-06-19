@@ -38,6 +38,7 @@ setup(
     install_requires=[
         "termin-assets",
         "termin-nanobind",
+        "termin-render",
         "termin-voxels",
         "termin-components-voxels",
     ],

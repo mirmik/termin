@@ -1,18 +1,20 @@
 /**
  * @file input_events_bindings.cpp
- * @brief nanobind bindings for input event structures.
+ * @brief nanobind bindings for viewport-bound input event structures.
  */
 
-#include "input_events_bindings.hpp"
-#include "../../input/input_events.hpp"
-#include "termin/viewport/tc_viewport_handle.hpp"
+#include <nanobind/nanobind.h>
+
+#include <string>
+
+#include <termin/input/input_events.hpp>
+#include <termin/viewport/tc_viewport_handle.hpp>
 
 namespace nb = nanobind;
 
 namespace termin {
 
 void bind_input_events(nb::module_& m) {
-    // MouseButtonEvent
     nb::class_<MouseButtonEvent>(m, "MouseButtonEvent",
         "Mouse button press/release event.\n\n"
         "Attributes:\n"
@@ -67,7 +69,6 @@ void bind_input_events(nb::module_& m) {
                    ", mods=" + std::to_string(e.mods) + ")";
         });
 
-    // MouseMoveEvent
     nb::class_<MouseMoveEvent>(m, "MouseMoveEvent",
         "Mouse movement event.\n\n"
         "Attributes:\n"
@@ -99,7 +100,6 @@ void bind_input_events(nb::module_& m) {
                    ", dx=" + std::to_string(e.dx) + ", dy=" + std::to_string(e.dy) + ")";
         });
 
-    // ScrollEvent
     nb::class_<ScrollEvent>(m, "ScrollEvent",
         "Mouse scroll event.\n\n"
         "Attributes:\n"
@@ -135,7 +135,6 @@ void bind_input_events(nb::module_& m) {
                    ", mods=" + std::to_string(e.mods) + ")";
         });
 
-    // KeyEvent
     nb::class_<KeyEvent>(m, "KeyEvent",
         "Keyboard event.\n\n"
         "Attributes:\n"
@@ -181,8 +180,6 @@ void bind_input_events(nb::module_& m) {
                    ", action=" + std::to_string(e.action) +
                    ", mods=" + std::to_string(e.mods) + ")";
         });
-
-    // MouseButton, Action, Mods enums moved to tcbase._tcbase_native
 }
 
 } // namespace termin

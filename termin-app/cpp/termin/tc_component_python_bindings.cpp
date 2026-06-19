@@ -12,8 +12,8 @@
 #include <tcbase/tc_log.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/render/render_context.hpp>
+#include <termin/input/input_events.hpp>
 #include "tc_component_python_bindings.hpp"
-#include "input/input_events.hpp"
 
 namespace nb = nanobind;
 

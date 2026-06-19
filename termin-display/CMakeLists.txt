@@ -194,6 +194,7 @@ if(TERMIN_BUILD_PYTHON)
         bindings/render/tc_input_manager_bindings.cpp
         bindings/render/tc_render_surface_bindings.cpp
         bindings/input/display_input_router_bindings.cpp
+        bindings/input/input_events_bindings.cpp
         bindings/platform/offscreen_render_surface_bindings.cpp
     )
     target_link_libraries(_display_native PRIVATE termin_display)
@@ -282,6 +283,7 @@ install(FILES
 
 install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/display_input_router.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/input_events.hpp
     DESTINATION include/termin/input
 )
 

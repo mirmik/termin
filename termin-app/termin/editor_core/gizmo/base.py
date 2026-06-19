@@ -17,7 +17,7 @@ from typing import Any, TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from termin.visualization.render.immediate import ImmediateRenderer
+    from termin.render import ImmediateRenderer
 
 
 # ============================================================

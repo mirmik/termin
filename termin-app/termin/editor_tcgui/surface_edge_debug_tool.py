@@ -191,7 +191,7 @@ class SurfaceEdgeDebugTool:
         if self._last_hit is None:
             return
 
-        from termin.visualization.render.immediate import ImmediateRenderer
+        from termin.render import ImmediateRenderer
 
         renderer = ImmediateRenderer.instance()
         hit = self._last_hit
