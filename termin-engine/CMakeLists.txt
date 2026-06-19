@@ -40,6 +40,11 @@ else()
     find_package(termin_input REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_collision termin_collision::termin_collision)
+else()
+    find_package(termin_collision REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_modules termin_modules::termin_modules)
 else()
     find_package(termin_modules REQUIRED)
@@ -56,6 +61,7 @@ set(TERMIN_ENGINE_SOURCES
     src/render_frame_planner.cpp
     src/scene_manager.cpp
     src/scene_light_collector.cpp
+    src/tc_scene_render_ext.cpp
     src/render_target_context_builder.cpp
     src/render_state_store.cpp
     src/rendering_manager.cpp
@@ -105,6 +111,7 @@ target_link_libraries(termin_engine
         termin_render::termin_render
         termin_display::termin_display
         termin_input::termin_input
+        termin_collision::termin_collision
         termin_modules::termin_modules
 )
 

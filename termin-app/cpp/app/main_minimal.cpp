@@ -7,16 +7,11 @@
 #include <Python.h>
 
 #include "termin/engine/engine_core.hpp"
+#include "termin/scene/tc_scene_render_ext.hpp"
 
 #include <iostream>
 #include <filesystem>
 #include <cstdlib>
-
-extern "C" {
-#include "core/tc_scene_render_mount.h"
-#include "core/tc_scene_render_state.h"
-#include <termin_collision/termin_collision.h>
-}
 
 #ifdef _WIN32
 #include <windows.h>
@@ -28,12 +23,6 @@ extern "C" {
 #endif
 
 namespace fs = std::filesystem;
-
-static void register_default_scene_extensions() {
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
-    termin_collision_runtime_init();
-}
 
 static fs::path get_executable_dir() {
 #ifdef _WIN32
@@ -188,7 +177,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Development mode, project root: " << termin_path << std::endl;
     }
 
-    register_default_scene_extensions();
+    termin::register_default_scene_extensions();
 
     // Create EngineCore BEFORE Python init
     // This sets up RenderingManager::instance()

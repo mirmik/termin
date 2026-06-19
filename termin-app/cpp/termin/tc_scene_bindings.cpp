@@ -9,7 +9,7 @@
 
 #include <termin/tc_scene.hpp>
 #include <termin/render/tc_scene_render_ext.hpp>
-#include "termin/tc_scene_render_ext.hpp"
+#include <termin/scene/tc_scene_render_ext.hpp>
 #include <termin/entity/component.hpp>
 #include "bindings/entity/entity_helpers.hpp"
 #include <tgfx/tgfx_mesh_handle.hpp>

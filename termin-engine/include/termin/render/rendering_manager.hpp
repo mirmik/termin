@@ -67,6 +67,7 @@ class TERMIN_ENGINE_API RenderingManager {
 public:
     // Global instance access (set by EngineCore)
     static RenderingManager& instance();
+    static RenderingManager* instance_or_null();
     static void set_instance(RenderingManager* instance);
     static void reset_for_testing();
 

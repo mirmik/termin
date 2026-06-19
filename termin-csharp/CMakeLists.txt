@@ -57,7 +57,7 @@ endif()
 else()
     find_package(termin_components_kinematic REQUIRED)
 endif()
-    # These three are pulled in transitively by termin::render_lib and
+    # These libraries are pulled in transitively by the engine/render stack and
     # end up in termin.dll's import table, so they must be copied next
     # to it — otherwise Windows loader silently falls back to any older
     # copy it can find on PATH (e.g. ~/AppData/Local/termin-sdk/bin/),
@@ -141,7 +141,7 @@ endif()
         OpenGL::GL
         tcbase::termin_base
         termin::entity_lib
-        termin::render_lib
+        termin_engine::termin_engine
         termin_scene::termin_scene
         termin_collision::termin_collision
         termin_components_collision::termin_components_collision
@@ -159,7 +159,6 @@ endif()
     # after a build and diff against the files in runtimes/win-x64/native/.
     set(_termin_csharp_runtime_targets
         termin::entity_lib
-        termin::render_lib
         termin::termin_core
         tcbase::termin_base
         termin_inspect::termin_inspect

@@ -39,17 +39,25 @@ namespace termin {
 
 RenderingManager* RenderingManager::s_instance = nullptr;
 
-RenderingManager& RenderingManager::instance() {
+RenderingManager* RenderingManager::instance_or_null() {
     // Check global storage (cross-DLL safe)
     RenderingManager* global = reinterpret_cast<RenderingManager*>(tc_rendering_manager_instance());
     if (global) {
         s_instance = global;
-        return *global;
+        return global;
     }
 
     // Fallback to local static (legacy, will be removed)
     if (s_instance) {
-        return *s_instance;
+        return s_instance;
+    }
+
+    return nullptr;
+}
+
+RenderingManager& RenderingManager::instance() {
+    if (RenderingManager* manager = instance_or_null()) {
+        return *manager;
     }
 
     tc_log(TC_LOG_ERROR, "[RenderingManager] instance() called but no instance set. Create EngineCore first.");

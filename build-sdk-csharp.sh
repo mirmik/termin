@@ -44,7 +44,7 @@ for arg in "$@"; do
             echo "  --vulkan          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-sdl          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --sdl             Accepted for top-level SDK builds; ignored by C# stage"
-            echo "  --no-opengl       Skip C# native bindings; they currently require render_lib/OpenGL"
+            echo "  --no-opengl       Skip C# native bindings; they currently require OpenGL"
             echo "  --opengl          Build C# native bindings (default)"
             echo "  --help, -h        Show this help"
             exit 0
@@ -62,7 +62,7 @@ if [[ "$OPENGL_MODE" == "off" ]]; then
     echo "  Skipping termin-csharp"
     echo "========================================"
     echo ""
-    echo "C# native bindings currently depend on render_lib/OpenGL."
+    echo "C# native bindings currently depend on OpenGL."
     echo "Re-run without --no-opengl when the OpenGL-backed SDK is available."
     exit 0
 fi

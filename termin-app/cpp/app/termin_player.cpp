@@ -4,18 +4,13 @@
 #include <Python.h>
 
 #include "termin/engine/engine_core.hpp"
+#include "termin/scene/tc_scene_render_ext.hpp"
 
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
-
-extern "C" {
-#include "core/tc_scene_render_mount.h"
-#include "core/tc_scene_render_state.h"
-#include <termin_collision/termin_collision.h>
-}
 
 #ifdef _WIN32
 #include <windows.h>
@@ -29,12 +24,6 @@ extern "C" {
 namespace fs = std::filesystem;
 
 namespace {
-
-void register_default_scene_extensions() {
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
-    termin_collision_runtime_init();
-}
 
 fs::path get_executable_dir() {
 #ifdef _WIN32
@@ -217,7 +206,7 @@ int main(int argc, char* argv[]) {
     Py_NoSiteFlag = 0;
     Py_IgnoreEnvironmentFlag = 1;
 
-    register_default_scene_extensions();
+    termin::register_default_scene_extensions();
     termin::EngineCore engine;
 
     Py_Initialize();

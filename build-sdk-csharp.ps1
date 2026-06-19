@@ -61,7 +61,7 @@ if ($OpenGlMode -eq "off") {
     Write-Host "  Skipping termin-csharp"
     Write-Host "========================================"
     Write-Host ""
-    Write-Host "C# native bindings currently depend on render_lib/OpenGL."
+    Write-Host "C# native bindings currently depend on OpenGL."
     Write-Host "Re-run without --no-opengl when the OpenGL-backed SDK is available."
     exit 0
 }
