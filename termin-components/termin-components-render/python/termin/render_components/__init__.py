@@ -23,6 +23,7 @@ from termin.render_components._components_render_native import (
     NormalPass,
     WorldTextAnchor,
     WorldTextComponent,
+    WorldTextOrientation,
     XrOriginComponent,
     XrThumbstickLocomotionComponent,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "NormalPass",
     "WorldTextAnchor",
     "WorldTextComponent",
+    "WorldTextOrientation",
     "XrOriginComponent",
     "XrThumbstickLocomotionComponent",
 ]

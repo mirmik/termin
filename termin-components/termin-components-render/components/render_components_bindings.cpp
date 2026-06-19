@@ -708,6 +708,11 @@ NB_MODULE(_components_render_native, m) {
         .value("Right", WorldTextAnchor::Right)
         .export_values();
 
+    nb::enum_<WorldTextOrientation>(m, "WorldTextOrientation")
+        .value("Billboard", WorldTextOrientation::Billboard)
+        .value("Fixed", WorldTextOrientation::Fixed)
+        .export_values();
+
     nb::class_<WorldTextComponent, Component>(m, "WorldTextComponent")
         .def("__init__", [](nb::handle self) {
             cxx_component_init<WorldTextComponent>(self);
@@ -717,6 +722,7 @@ NB_MODULE(_components_render_native, m) {
                             float size,
                             nb::object color,
                             WorldTextAnchor anchor,
+                            WorldTextOrientation orientation,
                             const std::string& phase_mark,
                             const std::string& font_path) {
             cxx_component_init<WorldTextComponent>(self);
@@ -724,6 +730,7 @@ NB_MODULE(_components_render_native, m) {
             cpp->set_text(text);
             cpp->set_size(size);
             cpp->set_anchor(anchor);
+            cpp->set_orientation(orientation);
             cpp->set_phase_mark(phase_mark);
             cpp->set_font_path(font_path);
             if (!color.is_none()) {
@@ -740,6 +747,7 @@ NB_MODULE(_components_render_native, m) {
         nb::arg("size") = 0.35f,
         nb::arg("color") = nb::none(),
         nb::arg("anchor") = WorldTextAnchor::Center,
+        nb::arg("orientation") = WorldTextOrientation::Billboard,
         nb::arg("phase_mark") = "transparent",
         nb::arg("font_path") = "")
         .def_prop_rw("text", [](WorldTextComponent& self) { return self.text; }, &WorldTextComponent::set_text)
@@ -753,6 +761,22 @@ NB_MODULE(_components_render_native, m) {
                 auto tuple = nb::cast<std::tuple<double, double, double>>(value);
                 self.set_local_offset(Vec3{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple)});
             })
+        .def_prop_rw("plane_normal",
+            [](WorldTextComponent& self) {
+                return nb::make_tuple(self.plane_normal.x, self.plane_normal.y, self.plane_normal.z);
+            },
+            [](WorldTextComponent& self, nb::object value) {
+                auto tuple = nb::cast<std::tuple<double, double, double>>(value);
+                self.set_plane_normal(Vec3{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple)});
+            })
+        .def_prop_rw("text_up",
+            [](WorldTextComponent& self) {
+                return nb::make_tuple(self.text_up.x, self.text_up.y, self.text_up.z);
+            },
+            [](WorldTextComponent& self, nb::object value) {
+                auto tuple = nb::cast<std::tuple<double, double, double>>(value);
+                self.set_text_up(Vec3{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple)});
+            })
         .def_prop_rw("color",
             [](WorldTextComponent& self) {
                 return nb::make_tuple(self.color.x, self.color.y, self.color.z, self.color.w);
@@ -764,6 +788,12 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw("size", [](WorldTextComponent& self) { return self.size; }, &WorldTextComponent::set_size)
         .def_prop_rw("anchor", [](WorldTextComponent& self) { return self.anchor; }, &WorldTextComponent::set_anchor)
         .def_prop_rw("anchor_name", &WorldTextComponent::anchor_name, &WorldTextComponent::set_anchor_name)
+        .def_prop_rw("orientation",
+            [](WorldTextComponent& self) { return self.orientation; },
+            &WorldTextComponent::set_orientation)
+        .def_prop_rw("orientation_name",
+            &WorldTextComponent::orientation_name,
+            &WorldTextComponent::set_orientation_name)
         .def_prop_rw("priority", [](WorldTextComponent& self) { return self.priority; }, &WorldTextComponent::set_priority)
         .def_prop_rw("depth_test", [](WorldTextComponent& self) { return self.depth_test; }, &WorldTextComponent::set_depth_test)
         .def_prop_rw("depth_write", [](WorldTextComponent& self) { return self.depth_write; }, &WorldTextComponent::set_depth_write)

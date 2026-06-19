@@ -25,15 +25,23 @@ enum class WorldTextAnchor {
     Right = 2,
 };
 
+enum class WorldTextOrientation {
+    Billboard = 0,
+    Fixed = 1,
+};
+
 class ENTITY_API WorldTextComponent : public Component, public Drawable {
 public:
     std::string text = "";
     std::string font_path = "";
     std::string phase_mark = "transparent";
     Vec3 local_offset{0.0, 0.0, 0.0};
+    Vec3 plane_normal{0.0, 0.0, 1.0};
+    Vec3 text_up{0.0, 1.0, 0.0};
     Vec4 color{1.0, 1.0, 1.0, 1.0};
     float size = 0.35f;
     WorldTextAnchor anchor = WorldTextAnchor::Center;
+    WorldTextOrientation orientation = WorldTextOrientation::Billboard;
     int priority = 0;
     bool depth_test = true;
     bool depth_write = false;
@@ -58,9 +66,12 @@ public:
     void set_font_path(const std::string& value);
     void set_phase_mark(const std::string& value);
     void set_local_offset(const Vec3& value);
+    void set_plane_normal(const Vec3& value);
+    void set_text_up(const Vec3& value);
     void set_color(const Vec4& value);
     void set_size(float value);
     void set_anchor(WorldTextAnchor value);
+    void set_orientation(WorldTextOrientation value);
     void set_priority(int value);
     void set_depth_test(bool value);
     void set_depth_write(bool value);
@@ -69,6 +80,8 @@ public:
 
     std::string anchor_name() const;
     void set_anchor_name(const std::string& value);
+    std::string orientation_name() const;
+    void set_orientation_name(const std::string& value);
 
     tc_value serialize_data() const override;
     void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
@@ -112,6 +125,14 @@ INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec3, local_offset, "Local Offset", "
     [](WorldTextComponent* self) -> Vec3& { return self->local_offset; },
     [](WorldTextComponent* self, const Vec3& value) { self->set_local_offset(value); })
 
+INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec3, plane_normal, "Plane Normal", "vec3",
+    [](WorldTextComponent* self) -> Vec3& { return self->plane_normal; },
+    [](WorldTextComponent* self, const Vec3& value) { self->set_plane_normal(value); })
+
+INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec3, text_up, "Text Up", "vec3",
+    [](WorldTextComponent* self) -> Vec3& { return self->text_up; },
+    [](WorldTextComponent* self, const Vec3& value) { self->set_text_up(value); })
+
 INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec4, color, "Color", "color",
     [](WorldTextComponent* self) -> Vec4& { return self->color; },
     [](WorldTextComponent* self, const Vec4& value) { self->set_color(value); })
@@ -127,6 +148,12 @@ INSPECT_FIELD_ACCESSORS_CHOICES(WorldTextComponent, int, anchor, "Anchor", "enum
     {"0", "Left"},
     {"1", "Center"},
     {"2", "Right"})
+
+INSPECT_FIELD_ACCESSORS_CHOICES(WorldTextComponent, int, orientation, "Orientation", "enum",
+    [](WorldTextComponent* self) -> int { return static_cast<int>(self->orientation); },
+    [](WorldTextComponent* self, int value) { self->set_orientation(static_cast<WorldTextOrientation>(value)); },
+    {"0", "Billboard"},
+    {"1", "Fixed"})
 
 INSPECT_FIELD_CALLBACK(WorldTextComponent, int, priority, "Priority", "int",
     [](WorldTextComponent* self) -> int& { return self->priority; },

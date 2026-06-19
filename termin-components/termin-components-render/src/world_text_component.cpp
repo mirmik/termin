@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 #include <tcbase/tc_log.hpp>
@@ -80,6 +82,53 @@ void extract_view_row3(const Mat44f& view, int row, float out[3]) {
     out[2] = view(2, row);
 }
 
+Vec3 normalized_or(const Vec3& value, const Vec3& fallback) {
+    const double len = value.norm();
+    if (len <= 1.0e-8) {
+        return fallback;
+    }
+    return value / len;
+}
+
+void copy_basis_vec(const Vec3& value, float out[3]) {
+    out[0] = static_cast<float>(value.x);
+    out[1] = static_cast<float>(value.y);
+    out[2] = static_cast<float>(value.z);
+}
+
+bool make_fixed_text_basis(
+    const WorldTextComponent& component,
+    const Mat44f& model,
+    float text_right[3],
+    float text_up[3])
+{
+    const Vec3 transformed_normal = model.transform_direction(component.plane_normal);
+    Vec3 normal = normalized_or(transformed_normal, Vec3::unit_z());
+
+    const Vec3 transformed_up = model.transform_direction(component.text_up);
+    Vec3 up = transformed_up - normal * transformed_up.dot(normal);
+    if (up.norm() <= 1.0e-8) {
+        tc::Log::error(
+            "[WorldTextComponent] text_up is parallel to plane_normal; using fallback basis");
+        const Vec3 fallback = std::abs(normal.dot(Vec3::unit_z())) < 0.99
+            ? Vec3::unit_z()
+            : Vec3::unit_y();
+        up = fallback - normal * fallback.dot(normal);
+    }
+    up = normalized_or(up, Vec3::unit_y());
+
+    Vec3 right = up.cross(normal);
+    if (right.norm() <= 1.0e-8) {
+        tc::Log::error("[WorldTextComponent] failed to build fixed text basis");
+        return false;
+    }
+    right = right.normalized();
+
+    copy_basis_vec(right, text_right);
+    copy_basis_vec(up, text_up);
+    return true;
+}
+
 std::string sanitize_phase_mark(const std::string& value) {
     if (value.empty()) {
         return "transparent";
@@ -119,6 +168,24 @@ void WorldTextComponent::set_local_offset(const Vec3& value) {
     local_offset = value;
 }
 
+void WorldTextComponent::set_plane_normal(const Vec3& value) {
+    if (value.norm() <= 1.0e-8) {
+        tc::Log::error("[WorldTextComponent] plane_normal is zero; using +Z");
+        plane_normal = Vec3::unit_z();
+        return;
+    }
+    plane_normal = value;
+}
+
+void WorldTextComponent::set_text_up(const Vec3& value) {
+    if (value.norm() <= 1.0e-8) {
+        tc::Log::error("[WorldTextComponent] text_up is zero; using +Y");
+        text_up = Vec3::unit_y();
+        return;
+    }
+    text_up = value;
+}
+
 void WorldTextComponent::set_color(const Vec4& value) {
     color = value;
 }
@@ -129,6 +196,20 @@ void WorldTextComponent::set_size(float value) {
 
 void WorldTextComponent::set_anchor(WorldTextAnchor value) {
     anchor = value;
+}
+
+void WorldTextComponent::set_orientation(WorldTextOrientation value) {
+    switch (value) {
+        case WorldTextOrientation::Fixed:
+        case WorldTextOrientation::Billboard:
+            orientation = value;
+            break;
+        default:
+            tc::Log::error("[WorldTextComponent] invalid orientation %d; using Billboard",
+                           static_cast<int>(value));
+            orientation = WorldTextOrientation::Billboard;
+            break;
+    }
 }
 
 void WorldTextComponent::set_priority(int value) {
@@ -176,6 +257,27 @@ void WorldTextComponent::set_anchor_name(const std::string& value) {
     }
 }
 
+std::string WorldTextComponent::orientation_name() const {
+    switch (orientation) {
+        case WorldTextOrientation::Fixed:
+            return "fixed";
+        case WorldTextOrientation::Billboard:
+        default:
+            return "billboard";
+    }
+}
+
+void WorldTextComponent::set_orientation_name(const std::string& value) {
+    std::string key = value;
+    std::transform(key.begin(), key.end(), key.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (key == "fixed" || key == "plane" || key == "world") {
+        orientation = WorldTextOrientation::Fixed;
+    } else {
+        orientation = WorldTextOrientation::Billboard;
+    }
+}
+
 tc_value WorldTextComponent::serialize_data() const {
     return Component::serialize_data();
 }
@@ -184,6 +286,9 @@ void WorldTextComponent::deserialize_data(const tc_value* data, tc_scene_handle 
     Component::deserialize_data(data, scene);
     phase_mark = sanitize_phase_mark(phase_mark);
     size = std::max(size, 0.001f);
+    set_orientation(orientation);
+    set_plane_normal(plane_normal);
+    set_text_up(text_up);
     material_ = TcMaterial();
     font_.reset();
     loaded_font_path_.clear();
@@ -308,10 +413,16 @@ bool WorldTextComponent::draw_tgfx2(tgfx::RenderContext2& ctx2,
     }
 
     Mat44f mvp = context.projection * context.view;
-    float cam_right[3]{};
-    float cam_up[3]{};
-    extract_view_row3(context.view, 0, cam_right);
-    extract_view_row3(context.view, 1, cam_up);
+    float text_right[3]{};
+    float text_up_basis[3]{};
+    if (orientation == WorldTextOrientation::Fixed) {
+        if (!make_fixed_text_basis(*this, context.model, text_right, text_up_basis)) {
+            return true;
+        }
+    } else {
+        extract_view_row3(context.view, 0, text_right);
+        extract_view_row3(context.view, 2, text_up_basis);
+    }
 
     Vec3 world_pos = context.model.transform_point(local_offset);
     float position[3] = {
@@ -320,7 +431,7 @@ bool WorldTextComponent::draw_tgfx2(tgfx::RenderContext2& ctx2,
         static_cast<float>(world_pos.z),
     };
 
-    renderer_->begin(&ctx2, mvp.data, cam_right, cam_up, font);
+    renderer_->begin(&ctx2, mvp.data, text_right, text_up_basis, font);
     renderer_->draw(
         text,
         position,

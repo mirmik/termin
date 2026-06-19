@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from termin.materials import TcMaterial
-from termin.render_components import LineRenderer, LineRenderMode, WorldTextAnchor, WorldTextComponent
+from termin.render_components import (
+    LineRenderer,
+    LineRenderMode,
+    WorldTextAnchor,
+    WorldTextComponent,
+    WorldTextOrientation,
+)
 
 
 VERTEX = """
@@ -161,6 +167,10 @@ def test_world_text_component_defaults_to_transparent_direct_draw():
     assert text.size == 0.5
     assert text.anchor == WorldTextAnchor.Center
     assert text.anchor_name == "center"
+    assert text.orientation == WorldTextOrientation.Billboard
+    assert text.orientation_name == "billboard"
+    assert text.plane_normal == (0.0, 0.0, 1.0)
+    assert text.text_up == (0.0, 1.0, 0.0)
     assert text.depth_test is True
     assert text.depth_write is False
     assert text.blend is True
@@ -201,18 +211,36 @@ def test_world_text_component_is_inspectable():
         ("1", "Center"),
         ("2", "Right"),
     ]
+    assert fields["orientation"].label == "Orientation"
+    assert fields["orientation"].kind == "enum"
+    assert [(choice.value, choice.label) for choice in fields["orientation"].choices] == [
+        ("0", "Billboard"),
+        ("1", "Fixed"),
+    ]
+    assert fields["plane_normal"].label == "Plane Normal"
+    assert fields["plane_normal"].kind == "vec3"
+    assert fields["text_up"].label == "Text Up"
+    assert fields["text_up"].kind == "vec3"
 
     entity = Entity(name="world text")
     component = entity.add_component_by_name("WorldTextComponent")
     component.set_field("text", "Nf3")
     component.set_field("anchor", "2")
+    component.set_field("orientation", "1")
+    component.set_field("plane_normal", [0.0, 0.0, 1.0])
+    component.set_field("text_up", [0.0, 1.0, 0.0])
     component.set_field("size", 0.75)
 
     assert component.get_field("text") == "Nf3"
     assert component.get_field("anchor") == 2
+    assert component.get_field("orientation") == 1
+    assert component.get_field("plane_normal") == [0.0, 0.0, 1.0]
+    assert component.get_field("text_up") == [0.0, 1.0, 0.0]
     assert component.get_field("size") == 0.75
     assert component.to_python().anchor == WorldTextAnchor.Right
     assert component.to_python().anchor_name == "right"
+    assert component.to_python().orientation == WorldTextOrientation.Fixed
+    assert component.to_python().orientation_name == "fixed"
 
 
 def test_depth_conversion_passes_bind_textures_by_reflected_name():
