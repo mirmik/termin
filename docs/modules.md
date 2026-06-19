@@ -95,9 +95,9 @@ Source of truth: [termin-graphics docs](../termin-graphics/docs/index.md)
 
 Source of truth: [termin-render docs](../termin-render/docs/index.md)
 
-Отвечает за render framework поверх canonical resources: render engine, frame graph, presenter/debugger, интеграцию с application-level rendering.
+Отвечает за render framework поверх canonical resources: render engine, frame graph, presenter/debugger, scene render mount data и интеграцию с application-level rendering.
 
-Здесь должны оставаться части, которые знают про frame graph, pass interfaces, engine views и отладочную визуализацию pipeline.
+Здесь должны оставаться части, которые знают про frame graph, pass interfaces, engine views, render scene mount config (`ViewportConfig`, `RenderTargetConfig`) и отладочную визуализацию pipeline. App `_native` может оставлять compatibility bindings для этих типов, но C/C++ ownership принадлежит `termin-render`.
 
 Кандидаты на вынос в [termin-graphics](#termin-graphics):
 
