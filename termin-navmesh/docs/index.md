@@ -10,6 +10,11 @@
 ## Основные области
 
 - Python package в `python/termin/navmesh`.
+- Native package ownership:
+  - `termin_navmesh` - C registry for `TcNavMesh` assets.
+  - `termin_navmesh_components` - Recast/Detour-backed scene components.
+  - `termin.navmesh._navmesh_native` - Python bindings for the native
+    components and `TcNavMesh` handle.
 - Algorithm notes рядом с package-кодом.
 - Packaging metadata в `setup.py` / `pyproject.toml`.
 
@@ -23,6 +28,10 @@ native Recast/app цепочку. Данные и алгоритмы (`NavMesh`,
 Recast/Detour компоненты загружаются только при обращении к соответствующим
 именам (`RecastNavMeshBuilderComponent`, `DetourPathfindingWorldComponent`,
 `TcNavMesh` и т.п.).
+
+Native Recast/Detour ownership больше не находится в `termin-app`: app-side
+код может подключать editor-specific визуализацию, но runtime/builder
+components и `_navmesh_native` собираются здесь.
 
 ## Asset integration
 

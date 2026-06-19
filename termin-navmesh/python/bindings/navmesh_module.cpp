@@ -7,7 +7,7 @@
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/navmesh/tc_navmesh_handle.hpp"
 #include <termin/entity/component.hpp>
-#include "termin/bindings/entity/entity_helpers.hpp"
+#include <termin/bindings/entity_helpers.hpp>
 #include <nanobind/stl/string.h>
 #include <mutex>
 #include <unordered_map>

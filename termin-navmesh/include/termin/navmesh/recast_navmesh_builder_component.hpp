@@ -7,9 +7,9 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/render/drawable.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
-#include "../material/tc_material_handle.hpp"
-#include "recast_debug_data.hpp"
-#include "navmesh_keeper_component.hpp"
+#include <tgfx/tgfx_material_handle.hpp>
+#include <termin/navmesh/recast_debug_data.hpp>
+#include <termin/navmesh/navmesh_keeper_component.hpp>
 #include <Recast.h>
 #include <string>
 

@@ -13,17 +13,6 @@ target_link_libraries(_voxels_native PRIVATE entity_lib tcbase::termin_base)
 # _lighting_native has been extracted into the standalone termin-lighting subproject.
 # See termin-env/termin-lighting/ — it is built by build-sdk-bindings.sh after main termin.
 
-# ============== Core entity modules ==============
-
-if(TERMIN_HAS_RECAST)
-    # NavMesh native module (RecastNavMeshBuilderComponent)
-    nanobind_add_module(_navmesh_native NB_SHARED
-        termin/bindings/navmesh/navmesh_module.cpp
-    )
-    target_link_libraries(_navmesh_native PRIVATE tcbase::termin_base entity_lib navmesh_lib render_lib)
-    target_compile_options(_navmesh_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-endif()
-
 # ============== Main unified module ==============
 
 set(TERMIN_APP_NATIVE_SOURCES
@@ -99,7 +88,7 @@ if(TGFX2_ENABLE_OPENGL)
     target_link_libraries(_native PRIVATE OpenGL::GL)
 endif()
 if(TERMIN_HAS_RECAST)
-    target_link_libraries(_native PRIVATE navmesh_lib)
+    target_link_libraries(_native PRIVATE termin_navmesh::termin_navmesh_components)
 endif()
 
 
@@ -142,12 +131,6 @@ set_target_properties(_voxels_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-if(TERMIN_HAS_RECAST)
-    set_target_properties(_navmesh_native PROPERTIES
-        INSTALL_RPATH "${TERMIN_PY_RPATH}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-    )
-endif()
 set_target_properties(_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -156,7 +139,4 @@ set_target_properties(_native PROPERTIES
 # ============== Install targets ==============
 
 install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
-if(TERMIN_HAS_RECAST)
-    install(TARGETS _navmesh_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/navmesh)
-endif()
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})

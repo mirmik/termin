@@ -1,6 +1,6 @@
-#include "detour_pathfinding_world_component.hpp"
+#include <termin/navmesh/detour_pathfinding_world_component.hpp>
 
-#include "detour_navmesh_asset_utils.hpp"
+#include <termin/navmesh/detour_navmesh_asset_utils.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <DetourNavMesh.h>
 #include <DetourNavMeshQuery.h>

@@ -216,7 +216,8 @@ Animation-domain API and bindings.
 
 Source of truth: [termin-navmesh docs](../termin-navmesh/docs/index.md)
 
-NavMesh bindings and navigation utilities.
+NavMesh C registry, Recast/Detour-backed scene components, `_navmesh_native`
+bindings, and navigation utilities.
 
 ### termin-tween
 

@@ -195,6 +195,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_navmesh REQUIRED)
 endif()
+if(TARGET termin_navmesh::termin_navmesh_components)
+    set(TERMIN_HAS_RECAST ON)
+else()
+    set(TERMIN_HAS_RECAST OFF)
+endif()
 
 # Core C library
 if(BUILD_TESTS)
@@ -203,42 +208,6 @@ else()
     set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 endif()
 add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
-
-# Recast library only (from recastnavigation, avoids configure_file race conditions)
-set(SOVERSION 1)
-set(LIB_VERSION 1.6.0)
-set(RECASTNAVIGATION_ENABLE_ASSERTS OFF)
-set(SKIP_INSTALL_ALL ON)  # Don't use recast's own install rules
-set(TERMIN_RECASTNAVIGATION_DIR
-    "${CMAKE_CURRENT_LIST_DIR}/../../termin-thirdparty/recastnavigation"
-    CACHE PATH "RecastNavigation source directory")
-set(TERMIN_RECAST_DIR "${TERMIN_RECASTNAVIGATION_DIR}/Recast")
-set(TERMIN_DETOUR_DIR "${TERMIN_RECASTNAVIGATION_DIR}/Detour")
-set(TERMIN_HAS_RECAST OFF)
-if(EXISTS "${TERMIN_RECAST_DIR}/CMakeLists.txt" AND EXISTS "${TERMIN_DETOUR_DIR}/CMakeLists.txt")
-    add_subdirectory(${TERMIN_RECAST_DIR} ${CMAKE_CURRENT_BINARY_DIR}/Recast EXCLUDE_FROM_ALL)
-    add_subdirectory(${TERMIN_DETOUR_DIR} ${CMAKE_CURRENT_BINARY_DIR}/Detour EXCLUDE_FROM_ALL)
-
-    # Re-add Recast to build (EXCLUDE_FROM_ALL removed it from default)
-    set_target_properties(Recast PROPERTIES EXCLUDE_FROM_ALL FALSE UNITY_BUILD OFF)
-    set_target_properties(Detour PROPERTIES EXCLUDE_FROM_ALL FALSE UNITY_BUILD OFF)
-
-    # Add INSTALL_INTERFACE to Recast includes for proper export
-    target_include_directories(Recast PUBLIC
-        $<INSTALL_INTERFACE:include/recastnavigation>
-    )
-    target_include_directories(Detour PUBLIC
-        $<INSTALL_INTERFACE:include/recastnavigation>
-    )
-    set(TERMIN_HAS_RECAST ON)
-else()
-    if(TERMIN_BUILD_PYTHON)
-        message(FATAL_ERROR
-            "TERMIN_BUILD_PYTHON=ON requires the recastnavigation submodule. "
-            "Run: git submodule update --init --recursive termin-thirdparty/recastnavigation")
-    endif()
-    message(WARNING "Recast/Detour submodules not found; navmesh support will be disabled.")
-endif()
 
 # ============== Entity shared library ==============
 # Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, KindRegistryCpp, EntityRegistry)
@@ -339,39 +308,6 @@ set_target_properties(render_lib PROPERTIES
 )
 if(COMMAND termin_enable_unity_build_for)
     termin_enable_unity_build_for(render_lib)
-endif()
-
-if(TERMIN_HAS_RECAST)
-    # ============== NavMesh library ==============
-    add_library(navmesh_lib SHARED
-        termin/navmesh/detour_navmesh_asset_utils.cpp
-        termin/navmesh/detour_pathfinding_world_component.cpp
-        termin/navmesh/navmesh_keeper_component.cpp
-        termin/navmesh/off_mesh_link_component.cpp
-        termin/navmesh/recast_navmesh_builder_component.cpp
-    )
-    if(COMMAND termin_add_alias_if_missing)
-        termin_add_alias_if_missing(termin::navmesh_lib navmesh_lib)
-    endif()
-    target_include_directories(navmesh_lib PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-        $<INSTALL_INTERFACE:include/cpp>
-    )
-    target_link_libraries(navmesh_lib PUBLIC entity_lib render_lib Recast Detour termin_navmesh::termin_navmesh)
-    target_compile_options(navmesh_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-    if(COMMAND termin_enable_pch_for)
-        termin_enable_pch_for(navmesh_lib)
-    else()
-        target_precompile_headers(navmesh_lib PRIVATE termin/pch.hpp)
-    endif()
-    set_target_properties(navmesh_lib PROPERTIES
-        POSITION_INDEPENDENT_CODE ON
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
-        INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
-    )
 endif()
 
 # ============== SDL2 (optional) ==============
@@ -619,9 +555,6 @@ endif()
 
 # ============== Install shared libraries ==============
 set(TERMIN_INSTALL_TARGETS entity_lib termin_core render_lib)
-if(TERMIN_HAS_RECAST)
-    list(APPEND TERMIN_INSTALL_TARGETS navmesh_lib Recast Detour)
-endif()
 install(TARGETS ${TERMIN_INSTALL_TARGETS}
     EXPORT terminTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -716,16 +649,6 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "bindings" EXCLUDE
 )
-if(TERMIN_HAS_RECAST)
-    install(DIRECTORY ${TERMIN_RECAST_DIR}/Include/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/recastnavigation
-        FILES_MATCHING PATTERN "*.h"
-    )
-    install(DIRECTORY ${TERMIN_DETOUR_DIR}/Include/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/recastnavigation
-        FILES_MATCHING PATTERN "*.h"
-    )
-endif()
 # ============== CMake Package Export ==============
 include(CMakePackageConfigHelpers)
 
