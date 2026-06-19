@@ -32,6 +32,8 @@ def test_create_build_context_uses_project_name_and_default_desktop_dirs(tmp_pat
     assert context.project_root == project.resolve()
     assert context.project_name == "ContextGame"
     assert context.target == "desktop"
+    assert context.configuration == "dev"
+    assert context.resource_policy == "strict"
     assert context.entry_scene == (project / "Scenes" / "Main.scene").resolve()
     assert context.dist_dir == (project / "dist" / "desktop" / "ContextGame").resolve()
     assert context.package_dir == context.dist_dir / "package"
@@ -59,6 +61,8 @@ def test_create_build_context_uses_explicit_output_and_target_options(tmp_path: 
         target="android",
         output_dir=output_dir,
         project_name="OverrideName",
+        configuration="debug",
+        resource_policy="dev_smoke",
         target_options={
             "abi": "arm64-v8a",
             "platform": "android-26",
@@ -66,6 +70,8 @@ def test_create_build_context_uses_explicit_output_and_target_options(tmp_path: 
     )
 
     assert context.project_name == "OverrideName"
+    assert context.configuration == "debug"
+    assert context.resource_policy == "dev_smoke"
     assert context.dist_dir == output_dir.resolve()
     assert context.package_dir == output_dir.resolve() / "package"
     assert context.logs_dir == output_dir.resolve() / "logs"

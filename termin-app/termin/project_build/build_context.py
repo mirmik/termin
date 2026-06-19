@@ -14,6 +14,8 @@ class BuildContext:
     project_root: Path
     project_name: str
     target: str
+    configuration: str
+    resource_policy: str
     entry_scene: Path
     dist_dir: Path
     package_dir: Path
@@ -27,6 +29,8 @@ def create_build_context(
     target: str,
     output_dir: str | Path | None = None,
     project_name: str | None = None,
+    configuration: str = "dev",
+    resource_policy: str = "strict",
     target_options: Mapping[str, object] | None = None,
 ) -> BuildContext:
     project_root_path = Path(project_root).resolve()
@@ -46,6 +50,8 @@ def create_build_context(
         project_root=project_root_path,
         project_name=resolved_project_name,
         target=target,
+        configuration=configuration,
+        resource_policy=resource_policy,
         entry_scene=entry_scene_path,
         dist_dir=dist_dir,
         package_dir=dist_dir / "package",

@@ -81,6 +81,8 @@ def test_profile_build_routes_desktop_profile(tmp_path: Path, monkeypatch) -> No
             "shader_compiler": None,
             "default_shader_language": "slang",
             "sdk_root": tmp_path / "sdk",
+            "configuration": "dev",
+            "resource_policy": "strict",
         }
     ]
 
@@ -146,6 +148,8 @@ def test_profile_build_routes_android_profile(tmp_path: Path, monkeypatch) -> No
             "default_shader_language": "slang",
             "abi": "x86_64",
             "platform": "android-29",
+            "configuration": "dev",
+            "resource_policy": "strict",
         }
     ]
 
@@ -214,6 +218,8 @@ def test_profile_build_routes_quest_openxr_profile(tmp_path: Path, monkeypatch) 
             "default_shader_language": "slang",
             "abi": "arm64-v8a",
             "platform": "android-26",
+            "configuration": "dev",
+            "resource_policy": "strict",
         }
     ]
 
@@ -243,10 +249,37 @@ def test_profile_build_normalizes_desktop_request(tmp_path: Path) -> None:
     assert request.context.project_root == project.resolve()
     assert request.context.entry_scene == (project / "Scenes" / "Main.scene").resolve()
     assert request.context.dist_dir == (project / "dist" / "dev").resolve()
+    assert request.context.configuration == "dev"
+    assert request.context.resource_policy == "strict"
     assert request.context.target_options == {"desktop": {"sdk_root": str(tmp_path / "sdk")}}
     assert request.sdk_root == tmp_path / "sdk"
     assert request.termin_root is None
     assert request.gradle is None
+
+
+def test_profile_build_normalizes_explicit_profile_policy(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "release": {
+                    "target": "desktop",
+                    "configuration": "release",
+                    "resource_policy": "dev_smoke",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/release",
+                }
+            },
+        },
+    )
+
+    profile = profile_build.load_build_profile(project, profiles_path, "release")
+    request = profile_build.normalize_profile_build_request(profile)
+
+    assert request.context.configuration == "release"
+    assert request.context.resource_policy == "dev_smoke"
 
 
 def test_profile_build_normalizes_android_request(tmp_path: Path) -> None:
@@ -275,6 +308,8 @@ def test_profile_build_normalizes_android_request(tmp_path: Path) -> None:
 
     assert request.target == "android"
     assert request.context.dist_dir == (project / "dist" / "android" / "mobile").resolve()
+    assert request.context.configuration == "dev"
+    assert request.context.resource_policy == "strict"
     assert request.context.target_options == {
         "android": {
             "abi": "x86_64",
@@ -313,6 +348,8 @@ def test_profile_build_normalizes_quest_openxr_request(tmp_path: Path) -> None:
     request = profile_build.normalize_profile_build_request(profile)
 
     assert request.target == "quest_openxr"
+    assert request.context.configuration == "dev"
+    assert request.context.resource_policy == "strict"
     assert request.context.target_options == {
         "android": {"gradle": str(tmp_path / "gradle")},
         "openxr": {"build_script": str(tmp_path / "build-quest-openxr-apk.sh")},
@@ -355,6 +392,144 @@ def test_profile_build_rejects_unsupported_target_block_before_wrapper(
         profile_build.build_profile(profile)
 
     assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value", "message"),
+    [
+        ("configuration", "shipping", "Supported values: dev, debug, release"),
+        ("resource_policy", "placeholder", "Supported values: dev, dev_smoke, strict"),
+    ],
+)
+def test_profile_build_rejects_unsupported_profile_policy_before_wrapper(
+    tmp_path: Path,
+    monkeypatch,
+    field_name: str,
+    field_value: str,
+    message: str,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    field_name: field_value,
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    with pytest.raises(profile_build.ProfileBuildError, match=message):
+        profile_build.build_profile(profile)
+
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("profile_target", "builder_name", "result_fields"),
+    [
+        (
+            "desktop",
+            "build_desktop_project",
+            {
+                "dist_dir": "dist/dev",
+                "app_manifest_path": "dist/dev/app.json",
+            },
+        ),
+        (
+            "android",
+            "build_android_project",
+            {
+                "apk_path": "dist/dev/apk/ProfileGame-debug.apk",
+                "log_path": "dist/dev/logs/android-build.log",
+                "application_id": "org.termin.builds.profilegame",
+                "launch_activity": "org.termin.android.TerminActivity",
+            },
+        ),
+        (
+            "quest_openxr",
+            "build_quest_openxr_project",
+            {
+                "apk_path": "dist/dev/apk/ProfileGame-quest-openxr-debug.apk",
+                "log_path": "dist/dev/logs/quest-openxr-build.log",
+                "application_id": "org.termin.openxr",
+                "launch_activity": "android.app.NativeActivity",
+            },
+        ),
+    ],
+)
+def test_profile_build_returns_nonzero_when_builder_reports_error_diagnostic(
+    tmp_path: Path,
+    monkeypatch,
+    profile_target: str,
+    builder_name: str,
+    result_fields: dict[str, str],
+    capsys,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": profile_target,
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                }
+            },
+        },
+    )
+    diagnostic = SimpleNamespace(
+        level="error",
+        path="manifest.json",
+        message="package is invalid",
+    )
+
+    def fake_builder(**kwargs):
+        resolved_fields = {
+            key: project / value
+            if key.endswith("_path") or key.endswith("_dir")
+            else value
+            for key, value in result_fields.items()
+        }
+        return SimpleNamespace(
+            package_result=_package_result(tmp_path),
+            diagnostics=[diagnostic],
+            **resolved_fields,
+        )
+
+    monkeypatch.setattr(profile_build, builder_name, fake_builder)
+
+    assert profile_build.main(
+        [
+            "build",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+            "--profile",
+            "dev",
+            "--target",
+            profile_target,
+        ]
+    ) == 1
+
+    captured = capsys.readouterr()
+    assert "error: manifest.json: package is invalid" in captured.out
 
 
 def test_profile_build_rejects_unsafe_output_before_wrapper(

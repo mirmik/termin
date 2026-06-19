@@ -32,10 +32,16 @@ Unknown commands are resolved in a git-like form:
 termin_builder build PROFILE
 ```
 
-`termin run PROFILE` and `termin play PROFILE` currently delegate to:
+`termin run PROFILE` delegates to:
 
 ```bash
 termin_runner run PROFILE
+```
+
+`termin play PROFILE` delegates to the same runner in source project mode:
+
+```bash
+termin_runner run PROFILE --mode project
 ```
 
 Packaged build commands do not use the legacy broad-copy
@@ -180,7 +186,7 @@ build profile:
 termin run dev --project path/to/project
 ```
 
-`run`/`play` are desktop/runtime commands today. Android and Quest/OpenXR
+`run` is a desktop packaged-runtime command today. Android and Quest/OpenXR
 profiles are build-only from `termin build`; install/launch on devices still
 goes through the dedicated deploy helpers until `termin deploy PROFILE` becomes
 the canonical device command.
@@ -237,19 +243,23 @@ termin run dev --mode legacy-build
 Default `--mode build` no longer falls back to `build.json` when the packaged
 bundle is missing.
 
-`run` is intentionally not build-only. Source project mode launches the profile
-entry scene directly through the player, which keeps room for editor-like
+`play` is intentionally separate from build output. It launches the profile
+entry scene directly through `termin.player`, which keeps room for editor-like
 Play Mode flows:
 
 ```bash
-termin run dev --mode project
+termin play dev
 ```
 
-Useful run options:
+`termin_runner` still exposes `--mode project` directly for lower-level
+diagnostics, but the user-facing command for source project playback is
+`termin play`.
+
+Useful run/play options:
 
 ```bash
 termin run dev --backend opengl --width 1600 --height 900 --title Chess
-termin run dev --mode project --scene scene2.scene
+termin play dev --scene scene2.scene
 ```
 
 ## Standard Library
