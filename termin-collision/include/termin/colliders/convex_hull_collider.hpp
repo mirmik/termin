@@ -221,12 +221,6 @@ inline std::vector<ConvexFace> build(const std::vector<Vec3>& points) {
     }
 
     // Assign points to outside sets
-    bool used[4] = {};
-    for (int k = 0; k < 4; ++k) {
-        int idx = face_tris[k][0]; // p0 appears in all, but let's mark all 4
-        (void)idx;
-    }
-
     for (int i = 0; i < (int)verts.size(); ++i) {
         if (i == p0 || i == p1 || i == p2 || i == p3) continue;
         double best_above = 0;
