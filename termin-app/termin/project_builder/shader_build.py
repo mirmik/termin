@@ -18,9 +18,15 @@ _STAGES: tuple[tuple[str, str, str], ...] = (
     ("geometry", "geom", "geometry_source"),
 )
 
-_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
+_DEFAULT_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
     "glsl": ("vulkan",),
     "slang": ("vulkan", "opengl"),
+}
+
+_SUPPORTED_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
+    "glsl": ("vulkan",),
+    "slang": ("vulkan", "opengl", "d3d11"),
+    "hlsl": ("d3d11",),
 }
 
 
@@ -28,8 +34,10 @@ def compile_shader_usages(
     shader_usages: Iterable[object],
     output_dir: Path,
     shader_compiler: Path | None,
+    shader_targets: Iterable[str] | None = None,
 ) -> list[BuildResource]:
     compiler = _resolve_shader_compiler(shader_compiler)
+    requested_targets = _normalize_shader_targets(shader_targets)
     source_dir = output_dir / ".build" / "shaders" / "source"
     source_dir.mkdir(parents=True, exist_ok=True)
 
@@ -45,9 +53,7 @@ def compile_shader_usages(
             raise ValueError(f"Shader '{shader.name}' has empty uuid")
 
         language = _shader_language(shader)
-        targets = _TARGETS_BY_LANGUAGE.get(language)
-        if targets is None:
-            raise ValueError(f"Shader '{shader.name}' has unsupported language: {language}")
+        targets = _targets_for_language(language, requested_targets, f"Shader '{shader.name}'")
 
         for stage_name, stage_ext, attr_name in _STAGES:
             source = _shader_stage_source(shader, attr_name)
@@ -64,7 +70,7 @@ def compile_shader_usages(
                 seen.add(key)
 
                 artifact_dir = output_dir / "assets" / "shaders" / target
-                artifact_path = artifact_dir / f"{shader_uuid}.{stage_ext}.{_artifact_extension(target)}"
+                artifact_path = artifact_dir / _artifact_filename(shader_uuid, target, stage_name, stage_ext)
 
                 _run_shader_compiler(
                     compiler=compiler,
@@ -96,8 +102,10 @@ def compile_shader_asset_resources(
     project_root: Path,
     output_dir: Path,
     shader_compiler: Path | None,
+    shader_targets: Iterable[str] | None = None,
 ) -> list[BuildResource]:
     compiler = _resolve_shader_compiler(shader_compiler)
+    requested_targets = _normalize_shader_targets(shader_targets)
     source_dir = output_dir / ".build" / "shaders" / "source"
     source_dir.mkdir(parents=True, exist_ok=True)
 
@@ -120,9 +128,11 @@ def compile_shader_asset_resources(
         source_path = project_root / resource.source_path
         program = _parse_shader_program(source_path)
         language = _program_language(program)
-        targets = _TARGETS_BY_LANGUAGE.get(language)
-        if targets is None:
-            raise ValueError(f"Shader asset '{resource.source_path}' has unsupported language: {language}")
+        targets = _targets_for_language(
+            language,
+            requested_targets,
+            f"Shader asset '{resource.source_path}'",
+        )
 
         for phase in program.phases:
             phase_uuid = _phase_uuid(resource.uuid, phase.phase_mark)
@@ -147,7 +157,7 @@ def compile_shader_asset_resources(
                     seen.add(key)
 
                     artifact_dir = output_dir / "assets" / "shaders" / target
-                    artifact_path = artifact_dir / f"{phase_uuid}.{stage_ext}.{_artifact_extension(target)}"
+                    artifact_path = artifact_dir / _artifact_filename(phase_uuid, target, stage_name, stage_ext)
                     _run_shader_compiler(
                         compiler=compiler,
                         language=language,
@@ -221,7 +231,51 @@ def _phase_uuid(shader_uuid: str, phase_mark: str) -> str:
 def _source_extension(language: str) -> str:
     if language == "slang":
         return "slang"
+    if language == "hlsl":
+        return "hlsl"
     return "glsl"
+
+
+def _normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str, ...] | None:
+    if shader_targets is None:
+        return None
+    normalized: list[str] = []
+    for target in shader_targets:
+        text = str(target).strip().lower()
+        if text == "":
+            raise ValueError("Shader target must be a non-empty string")
+        if text not in {"vulkan", "opengl", "d3d11"}:
+            raise ValueError(f"Unsupported shader target: {target}")
+        if text not in normalized:
+            normalized.append(text)
+    if not normalized:
+        raise ValueError("At least one shader target must be requested")
+    return tuple(normalized)
+
+
+def _targets_for_language(
+    language: str,
+    requested_targets: tuple[str, ...] | None,
+    context: str,
+) -> tuple[str, ...]:
+    if requested_targets is None:
+        targets = _DEFAULT_TARGETS_BY_LANGUAGE.get(language)
+        if targets is None:
+            raise ValueError(f"{context} has unsupported language: {language}")
+        return targets
+
+    supported = _SUPPORTED_TARGETS_BY_LANGUAGE.get(language)
+    if supported is None:
+        raise ValueError(f"{context} has unsupported language: {language}")
+    unsupported = [target for target in requested_targets if target not in supported]
+    if unsupported:
+        unsupported_text = ", ".join(unsupported)
+        supported_text = ", ".join(supported)
+        raise ValueError(
+            f"{context} language '{language}' cannot produce requested shader "
+            f"target(s): {unsupported_text}; supported targets: {supported_text}"
+        )
+    return requested_targets
 
 
 def _artifact_extension(target: str) -> str:
@@ -229,7 +283,26 @@ def _artifact_extension(target: str) -> str:
         return "spv"
     if target == "opengl":
         return "glsl"
+    if target == "d3d11":
+        return "cso"
     raise ValueError(f"Unsupported shader target: {target}")
+
+
+def _artifact_stage_suffix(target: str, stage_name: str, stage_ext: str) -> str:
+    if target != "d3d11":
+        return stage_ext
+    if stage_name == "vertex":
+        return "vs"
+    if stage_name == "fragment":
+        return "ps"
+    if stage_name == "geometry":
+        return "gs"
+    raise ValueError(f"Unsupported D3D11 shader stage: {stage_name}")
+
+
+def _artifact_filename(shader_uuid: str, target: str, stage_name: str, stage_ext: str) -> str:
+    suffix = _artifact_stage_suffix(target, stage_name, stage_ext)
+    return f"{shader_uuid}.{suffix}.{_artifact_extension(target)}"
 
 
 def _resource_type(target: str) -> str:
@@ -237,6 +310,8 @@ def _resource_type(target: str) -> str:
         return "shader_spirv"
     if target == "opengl":
         return "shader_glsl"
+    if target == "d3d11":
+        return "shader_dxbc"
     raise ValueError(f"Unsupported shader target: {target}")
 
 

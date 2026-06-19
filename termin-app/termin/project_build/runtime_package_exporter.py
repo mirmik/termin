@@ -23,6 +23,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,17 @@ DEFAULT_SHADER_SOURCE_PATH = "termin-runtime/default-color"
 DEFAULT_SHADER_LANGUAGE = "slang"
 DEFAULT_RESOURCE_POLICY = "strict"
 SUPPORTED_RESOURCE_POLICIES = {"dev", "dev_smoke", "strict"}
+
+_DEFAULT_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
+    "glsl": ("vulkan",),
+    "slang": ("vulkan", "opengl"),
+}
+
+_SUPPORTED_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
+    "glsl": ("vulkan",),
+    "slang": ("vulkan", "opengl", "d3d11"),
+    "hlsl": ("d3d11",),
+}
 
 
 ENGINE_SKYBOX_SHADER_UUID = "termin-engine-skybox"
@@ -92,8 +104,10 @@ def export_runtime_package(
     shader_compiler: str | Path | None = None,
     default_shader_language: str = DEFAULT_SHADER_LANGUAGE,
     resource_policy: str = DEFAULT_RESOURCE_POLICY,
+    shader_targets: Iterable[str] | None = None,
 ) -> RuntimePackageExportResult:
     _validate_resource_policy(resource_policy)
+    requested_shader_targets = _normalize_shader_targets(shader_targets)
     project_root_path = Path(project_root).resolve()
     entry_scene_path = _resolve_entry_scene(project_root_path, Path(entry_scene))
     output_dir_path = Path(output_dir).resolve()
@@ -129,8 +143,20 @@ def export_runtime_package(
     _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
     if not shaders:
         shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
-    _write_shaders(output_dir_path, shaders, resources, diagnostics, shader_compiler)
-    _write_default_pipeline_shader_artifacts(output_dir_path, diagnostics, shader_compiler)
+    _write_shaders(
+        output_dir_path,
+        shaders,
+        resources,
+        diagnostics,
+        shader_compiler,
+        requested_shader_targets,
+    )
+    _write_default_pipeline_shader_artifacts(
+        output_dir_path,
+        diagnostics,
+        shader_compiler,
+        requested_shader_targets,
+    )
     resources.sort(key=_resource_sort_key)
 
     manifest = {
@@ -140,6 +166,10 @@ def export_runtime_package(
         "resources": resources,
         "scene": "scene.json",
     }
+    if requested_shader_targets is not None:
+        manifest["target_requirements"] = {
+            "shader_targets": list(requested_shader_targets),
+        }
     manifest_path = output_dir_path / "manifest.json"
     _write_json(manifest_path, manifest)
 
@@ -158,6 +188,80 @@ def _validate_resource_policy(resource_policy: str) -> None:
             f"Unsupported runtime package resource_policy '{resource_policy}'. "
             f"Supported values: {supported}"
         )
+
+
+def _normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str, ...] | None:
+    if shader_targets is None:
+        return None
+    normalized: list[str] = []
+    for target in shader_targets:
+        text = str(target).strip().lower()
+        if text == "":
+            raise ValueError("Runtime package shader target must be a non-empty string")
+        if text not in {"vulkan", "opengl", "d3d11"}:
+            raise ValueError(f"Unsupported runtime package shader target: {target}")
+        if text not in normalized:
+            normalized.append(text)
+    if not normalized:
+        raise ValueError("Runtime package must request at least one shader target")
+    return tuple(normalized)
+
+
+def _shader_targets_for_language(
+    language: str,
+    requested_targets: tuple[str, ...] | None,
+    context: str,
+) -> tuple[str, ...]:
+    if requested_targets is None:
+        targets = _DEFAULT_SHADER_TARGETS_BY_LANGUAGE.get(language)
+        if targets is None:
+            raise ValueError(f"{context} has unsupported language: {language}")
+        return targets
+
+    supported = _SUPPORTED_SHADER_TARGETS_BY_LANGUAGE.get(language)
+    if supported is None:
+        raise ValueError(f"{context} has unsupported language: {language}")
+    unsupported = [target for target in requested_targets if target not in supported]
+    if unsupported:
+        unsupported_text = ", ".join(unsupported)
+        supported_text = ", ".join(supported)
+        raise ValueError(
+            f"{context} language '{language}' cannot produce requested shader "
+            f"target(s): {unsupported_text}; supported targets: {supported_text}"
+        )
+    return requested_targets
+
+
+def _artifact_extension_for_target(target: str) -> str:
+    if target == "vulkan":
+        return "spv"
+    if target == "opengl":
+        return "glsl"
+    if target == "d3d11":
+        return "cso"
+    raise ValueError(f"Unsupported shader target: {target}")
+
+
+def _artifact_stage_suffix(target: str, stage_name: str, fallback_stage_ext: str) -> str:
+    if target != "d3d11":
+        return fallback_stage_ext
+    if stage_name == "vertex":
+        return "vs"
+    if stage_name == "fragment":
+        return "ps"
+    if stage_name == "geometry":
+        return "gs"
+    raise ValueError(f"Unsupported D3D11 shader stage: {stage_name}")
+
+
+def _artifact_filename(shader_uuid: str, target: str, stage_name: str, fallback_stage_ext: str) -> str:
+    suffix = _artifact_stage_suffix(target, stage_name, fallback_stage_ext)
+    extension = _artifact_extension_for_target(target)
+    return f"{shader_uuid}.{suffix}.{extension}"
+
+
+def _artifact_path_text(shader_uuid: str, target: str, stage_name: str, fallback_stage_ext: str) -> str:
+    return f"shaders/{target}/{_artifact_filename(shader_uuid, target, stage_name, fallback_stage_ext)}"
 
 
 @dataclass
@@ -398,10 +502,11 @@ def _write_shaders(
     resources: list[dict[str, str]],
     diagnostics: list[RuntimePackageExportDiagnostic],
     shader_compiler: str | Path | None,
+    requested_targets: tuple[str, ...] | None,
 ) -> None:
     compiler = _resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
     for shader in sorted(shaders.values(), key=lambda item: item.uuid):
-        _write_shader(package_dir, resources, diagnostics, shader, compiler)
+        _write_shader(package_dir, resources, diagnostics, shader, compiler, requested_targets)
 
 
 def _write_shader(
@@ -410,19 +515,22 @@ def _write_shader(
     diagnostics: list[RuntimePackageExportDiagnostic],
     shader: _ShaderSpec,
     compiler: Path | None,
+    requested_targets: tuple[str, ...] | None,
 ) -> None:
-    if shader.language not in {"glsl", "slang"}:
-        raise ValueError(f"Shader '{shader.uuid}' has unsupported language: {shader.language}")
+    targets = _shader_targets_for_language(
+        shader.language,
+        requested_targets,
+        f"Shader '{shader.uuid}'",
+    )
 
     shader_dir = package_dir / "shaders"
     vulkan_dir = shader_dir / "vulkan"
-    opengl_dir = shader_dir / "opengl"
     shader_dir.mkdir(parents=True, exist_ok=True)
     vulkan_dir.mkdir(parents=True, exist_ok=True)
-    if shader.language == "slang":
-        opengl_dir.mkdir(parents=True, exist_ok=True)
+    for target in targets:
+        (shader_dir / target).mkdir(parents=True, exist_ok=True)
 
-    source_ext = "slang" if shader.language == "slang" else "glsl"
+    source_ext = _source_extension_for_language(shader.language)
     shared_stage_source = (
         shader.language == "slang"
         and shader.geometry_source == ""
@@ -443,7 +551,7 @@ def _write_shader(
         geometry_source_path = vulkan_dir / f"{shader.uuid}.geom.{source_ext}"
         geometry_source_path.write_text(shader.geometry_source, encoding="utf-8")
 
-    if compiler is None and shader.allow_precompiled_default:
+    if compiler is None and shader.allow_precompiled_default and targets == ("vulkan",):
         _copy_default_spirv(vulkan_dir / f"{shader.uuid}.vert.spv", "termin-android-scene-color.vert.spv")
         _copy_default_spirv(vulkan_dir / f"{shader.uuid}.frag.spv", "termin-android-scene-color.frag.spv")
         diagnostics.append(
@@ -459,56 +567,25 @@ def _write_shader(
                 "Shader compiler 'termin_shaderc' was not found. "
                 "Pass shader_compiler=..., add it to PATH, or set TERMIN_SDK."
             )
-        _compile_shader_stage(
-            compiler,
-            shader.language,
-            "vulkan",
-            "vertex",
-            vertex_source_path,
-            vulkan_dir / f"{shader.uuid}.vert.spv",
-            f"{shader.name or shader.uuid}:vertex",
-            shader.vertex_entry,
-        )
-        _compile_shader_stage(
-            compiler,
-            shader.language,
-            "vulkan",
-            "fragment",
-            fragment_source_path,
-            vulkan_dir / f"{shader.uuid}.frag.spv",
-            f"{shader.name or shader.uuid}:fragment",
-            shader.fragment_entry,
-        )
-        if geometry_source_path is not None:
+        for target in targets:
+            target_dir = shader_dir / target
             _compile_shader_stage(
                 compiler,
                 shader.language,
-                "vulkan",
-                "geometry",
-                geometry_source_path,
-                vulkan_dir / f"{shader.uuid}.geom.spv",
-                f"{shader.name or shader.uuid}:geometry",
-                shader.geometry_entry,
-            )
-
-        if shader.language == "slang":
-            _compile_shader_stage(
-                compiler,
-                shader.language,
-                "opengl",
+                target,
                 "vertex",
                 vertex_source_path,
-                opengl_dir / f"{shader.uuid}.vert.glsl",
+                target_dir / _artifact_filename(shader.uuid, target, "vertex", "vert"),
                 f"{shader.name or shader.uuid}:vertex",
                 shader.vertex_entry,
             )
             _compile_shader_stage(
                 compiler,
                 shader.language,
-                "opengl",
+                target,
                 "fragment",
                 fragment_source_path,
-                opengl_dir / f"{shader.uuid}.frag.glsl",
+                target_dir / _artifact_filename(shader.uuid, target, "fragment", "frag"),
                 f"{shader.name or shader.uuid}:fragment",
                 shader.fragment_entry,
             )
@@ -516,10 +593,10 @@ def _write_shader(
                 _compile_shader_stage(
                     compiler,
                     shader.language,
-                    "opengl",
+                    target,
                     "geometry",
                     geometry_source_path,
-                    opengl_dir / f"{shader.uuid}.geom.glsl",
+                    target_dir / _artifact_filename(shader.uuid, target, "geometry", "geom"),
                     f"{shader.name or shader.uuid}:geometry",
                     shader.geometry_entry,
                 )
@@ -543,23 +620,23 @@ def _write_shader(
         "source_path": shader.source_path,
         "features": int(shader.features),
         "artifacts": {
-            "vulkan": {
-                "vertex": f"shaders/vulkan/{shader.uuid}.vert.spv",
-                "fragment": f"shaders/vulkan/{shader.uuid}.frag.spv",
+            target: {
+                "vertex": _artifact_path_text(shader.uuid, target, "vertex", "vert"),
+                "fragment": _artifact_path_text(shader.uuid, target, "fragment", "frag"),
             }
+            for target in targets
         },
     }
     if geometry_source_path is not None:
         shader_spec["geometry_source_path"] = f"shaders/vulkan/{shader.uuid}.geom.{source_ext}"
         shader_spec["geometry_entry"] = shader.geometry_entry
-        shader_spec["artifacts"]["vulkan"]["geometry"] = f"shaders/vulkan/{shader.uuid}.geom.spv"
-    if shader.language == "slang":
-        shader_spec["artifacts"]["opengl"] = {
-            "vertex": f"shaders/opengl/{shader.uuid}.vert.glsl",
-            "fragment": f"shaders/opengl/{shader.uuid}.frag.glsl",
-        }
-        if geometry_source_path is not None:
-            shader_spec["artifacts"]["opengl"]["geometry"] = f"shaders/opengl/{shader.uuid}.geom.glsl"
+        for target in targets:
+            shader_spec["artifacts"][target]["geometry"] = _artifact_path_text(
+                shader.uuid,
+                target,
+                "geometry",
+                "geom",
+            )
 
     shader_spec_path = shader_dir / f"{shader.uuid}.shader.json"
     _write_json(shader_spec_path, shader_spec)
@@ -588,6 +665,7 @@ def _write_default_pipeline_shader_artifacts(
     package_dir: Path,
     diagnostics: list[RuntimePackageExportDiagnostic],
     shader_compiler: str | Path | None,
+    requested_targets: tuple[str, ...] | None = None,
 ) -> None:
     compiler = _resolve_shader_compiler(Path(shader_compiler) if shader_compiler is not None else None)
     if compiler is None:
@@ -597,7 +675,7 @@ def _write_default_pipeline_shader_artifacts(
         )
 
     for shader in _default_pipeline_engine_shaders():
-        _write_engine_shader_artifact(package_dir, diagnostics, shader, compiler)
+        _write_engine_shader_artifact(package_dir, diagnostics, shader, compiler, requested_targets)
     _write_tcgui_ui_shader_artifacts(package_dir, compiler)
 
 
@@ -733,17 +811,20 @@ def _write_engine_shader_artifact(
     diagnostics: list[RuntimePackageExportDiagnostic],
     shader: _EngineShaderArtifact,
     compiler: Path,
+    requested_targets: tuple[str, ...] | None = None,
 ) -> None:
     del diagnostics
-    if shader.language not in {"glsl", "slang"}:
-        raise ValueError(f"Engine shader '{shader.uuid}' has unsupported language: {shader.language}")
+    targets = _shader_targets_for_language(
+        shader.language,
+        requested_targets,
+        f"Engine shader '{shader.uuid}'",
+    )
 
     vulkan_dir = package_dir / "shaders" / "vulkan"
-    opengl_dir = package_dir / "shaders" / "opengl"
     layout_dir = package_dir / "shaders" / "layout"
     vulkan_dir.mkdir(parents=True, exist_ok=True)
-    if shader.language == "slang":
-        opengl_dir.mkdir(parents=True, exist_ok=True)
+    for target in targets:
+        (package_dir / "shaders" / target).mkdir(parents=True, exist_ok=True)
     if shader.layout:
         layout_dir.mkdir(parents=True, exist_ok=True)
         (layout_dir / f"{shader.uuid}.shader-layout.json").write_text(
@@ -766,24 +847,14 @@ def _write_engine_shader_artifact(
             else vulkan_dir / f"{shader.uuid}.vert.{source_ext}"
         )
         vertex_source_path.write_text(shader.vertex_source, encoding="utf-8")
-        _compile_shader_stage(
-            compiler,
-            shader.language,
-            "vulkan",
-            "vertex",
-            vertex_source_path,
-            vulkan_dir / f"{shader.uuid}.vert.spv",
-            f"{shader.name}:vertex",
-            shader.vertex_entry,
-        )
-        if shader.language == "slang":
+        for target in targets:
             _compile_shader_stage(
                 compiler,
                 shader.language,
-                "opengl",
+                target,
                 "vertex",
                 vertex_source_path,
-                opengl_dir / f"{shader.uuid}.vert.glsl",
+                package_dir / "shaders" / target / _artifact_filename(shader.uuid, target, "vertex", "vert"),
                 f"{shader.name}:vertex",
                 shader.vertex_entry,
             )
@@ -798,24 +869,14 @@ def _write_engine_shader_artifact(
     )
     if vertex_source_path is None or fragment_source_path != vertex_source_path:
         fragment_source_path.write_text(shader.fragment_source, encoding="utf-8")
-    _compile_shader_stage(
-        compiler,
-        shader.language,
-        "vulkan",
-        "fragment",
-        fragment_source_path,
-        vulkan_dir / f"{shader.uuid}.frag.spv",
-        f"{shader.name}:fragment",
-        shader.fragment_entry,
-    )
-    if shader.language == "slang":
+    for target in targets:
         _compile_shader_stage(
             compiler,
             shader.language,
-            "opengl",
+            target,
             "fragment",
             fragment_source_path,
-            opengl_dir / f"{shader.uuid}.frag.glsl",
+            package_dir / "shaders" / target / _artifact_filename(shader.uuid, target, "fragment", "frag"),
             f"{shader.name}:fragment",
             shader.fragment_entry,
         )
@@ -863,6 +924,8 @@ def _source_extension_for_language(language: str) -> str:
         return "slang"
     if language == "glsl":
         return "glsl"
+    if language == "hlsl":
+        return "hlsl"
     raise ValueError(f"Unsupported shader language: {language}")
 
 
