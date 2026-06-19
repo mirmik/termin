@@ -10,6 +10,14 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from termin.player.project_runtime_support import (
+    create_asset_import_plugin_map,
+    create_build_import_registry,
+    load_project_modules,
+    register_project_runtime_resources,
+    scan_project_assets,
+)
+
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
     from termin.scene import TcScene as Scene
@@ -473,119 +481,21 @@ class PlayerRuntime:
 
     def _register_components(self):
         """Register builtin components and resources."""
-        from termin.assets.resources import ResourceManager
-        rm = ResourceManager.instance()
-        rm.register_builtin_components()
-        rm.register_builtin_textures()
-        rm.register_builtin_materials()
-        rm.register_builtin_meshes()
-        rm.register_builtin_frame_passes()
+        register_project_runtime_resources(include_render_resources=True)
 
     def _load_modules(self) -> None:
         """Load all project modules through termin-modules runtime."""
-        from tcbase import log
-        from termin_modules import ModuleKind, ModuleState
-        from termin.modules import get_project_modules_runtime
-
-        runtime = get_project_modules_runtime()
-        success = runtime.load_project(self.project_path)
-        if not success and runtime.last_error:
-            log.error(f"[PlayerRuntime] Module load error: {runtime.last_error}")
-
-        cpp_loaded = 0
-        cpp_failed = 0
-        py_loaded = 0
-        py_failed = 0
-
-        for record in runtime.records():
-            if record.kind == ModuleKind.Cpp:
-                if record.state == ModuleState.Loaded:
-                    cpp_loaded += 1
-                    log.info(f"[PlayerRuntime] Loaded C++ module: {record.id}")
-                elif record.state == ModuleState.Failed:
-                    cpp_failed += 1
-                    log.error(f"[PlayerRuntime] Failed to load C++ module {record.id}: {record.error_message}")
-            else:
-                if record.state == ModuleState.Loaded:
-                    py_loaded += 1
-                    log.info(f"[PlayerRuntime] Loaded Python module: {record.id}")
-                elif record.state == ModuleState.Failed:
-                    py_failed += 1
-                    log.error(f"[PlayerRuntime] Failed to load Python module {record.id}: {record.error_message}")
-
-        log.info(f"[PlayerRuntime] C++ modules: {cpp_loaded} loaded, {cpp_failed} failed")
-        log.info(f"[PlayerRuntime] Python modules: {py_loaded} loaded, {py_failed} failed")
+        load_project_modules(self.project_path, log_prefix="[PlayerRuntime]")
 
     def _create_build_import_registry(self) -> "AssetTypeRegistry":
-        from termin_assets import AssetTypeRegistry
-        from termin_assets.default_plugins import register_default_import_asset_plugins
-
-        registry = AssetTypeRegistry()
-        register_default_import_asset_plugins(registry)
-        return registry
+        return create_build_import_registry()
 
     def _create_asset_import_plugin_map(self):
-        from termin_assets.default_plugins import build_import_plugin_extension_map
-
-        registry = self._create_build_import_registry()
-        return build_import_plugin_extension_map(registry)
+        return create_asset_import_plugin_map()
 
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
-        import os
-        from tcbase import log
-        from termin.assets.resources import ResourceManager
-        from termin.project.settings import SERVICE_RESOURCE_IGNORE_PATHS
-
-        rm = ResourceManager.instance()
-        ext_map = self._create_asset_import_plugin_map()
-        service_ignored_roots = tuple(
-            os.path.abspath(os.path.join(self.project_path, ignored_path))
-            for ignored_path in SERVICE_RESOURCE_IGNORE_PATHS
-        )
-
-        def is_service_ignored(path: str) -> bool:
-            resolved = os.path.abspath(path)
-            return any(
-                resolved == ignored_root or resolved.startswith(ignored_root + os.sep)
-                for ignored_root in service_ignored_roots
-            )
-
-        # Collect files sorted by priority
-        pending = []  # (priority, path, preloader)
-        for root, dirs, files in os.walk(self.project_path):
-            dirs[:] = [
-                d for d in dirs
-                if not d.startswith((".", "__"))
-                and not is_service_ignored(os.path.join(root, d))
-            ]
-            for filename in files:
-                if filename.startswith("."):
-                    continue
-                path = os.path.join(root, filename)
-                if is_service_ignored(path):
-                    continue
-                ext = os.path.splitext(filename)[1].lower()
-                if ext in ext_map:
-                    pl = ext_map[ext]
-                    pending.append((pl.priority, path, pl))
-
-        # Sort by priority
-        pending.sort(key=lambda x: (x[0], x[1]))
-
-        # Process files
-        loaded_count = 0
-        for _priority, path, pl in pending:
-            try:
-                result = pl.preload(path)
-                if result is not None:
-                    log.info(f"[PlayerRuntime] Loading {result.resource_type}: {os.path.basename(path)}")
-                    rm.register_file(result)
-                    loaded_count += 1
-            except Exception as e:
-                log.error(f"[PlayerRuntime] Failed to load {path}: {e}")
-
-        log.info(f"[PlayerRuntime] Loaded {loaded_count} project assets")
+        scan_project_assets(self.project_path, log_prefix="[PlayerRuntime]")
 
     def _load_manifest_assets(self) -> None:
         """Load build resources listed by manifest.json."""

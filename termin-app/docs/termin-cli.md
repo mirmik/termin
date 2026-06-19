@@ -14,7 +14,7 @@ termin profiles [--project path/to/project]
 termin profile PROFILE [--project path/to/project]
 termin build PROFILE [--project path/to/project] [--dry-run]
 termin run PROFILE [--project path/to/project] [run options]
-termin play PROFILE [--project path/to/project] [run options]
+termin play [SCENE] [--project path/to/project] [play options]
 termin stdlib [sync] [--project path/to/project] [--clean] [--dry-run]
 termin runner ...
 termin builder ...
@@ -38,10 +38,10 @@ termin_builder build PROFILE
 termin_runner run PROFILE
 ```
 
-`termin play PROFILE` delegates to the same runner in source project mode:
+`termin play [SCENE]` delegates to the project playback runner:
 
 ```bash
-termin_runner run PROFILE --mode project
+termin_runner play [SCENE]
 ```
 
 Packaged build commands do not use the legacy broad-copy
@@ -243,23 +243,44 @@ termin run dev --mode legacy-build
 Default `--mode build` no longer falls back to `build.json` when the packaged
 bundle is missing.
 
-`play` is intentionally separate from build output. It launches the profile
-entry scene directly through `termin.player`, which keeps room for editor-like
-Play Mode flows:
+`play` is intentionally separate from build output and build profiles. It
+launches a source scene directly through `termin.player`, which keeps room for
+editor-like Play Mode flows:
 
 ```bash
-termin play dev
+termin play
 ```
 
-`termin_runner` still exposes `--mode project` directly for lower-level
-diagnostics, but the user-facing command for source project playback is
-`termin play`.
+Scene selection order:
+
+1. explicit positional scene, for example `termin play Scenes/Main.scene`;
+2. explicit `--scene`, for compatibility with lower-level player options;
+3. project-local `project_settings/.editor_state.json` `last_scene`;
+4. first `.scene` file found under the project root.
+
+Headless playback runs the same source scene update lifecycle without creating
+a window, `RenderingManager`, display surfaces, or render passes. It is intended
+for tests and simulation-only checks:
+
+```bash
+termin play --headless --frames 10 --dt 0.0166667
+```
+
+In headless mode `termin.player` loads the scene with no render scene
+extensions by default and calls `scene.update(dt)` for the requested frame
+count. It does not call `scene.before_render()` or `RenderingManager.render_all`.
+Use `--no-assets` and `--no-modules` for narrow smoke tests that do not need
+project asset discovery or module loading.
+
+`termin_runner run --mode project` remains only as a lower-level compatibility
+path. The user-facing command for source project playback is `termin play`.
 
 Useful run/play options:
 
 ```bash
 termin run dev --backend opengl --width 1600 --height 900 --title Chess
-termin play dev --scene scene2.scene
+termin play Scenes/scene2.scene
+termin play --headless --frames 1 --no-assets --no-modules
 ```
 
 ## Standard Library
