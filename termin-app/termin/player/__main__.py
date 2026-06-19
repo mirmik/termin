@@ -3,7 +3,7 @@ Command-line entry point for Termin Player.
 
 Usage:
     python -m termin.player path/to/project --scene main.scene
-    python -m termin.player path/to/project --scene main.scene --headless --frames 1
+    python -m termin.player path/to/project --scene main.scene --headless
     python -m termin.player --build dist/MyGame/build.json
     python -m termin.player --bundle dist/MyGame/app.json
 """
@@ -69,8 +69,8 @@ def main():
     parser.add_argument(
         "--frames",
         type=int,
-        default=1,
-        help="Number of frames to run in --headless mode (default: 1)",
+        default=None,
+        help="Number of frames to run in --headless mode (default: run until quit/interrupted)",
     )
     parser.add_argument(
         "--dt",
@@ -125,7 +125,7 @@ def main():
         parser.error("--build and --bundle are mutually exclusive")
     if args.headless and (args.build is not None or args.bundle is not None):
         parser.error("--headless runs source projects only; --build and --bundle are render runtimes")
-    if args.frames < 0:
+    if args.frames is not None and args.frames < 0:
         parser.error("--frames must be non-negative")
     if args.dt < 0.0:
         parser.error("--dt must be non-negative")
@@ -205,7 +205,7 @@ def main():
     if args.headless:
         from termin.player import run_headless_project
 
-        run_headless_project(
+        stats = run_headless_project(
             project_path=project_path,
             scene_name=scene_name,
             frames=args.frames,
@@ -213,6 +213,8 @@ def main():
             load_assets=not args.no_assets,
             load_modules=not args.no_modules,
         )
+        if stats.exit_code != 0:
+            sys.exit(stats.exit_code)
         return
 
     from termin.player import run_project
