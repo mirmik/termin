@@ -63,6 +63,7 @@ ENGINE_CANVAS2D_SOLID_SHADER_UUID = "termin-engine-canvas2d-solid"
 ENGINE_CANVAS2D_TEXTURE_SHADER_UUID = "termin-engine-canvas2d-texture"
 ENGINE_TEXT2D_SHADER_UUID = "termin-engine-text2d"
 ENGINE_TEXT2D_SDF_SHADER_UUID = "termin-engine-text2d-sdf"
+ENGINE_TEXT3D_SHADER_UUID = "termin-engine-text3d"
 ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
 TCGUI_UI_SHADER_UUID = "termin-tcgui-ui-engine"
 TCGUI_UI_SHADER_NAME = "UIEngineVSFS"
@@ -694,6 +695,7 @@ def _default_pipeline_engine_shaders() -> list[_EngineShaderArtifact]:
         _builtin_engine_shader_artifact(ENGINE_CANVAS2D_TEXTURE_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_TEXT2D_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_TEXT2D_SDF_SHADER_UUID),
+        _builtin_engine_shader_artifact(ENGINE_TEXT3D_SHADER_UUID),
         _builtin_engine_shader_artifact(ENGINE_SHADOW_MATERIAL_SHADER_UUID),
     ]
 

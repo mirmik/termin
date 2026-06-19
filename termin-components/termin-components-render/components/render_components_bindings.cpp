@@ -21,6 +21,7 @@
 #include <termin/render/normal_pass.hpp>
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/render/skinned_mesh_renderer.hpp>
+#include <termin/render/world_text_component.hpp>
 #include <termin/xr/xr_origin_component.hpp>
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <tcbase/tc_log.hpp>
@@ -694,6 +695,89 @@ NB_MODULE(_components_render_native, m) {
         })
         .def("draw_geometry", &LineRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
         .def("get_geometry_draws", [](LineRenderer& self, nb::object phase_mark) {
+            if (phase_mark.is_none()) {
+                return self.get_geometry_draws(nullptr);
+            }
+            std::string pm = nb::cast<std::string>(phase_mark);
+            return self.get_geometry_draws(&pm);
+        }, nb::arg("phase_mark") = nb::none());
+
+    nb::enum_<WorldTextAnchor>(m, "WorldTextAnchor")
+        .value("Left", WorldTextAnchor::Left)
+        .value("Center", WorldTextAnchor::Center)
+        .value("Right", WorldTextAnchor::Right)
+        .export_values();
+
+    nb::class_<WorldTextComponent, Component>(m, "WorldTextComponent")
+        .def("__init__", [](nb::handle self) {
+            cxx_component_init<WorldTextComponent>(self);
+        })
+        .def("__init__", [](nb::handle self,
+                            const std::string& text,
+                            float size,
+                            nb::object color,
+                            WorldTextAnchor anchor,
+                            const std::string& phase_mark,
+                            const std::string& font_path) {
+            cxx_component_init<WorldTextComponent>(self);
+            auto* cpp = nb::inst_ptr<WorldTextComponent>(self);
+            cpp->set_text(text);
+            cpp->set_size(size);
+            cpp->set_anchor(anchor);
+            cpp->set_phase_mark(phase_mark);
+            cpp->set_font_path(font_path);
+            if (!color.is_none()) {
+                auto tuple = nb::cast<std::tuple<double, double, double, double>>(color);
+                cpp->set_color(Vec4{
+                    std::get<0>(tuple),
+                    std::get<1>(tuple),
+                    std::get<2>(tuple),
+                    std::get<3>(tuple),
+                });
+            }
+        },
+        nb::arg("text") = "",
+        nb::arg("size") = 0.35f,
+        nb::arg("color") = nb::none(),
+        nb::arg("anchor") = WorldTextAnchor::Center,
+        nb::arg("phase_mark") = "transparent",
+        nb::arg("font_path") = "")
+        .def_prop_rw("text", [](WorldTextComponent& self) { return self.text; }, &WorldTextComponent::set_text)
+        .def_prop_rw("font_path", [](WorldTextComponent& self) { return self.font_path; }, &WorldTextComponent::set_font_path)
+        .def_prop_rw("phase_mark", [](WorldTextComponent& self) { return self.phase_mark; }, &WorldTextComponent::set_phase_mark)
+        .def_prop_rw("local_offset",
+            [](WorldTextComponent& self) {
+                return nb::make_tuple(self.local_offset.x, self.local_offset.y, self.local_offset.z);
+            },
+            [](WorldTextComponent& self, nb::object value) {
+                auto tuple = nb::cast<std::tuple<double, double, double>>(value);
+                self.set_local_offset(Vec3{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple)});
+            })
+        .def_prop_rw("color",
+            [](WorldTextComponent& self) {
+                return nb::make_tuple(self.color.x, self.color.y, self.color.z, self.color.w);
+            },
+            [](WorldTextComponent& self, nb::object value) {
+                auto tuple = nb::cast<std::tuple<double, double, double, double>>(value);
+                self.set_color(Vec4{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple), std::get<3>(tuple)});
+            })
+        .def_prop_rw("size", [](WorldTextComponent& self) { return self.size; }, &WorldTextComponent::set_size)
+        .def_prop_rw("anchor", [](WorldTextComponent& self) { return self.anchor; }, &WorldTextComponent::set_anchor)
+        .def_prop_rw("anchor_name", &WorldTextComponent::anchor_name, &WorldTextComponent::set_anchor_name)
+        .def_prop_rw("priority", [](WorldTextComponent& self) { return self.priority; }, &WorldTextComponent::set_priority)
+        .def_prop_rw("depth_test", [](WorldTextComponent& self) { return self.depth_test; }, &WorldTextComponent::set_depth_test)
+        .def_prop_rw("depth_write", [](WorldTextComponent& self) { return self.depth_write; }, &WorldTextComponent::set_depth_write)
+        .def_prop_rw("blend", [](WorldTextComponent& self) { return self.blend; }, &WorldTextComponent::set_blend)
+        .def_prop_rw("cull", [](WorldTextComponent& self) { return self.cull; }, &WorldTextComponent::set_cull)
+        .def_prop_ro("is_drawable", [](WorldTextComponent&) { return true; })
+        .def_prop_ro("phase_marks", [](WorldTextComponent& self) {
+            nb::set marks;
+            for (const auto& mark : self.phase_marks()) {
+                marks.add(nb::str(mark.c_str()));
+            }
+            return marks;
+        })
+        .def("get_geometry_draws", [](WorldTextComponent& self, nb::object phase_mark) {
             if (phase_mark.is_none()) {
                 return self.get_geometry_draws(nullptr);
             }

@@ -21,6 +21,8 @@ from termin.render_components._components_render_native import (
     OrthographicCameraComponent,
     PerspectiveCameraComponent,
     NormalPass,
+    WorldTextAnchor,
+    WorldTextComponent,
     XrOriginComponent,
     XrThumbstickLocomotionComponent,
 )
@@ -39,6 +41,8 @@ __all__ = [
     "OrthographicCameraComponent",
     "PerspectiveCameraComponent",
     "NormalPass",
+    "WorldTextAnchor",
+    "WorldTextComponent",
     "XrOriginComponent",
     "XrThumbstickLocomotionComponent",
 ]

@@ -35,3 +35,16 @@ continue to expose a mesh through `get_mesh()`.
 `cast_shadow` is opt-in for all line modes. Direct GPU modes only participate
 in the `shadow` phase when this flag is enabled; other auxiliary geometry
 phases such as depth, normal, and id remain mesh-only.
+
+## WorldTextComponent
+
+`WorldTextComponent` draws stable world-space labels through the existing
+`termin-graphics` Text3D renderer. It is a C++ drawable component exported as
+`termin.render_components.WorldTextComponent`, with inspectable fields for
+`text`, `font_path`, `local_offset`, `color`, `size`, `anchor`, `phase_mark`,
+and render-state flags.
+
+The component uses direct tgfx2 rendering in the selected material phase
+(`transparent` by default) and exports the `termin-engine-text3d` built-in
+shader into runtime packages, so `termin play` and standalone builds do not
+depend on editor-only shader compilation for 3D labels.
