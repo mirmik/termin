@@ -151,10 +151,8 @@ Still retained app asset compatibility/runtime surface:
 
 Remaining production-used visualization-owned paths:
 - `termin.visualization.core.scene`
-- `termin.visualization.core.input_events`
 - `termin.visualization.core.camera`
 - `termin.visualization.core.viewport`
-- `termin.visualization.render.immediate`
 - `termin.visualization.render.glsl_preprocessor`
 - `termin.visualization.render.framegraph.*`
 - `termin.visualization.render.materials.*`
@@ -177,6 +175,8 @@ Likely canonical replacements:
 - `termin.visualization.core.entity` -> `termin.scene.Entity`
 - `termin.visualization.core.component` -> `termin.scene.Component`, `termin.input.InputComponent`, `termin.inspect.InspectField`
 - `termin.visualization.core.python_component` -> `termin.scene.PythonComponent`, `termin.input.InputComponent`, `termin.render.DrawableComponent`
+- `termin.visualization.core.input_events` -> `termin.input` (`MouseButtonEvent`, `MouseMoveEvent`, `ScrollEvent`, `KeyEvent`)
+- `termin.visualization.render.immediate` -> `termin.render.ImmediateRenderer`
 - `termin.visualization.render.manager` -> `termin.engine.RenderingManager`
 - `termin.visualization.core.voxel_grid_handle` -> `termin.voxels._voxels_native.VoxelGridHandle`
 - `termin.visualization.core.picking` -> `termin.render_passes`
@@ -219,14 +219,18 @@ Package-level `termin.visualization.__init__` and `termin.visualization.render._
 were stripped to namespace-only modules on 2026-06-19. Do not add new
 package-level domain re-exports there.
 
+Resolved in this cleanup pass:
+- `termin.visualization.core.input_events` was removed. Python consumers import
+  event classes from `termin.input`; native registration lives in
+  `termin-display` because event instances carry `TcViewport` handles.
+- `termin.visualization.render.immediate` was removed. The singleton wrapper
+  moved to `termin.render.ImmediateRenderer`; native immediate rendering remains
+  in `tgfx.ImmediateRenderer`.
+
 Still deferred:
 - `termin.visualization.core.scene` owns app-specific scene extension helpers
   such as `create_scene`, `scene_render_mount`, and `default_scene_extensions`;
   these need a canonical owner before removal.
-- `termin.visualization.core.input_events` re-exports event classes from the
-  app native module; move them to `termin.input` before deleting the old path.
-- `termin.visualization.render.immediate` adds singleton semantics on top of
-  `tgfx.ImmediateRenderer`; move that wrapper deliberately before deleting it.
 - Real editor/debug/framegraph/material/platform modules under
   `termin.visualization.*` still need ownership decisions or extraction.
 

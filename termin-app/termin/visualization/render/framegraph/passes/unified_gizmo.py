@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Callable, List, Set, Tuple, TYPE_CHECKING
 
 from termin.render_framework.python_pass import PythonFramePass
-from termin.visualization.render.immediate import ImmediateRenderer
+from termin.render import ImmediateRenderer
 from termin.inspect import InspectField
 from tcbase.profiler import Profiler
 
