@@ -1,16 +1,7 @@
-"""Rendering package entry point. Import concrete submodules directly."""
+"""Legacy visualization render namespace.
 
-# Import to ensure GLSL preprocessor fallback loader is set up before any shader compilation
-import termin.visualization.render.glsl_preprocessor  # noqa: F401
+Do not add package-level re-exports here. Import render domain types from
+canonical owners such as ``termin.engine`` and ``termin.render_framework``.
+"""
 
-from termin.render_framework import RenderEngine
-from termin.visualization.render.manager import RenderingManager
-from termin.visualization.render.offscreen_context import OffscreenContext
-from termin.visualization.render.view import RenderView
-
-__all__ = [
-    "RenderEngine",
-    "RenderingManager",
-    "OffscreenContext",
-    "RenderView",
-]
+__all__: list[str] = []

@@ -19,7 +19,8 @@ from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
 from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
-from termin.visualization.core.scene import Scene, scene_render_state, scene_render_mount
+from termin.scene import TcScene as Scene
+from termin.visualization.core.scene import scene_render_state, scene_render_mount
 from tcbase import log
 
 if TYPE_CHECKING:

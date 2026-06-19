@@ -9,7 +9,7 @@ import numpy as np
 from termin.editor_core.undo_stack import UndoCommand
 from termin.geombase import GeneralPose3
 from termin.kinematic.general_transform import GeneralTransform3
-from termin.visualization.core.entity import Entity, Component
+from termin.scene import Entity, Component
 from termin.scene import TcComponentRef
 from termin.inspect import InspectField
 from termin.visualization.core.scene import scene_render_state

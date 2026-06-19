@@ -19,7 +19,7 @@ The offscreen-first rendering model separates rendering into two phases:
 ### Step 1: Initialize RenderingManager
 
 ```python
-from termin.visualization.render import RenderingManager
+from termin.engine import RenderingManager
 
 # At application startup (before creating displays)
 manager = RenderingManager.instance()

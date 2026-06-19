@@ -602,7 +602,7 @@ def show_framegraph_debugger(
         if not capture_tex:
             status_label.text = "No capture for depth"
             return
-        from termin.visualization.render.manager import RenderingManager
+        from termin.engine import RenderingManager
         render_engine = RenderingManager.instance().render_engine
         if render_engine is None:
             status_label.text = "No render engine"

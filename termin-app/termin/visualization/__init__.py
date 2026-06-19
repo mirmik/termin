@@ -1,53 +1,8 @@
+"""Legacy visualization package namespace.
+
+Do not add package-level re-exports here. Import domain types from their
+canonical packages, such as ``termin.scene``, ``termin.input``,
+``termin.render``, ``termin.render_framework`` and ``termin.display``.
 """
-Visualization package providing a minimal rendering stack with pluggable backends.
 
-The module exposes abstractions for window/context management, scene graphs,
-camera models and GPU resources such as meshes, shaders, materials and textures.
-"""
-
-from tgfx import TcShader
-
-from termin.visualization.core.scene import Scene
-from termin.visualization.core.entity import Entity, Component, InputComponent
-from termin.render_framework import RenderContext
-from termin.visualization.core.input_events import (
-    MouseButtonEvent,
-    MouseMoveEvent,
-    ScrollEvent,
-    KeyEvent,
-)
-from termin.visualization.core.camera import (
-    CameraComponent,
-    PerspectiveCameraComponent,
-    OrthographicCameraComponent,
-    OrbitCameraController,
-)
-from termin.render_components import MeshRenderer
-from termin.materials import TcMaterial as Material
-from tgfx.window import WindowBackend
-from tcbase import MouseButton, Key, Action
-from termin.render.texture import Texture
-
-__all__ = [
-    "Scene",
-    "Entity",
-    "Component",
-    "InputComponent",
-    "RenderContext",
-    "MouseButtonEvent",
-    "MouseMoveEvent",
-    "ScrollEvent",
-    "KeyEvent",
-    "CameraComponent",
-    "PerspectiveCameraComponent",
-    "OrthographicCameraComponent",
-    "OrbitCameraController",
-    "MeshRenderer",
-    "Material",
-    "TcShader",
-    "Texture",
-    "WindowBackend",
-    "MouseButton",
-    "Key",
-    "Action",
-]
+__all__: list[str] = []

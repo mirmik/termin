@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.visualization.core.camera import CameraComponent
 from termin.visualization.ui.widgets.component import UIComponent
 from tcgui.widgets.basic import IconButton

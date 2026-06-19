@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.component import InputComponent
+from termin.input import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent, MouseMoveEvent
 from tcbase import Action
 from tcgui.widgets.ui import UI

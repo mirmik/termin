@@ -406,7 +406,7 @@ class FramegraphDebuggerModel:
         return "Timing: no data"
 
     def format_render_stats(self) -> str:
-        from termin.visualization.render.manager import RenderingManager
+        from termin.engine import RenderingManager
         stats = RenderingManager.instance().get_render_stats()
         parts = [
             f"Scenes: {stats['attached_scenes']}",
@@ -520,7 +520,7 @@ class FramegraphDebuggerModel:
             self.hdr_stats_changed.emit(text)
             return text
 
-        from termin.visualization.render.manager import RenderingManager
+        from termin.engine import RenderingManager
         render_engine = RenderingManager.instance().render_engine
         if render_engine is None:
             text = "No render engine"

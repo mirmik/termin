@@ -14,7 +14,7 @@ from tcbase import log
 
 if TYPE_CHECKING:
     from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
 
 
 class EditorStateIO:

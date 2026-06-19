@@ -13,7 +13,7 @@ from tcgui.widgets.grid_layout import GridLayout
 from tcgui.widgets.units import px
 
 from termin.kinematic.general_transform import GeneralTransform3
-from termin.visualization.core.entity import Entity
+from termin.scene import Entity
 from termin.geombase import GeneralPose3
 from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.editor_commands import TransformEditCommand

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.inspect import InspectField
 from termin.audio.handle import AudioClipHandle
 

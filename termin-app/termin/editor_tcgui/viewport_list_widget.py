@@ -23,7 +23,7 @@ from termin.editor_core.signal import Signal
 if TYPE_CHECKING:
     from termin.display import Display
     from termin.visualization.core.viewport import Viewport
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
 
 
 class _NodeKind:

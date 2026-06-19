@@ -204,7 +204,7 @@ class EditorFramegraphDebuggerService:
                 "capture": _capture_summary_for(capture),
             }
 
-        from termin.visualization.render.manager import RenderingManager
+        from termin.engine import RenderingManager
 
         render_engine = RenderingManager.instance().render_engine
         if render_engine is None:

@@ -13,13 +13,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.visualization.core.entity import Entity
+from termin.scene import Entity
 from termin.visualization.core.camera import CameraComponent, OrbitCameraController
 from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
 
 
 class EditorCameraManager:

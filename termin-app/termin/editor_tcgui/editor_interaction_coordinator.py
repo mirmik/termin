@@ -129,7 +129,7 @@ class EditorInteractionCoordinator:
         if interaction_system is None:
             return
 
-        from termin.visualization.core.entity import Entity
+        from termin.scene import Entity
 
         if isinstance(obj, Entity):
             interaction_system.selection.select(obj)

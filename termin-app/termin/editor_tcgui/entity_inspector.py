@@ -18,7 +18,7 @@ from tcgui.widgets.grid_layout import GridLayout
 from tcgui.widgets.units import px
 from tcgui.widgets.input_dialog import show_input_dialog
 
-from termin.visualization.core.entity import Entity
+from termin.scene import Entity
 from termin.kinematic.transform import Transform3
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.editor_core.undo_stack import UndoCommand

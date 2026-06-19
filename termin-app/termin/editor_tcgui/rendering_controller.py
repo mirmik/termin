@@ -14,7 +14,7 @@ from tcbase import log
 if TYPE_CHECKING:
     from termin.display import Display
     from termin.visualization.core.viewport import Viewport
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.visualization.render.offscreen_context import OffscreenContext
     from tgfx._tgfx_native import Tgfx2Context

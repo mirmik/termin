@@ -12,7 +12,7 @@ from tcgui.widgets.events import DragEvent
 from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.entity_operations import EntityOperations
-from termin.visualization.core.entity import Entity
+from termin.scene import Entity
 
 _GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
 _SCENE_TREE_EXTERNAL_EXTENSIONS = _GLTF_MODEL_EXTENSIONS + (".prefab", ".tc_prefab")

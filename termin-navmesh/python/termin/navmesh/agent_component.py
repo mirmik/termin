@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Optional, List
 import numpy as np
 
 from tcbase import log, MouseButton, Action
-from termin.visualization.core.component import InputComponent
+from termin.input import InputComponent
 from termin.visualization.core.input_events import MouseButtonEvent
 from termin.inspect import InspectField
 

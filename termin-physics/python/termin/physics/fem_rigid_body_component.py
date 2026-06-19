@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import warnings
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.fem.multibody3d_3 import RigidBody3D
 from termin.fem.inertia3d import SpatialInertia3D
 from termin.geombase import Pose3
