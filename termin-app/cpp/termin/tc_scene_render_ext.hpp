@@ -14,8 +14,8 @@
 #include "core/tc_scene_skybox.h"
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/vec4.hpp>
-#include "termin/viewport_config.hpp"
-#include "termin/render_target_config.hpp"
+#include <termin/viewport_config.hpp>
+#include <termin/render_target_config.hpp>
 
 namespace termin {
 

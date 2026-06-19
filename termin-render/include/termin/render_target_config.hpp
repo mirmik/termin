@@ -6,7 +6,7 @@
 #include <string>
 
 extern "C" {
-#include "tc_render_target_config.h"
+#include <tc_render_target_config.h>
 }
 
 namespace termin {

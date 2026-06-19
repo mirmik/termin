@@ -1,5 +1,5 @@
 // render_target_config.cpp - RenderTargetConfig implementation
-#include "render_target_config.hpp"
+#include <termin/render_target_config.hpp>
 #include <tcbase/tgfx_intern_string.h>
 #include <cstring>
 

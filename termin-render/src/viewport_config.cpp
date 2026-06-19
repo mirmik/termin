@@ -1,9 +1,9 @@
 // viewport_config.cpp - ViewportConfig implementation
-#include "viewport_config.hpp"
+#include <termin/viewport_config.hpp>
 #include <tcbase/tgfx_intern_string.h>
 
 extern "C" {
-#include "tc_viewport_config.h"
+#include <tc_viewport_config.h>
 }
 
 namespace termin {
