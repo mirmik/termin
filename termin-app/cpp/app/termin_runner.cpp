@@ -227,7 +227,7 @@ void print_help() {
         << "Usage:\n"
         << "  termin_runner --help\n"
         << "  termin_runner run <profile> [--project <dir>] [--profiles <file>] [options] [-- player-args...]\n"
-        << "  termin_runner play [scene] [--project <dir>] [options] [-- player-args...]\n"
+        << "  termin_runner play [project|scene] [--project <dir>] [options] [-- player-args...]\n"
         << "\n"
         << "Run-only options:\n"
         << "  --profiles <file>         Override project_settings/build_profiles.json.\n"
@@ -256,7 +256,7 @@ void print_help() {
 void print_usage_error() {
     std::cerr
         << "Usage: termin_runner run <profile> [options]\n"
-        << "       termin_runner play [scene] [options]\n"
+        << "       termin_runner play [project|scene] [options]\n"
         << "Run 'termin_runner --help' for full help.\n";
 }
 
@@ -265,6 +265,27 @@ std::string take_value(int argc, char** argv, int& index, const std::string& opt
         throw std::runtime_error("missing value for " + option);
     }
     return argv[++index];
+}
+
+bool positional_play_arg_is_project(const std::string& value) {
+    if (value.empty()) {
+        return false;
+    }
+
+    std::error_code ec;
+    fs::path path = fs::absolute(fs::path(value));
+    path = fs::weakly_canonical(path, ec);
+    if (ec) {
+        path = fs::absolute(fs::path(value));
+    }
+
+    if (fs::is_directory(path, ec)) {
+        return true;
+    }
+    if (fs::is_regular_file(path, ec) && path.extension() == ".terminproj") {
+        return true;
+    }
+    return false;
 }
 
 ParsedArgs parse_args(int argc, char** argv) {
@@ -292,7 +313,12 @@ ParsedArgs parse_args(int argc, char** argv) {
         }
         parsed.profile_name = argv[i++];
     } else if (i < argc && std::string(argv[i]).rfind("-", 0) != 0) {
-        parsed.play_scene = argv[i++];
+        std::string value = argv[i++];
+        if (positional_play_arg_is_project(value)) {
+            parsed.options.project_root = value;
+        } else {
+            parsed.play_scene = value;
+        }
     }
 
     for (; i < argc; ++i) {

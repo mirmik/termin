@@ -171,7 +171,8 @@ class PlayerRuntime:
         from tcbase import log
 
         self._configure_backend_default()
-        self._configure_build_shader_runtime()
+        if not self._configure_shader_runtime():
+            return False
 
         # Load the app render bindings before resource preloaders touch
         # materials/shaders. Importing tgfx-only helpers first leaves some
@@ -446,6 +447,16 @@ class PlayerRuntime:
             "[PlayerRuntime] Build shader runtime configured: "
             f"artifact_root='{artifact_root}' cache_root='{cache_root}' dev_compile=False"
         )
+
+    def _configure_shader_runtime(self) -> bool:
+        """Configure shader artifacts for source-project or packaged execution."""
+        if self.build_json_path is not None or self.asset_manifest_path is not None:
+            self._configure_build_shader_runtime()
+            return True
+
+        from termin.shader_runtime import configure_project_shader_runtime
+
+        return configure_project_shader_runtime(self.project_path, label="source player")
 
     def _ensure_texture_registry(self) -> None:
         """Load the tgfx texture registry before app-native modules."""
