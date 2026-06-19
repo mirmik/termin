@@ -32,7 +32,7 @@ from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
 from termin.geombase import GeneralPose3, Vec3
 from termin.kinematic.transform import Transform3
-from termin.visualization.core.entity import Entity
+from termin.scene import Entity
 
 
 class EntityOperations:

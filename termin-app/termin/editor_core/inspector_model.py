@@ -185,7 +185,7 @@ class InspectorModel:
         object (Transform3, etc.) is still handed to the entity inspector
         since it's the generic target widget.
         """
-        from termin.visualization.core.entity import Entity
+        from termin.scene import Entity
 
         if isinstance(obj, Entity):
             self.show_entity(obj)

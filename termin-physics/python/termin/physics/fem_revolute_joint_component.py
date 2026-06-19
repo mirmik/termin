@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.fem.multibody3d_3 import RevoluteJoint3D
 from termin.inspect import InspectField
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
-    from termin.visualization.core.entity import Entity
+    from termin.scene import TcScene as Scene
+    from termin.scene import Entity
     from termin.physics.fem_physics_world_component import FEMPhysicsWorldComponent
     from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent
     from termin.visualization.render.immediate import ImmediateRenderer

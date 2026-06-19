@@ -17,7 +17,7 @@ import numpy as np
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
     from termin.assets.resources import ResourceManager
 
 
@@ -125,7 +125,7 @@ class PrefabPersistence:
         Returns:
             Root entity of the prefab.
         """
-        from termin.visualization.core.entity import Entity
+        from termin.scene import Entity
 
         file_path = Path(file_path)
 

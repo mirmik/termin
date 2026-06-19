@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, List, Optional
 import numpy as np
 
 from tcbase import log
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.inspect import InspectField
 from termin.navmesh.pathfinding import (
     RegionGraph,
@@ -23,8 +23,8 @@ from termin.navmesh.types import NavMesh, Portal
 from termin.navmesh.region_growing import NEIGHBORS_26
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
-    from termin.visualization.core.entity import Entity
+    from termin.scene import TcScene as Scene
+    from termin.scene import Entity
 
 
 def _rebuild_graph_action(component: "PathfindingWorldComponent") -> None:

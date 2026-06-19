@@ -149,22 +149,38 @@ Still retained app asset compatibility/runtime surface:
 
 ## Visualization Facades
 
-Production-used facade paths:
-- `termin.visualization.core.entity`
-- `termin.visualization.core.component`
+Remaining production-used visualization-owned paths:
+- `termin.visualization.core.scene`
+- `termin.visualization.core.input_events`
+- `termin.visualization.core.camera`
+- `termin.visualization.core.viewport`
+- `termin.visualization.render.immediate`
+- `termin.visualization.render.glsl_preprocessor`
+- `termin.visualization.render.framegraph.*`
+- `termin.visualization.render.materials.*`
+- `termin.visualization.platform.*`
+- `termin.visualization.ui.widgets.component`
 
 These are imported by:
 - `termin-app/termin/editor_core/*`
 - `termin-app/termin/editor_tcgui/*`
 - `termin-app/termin/player/*`
+- `termin-navmesh`
 - `termin-physics`
 - examples
 
-Do not delete these one-by-one unless their consumers are first moved to canonical packages.
+These are no longer treated as canonical facade APIs. Move consumers to domain
+packages where a canonical owner exists, and move real app/runtime logic only
+after choosing the new owner.
 
 Likely canonical replacements:
 - `termin.visualization.core.entity` -> `termin.scene.Entity`
-- `termin.visualization.core.component` -> `termin.scene.Component`, `termin.scene.InputComponent`, `termin.inspect.InspectField`
+- `termin.visualization.core.component` -> `termin.scene.Component`, `termin.input.InputComponent`, `termin.inspect.InspectField`
+- `termin.visualization.core.python_component` -> `termin.scene.PythonComponent`, `termin.input.InputComponent`, `termin.render.DrawableComponent`
+- `termin.visualization.render.manager` -> `termin.engine.RenderingManager`
+- `termin.visualization.core.voxel_grid_handle` -> `termin.voxels._voxels_native.VoxelGridHandle`
+- `termin.visualization.core.picking` -> `termin.render_passes`
+- `termin.visualization.render.shader` -> `tgfx.TcShader`, `termin.materials.GlslPreprocessor`
 - `termin.visualization.core.display` -> `termin.display.Display`
 - `termin.visualization.render.render_context` -> `termin.render_framework.RenderContext`
 - `termin.visualization.render.drawable` -> `termin.render.drawable`
@@ -177,23 +193,42 @@ Removed after internal consumers were redirected:
 - `termin.visualization.core.prefab_instance_marker`
 - `termin.visualization.core.prefab_registry`
 - `termin.visualization.core.property_path`
+- `termin.visualization.core.component`
 - `termin.visualization.core.display`
+- `termin.visualization.core.entity`
+- `termin.visualization.core.picking`
+- `termin.visualization.core.python_component`
+- `termin.visualization.core.serialization`
+- `termin.visualization.core.voxel_grid_handle`
 - `termin.visualization.render.drawable`
 - `termin.visualization.render.framegraph.pipeline`
 - `termin.visualization.render.framegraph.resource_spec`
+- `termin.visualization.render.manager`
 - `termin.visualization.render.render_context`
+- `termin.visualization.render.shader`
 - `termin.visualization.render.shader_parser`
 - `termin.visualization.render.solid_primitives`
 - `termin.visualization.render.texture`
+- `termin.visualization.render.view`
 - `termin.visualization.platform.backends.fbo_backend`
 - `termin.visualization.ui.widgets.basic`
 - `termin.visualization.ui.widgets.containers`
 - `termin.visualization.ui.widgets.units`
 
-Unused direct-import visualization shims still deferred:
-- `termin.visualization.render.shader` contains local wrapper code and should be reviewed separately.
+Package-level `termin.visualization.__init__` and `termin.visualization.render.__init__`
+were stripped to namespace-only modules on 2026-06-19. Do not add new
+package-level domain re-exports there.
 
-Note: `termin.visualization.__init__`, `termin.visualization.core.__init__`, `termin.visualization.render.__init__`, and `termin.visualization.render.framegraph.__init__` are broader package facades. They were not counted as explicit migration shims in the same way, but they should be reviewed when the visualization boundary is redesigned.
+Still deferred:
+- `termin.visualization.core.scene` owns app-specific scene extension helpers
+  such as `create_scene`, `scene_render_mount`, and `default_scene_extensions`;
+  these need a canonical owner before removal.
+- `termin.visualization.core.input_events` re-exports event classes from the
+  app native module; move them to `termin.input` before deleting the old path.
+- `termin.visualization.render.immediate` adds singleton semantics on top of
+  `tgfx.ImmediateRenderer`; move that wrapper deliberately before deleting it.
+- Real editor/debug/framegraph/material/platform modules under
+  `termin.visualization.*` still need ownership decisions or extraction.
 
 ## Loader Shims
 

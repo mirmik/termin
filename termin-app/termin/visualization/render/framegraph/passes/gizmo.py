@@ -10,7 +10,7 @@ from termin.inspect import InspectField
 
 if TYPE_CHECKING:
     from termin.visualization.render.framegraph.execute_context import ExecuteContext
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
 
 _GIZMO_MASK_SHADER_UUID = "termin-engine-gizmo-mask"
 

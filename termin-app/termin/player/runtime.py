@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
 
 
 _active_runtime: "PlayerRuntime | None" = None
@@ -168,7 +168,7 @@ class PlayerRuntime:
         # materials/shaders. Importing tgfx-only helpers first leaves some
         # build materials in a state where the runtime pipeline clears but
         # draws no scene geometry.
-        from termin.visualization.render import RenderingManager
+        from termin.engine import RenderingManager
 
         self._ensure_texture_registry()
 
@@ -844,7 +844,7 @@ class PlayerRuntime:
 
     def _render(self):
         """Render using RenderingManager."""
-        from termin.visualization.render import RenderingManager
+        from termin.engine import RenderingManager
 
         manager = RenderingManager.instance()
         manager.render_all(present=True)
@@ -874,7 +874,7 @@ class PlayerRuntime:
     def shutdown(self):
         """Clean up resources."""
         from tcbase import log
-        from termin.visualization.render import RenderingManager
+        from termin.engine import RenderingManager
 
         log.info("[PlayerRuntime] Shutting down")
 

@@ -12,11 +12,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.display import Display
     from termin.visualization.core.viewport import Viewport
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
     from termin.visualization.render.framegraph import RenderPipeline
     from termin.editor_core.editor_camera import EditorCameraManager
     RenderingController = Any
@@ -274,7 +274,7 @@ class EditorSceneAttachment:
 
     def _start_entity_hierarchy(self, entity: "Entity") -> None:
         """Recursively call start() on all components in entity and children."""
-        from termin.visualization.core.python_component import PythonComponent
+        from termin.scene import PythonComponent
 
         for comp in entity.components:
             if isinstance(comp, PythonComponent):

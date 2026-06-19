@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import GeneralPose3
@@ -13,7 +13,7 @@ import warnings
 import numpy as np
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
 
 
 class RigidBodyComponent(PythonComponent):

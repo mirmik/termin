@@ -136,7 +136,7 @@ static void set_material_from_python(MaterialPass& pass, nb::object material_obj
 
     if (nb::isinstance<nb::str>(material_obj)) {
         try {
-            nb::module_ rm_mod = nb::module_::import_("termin.visualization.core.resources");
+            nb::module_ rm_mod = nb::module_::import_("termin.assets.resources");
             nb::object rm = rm_mod.attr("ResourceManager").attr("instance")();
             nb::object material = rm.attr("get_material")(material_obj);
             if (material.is_none()) {

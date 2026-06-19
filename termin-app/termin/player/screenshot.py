@@ -19,7 +19,7 @@ def capture_player_screenshot(
     include_image: bool = False,
 ) -> dict[str, object]:
     """Read the player runtime render surface and save it as a PNG image."""
-    from termin.visualization.render.manager import RenderingManager
+    from termin.engine import RenderingManager
 
     render_engine = RenderingManager.instance().render_engine
     if render_engine is None:

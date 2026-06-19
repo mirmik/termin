@@ -387,7 +387,7 @@ Verification:
 - picking import smoke
 - `rg "tc_picking" termin-app/core_c termin-app/cpp`
 
-Status 2026-05-21: done. `IdPass` and the single `tc_picking` RGB/pick-id cache moved into `termin-render-passes`. App Python re-export for `IdPass` and `termin.visualization.core.picking` now import from `termin.render_passes`; app C++ still calls the same `tc_picking_*` symbols through the linked render-passes library for compatibility.
+Status 2026-06-19: done. `IdPass` and the single `tc_picking` RGB/pick-id cache moved into `termin-render-passes`. The old app Python re-export `termin.visualization.core.picking` has been removed; import `tc_picking_*` helpers from `termin.render_passes` directly. App C++ still calls the same `tc_picking_*` symbols through the linked render-passes library.
 
 ### Phase 9: decide debug/editor pass ownership
 

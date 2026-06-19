@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from termin.visualization.core.scene import Scene
+from termin.scene import TcScene as Scene
 from termin.assets.resources import ResourceManager
 
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from termin.visualization.core.python_component import InputComponent
+from termin.input import InputComponent
 
 # Re-export from C++
 from termin.render_components import (

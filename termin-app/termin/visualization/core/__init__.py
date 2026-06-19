@@ -3,7 +3,7 @@
 This package is intentionally an empty namespace. Import the specific
 submodules you need directly, e.g.:
 
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
     from termin.visualization.core.camera import CameraComponent
     from termin.display import Display
 

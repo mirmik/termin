@@ -122,7 +122,7 @@ def test_line_renderer_keeps_legacy_raw_lines_constructor_position():
 
 def test_line_renderer_points_are_inspectable():
     from termin.inspect import InspectRegistry
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
 
     registry = InspectRegistry.instance()
     fields = {field.path: field for field in registry.all_fields("LineRenderer")}

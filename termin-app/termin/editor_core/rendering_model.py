@@ -23,7 +23,7 @@ from termin.editor_core.signal import Signal
 
 if TYPE_CHECKING:
     from termin.display import Display
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
     from termin.visualization.core.viewport import Viewport
     from termin.visualization.core.render_pipeline import RenderPipeline
     from termin.engine import RenderingManager

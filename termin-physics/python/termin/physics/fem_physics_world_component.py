@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List
 import logging
 import numpy as np
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.inspect import InspectField
 

@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING, Callable, List, Type, TypeVar
 
 if TYPE_CHECKING:
     from termin.scene import TcScene
-    from termin.visualization.core.component import Component, InputComponent
+    from termin.scene import Component
+    from termin.input import InputComponent
 
 T = TypeVar("T", bound="Component")
 

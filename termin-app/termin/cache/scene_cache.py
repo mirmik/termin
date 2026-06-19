@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Dict, List
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
 
 
 class SceneCache(ABC):

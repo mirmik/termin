@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
-    from termin.visualization.core.scene import Scene
-    from termin.visualization.core.entity import Entity
+    from termin.scene import TcScene as Scene
+    from termin.scene import Entity
 
 # Entry: (NavMesh, Entity)
 NavMeshEntry = tuple["NavMesh", "Entity"]

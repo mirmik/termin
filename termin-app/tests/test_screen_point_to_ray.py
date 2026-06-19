@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from termin.visualization import Entity
+from termin.scene import Entity
 from termin.visualization.core.camera import PerspectiveCameraComponent
 from termin.geombase import Pose3
 

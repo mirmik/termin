@@ -13,7 +13,7 @@ from tcbase import log
 
 if TYPE_CHECKING:
     from termin.assets.resources import ResourceManager
-    from termin.visualization.core.scene import Scene
+    from termin.scene import TcScene as Scene
 
 
 class ResourceLoader:

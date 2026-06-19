@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from termin.visualization.core.python_component import PythonComponent
+from termin.scene import PythonComponent
 from termin.inspect import InspectField
 
 

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 if TYPE_CHECKING:
     from termin.engine import SceneManager
     from termin.assets.resources import ResourceManager
-    from termin.visualization.core.entity import Entity
+    from termin.scene import Entity
 
 
 class PrefabEditController:
