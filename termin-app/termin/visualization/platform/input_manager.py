@@ -10,6 +10,7 @@ from termin.display import (
     _display_input_router_new,
     _display_input_router_free,
     _display_input_router_base,
+    _viewport_get_input_manager,
     _viewport_input_manager_new,
     _viewport_input_manager_free,
 )
@@ -49,11 +50,17 @@ class BasicDisplayInputManager:
             _viewport_input_manager_free(ptr)
         self._viewport_managers = []
 
-    def add_viewport(self, vp_index: int, vp_generation: int):
+    def add_viewport(self, vp_index: int, vp_generation: int) -> bool:
         """Create and attach viewport input manager for a viewport."""
+        existing = _viewport_get_input_manager(vp_index, vp_generation)
+        if existing:
+            return True
+
         ptr = _viewport_input_manager_new(vp_index, vp_generation)
         if ptr:
             self._viewport_managers.append(ptr)
+            return True
+        return False
 
     @property
     def tc_input_manager_ptr(self) -> int:

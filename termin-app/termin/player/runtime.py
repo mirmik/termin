@@ -151,6 +151,7 @@ class PlayerRuntime:
         # Display/Input (managed via RenderingManager)
         self._display = None
         self._viewport = None
+        self._viewports = []
         self._fallback_render_target = None
         self._input_manager = None
         self._mcp_executor = None
@@ -326,6 +327,7 @@ class PlayerRuntime:
 
         viewports = manager.attach_scene_full(self.scene)
         if len(viewports) > 0:
+            self._viewports = list(viewports)
             self._viewport = viewports[0]
             self._disable_unrenderable_unused_render_targets(manager, viewports)
             log.info(f"[PlayerRuntime] Attached scene rendering: {len(viewports)} viewport(s)")
@@ -367,6 +369,7 @@ class PlayerRuntime:
             name="Main",
         )
         self._viewport.render_target = self._fallback_render_target
+        self._viewports = [self._viewport]
         log.info("[PlayerRuntime] Created fallback viewport with render target 'Main'")
         return True
 
@@ -692,14 +695,38 @@ class PlayerRuntime:
 
     def _setup_input(self):
         """Set up input handling."""
-        from termin.visualization.platform.input_manager import DisplayInputRouter
+        from tcbase import log
+        from termin.visualization.platform.input_manager import BasicDisplayInputManager
 
-        # Router auto-attaches to display's surface
-        self._input_router = DisplayInputRouter(self._display.tc_display_ptr)
+        if self._display is None:
+            log.error("[PlayerRuntime] Cannot set up input without display")
+            return
+
+        input_manager = BasicDisplayInputManager(self._display.tc_display_ptr)
+        active_viewports = 0
+        for viewport in self._viewports:
+            mode = viewport.input_mode or "simple"
+            if mode == "none" or mode == "editor":
+                continue
+            if mode not in ("simple", "basic"):
+                log.warning(
+                    f"[PlayerRuntime] Unknown viewport input mode '{mode}' for viewport '{viewport.name}'"
+                )
+                continue
+
+            vp_index, vp_generation = viewport._viewport_handle()
+            if input_manager.add_viewport(vp_index, vp_generation):
+                active_viewports += 1
+            else:
+                log.error(f"[PlayerRuntime] Failed to create input manager for viewport '{viewport.name}'")
+
         if self.window is not None:
-            self.window.set_input_manager(self._input_router.tc_input_manager_ptr)
+            self.window.set_input_manager(input_manager.tc_input_manager_ptr)
         if self.surface is not None:
-            self.surface.set_input_manager(self._input_router.tc_input_manager_ptr)
+            self.surface.set_input_manager(input_manager.tc_input_manager_ptr)
+
+        self._input_manager = input_manager
+        log.info(f"[PlayerRuntime] Input configured for {active_viewports} viewport(s)")
 
     def run(self):
         """Run the game loop."""
