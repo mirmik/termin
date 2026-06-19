@@ -3,6 +3,7 @@ Command-line entry point for Termin Player.
 
 Usage:
     python -m termin.player path/to/project --scene main.scene
+    python -m termin.player path/to/project --scene main.scene --headless --frames 1
     python -m termin.player --build dist/MyGame/build.json
     python -m termin.player --bundle dist/MyGame/app.json
 """
@@ -61,6 +62,33 @@ def main():
         help="Window title",
     )
     parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run project scene update loop without window, RenderingManager, or rendering",
+    )
+    parser.add_argument(
+        "--frames",
+        type=int,
+        default=1,
+        help="Number of frames to run in --headless mode (default: 1)",
+    )
+    parser.add_argument(
+        "--dt",
+        type=float,
+        default=1.0 / 60.0,
+        help="Simulation dt per frame in --headless mode (default: 1/60)",
+    )
+    parser.add_argument(
+        "--no-assets",
+        action="store_true",
+        help="Skip source asset scanning in --headless mode",
+    )
+    parser.add_argument(
+        "--no-modules",
+        action="store_true",
+        help="Skip project module loading in --headless mode",
+    )
+    parser.add_argument(
         "--mcp",
         action="store_true",
         help="Enable the player MCP diagnostics endpoint",
@@ -95,6 +123,12 @@ def main():
 
     if args.build is not None and args.bundle is not None:
         parser.error("--build and --bundle are mutually exclusive")
+    if args.headless and (args.build is not None or args.bundle is not None):
+        parser.error("--headless runs source projects only; --build and --bundle are render runtimes")
+    if args.frames < 0:
+        parser.error("--frames must be non-negative")
+    if args.dt < 0.0:
+        parser.error("--dt must be non-negative")
 
     if args.bundle is not None:
         app_json_path = Path(args.bundle)
@@ -167,6 +201,19 @@ def main():
         # Use relative path from project root
         scene_name = str(scene_files[0].relative_to(project_path))
         print(f"Using scene: {scene_name}")
+
+    if args.headless:
+        from termin.player import run_headless_project
+
+        run_headless_project(
+            project_path=project_path,
+            scene_name=scene_name,
+            frames=args.frames,
+            dt=args.dt,
+            load_assets=not args.no_assets,
+            load_modules=not args.no_modules,
+        )
+        return
 
     from termin.player import run_project
 
