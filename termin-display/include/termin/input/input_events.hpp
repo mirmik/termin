@@ -1,6 +1,6 @@
 /**
  * @file input_events.hpp
- * @brief C++ wrappers for input event structures.
+ * @brief C++ wrappers for viewport-bound input event structures.
  *
  * Uses C structures from tc_input_event.h as base,
  * adds C++ constructors and methods.
@@ -36,7 +36,6 @@ struct MouseButtonEvent : public tc_mouse_button_event {
         button = btn; action = act; mods = m;
     }
 
-    // Construct from C struct
     explicit MouseButtonEvent(const tc_mouse_button_event& e) {
         viewport = e.viewport;
         x = e.x; y = e.y;
@@ -61,7 +60,6 @@ struct MouseMoveEvent : public tc_mouse_move_event {
         dx = dx_; dy = dy_;
     }
 
-    // Construct from C struct
     explicit MouseMoveEvent(const tc_mouse_move_event& e) {
         viewport = e.viewport;
         x = e.x; y = e.y;
@@ -86,7 +84,6 @@ struct ScrollEvent : public tc_scroll_event {
         xoffset = xoff; yoffset = yoff; mods = m;
     }
 
-    // Construct from C struct
     explicit ScrollEvent(const tc_scroll_event& e) {
         viewport = e.viewport;
         x = e.x; y = e.y;
@@ -111,7 +108,6 @@ struct KeyEvent : public tc_key_event {
         action = act; mods = m;
     }
 
-    // Construct from C struct
     explicit KeyEvent(const tc_key_event& e) {
         viewport = e.viewport;
         key = e.key; scancode = e.scancode;
@@ -119,9 +115,8 @@ struct KeyEvent : public tc_key_event {
     }
 };
 
-// Input enums from tcbase
-using tcbase::MouseButton;
 using tcbase::Action;
 using tcbase::Mods;
+using tcbase::MouseButton;
 
 } // namespace termin

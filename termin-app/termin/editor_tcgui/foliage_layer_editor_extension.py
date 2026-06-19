@@ -412,7 +412,7 @@ class FoliageLayerEditorExtension:
         if handle is None:
             return
 
-        from termin.visualization.render.immediate import ImmediateRenderer
+        from termin.render import ImmediateRenderer
 
         renderer = ImmediateRenderer.instance()
         for instance in handle.instances:

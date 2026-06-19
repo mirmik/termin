@@ -4,7 +4,7 @@
 #include <termin/entity/component.hpp>
 #include "../entity/cmp_ref.hpp"
 #include <termin/entity/input_handler.hpp>
-#include "../input/input_events.hpp"
+#include <termin/input/input_events.hpp>
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/quat.hpp>
 #include <termin/geom/pose3.hpp>

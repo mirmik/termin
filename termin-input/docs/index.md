@@ -1,6 +1,7 @@
 # termin-input
 
-`termin-input` содержит input abstractions и bindings для событий/состояний ввода, используемых engine/editor/display слоями.
+`termin-input` содержит input abstractions и bindings для состояний ввода,
+используемых engine/editor/display слоями.
 
 Связанные документы:
 
@@ -19,6 +20,12 @@
 Python package: `termin.input` через пакет `termin-input`.
 
 Базовые enum-значения ввода (`Action`, `MouseButton`, `Mods`, `Key`) экспортируются из `tcbase`.
+
+Viewport-bound event classes (`MouseButtonEvent`, `MouseMoveEvent`,
+`ScrollEvent`, `KeyEvent`) are imported from `termin.input` in Python. Their
+native registration lives in `termin-display` because these event objects carry
+`TcViewport` handles and moving that binding into `termin-input` would create a
+C++ dependency cycle.
 
 ## Input device registry
 
