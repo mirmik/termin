@@ -57,6 +57,7 @@ if __name__ == "__main__":
                 "termin.animation_components", "termin.animation_components.*",  # termin-animation
                 "termin.audio", "termin.audio.*",               # termin-audio core
                 "termin.physics", "termin.physics.*",           # termin-physics
+                "termin.physics_components", "termin.physics_components.*",  # termin-components-physics
                 "termin.navmesh", "termin.navmesh.*",           # termin-navmesh
                 "termin.tween", "termin.tween.*",               # termin-tween / termin-components-tween
                 "termin.voxels", "termin.voxels.*",             # termin-voxels / termin-components-voxels
@@ -112,6 +113,7 @@ if __name__ == "__main__":
             "termin-audio",
             "termin-voxels",
             "termin-components-voxels",
+            "termin-components-physics",
             "termin-components-ui",
             "termin-materials",
             "termin-render-passes",
