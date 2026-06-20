@@ -148,11 +148,13 @@ adapter API.
 
 ---
 
-### 2.2 Утечка tgfx типов в публичном API termin-render
+### 2.2 termin-render и публичные tgfx/tgfx2 типы
+
+**Статус 2026-06-20:** интерпретация этого пункта уточнена. Сам факт публичной зависимости `termin-render` от `termin-graphics` больше не считается нарушением границы: `termin-render` является render framework поверх `termin-graphics`, а не слоем, который обязан полностью инкапсулировать GPU API. Список ниже оставлен как inventory мест, где `tgfx`/`tgfx2` входит в публичный render-facing контракт.
 
 **Где смотреть:**
 
-| Файл | Утечка |
+| Файл | Публичный graphics-facing контракт |
 |------|--------|
 | `termin-render/include/termin/render/render_pipeline.hpp:9-11` | `<tgfx2/descriptors.hpp>`, `<tgfx2/i_render_device.hpp>`, `<tgfx2/texture_pool.hpp>` |
 | `termin-render/include/termin/render/drawable.hpp:20-21` | `<tgfx/resources/tc_material.h>`, `<tgfx/tgfx_shader_handle.hpp>` |
@@ -167,7 +169,9 @@ adapter API.
 | `termin-render/include/termin/render/shadow.hpp` | tgfx2 типы |
 | `termin-render/include/termin/render/resource_spec.hpp` | tgfx2 типы |
 
-**Проблема:** 30+ заголовков termin-render напрямую включают заголовки termin-graphics (`tgfx/`, `tgfx2/`). Любой потребитель termin-render автоматически получает зависимость от termin-graphics. termin-render должен абстрагировать графический бэкенд, а не экспонировать его типы.
+**Уточнение:** 30+ заголовков `termin-render` напрямую включают заголовки `termin-graphics` (`tgfx/`, `tgfx2/`). Это нормально для API, которые непосредственно описывают render execution, frame graph, render contexts, texture handles, frame presenters или bridge к graphics device.
+
+Архитектурный риск здесь другой: `tgfx`/`tgfx2` не должен незаметно расползаться в scene/asset/build/editor policy contracts, где вызывающий код не должен думать о backend placement, device handles или transient GPU resources. При ревью новых API нужно проверять, является ли конкретный API render-facing. Если да, `tgfx` допустим; если нет, нужен более высокий domain contract или отдельный bridge.
 
 **tc_mesh* в публичном API:**
 `termin-render/include/termin/render/drawable.hpp`:
@@ -177,7 +181,7 @@ virtual tc_mesh* get_mesh_for_phase(
     int geometry_id
 ) const;
 ```
-`tc_mesh` — тип из termin-mesh, возвращаемый как сырой указатель из интерфейса Drawable.
+`tc_mesh` — тип из termin-mesh, возвращаемый как сырой указатель из интерфейса Drawable. Это допустимо как render-facing escape hatch для прямого draw path, но такие API должны оставаться явно помеченными как bridge/migration surface и не становиться общим scene/component контрактом.
 
 ---
 
@@ -541,7 +545,7 @@ termin/editor_tcgui/ (tcgui)
 | 1.3 | Утечка GUI в editor_core | termin-app | editor_camera_ui_controller.py, spacemouse_controller.py | 🔴 Частично исправлено |
 | 1.4 | termin-gui Viewport3D → SDK internals | termin-gui | viewport3d.py | 🔴 Частично исправлено |
 | 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | ✅ Исправлено |
-| 2.2 | Утечка tgfx типов в публичном API | termin-render | render_pipeline.hpp, drawable.hpp (+ 30 хедеров) | 🟠 Высокая |
+| 2.2 | termin-render public tgfx/tgfx2 contract inventory | termin-render | render_pipeline.hpp, drawable.hpp (+ 30 хедеров) | 🟡 Уточнено |
 | 2.3 | Бизнес-логика в биндингах + hasattr/setattr | termin-* python bindings | tc_pass_bindings.cpp и др. | 🟠 Высокая |
 | 2.4 | Дублирование/расхождение биндингов | termin-base, termin-app | geom/ | 🟠 Частично исправлено |
 | 2.5 | Экспозиция внутренних типов через биндинги | termin-* python bindings | uintptr_t handles, tc_* типы | 🟠 Высокая |
