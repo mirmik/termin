@@ -156,11 +156,9 @@ Still retained app asset compatibility/runtime surface:
 Remaining production-used visualization-owned paths:
 - `termin.visualization.core.scene`
 - `termin.visualization.core.camera`
-- `termin.visualization.core.viewport`
 - `termin.visualization.render.glsl_preprocessor`
 - `termin.visualization.render.framegraph.*`
 - `termin.visualization.render.materials.*`
-- `termin.visualization.platform.*`
 - `termin.visualization.ui.widgets.component`
 
 These are imported by:
@@ -190,6 +188,10 @@ Likely canonical replacements:
 - `termin.visualization.render.drawable` -> `termin.render.drawable`
 - `termin.visualization.render.framegraph.resource_spec` -> `termin.render_framework.ResourceSpec`
 - `termin.visualization.platform.backends.fbo_backend` -> `termin.display.FBOSurface`
+- `termin.visualization.platform.input_manager` -> `termin.display`
+- `termin.visualization.core.viewport` -> `termin.viewport`
+- `termin.visualization.core.viewport_config` -> `termin.render.ViewportConfig`
+- `termin.visualization.core.render_target_config` -> `termin.render.RenderTargetConfig`
 
 Removed after internal consumers were redirected:
 - `termin.visualization.core.entity_registry`
@@ -215,6 +217,11 @@ Removed after internal consumers were redirected:
 - `termin.visualization.render.texture`
 - `termin.visualization.render.view`
 - `termin.visualization.platform.backends.fbo_backend`
+- `termin.visualization.platform.input_manager`
+- `termin.visualization.platform`
+- `termin.visualization.core.viewport`
+- `termin.visualization.core.viewport_config`
+- `termin.visualization.core.render_target_config`
 - `termin.visualization.ui.widgets.basic`
 - `termin.visualization.ui.widgets.containers`
 - `termin.visualization.ui.widgets.units`
@@ -230,6 +237,14 @@ Resolved in this cleanup pass:
 - `termin.visualization.render.immediate` was removed. The singleton wrapper
   moved to `termin.render.ImmediateRenderer`; native immediate rendering remains
   in `tgfx.ImmediateRenderer`.
+- `termin.visualization.core.viewport` was removed. Python consumers import
+  `Viewport` from `termin.viewport`; player code creates the Default pipeline
+  through `termin.engine.RenderingManager`.
+- `termin.visualization.platform.*` was removed. `BasicDisplayInputManager` and
+  `DisplayInputRouter` are available from `termin.display`.
+- `termin.visualization.core.viewport_config` and
+  `termin.visualization.core.render_target_config` were removed. Python
+  consumers import config classes and serializers from `termin.render`.
 
 Still deferred:
 - `termin.visualization.core.scene` owns app-specific scene extension helpers

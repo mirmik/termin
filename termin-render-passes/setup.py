@@ -24,6 +24,7 @@ setup(
     packages=["termin.render_passes"],
     package_dir={"termin.render_passes": "python/termin/render_passes"},
     install_requires=[
+        "tcbase",
         "termin-nanobind",
         "termin-render",
         "termin-components-render",

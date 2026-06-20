@@ -8,6 +8,7 @@ consume these passes through the public C++ headers under `<termin/render/...>`
 or Python package `termin.render_passes`, not compile pass sources from
 `termin-app`.
 
-`ColliderGizmoPass` lives here as a debug/editor render pass. Its implementation
-uses collision components privately; consumers should depend on the pass API, not
-on app-side render sources.
+`ColliderGizmoPass`, `ImmediateDepthPass`, and `UnifiedGizmoPass` live here as
+debug/editor render passes. Their implementations use collision, immediate
+rendering, or caller-provided gizmo draw sources privately; consumers should
+depend on the pass API, not on app-side render sources.

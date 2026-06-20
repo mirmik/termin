@@ -28,7 +28,9 @@ from termin.render_passes._render_passes_native import (
     tc_picking_rgb_to_id,
 )
 from termin.render_passes.highlight import HighlightPass
+from termin.render_passes.immediate_depth import ImmediateDepthPass
 from termin.render_passes.ui_widget import UIWidgetPass
+from termin.render_passes.unified_gizmo import UnifiedGizmoPass
 
 __all__ = [
     "BlitPass",
@@ -39,6 +41,7 @@ __all__ = [
     "GrayscalePass",
     "HighlightPass",
     "IdPass",
+    "ImmediateDepthPass",
     "PresentToScreenPass",
     "ResolvePass",
     "ShadowMapArrayEntry",
@@ -51,6 +54,7 @@ __all__ = [
     "TONEMAP_REINHARD",
     "TonemapPass",
     "UIWidgetPass",
+    "UnifiedGizmoPass",
     "tc_picking_cache_clear",
     "tc_picking_id_to_rgb",
     "tc_picking_rgb_to_id",

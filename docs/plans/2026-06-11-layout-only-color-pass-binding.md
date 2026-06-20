@@ -77,6 +77,9 @@ descriptor-set noise around unrelated drawables.
 - `ColorMaterial` and `UnlitMaterial` now use parsed Slang shader text instead
   of hand-authored GLSL source. They rely on compact engine identifiers
   (`u_view`, `u_projection`, `u_model`) and parser-owned scoped blocks.
+- Status 2026-06-20: the unused app-side `ColorMaterial` and `UnlitMaterial`
+  helper module was removed. ColorPass/material tests now use material assets
+  and shader parsing paths directly instead of this legacy convenience API.
 - The Slang parser now synthesizes canonical `per_frame` and `draw_data`
   resources for compact engine identifier use. Shader text should not declare
   duplicate per-frame/per-draw blocks for these built-in resources.

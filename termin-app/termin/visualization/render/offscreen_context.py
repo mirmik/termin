@@ -14,8 +14,8 @@ OffscreenContext — dedicated GL context для offscreen рендеринга.
     # Создание контекста
     context = OffscreenContext()
 
-    # Все дисплеи должны share context с ним
-    window_backend = SDLEmbeddedWindowBackend(share_context=context.gl_context)
+    # Display/window surfaces must share context with it.
+    window_surface = create_window_surface(share_context=context.gl_context)
 
     # Рендеринг
     context.make_current()
@@ -98,8 +98,8 @@ class OffscreenContext:
         """
         GL context для sharing с дисплеями.
 
-        Передайте это значение в SDLEmbeddedWindowBackend при создании
-        окон, чтобы они использовали shared context.
+        Передайте это значение при создании window/display surface, чтобы
+        она использовала shared context.
         """
         return self._gl_context
 

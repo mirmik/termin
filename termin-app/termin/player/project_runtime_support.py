@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
 
+from termin.default_assets.resource_manager import DefaultResourceManager
+
 
 def register_project_runtime_resources(*, include_render_resources: bool) -> None:
     """Register builtin resources needed before scene deserialization."""
-    from termin.assets.resources import ResourceManager
-
-    rm = ResourceManager.instance()
+    rm = DefaultResourceManager.instance()
     rm.register_builtin_components()
     if not include_render_resources:
         return
@@ -81,11 +81,9 @@ def create_asset_import_plugin_map():
 def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
     """Scan project directory for source assets and register them."""
     from tcbase import log
-    from termin.assets.resources import ResourceManager
-    from termin.project.settings import SERVICE_RESOURCE_IGNORE_PATHS
 
     project_path = Path(project_path)
-    rm = ResourceManager.instance()
+    rm = DefaultResourceManager.instance()
     ext_map = create_asset_import_plugin_map()
     ignored_roots = _project_asset_ignored_roots(project_path)
 

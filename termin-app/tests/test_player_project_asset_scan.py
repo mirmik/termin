@@ -1,6 +1,4 @@
 import json
-import sys
-import types
 from pathlib import Path
 
 from termin_assets import PreLoadResult
@@ -14,14 +12,6 @@ class RecordingResourceManager:
 
     def register_file(self, result: PreLoadResult) -> None:
         self.results.append(result)
-
-
-class FakeResourceManager:
-    instance_value = RecordingResourceManager()
-
-    @classmethod
-    def instance(cls) -> RecordingResourceManager:
-        return cls.instance_value
 
 
 class RecordingPreloader:
@@ -63,10 +53,11 @@ def test_source_asset_scan_ignores_generated_and_project_ignored_paths(monkeypat
     )
 
     manager = RecordingResourceManager()
-    FakeResourceManager.instance_value = manager
-    fake_resources_module = types.ModuleType("termin.assets.resources")
-    fake_resources_module.ResourceManager = FakeResourceManager
-    monkeypatch.setitem(sys.modules, "termin.assets.resources", fake_resources_module)
+    monkeypatch.setattr(
+        project_runtime_support.DefaultResourceManager,
+        "instance",
+        staticmethod(lambda: manager),
+    )
 
     loaded_count = project_runtime_support.scan_project_assets(project, log_prefix="[Test]")
 
