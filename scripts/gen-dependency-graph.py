@@ -35,6 +35,7 @@ CMAKE_TARGET_TO_DIR = {
     "termin_animation": "termin-animation",
     "termin_modules": "termin-modules",
     "termin_components_render": "termin-components-render",
+    "termin_components_ui": "termin-components-ui",
     "termin_components_mesh": "termin-components-mesh",
     "termin_components_collision": "termin-components-collision",
     "termin_components_kinematic": "termin-components-kinematic",
@@ -65,6 +66,7 @@ PYTHON_PKG_TO_DIR = {
     "termin-voxels": "termin-voxels",
     "termin-components-tween": "termin-components-tween",
     "termin-components-voxels": "termin-components-voxels",
+    "termin-components-ui": "termin-components-ui",
     "termin-nanobind": "termin-nanobind-sdk",
     "termin-csg": "termin-csg",
     "termin-lighting": "termin-lighting",
@@ -106,6 +108,7 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.scene": "termin-scene",
     "termin.inspect": "termin-inspect",
     "termin.render_components": "termin-components-render",
+    "termin.ui_components": "termin-components-ui",
     "termin.render_framework": "termin-render",
     "termin.render_passes": "termin-render-passes",
     "termin.lighting": "termin-lighting",
@@ -416,6 +419,7 @@ def main():
             "termin-components-collision", "termin-components-physics",
             "termin-components-kinematic", "termin-components-mesh",
             "termin-components-tween", "termin-components-voxels",
+            "termin-components-ui",
         ],
         "Thin Facades": [],  # termin-entity удалён
     }

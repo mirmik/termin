@@ -17,7 +17,7 @@ from termin.scene import Entity
 from termin.render_components.camera import CameraComponent
 from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.viewport_hint import ViewportHintComponent
-from termin.visualization.ui.widgets.component import UIComponent
+from termin.ui_components import UIComponent
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene

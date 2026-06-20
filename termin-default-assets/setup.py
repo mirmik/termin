@@ -21,6 +21,7 @@ setup(
         "termin-render",
         "termin-render-passes",
         "termin-components-render",
+        "termin-components-ui",
         "termin-scene",
         "termin-voxels",
         "tcgui",

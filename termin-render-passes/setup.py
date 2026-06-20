@@ -27,6 +27,7 @@ setup(
         "termin-nanobind",
         "termin-render",
         "termin-components-render",
+        "termin-components-ui",
         "termin-inspect",
         "tgfx",
         "numpy",

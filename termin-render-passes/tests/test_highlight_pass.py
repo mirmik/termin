@@ -19,3 +19,14 @@ def test_highlight_pass_is_exported_from_render_passes(capsys) -> None:
     metadata = registry.get_type_metadata("HighlightPass")
     assert metadata["graph"]["node_inputs"] == [["input_res", "fbo"], ["id_res", "fbo"]]
     assert metadata["graph"]["node_outputs"] == [["output_res", "fbo"]]
+
+
+def test_ui_widget_pass_is_exported_from_render_passes() -> None:
+    from termin.render_passes import UIWidgetPass
+
+    pass_obj = UIWidgetPass()
+
+    assert pass_obj.pass_name == "UIWidgets"
+    assert pass_obj.compute_reads() == {"color+ui"}
+    assert pass_obj.compute_writes() == {"color+widgets"}
+    assert pass_obj.get_inplace_aliases() == [("color+ui", "color+widgets")]

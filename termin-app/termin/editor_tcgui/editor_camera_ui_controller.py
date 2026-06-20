@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from termin.scene import PythonComponent
 from termin.render_components.camera import CameraComponent
-from termin.visualization.ui.widgets.component import UIComponent
+from termin.ui_components import UIComponent
 from tcgui.widgets.basic import IconButton
 from termin.inspect import InspectField
 
