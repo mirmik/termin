@@ -87,7 +87,7 @@ logic.
 
 Source of truth: [termin-graphics docs](../termin-graphics/docs/index.md)
 
-Отвечает за backend-neutral GPU API, tgfx2 context/device/runtime, render targets, texture pools, canvas renderer facade и низкоуровневые GPU utilities.
+Отвечает за backend-neutral GPU API, tgfx2 context/device/runtime, render targets, texture pools, canvas renderer facade и низкоуровневые GPU utilities. Это канонический GPU substrate для render framework; использование `tgfx`/`tgfx2` типов в render-facing API само по себе не является нарушением границы.
 
 Ключевая граница сейчас важна из-за миграции renderer facades: generic GPU utilities без знания frame graph относятся сюда, а frame graph/debugger logic остается в [termin-render](#termin-render).
 
@@ -95,14 +95,16 @@ Source of truth: [termin-graphics docs](../termin-graphics/docs/index.md)
 
 Source of truth: [termin-render docs](../termin-render/docs/index.md)
 
-Отвечает за render framework поверх canonical resources: render engine, frame graph, presenter/debugger, scene render mount data и render-state integration helpers.
+Отвечает за render framework поверх canonical resources и `termin-graphics`: render engine, frame graph, presenter/debugger, scene render mount data и render-state integration helpers.
+
+`termin-render` не обязан инкапсулировать `termin-graphics` как implementation detail. Публичная зависимость от `tgfx`/`tgfx2` допустима для API, которые непосредственно описывают GPU execution, frame graph, render contexts, texture handles или bridge к graphics device. Граница проходит не по факту include-а `tgfx`, а по смыслу контракта: scene/asset/build/editor policy не должны случайно зависеть от backend-specific деталей, если они не являются render-facing API.
 
 Здесь должны оставаться части, которые знают про frame graph, pass interfaces, engine views, render scene mount config (`ViewportConfig`, `RenderTargetConfig`, scene pipeline templates), render-state accessors и legacy render-state/mount migration helpers. Python bindings для `ViewportConfig` и `RenderTargetConfig` также принадлежат `termin.render`; app `_native` не должен регистрировать собственные Python-классы для этих типов. Glue, который напрямую вызывает `termin-engine` `RenderingManager`, пока не относится к `termin-render`, чтобы не создавать обратную зависимость.
 
 Кандидаты на вынос в [termin-graphics](#termin-graphics):
 
 - generic fullscreen texture presentation;
-- generic `tc_texture` / `tc_mesh` to tgfx2 adapters;
+- generic `tc_texture` / `tc_mesh` to tgfx2 adapters, если они не знают о frame graph/pass contracts;
 - общие allocation/cache helpers, не знающие о frame graph.
 
 ### termin-render-passes
