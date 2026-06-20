@@ -4,7 +4,7 @@
 
 namespace termin_modules {
 
-class CppModuleBackend : public IModuleBackend {
+class TERMIN_MODULES_API CppModuleBackend : public IModuleBackend {
 public:
     BuildOutputCallback _output_callback;
 

@@ -8,6 +8,7 @@
 #include <termin/entity/component_registry.hpp>
 #include "termin/entity/cmp_ref.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
+#include "termin/animation/termin_components_animation_api.hpp"
 #include "termin/skeleton/skeleton_instance.hpp"
 
 namespace termin {
@@ -18,7 +19,7 @@ class SkeletonController;
 //
 // Stores clips, current clip, time. Updates skeleton bones each frame.
 // Can be controlled externally (playing=false) via update_bones_at_time().
-class ENTITY_API AnimationPlayer : public CxxComponent {
+class TERMIN_COMPONENTS_ANIMATION_API AnimationPlayer : public CxxComponent {
 public:
     // Clip handles for serialization
     std::vector<animation::TcAnimationClip> clips;

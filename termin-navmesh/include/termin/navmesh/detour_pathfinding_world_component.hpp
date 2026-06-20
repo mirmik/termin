@@ -5,13 +5,14 @@
 #include <vector>
 
 #include <termin/entity/component.hpp>
+#include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 class dtNavMesh;
 class dtNavMeshQuery;
 
 namespace termin {
 
-struct DetourRaycastResult {
+struct TERMIN_NAVMESH_COMPONENTS_API DetourRaycastResult {
     bool success = false;
     bool hit = false;
     float t = 0.0f;
@@ -20,14 +21,14 @@ struct DetourRaycastResult {
     std::vector<unsigned long long> visited;
 };
 
-struct DetourClosestPointResult {
+struct TERMIN_NAVMESH_COMPONENTS_API DetourClosestPointResult {
     bool success = false;
     bool over_poly = false;
     unsigned long long poly_ref = 0;
     std::array<float, 3> point{0.0f, 0.0f, 0.0f};
 };
 
-struct DetourPathPoint {
+struct TERMIN_NAVMESH_COMPONENTS_API DetourPathPoint {
     std::array<float, 3> point{0.0f, 0.0f, 0.0f};
     unsigned char flags = 0;
     unsigned long long poly_ref = 0;
@@ -36,12 +37,12 @@ struct DetourPathPoint {
     unsigned char area = 0;
 };
 
-struct DetourPathResult {
+struct TERMIN_NAVMESH_COMPONENTS_API DetourPathResult {
     bool success = false;
     std::vector<DetourPathPoint> points;
 };
 
-class DetourPathfindingWorldComponent : public CxxComponent {
+class TERMIN_NAVMESH_COMPONENTS_API DetourPathfindingWorldComponent : public CxxComponent {
 public:
     std::string navmesh_uuid;
     float query_extent_x = 2.0f;
