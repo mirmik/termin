@@ -6,6 +6,7 @@
 #include <tgfx/tgfx_material_handle.hpp>
 
 #include "inspect/tc_inspect_component_adapter.h"
+#include "inspect/tc_inspect_init.h"
 
 #include <string>
 
@@ -73,6 +74,10 @@ void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 valu
     tc_value_free(&v);
 }
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4190)
+#endif
 tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     tc_vec3 result = {0.0, 0.0, 0.0};
@@ -91,6 +96,9 @@ tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path) {
     tc_value_free(&v);
     return result;
 }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat value, void* context) {
     tc_value v = tc_value_list_new();
@@ -102,6 +110,10 @@ void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat valu
     tc_value_free(&v);
 }
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4190)
+#endif
 tc_quat tc_component_get_field_quat(tc_component* c, const char* path) {
     tc_value v = tc_component_inspect_get(c, path);
     tc_quat result = {0, 0, 0, 1};
@@ -121,6 +133,9 @@ tc_quat tc_component_get_field_quat(tc_component* c, const char* path) {
     tc_value_free(&v);
     return result;
 }
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, void* context) {
     tc_value v = tc_value_int(value);

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
+#include "termin/render_passes/export.h"
 #include "termin/materials/shader_parser.hpp"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
@@ -22,7 +23,7 @@ namespace tgfx { class IRenderDevice; }
 
 namespace termin {
 
-class SkyBoxPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API SkyBoxPass : public CxxFramePass {
 public:
     std::string input_res = "empty";
     std::string output_res = "color";

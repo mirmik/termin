@@ -2,6 +2,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
+#include "termin/render_passes/export.h"
 #include "tc_inspect_cpp.hpp"
 
 extern "C" {
@@ -12,7 +13,7 @@ namespace tgfx { class IRenderDevice; }
 
 namespace termin {
 
-class DebugTrianglePass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API DebugTrianglePass : public CxxFramePass {
 public:
     std::string output_res = "OUTPUT";
 

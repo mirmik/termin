@@ -2,6 +2,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
+#include "termin/render_passes/export.h"
 #include "tc_inspect_cpp.hpp"
 
 #include <string>
@@ -12,7 +13,7 @@ namespace termin {
 // ResolvePass resolves an MSAA color resource into a single-sample color
 // resource through the backend transfer/resolve path. The strategy field is
 // kept for serialized graph compatibility; average is the only supported mode.
-class ResolvePass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API ResolvePass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "resolved";

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from termin_assets import AssetTypeRegistry
 from termin.default_assets.voxels.asset import VoxelGridAsset
 from termin.default_assets.voxels.asset_plugin import (
@@ -16,7 +18,7 @@ def test_voxel_grid_asset_wraps_grid() -> None:
 
     assert asset.name == "source_grid"
     assert asset.grid is grid
-    assert str(asset.source_path) == "/tmp/source.voxels"
+    assert asset.source_path == Path("/tmp/source.voxels")
 
 
 def test_voxel_grid_plugins_register_with_asset_registry() -> None:

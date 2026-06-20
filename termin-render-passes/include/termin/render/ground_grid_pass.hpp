@@ -2,6 +2,7 @@
 
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/execute_context.hpp>
+#include <termin/render_passes/export.h>
 #include <tgfx2/handles.hpp>
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
@@ -21,7 +22,7 @@ namespace termin {
  *
  * Goes through tgfx::RenderContext2 end-to-end.
  */
-class GroundGridPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API GroundGridPass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "color";

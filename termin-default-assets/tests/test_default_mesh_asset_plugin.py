@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 
 from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult
@@ -50,7 +52,7 @@ def test_mesh_asset_wraps_mesh3() -> None:
     assert asset.mesh_data.is_valid
     assert asset.get_vertex_count() == 3
     assert asset.get_triangle_count() == 1
-    assert str(asset.source_path) == "/tmp/triangle.obj"
+    assert asset.source_path == Path("/tmp/triangle.obj")
 
 
 def test_mesh_spec_defaults_live_in_default_assets() -> None:
@@ -89,7 +91,7 @@ def test_mesh_runtime_plugin_registers_lazy_asset() -> None:
     asset = resource_manager.get_runtime_asset("mesh", "triangle")
     assert isinstance(asset, MeshAsset)
     assert asset.uuid == "mesh-uuid"
-    assert str(asset.source_path) == "/tmp/triangle.obj"
+    assert asset.source_path == Path("/tmp/triangle.obj")
     assert asset._scale == 2.0
 
 

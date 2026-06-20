@@ -78,6 +78,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
 )
 
 set(TERMIN_RENDER_PASSES_HEADERS
+    include/termin/render_passes/export.h
     include/termin/render_passes/termin_render_passes.h
     include/termin/render_passes/version.h
     include/termin/lighting/lighting_ubo.hpp
@@ -137,6 +138,7 @@ target_link_libraries(termin_render_passes PRIVATE
     termin_components_collision::termin_components_collision
 )
 target_compile_definitions(termin_render_passes PRIVATE
+    TERMIN_RENDER_PASSES_EXPORTS
     TERMIN_RENDER_EXPORTS
     TC_EXPORTS
 )
@@ -153,7 +155,6 @@ set_target_properties(termin_render_passes PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 termin_set_rpath_lib(termin_render_passes)
 

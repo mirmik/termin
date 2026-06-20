@@ -1,5 +1,6 @@
 #pragma once
 
+#include <termin/render_passes/export.h>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/vec3.hpp>
 
@@ -14,7 +15,7 @@ namespace termin {
  *
  * Coordinate convention: Y-forward, Z-up (same as main engine).
  */
-struct ShadowCameraParams {
+struct TERMIN_RENDER_PASSES_API ShadowCameraParams {
     Vec3 light_direction{0.0, 1.0, 0.0};  // Normalized direction from light into scene
     std::optional<std::array<float, 4>> ortho_bounds;  // (left, right, bottom, top)
     float ortho_size = 20.0f;  // Half-size of symmetric ortho box (fallback)
@@ -48,7 +49,7 @@ struct ShadowCameraParams {
  * @param params Shadow camera parameters
  * @return 4x4 view matrix
  */
-Mat44f build_shadow_view_matrix(const ShadowCameraParams& params);
+TERMIN_RENDER_PASSES_API Mat44f build_shadow_view_matrix(const ShadowCameraParams& params);
 
 /**
  * Compute the world-space eye position used by build_shadow_view_matrix().
@@ -56,7 +57,7 @@ Mat44f build_shadow_view_matrix(const ShadowCameraParams& params);
  * Direct GPU drawables that expand geometry in a vertex shader (billboard
  * lines, impostors) need the shadow camera eye in addition to view/projection.
  */
-Vec3 shadow_camera_position(const ShadowCameraParams& params);
+TERMIN_RENDER_PASSES_API Vec3 shadow_camera_position(const ShadowCameraParams& params);
 
 
 /**
@@ -68,7 +69,7 @@ Vec3 shadow_camera_position(const ShadowCameraParams& params);
  * @param params Shadow camera parameters
  * @return 4x4 projection matrix
  */
-Mat44f build_shadow_projection_matrix(const ShadowCameraParams& params);
+TERMIN_RENDER_PASSES_API Mat44f build_shadow_projection_matrix(const ShadowCameraParams& params);
 
 
 /**
@@ -79,7 +80,7 @@ Mat44f build_shadow_projection_matrix(const ShadowCameraParams& params);
  * @param params Shadow camera parameters
  * @return 4x4 light space matrix
  */
-Mat44f compute_light_space_matrix(const ShadowCameraParams& params);
+TERMIN_RENDER_PASSES_API Mat44f compute_light_space_matrix(const ShadowCameraParams& params);
 
 
 /**
@@ -92,7 +93,7 @@ Mat44f compute_light_space_matrix(const ShadowCameraParams& params);
  * @param projection_matrix 4x4 projection matrix
  * @return 8 corners in world space
  */
-std::array<Vec3, 8> compute_frustum_corners(
+TERMIN_RENDER_PASSES_API std::array<Vec3, 8> compute_frustum_corners(
     const Mat44f& view_matrix,
     const Mat44f& projection_matrix
 );
@@ -117,7 +118,7 @@ std::array<Vec3, 8> compute_frustum_corners(
  * @param caster_offset Distance behind camera for shadow casters
  * @return Fitted shadow camera parameters
  */
-ShadowCameraParams fit_shadow_frustum_to_camera(
+TERMIN_RENDER_PASSES_API ShadowCameraParams fit_shadow_frustum_to_camera(
     const Mat44f& view_matrix,
     const Mat44f& projection_matrix,
     const Vec3& light_direction,
@@ -133,7 +134,7 @@ ShadowCameraParams fit_shadow_frustum_to_camera(
  *
  * Used for transforming frustum corners to light space before AABB computation.
  */
-Mat44f build_light_rotation_matrix(const Vec3& light_direction);
+TERMIN_RENDER_PASSES_API Mat44f build_light_rotation_matrix(const Vec3& light_direction);
 
 
 /**
@@ -150,7 +151,7 @@ Mat44f build_light_rotation_matrix(const Vec3& light_direction);
  * @param lambda Blend factor (0=linear, 1=log)
  * @return Vector of split distances [near, split1, split2, ..., far]
  */
-std::vector<float> compute_cascade_splits(
+TERMIN_RENDER_PASSES_API std::vector<float> compute_cascade_splits(
     float near,
     float far,
     int cascade_count,
@@ -175,7 +176,7 @@ std::vector<float> compute_cascade_splits(
  * @param caster_offset Distance behind cascade for shadow casters
  * @return Fitted shadow camera parameters for this cascade
  */
-ShadowCameraParams fit_shadow_frustum_for_cascade(
+TERMIN_RENDER_PASSES_API ShadowCameraParams fit_shadow_frustum_for_cascade(
     const Mat44f& view_matrix,
     const Mat44f& projection_matrix,
     float camera_near,

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from termin_assets import AssetContext, PreLoadResult, set_resource_manager_factory
 from termin.default_assets.ui.asset import UIAsset
 from termin.default_assets.ui.asset_plugin import create_import_plugin, create_runtime_plugin
@@ -41,7 +43,7 @@ def test_ui_runtime_plugin_registers_lazy_asset() -> None:
     asset = resource_manager.get_runtime_asset("ui", "main")
     assert isinstance(asset, UIAsset)
     assert asset.uuid == "ui-uuid"
-    assert str(asset.source_path) == "/tmp/main.uiscript"
+    assert asset.source_path == Path("/tmp/main.uiscript")
     assert not asset.is_loaded
 
 

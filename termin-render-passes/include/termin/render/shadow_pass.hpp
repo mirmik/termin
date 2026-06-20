@@ -7,6 +7,7 @@
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
+#include "termin/render_passes/export.h"
 #include "termin/lighting/shadow.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
@@ -29,7 +30,7 @@ extern "C" {
 namespace termin {
 
 // Draw call for shadow pass (defined before ShadowPass class)
-struct ShadowDrawCall {
+struct TERMIN_RENDER_PASSES_API ShadowDrawCall {
     Entity entity;
     tc_component* component = nullptr;
     tc_material_phase* phase = nullptr;
@@ -50,7 +51,7 @@ struct ShadowDrawCall {
 };
 
 // Result of shadow map rendering for one light (or cascade)
-struct ShadowMapResult {
+struct TERMIN_RENDER_PASSES_API ShadowMapResult {
     tgfx::TextureHandle depth_tex2;
     int width = 0;
     int height = 0;
@@ -83,7 +84,7 @@ struct ShadowMapResult {
  *
  * Returns list of ShadowMapResult for use by ColorPass.
  */
-class ShadowPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API ShadowPass : public CxxFramePass {
 public:
     // Pass configuration
     std::string output_res = "shadow_maps";

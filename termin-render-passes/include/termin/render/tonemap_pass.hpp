@@ -2,6 +2,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
+#include "termin/render_passes/export.h"
 #include "tgfx2/handles.hpp"
 #include "tc_inspect_cpp.hpp"
 extern "C" {
@@ -25,7 +26,7 @@ enum class TonemapMethod : int {
 // UBO for parameters via bind_uniform_buffer, input texture via
 // bind_sampled_texture. No raw GL calls. Legacy tgfx1 dual-path
 // removed in Stage 8.1.
-class TonemapPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API TonemapPass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "color";
