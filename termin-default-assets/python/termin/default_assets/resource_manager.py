@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from termin_assets import AssetRuntimeManager
 
 from termin.default_assets.resource_api import DefaultAssetResourceMixin
+from termin.default_assets.resource_accessors import DefaultResourceAccessorsMixin
 from termin.default_assets.resource_components import DefaultComponentsMixin
 from termin.default_assets.resource_registries import DefaultAssetRegistryFactoryMixin
 from termin.default_assets.resource_serialization import DefaultSerializationMixin
@@ -173,6 +174,7 @@ class DefaultResourceManager(
     DefaultResourceManagerBase,
     DefaultAssetResourceMixin,
     DefaultComponentsMixin,
+    DefaultResourceAccessorsMixin,
     DefaultSerializationMixin,
 ):
     """Default asset runtime manager without editor-specific extensions."""
