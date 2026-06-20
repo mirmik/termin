@@ -395,8 +395,8 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
         if asset.is_loaded and asset.data:
             grid = asset.data
             extra.append(f"Cell size:    {grid.cell_size}")
-            extra.append(f"Voxel count:  {grid.voxel_count()}")
-            extra.append(f"Origin:       ({grid.origin.x:.2f}, {grid.origin.y:.2f}, {grid.origin.z:.2f})")
+            extra.append(f"Voxel count:  {grid.voxel_count}")
+            extra.append(f"Origin:       ({grid.origin[0]:.2f}, {grid.origin[1]:.2f}, {grid.origin[2]:.2f})")
         _show_asset_details(name, asset, extra)
 
     def _show_navmesh_details(name: str):

@@ -26,6 +26,7 @@ def __getattr__(name: str):
         "TcVoxelGrid",
         "VoxelGridHandle",
         "declare_voxel_grid_asset",
+        "set_voxel_grid_asset_data",
         "set_voxel_grid_asset_metadata",
     ):
         try:
@@ -33,6 +34,7 @@ def __getattr__(name: str):
                 TcVoxelGrid,
                 VoxelGridHandle,
                 declare_voxel_grid_asset,
+                set_voxel_grid_asset_data,
                 set_voxel_grid_asset_metadata,
             )
         except ImportError as exc:
@@ -43,6 +45,7 @@ def __getattr__(name: str):
             "TcVoxelGrid": TcVoxelGrid,
             "VoxelGridHandle": VoxelGridHandle,
             "declare_voxel_grid_asset": declare_voxel_grid_asset,
+            "set_voxel_grid_asset_data": set_voxel_grid_asset_data,
             "set_voxel_grid_asset_metadata": set_voxel_grid_asset_metadata,
         }
         globals().update(exports)
@@ -109,5 +112,6 @@ __all__ = [
     "VOXEL_FILE_EXTENSION",
     "voxel_display_shader",
     "declare_voxel_grid_asset",
+    "set_voxel_grid_asset_data",
     "set_voxel_grid_asset_metadata",
 ]

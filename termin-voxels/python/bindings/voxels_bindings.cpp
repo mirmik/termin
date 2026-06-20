@@ -65,6 +65,125 @@ nb::dict surface_normals_to_dict(const std::unordered_map<VoxelKey, std::vector<
     return result;
 }
 
+void serialize_surface_normals(nb::dict& result, const VoxelGrid& grid) {
+    const auto& normals = grid.surface_normals();
+    if (normals.empty()) {
+        return;
+    }
+    nb::dict normals_dict;
+    for (const auto& [key, normal_list] : normals) {
+        int vx = std::get<0>(key);
+        int vy = std::get<1>(key);
+        int vz = std::get<2>(key);
+        std::string key_str = std::to_string(vx) + "," + std::to_string(vy) + "," + std::to_string(vz);
+        nb::list py_normals;
+        for (const auto& normal : normal_list) {
+            py_normals.append(nb::make_tuple(normal.x, normal.y, normal.z));
+        }
+        normals_dict[nb::str(key_str.c_str())] = py_normals;
+    }
+    result["surface_normals"] = normals_dict;
+}
+
+Vec3 vec3_from_sequence(nb::handle value) {
+    nb::sequence seq = nb::cast<nb::sequence>(value);
+    return Vec3(
+        nb::cast<double>(seq[0]),
+        nb::cast<double>(seq[1]),
+        nb::cast<double>(seq[2])
+    );
+}
+
+void deserialize_surface_normals(VoxelGrid& grid, const nb::dict& data) {
+    if (!data.contains("surface_normals")) {
+        return;
+    }
+    nb::dict normals_dict = nb::cast<nb::dict>(data["surface_normals"]);
+    for (auto item : normals_dict) {
+        std::string key_str = nb::cast<std::string>(item.first);
+        size_t pos1 = key_str.find(',');
+        size_t pos2 = key_str.find(',', pos1 + 1);
+        if (pos1 == std::string::npos || pos2 == std::string::npos) {
+            continue;
+        }
+        int vx = std::stoi(key_str.substr(0, pos1));
+        int vy = std::stoi(key_str.substr(pos1 + 1, pos2 - pos1 - 1));
+        int vz = std::stoi(key_str.substr(pos2 + 1));
+
+        nb::sequence normal_data = nb::cast<nb::sequence>(item.second);
+        std::vector<Vec3> normals;
+        if (nb::len(normal_data) == 3 && !nb::isinstance<nb::sequence>(normal_data[0])) {
+            normals.push_back(vec3_from_sequence(item.second));
+        } else {
+            for (nb::handle normal : normal_data) {
+                normals.push_back(vec3_from_sequence(normal));
+            }
+        }
+        grid.set_surface_normals(vx, vy, vz, normals);
+    }
+}
+
+VoxelGrid voxel_grid_from_dict(const nb::dict& data) {
+    Vec3 origin = Vec3::zero();
+    if (data.contains("origin")) {
+        origin = vec3_from_sequence(data["origin"]);
+    }
+    double cell_size = data.contains("cell_size") ? nb::cast<double>(data["cell_size"]) : 0.25;
+    std::string name = data.contains("name") ? nb::cast<std::string>(data["name"]) : "";
+    std::string source_path = data.contains("path") ? nb::cast<std::string>(data["path"]) : "";
+
+    VoxelGrid grid(cell_size, origin, name, source_path);
+
+    if (data.contains("chunks")) {
+        nb::dict chunks_dict = nb::cast<nb::dict>(data["chunks"]);
+        nb::module_ gzip = nb::module_::import_("gzip");
+        nb::module_ base64 = nb::module_::import_("base64");
+
+        for (auto item : chunks_dict) {
+            std::string key_str = nb::cast<std::string>(item.first);
+            nb::dict chunk_data = nb::cast<nb::dict>(item.second);
+
+            size_t pos1 = key_str.find(',');
+            size_t pos2 = key_str.find(',', pos1 + 1);
+            if (pos1 == std::string::npos || pos2 == std::string::npos) {
+                continue;
+            }
+            int cx = std::stoi(key_str.substr(0, pos1));
+            int cy = std::stoi(key_str.substr(pos1 + 1, pos2 - pos1 - 1));
+            int cz = std::stoi(key_str.substr(pos2 + 1));
+
+            nb::bytes compressed = nb::cast<nb::bytes>(base64.attr("b64decode")(chunk_data["data"]));
+            nb::bytes raw = nb::cast<nb::bytes>(gzip.attr("decompress")(compressed));
+            char* raw_data = nullptr;
+            Py_ssize_t raw_size = 0;
+            if (PyBytes_AsStringAndSize(raw.ptr(), &raw_data, &raw_size) != 0 || raw_data == nullptr) {
+                throw std::runtime_error("VoxelGrid.deserialize: expected bytes chunk payload");
+            }
+            if (raw_size < CHUNK_VOLUME) {
+                throw std::runtime_error("VoxelGrid.deserialize: chunk payload is shorter than CHUNK_VOLUME");
+            }
+
+            for (int z = 0; z < CHUNK_SIZE; z++) {
+                for (int y = 0; y < CHUNK_SIZE; y++) {
+                    for (int x = 0; x < CHUNK_SIZE; x++) {
+                        int idx = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE;
+                        uint8_t val = static_cast<uint8_t>(raw_data[idx]);
+                        if (val != VOXEL_EMPTY) {
+                            int vx = cx * CHUNK_SIZE + x;
+                            int vy = cy * CHUNK_SIZE + y;
+                            int vz = cz * CHUNK_SIZE + z;
+                            grid.set(vx, vy, vz, val);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    deserialize_surface_normals(grid, data);
+    return grid;
+}
+
 NB_MODULE(_voxels_native, m) {
     m.doc() = "Native C++ voxelization module";
 
@@ -99,7 +218,7 @@ NB_MODULE(_voxels_native, m) {
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<uint8_t*>(p); });
             size_t shape[3] = {CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE};
             return nb::ndarray<nb::numpy, uint8_t>(data, 3, shape, owner);
-        })
+        }, nb::rv_policy::move)
         .def("serialize", [](const VoxelChunk& c) {
             nb::module_ gzip = nb::module_::import_("gzip");
             nb::module_ base64 = nb::module_::import_("base64");
@@ -188,10 +307,10 @@ NB_MODULE(_voxels_native, m) {
             double* data = new double[3]{o.x, o.y, o.z};
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
             return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
-        })
+        }, nb::rv_policy::move)
         .def_prop_ro("surface_normals", [](const VoxelGrid& grid) {
             return surface_normals_to_dict(grid.surface_normals());
-        })
+        }, nb::rv_policy::move)
 
         // Voxel access
         .def("get", &VoxelGrid::get)
@@ -217,6 +336,14 @@ NB_MODULE(_voxels_native, m) {
             double* data = new double[3]{w.x, w.y, w.z};
             nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
             return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
+        })
+
+        .def("voxel_to_chunk", [](const VoxelGrid& grid, int vx, int vy, int vz) {
+            auto [chunk_key, local] = grid.voxel_to_chunk(vx, vy, vz);
+            return nb::make_tuple(
+                nb::make_tuple(std::get<0>(chunk_key), std::get<1>(chunk_key), std::get<2>(chunk_key)),
+                nb::make_tuple(std::get<0>(local), std::get<1>(local), std::get<2>(local))
+            );
         })
 
         // Chunk access
@@ -341,6 +468,7 @@ NB_MODULE(_voxels_native, m) {
             // Inline serialization
             nb::dict result;
             result["type"] = "inline";
+            result["name"] = grid.name();
             Vec3 o = grid.origin();
             result["origin"] = nb::make_tuple(o.x, o.y, o.z);
             result["cell_size"] = grid.cell_size();
@@ -366,11 +494,13 @@ NB_MODULE(_voxels_native, m) {
                 chunks_dict[nb::str(key_str.c_str())] = chunk_data;
             }
             result["chunks"] = chunks_dict;
+            serialize_surface_normals(result, grid);
             return result;
         })
         .def("direct_serialize", [](const VoxelGrid& grid) {
             nb::dict result;
             result["type"] = "inline";
+            result["name"] = grid.name();
             Vec3 o = grid.origin();
             result["origin"] = nb::make_tuple(o.x, o.y, o.z);
             result["cell_size"] = grid.cell_size();
@@ -395,110 +525,14 @@ NB_MODULE(_voxels_native, m) {
                 chunks_dict[nb::str(key_str.c_str())] = chunk_data;
             }
             result["chunks"] = chunks_dict;
+            serialize_surface_normals(result, grid);
             return result;
         })
         .def_static("deserialize", [](const nb::dict& data) {
-            nb::object origin_obj = data["origin"];
-            nb::tuple origin_tuple = nb::cast<nb::tuple>(origin_obj);
-            Vec3 origin(
-                nb::cast<double>(origin_tuple[0]),
-                nb::cast<double>(origin_tuple[1]),
-                nb::cast<double>(origin_tuple[2])
-            );
-            double cell_size = nb::cast<double>(data["cell_size"]);
-            std::string source_path = data.contains("path") ? nb::cast<std::string>(data["path"]) : "";
-
-            VoxelGrid grid(cell_size, origin, "", source_path);
-
-            if (data.contains("chunks")) {
-                nb::dict chunks_dict = nb::cast<nb::dict>(data["chunks"]);
-                nb::module_ gzip = nb::module_::import_("gzip");
-                nb::module_ base64 = nb::module_::import_("base64");
-
-                for (auto item : chunks_dict) {
-                    std::string key_str = nb::cast<std::string>(item.first);
-                    nb::dict chunk_data = nb::cast<nb::dict>(item.second);
-
-                    // Parse key "cx,cy,cz"
-                    size_t pos1 = key_str.find(',');
-                    size_t pos2 = key_str.find(',', pos1 + 1);
-                    int cx = std::stoi(key_str.substr(0, pos1));
-                    int cy = std::stoi(key_str.substr(pos1 + 1, pos2 - pos1 - 1));
-                    int cz = std::stoi(key_str.substr(pos2 + 1));
-
-                    // Deserialize chunk data
-                    nb::bytes compressed = nb::cast<nb::bytes>(base64.attr("b64decode")(chunk_data["data"]));
-                    nb::bytes raw = nb::cast<nb::bytes>(gzip.attr("decompress")(compressed));
-                    std::string raw_str = nb::cast<std::string>(raw);
-
-                    for (int z = 0; z < CHUNK_SIZE; z++) {
-                        for (int y = 0; y < CHUNK_SIZE; y++) {
-                            for (int x = 0; x < CHUNK_SIZE; x++) {
-                                int idx = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE;
-                                uint8_t val = static_cast<uint8_t>(raw_str[idx]);
-                                if (val != VOXEL_EMPTY) {
-                                    int vx = cx * CHUNK_SIZE + x;
-                                    int vy = cy * CHUNK_SIZE + y;
-                                    int vz = cz * CHUNK_SIZE + z;
-                                    grid.set(vx, vy, vz, val);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return grid;
+            return voxel_grid_from_dict(data);
         })
         .def_static("direct_deserialize", [](const nb::dict& data) {
-            // Same as deserialize
-            nb::object origin_obj = data["origin"];
-            nb::tuple origin_tuple = nb::cast<nb::tuple>(origin_obj);
-            Vec3 origin(
-                nb::cast<double>(origin_tuple[0]),
-                nb::cast<double>(origin_tuple[1]),
-                nb::cast<double>(origin_tuple[2])
-            );
-            double cell_size = nb::cast<double>(data["cell_size"]);
-            std::string source_path = data.contains("path") ? nb::cast<std::string>(data["path"]) : "";
-
-            VoxelGrid grid(cell_size, origin, "", source_path);
-
-            if (data.contains("chunks")) {
-                nb::dict chunks_dict = nb::cast<nb::dict>(data["chunks"]);
-                nb::module_ gzip = nb::module_::import_("gzip");
-                nb::module_ base64 = nb::module_::import_("base64");
-
-                for (auto item : chunks_dict) {
-                    std::string key_str = nb::cast<std::string>(item.first);
-                    nb::dict chunk_data = nb::cast<nb::dict>(item.second);
-
-                    size_t pos1 = key_str.find(',');
-                    size_t pos2 = key_str.find(',', pos1 + 1);
-                    int cx = std::stoi(key_str.substr(0, pos1));
-                    int cy = std::stoi(key_str.substr(pos1 + 1, pos2 - pos1 - 1));
-                    int cz = std::stoi(key_str.substr(pos2 + 1));
-
-                    nb::bytes compressed = nb::cast<nb::bytes>(base64.attr("b64decode")(chunk_data["data"]));
-                    nb::bytes raw = nb::cast<nb::bytes>(gzip.attr("decompress")(compressed));
-                    std::string raw_str = nb::cast<std::string>(raw);
-
-                    for (int z = 0; z < CHUNK_SIZE; z++) {
-                        for (int y = 0; y < CHUNK_SIZE; y++) {
-                            for (int x = 0; x < CHUNK_SIZE; x++) {
-                                int idx = x + y * CHUNK_SIZE + z * CHUNK_SIZE * CHUNK_SIZE;
-                                uint8_t val = static_cast<uint8_t>(raw_str[idx]);
-                                if (val != VOXEL_EMPTY) {
-                                    int vx = cx * CHUNK_SIZE + x;
-                                    int vy = cy * CHUNK_SIZE + y;
-                                    int vz = cz * CHUNK_SIZE + z;
-                                    grid.set(vx, vy, vz, val);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return grid;
+            return voxel_grid_from_dict(data);
         });
 
     // ========== TcVoxelGrid ==========
@@ -513,15 +547,37 @@ NB_MODULE(_voxels_native, m) {
         .def_prop_ro("name", [](const TcVoxelGrid& self) { return std::string(self.name()); })
         .def_prop_ro("source_path", [](const TcVoxelGrid& self) { return std::string(self.source_path()); })
         .def_prop_ro("version", &TcVoxelGrid::version)
+        .def_prop_ro("grid", [](const TcVoxelGrid& self) -> nb::object {
+            VoxelGrid* grid = self.grid();
+            if (!grid) {
+                return nb::none();
+            }
+            return nb::cast(grid, nb::rv_policy::reference);
+        })
         .def("ensure_loaded", &TcVoxelGrid::ensure_loaded)
+        .def("set_grid", &TcVoxelGrid::set_grid, nb::arg("grid"))
         .def("serialize", [](const TcVoxelGrid& self) {
             nb::dict result;
             if (self.is_valid()) {
                 result["uuid"] = std::string(self.uuid());
                 result["name"] = std::string(self.name());
+                std::string path = std::string(self.source_path());
+                result["type"] = path.empty() ? "uuid" : "path";
+                if (!path.empty()) {
+                    result["path"] = path;
+                }
             }
             return result;
-        });
+        })
+        .def_static("deserialize", [](const nb::dict& data) {
+            if (data.contains("uuid")) {
+                return TcVoxelGrid::from_uuid(nb::cast<std::string>(data["uuid"]));
+            }
+            if (data.contains("name")) {
+                return TcVoxelGrid::from_name(nb::cast<std::string>(data["name"]));
+            }
+            return TcVoxelGrid();
+        }, nb::arg("data"));
 
     m.def("declare_voxel_grid_asset", [](const std::string& uuid, const std::string& name) {
         TcVoxelGrid grid = TcVoxelGrid::declare(uuid, name);
@@ -542,53 +598,66 @@ NB_MODULE(_voxels_native, m) {
           },
           nb::arg("uuid"), nb::arg("name") = "", nb::arg("source_path") = "");
 
-    // ========== VoxelGridHandle ==========
-    nb::class_<VoxelGridHandle>(m, "VoxelGridHandle")
-        .def(nb::init<>())
-        .def("__init__", [](VoxelGridHandle* self, nb::object asset) {
-            new (self) VoxelGridHandle(VoxelGridHandle::from_asset(asset));
-        }, nb::arg("asset"))
-        .def_static("from_name", &VoxelGridHandle::from_name, nb::arg("name"))
-        .def_static("from_asset", &VoxelGridHandle::from_asset, nb::arg("asset"))
-        .def_static("from_uuid", &VoxelGridHandle::from_uuid, nb::arg("uuid"))
-        .def_static("deserialize", &VoxelGridHandle::deserialize, nb::arg("data"))
-        .def_rw("asset", &VoxelGridHandle::asset)
-        .def_rw("native", &VoxelGridHandle::native)
-        .def_prop_ro("is_valid", &VoxelGridHandle::is_valid)
-        .def_prop_ro("name", &VoxelGridHandle::name)
-        .def_prop_ro("grid", &VoxelGridHandle::grid)
-        .def_prop_ro("version", &VoxelGridHandle::version)
-        .def("get", &VoxelGridHandle::get)
-        .def("get_grid", &VoxelGridHandle::get)
-        .def("get_grid_or_none", &VoxelGridHandle::get)
-        .def("get_asset", [](const VoxelGridHandle& self) { return self.asset; })
-        .def("serialize", &VoxelGridHandle::serialize);
+    m.def("set_voxel_grid_asset_data",
+          [](const std::string& uuid,
+             const std::string& name,
+             const std::string& source_path,
+             const VoxelGrid& payload) {
+              TcVoxelGrid grid = TcVoxelGrid::declare(uuid, name);
+              tc_voxel_grid* raw = grid.get();
+              if (!raw) {
+                  return false;
+              }
+              tc_voxel_grid_set_metadata(
+                  raw,
+                  name.empty() ? nullptr : name.c_str(),
+                  source_path.empty() ? nullptr : source_path.c_str());
+              return grid.set_grid(payload);
+          },
+          nb::arg("uuid"), nb::arg("name"), nb::arg("source_path"), nb::arg("payload"));
 
-    // Register kind handler for voxel_grid_handle
-    // C++ handler for C++ fields
-    tc::register_cpp_handle_kind<VoxelGridHandle>("voxel_grid_handle");
+    m.attr("VoxelGridHandle") = m.attr("TcVoxelGrid");
+
+    // Register kind handler for voxel_grid_handle.
+    // The legacy kind name is kept for scene compatibility; the value type is TcVoxelGrid.
+    tc::register_cpp_handle_kind<TcVoxelGrid>("voxel_grid_handle");
 
     // Python handler for Python fields
     tc::KindRegistry::instance().register_python(
         "voxel_grid_handle",
         // serialize
         nb::cpp_function([](nb::object obj) -> nb::object {
-            VoxelGridHandle handle = nb::cast<VoxelGridHandle>(obj);
-            return handle.serialize();
+            TcVoxelGrid handle = nb::cast<TcVoxelGrid>(obj);
+            nb::dict result;
+            if (handle.is_valid()) {
+                result["uuid"] = std::string(handle.uuid());
+                result["name"] = std::string(handle.name());
+                std::string path = std::string(handle.source_path());
+                result["type"] = path.empty() ? "uuid" : "path";
+                if (!path.empty()) {
+                    result["path"] = path;
+                }
+            }
+            return result;
         }),
         // deserialize
         nb::cpp_function([](nb::object data) -> nb::object {
             // Handle UUID string
             if (nb::isinstance<nb::str>(data)) {
-                return nb::cast(VoxelGridHandle::from_uuid(nb::cast<std::string>(data)));
+                return nb::cast(TcVoxelGrid::from_uuid(nb::cast<std::string>(data)));
             }
 
             // Handle dict format
             if (nb::isinstance<nb::dict>(data)) {
                 nb::dict d = nb::cast<nb::dict>(data);
-                return nb::cast(VoxelGridHandle::deserialize(d));
+                if (d.contains("uuid")) {
+                    return nb::cast(TcVoxelGrid::from_uuid(nb::cast<std::string>(d["uuid"])));
+                }
+                if (d.contains("name")) {
+                    return nb::cast(TcVoxelGrid::from_name(nb::cast<std::string>(d["name"])));
+                }
             }
-            return nb::cast(VoxelGridHandle());
+            return nb::cast(TcVoxelGrid());
         })
     );
 

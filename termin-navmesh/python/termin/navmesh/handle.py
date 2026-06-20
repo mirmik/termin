@@ -1,8 +1,9 @@
-"""Compatibility re-export for navmesh handles.
+"""Compatibility import path for the canonical navmesh runtime resource."""
 
-Canonical module: :mod:`termin.default_assets.navmesh.handle`.
-"""
+from __future__ import annotations
 
-from termin.default_assets.navmesh.handle import NavMeshHandle
+from termin.navmesh._navmesh_native import TcNavMesh
+
+NavMeshHandle = TcNavMesh
 
 __all__ = ["NavMeshHandle"]

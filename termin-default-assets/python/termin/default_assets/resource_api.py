@@ -24,12 +24,14 @@ if TYPE_CHECKING:
     from termin.glb.asset import GLBAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.materials import TcMaterial as Material
+    from termin.navmesh._navmesh_native import TcNavMesh
     from termin.navmesh.types import NavMesh
     from termin.prefab.asset import PrefabAsset
     from termin.render.texture import Texture
     from termin.render.texture_handle import TextureHandle
     from termin.scene import Entity, GeneralTransform3
     from termin.render_framework import RenderPipeline
+    from termin.voxels._voxels_native import TcVoxelGrid
     from termin.voxels.grid import VoxelGrid
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
@@ -335,18 +337,19 @@ class DefaultAssetResourceMixin:
     def register_voxel_grid(self, name: str, grid: "VoxelGrid", source_path: str | None = None) -> None:
         """Register voxel grid."""
         from termin.default_assets.voxels.asset import VoxelGridAsset
+        from termin.voxels._voxels_native import TcVoxelGrid
 
         grid.name = name
         existing_asset = self._voxel_grid_registry.get_asset(name)
         if existing_asset is not None:
             existing_asset.data = grid
-            self.voxel_grids[name] = grid
+            self.voxel_grids[name] = TcVoxelGrid.from_uuid(existing_asset.uuid)
             return
         asset = VoxelGridAsset.from_grid(grid, name=name, source_path=source_path)
         self._voxel_grid_registry.register(name, asset, source_path)
-        self.voxel_grids[name] = grid
+        self.voxel_grids[name] = TcVoxelGrid.from_uuid(asset.uuid)
 
-    def get_voxel_grid(self, name: str) -> Optional["VoxelGrid"]:
+    def get_voxel_grid(self, name: str) -> Optional["TcVoxelGrid"]:
         """Get voxel grid by name (lazy loading)."""
         grid = self.voxel_grids.get(name)
         if grid is not None:
@@ -359,13 +362,13 @@ class DefaultAssetResourceMixin:
     def list_voxel_grid_names(self) -> list[str]:
         return self._voxel_grid_registry.list_names()
 
-    def find_voxel_grid_name(self, grid: "VoxelGrid") -> Optional[str]:
+    def find_voxel_grid_name(self, grid: "TcVoxelGrid") -> Optional[str]:
         return self._voxel_grid_registry.find_name(grid)
 
-    def find_voxel_grid_uuid(self, grid: "VoxelGrid") -> Optional[str]:
+    def find_voxel_grid_uuid(self, grid: "TcVoxelGrid") -> Optional[str]:
         return self._voxel_grid_registry.find_uuid(grid)
 
-    def get_voxel_grid_by_uuid(self, uuid: str) -> Optional["VoxelGrid"]:
+    def get_voxel_grid_by_uuid(self, uuid: str) -> Optional["TcVoxelGrid"]:
         grid = self._voxel_grid_registry.get_by_uuid(uuid)
         if grid is not None:
             asset = self._voxel_grid_registry.get_asset_by_uuid(uuid)
@@ -387,13 +390,14 @@ class DefaultAssetResourceMixin:
 
     def register_navmesh(self, name: str, navmesh: "NavMesh", source_path: str | None = None) -> None:
         from termin.default_assets.navmesh.asset import NavMeshAsset
+        from termin.navmesh._navmesh_native import TcNavMesh
 
         navmesh.name = name
         asset = NavMeshAsset.from_navmesh(navmesh, name=name, source_path=source_path)
         self._navmesh_registry.register(name, asset, source_path)
-        self.navmeshes[name] = navmesh
+        self.navmeshes[name] = TcNavMesh.from_uuid(asset.uuid)
 
-    def get_navmesh(self, name: str) -> Optional["NavMesh"]:
+    def get_navmesh(self, name: str) -> Optional["TcNavMesh"]:
         navmesh = self.navmeshes.get(name)
         if navmesh is not None:
             return navmesh
@@ -405,13 +409,13 @@ class DefaultAssetResourceMixin:
     def list_navmesh_names(self) -> list[str]:
         return self._navmesh_registry.list_names()
 
-    def find_navmesh_name(self, navmesh: "NavMesh") -> Optional[str]:
+    def find_navmesh_name(self, navmesh: "TcNavMesh") -> Optional[str]:
         return self._navmesh_registry.find_name(navmesh)
 
-    def find_navmesh_uuid(self, navmesh: "NavMesh") -> Optional[str]:
+    def find_navmesh_uuid(self, navmesh: "TcNavMesh") -> Optional[str]:
         return self._navmesh_registry.find_uuid(navmesh)
 
-    def get_navmesh_by_uuid(self, uuid: str) -> Optional["NavMesh"]:
+    def get_navmesh_by_uuid(self, uuid: str) -> Optional["TcNavMesh"]:
         navmesh = self._navmesh_registry.get_by_uuid(uuid)
         if navmesh is not None:
             asset = self._navmesh_registry.get_asset_by_uuid(uuid)

@@ -82,7 +82,9 @@ class NavMeshRuntimePlugin:
         asset.reload()
 
         if asset.navmesh is not None:
-            rm.navmeshes[name] = asset.navmesh
+            from termin.navmesh._navmesh_native import TcNavMesh
+
+            rm.navmeshes[name] = TcNavMesh.from_uuid(asset.uuid)
 
 
 class NavMeshAssetPlugin(NavMeshImportPlugin, NavMeshRuntimePlugin):

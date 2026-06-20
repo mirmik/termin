@@ -160,15 +160,16 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_voxel_grid_registry(self):
         """Create AssetRegistry for voxel grids."""
         from termin_assets import AssetRegistry
+        from termin.voxels._voxels_native import TcVoxelGrid
 
         def data_from_asset(asset):
-            if asset.grid is None:
-                asset.ensure_loaded()
-            return asset.grid
+            return TcVoxelGrid.from_uuid(asset.uuid)
 
-        def data_to_asset(data):
+        def data_to_asset(data: TcVoxelGrid):
+            if not isinstance(data, TcVoxelGrid) or not data.is_valid:
+                return None
             for asset in self._voxel_grid_registry.assets.values():
-                if asset.grid is data:
+                if asset.uuid == data.uuid:
                     return asset
             return None
 
@@ -186,15 +187,16 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_navmesh_registry(self):
         """Create AssetRegistry for navmeshes."""
         from termin_assets import AssetRegistry
+        from termin.navmesh._navmesh_native import TcNavMesh
 
         def data_from_asset(asset):
-            if asset.navmesh is None:
-                asset.ensure_loaded()
-            return asset.navmesh
+            return TcNavMesh.from_uuid(asset.uuid)
 
-        def data_to_asset(data):
+        def data_to_asset(data: TcNavMesh):
+            if not isinstance(data, TcNavMesh) or not data.is_valid:
+                return None
             for asset in self._navmesh_registry.assets.values():
-                if asset.navmesh is data:
+                if asset.uuid == data.uuid:
                     return asset
             return None
 

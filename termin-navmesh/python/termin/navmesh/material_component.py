@@ -13,7 +13,7 @@ import numpy as np
 
 from termin.render import DrawableComponent
 from termin.mesh import TcMesh
-from termin.navmesh.handle import NavMeshHandle
+from termin.navmesh._navmesh_native import TcNavMesh
 from termin._native.render import TcMaterial
 from termin.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField
@@ -29,7 +29,7 @@ class NavMeshMaterialComponent(DrawableComponent):
     Component for rendering NavMesh with a material.
 
     Implements Drawable protocol - renders NavMesh geometry using selected material.
-    Supports hot-reload via NavMeshHandle.
+    Supports hot-reload via TcNavMesh.
     """
 
     inspect_fields = {
@@ -46,14 +46,15 @@ class NavMeshMaterialComponent(DrawableComponent):
         material_name: str = "",
     ) -> None:
         super().__init__()
-        self.navmesh: NavMeshHandle = NavMeshHandle()
+        self.navmesh: TcNavMesh = TcNavMesh()
         self._material: TcMaterial | None = None
         self._last_navmesh: Optional["NavMesh"] = None
+        self._last_navmesh_version: int = -1
         self._mesh: Optional[TcMesh] = None
         self._needs_rebuild = True
 
         if navmesh_name:
-            self.navmesh = NavMeshHandle.from_name(navmesh_name)
+            self.navmesh = TcNavMesh.from_name(navmesh_name)
         if material_name:
             self.set_material_by_name(material_name)
 
@@ -107,9 +108,10 @@ class NavMeshMaterialComponent(DrawableComponent):
 
     def _check_hot_reload(self) -> None:
         """Check if navmesh changed (hot-reload)."""
-        current = self.navmesh.get_navmesh()
-        if self._needs_rebuild or current is not self._last_navmesh:
+        current_version = self.navmesh.version
+        if self._needs_rebuild or current_version != self._last_navmesh_version:
             self._needs_rebuild = False
+            self._last_navmesh_version = current_version
             self._rebuild_mesh()
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
@@ -136,7 +138,7 @@ class NavMeshMaterialComponent(DrawableComponent):
         """Rebuild mesh from NavMesh."""
         self._mesh = None
 
-        navmesh = self.navmesh.get_navmesh()
+        navmesh = self._get_navmesh_payload()
         self._last_navmesh = navmesh
 
         if navmesh is None or navmesh.polygon_count() == 0:
@@ -180,6 +182,26 @@ class NavMeshMaterialComponent(DrawableComponent):
                 vertex_normals=normals,
                 name="navmesh_material",
             )
+
+    def _get_navmesh_payload(self) -> "NavMesh | None":
+        """Resolve legacy polygon payload for the selected canonical TcNavMesh."""
+        if not self.navmesh.is_valid:
+            return None
+        self.navmesh.ensure_loaded()
+        from termin_assets import get_resource_manager
+        from tcbase import log
+
+        rm = get_resource_manager()
+        if rm is None:
+            log.error("[NavMeshMaterialComponent] Resource manager is not configured")
+            return None
+        asset = rm.get_navmesh_asset_by_uuid(self.navmesh.uuid)
+        if asset is None and self.navmesh.name:
+            asset = rm.get_navmesh_asset(self.navmesh.name)
+        if asset is None:
+            log.error(f"[NavMeshMaterialComponent] NavMesh asset not found: {self.navmesh.uuid}")
+            return None
+        return asset.navmesh
 
     def invalidate(self) -> None:
         """Force mesh rebuild on next frame."""

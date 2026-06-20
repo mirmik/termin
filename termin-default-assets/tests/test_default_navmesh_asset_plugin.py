@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from termin_assets import AssetTypeRegistry, set_resource_manager_factory
+from termin_assets import AssetTypeRegistry
 from termin.default_assets.navmesh.asset import NavMeshAsset
 from termin.default_assets.navmesh.asset_plugin import (
     create_import_plugin,
@@ -23,7 +23,7 @@ def test_navmesh_asset_wraps_navmesh() -> None:
     assert asset.source_path == Path("/tmp/source.navmesh")
 
 
-def test_navmesh_handle_uses_configured_resource_manager_factory() -> None:
+def test_navmesh_handle_aliases_canonical_tc_navmesh() -> None:
     navmesh = NavMesh(name="factory_navmesh")
     asset = NavMeshAsset.from_navmesh(
         navmesh,
@@ -31,26 +31,14 @@ def test_navmesh_handle_uses_configured_resource_manager_factory() -> None:
         source_path="/tmp/factory.navmesh",
     )
 
-    class FakeResourceManager:
-        def get_navmesh_asset(self, name: str):
-            return asset if name == asset.name else None
+    by_name = NavMeshHandle.from_name("factory_navmesh")
+    by_uuid = NavMeshHandle.from_uuid(asset.uuid)
 
-        def get_navmesh_asset_by_uuid(self, uuid: str):
-            return asset if uuid == asset.uuid else None
-
-    set_resource_manager_factory(FakeResourceManager)
-    try:
-        by_name = NavMeshHandle.from_name("factory_navmesh")
-        by_uuid = NavMeshHandle.from_uuid(asset.uuid)
-    finally:
-        set_resource_manager_factory(None)
-
-    assert by_name.asset is asset
-    assert by_name.navmesh is navmesh
-    assert by_uuid.asset is asset
-    assert by_uuid.navmesh is navmesh
-    assert by_name.native.is_valid
-    assert by_name.native.uuid == asset.uuid
+    assert NavMeshHandle is TcNavMesh
+    assert by_name.is_valid
+    assert by_uuid.is_valid
+    assert by_name.uuid == asset.uuid
+    assert by_uuid.uuid == asset.uuid
     assert TcNavMesh.from_name("factory_navmesh").uuid == asset.uuid
 
 
@@ -62,11 +50,9 @@ def test_navmesh_asset_declares_core_runtime_resource() -> None:
         source_path="/tmp/declared.navmesh",
     )
 
-    handle = NavMeshHandle.from_asset(asset)
     by_uuid = TcNavMesh.from_uuid(asset.uuid)
     by_name = TcNavMesh.from_name("declared_navmesh")
 
-    assert handle.native.is_valid
     assert by_uuid.is_valid
     assert by_name.is_valid
     assert by_uuid.uuid == asset.uuid
