@@ -183,8 +183,8 @@ Status 2026-06-20: the default typed runtime facade moved below the app layer.
 canonical manager for the standard SDK asset set, and default handle selector
 logic lives in `termin.default_assets.resource_accessors` /
 `termin.default_assets.handle_accessors`. `termin.assets.resources` remains as
-an app-specific extension/compatibility path for visualization additions,
-material fallback behavior, and old imports.
+an app-specific extension/compatibility path for editor resource-manager policy
+and old imports.
 
 Status 2026-06-20: lower/runtime imports were cut away from the app
 `ResourceManager`. `termin-components-render` native material assignment and

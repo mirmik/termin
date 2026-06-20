@@ -136,6 +136,7 @@ def test_dead_visualization_legacy_paths_are_removed() -> None:
         "termin.visualization.render.materials.pick_material",
         "termin.visualization.render.materials.simple",
         "termin.visualization.render.materials.grid_material",
+        "termin.visualization.render.materials.unknown_material",
         "termin.visualization.render.materials.shadow_material",
         "termin.visualization.render.materials.depth_material",
     ]
