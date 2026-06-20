@@ -1,51 +1,16 @@
-"""Material helper presets.
+"""Material fallback helpers.
 
-All material classes now return TcMaterial instances.
-Use the create_* factory functions for explicit material creation.
+Legacy preset material helpers were removed after their internal consumers moved
+to shader/catalog driven materials. ``UnknownMaterial`` remains app-owned
+because the editor ResourceManager uses it for missing material visualization.
 """
 
-from termin.visualization.render.materials.pick_material import (
-    PickMaterial,
-    create_pick_material,
-)
-from termin.visualization.render.materials.simple import (
-    ColorMaterial,
-    UnlitMaterial,
-    create_color_material,
-    create_unlit_material,
-)
-from termin.visualization.render.materials.grid_material import (
-    GridMaterial,
-    create_grid_material,
-)
 from termin.visualization.render.materials.unknown_material import (
     UnknownMaterial,
     create_unknown_material,
 )
-from termin.visualization.render.materials.shadow_material import (
-    ShadowMaterial,
-    create_shadow_material,
-)
-from termin.visualization.render.materials.depth_material import (
-    DepthMaterial,
-    create_depth_material,
-)
 
 __all__ = [
-    # Material classes (return TcMaterial)
-    "PickMaterial",
-    "ColorMaterial",
-    "UnlitMaterial",
-    "GridMaterial",
     "UnknownMaterial",
-    "ShadowMaterial",
-    "DepthMaterial",
-    # Factory functions
-    "create_pick_material",
-    "create_color_material",
-    "create_unlit_material",
-    "create_grid_material",
     "create_unknown_material",
-    "create_shadow_material",
-    "create_depth_material",
 ]
