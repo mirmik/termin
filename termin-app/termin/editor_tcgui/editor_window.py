@@ -80,14 +80,12 @@ class EditorWindowTcgui:
 
     def __init__(
         self,
-        world,
         initial_scene,
         scene_manager: SceneManager,
         offscreen_context=None,
         ctx=None,
         main_window=None,
     ) -> None:
-        self._world = world
         self._offscreen_context = offscreen_context
         # Process-global tgfx2 context — the editor's FBOSurface and
         # RenderingControllerTcgui allocate their render targets here.
