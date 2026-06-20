@@ -8,6 +8,7 @@ from termin.default_assets.voxels.asset_plugin import (
     register_voxel_grid_import_plugin,
     register_voxel_grid_runtime_plugin,
 )
+from termin.voxels._voxels_native import TcVoxelGrid, VoxelGridHandle
 from termin.voxels.grid import VoxelGrid
 
 
@@ -19,6 +20,22 @@ def test_voxel_grid_asset_wraps_grid() -> None:
     assert asset.name == "source_grid"
     assert asset.grid is grid
     assert asset.source_path == Path("/tmp/source.voxels")
+    assert TcVoxelGrid.from_name("source_grid").uuid == asset.uuid
+
+
+def test_voxel_grid_asset_declares_core_runtime_resource() -> None:
+    grid = VoxelGrid(name="declared_grid")
+
+    asset = VoxelGridAsset.from_grid(grid, source_path="/tmp/declared.voxels")
+    handle = VoxelGridHandle.from_asset(asset)
+    by_uuid = TcVoxelGrid.from_uuid(asset.uuid)
+    by_name = TcVoxelGrid.from_name("declared_grid")
+
+    assert handle.native.is_valid
+    assert by_uuid.is_valid
+    assert by_name.is_valid
+    assert by_uuid.uuid == asset.uuid
+    assert by_name.uuid == asset.uuid
 
 
 def test_voxel_grid_plugins_register_with_asset_registry() -> None:

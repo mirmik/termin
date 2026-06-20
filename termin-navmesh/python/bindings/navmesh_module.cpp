@@ -147,13 +147,22 @@ void bind_recast_navmesh_builder(nb::module_& m) {
     nb::class_<TcNavMesh>(m, "TcNavMesh")
         .def(nb::init<>())
         .def_static("from_uuid", &TcNavMesh::from_uuid, nb::arg("uuid"))
+        .def_static("from_name", &TcNavMesh::from_name, nb::arg("name"))
         .def_static("declare", &TcNavMesh::declare, nb::arg("uuid"), nb::arg("name") = "")
         .def_prop_ro("is_valid", &TcNavMesh::is_valid)
         .def_prop_ro("is_loaded", &TcNavMesh::is_loaded)
         .def_prop_ro("uuid", [](const TcNavMesh& self) { return std::string(self.uuid()); })
         .def_prop_ro("name", [](const TcNavMesh& self) { return std::string(self.name()); })
         .def_prop_ro("version", &TcNavMesh::version)
-        .def("ensure_loaded", &TcNavMesh::ensure_loaded);
+        .def("ensure_loaded", &TcNavMesh::ensure_loaded)
+        .def("serialize", [](const TcNavMesh& self) {
+            nb::dict result;
+            if (self.is_valid()) {
+                result["uuid"] = std::string(self.uuid());
+                result["name"] = std::string(self.name());
+            }
+            return result;
+        });
 
     m.def("declare_navmesh_asset", [](const std::string& uuid, const std::string& name) {
         TcNavMesh navmesh = TcNavMesh::declare(uuid, name);

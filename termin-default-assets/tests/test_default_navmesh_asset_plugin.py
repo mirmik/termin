@@ -9,6 +9,7 @@ from termin.default_assets.navmesh.asset_plugin import (
     register_navmesh_runtime_plugin,
 )
 from termin.default_assets.navmesh.handle import NavMeshHandle
+from termin.navmesh._navmesh_native import TcNavMesh
 from termin.navmesh.types import NavMesh
 
 
@@ -48,6 +49,28 @@ def test_navmesh_handle_uses_configured_resource_manager_factory() -> None:
     assert by_name.navmesh is navmesh
     assert by_uuid.asset is asset
     assert by_uuid.navmesh is navmesh
+    assert by_name.native.is_valid
+    assert by_name.native.uuid == asset.uuid
+    assert TcNavMesh.from_name("factory_navmesh").uuid == asset.uuid
+
+
+def test_navmesh_asset_declares_core_runtime_resource() -> None:
+    navmesh = NavMesh(name="declared_navmesh")
+    asset = NavMeshAsset.from_navmesh(
+        navmesh,
+        name="declared_navmesh",
+        source_path="/tmp/declared.navmesh",
+    )
+
+    handle = NavMeshHandle.from_asset(asset)
+    by_uuid = TcNavMesh.from_uuid(asset.uuid)
+    by_name = TcNavMesh.from_name("declared_navmesh")
+
+    assert handle.native.is_valid
+    assert by_uuid.is_valid
+    assert by_name.is_valid
+    assert by_uuid.uuid == asset.uuid
+    assert by_name.uuid == asset.uuid
 
 
 def test_navmesh_plugins_register_with_asset_registry() -> None:

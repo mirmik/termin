@@ -17,17 +17,27 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 include(GNUInstallDirs)
 
-add_library(termin_voxels INTERFACE)
+add_library(termin_voxels SHARED
+    src/tc_voxel_grid_registry.cpp
+)
 add_library(termin_voxels::termin_voxels ALIAS termin_voxels)
 
-target_include_directories(termin_voxels INTERFACE
+target_compile_definitions(termin_voxels PRIVATE TERMIN_VOXELS_EXPORTS)
+
+target_include_directories(termin_voxels PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(termin_voxels INTERFACE
+target_link_libraries(termin_voxels PUBLIC
     tcbase::termin_base
 )
+
+set_target_properties(termin_voxels PROPERTIES
+    VERSION ${PROJECT_VERSION}
+    SOVERSION 0
+)
+termin_set_rpath_lib(termin_voxels)
 
 if(TERMIN_BUILD_PYTHON)
     if(NOT Python_EXECUTABLE)
