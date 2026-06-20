@@ -203,7 +203,8 @@ public readonly struct ComponentRef
     public TcVec3 GetFieldVec3(string path)
     {
         if (_ptr == IntPtr.Zero) return new TcVec3(0, 0, 0);
-        return TerminCore.ComponentGetFieldVec3(_ptr, path);
+        TerminCore.ComponentGetFieldVec3(_ptr, path, out var value);
+        return value;
     }
 
     /// <summary>
@@ -221,7 +222,8 @@ public readonly struct ComponentRef
     public TcQuat GetFieldQuat(string path)
     {
         if (_ptr == IntPtr.Zero) return new TcQuat(0, 0, 0, 1);
-        return TerminCore.ComponentGetFieldQuat(_ptr, path);
+        TerminCore.ComponentGetFieldQuat(_ptr, path, out var value);
+        return value;
     }
 
     /// <summary>
