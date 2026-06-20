@@ -1,7 +1,8 @@
 import sys
 import types
+import pytest
 
-from termin.assets.resources import ResourceManager
+from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.render_framework.frame_pass_registry import FramePassRegistry
 from termin.scene.component_registry import ComponentClassRegistry
 
@@ -45,7 +46,7 @@ def test_frame_pass_registry_registers_builtin_specs() -> None:
 
 
 def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
 
     class ProbeComponent:
         pass
@@ -89,38 +90,89 @@ def test_default_builtin_specs_live_below_app_layer() -> None:
     ) not in frame_pass_specs
 
 
-def test_app_builtin_specs_extend_default_specs() -> None:
-    from termin.assets.resources._builtins import (
-        APP_BUILTIN_COMPONENTS,
-        APP_BUILTIN_FRAME_PASSES,
-        get_builtin_component_specs,
-        get_builtin_frame_pass_specs,
+def test_default_builtin_specs_include_migrated_app_types() -> None:
+    from termin.default_assets.builtin_types import (
+        get_default_builtin_component_specs,
+        get_default_builtin_frame_pass_specs,
     )
 
-    component_specs = get_builtin_component_specs()
-    frame_pass_specs = get_builtin_frame_pass_specs()
+    component_specs = get_default_builtin_component_specs()
+    frame_pass_specs = get_default_builtin_frame_pass_specs()
 
-    assert APP_BUILTIN_COMPONENTS == []
     assert ("termin.colliders.teleport_component", "TeleportComponent") in component_specs
     assert ("termin.render_components", "CameraComponent") in component_specs
     assert ("termin.render_components", "CameraController") in component_specs
     assert ("termin.ui_components", "UIComponent") in component_specs
 
-    assert APP_BUILTIN_FRAME_PASSES == [
-        ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
-    ]
     assert ("termin.render_passes", "UIWidgetPass") in frame_pass_specs
     assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
+    assert ("termin.render_passes", "ImmediateDepthPass") in frame_pass_specs
+    assert ("termin.render_passes", "UnifiedGizmoPass") in frame_pass_specs
     assert ("termin.render_components", "MaterialPass") in frame_pass_specs
 
 
-def test_app_legacy_ui_paths_reexport_canonical_classes() -> None:
+def test_ui_component_and_pass_use_canonical_paths() -> None:
     from termin.render_passes import UIWidgetPass
     from termin.ui_components import UIComponent
-    from termin.visualization.render.framegraph.passes.ui_widget import (
-        UIWidgetPass as LegacyUIWidgetPass,
-    )
-    from termin.visualization.ui.widgets.component import UIComponent as LegacyUIComponent
 
-    assert LegacyUIWidgetPass is UIWidgetPass
-    assert LegacyUIComponent is UIComponent
+    assert UIWidgetPass.__module__ == "termin.render_passes.ui_widget"
+    assert UIComponent.__module__ == "termin.ui_components.component"
+
+
+def test_render_config_types_use_canonical_paths() -> None:
+    from termin.render import (
+        RenderTargetConfig,
+        ViewportConfig,
+        deserialize_render_target_config,
+        deserialize_viewport_config,
+        serialize_render_target_config,
+        serialize_viewport_config,
+    )
+
+    viewport_config = ViewportConfig()
+    viewport_config.name = "Main"
+    assert serialize_viewport_config(viewport_config)["name"] == "Main"
+    assert deserialize_viewport_config({"name": "Main"}).name == "Main"
+
+    render_target_config = RenderTargetConfig()
+    render_target_config.name = "Target"
+    assert serialize_render_target_config(render_target_config)["name"] == "Target"
+    assert deserialize_render_target_config({"name": "Target"}).name == "Target"
+
+
+def test_legacy_ui_component_and_pass_paths_are_removed() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        __import__("termin.visualization.render.framegraph.passes.ui_widget", fromlist=["UIWidgetPass"])
+
+    with pytest.raises(ModuleNotFoundError):
+        __import__("termin.visualization.ui.widgets.component", fromlist=["UIComponent"])
+
+
+def test_dead_visualization_legacy_paths_are_removed() -> None:
+    removed_modules = [
+        "termin.visualization.components",
+        "termin.visualization.ui",
+        "termin.visualization.render.shadow",
+        "termin.visualization.render.shadow.shadow_camera",
+        "termin.visualization.render.materials.pick_material",
+        "termin.visualization.render.materials.simple",
+        "termin.visualization.render.materials.grid_material",
+        "termin.visualization.render.materials.unknown_material",
+        "termin.visualization.render.materials.shadow_material",
+        "termin.visualization.render.materials.depth_material",
+        "termin.visualization.render.lighting",
+        "termin.visualization.render.lighting.light_setup",
+        "termin.visualization.render.lighting.shading",
+        "termin.visualization.platform.backends",
+        "termin.visualization.platform.backends.sdl_embedded",
+        "termin.visualization.platform",
+        "termin.visualization.platform.input_manager",
+        "termin.visualization.core.world",
+        "termin.visualization.core.viewport",
+        "termin.visualization.core.viewport_config",
+        "termin.visualization.core.render_target_config",
+    ]
+
+    for module_name in removed_modules:
+        with pytest.raises(ModuleNotFoundError):
+            __import__(module_name)

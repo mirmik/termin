@@ -205,8 +205,7 @@ class PlayerRuntime:
         import termin.visualization.render.glsl_preprocessor  # noqa: F401
 
         # Create default pipeline and configure RenderingManager
-        from termin.visualization.core.viewport import make_default_pipeline
-        pipeline = make_default_pipeline()
+        pipeline = RenderingManager.instance().create_pipeline("Default")
         log.info(f"[PlayerRuntime] Created pipeline: {pipeline.name} with {len(pipeline.passes)} passes")
 
         manager = RenderingManager.instance()
@@ -306,9 +305,9 @@ class PlayerRuntime:
         if not name or name in ("Default", "(Default)"):
             return None
 
-        from termin.assets.resources import ResourceManager
+        from termin.default_assets.resource_manager import DefaultResourceManager
 
-        rm = ResourceManager.instance()
+        rm = DefaultResourceManager.instance()
         if "-" in name:
             pipeline = rm.get_pipeline_by_uuid(name)
             if pipeline is not None:
@@ -514,7 +513,7 @@ class PlayerRuntime:
     def _load_manifest_assets(self) -> None:
         """Load build resources listed by manifest.json."""
         from tcbase import log
-        from termin.assets.resources import ResourceManager
+        from termin.default_assets.resource_manager import DefaultResourceManager
 
         if self.asset_manifest_path is None:
             log.error("[PlayerRuntime] No asset manifest path set")
@@ -554,7 +553,7 @@ class PlayerRuntime:
             message = diagnostic.get("message")
             log.warning(f"[PlayerRuntime] Build diagnostic {level}: {path}: {message}")
 
-        rm = ResourceManager.instance()
+        rm = DefaultResourceManager.instance()
         import_registry = self._create_build_import_registry()
         loaded_count = load_manifest_assets_with_import_plugins(
             project_path=self.project_path,
@@ -707,7 +706,7 @@ class PlayerRuntime:
     def _setup_input(self):
         """Set up input handling."""
         from tcbase import log
-        from termin.visualization.platform.input_manager import BasicDisplayInputManager
+        from termin.display import BasicDisplayInputManager
 
         if self._display is None:
             log.error("[PlayerRuntime] Cannot set up input without display")

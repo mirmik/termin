@@ -206,7 +206,7 @@ Python:
 Verification:
 
 - `cmake --build build/Release --target termin_render_passes render_lib -j2`
-- import smoke after binding move: `from termin.visualization.render.framegraph.passes.tonemap import TonemapPass`
+- import smoke after binding move: `from termin.render_passes import TonemapPass`
 
 ### Phase 3: add Python bindings owned by `termin-render-passes`
 
@@ -435,8 +435,16 @@ Remove or shrink:
 
 Python cleanup:
 
-- Long term, replace `termin.visualization.render.framegraph.passes.*` imports in app code with canonical `termin.render_passes`.
-- Re-export modules may remain temporarily for compatibility, but they should contain no logic.
+- Status 2026-06-20: app imports now use canonical `termin.render_passes`,
+  `termin.render_components`, and `termin.render_framework` paths. The legacy
+  `termin.visualization.render.framegraph.passes.*` re-export modules were
+  removed rather than kept as compatibility shims.
+- Status 2026-06-20: unused Python app wrappers
+  `termin.visualization.render.shadow` and
+  `termin.visualization.render.shadow.shadow_camera` were removed. The C++
+  shadow camera implementation remains owned by `termin-render-passes`; Python
+  should only grow a new canonical `termin.render_passes` wrapper if a live
+  consumer needs that API.
 
 Verification:
 

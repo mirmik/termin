@@ -21,7 +21,7 @@ class AssetsMixin(DefaultAssetResourceMixin):
 
         Returns UnknownMaterial if material is not found or failed to load.
         """
-        from termin.visualization.render.materials.unknown_material import UnknownMaterial
+        from termin.materials import UnknownMaterial
 
         mat = self.materials.get(name)
         if mat is not None:
@@ -43,7 +43,7 @@ class AssetsMixin(DefaultAssetResourceMixin):
 
         Returns UnknownMaterial if material is not found or failed to load.
         """
-        from termin.visualization.render.materials.unknown_material import UnknownMaterial
+        from termin.materials import UnknownMaterial
 
         asset: "MaterialAsset | None" = self._material_registry.get_asset_by_uuid(uuid)
         if asset is None:

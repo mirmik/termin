@@ -24,7 +24,7 @@ from termin.editor_core.signal import Signal
 if TYPE_CHECKING:
     from termin.display import Display
     from termin.scene import TcScene as Scene
-    from termin.visualization.core.viewport import Viewport
+    from termin.viewport import Viewport
     from termin.visualization.core.render_pipeline import RenderPipeline
     from termin.engine import RenderingManager
 
@@ -138,7 +138,7 @@ class RenderingModel:
         ``RenderingManager`` returns (raw ``TcDisplay`` wrappers don't
         carry the subclass ``.surface``).
         """
-        from termin.visualization.platform.input_manager import DisplayInputRouter
+        from termin.display import DisplayInputRouter
 
         display_id = display.tc_display_ptr
 
@@ -433,7 +433,7 @@ class RenderingModel:
 
     def sync_viewport_configs_to_scene(self, scene: "Scene") -> None:
         """Snapshot this scene's viewports into ``scene.viewport_configs``."""
-        from termin.visualization.core.viewport_config import ViewportConfig
+        from termin.render import ViewportConfig
         from termin.visualization.core.scene import scene_render_mount
 
         rm = scene_render_mount(scene)
@@ -468,7 +468,7 @@ class RenderingModel:
 
     def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
         """Snapshot manager-owned render targets into ``scene.render_target_configs``."""
-        from termin.visualization.core.render_target_config import RenderTargetConfig
+        from termin.render import RenderTargetConfig
         from termin.visualization.core.scene import scene_render_mount
 
         rm = scene_render_mount(scene)

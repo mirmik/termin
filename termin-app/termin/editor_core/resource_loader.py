@@ -44,13 +44,10 @@ class ResourceLoader:
         self._show_open_file_dialog = show_open_file_dialog
 
     def scan_builtin_components(self) -> None:
-        """Scan and register built-in component modules."""
-        builtin_modules = [
-            "termin.visualization.components",
-        ]
-        loaded = self._resource_manager.scan_components(builtin_modules)
+        """Register built-in component specs."""
+        loaded = self._resource_manager.register_builtin_components()
         if loaded:
-            log.warning(f"Loaded components: {loaded}")
+            log.info(f"Loaded components: {loaded}")
 
     def init_resources_from_scene(self) -> None:
         """

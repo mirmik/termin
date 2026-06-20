@@ -1,15 +1,18 @@
-"""ViewportConfig - configuration for scene viewport mounting."""
+"""ViewportConfig serialization helpers."""
 
 from __future__ import annotations
 
-# Re-export C++ class
-from termin._native import ViewportConfig
+from termin.render._render_native import ViewportConfig
 
-__all__ = ["ViewportConfig", "serialize_viewport_config", "deserialize_viewport_config"]
+__all__ = [
+    "ViewportConfig",
+    "serialize_viewport_config",
+    "deserialize_viewport_config",
+]
 
 
 def serialize_viewport_config(config: ViewportConfig) -> dict:
-    """Serialize ViewportConfig to dict."""
+    """Serialize ViewportConfig to a scene-dict representation."""
     result = {
         "name": config.name,
         "display_name": config.display_name,
@@ -29,7 +32,7 @@ def serialize_viewport_config(config: ViewportConfig) -> dict:
 
 
 def deserialize_viewport_config(data: dict) -> ViewportConfig:
-    """Deserialize ViewportConfig from dict."""
+    """Deserialize ViewportConfig from a scene-dict representation."""
     region = data.get("region", [0.0, 0.0, 1.0, 1.0])
 
     config = ViewportConfig()

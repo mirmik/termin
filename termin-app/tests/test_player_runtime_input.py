@@ -1,6 +1,3 @@
-import sys
-import types
-
 from termin.player.runtime import PlayerRuntime
 
 
@@ -43,9 +40,9 @@ class _BasicDisplayInputManager:
 
 
 def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monkeypatch):
-    platform_module = types.ModuleType("termin.visualization.platform.input_manager")
-    platform_module.BasicDisplayInputManager = _BasicDisplayInputManager
-    monkeypatch.setitem(sys.modules, "termin.visualization.platform.input_manager", platform_module)
+    import termin.display
+
+    monkeypatch.setattr(termin.display, "BasicDisplayInputManager", _BasicDisplayInputManager)
     _BasicDisplayInputManager.instances.clear()
 
     runtime = PlayerRuntime(".", "scene.json")

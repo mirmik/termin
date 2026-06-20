@@ -15,9 +15,9 @@ if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
     from termin.render_components.camera import CameraComponent
     from termin.display import Display
-    from termin.visualization.core.viewport import Viewport
+    from termin.viewport import Viewport
     from termin.scene import Entity
-    from termin.visualization.render.framegraph import RenderPipeline
+    from termin.render_framework import RenderPipeline
     from termin.editor_core.editor_camera import EditorCameraManager
     RenderingController = Any
 

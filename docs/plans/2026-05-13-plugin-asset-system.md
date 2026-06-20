@@ -183,8 +183,17 @@ Status 2026-06-20: the default typed runtime facade moved below the app layer.
 canonical manager for the standard SDK asset set, and default handle selector
 logic lives in `termin.default_assets.resource_accessors` /
 `termin.default_assets.handle_accessors`. `termin.assets.resources` remains as
-an app-specific extension/compatibility path for visualization additions,
-material fallback behavior, and old imports.
+an app-specific extension/compatibility path for editor resource-manager policy
+and old imports.
+
+Status 2026-06-20: lower/runtime imports were cut away from the app
+`ResourceManager`. `termin-components-render` native material assignment and
+app C++ texture handle helpers now resolve the process resource manager through
+`termin_assets.get_resource_manager()`, while standalone player/project asset
+loading uses `DefaultResourceManager` directly. The app compatibility modules
+`termin.assets.resources._base`, `_accessors`, `_handle_accessors`, and
+`_serialization` were removed; `AppResourceManager` now composes canonical
+default-assets mixins directly.
 
 Status 2026-06-20: the already separable component/frame-pass additions moved
 out of the app builtin catalog. `CameraController` and the `MaterialPass`
@@ -199,8 +208,14 @@ Status 2026-06-20: `UIComponent` moved to a new
 `termin-components-ui` package as `termin.ui_components.UIComponent`, and
 `UIWidgetPass` moved to `termin-render-passes` as
 `termin.render_passes.UIWidgetPass`. The default builtin catalog now registers
-both below the app layer. `termin-app` keeps compatibility re-exports and now
-contributes only the editor/tooling `GizmoPass` as an app builtin frame pass.
+both below the app layer. At that point `termin-app` kept compatibility
+re-exports and still contributed only the editor/tooling `GizmoPass` as an app
+builtin frame pass.
+
+Status 2026-06-20: `ImmediateDepthPass` and `UnifiedGizmoPass` moved to
+`termin-render-passes` and are registered by the default builtin catalog. The
+old entity-based app `GizmoPass` builtin was removed, leaving
+`APP_BUILTIN_FRAME_PASSES` empty.
 
 Status 2026-06-20: rigid-body scene components moved out of `termin-app` into
 `termin-components-physics` while preserving the canonical
@@ -211,9 +226,10 @@ Status 2026-06-17: component class and frame-pass class registries moved out of
 the app resource manager into domain packages. `termin.scene.component_registry`
 now owns `ComponentClassRegistry`, while
 `termin.render_framework.frame_pass_registry` owns `FramePassRegistry`.
-`termin.assets.resources.ResourceManager` keeps compatibility facade methods and
-the old `components`/`frame_passes` dict views, but delegates registration,
-lookup, listing, and scanning to the domain registries. The old app
+At that point `termin.assets.resources.ResourceManager` kept compatibility
+facade methods and the old `components`/`frame_passes` dict views, but
+delegated registration, lookup, listing, and scanning to the domain registries.
+The old app
 `visualization.core.plugin_loader` compatibility re-export was removed on
 2026-06-18 after internal imports moved to `termin.scene.class_scanner`.
 

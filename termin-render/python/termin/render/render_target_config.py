@@ -1,14 +1,18 @@
-"""RenderTargetConfig - configuration for scene render targets."""
+"""RenderTargetConfig serialization helpers."""
 
 from __future__ import annotations
 
-from termin._native import RenderTargetConfig
+from termin.render._render_native import RenderTargetConfig
 
-__all__ = ["RenderTargetConfig", "serialize_render_target_config", "deserialize_render_target_config"]
+__all__ = [
+    "RenderTargetConfig",
+    "serialize_render_target_config",
+    "deserialize_render_target_config",
+]
 
 
 def serialize_render_target_config(config: RenderTargetConfig) -> dict:
-    """Serialize RenderTargetConfig to dict."""
+    """Serialize RenderTargetConfig to a scene-dict representation."""
     result = {
         "name": config.name,
     }
@@ -45,7 +49,7 @@ def serialize_render_target_config(config: RenderTargetConfig) -> dict:
 
 
 def deserialize_render_target_config(data: dict) -> RenderTargetConfig:
-    """Deserialize RenderTargetConfig from dict."""
+    """Deserialize RenderTargetConfig from a scene-dict representation."""
     config = RenderTargetConfig()
     config.name = data.get("name", "")
     config.kind = data.get("kind", "texture_2d")

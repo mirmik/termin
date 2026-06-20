@@ -15,7 +15,7 @@ from termin.render import ImmediateRenderer
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph.execute_context import ExecuteContext
+    from termin.render_framework import ExecuteContext
 
 
 class ImmediateDepthPass(PythonFramePass):

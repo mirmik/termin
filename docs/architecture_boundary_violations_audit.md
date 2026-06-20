@@ -431,7 +431,7 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 `Viewport3D` уже переключен с app compatibility `termin._native.render` на владельца символов `termin.display`. Но он всё ещё вызывает `_display_get_surface_ptr`, `_render_surface_get_input_manager`, `_input_manager_on_mouse_move`, `_input_manager_on_scroll`, `_input_manager_on_mouse_button`, `_input_manager_on_key` как приватные underscored functions.
 
-Следующий небольшой правильный шаг: добавить публичный adapter в `termin.display` или `termin.visualization.platform.input_manager`, который принимает display/input-manager handle и предоставляет методы `mouse_move`, `scroll`, `mouse_button`, `key`. После этого `Viewport3D` перестанет знать о native symbol names. Это не уберёт весь interop, но перенесёт его в слой-владелец display/input.
+Status 2026-06-20: display/player routing helpers moved to `termin.display.input_manager`; the old app path `termin.visualization.platform.input_manager` was removed. The remaining `Viewport3D` work is a smaller public event-forwarding adapter in `termin.display`, so `Viewport3D` no longer calls native underscored functions directly.
 
 ### 5.2 Component binding targets больше не завязаны на `termin-app/cpp/termin/bindings`
 

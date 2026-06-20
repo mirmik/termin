@@ -274,16 +274,13 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     tgfx2_ctx = Tgfx2Context.from_window(
         main_window.device_ptr(), main_window.context_ptr())
 
-    # Create world and scene
-    from termin.visualization.core.world import World
+    # Create initial scene
     from termin.visualization.core.scene import create_scene
 
-    world = World()
     if no_scene:
         initial_scene = None
     else:
         initial_scene = create_scene(name="default")
-        world.add_scene(initial_scene)
 
     ui = UI(graphics=tgfx2_ctx)
 
@@ -301,7 +298,6 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     # Create editor window and build UI
     from termin.editor_tcgui.editor_window import EditorWindowTcgui
     win = EditorWindowTcgui(
-        world=world,
         initial_scene=initial_scene,
         scene_manager=engine.scene_manager,
         offscreen_context=None,
