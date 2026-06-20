@@ -205,8 +205,7 @@ class PlayerRuntime:
         import termin.visualization.render.glsl_preprocessor  # noqa: F401
 
         # Create default pipeline and configure RenderingManager
-        from termin.visualization.core.viewport import make_default_pipeline
-        pipeline = make_default_pipeline()
+        pipeline = RenderingManager.instance().create_pipeline("Default")
         log.info(f"[PlayerRuntime] Created pipeline: {pipeline.name} with {len(pipeline.passes)} passes")
 
         manager = RenderingManager.instance()
@@ -707,7 +706,7 @@ class PlayerRuntime:
     def _setup_input(self):
         """Set up input handling."""
         from tcbase import log
-        from termin.visualization.platform.input_manager import BasicDisplayInputManager
+        from termin.display import BasicDisplayInputManager
 
         if self._display is None:
             log.error("[PlayerRuntime] Cannot set up input without display")
