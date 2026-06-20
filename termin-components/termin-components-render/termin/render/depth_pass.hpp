@@ -9,7 +9,7 @@ extern "C" {
 
 namespace termin {
 
-class DepthPass : public GeometryPassBase {
+class ENTITY_API DepthPass : public GeometryPassBase {
 private:
     float _near_plane = 0.1f;
     float _far_plane = 1000.0f;
@@ -75,7 +75,7 @@ protected:
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
 
-class DepthOnlyPass : public CxxFramePass {
+class ENTITY_API DepthOnlyPass : public CxxFramePass {
 public:
     struct DrawCall {
     public:
@@ -159,7 +159,7 @@ private:
     void sort_draw_calls_by_shader() const;
 };
 
-class DepthToColorPass : public CxxFramePass {
+class ENTITY_API DepthToColorPass : public CxxFramePass {
 public:
     std::string input_res = "depth_texture";
     std::string output_res = "depth_color";
@@ -224,7 +224,7 @@ private:
     void release_tgfx2_resources();
 };
 
-class ColorToDepthPass : public CxxFramePass {
+class ENTITY_API ColorToDepthPass : public CxxFramePass {
 public:
     std::string input_res = "color_texture";
     std::string output_res = "depth_texture";

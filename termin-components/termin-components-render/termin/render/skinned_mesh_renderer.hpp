@@ -25,7 +25,7 @@ class SkeletonController;
  * - Per-instance std140 UBO (bone_block/BoneBlock) uploaded before drawing
  * - Skinned shader variant injection via get_skinned_material()
  */
-class SkinnedMeshRenderer : public MeshRenderer {
+class ENTITY_API SkinnedMeshRenderer : public MeshRenderer {
 public:
     // C++ SkeletonController reference (CmpRef validates entity liveness)
     CmpRef<SkeletonController> _skeleton_controller;
