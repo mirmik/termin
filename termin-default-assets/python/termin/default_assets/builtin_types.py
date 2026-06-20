@@ -11,6 +11,7 @@ from termin_assets.builtin_types import BuiltinTypeSpec, collect_builtin_type_sp
 
 _DEFAULT_COMPONENT_PROVIDER_MODULES = (
     "termin.render_components.builtins",
+    "termin.ui_components.builtins",
 )
 
 _DEFAULT_FRAME_PASS_PROVIDER_MODULES = (

@@ -112,6 +112,7 @@ if __name__ == "__main__":
             "termin-audio",
             "termin-voxels",
             "termin-components-voxels",
+            "termin-components-ui",
             "termin-materials",
             "termin-render-passes",
             "termin-nanobind",

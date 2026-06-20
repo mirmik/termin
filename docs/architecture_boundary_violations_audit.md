@@ -99,7 +99,7 @@
 | `termin-app/termin/visualization/platform/backends/sdl_embedded.py` | **Исправлено 2026-05-24:** PyQt embedding hooks удалены |
 | `termin-app/termin/visualization/render/texture.py` | **Исправлено 2026-05-24:** Qt preview удалён вместе с Qt editor |
 | `termin-app/termin/visualization/ui/widgets/__init__.py` | Full re-export tcgui.widgets (иллюзия абстракции) |
-| `termin-app/termin/visualization/ui/widgets/component.py` | `UIComponent` наследуется от `InputComponent` + импортирует `tcgui.widgets.ui.UI` |
+| `termin-components/termin-components-ui/python/termin/ui_components/component.py` | `UIComponent` intentionally lives below app now; package explicitly depends on `tcgui` and `termin-input` |
 
 **Проблема:** `editor_core` декларирует себя как UI-agnostic слой. PyQt-зависимости закрыты; остаточная проблема — `termin/visualization/ui/widgets` как tcgui re-export внутри app/SDK boundary.
 

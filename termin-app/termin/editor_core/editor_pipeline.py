@@ -27,7 +27,7 @@ def make_editor_pipeline() -> RenderPipeline:
     from termin.visualization.render.framegraph.passes.unified_gizmo import UnifiedGizmoPass
     from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
     from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
-    from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
+    from termin.render_passes import UIWidgetPass
 
     def get_gizmo_manager():
         sys = EditorInteractionSystem.instance()

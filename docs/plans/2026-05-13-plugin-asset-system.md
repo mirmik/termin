@@ -190,9 +190,17 @@ Status 2026-06-20: the already separable component/frame-pass additions moved
 out of the app builtin catalog. `CameraController` and the `MaterialPass`
 inspect/dynamic-input helper now live in `termin.render_components`, while
 `TeleportComponent` lives in `termin.colliders.teleport_component`.
-`termin.default_assets.builtin_types` registers these as SDK defaults, and
-`termin-app` now contributes only the editor/UI-specific `UIWidgetPass` and
-`GizmoPass`. The old app module paths are compatibility re-exports.
+`termin.default_assets.builtin_types` registers these as SDK defaults. At this
+point `termin-app` still contributed `UIWidgetPass` and `GizmoPass`; subsequent
+work moved `UIWidgetPass` below the app layer too. The old app module paths are
+compatibility re-exports.
+
+Status 2026-06-20: `UIComponent` moved to a new
+`termin-components-ui` package as `termin.ui_components.UIComponent`, and
+`UIWidgetPass` moved to `termin-render-passes` as
+`termin.render_passes.UIWidgetPass`. The default builtin catalog now registers
+both below the app layer. `termin-app` keeps compatibility re-exports and now
+contributes only the editor/tooling `GizmoPass` as an app builtin frame pass.
 
 Status 2026-06-17: component class and frame-pass class registries moved out of
 the app resource manager into domain packages. `termin.scene.component_registry`

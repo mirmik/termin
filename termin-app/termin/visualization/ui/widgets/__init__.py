@@ -7,7 +7,7 @@ from tcgui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, 
 from tcgui.widgets.renderer import UIRenderer
 from tcgui.widgets.loader import UILoader
 from tcgui.widgets.ui import UI
-from termin.visualization.ui.widgets.component import UIComponent
+from termin.ui_components import UIComponent
 
 __all__ = [
     # Units

@@ -78,8 +78,10 @@ def test_default_builtin_specs_live_below_app_layer() -> None:
 
     assert ("termin.render_components", "CameraComponent") in component_specs
     assert ("termin.render_components", "CameraController") in component_specs
+    assert ("termin.ui_components", "UIComponent") in component_specs
     assert ("termin.colliders.teleport_component", "TeleportComponent") in component_specs
     assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
+    assert ("termin.render_passes", "UIWidgetPass") in frame_pass_specs
     assert ("termin.render_components", "MaterialPass") in frame_pass_specs
     assert (
         "termin.visualization.render.framegraph.passes.ui_widget",
@@ -102,12 +104,23 @@ def test_app_builtin_specs_extend_default_specs() -> None:
     assert ("termin.colliders.teleport_component", "TeleportComponent") in component_specs
     assert ("termin.render_components", "CameraComponent") in component_specs
     assert ("termin.render_components", "CameraController") in component_specs
+    assert ("termin.ui_components", "UIComponent") in component_specs
 
-    app_ui_spec = (
-        "termin.visualization.render.framegraph.passes.ui_widget",
-        "UIWidgetPass",
-    )
-    assert app_ui_spec in APP_BUILTIN_FRAME_PASSES
-    assert app_ui_spec in frame_pass_specs
+    assert APP_BUILTIN_FRAME_PASSES == [
+        ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
+    ]
+    assert ("termin.render_passes", "UIWidgetPass") in frame_pass_specs
     assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
     assert ("termin.render_components", "MaterialPass") in frame_pass_specs
+
+
+def test_app_legacy_ui_paths_reexport_canonical_classes() -> None:
+    from termin.render_passes import UIWidgetPass
+    from termin.ui_components import UIComponent
+    from termin.visualization.render.framegraph.passes.ui_widget import (
+        UIWidgetPass as LegacyUIWidgetPass,
+    )
+    from termin.visualization.ui.widgets.component import UIComponent as LegacyUIComponent
+
+    assert LegacyUIWidgetPass is UIWidgetPass
+    assert LegacyUIComponent is UIComponent

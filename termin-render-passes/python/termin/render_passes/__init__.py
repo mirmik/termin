@@ -28,6 +28,7 @@ from termin.render_passes._render_passes_native import (
     tc_picking_rgb_to_id,
 )
 from termin.render_passes.highlight import HighlightPass
+from termin.render_passes.ui_widget import UIWidgetPass
 
 __all__ = [
     "BlitPass",
@@ -49,6 +50,7 @@ __all__ = [
     "TONEMAP_NONE",
     "TONEMAP_REINHARD",
     "TonemapPass",
+    "UIWidgetPass",
     "tc_picking_cache_clear",
     "tc_picking_id_to_rgb",
     "tc_picking_rgb_to_id",

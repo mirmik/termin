@@ -11,7 +11,6 @@ from termin.default_assets.builtin_types import (
 APP_BUILTIN_COMPONENTS: list[BuiltinTypeSpec] = []
 
 APP_BUILTIN_FRAME_PASSES: list[BuiltinTypeSpec] = [
-    ("termin.visualization.render.framegraph.passes.ui_widget", "UIWidgetPass"),
     ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
 ]
 
