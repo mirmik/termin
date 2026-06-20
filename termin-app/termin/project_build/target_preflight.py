@@ -133,6 +133,7 @@ def preflight_android_build(
 
     resolved_termin_root = _resolve_required_termin_root(
         termin_root,
+        build_script,
         ANDROID_BUILD_SCRIPT,
         target_name,
         diagnostics,
@@ -187,6 +188,7 @@ def preflight_quest_openxr_build(
 
     resolved_termin_root = _resolve_required_termin_root(
         termin_root,
+        build_script,
         QUEST_OPENXR_BUILD_SCRIPT,
         target_name,
         diagnostics,
@@ -342,10 +344,26 @@ def _validate_output_dir(
 
 def _resolve_required_termin_root(
     termin_root: str | Path | None,
+    build_script: str | Path | None,
     marker_script_name: str,
     target_name: str,
     diagnostics: list[BuildDiagnostic],
 ) -> Path:
+    if build_script is not None:
+        if termin_root is None:
+            return Path(build_script).expanduser().resolve().parent
+
+        root = Path(termin_root).expanduser().resolve()
+        if not root.is_dir():
+            diagnostics.append(
+                build_error(
+                    "termin_root",
+                    f"Termin root does not exist: {root}",
+                )
+            )
+            return Path()
+        return root
+
     try:
         return resolve_termin_root(
             termin_root,

@@ -83,7 +83,7 @@ def _assert_single_error(exc: TargetPreflightError, path_part: str, message_part
     diagnostic = exc.diagnostics[0]
     assert isinstance(diagnostic, BuildDiagnostic)
     assert diagnostic.level == "error"
-    assert path_part in diagnostic.path
+    assert path_part.replace("\\", "/") in diagnostic.path.replace("\\", "/")
     assert message_part in diagnostic.message
 
 
