@@ -45,9 +45,18 @@ Focused checks can pass repository-relative path filters:
 ./run-lint-cpp.sh termin-render termin-graphics
 ```
 
+Python/nanobind binding translation units are opt-in because they require the
+Python binding build graph:
+
+```bash
+./run-lint-cpp.sh --python-bindings
+./run-lint-cpp.sh --python-bindings termin-render/python
+```
+
 The script:
 
 - configures a dedicated build directory, `build/Release-lint` by default;
+- uses `build/Release-lint-python` by default for `--python-bindings`;
 - passes `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`;
 - keeps lint builds separate from normal SDK/test builds to avoid changing build
   semantics.
@@ -62,6 +71,10 @@ The script:
   `memcpy` / `memset` calls, `clang-analyzer-deadcode.*` until local and
   third-party header noise is audited, and clang's `nan-infinity-disabled`
   diagnostic in the Release lint profile.
+- in `--python-bindings` mode only, excludes
+  `clang-analyzer-core.NullDereference` from the default checks because the
+  analyzer repeatedly reports false positives inside nanobind's list caster;
+  explicit `--checks` overrides keep full control.
 
 Useful options:
 
