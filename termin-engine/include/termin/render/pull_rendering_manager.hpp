@@ -1,5 +1,6 @@
 #pragma once
 
+#include "termin/engine/termin_engine_api.hpp"
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
@@ -21,7 +22,7 @@ namespace termin {
 // PullRenderingManager - for pull-based rendering (WPF, Qt style)
 // Each display's Render callback calls render_display() independently.
 // Viewports are rendered to offscreen FBOs and immediately blitted to display.
-class PullRenderingManager {
+class TERMIN_ENGINE_API PullRenderingManager {
 public:
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
