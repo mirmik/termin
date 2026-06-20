@@ -71,8 +71,9 @@ target_link_libraries(termin_csg PRIVATE
 set_target_properties(termin_csg PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
+    WINDOWS_EXPORT_ALL_SYMBOLS OFF
 )
+target_compile_definitions(termin_csg PRIVATE TERMIN_CSG_EXPORTS)
 termin_set_rpath_lib(termin_csg)
 
 if(TERMIN_CSG_BUILD_TESTS)

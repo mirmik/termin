@@ -6,6 +6,8 @@
 #include <tgfx/tgfx_mesh3.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
+#include <termin/csg/termin_csg_api.hpp>
+
 namespace termin::csg {
 
 struct Point2 {
@@ -15,7 +17,7 @@ struct Point2 {
 
 using Polygon2 = std::vector<Point2>;
 
-class Solid {
+class TERMIN_CSG_API Solid {
 public:
     Solid();
     Solid(const Solid&);
@@ -40,40 +42,40 @@ private:
 
     Impl* impl_ = nullptr;
 
-    friend Solid make_box(double, double, double, bool);
-    friend Solid make_sphere(double, int);
-    friend Solid make_cylinder(double, double, int, bool);
-    friend Solid make_cone(double, double, double, int, bool);
-    friend Solid unite(const Solid&, const Solid&);
-    friend Solid subtract(const Solid&, const Solid&);
-    friend Solid intersect(const Solid&, const Solid&);
-    friend Solid extrude(const Polygon2&, const std::vector<Polygon2>&, double);
-    friend Solid from_mesh3(const Mesh3&);
-    friend Mesh3 to_mesh3(const Solid&, const std::string&, const std::string&, bool);
+    friend TERMIN_CSG_API Solid make_box(double, double, double, bool);
+    friend TERMIN_CSG_API Solid make_sphere(double, int);
+    friend TERMIN_CSG_API Solid make_cylinder(double, double, int, bool);
+    friend TERMIN_CSG_API Solid make_cone(double, double, double, int, bool);
+    friend TERMIN_CSG_API Solid unite(const Solid&, const Solid&);
+    friend TERMIN_CSG_API Solid subtract(const Solid&, const Solid&);
+    friend TERMIN_CSG_API Solid intersect(const Solid&, const Solid&);
+    friend TERMIN_CSG_API Solid extrude(const Polygon2&, const std::vector<Polygon2>&, double);
+    friend TERMIN_CSG_API Solid from_mesh3(const Mesh3&);
+    friend TERMIN_CSG_API Mesh3 to_mesh3(const Solid&, const std::string&, const std::string&, bool);
 };
 
-Solid make_box(double x, double y, double z, bool centered = true);
-Solid make_sphere(double radius, int circular_segments = 0);
-Solid make_cylinder(double radius, double height, int circular_segments = 0, bool centered = true);
-Solid make_cone(double radius_low, double radius_high, double height, int circular_segments = 0, bool centered = true);
-Solid unite(const Solid& a, const Solid& b);
-Solid subtract(const Solid& a, const Solid& b);
-Solid intersect(const Solid& a, const Solid& b);
-Solid from_mesh3(const Mesh3& mesh);
+TERMIN_CSG_API Solid make_box(double x, double y, double z, bool centered = true);
+TERMIN_CSG_API Solid make_sphere(double radius, int circular_segments = 0);
+TERMIN_CSG_API Solid make_cylinder(double radius, double height, int circular_segments = 0, bool centered = true);
+TERMIN_CSG_API Solid make_cone(double radius_low, double radius_high, double height, int circular_segments = 0, bool centered = true);
+TERMIN_CSG_API Solid unite(const Solid& a, const Solid& b);
+TERMIN_CSG_API Solid subtract(const Solid& a, const Solid& b);
+TERMIN_CSG_API Solid intersect(const Solid& a, const Solid& b);
+TERMIN_CSG_API Solid from_mesh3(const Mesh3& mesh);
 
 // Builds a solid by extruding a 2D contour along +Z. The outer polygon and all
 // holes are interpreted in the local XY plane. Winding does not need to be
 // pre-normalized; Manifold/Clipper2 regularizes the cross-section internally.
-Solid extrude(const Polygon2& outer, const std::vector<Polygon2>& holes, double height);
+TERMIN_CSG_API Solid extrude(const Polygon2& outer, const std::vector<Polygon2>& holes, double height);
 
-Mesh3 to_mesh3(const Solid& solid,
-               const std::string& name = "",
-               const std::string& uuid = "",
-               bool flat_shading = false);
+TERMIN_CSG_API Mesh3 to_mesh3(const Solid& solid,
+                              const std::string& name = "",
+                              const std::string& uuid = "",
+                              bool flat_shading = false);
 
-TcMesh to_tc_mesh(const Solid& solid,
-                  const std::string& name = "",
-                  const std::string& uuid = "",
-                  bool flat_shading = false);
+TERMIN_CSG_API TcMesh to_tc_mesh(const Solid& solid,
+                                 const std::string& name = "",
+                                 const std::string& uuid = "",
+                                 bool flat_shading = false);
 
 } // namespace termin::csg

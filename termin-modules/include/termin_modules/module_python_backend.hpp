@@ -1,10 +1,11 @@
 #pragma once
 
 #include "termin_modules/module_backend.hpp"
+#include "termin_modules/termin_modules_python_api.hpp"
 
 namespace termin_modules {
 
-class PythonModuleBackend : public IModuleBackend {
+class TERMIN_MODULES_PYTHON_API PythonModuleBackend : public IModuleBackend {
 public:
     ModuleKind kind() const override { return ModuleKind::Python; }
 

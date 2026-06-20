@@ -10,10 +10,11 @@
 #include "termin_modules/module_backend.hpp"
 #include "termin_modules/module_descriptor_parser.hpp"
 #include "termin_modules/module_integration.hpp"
+#include "termin_modules/termin_modules_api.hpp"
 
 namespace termin_modules {
 
-class ModuleRuntime {
+class TERMIN_MODULES_API ModuleRuntime {
 public:
     using ModuleEventCallback = std::function<void(const ModuleEvent&)>;
 

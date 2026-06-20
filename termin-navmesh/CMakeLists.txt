@@ -67,6 +67,7 @@ target_link_libraries(termin_navmesh PUBLIC
 set_target_properties(termin_navmesh PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
+    WINDOWS_EXPORT_ALL_SYMBOLS OFF
 )
 termin_set_rpath_lib(termin_navmesh)
 
@@ -138,6 +139,7 @@ if(TERMIN_HAS_RECAST)
         Detour
     )
     target_compile_features(termin_navmesh_components PUBLIC cxx_std_20)
+    target_compile_definitions(termin_navmesh_components PRIVATE TERMIN_NAVMESH_COMPONENTS_EXPORTS)
     if(COMMAND termin_enable_pch_for)
         termin_enable_pch_for(termin_navmesh_components)
     endif()
@@ -147,7 +149,7 @@ if(TERMIN_HAS_RECAST)
     set_target_properties(termin_navmesh_components PROPERTIES
         VERSION ${PROJECT_VERSION}
         SOVERSION 0
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
+        WINDOWS_EXPORT_ALL_SYMBOLS OFF
     )
     termin_set_rpath_lib(termin_navmesh_components)
 

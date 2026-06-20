@@ -36,9 +36,9 @@ add_library(termin_modules::termin_modules ALIAS termin_modules)
 target_compile_features(termin_modules PUBLIC cxx_std_20)
 set_target_properties(termin_modules PROPERTIES
     POSITION_INDEPENDENT_CODE ON
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
+    WINDOWS_EXPORT_ALL_SYMBOLS OFF
 )
-target_compile_definitions(termin_modules PRIVATE TC_EXPORTS)
+target_compile_definitions(termin_modules PRIVATE TERMIN_MODULES_EXPORTS)
 termin_set_rpath_lib(termin_modules)
 
 if(MSVC)
@@ -80,8 +80,9 @@ if(TERMIN_BUILD_PYTHON)
         $<INSTALL_INTERFACE:include>
     )
     set_target_properties(termin_modules_python PROPERTIES
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
+        WINDOWS_EXPORT_ALL_SYMBOLS OFF
     )
+    target_compile_definitions(termin_modules_python PRIVATE TERMIN_MODULES_PYTHON_EXPORTS)
     termin_set_rpath_lib(termin_modules_python)
 
     # Nanobind module
