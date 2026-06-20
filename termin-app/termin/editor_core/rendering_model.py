@@ -24,7 +24,7 @@ from termin.editor_core.signal import Signal
 if TYPE_CHECKING:
     from termin.display import Display
     from termin.scene import TcScene as Scene
-    from termin.visualization.core.viewport import Viewport
+    from termin.viewport import Viewport
     from termin.visualization.core.render_pipeline import RenderPipeline
     from termin.engine import RenderingManager
 
@@ -138,7 +138,7 @@ class RenderingModel:
         ``RenderingManager`` returns (raw ``TcDisplay`` wrappers don't
         carry the subclass ``.surface``).
         """
-        from termin.visualization.platform.input_manager import DisplayInputRouter
+        from termin.display import DisplayInputRouter
 
         display_id = display.tc_display_ptr
 

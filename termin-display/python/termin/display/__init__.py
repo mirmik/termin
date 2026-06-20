@@ -48,6 +48,7 @@ from termin.display._display_native import _render_surface_set_on_resize as _ren
 from termin.display._display_native import _viewport_get_input_manager as _viewport_get_input_manager
 from termin.display._display_native import _viewport_input_manager_free as _viewport_input_manager_free
 from termin.display._display_native import _viewport_input_manager_new as _viewport_input_manager_new
+from termin.display.input_manager import BasicDisplayInputManager
 
 __all__ = [
     "BackendWindow",
@@ -56,5 +57,6 @@ __all__ = [
     "BackendWindowManager",
     "Display",
     "DisplayInputRouter",
+    "BasicDisplayInputManager",
     "FBOSurface",
 ]

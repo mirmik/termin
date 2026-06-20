@@ -23,7 +23,7 @@ from tcgui.widgets.basic import IconButton
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.visualization.core.viewport import Viewport
+    from termin.viewport import Viewport
 
 
 class EditorCameraUIController(PythonComponent):
