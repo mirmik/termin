@@ -20,12 +20,23 @@ inline std::string tc_value_dict_get_string(const tc_value* dict, const char* ke
     return v->data.s;
 }
 
+inline nb::object get_runtime_resource_manager(const char* caller) {
+    nb::object assets_module = nb::module_::import_("termin_assets");
+    nb::object rm = assets_module.attr("get_resource_manager")();
+    if (rm.is_none()) {
+        tc::Log::warn("%s: resource manager is not configured", caller);
+    }
+    return rm;
+}
+
 // ========== TextureHandle inline implementations ==========
 
 inline TextureHandle TextureHandle::from_name(const std::string& name) {
     try {
-        nb::object rm_module = nb::module_::import_("termin.assets.resources");
-        nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+        nb::object rm = get_runtime_resource_manager("TextureHandle::from_name");
+        if (rm.is_none()) {
+            return TextureHandle();
+        }
         nb::object asset = rm.attr("get_texture_asset")(name);
         if (asset.is_none()) {
             return TextureHandle();
@@ -81,8 +92,10 @@ inline TextureHandle TextureHandle::deserialize(const nb::dict& data) {
     if (data.contains("uuid")) {
         try {
             std::string uuid = nb::cast<std::string>(data["uuid"]);
-            nb::object rm_module = nb::module_::import_("termin.assets.resources");
-            nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            nb::object rm = get_runtime_resource_manager("TextureHandle::deserialize");
+            if (rm.is_none()) {
+                return TextureHandle();
+            }
             nb::object asset = rm.attr("get_texture_asset_by_uuid")(uuid);
             if (!asset.is_none()) {
                 return TextureHandle(asset);
@@ -127,8 +140,10 @@ inline void TextureHandle::deserialize_from(const tc_value* data, void*) {
     std::string uuid = tc_value_dict_get_string(data, "uuid");
     if (!uuid.empty()) {
         try {
-            nb::object rm_module = nb::module_::import_("termin.assets.resources");
-            nb::object rm = rm_module.attr("ResourceManager").attr("instance")();
+            nb::object rm = get_runtime_resource_manager("TextureHandle::deserialize_from");
+            if (rm.is_none()) {
+                return;
+            }
             nb::object found = rm.attr("get_texture_asset_by_uuid")(uuid);
             if (!found.is_none()) {
                 asset = found;

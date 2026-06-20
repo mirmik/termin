@@ -306,9 +306,9 @@ class PlayerRuntime:
         if not name or name in ("Default", "(Default)"):
             return None
 
-        from termin.assets.resources import ResourceManager
+        from termin.default_assets.resource_manager import DefaultResourceManager
 
-        rm = ResourceManager.instance()
+        rm = DefaultResourceManager.instance()
         if "-" in name:
             pipeline = rm.get_pipeline_by_uuid(name)
             if pipeline is not None:
@@ -514,7 +514,7 @@ class PlayerRuntime:
     def _load_manifest_assets(self) -> None:
         """Load build resources listed by manifest.json."""
         from tcbase import log
-        from termin.assets.resources import ResourceManager
+        from termin.default_assets.resource_manager import DefaultResourceManager
 
         if self.asset_manifest_path is None:
             log.error("[PlayerRuntime] No asset manifest path set")
@@ -554,7 +554,7 @@ class PlayerRuntime:
             message = diagnostic.get("message")
             log.warning(f"[PlayerRuntime] Build diagnostic {level}: {path}: {message}")
 
-        rm = ResourceManager.instance()
+        rm = DefaultResourceManager.instance()
         import_registry = self._create_build_import_registry()
         loaded_count = load_manifest_assets_with_import_plugins(
             project_path=self.project_path,

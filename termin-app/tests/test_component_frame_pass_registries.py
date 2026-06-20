@@ -2,7 +2,7 @@ import sys
 import types
 import pytest
 
-from termin.assets.resources import ResourceManager
+from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.render_framework.frame_pass_registry import FramePassRegistry
 from termin.scene.component_registry import ComponentClassRegistry
 
@@ -46,7 +46,7 @@ def test_frame_pass_registry_registers_builtin_specs() -> None:
 
 
 def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
 
     class ProbeComponent:
         pass
@@ -90,24 +90,20 @@ def test_default_builtin_specs_live_below_app_layer() -> None:
     ) not in frame_pass_specs
 
 
-def test_app_builtin_specs_extend_default_specs() -> None:
-    from termin.assets.resources._builtins import (
-        APP_BUILTIN_COMPONENTS,
-        APP_BUILTIN_FRAME_PASSES,
-        get_builtin_component_specs,
-        get_builtin_frame_pass_specs,
+def test_default_builtin_specs_include_migrated_app_types() -> None:
+    from termin.default_assets.builtin_types import (
+        get_default_builtin_component_specs,
+        get_default_builtin_frame_pass_specs,
     )
 
-    component_specs = get_builtin_component_specs()
-    frame_pass_specs = get_builtin_frame_pass_specs()
+    component_specs = get_default_builtin_component_specs()
+    frame_pass_specs = get_default_builtin_frame_pass_specs()
 
-    assert APP_BUILTIN_COMPONENTS == []
     assert ("termin.colliders.teleport_component", "TeleportComponent") in component_specs
     assert ("termin.render_components", "CameraComponent") in component_specs
     assert ("termin.render_components", "CameraController") in component_specs
     assert ("termin.ui_components", "UIComponent") in component_specs
 
-    assert APP_BUILTIN_FRAME_PASSES == []
     assert ("termin.render_passes", "UIWidgetPass") in frame_pass_specs
     assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
     assert ("termin.render_passes", "ImmediateDepthPass") in frame_pass_specs
