@@ -270,7 +270,7 @@ Source of truth: [termin-app docs](../termin-app/docs/index.md), [editor archite
 
 Основное приложение/редактор. tcgui является единственным поддерживаемым UI редактора; Qt/PyQt-версия удалена.
 
-Application-level code не должен протекать вниз в graphics/render/scene. `termin-app` может держать compatibility reexports для старых импортов, но canonical ownership таких API должен жить в доменных пакетах.
+Application-level code не должен протекать вниз в graphics/render/scene. Старые app-level compatibility reexports для доменных API разбираются в пользу canonical imports из owning packages; новые re-export слои в `termin-app` добавлять не следует.
 
 ### diffusion-editor
 

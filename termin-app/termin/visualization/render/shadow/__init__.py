@@ -6,8 +6,7 @@ from termin.visualization.render.shadow.shadow_camera import (
     build_shadow_projection_matrix,
     compute_light_space_matrix,
 )
-# ShadowMapArrayResource и ShadowMapArrayEntry перенесены в framegraph.resource
-from termin.visualization.render.framegraph.resource import (
+from termin.render_passes import (
     ShadowMapArrayEntry,
     ShadowMapArrayResource,
 )

@@ -1,5 +1,6 @@
 import sys
 import types
+import pytest
 
 from termin.assets.resources import ResourceManager
 from termin.render_framework.frame_pass_registry import FramePassRegistry
@@ -114,13 +115,17 @@ def test_app_builtin_specs_extend_default_specs() -> None:
     assert ("termin.render_components", "MaterialPass") in frame_pass_specs
 
 
-def test_app_legacy_ui_paths_reexport_canonical_classes() -> None:
+def test_ui_component_and_pass_use_canonical_paths() -> None:
     from termin.render_passes import UIWidgetPass
     from termin.ui_components import UIComponent
-    from termin.visualization.render.framegraph.passes.ui_widget import (
-        UIWidgetPass as LegacyUIWidgetPass,
-    )
-    from termin.visualization.ui.widgets.component import UIComponent as LegacyUIComponent
 
-    assert LegacyUIWidgetPass is UIWidgetPass
-    assert LegacyUIComponent is UIComponent
+    assert UIWidgetPass.__module__ == "termin.render_passes.ui_widget"
+    assert UIComponent.__module__ == "termin.ui_components.component"
+
+
+def test_legacy_ui_component_and_pass_paths_are_removed() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        __import__("termin.visualization.render.framegraph.passes.ui_widget", fromlist=["UIWidgetPass"])
+
+    with pytest.raises(ModuleNotFoundError):
+        __import__("termin.visualization.ui.widgets.component", fromlist=["UIComponent"])
