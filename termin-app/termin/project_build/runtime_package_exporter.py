@@ -1025,7 +1025,7 @@ def _write_pipelines(
     pipeline_dir.mkdir(parents=True, exist_ok=True)
 
     for uuid_value, name in sorted(pipelines.items()):
-        source = _find_pipeline_source(project_root, uuid_value, name)
+        source = _find_pipeline_source(project_root, uuid_value, name, diagnostics)
         if source is None:
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
@@ -1081,7 +1081,28 @@ def _safe_package_stem(value: str) -> str:
     return stem or "pipeline"
 
 
-def _find_pipeline_source(project_root: Path, uuid_value: str, name: str) -> Path | None:
+def _append_project_file_diagnostic(
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    project_root: Path,
+    path: Path,
+    message: str,
+    level: str = "warning",
+) -> None:
+    diagnostics.append(
+        RuntimePackageExportDiagnostic(
+            level=level,
+            path=str(path.relative_to(project_root)),
+            message=message,
+        )
+    )
+
+
+def _find_pipeline_source(
+    project_root: Path,
+    uuid_value: str,
+    name: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> Path | None:
     pipeline_paths = list(_iter_project_pipeline_paths(project_root))
 
     if uuid_value:
@@ -1093,8 +1114,20 @@ def _find_pipeline_source(project_root: Path, uuid_value: str, name: str) -> Pat
                         meta = json.load(f)
                     if isinstance(meta, dict) and meta.get("uuid") == uuid_value:
                         return path
-                except Exception:
-                    pass
+                    if not isinstance(meta, dict):
+                        _append_project_file_diagnostic(
+                            diagnostics,
+                            project_root,
+                            meta_path,
+                            "Runtime exporter skipped pipeline metadata because JSON root is not an object",
+                        )
+                except Exception as exc:
+                    _append_project_file_diagnostic(
+                        diagnostics,
+                        project_root,
+                        meta_path,
+                        f"Runtime exporter failed to inspect pipeline metadata: {exc}",
+                    )
 
         for path in pipeline_paths:
             try:
@@ -1102,8 +1135,20 @@ def _find_pipeline_source(project_root: Path, uuid_value: str, name: str) -> Pat
                     data = json.load(f)
                 if isinstance(data, dict) and data.get("uuid") == uuid_value:
                     return path
-            except Exception:
-                pass
+                if not isinstance(data, dict):
+                    _append_project_file_diagnostic(
+                        diagnostics,
+                        project_root,
+                        path,
+                        "Runtime exporter skipped pipeline asset during source lookup because JSON root is not an object",
+                    )
+            except Exception as exc:
+                _append_project_file_diagnostic(
+                    diagnostics,
+                    project_root,
+                    path,
+                    f"Runtime exporter failed to inspect pipeline asset during source lookup: {exc}",
+                )
 
     if name:
         expected = f"{name}.pipeline"
@@ -1190,7 +1235,7 @@ def _export_mesh_spec(
     diagnostics: list[RuntimePackageExportDiagnostic],
     resource_policy: str,
 ) -> dict[str, Any] | None:
-    mesh_source = _find_mesh_source(project_root, uuid_value, name)
+    mesh_source = _find_mesh_source(project_root, uuid_value, name, diagnostics)
     if mesh_source is not None:
         try:
             return _mesh_source_to_spec(mesh_source, uuid_value, name)
@@ -1242,7 +1287,12 @@ def _export_mesh_spec(
     return None
 
 
-def _find_mesh_source(project_root: Path, uuid_value: str, name: str) -> Path | None:
+def _find_mesh_source(
+    project_root: Path,
+    uuid_value: str,
+    name: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> Path | None:
     mesh_paths = list(_iter_project_mesh_paths(project_root))
 
     if uuid_value:
@@ -1255,8 +1305,20 @@ def _find_mesh_source(project_root: Path, uuid_value: str, name: str) -> Path | 
                     meta = json.load(f)
                 if isinstance(meta, dict) and meta.get("uuid") == uuid_value:
                     return path
-            except Exception:
-                pass
+                if not isinstance(meta, dict):
+                    _append_project_file_diagnostic(
+                        diagnostics,
+                        project_root,
+                        meta_path,
+                        "Runtime exporter skipped mesh metadata because JSON root is not an object",
+                    )
+            except Exception as exc:
+                _append_project_file_diagnostic(
+                    diagnostics,
+                    project_root,
+                    meta_path,
+                    f"Runtime exporter failed to inspect mesh metadata: {exc}",
+                )
 
     if name:
         for path in mesh_paths:
