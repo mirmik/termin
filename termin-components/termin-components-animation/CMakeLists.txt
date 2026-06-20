@@ -45,13 +45,15 @@ add_library(termin_components_animation SHARED
     src/animation_player.cpp
 )
 add_library(termin_components_animation::termin_components_animation ALIAS termin_components_animation)
-target_compile_definitions(termin_components_animation PRIVATE TERMIN_SCENE_EXPORTS TC_EXPORTS)
+target_compile_definitions(termin_components_animation PRIVATE TERMIN_COMPONENTS_ANIMATION_EXPORTS)
+
+set_target_properties(termin_components_animation PROPERTIES
+    WINDOWS_EXPORT_ALL_SYMBOLS OFF
+)
 
 if(MSVC)
     target_compile_options(termin_components_animation PRIVATE /wd4251 /wd4275)
 endif()
-
-set_target_properties(termin_components_animation PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 target_include_directories(termin_components_animation PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

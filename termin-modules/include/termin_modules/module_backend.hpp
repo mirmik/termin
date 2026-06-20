@@ -3,12 +3,13 @@
 #include <functional>
 
 #include "termin_modules/module_types.hpp"
+#include "termin_modules/termin_modules_api.hpp"
 
 namespace termin_modules {
 
 using BuildOutputCallback = std::function<void(const std::string& module_id, const std::string& line)>;
 
-class IModuleBackend {
+class TERMIN_MODULES_API IModuleBackend {
 public:
     virtual ~IModuleBackend() = default;
 
