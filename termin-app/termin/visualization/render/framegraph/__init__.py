@@ -21,7 +21,7 @@ from termin.visualization.render.framegraph.resource import (
 from termin.visualization.render.framegraph.passes.gizmo import GizmoPass
 from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
 from termin.visualization.render.framegraph.passes.ui_widget import UIWidgetPass
-from termin.visualization.render.framegraph.passes.material_pass import MaterialPass
+from termin.render_components.material_pass import MaterialPass
 
 __all__ = [
     "PythonFramePass",

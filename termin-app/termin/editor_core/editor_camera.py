@@ -14,7 +14,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from termin.scene import Entity
-from termin.visualization.core.camera import CameraComponent, OrbitCameraController
+from termin.render_components.camera import CameraComponent
+from termin.visualization.core.camera import OrbitCameraController
 from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.visualization.ui.widgets.component import UIComponent
 

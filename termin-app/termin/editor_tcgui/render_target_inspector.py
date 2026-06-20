@@ -386,7 +386,7 @@ class RenderTargetInspectorTcgui(VStack):
                         self._cameras.append(origin)
                         self._camera_combo.add_item(label)
                 else:
-                    from termin.visualization.core.camera import CameraComponent
+                    from termin.render_components.camera import CameraComponent
                     for ent in entities:
                         cam = ent.get_component(CameraComponent)
                         if cam is None:

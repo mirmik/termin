@@ -233,12 +233,9 @@ def _material_pass_texture_inputs(material_name: object) -> list[tuple[str, str]
     material_text = str(material_name)
     if not material_text or material_text == "(None)":
         return []
-    try:
-        from termin.visualization.render.framegraph.passes.material_pass import get_texture_inputs_for_material
-        return list(get_texture_inputs_for_material(material_text))
-    except Exception as e:
-        log.error(f"[PipelineEditor] failed to collect MaterialPass texture inputs for '{material_text}': {e}")
-        return []
+    from termin.render_components.material_pass import get_texture_inputs_for_material
+
+    return list(get_texture_inputs_for_material(material_text))
 
 
 def _set_dynamic_input_sockets(graph, node, dynamic_inputs: list[tuple[str, str]], keep_sockets: set[str]) -> None:

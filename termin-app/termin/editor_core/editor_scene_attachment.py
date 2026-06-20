@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
-    from termin.visualization.core.camera import CameraComponent
+    from termin.render_components.camera import CameraComponent
     from termin.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.scene import Entity

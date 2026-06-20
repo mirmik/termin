@@ -48,4 +48,14 @@ __all__ = [
     'Sphere',
     'Box',
     'Capsule',
+    'TeleportComponent',
 ]
+
+
+def __getattr__(name: str):
+    if name == "TeleportComponent":
+        from termin.colliders.teleport_component import TeleportComponent
+
+        globals()[name] = TeleportComponent
+        return TeleportComponent
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

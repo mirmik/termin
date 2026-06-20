@@ -147,9 +147,9 @@ class _FakeUi:
 
 
 def _install_camera_component_stub(monkeypatch):
-    camera_module = types.ModuleType("termin.visualization.core.camera")
+    camera_module = types.ModuleType("termin.render_components.camera")
     camera_module.CameraComponent = _CameraComponent
-    monkeypatch.setitem(sys.modules, "termin.visualization.core.camera", camera_module)
+    monkeypatch.setitem(sys.modules, "termin.render_components.camera", camera_module)
 
 
 def _install_xr_origin_component_stub(monkeypatch):

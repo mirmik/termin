@@ -24,7 +24,7 @@ from termin._native.render import (
 )
 
 if TYPE_CHECKING:
-    from termin.visualization.core.camera import Camera
+    from termin.render_components.camera import CameraComponent as Camera
 
 __all__ = [
     "ShadowCameraParams",
