@@ -12,9 +12,7 @@ set(TERMIN_APP_NATIVE_SOURCES
     termin/bindings/render/shader_parser.cpp
     termin/bindings/render/camera.cpp
     termin/bindings/render/shadow.cpp
-    termin/bindings/render/resource_spec.cpp
     termin/bindings/render/frame_pass.cpp
-    termin/bindings/render/tc_pass_bindings.cpp
     termin/bindings/render/material.cpp
     termin/bindings/render/drawable.cpp
     termin/bindings/render/renderers.cpp

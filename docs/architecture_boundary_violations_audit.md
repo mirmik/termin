@@ -188,14 +188,13 @@ virtual tc_mesh* get_mesh_for_phase(
 | Файл | Размер | Проблема |
 |------|--------|----------|
 | `termin-render/python/tc_pass_bindings.cpp` | 1030 строк | Полноценный Python/C++ interop runtime, а не binding layer |
-| `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp` | 1101 строк | Дублированный файл с аналогичными паттернами |
 | `termin-engine/bindings/scene_manager_bindings.cpp` | 364 строки | JSON I/O, scene copy, entity enumeration |
 | `termin-render/python/tc_render_target_bindings.cpp` | 323 строки | Dynamic module imports, format parsing |
 | `termin-inspect/python/bindings/inspect_module.cpp` | 369 строк | Pluggable extractors, tc_value конвертация |
 
 **Массовое hasattr/setattr/getattr** (~69 вхождений в проверенных биндингах):
-- `tc_pass_bindings.cpp` — 24 использования
-- `render_pipeline_bindings.cpp` — 8
+- `termin-render/python/tc_pass_bindings.cpp` — Python pass interop
+- `termin-render/python/render_pipeline_bindings.cpp` — Python pass duck-typing
 - Используется как duck-typing fallback — если Python объект не имеет атрибута, C++ молча пропускает
 
 **Python обёртки с бизнес-логикой:**
@@ -211,10 +210,9 @@ virtual tc_mesh* get_mesh_for_phase(
 
 **Где смотреть:**
 - `termin-base/python/bindings/geom/` vs `termin-app/cpp/termin/bindings/geom/` — одинаковые биндинги геометрии
-- `termin-render/python/tc_pass_bindings.cpp` vs `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp` — не byte-for-byte идентичны, но сохраняют общий крупный interop/runtime паттерн и требуют разведения владельца
 - Смешанная стратегия: `Pose3` — C++ native, `Pose2` — чистый Python numpy
 
-**Новая проверка 2026-05-21:** app/render pass bindings имеют разные хэши, поэтому прежняя формулировка "идентичные файлы" устарела. Проблема остаётся как архитектурное дублирование и расхождение двух реализаций.
+**Обновление 2026-06-20:** app-side legacy copies of `tc_pass_bindings.cpp`, `render_pipeline_bindings.cpp`, `resource_spec.cpp` and `graphics_backend.cpp` were removed from `termin-app`; render pass/pipeline ownership now lives in `termin-render`/`termin-render-framework`. The remaining duplication item here is the geom binding split.
 
 ---
 
@@ -462,13 +460,12 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 Native ownership уже перенесён в `termin-navmesh`: `termin_navmesh_components` и `termin.navmesh._navmesh_native` собираются там, а `termin-app` держит только editor-specific визуализацию off-mesh links. Следующий шаг — разделить Python exports на core/navigation и visual/editor/cache integration, чтобы metadata отражала выбранную публичную поверхность, а не временно смешанный слой.
 
-### 5.4 Вынести app/render pass binding дублирование в одного владельца
+### 5.4 Упростить render pass Python interop runtime
 
 **Где смотреть:**
 - `termin-render/python/tc_pass_bindings.cpp`
-- `termin-app/cpp/termin/bindings/render/tc_pass_bindings.cpp`
 
-Файлы уже не идентичны, поэтому механический delete рискован. Но можно начать с инвентаризации отличий и вынести общий C++ helper для Python pass interop в `termin-render`, оставив app-слою только re-export или app-specific glue.
+App-side legacy duplicate was removed; canonical ownership is now in `termin-render`. Следующий шаг — уменьшить бизнес-логику внутри `tc_pass_bindings.cpp`: вынести Python pass interop helpers в явный runtime/helper слой и оставить binding file тонкой регистрацией API.
 
 ### 5.5 Уточнить публичную поверхность `termin.display`
 
@@ -546,7 +543,7 @@ termin/editor_tcgui/ (tcgui)
 | 2.1 | Прямые пути к include в CMake | termin-display, termin-components-render | CMakeLists.txt | ✅ Исправлено |
 | 2.2 | Утечка tgfx типов в публичном API | termin-render | render_pipeline.hpp, drawable.hpp (+ 30 хедеров) | 🟠 Высокая |
 | 2.3 | Бизнес-логика в биндингах + hasattr/setattr | termin-* python bindings | tc_pass_bindings.cpp и др. | 🟠 Высокая |
-| 2.4 | Дублирование/расхождение биндингов | termin-render, termin-app | tc_pass_bindings.cpp, geom/ | 🟠 Высокая |
+| 2.4 | Дублирование/расхождение биндингов | termin-base, termin-app | geom/ | 🟠 Частично исправлено |
 | 2.5 | Экспозиция внутренних типов через биндинги | termin-* python bindings | uintptr_t handles, tc_* типы | 🟠 Высокая |
 | 2.6 | termin_core дублирует termin-engine | termin-app/core_c | CMakeLists.txt | 🟠 Высокая |
 | 3.1 | Внутренние include из нижних уровней | termin-engine | rendering_manager.cpp | 🟡 Средняя |

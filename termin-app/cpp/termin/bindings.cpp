@@ -31,16 +31,10 @@ namespace termin {
 void bind_gizmo(nb::module_& m);
 void bind_editor_interaction(nb::module_& m);
 void bind_frame_graph_debugger(nb::module_& m);
-void cleanup_pass_classes();
 }
 
 // Entity domain bindings (migrated from _entity_native)
 void bind_entity_domain(nb::module_& m);
-
-// Cleanup function for _native module only
-static void cleanup_all_python_objects() {
-    termin::cleanup_pass_classes();
-}
 
 // Moved from mesh_module.cpp — registers tc_mesh kind handlers for InspectRegistry
 static void register_tc_mesh_kind() {
@@ -209,10 +203,10 @@ NB_MODULE(_native, m) {
         "Clear the picking cache");
 
     // Register cleanup function to be called before Python shutdown
-    m.def("_cleanup_python_objects", &cleanup_all_python_objects,
+    m.def("_cleanup_python_objects", []() {},
         "Internal: cleanup all Python objects stored in C++ before shutdown");
 
     // Register cleanup with Python's atexit module
     nb::module_ atexit = nb::module_::import_("atexit");
-    atexit.attr("register")(nb::cpp_function(&cleanup_all_python_objects));
+    atexit.attr("register")(nb::cpp_function([]() {}));
 }
