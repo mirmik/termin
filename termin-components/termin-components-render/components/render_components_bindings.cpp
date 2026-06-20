@@ -138,8 +138,13 @@ static void set_material_from_python(MaterialPass& pass, nb::object material_obj
 
     if (nb::isinstance<nb::str>(material_obj)) {
         try {
-            nb::module_ rm_mod = nb::module_::import_("termin.assets.resources");
-            nb::object rm = rm_mod.attr("ResourceManager").attr("instance")();
+            nb::module_ assets_mod = nb::module_::import_("termin_assets");
+            nb::object rm = assets_mod.attr("get_resource_manager")();
+            if (rm.is_none()) {
+                tc::Log::error("[render_components] Resource manager is not configured");
+                pass.material = TcMaterial();
+                return;
+            }
             nb::object material = rm.attr("get_material")(material_obj);
             if (material.is_none()) {
                 tc::Log::error("[render_components] Material '%s' not found",
