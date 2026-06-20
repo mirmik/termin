@@ -9,8 +9,8 @@ Physics component package for connecting entity components to physics simulation
 
 ## Основные области
 
-- Build metadata in `CMakeLists.txt`.
-- Component implementation/headers under this package.
+- Build metadata in `CMakeLists.txt` and `setup.py`.
+- Python component implementations under `python/termin/physics_components`.
 
 ## Публичный API
 

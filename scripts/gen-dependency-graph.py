@@ -66,6 +66,7 @@ PYTHON_PKG_TO_DIR = {
     "termin-voxels": "termin-voxels",
     "termin-components-tween": "termin-components-tween",
     "termin-components-voxels": "termin-components-voxels",
+    "termin-components-physics": "termin-components-physics",
     "termin-components-ui": "termin-components-ui",
     "termin-nanobind": "termin-nanobind-sdk",
     "termin-csg": "termin-csg",

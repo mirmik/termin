@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 from termin.scene import Entity
 from termin.render_components.camera import CameraComponent
 from termin.visualization.core.camera import OrbitCameraController
-from termin.visualization.core.viewport_hint import ViewportHintComponent
 from termin.ui_components import UIComponent
 
 if TYPE_CHECKING:
@@ -106,13 +105,6 @@ class EditorCameraManager:
         camera = camera_entity.get_component(CameraComponent)
         print(f"[DEBUG] _ensure_editor_camera: CREATED new camera={camera}, entity={camera_entity}", flush=True)
 
-        # Add ViewportHintComponent for pipeline and layer mask control
-        #hint = ViewportHintComponent()
-        # All layers enabled by default (inherited from ViewportHintComponent.__init__)
-        camera_entity.add_component_by_name("ViewportHintComponent")
-        hint = camera_entity.get_component(ViewportHintComponent)
-        hint.pipeline_name = "(Editor)"
-        
         # Create child entity for editor UI with layer=1
         ui_entity = Entity(name="editor_ui")
         ui_entity.serializable = False

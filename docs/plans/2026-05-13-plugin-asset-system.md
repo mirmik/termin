@@ -202,6 +202,11 @@ Status 2026-06-20: `UIComponent` moved to a new
 both below the app layer. `termin-app` keeps compatibility re-exports and now
 contributes only the editor/tooling `GizmoPass` as an app builtin frame pass.
 
+Status 2026-06-20: rigid-body scene components moved out of `termin-app` into
+`termin-components-physics` while preserving the canonical
+`termin.physics_components` namespace. The stale `ViewportHintComponent` app
+component was removed instead of migrated.
+
 Status 2026-06-17: component class and frame-pass class registries moved out of
 the app resource manager into domain packages. `termin.scene.component_registry`
 now owns `ComponentClassRegistry`, while
