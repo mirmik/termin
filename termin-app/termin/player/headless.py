@@ -202,6 +202,10 @@ def _extract_scene_data(data: object) -> dict:
 
 
 def _default_headless_scene_extensions() -> tuple[int, ...]:
+    from termin_nanobind.runtime import preload_sdk_libs
+
+    preload_sdk_libs("termin_graphics", "termin_graphics2")
+
     from termin._native import register_default_scene_extensions
     from termin.visualization.core.scene import SCENE_EXT_TYPE_COLLISION_WORLD
 
