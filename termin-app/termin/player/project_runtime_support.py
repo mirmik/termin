@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
+    from termin.project.settings import ProjectSettings
 
 from termin.default_assets.resource_manager import DefaultResourceManager
 
@@ -130,7 +131,7 @@ def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
 
 
 def _project_asset_ignored_roots(project_path: Path) -> tuple[str, ...]:
-    from termin.project.settings import ProjectSettings, SERVICE_RESOURCE_IGNORE_PATHS
+    from termin.project.settings import SERVICE_RESOURCE_IGNORE_PATHS
 
     settings = _load_project_settings(project_path)
     ignored_roots = [
