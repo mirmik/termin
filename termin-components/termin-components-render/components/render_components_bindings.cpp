@@ -10,6 +10,7 @@
 #include <tgfx/tgfx_material_handle.hpp>
 
 #include <algorithm>
+#include <tc_inspect_cpp.hpp>
 #include <termin/bindings/entity_helpers.hpp>
 #include <termin/camera/camera_component.hpp>
 #include <termin/lighting/light_component.hpp>
@@ -200,9 +201,12 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("tmesh._tmesh_native");
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.lighting._lighting_native");
+    nb::module_::import_("termin.render._render_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
     nb::module_::import_("termin.skeleton._components_skeleton_native");
     nb::module_::import_("termin.viewport._viewport_native");
+
+    tc::init_cpp_inspect_vtable();
 
     nb::class_<CameraComponent, CxxComponent>(m, "CameraComponent")
         .def("__init__", [](nb::handle self) {

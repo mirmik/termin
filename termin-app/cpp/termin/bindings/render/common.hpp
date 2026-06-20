@@ -14,7 +14,6 @@ namespace termin {
 void bind_shader_parser(nb::module_& m);
 void bind_camera(nb::module_& m);
 void bind_shadow(nb::module_& m);
-void bind_resource_spec(nb::module_& m);
 void bind_frame_pass(nb::module_& m);
 void bind_material(nb::module_& m);
 void bind_tc_material(nb::module_& m);
@@ -22,8 +21,5 @@ void register_material_kind_handlers();
 void bind_drawable(nb::module_& m);
 void bind_renderers(nb::module_& m);
 void bind_solid_primitive(nb::module_& m);
-void bind_tc_pass(nb::module_& m);
-void bind_render_pipeline(nb::module_& m);
-void bind_scene_pipeline_template(nb::module_& m);
 
 } // namespace termin

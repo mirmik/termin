@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include <tc_value.h>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/geom/vec3.hpp>
@@ -121,17 +122,29 @@ INSPECT_FIELD_CALLBACK(WorldTextComponent, std::string, phase_mark, "Phase Mark"
     [](WorldTextComponent* self) -> std::string& { return self->phase_mark; },
     [](WorldTextComponent* self, const std::string& value) { self->set_phase_mark(value); })
 
-INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec3, local_offset, "Local Offset", "vec3",
-    [](WorldTextComponent* self) -> Vec3& { return self->local_offset; },
-    [](WorldTextComponent* self, const Vec3& value) { self->set_local_offset(value); })
+INSPECT_FIELD_ACCESSORS(WorldTextComponent, tc_vec3, local_offset, "Local Offset", "vec3",
+    [](WorldTextComponent* self) {
+        return tc_vec3{self->local_offset.x, self->local_offset.y, self->local_offset.z};
+    },
+    [](WorldTextComponent* self, tc_vec3 value) {
+        self->set_local_offset(Vec3{value.x, value.y, value.z});
+    })
 
-INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec3, plane_normal, "Plane Normal", "vec3",
-    [](WorldTextComponent* self) -> Vec3& { return self->plane_normal; },
-    [](WorldTextComponent* self, const Vec3& value) { self->set_plane_normal(value); })
+INSPECT_FIELD_ACCESSORS(WorldTextComponent, tc_vec3, plane_normal, "Plane Normal", "vec3",
+    [](WorldTextComponent* self) {
+        return tc_vec3{self->plane_normal.x, self->plane_normal.y, self->plane_normal.z};
+    },
+    [](WorldTextComponent* self, tc_vec3 value) {
+        self->set_plane_normal(Vec3{value.x, value.y, value.z});
+    })
 
-INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec3, text_up, "Text Up", "vec3",
-    [](WorldTextComponent* self) -> Vec3& { return self->text_up; },
-    [](WorldTextComponent* self, const Vec3& value) { self->set_text_up(value); })
+INSPECT_FIELD_ACCESSORS(WorldTextComponent, tc_vec3, text_up, "Text Up", "vec3",
+    [](WorldTextComponent* self) {
+        return tc_vec3{self->text_up.x, self->text_up.y, self->text_up.z};
+    },
+    [](WorldTextComponent* self, tc_vec3 value) {
+        self->set_text_up(Vec3{value.x, value.y, value.z});
+    })
 
 INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec4, color, "Color", "color",
     [](WorldTextComponent* self) -> Vec4& { return self->color; },
