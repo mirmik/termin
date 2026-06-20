@@ -1,13 +1,4 @@
-"""
-Unknown/Missing Material - fallback for missing shaders and materials.
-
-Used when:
-- Shader file not found
-- Material class not found
-- Deserialization failed
-
-Provides visual feedback (magenta color).
-"""
+"""Missing-material runtime fallback."""
 
 from __future__ import annotations
 
@@ -47,36 +38,21 @@ void main() {
     vec3 N = normalize(v_normal);
     vec3 V = normalize(u_camera_position - v_world_pos);
 
-    // Simple hemisphere lighting
     float up = dot(N, vec3(0.0, 0.0, 1.0)) * 0.5 + 0.5;
-
-    // Magenta base color (standard "missing texture" color)
     vec3 base_color = vec3(1.0, 0.0, 1.0);
-
-    // Fresnel rim for visibility
     float fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0);
 
     vec3 color = base_color * (0.3 + 0.7 * up) + vec3(1.0) * fresnel * 0.3;
-
     FragColor = vec4(color, 1.0);
 }
 """
+
 
 def create_unknown_material(
     name: str = "UnknownMaterial",
     error_message: str | None = None,
 ) -> TcMaterial:
-    """
-    Create an unknown/missing material (bright magenta).
-
-    Args:
-        name: Material name (can include error info).
-        error_message: Optional error message to store in name.
-
-    Returns:
-        TcMaterial that renders as magenta.
-    """
-    # Include error in name for debugging
+    """Create a visible fallback material for missing or broken materials."""
     mat_name = name
     if error_message:
         mat_name = f"{name}: {error_message[:50]}"
@@ -84,7 +60,6 @@ def create_unknown_material(
     mat = TcMaterial.create(mat_name, "")
     mat.shader_name = "UnknownShader"
 
-    state = TcRenderState.opaque()
     phase = mat.add_phase_from_sources(
         vertex_source=UNKNOWN_VERT,
         fragment_source=UNKNOWN_FRAG,
@@ -92,29 +67,17 @@ def create_unknown_material(
         shader_name="UnknownShader",
         phase_mark="opaque",
         priority=0,
-        state=state,
+        state=TcRenderState.opaque(),
     )
 
     if phase is not None:
-        # Magenta color
         phase.set_color(1.0, 0.0, 1.0, 1.0)
 
     return mat
 
 
-# Legacy function alias
-def get_unknown_shader():
-    """Deprecated: Use create_unknown_material() instead."""
-    raise NotImplementedError("get_unknown_shader() is deprecated. Use create_unknown_material() instead.")
-
-
 class UnknownMaterial(TcMaterial):
-    """
-    Fallback material for missing/broken shaders and materials.
-
-    Renders as bright magenta (standard "missing" color).
-    Returns TcMaterial.
-    """
+    """Fallback material for missing or broken shaders and materials."""
 
     def __new__(
         cls,
@@ -123,7 +86,6 @@ class UnknownMaterial(TcMaterial):
         original_data: dict | None = None,
         error_message: str | None = None,
     ) -> TcMaterial:
-        # Build error message for debugging
         msg = error_message
         if not msg:
             if original_shader:
@@ -134,7 +96,7 @@ class UnknownMaterial(TcMaterial):
 
     @classmethod
     def for_missing_shader(cls, shader_name: str) -> TcMaterial:
-        """Create UnknownMaterial for a missing shader."""
+        """Create an UnknownMaterial for a missing shader."""
         return create_unknown_material(error_message=f"Missing shader: {shader_name}")
 
     @classmethod
@@ -143,7 +105,7 @@ class UnknownMaterial(TcMaterial):
         material_name: str,
         original_data: dict | None = None,
     ) -> TcMaterial:
-        """Create UnknownMaterial for a missing material class."""
+        """Create an UnknownMaterial for a missing material."""
         return create_unknown_material(error_message=f"Missing material: {material_name}")
 
     @classmethod
@@ -152,5 +114,5 @@ class UnknownMaterial(TcMaterial):
         error: Exception,
         original_data: dict | None = None,
     ) -> TcMaterial:
-        """Create UnknownMaterial for a deserialization error."""
+        """Create an UnknownMaterial for a material loading error."""
         return create_unknown_material(error_message=str(error))

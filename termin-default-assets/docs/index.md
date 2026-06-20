@@ -16,11 +16,12 @@ Runtime manager boundary:
   `termin.default_assets.handle_accessors.HandleAccessors` own default handle
   selector access for standard kinds such as `tc_mesh`, `texture_handle`,
   `voxel_grid_handle`, and `navmesh_handle`.
+- `termin.materials.UnknownMaterial` owns the standard missing-material visual
+  fallback used by editor and runtime resource managers.
 - `termin.assets.resources.AppResourceManager` in `termin-app` is an
-  editor/app extension over `DefaultResourceManagerBase`, currently limited to
-  app-specific material fallback behavior. Runtime/player code should use
-  `DefaultResourceManager` or the `termin_assets.get_resource_manager()` process
-  factory instead of importing this app namespace.
+  editor/app extension over `DefaultResourceManagerBase`. Runtime/player code
+  should use `DefaultResourceManager` or the `termin_assets.get_resource_manager()`
+  process factory instead of importing this app namespace.
 - Default component/frame-pass catalogs live below the app layer:
   `CameraController`, render component/pass types and `MaterialPass` are owned
   by `termin-components-render`, `UIComponent` is owned by

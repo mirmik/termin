@@ -21,9 +21,9 @@ class AppResourceManager(
     App resource manager extension over the default runtime manager.
 
     Runtime/default asset ownership lives in ``termin.default_assets``. This
-    class adds app-specific material fallback and visualization component/
-    frame-pass registrations. Use ``ResourceManager`` as the legacy public app
-    alias.
+    class adds editor/app material fallback policy on top of the canonical
+    ``termin.materials.UnknownMaterial`` helper. Use ``ResourceManager`` as the
+    legacy public app alias.
     """
 
     @classmethod
