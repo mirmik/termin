@@ -7,13 +7,12 @@ voxelization helpers, mesh conversion helpers, shader helper and
 Native package ownership:
 - `termin_voxels` - C registry for `TcVoxelGrid` runtime resources.
 - `termin.voxels._voxels_native` - Python bindings for voxelization helpers,
-  native voxel data types, `TcVoxelGrid`, and the compatibility
-  `VoxelGridHandle`.
+  native voxel data types, and `TcVoxelGrid`.
 
 `TcVoxelGrid` is the canonical runtime identity for voxel-grid resources
-(`uuid`, `name`, `source_path`, `version`). `VoxelGridHandle` remains as a
-compatibility wrapper for editor/component paths that still need the legacy
-Python `termin.voxels.grid.VoxelGrid` payload from `VoxelGridAsset`.
+(`uuid`, `name`, `source_path`, `version`) and owns the native `VoxelGrid`
+payload through the core registry. `VoxelGridHandle` is only a compatibility
+alias for `TcVoxelGrid`, matching the `TcMeshHandle = TcMesh` pattern.
 
 Scene/render components are shipped by `termin-components-voxels` under the
 same import namespace (`termin.voxels.display_component`,

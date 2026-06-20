@@ -76,7 +76,9 @@ class VoxelGridRuntimePlugin:
         asset.reload()
 
         if asset.grid is not None:
-            rm.voxel_grids[name] = asset.grid
+            from termin.voxels._voxels_native import TcVoxelGrid
+
+            rm.voxel_grids[name] = TcVoxelGrid.from_uuid(asset.uuid)
 
 
 class VoxelGridAssetPlugin(VoxelGridImportPlugin, VoxelGridRuntimePlugin):

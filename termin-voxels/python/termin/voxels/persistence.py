@@ -33,27 +33,9 @@ class VoxelPersistence:
         """
         path = Path(path)
 
-        data = {
-            "version": VOXEL_FORMAT_VERSION,
-            "name": grid.name,
-            "cell_size": grid.cell_size,
-            "chunks": {},
-        }
-
-        for (cx, cy, cz), chunk in grid.iter_chunks():
-            if chunk.is_empty:
-                continue
-            key = f"{cx},{cy},{cz}"
-            data["chunks"][key] = chunk.serialize()
-
-        # Сохраняем нормали поверхностных вокселей (список нормалей для каждого вокселя)
-        if grid.surface_normals:
-            normals_data = {}
-            for (vx, vy, vz), normals_list in grid.surface_normals.items():
-                key = f"{vx},{vy},{vz}"
-                # Сохраняем как список списков [[nx, ny, nz], ...]
-                normals_data[key] = [n.tolist() for n in normals_list]
-            data["surface_normals"] = normals_data
+        data: dict = grid.serialize()
+        data["version"] = VOXEL_FORMAT_VERSION
+        data["origin"] = [0, 0, 0]
 
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
@@ -94,49 +76,13 @@ class VoxelPersistence:
         Raises:
             ValueError: Если формат файла неверный.
         """
-        import numpy as np
-
         data = json.loads(content)
 
         version = data.get("version", "")
         if not version.startswith("1."):
             raise ValueError(f"Unsupported voxel format version: {version}")
 
-        name = data.get("name", "")
-        cell_size = data.get("cell_size", 0.25)
-
-        # Создаём сетку с origin в (0,0,0) — локальные координаты
-        grid = VoxelGrid(origin=(0, 0, 0), cell_size=cell_size, name=name)
-
-        from termin.voxels.chunk import VoxelChunk
-
-        for key, chunk_data in data.get("chunks", {}).items():
-            parts = key.split(",")
-            if len(parts) != 3:
-                continue
-            cx, cy, cz = int(parts[0]), int(parts[1]), int(parts[2])
-            chunk = VoxelChunk.deserialize(chunk_data)
-            if not chunk.is_empty:
-                grid._chunks[(cx, cy, cz)] = chunk
-
-        # Загружаем нормали поверхностных вокселей
-        for key, normals_data in data.get("surface_normals", {}).items():
-            parts = key.split(",")
-            if len(parts) != 3:
-                continue
-            vx, vy, vz = int(parts[0]), int(parts[1]), int(parts[2])
-
-            # Поддержка старого формата (version 1.1): single normal [x, y, z]
-            # Новый формат (version 1.2): list of normals [[x, y, z], ...]
-            if normals_data and isinstance(normals_data[0], list):
-                # Новый формат: список нормалей
-                normals = [np.array(n, dtype=np.float32) for n in normals_data]
-                grid.set_surface_normals(vx, vy, vz, normals)
-            else:
-                # Старый формат: одна нормаль
-                grid.set_surface_normals(vx, vy, vz, [np.array(normals_data, dtype=np.float32)])
-
-        return grid
+        return VoxelGrid.deserialize(data)
 
     @staticmethod
     def get_info(path: Union[str, Path]) -> dict:

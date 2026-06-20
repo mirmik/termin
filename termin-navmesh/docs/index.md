@@ -14,7 +14,7 @@
   - `termin_navmesh` - C registry for `TcNavMesh` assets.
   - `termin_navmesh_components` - Recast/Detour-backed scene components.
   - `termin.navmesh._navmesh_native` - Python bindings for the native
-    components and `TcNavMesh` handle.
+    components and `TcNavMesh`.
 - Algorithm notes рядом с package-кодом.
 - Packaging metadata в `setup.py` / `pyproject.toml`.
 
@@ -38,9 +38,11 @@ components и `_navmesh_native` собираются здесь.
 Navmesh asset ownership живет в `termin-default-assets`:
 
 - `termin.default_assets.navmesh.asset.NavMeshAsset`
-- `termin.default_assets.navmesh.handle.NavMeshHandle`
 - `termin.default_assets.navmesh.asset_plugin.NavMeshImportPlugin`
 - `termin.default_assets.navmesh.asset_plugin.NavMeshRuntimePlugin`
+
+`TcNavMesh` is the canonical runtime identity. `NavMeshHandle` compatibility
+imports are aliases for `TcNavMesh`, not separate wrappers.
 
 Compatibility status:
 - `termin.navmesh.asset`, `termin.navmesh.asset_plugin`,

@@ -160,9 +160,21 @@ void bind_recast_navmesh_builder(nb::module_& m) {
             if (self.is_valid()) {
                 result["uuid"] = std::string(self.uuid());
                 result["name"] = std::string(self.name());
+                result["type"] = "uuid";
             }
             return result;
-        });
+        })
+        .def_static("deserialize", [](const nb::dict& data) {
+            if (data.contains("uuid")) {
+                return TcNavMesh::from_uuid(nb::cast<std::string>(data["uuid"]));
+            }
+            if (data.contains("name")) {
+                return TcNavMesh::from_name(nb::cast<std::string>(data["name"]));
+            }
+            return TcNavMesh();
+        }, nb::arg("data"));
+
+    m.attr("NavMeshHandle") = m.attr("TcNavMesh");
 
     m.def("declare_navmesh_asset", [](const std::string& uuid, const std::string& name) {
         TcNavMesh navmesh = TcNavMesh::declare(uuid, name);

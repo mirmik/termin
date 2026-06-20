@@ -132,21 +132,21 @@ class LayerMaskKind:
 
 @register_kind("navmesh_handle")
 class NavMeshHandleKind:
-    """Handler for navmesh_handle kind."""
+    """Handler for navmesh_handle kind.
+
+    The kind name is legacy scene schema; the runtime value is TcNavMesh.
+    """
 
     @staticmethod
     def serialize(obj):
-        from termin.default_assets.navmesh.handle import NavMeshHandle
         from termin.navmesh._navmesh_native import TcNavMesh
-        if isinstance(obj, NavMeshHandle):
-            return obj.serialize()
         if isinstance(obj, TcNavMesh):
             return obj.serialize()
         return None
 
     @staticmethod
     def deserialize(data):
-        from termin.default_assets.navmesh.handle import NavMeshHandle
+        from termin.navmesh._navmesh_native import TcNavMesh
         if isinstance(data, dict):
-            return NavMeshHandle.deserialize(data)
-        return NavMeshHandle()
+            return TcNavMesh.deserialize(data)
+        return TcNavMesh()

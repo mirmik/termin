@@ -11,8 +11,8 @@ from ._handle_accessors import HandleAccessors
 
 if TYPE_CHECKING:
     from termin.materials import TcMaterial
-    from termin.voxels._voxels_native import VoxelGridHandle
-    from termin.default_assets.navmesh.handle import NavMeshHandle
+    from termin.voxels._voxels_native import TcVoxelGrid
+    from termin.navmesh._navmesh_native import TcNavMesh
     from termin.skeleton._skeleton_native import TcSkeleton
     from termin.default_assets.ui.handle import UIHandle
     from termin.mesh import TcMesh
@@ -151,45 +151,33 @@ class AccessorsMixin:
                 return handle.name or None
         return None
 
-    # Handle accessors for VoxelGridHandle (creates handle on-the-fly)
-    def _get_voxel_grid_handle(self, name: str) -> Optional["VoxelGridHandle"]:
-        """Get VoxelGridHandle by name."""
-        from termin.voxels._voxels_native import VoxelGridHandle
-        return VoxelGridHandle.from_name(name)
+    # Handle accessors for TcVoxelGrid (legacy kind name: voxel_grid_handle)
+    def _get_voxel_grid_handle(self, name: str) -> Optional["TcVoxelGrid"]:
+        """Get TcVoxelGrid by name."""
+        from termin.voxels._voxels_native import TcVoxelGrid
+        handle = TcVoxelGrid.from_name(name)
+        return handle if handle.is_valid else None
 
     def _find_voxel_grid_handle_name(self, handle: Any) -> Optional[str]:
-        """Find name for a VoxelGridHandle or VoxelGrid."""
-        from termin.voxels._voxels_native import VoxelGridHandle
-        if isinstance(handle, VoxelGridHandle):
-            asset = handle.get_asset()
-            if asset:
-                return asset.name
-            grid = handle.get()
-            if grid:
-                return self.find_voxel_grid_name(grid)
-            return None
-        # Legacy: raw VoxelGrid
-        return self.find_voxel_grid_name(handle)
+        """Find name for a TcVoxelGrid."""
+        from termin.voxels._voxels_native import TcVoxelGrid
+        if isinstance(handle, TcVoxelGrid) and handle.is_valid:
+            return handle.name or None
+        return None
 
-    # Handle accessors for NavMeshHandle
-    def _get_navmesh_handle(self, name: str) -> Optional["NavMeshHandle"]:
-        """Get NavMeshHandle by name."""
-        from termin.default_assets.navmesh.handle import NavMeshHandle
-        return NavMeshHandle.from_name(name)
+    # Handle accessors for TcNavMesh (legacy kind name: navmesh_handle)
+    def _get_navmesh_handle(self, name: str) -> Optional["TcNavMesh"]:
+        """Get TcNavMesh by name."""
+        from termin.navmesh._navmesh_native import TcNavMesh
+        handle = TcNavMesh.from_name(name)
+        return handle if handle.is_valid else None
 
     def _find_navmesh_handle_name(self, handle: Any) -> Optional[str]:
-        """Find name for a NavMeshHandle or NavMesh."""
-        from termin.default_assets.navmesh.handle import NavMeshHandle
-        if isinstance(handle, NavMeshHandle):
-            asset = handle.get_asset()
-            if asset:
-                return asset.name
-            navmesh = handle.get()
-            if navmesh:
-                return self.find_navmesh_name(navmesh)
-            return None
-        # Legacy: raw NavMesh
-        return self.find_navmesh_name(handle)
+        """Find name for a TcNavMesh."""
+        from termin.navmesh._navmesh_native import TcNavMesh
+        if isinstance(handle, TcNavMesh) and handle.is_valid:
+            return handle.name or None
+        return None
 
     # Handle accessors for TcSkeleton
     def _get_tc_skeleton(self, name: str) -> Optional["TcSkeleton"]:
@@ -318,13 +306,13 @@ class AccessorsMixin:
             return TcMaterial.from_uuid(uuid)
 
         if kind == "voxel_grid":
-            from termin.voxels._voxels_native import VoxelGridHandle
-            handle = VoxelGridHandle.from_uuid(uuid)
+            from termin.voxels._voxels_native import TcVoxelGrid
+            handle = TcVoxelGrid.from_uuid(uuid)
             return handle if handle.is_valid else None
 
         if kind == "navmesh":
-            from termin.default_assets.navmesh.handle import NavMeshHandle
-            handle = NavMeshHandle.from_uuid(uuid)
+            from termin.navmesh._navmesh_native import TcNavMesh
+            handle = TcNavMesh.from_uuid(uuid)
             return handle if handle.is_valid else None
 
         if kind == "skeleton":

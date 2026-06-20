@@ -10,8 +10,8 @@ Current adapters:
 
 - `termin.default_assets.mesh`: `MeshAsset`, mesh import/runtime plugins,
   mesh import specs and OBJ/STL loaders.
-- `termin.default_assets.navmesh`: `NavMeshAsset`, `NavMeshHandle`, navmesh
-  import/runtime plugins.
+- `termin.default_assets.navmesh`: `NavMeshAsset`, navmesh import/runtime
+  plugins, and `NavMeshHandle` as a compatibility alias for `TcNavMesh`.
 - `termin.default_assets.voxels`: `VoxelGridAsset`, voxel-grid import/runtime
   plugins.
 - `termin.default_assets.audio`: `AudioClipAsset`, `AudioClipHandle`,

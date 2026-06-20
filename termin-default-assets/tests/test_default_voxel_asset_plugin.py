@@ -27,15 +27,15 @@ def test_voxel_grid_asset_declares_core_runtime_resource() -> None:
     grid = VoxelGrid(name="declared_grid")
 
     asset = VoxelGridAsset.from_grid(grid, source_path="/tmp/declared.voxels")
-    handle = VoxelGridHandle.from_asset(asset)
     by_uuid = TcVoxelGrid.from_uuid(asset.uuid)
     by_name = TcVoxelGrid.from_name("declared_grid")
 
-    assert handle.native.is_valid
+    assert VoxelGridHandle is TcVoxelGrid
     assert by_uuid.is_valid
     assert by_name.is_valid
     assert by_uuid.uuid == asset.uuid
     assert by_name.uuid == asset.uuid
+    assert by_uuid.grid.get(0, 0, 0) == grid.get(0, 0, 0)
 
 
 def test_voxel_grid_plugins_register_with_asset_registry() -> None:

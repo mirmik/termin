@@ -1,4 +1,5 @@
 #include "termin/voxels/tc_voxel_grid_registry.h"
+#include "termin/voxels/tc_voxel_grid_payload.hpp"
 
 #include <tcbase/tc_log.h>
 #include <tcbase/tc_pool.h>
@@ -27,6 +28,12 @@ static uint32_t voxel_grid_unpack_index(void* ptr) {
 
 static void voxel_grid_bump_version(tc_voxel_grid* grid) {
     if (grid) grid->version++;
+}
+
+static void voxel_grid_free_payload(tc_voxel_grid* grid) {
+    if (!grid || !grid->native_payload) return;
+    delete static_cast<termin::voxels::VoxelGrid*>(grid->native_payload);
+    grid->native_payload = nullptr;
 }
 
 static void voxel_grid_init_slot(tc_voxel_grid* grid, tc_handle h, const char* uuid, bool loaded) {
@@ -58,6 +65,13 @@ void tc_voxel_grid_init(void) {
 
 void tc_voxel_grid_shutdown(void) {
     if (!g_initialized) return;
+    for (uint32_t i = 0; i < g_voxel_grid_pool.capacity; ++i) {
+        if (g_voxel_grid_pool.states[i] == TC_SLOT_OCCUPIED) {
+            tc_voxel_grid* grid = static_cast<tc_voxel_grid*>(
+                tc_pool_get_unchecked(&g_voxel_grid_pool, i));
+            voxel_grid_free_payload(grid);
+        }
+    }
     tc_pool_free(&g_voxel_grid_pool);
     tc_resource_map_free(g_uuid_to_index);
     g_uuid_to_index = nullptr;
@@ -170,6 +184,7 @@ bool tc_voxel_grid_destroy(tc_voxel_grid_handle h) {
     tc_voxel_grid* grid = tc_voxel_grid_get(h);
     if (!grid) return false;
     tc_resource_map_remove(g_uuid_to_index, grid->uuid);
+    voxel_grid_free_payload(grid);
     return tc_pool_free_slot(&g_voxel_grid_pool, h);
 }
 
@@ -217,6 +232,51 @@ bool tc_voxel_grid_set_metadata(tc_voxel_grid* grid, const char* name, const cha
     voxel_grid_bump_version(grid);
     return true;
 }
+
+namespace termin {
+namespace voxels {
+
+VoxelGrid* tc_voxel_grid_payload(tc_voxel_grid_handle h) {
+    tc_voxel_grid* grid = tc_voxel_grid_get(h);
+    return grid ? static_cast<VoxelGrid*>(grid->native_payload) : nullptr;
+}
+
+const VoxelGrid* tc_voxel_grid_payload_const(tc_voxel_grid_handle h) {
+    tc_voxel_grid* grid = tc_voxel_grid_get(h);
+    return grid ? static_cast<const VoxelGrid*>(grid->native_payload) : nullptr;
+}
+
+bool tc_voxel_grid_set_payload_copy(tc_voxel_grid_handle h, const VoxelGrid& payload) {
+    tc_voxel_grid* grid = tc_voxel_grid_get(h);
+    if (!grid) return false;
+    voxel_grid_free_payload(grid);
+    grid->native_payload = new VoxelGrid(payload);
+    grid->is_loaded = 1;
+    if (grid->name == nullptr || grid->name[0] == '\0') {
+        const std::string& payload_name = payload.name();
+        if (!payload_name.empty()) {
+            grid->name = tgfx_intern_string(payload_name.c_str());
+        }
+    }
+    const std::string& payload_source_path = payload.source_path();
+    if (!payload_source_path.empty()) {
+        grid->source_path = tgfx_intern_string(payload_source_path.c_str());
+    }
+    voxel_grid_bump_version(grid);
+    return true;
+}
+
+bool tc_voxel_grid_clear_payload(tc_voxel_grid_handle h) {
+    tc_voxel_grid* grid = tc_voxel_grid_get(h);
+    if (!grid) return false;
+    voxel_grid_free_payload(grid);
+    grid->is_loaded = 0;
+    voxel_grid_bump_version(grid);
+    return true;
+}
+
+} // namespace voxels
+} // namespace termin
 
 void tc_voxel_grid_add_ref(tc_voxel_grid* grid) {
     if (grid) grid->ref_count++;

@@ -4,7 +4,7 @@
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <DetourNavMesh.h>
 #include <DetourStatus.h>
-#include <inspect/tc_kind_cpp.hpp>
+#include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <tcbase/trent/json.h>
 #include <algorithm>
 #include <any>
@@ -66,32 +66,7 @@ bool set_debug_shader_entries(tc_material_phase* phase, const char* shader_name)
 
 struct NavMeshHandleKindRegistrar {
     NavMeshHandleKindRegistrar() {
-        tc::KindRegistryCpp::instance().register_kind(
-            "navmesh_handle",
-            [](const std::any& value) -> tc_value {
-                const std::string uuid =
-                    value.type() == typeid(std::string) ? std::any_cast<std::string>(value) : std::string();
-                tc_value result = tc_value_dict_new();
-                tc_value_dict_set(&result, "uuid", tc_value_string(uuid.c_str()));
-                tc_value_dict_set(&result, "name", tc_value_string(""));
-                return result;
-            },
-            [](const tc_value* value, void*) -> std::any {
-                if (!value || value->type == TC_VALUE_NIL) {
-                    return std::string();
-                }
-                if (value->type == TC_VALUE_STRING && value->data.s) {
-                    return std::string(value->data.s);
-                }
-                if (value->type == TC_VALUE_DICT) {
-                    tc_value* uuid = tc_value_dict_get(const_cast<tc_value*>(value), "uuid");
-                    if (uuid && uuid->type == TC_VALUE_STRING && uuid->data.s) {
-                        return std::string(uuid->data.s);
-                    }
-                }
-                return std::string();
-            }
-        );
+        tc::register_cpp_handle_kind<TcNavMesh>("navmesh_handle");
     }
 };
 

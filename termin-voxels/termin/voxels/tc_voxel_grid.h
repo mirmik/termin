@@ -39,6 +39,7 @@ struct tc_voxel_grid {
     uint8_t _pad[3];
     tc_voxel_grid_load_fn load_callback;
     void* load_user_data;
+    void* native_payload;
 };
 
 TERMIN_VOXELS_API void tc_voxel_grid_add_ref(tc_voxel_grid* grid);

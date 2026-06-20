@@ -24,10 +24,12 @@ if TYPE_CHECKING:
     from termin.glb.asset import GLBAsset
     from termin.materials import ShaderMultyPhaseProgramm
     from termin.materials import TcMaterial as Material
+    from termin.navmesh._navmesh_native import TcNavMesh
     from termin.navmesh.types import NavMesh
     from termin.prefab.asset import PrefabAsset
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
+    from termin.voxels._voxels_native import TcVoxelGrid
     from termin.voxels.grid import VoxelGrid
 
 
@@ -51,8 +53,8 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         # authoritative asset storage; these preserve legacy fast paths.
         self.materials: dict[str, "Material"] = {}
         self.shaders: dict[str, "ShaderMultyPhaseProgramm"] = {}
-        self.voxel_grids: dict[str, "VoxelGrid"] = {}
-        self.navmeshes: dict[str, "NavMesh"] = {}
+        self.voxel_grids: dict[str, "TcVoxelGrid"] = {}
+        self.navmeshes: dict[str, "TcNavMesh"] = {}
         self.animation_clips: dict[str, "TcAnimationClip"] = {}
         self.skeletons: dict[str, "TcSkeleton"] = {}
 

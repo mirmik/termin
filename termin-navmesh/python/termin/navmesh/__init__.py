@@ -30,6 +30,7 @@ _NATIVE_EXPORT_NAMES = frozenset(
         "OffMeshLinkType",
         "RecastNavMeshBuilderComponent",
         "RecastBuildResult",
+        "NavMeshHandle",
         "TcNavMesh",
         "clear_navmesh_load_callback",
         "declare_navmesh_asset",
@@ -69,6 +70,7 @@ def _load_native_exports() -> dict[str, object]:
             OffMeshLinkType,
             RecastNavMeshBuilderComponent,
             RecastBuildResult,
+            NavMeshHandle,
             TcNavMesh,
             clear_navmesh_load_callback,
             declare_navmesh_asset,
@@ -93,6 +95,7 @@ def _load_native_exports() -> dict[str, object]:
         "OffMeshLinkType": OffMeshLinkType,
         "RecastNavMeshBuilderComponent": RecastNavMeshBuilderComponent,
         "RecastBuildResult": RecastBuildResult,
+        "NavMeshHandle": NavMeshHandle,
         "TcNavMesh": TcNavMesh,
         "clear_navmesh_load_callback": clear_navmesh_load_callback,
         "declare_navmesh_asset": declare_navmesh_asset,
@@ -109,12 +112,6 @@ def __getattr__(name: str):
 
         globals()["NavMeshAsset"] = NavMeshAsset
         return NavMeshAsset
-
-    if name == "NavMeshHandle":
-        from termin.default_assets.navmesh.handle import NavMeshHandle
-
-        globals()["NavMeshHandle"] = NavMeshHandle
-        return NavMeshHandle
 
     if name == "PolygonBuilder":
         from termin.navmesh.polygon_builder import PolygonBuilder
@@ -145,6 +142,7 @@ __all__ = [
     "OffMeshLinkType",
     "RecastNavMeshBuilderComponent",
     "RecastBuildResult",
+    "NavMeshHandle",
     "TcNavMesh",
     "clear_navmesh_load_callback",
     "declare_navmesh_asset",
