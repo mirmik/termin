@@ -139,6 +139,12 @@ def test_dead_visualization_legacy_paths_are_removed() -> None:
         "termin.visualization.render.materials.unknown_material",
         "termin.visualization.render.materials.shadow_material",
         "termin.visualization.render.materials.depth_material",
+        "termin.visualization.render.lighting",
+        "termin.visualization.render.lighting.light_setup",
+        "termin.visualization.render.lighting.shading",
+        "termin.visualization.platform.backends",
+        "termin.visualization.platform.backends.sdl_embedded",
+        "termin.visualization.core.world",
     ]
 
     for module_name in removed_modules:
