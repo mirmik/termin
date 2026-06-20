@@ -58,8 +58,9 @@ int main() {
         tgfx::TextureDesc rt_desc;
         rt_desc.width = static_cast<uint32_t>(fb_w);
         rt_desc.height = static_cast<uint32_t>(fb_h);
-        rt_desc.format = tgfx::PixelFormat::BGRA8_UNorm;
+        rt_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
         rt_desc.usage = tgfx::TextureUsage::ColorAttachment |
+                        tgfx::TextureUsage::Sampled |
                         tgfx::TextureUsage::CopySrc;
         tgfx::TextureHandle rt = dev->create_texture(rt_desc);
         if (!rt) {
