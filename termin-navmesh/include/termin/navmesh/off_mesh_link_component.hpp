@@ -16,6 +16,7 @@
 #include <tc_log.h>
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 namespace termin {
 
@@ -29,7 +30,7 @@ enum class OffMeshLinkType : int {
     Climb = 3,
 };
 
-class OffMeshLinkComponent : public CxxComponent, public Drawable {
+class TERMIN_NAVMESH_COMPONENTS_API OffMeshLinkComponent : public CxxComponent, public Drawable {
 public:
     bool enabled = true;
     int link_type = static_cast<int>(OffMeshLinkType::JumpDown);

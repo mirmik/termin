@@ -10,6 +10,7 @@
 #include <tgfx/tgfx_material_handle.hpp>
 #include <termin/navmesh/recast_debug_data.hpp>
 #include <termin/navmesh/navmesh_keeper_component.hpp>
+#include <termin/navmesh/termin_navmesh_components_api.hpp>
 #include <Recast.h>
 #include <string>
 
@@ -22,7 +23,7 @@ enum class MeshSource : int {
 };
 
 // Result of navmesh build
-struct RecastBuildResult {
+struct TERMIN_NAVMESH_COMPONENTS_API RecastBuildResult {
     bool success = false;
     std::string error;
 
@@ -32,7 +33,7 @@ struct RecastBuildResult {
 };
 
 // NavMesh builder component using Recast library
-class RecastNavMeshBuilderComponent : public CxxComponent, public Drawable {
+class TERMIN_NAVMESH_COMPONENTS_API RecastNavMeshBuilderComponent : public CxxComponent, public Drawable {
 public:
     // --- Configuration fields (exposed to inspector) ---
 

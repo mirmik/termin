@@ -50,12 +50,12 @@ const tc_input_manager_vtable counting_input_vtable = {
     .on_mouse_button = count_mouse_button,
 };
 
-CountingInput make_counting_input()
+void init_counting_input(CountingInput* input)
 {
-    CountingInput input;
-    tc_input_manager_init(&input.manager, &counting_input_vtable);
-    input.manager.userdata = &input;
-    return input;
+    input->presses = 0;
+    input->releases = 0;
+    tc_input_manager_init(&input->manager, &counting_input_vtable);
+    input->manager.userdata = input;
 }
 
 } // namespace
@@ -78,8 +78,10 @@ int main()
     tc_display_add_viewport(display, left);
     tc_display_add_viewport(display, right);
 
-    CountingInput left_input = make_counting_input();
-    CountingInput right_input = make_counting_input();
+    CountingInput left_input;
+    CountingInput right_input;
+    init_counting_input(&left_input);
+    init_counting_input(&right_input);
     tc_viewport_set_input_manager(left, &left_input.manager);
     tc_viewport_set_input_manager(right, &right_input.manager);
 

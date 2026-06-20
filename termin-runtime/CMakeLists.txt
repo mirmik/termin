@@ -62,10 +62,10 @@ add_library(termin_runtime::termin_runtime ALIAS termin_runtime)
 
 set_target_properties(termin_runtime PROPERTIES
     POSITION_INDEPENDENT_CODE ON
+    WINDOWS_EXPORT_ALL_SYMBOLS OFF
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
 )
 termin_set_rpath_lib(termin_runtime)
 

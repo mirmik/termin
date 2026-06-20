@@ -8,12 +8,13 @@
 #include <termin/render/drawable.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
+#include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 namespace termin {
 
 class RecastNavMeshBuilderComponent;
 
-class NavMeshKeeperComponent : public CxxComponent, public Drawable {
+class TERMIN_NAVMESH_COMPONENTS_API NavMeshKeeperComponent : public CxxComponent, public Drawable {
     friend class RecastNavMeshBuilderComponent;
 
 public:
