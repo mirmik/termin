@@ -5,6 +5,17 @@
 
 namespace termin {
 
+inline std::string voxel_handle_tc_value_dict_get_string(
+    const tc_value* dict,
+    const char* key,
+    const char* default_val = ""
+) {
+    if (!dict || dict->type != TC_VALUE_DICT) return default_val;
+    tc_value* v = tc_value_dict_get(const_cast<tc_value*>(dict), key);
+    if (!v || v->type != TC_VALUE_STRING || !v->data.s) return default_val;
+    return v->data.s;
+}
+
 inline VoxelGridHandle VoxelGridHandle::from_name(const std::string& name) {
     try {
         nb::object rm_module = nb::module_::import_("termin.assets.resources");
@@ -87,7 +98,7 @@ inline void VoxelGridHandle::deserialize_from(const tc_value* data, void*) {
         return;
     }
 
-    std::string uuid = tc_value_dict_get_string(data, "uuid");
+    std::string uuid = voxel_handle_tc_value_dict_get_string(data, "uuid");
     if (!uuid.empty()) {
         try {
             nb::object rm_module = nb::module_::import_("termin.assets.resources");
@@ -102,13 +113,13 @@ inline void VoxelGridHandle::deserialize_from(const tc_value* data, void*) {
         }
     }
 
-    std::string type = tc_value_dict_get_string(data, "type", "none");
+    std::string type = voxel_handle_tc_value_dict_get_string(data, "type", "none");
 
     if (type == "named") {
-        std::string name = tc_value_dict_get_string(data, "name");
+        std::string name = voxel_handle_tc_value_dict_get_string(data, "name");
         asset = from_name(name).asset;
     } else if (type == "path") {
-        std::string path = tc_value_dict_get_string(data, "path");
+        std::string path = voxel_handle_tc_value_dict_get_string(data, "path");
         size_t last_slash = path.find_last_of("/\\");
         std::string filename = (last_slash != std::string::npos)
             ? path.substr(last_slash + 1) : path;
