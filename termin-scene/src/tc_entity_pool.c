@@ -5,6 +5,7 @@
 #include "core/tc_component.h"
 #include "core/tc_scene.h"
 #include <tcbase/tc_log.h>
+#include <tcbase/tc_types.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -49,13 +50,8 @@ static void fill_matrix_identity(double* m16) {
 #define INITIAL_CHILDREN_CAPACITY 4
 #define INITIAL_COMPONENTS_CAPACITY 4
 
-typedef struct {
-    double x, y, z;
-} Vec3;
-
-typedef struct {
-    double x, y, z, w;
-} Quat;
+typedef tc_vec3 Vec3;
+typedef tc_quat Quat;
 
 typedef struct {
     Vec3 position;
