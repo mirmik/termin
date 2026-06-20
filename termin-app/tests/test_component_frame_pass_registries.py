@@ -77,8 +77,10 @@ def test_default_builtin_specs_live_below_app_layer() -> None:
     frame_pass_specs = get_default_builtin_frame_pass_specs()
 
     assert ("termin.render_components", "CameraComponent") in component_specs
-    assert ("termin.components.teleport_component", "TeleportComponent") not in component_specs
+    assert ("termin.render_components", "CameraController") in component_specs
+    assert ("termin.colliders.teleport_component", "TeleportComponent") in component_specs
     assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
+    assert ("termin.render_components", "MaterialPass") in frame_pass_specs
     assert (
         "termin.visualization.render.framegraph.passes.ui_widget",
         "UIWidgetPass",
@@ -96,9 +98,10 @@ def test_app_builtin_specs_extend_default_specs() -> None:
     component_specs = get_builtin_component_specs()
     frame_pass_specs = get_builtin_frame_pass_specs()
 
-    assert ("termin.components.teleport_component", "TeleportComponent") in APP_BUILTIN_COMPONENTS
-    assert ("termin.components.teleport_component", "TeleportComponent") in component_specs
+    assert APP_BUILTIN_COMPONENTS == []
+    assert ("termin.colliders.teleport_component", "TeleportComponent") in component_specs
     assert ("termin.render_components", "CameraComponent") in component_specs
+    assert ("termin.render_components", "CameraController") in component_specs
 
     app_ui_spec = (
         "termin.visualization.render.framegraph.passes.ui_widget",
@@ -107,3 +110,4 @@ def test_app_builtin_specs_extend_default_specs() -> None:
     assert app_ui_spec in APP_BUILTIN_FRAME_PASSES
     assert app_ui_spec in frame_pass_specs
     assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
+    assert ("termin.render_components", "MaterialPass") in frame_pass_specs

@@ -569,7 +569,7 @@ class RenderingControllerTcgui:
         self._notify_rendering_changed()
 
     def _find_first_scene_camera(self, scene: "Scene"):
-        from termin.visualization.core.camera import CameraComponent
+        from termin.render_components.camera import CameraComponent
 
         for entity in scene.entities:
             camera = entity.get_component(CameraComponent)

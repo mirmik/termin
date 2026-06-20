@@ -24,7 +24,15 @@ class AppResourceManager(
     frame-pass registrations. Use ``ResourceManager`` as the legacy public app
     alias.
     """
-    pass
+
+    @classmethod
+    def instance(cls) -> "AppResourceManager":
+        instance = super().instance()
+
+        from termin_assets import set_resource_manager_factory
+
+        set_resource_manager_factory(cls.instance)
+        return instance
 
 
 ResourceManager = AppResourceManager

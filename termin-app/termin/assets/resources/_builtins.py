@@ -8,15 +8,11 @@ from termin.default_assets.builtin_types import (
     get_default_builtin_frame_pass_specs,
 )
 
-APP_BUILTIN_COMPONENTS: list[BuiltinTypeSpec] = [
-    ("termin.visualization.core.camera", "CameraController"),
-    ("termin.components.teleport_component", "TeleportComponent"),
-]
+APP_BUILTIN_COMPONENTS: list[BuiltinTypeSpec] = []
 
 APP_BUILTIN_FRAME_PASSES: list[BuiltinTypeSpec] = [
     ("termin.visualization.render.framegraph.passes.ui_widget", "UIWidgetPass"),
     ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
-    ("termin.visualization.render.framegraph.passes.material_pass", "MaterialPass"),
 ]
 
 

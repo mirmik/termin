@@ -27,9 +27,12 @@ from termin.render_components._components_render_native import (
     XrOriginComponent,
     XrThumbstickLocomotionComponent,
 )
+from termin.render_components.camera import CameraController
+from termin.render_components.material_pass import get_texture_inputs_for_material
 
 __all__ = [
     "CameraComponent",
+    "CameraController",
     "ColorToDepthPass",
     "DepthOnlyPass",
     "DepthPass",
@@ -47,4 +50,5 @@ __all__ = [
     "WorldTextOrientation",
     "XrOriginComponent",
     "XrThumbstickLocomotionComponent",
+    "get_texture_inputs_for_material",
 ]

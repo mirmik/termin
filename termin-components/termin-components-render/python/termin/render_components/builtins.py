@@ -4,6 +4,7 @@ from __future__ import annotations
 
 COMPONENT_SPECS: list[tuple[str, str]] = [
     ("termin.render_components", "CameraComponent"),
+    ("termin.render_components", "CameraController"),
     ("termin.render_components", "MeshRenderer"),
     ("termin.render_components", "SkinnedMeshRenderer"),
     ("termin.render_components", "LineRenderer"),
@@ -19,6 +20,7 @@ FRAME_PASS_SPECS: list[tuple[str, str]] = [
     ("termin.render_components", "DepthToColorPass"),
     ("termin.render_components", "ColorToDepthPass"),
     ("termin.render_components", "NormalPass"),
+    ("termin.render_components", "MaterialPass"),
 ]
 
 __all__ = ["COMPONENT_SPECS", "FRAME_PASS_SPECS"]

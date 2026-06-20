@@ -25,7 +25,11 @@ setup(
         "termin.colliders": "python/termin/colliders",
         "termin.collision": "python/termin/collision",
     },
-    install_requires=["termin-nanobind"],
+    install_requires=[
+        "tcbase",
+        "termin-input",
+        "termin-nanobind",
+    ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,

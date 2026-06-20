@@ -31,6 +31,7 @@ DEFAULT_DOMAIN_COMPONENT_SPECS: list[BuiltinTypeSpec] = [
     ("termin.physics.fem_fixed_joint_component", "FEMFixedJointComponent"),
     ("termin.physics.fem_revolute_joint_component", "FEMRevoluteJointComponent"),
     ("termin.colliders.collider_component", "ColliderComponent"),
+    ("termin.colliders.teleport_component", "TeleportComponent"),
     ("termin.mesh.mesh_component", "MeshComponent"),
     ("termin.mesh.script_mesh_component", "ScriptMeshComponent"),
     ("termin.mesh.procedural_mesh_component", "ProceduralMeshComponent"),

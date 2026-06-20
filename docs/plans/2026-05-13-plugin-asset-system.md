@@ -186,6 +186,14 @@ logic lives in `termin.default_assets.resource_accessors` /
 an app-specific extension/compatibility path for visualization additions,
 material fallback behavior, and old imports.
 
+Status 2026-06-20: the already separable component/frame-pass additions moved
+out of the app builtin catalog. `CameraController` and the `MaterialPass`
+inspect/dynamic-input helper now live in `termin.render_components`, while
+`TeleportComponent` lives in `termin.colliders.teleport_component`.
+`termin.default_assets.builtin_types` registers these as SDK defaults, and
+`termin-app` now contributes only the editor/UI-specific `UIWidgetPass` and
+`GizmoPass`. The old app module paths are compatibility re-exports.
+
 Status 2026-06-17: component class and frame-pass class registries moved out of
 the app resource manager into domain packages. `termin.scene.component_registry`
 now owns `ComponentClassRegistry`, while

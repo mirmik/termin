@@ -579,7 +579,7 @@ class PlayerRuntime:
     def _setup_camera(self):
         """Find existing camera or create default one."""
         from tcbase import log
-        from termin.visualization.core.camera import CameraComponent
+        from termin.render_components.camera import CameraComponent
 
         log.info(f"[PlayerRuntime] Looking for camera in {len(self.scene.entities)} entities")
 
