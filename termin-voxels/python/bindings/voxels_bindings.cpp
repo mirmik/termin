@@ -7,7 +7,7 @@
 #include <nanobind/stl/optional.h>
 
 #include "termin/voxels/voxel_grid.hpp"
-#include "termin/assets/handles.hpp"
+#include "termin/voxels/voxel_grid_handle.hpp"
 #include "termin/inspect/tc_kind.hpp"
 #include "inspect/tc_inspect_python.hpp"
 #include <tcbase/tc_log.hpp>

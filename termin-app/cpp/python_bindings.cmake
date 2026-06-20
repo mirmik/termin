@@ -3,16 +3,6 @@
 
 find_package(nanobind CONFIG REQUIRED)
 
-# ============== Small utility modules ==============
-
-# Voxels native module (VoxelGrid, voxelization, VoxelGridHandle)
-nanobind_add_module(_voxels_native NB_SHARED termin/voxels_bindings.cpp)
-target_compile_options(_voxels_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-target_link_libraries(_voxels_native PRIVATE entity_lib tcbase::termin_base)
-
-# _lighting_native has been extracted into the standalone termin-lighting subproject.
-# See termin-env/termin-lighting/ — it is built by build-sdk-bindings.sh after main termin.
-
 # ============== Main unified module ==============
 
 set(TERMIN_APP_NATIVE_SOURCES
@@ -71,6 +61,7 @@ target_link_libraries(_native PRIVATE
     termin_inspect::termin_inspect_python
     termin_skeleton::termin_skeleton
     termin_components_skeleton::termin_components_skeleton
+    termin_voxels::termin_voxels
     termin_engine::termin_engine
     termin_render_passes::termin_render_passes
     tgfx::termin_graphics
@@ -119,10 +110,6 @@ set_target_properties(entity_lib PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
 )
-set_target_properties(_voxels_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -130,5 +117,4 @@ set_target_properties(_native PROPERTIES
 
 # ============== Install targets ==============
 
-install(TARGETS _voxels_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/voxels)
 install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})

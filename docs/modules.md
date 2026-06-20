@@ -236,8 +236,7 @@ Voxel grid runtime API, persistence, mesh voxelization helpers and
 `termin.voxels._voxels_native`.
 
 Scene/render components live in [termin-components-voxels](#component-libraries);
-the native CMake target is still built from `termin-app/cpp` during the current
-migration stage.
+the native CMake target is owned and built by `termin-voxels`.
 
 ## Component Libraries
 
