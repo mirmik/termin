@@ -125,3 +125,21 @@ def test_legacy_ui_component_and_pass_paths_are_removed() -> None:
 
     with pytest.raises(ModuleNotFoundError):
         __import__("termin.visualization.ui.widgets.component", fromlist=["UIComponent"])
+
+
+def test_dead_visualization_legacy_paths_are_removed() -> None:
+    removed_modules = [
+        "termin.visualization.components",
+        "termin.visualization.ui",
+        "termin.visualization.render.shadow",
+        "termin.visualization.render.shadow.shadow_camera",
+        "termin.visualization.render.materials.pick_material",
+        "termin.visualization.render.materials.simple",
+        "termin.visualization.render.materials.grid_material",
+        "termin.visualization.render.materials.shadow_material",
+        "termin.visualization.render.materials.depth_material",
+    ]
+
+    for module_name in removed_modules:
+        with pytest.raises(ModuleNotFoundError):
+            __import__(module_name)

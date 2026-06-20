@@ -248,6 +248,11 @@ Status:
   from catalog-managed GLSL built-ins with `legacy_uniform` metadata, which
   keeps them on the old material uniform ABI while making the source location
   canonical.
+- Status 2026-06-20: the unused app-side legacy helper modules
+  `termin.visualization.render.materials.pick_material`,
+  `shadow_material`, and `depth_material` were removed. Runtime materials should
+  come from material/shader assets or catalog-managed built-ins; app
+  `UnknownMaterial` remains for editor missing-material visualization.
 - Removed the unused Python `visualization.render.skybox` shader/string module;
   live skybox rendering is owned by the catalog-managed `termin-engine-skybox`
   program path.
