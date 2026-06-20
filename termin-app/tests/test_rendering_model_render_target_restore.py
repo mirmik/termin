@@ -15,10 +15,11 @@ _SPEC.loader.exec_module(_MODULE)
 RenderingModel = _MODULE.RenderingModel
 
 _RT_CONFIG_PATH = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[2]
+    / "termin-render"
+    / "python"
     / "termin"
-    / "visualization"
-    / "core"
+    / "render"
     / "render_target_config.py"
 )
 
@@ -99,9 +100,9 @@ class _RenderTargetConfig:
 
 
 def _load_render_target_config_module(monkeypatch):
-    native_mod = types.ModuleType("termin._native")
+    native_mod = types.ModuleType("termin.render._render_native")
     native_mod.RenderTargetConfig = _RenderTargetConfig
-    monkeypatch.setitem(sys.modules, "termin._native", native_mod)
+    monkeypatch.setitem(sys.modules, "termin.render._render_native", native_mod)
 
     spec = importlib.util.spec_from_file_location(
         "render_target_config_source",
@@ -230,9 +231,10 @@ def _install_native_stubs(monkeypatch, pool):
     native_log_module.log = log
     monkeypatch.setitem(sys.modules, "termin._native", native_log_module)
 
-    rt_config_module = types.ModuleType("termin.visualization.core.render_target_config")
-    rt_config_module.RenderTargetConfig = _RenderTargetConfig
-    monkeypatch.setitem(sys.modules, "termin.visualization.core.render_target_config", rt_config_module)
+    render_module = types.ModuleType("termin.render")
+    render_module.RenderTargetConfig = _RenderTargetConfig
+    render_module.ViewportConfig = _ViewportConfig
+    monkeypatch.setitem(sys.modules, "termin.render", render_module)
 
 
 def test_attach_scene_does_not_restore_render_target_configs_in_python(monkeypatch):
