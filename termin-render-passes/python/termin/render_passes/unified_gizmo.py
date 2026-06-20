@@ -1,13 +1,8 @@
-"""
-UnifiedGizmoPass — unified gizmo rendering pass using GizmoManager.
-
-Renders all gizmos registered with the manager in a single pass.
-Uses the new unified gizmo architecture with declarative gizmos.
-"""
+"""UnifiedGizmoPass - renders debug gizmo draw sources."""
 
 from __future__ import annotations
 
-from typing import Callable, List, Set, Tuple, TYPE_CHECKING
+from typing import Any, Callable, List, Protocol, Set, Tuple, TYPE_CHECKING
 
 from termin.render_framework.python_pass import PythonFramePass
 from termin.render import ImmediateRenderer
@@ -15,17 +10,22 @@ from termin.inspect import InspectField
 from tcbase.profiler import Profiler
 
 if TYPE_CHECKING:
-    from termin.editor_core.gizmo import GizmoManager
-    from termin.visualization.render.framegraph.execute_context import ExecuteContext
+    from termin.render_framework import ExecuteContext
+
+
+class GizmoDrawSource(Protocol):
+    """Object capable of submitting gizmo geometry to ImmediateRenderer."""
+
+    def render(self, renderer: ImmediateRenderer, ctx2: Any, view: Any, proj: Any) -> None:
+        ...
 
 
 class UnifiedGizmoPass(PythonFramePass):
     """
-    Framegraph pass that renders all gizmos via GizmoManager.
+    Framegraph pass that renders all gizmos via a draw source.
 
     Gizmos are rendered on top of the scene: the pass clears its depth
     attachment before rendering, then uses it for depth between gizmo elements.
-    This replaces both the old entity-based GizmoPass and ImmediateGizmoPass.
     """
 
     category = "Debug"
@@ -41,7 +41,7 @@ class UnifiedGizmoPass(PythonFramePass):
 
     def __init__(
         self,
-        gizmo_manager: "GizmoManager | Callable[[], GizmoManager | None] | None" = None,
+        gizmo_manager: GizmoDrawSource | Callable[[], GizmoDrawSource | None] | None = None,
         input_res: str = "color",
         output_res: str = "color",
         pass_name: str = "UnifiedGizmoPass",
@@ -57,7 +57,7 @@ class UnifiedGizmoPass(PythonFramePass):
     def compute_writes(self) -> Set[str]:
         return {self.output_res}
 
-    def _get_gizmo_manager(self) -> "GizmoManager | None":
+    def _get_gizmo_manager(self) -> GizmoDrawSource | None:
         if self._gizmo_manager_source is None:
             return None
         if callable(self._gizmo_manager_source):

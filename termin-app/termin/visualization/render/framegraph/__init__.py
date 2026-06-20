@@ -9,17 +9,18 @@ from termin.render_passes import (
     GrayscalePass,
     HighlightPass,
     IdPass,
+    ImmediateDepthPass,
     PresentToScreenPass,
     ResolvePass,
     TonemapPass,
+    UnifiedGizmoPass,
 )
 from termin.visualization.render.framegraph.resource import (
     FrameGraphResource,
     ShadowMapArrayResource,
     ShadowMapArrayEntry,
 )
-from termin.visualization.render.framegraph.passes.gizmo import GizmoPass
-from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
+from termin.render_passes import ColliderGizmoPass
 from termin.render_passes import UIWidgetPass
 from termin.render_components.material_pass import MaterialPass
 
@@ -37,7 +38,6 @@ __all__ = [
     "ColliderGizmoPass",
     "DepthPass",
     "DebugTrianglePass",
-    "GizmoPass",
     "IdPass",
     "NormalPass",
     "PresentToScreenPass",
@@ -47,5 +47,7 @@ __all__ = [
     "HighlightPass",
     "MaterialPass",
     "BloomPass",
+    "ImmediateDepthPass",
     "TonemapPass",
+    "UnifiedGizmoPass",
 ]

@@ -199,8 +199,14 @@ Status 2026-06-20: `UIComponent` moved to a new
 `termin-components-ui` package as `termin.ui_components.UIComponent`, and
 `UIWidgetPass` moved to `termin-render-passes` as
 `termin.render_passes.UIWidgetPass`. The default builtin catalog now registers
-both below the app layer. `termin-app` keeps compatibility re-exports and now
-contributes only the editor/tooling `GizmoPass` as an app builtin frame pass.
+both below the app layer. At that point `termin-app` kept compatibility
+re-exports and still contributed only the editor/tooling `GizmoPass` as an app
+builtin frame pass.
+
+Status 2026-06-20: `ImmediateDepthPass` and `UnifiedGizmoPass` moved to
+`termin-render-passes` and are registered by the default builtin catalog. The
+old entity-based app `GizmoPass` builtin was removed, leaving
+`APP_BUILTIN_FRAME_PASSES` empty.
 
 Status 2026-06-20: rigid-body scene components moved out of `termin-app` into
 `termin-components-physics` while preserving the canonical

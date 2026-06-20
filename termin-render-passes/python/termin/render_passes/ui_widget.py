@@ -8,7 +8,7 @@ from termin.inspect import InspectField
 from termin.render_framework.python_pass import PythonFramePass
 
 if TYPE_CHECKING:
-    from termin.visualization.render.framegraph.execute_context import ExecuteContext
+    from termin.render_framework import ExecuteContext
 
 
 class UIWidgetPass(PythonFramePass):

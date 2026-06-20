@@ -15,19 +15,19 @@ def make_editor_pipeline() -> RenderPipeline:
     from termin.render_framework import ResourceSpec
     from termin.render_passes import (
         BloomPass,
+        ColliderGizmoPass,
         ColorPass,
         HighlightPass,
         IdPass,
+        ImmediateDepthPass,
         PresentToScreenPass,
         ResolvePass,
         ShadowPass,
         SkyBoxPass,
         TonemapPass,
+        UIWidgetPass,
+        UnifiedGizmoPass,
     )
-    from termin.visualization.render.framegraph.passes.unified_gizmo import UnifiedGizmoPass
-    from termin.visualization.render.framegraph.passes.collider_gizmo import ColliderGizmoPass
-    from termin.visualization.render.framegraph.passes.immediate_depth import ImmediateDepthPass
-    from termin.render_passes import UIWidgetPass
 
     def get_gizmo_manager():
         sys = EditorInteractionSystem.instance()
