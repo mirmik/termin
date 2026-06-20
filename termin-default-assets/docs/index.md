@@ -21,9 +21,10 @@ Runtime manager boundary:
 - Default component/frame-pass catalogs live below the app layer:
   `CameraController`, render component/pass types and `MaterialPass` are owned
   by `termin-components-render`, `UIComponent` is owned by
-  `termin-components-ui`, `UIWidgetPass` is owned by `termin-render-passes`,
-  and `TeleportComponent` is owned by `termin-collision`. `termin-app` adds
-  only editor/tooling pass types such as `GizmoPass`.
+  `termin-components-ui`, `UIWidgetPass`, `ImmediateDepthPass`, and
+  `UnifiedGizmoPass` are owned by `termin-render-passes`, and
+  `TeleportComponent` is owned by `termin-collision`. `termin-app` currently
+  has no component/frame-pass builtin additions.
 
 Current adapters:
 

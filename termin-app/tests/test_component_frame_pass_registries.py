@@ -106,11 +106,11 @@ def test_app_builtin_specs_extend_default_specs() -> None:
     assert ("termin.render_components", "CameraController") in component_specs
     assert ("termin.ui_components", "UIComponent") in component_specs
 
-    assert APP_BUILTIN_FRAME_PASSES == [
-        ("termin.visualization.render.framegraph.passes.gizmo", "GizmoPass"),
-    ]
+    assert APP_BUILTIN_FRAME_PASSES == []
     assert ("termin.render_passes", "UIWidgetPass") in frame_pass_specs
     assert ("termin.render_passes", "HighlightPass") in frame_pass_specs
+    assert ("termin.render_passes", "ImmediateDepthPass") in frame_pass_specs
+    assert ("termin.render_passes", "UnifiedGizmoPass") in frame_pass_specs
     assert ("termin.render_components", "MaterialPass") in frame_pass_specs
 
 
