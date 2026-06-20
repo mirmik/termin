@@ -1,6 +1,7 @@
 #pragma once
 
 #include <termin/render/geometry_pass_base.hpp>
+#include <termin/render_passes/export.h>
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
 extern "C" {
@@ -9,7 +10,7 @@ extern "C" {
 
 namespace termin {
 
-class IdPass : public GeometryPassBase {
+class TERMIN_RENDER_PASSES_API IdPass : public GeometryPassBase {
 public:
     IdPass(
         const std::string& input_res = "empty",

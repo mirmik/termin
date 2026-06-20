@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from termin_assets import AssetContext, AssetTypeRegistry, PreLoadResult, set_resource_manager_factory
 from termin.default_assets.audio.asset import AudioClipAsset
 from termin.default_assets.audio.asset_plugin import (
@@ -42,7 +44,7 @@ def test_audio_clip_asset_from_file_uses_path_stem() -> None:
     asset = AudioClipAsset.from_file("/tmp/impact.wav")
 
     assert asset.name == "impact"
-    assert str(asset.source_path) == "/tmp/impact.wav"
+    assert asset.source_path == Path("/tmp/impact.wav")
 
 
 def test_audio_clip_handle_uses_configured_resource_manager_factory() -> None:
@@ -95,7 +97,7 @@ def test_audio_clip_runtime_plugin_registers_lazy_asset() -> None:
     asset = resource_manager.get_audio_clip_asset("impact")
     assert isinstance(asset, AudioClipAsset)
     assert asset.uuid == "audio-uuid"
-    assert str(asset.source_path) == "/tmp/impact.wav"
+    assert asset.source_path == Path("/tmp/impact.wav")
 
 
 def test_audio_clip_entry_point_factories() -> None:

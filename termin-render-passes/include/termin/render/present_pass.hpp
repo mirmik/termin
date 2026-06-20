@@ -1,6 +1,7 @@
 #pragma once
 
 #include "termin/render/frame_pass.hpp"
+#include "termin/render_passes/export.h"
 #include "tc_inspect_cpp.hpp"
 
 namespace termin {
@@ -8,7 +9,7 @@ namespace termin {
 // PresentToScreenPass - copies input FBO to output FBO via blit.
 // Does NOT use inplace aliases, so breaks inplace chains.
 // Use this to copy rendered content to OUTPUT/DISPLAY.
-class PresentToScreenPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API PresentToScreenPass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "OUTPUT";
@@ -40,7 +41,7 @@ public:
 // BlitPass - copies one FBO into another graph-selected FBO target.
 // This is the native equivalent of the old Python BlitPass so serialized
 // pipelines can run in C++-only runtimes such as OpenXR/Android.
-class BlitPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API BlitPass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "blit";

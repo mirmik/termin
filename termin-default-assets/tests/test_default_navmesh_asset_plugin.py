@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from termin_assets import AssetTypeRegistry, set_resource_manager_factory
 from termin.default_assets.navmesh.asset import NavMeshAsset
 from termin.default_assets.navmesh.asset_plugin import (
@@ -17,7 +19,7 @@ def test_navmesh_asset_wraps_navmesh() -> None:
 
     assert asset.name == "source_navmesh"
     assert asset.navmesh is navmesh
-    assert str(asset.source_path) == "/tmp/source.navmesh"
+    assert asset.source_path == Path("/tmp/source.navmesh")
 
 
 def test_navmesh_handle_uses_configured_resource_manager_factory() -> None:

@@ -9,6 +9,7 @@
 #include "termin/render/frame_pass.hpp"
 #include "termin/render/execute_context.hpp"
 #include "termin/render/resource_spec.hpp"
+#include "termin/render_passes/export.h"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
 
@@ -38,7 +39,7 @@ namespace termin {
  * Collects all Drawable components from entities, filters by phase_mark,
  * sorts by priority, and renders with materials and lighting.
  */
-class ColorPass : public CxxFramePass {
+class TERMIN_RENDER_PASSES_API ColorPass : public CxxFramePass {
 public:
     // Pass configuration
     std::string input_res = "empty";

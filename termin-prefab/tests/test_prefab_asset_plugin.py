@@ -39,7 +39,7 @@ def test_prefab_runtime_plugin_registers_lazy_asset() -> None:
     asset = resource_manager.get_prefab_asset("Enemy")
     assert isinstance(asset, PrefabAsset)
     assert asset.uuid == "prefab-uuid"
-    assert str(asset.source_path) == "/tmp/Enemy.prefab"
+    assert asset.source_path == Path("/tmp/Enemy.prefab")
     assert not asset.is_loaded
 
 
