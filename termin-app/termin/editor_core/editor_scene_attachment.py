@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from termin.display import Display
     from termin.visualization.core.viewport import Viewport
     from termin.scene import Entity
-    from termin.visualization.render.framegraph import RenderPipeline
+    from termin.render_framework import RenderPipeline
     from termin.editor_core.editor_camera import EditorCameraManager
     RenderingController = Any
 

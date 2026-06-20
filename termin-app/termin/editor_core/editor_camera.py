@@ -13,9 +13,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from termin._native import OrbitCameraController
 from termin.scene import Entity
 from termin.render_components.camera import CameraComponent
-from termin.visualization.core.camera import OrbitCameraController
 from termin.ui_components import UIComponent
 
 if TYPE_CHECKING:
