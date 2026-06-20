@@ -119,6 +119,27 @@ def test_ui_component_and_pass_use_canonical_paths() -> None:
     assert UIComponent.__module__ == "termin.ui_components.component"
 
 
+def test_render_config_types_use_canonical_paths() -> None:
+    from termin.render import (
+        RenderTargetConfig,
+        ViewportConfig,
+        deserialize_render_target_config,
+        deserialize_viewport_config,
+        serialize_render_target_config,
+        serialize_viewport_config,
+    )
+
+    viewport_config = ViewportConfig()
+    viewport_config.name = "Main"
+    assert serialize_viewport_config(viewport_config)["name"] == "Main"
+    assert deserialize_viewport_config({"name": "Main"}).name == "Main"
+
+    render_target_config = RenderTargetConfig()
+    render_target_config.name = "Target"
+    assert serialize_render_target_config(render_target_config)["name"] == "Target"
+    assert deserialize_render_target_config({"name": "Target"}).name == "Target"
+
+
 def test_legacy_ui_component_and_pass_paths_are_removed() -> None:
     with pytest.raises(ModuleNotFoundError):
         __import__("termin.visualization.render.framegraph.passes.ui_widget", fromlist=["UIWidgetPass"])
@@ -148,6 +169,8 @@ def test_dead_visualization_legacy_paths_are_removed() -> None:
         "termin.visualization.platform.input_manager",
         "termin.visualization.core.world",
         "termin.visualization.core.viewport",
+        "termin.visualization.core.viewport_config",
+        "termin.visualization.core.render_target_config",
     ]
 
     for module_name in removed_modules:

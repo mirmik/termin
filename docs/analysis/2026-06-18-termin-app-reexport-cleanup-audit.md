@@ -190,6 +190,8 @@ Likely canonical replacements:
 - `termin.visualization.platform.backends.fbo_backend` -> `termin.display.FBOSurface`
 - `termin.visualization.platform.input_manager` -> `termin.display`
 - `termin.visualization.core.viewport` -> `termin.viewport`
+- `termin.visualization.core.viewport_config` -> `termin.render.ViewportConfig`
+- `termin.visualization.core.render_target_config` -> `termin.render.RenderTargetConfig`
 
 Removed after internal consumers were redirected:
 - `termin.visualization.core.entity_registry`
@@ -218,6 +220,8 @@ Removed after internal consumers were redirected:
 - `termin.visualization.platform.input_manager`
 - `termin.visualization.platform`
 - `termin.visualization.core.viewport`
+- `termin.visualization.core.viewport_config`
+- `termin.visualization.core.render_target_config`
 - `termin.visualization.ui.widgets.basic`
 - `termin.visualization.ui.widgets.containers`
 - `termin.visualization.ui.widgets.units`
@@ -238,6 +242,9 @@ Resolved in this cleanup pass:
   through `termin.engine.RenderingManager`.
 - `termin.visualization.platform.*` was removed. `BasicDisplayInputManager` and
   `DisplayInputRouter` are available from `termin.display`.
+- `termin.visualization.core.viewport_config` and
+  `termin.visualization.core.render_target_config` were removed. Python
+  consumers import config classes and serializers from `termin.render`.
 
 Still deferred:
 - `termin.visualization.core.scene` owns app-specific scene extension helpers
