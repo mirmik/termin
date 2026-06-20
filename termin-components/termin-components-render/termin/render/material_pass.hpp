@@ -18,7 +18,7 @@
 
 namespace termin {
 
-class MaterialPass : public CxxFramePass {
+class ENTITY_API MaterialPass : public CxxFramePass {
 public:
     TcMaterial material;
     std::string output_res = "color";

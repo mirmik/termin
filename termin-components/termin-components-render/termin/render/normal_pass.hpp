@@ -9,7 +9,7 @@ extern "C" {
 
 namespace termin {
 
-class NormalPass : public GeometryPassBase {
+class ENTITY_API NormalPass : public GeometryPassBase {
 private:
     // Lazy tgfx2 resources used by execute_with_data_tgfx2. Shader lives
     // on the tc_shader registry (hash-based dedup) so Play/Stop doesn't

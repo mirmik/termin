@@ -30,3 +30,4 @@
 - [D3D11 backend readiness](2026-06-15-d3d11-backend-readiness-plan.md)
 - [Project build/runtime packaging target architecture](2026-06-17-build-system-target-architecture.md)
 - [Project build pipeline execution plan](2026-06-18-project-build-pipeline-execution-plan.md)
+- [D3D11 runtime placement goal plan](2026-06-20-d3d11-runtime-placement-goal-plan.md)
