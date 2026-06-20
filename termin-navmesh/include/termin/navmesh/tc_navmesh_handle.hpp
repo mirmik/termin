@@ -93,6 +93,11 @@ public:
         return tc_navmesh_handle_is_invalid(h) ? TcNavMesh() : TcNavMesh(h);
     }
 
+    static TcNavMesh from_name(const std::string& name) {
+        tc_navmesh_handle h = tc_navmesh_find_by_name(name.c_str());
+        return tc_navmesh_handle_is_invalid(h) ? TcNavMesh() : TcNavMesh(h);
+    }
+
     static TcNavMesh get_or_create(const std::string& uuid) {
         tc_navmesh_handle h = tc_navmesh_get_or_create(uuid.c_str());
         return tc_navmesh_handle_is_invalid(h) ? TcNavMesh() : TcNavMesh(h);

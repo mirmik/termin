@@ -157,4 +157,6 @@ class NavMeshAsset(DataAsset["NavMesh"]):
     ) -> "NavMeshAsset":
         """Create NavMeshAsset from existing NavMesh."""
         asset_name = name or navmesh.name or "navmesh"
-        return cls(navmesh=navmesh, name=asset_name, source_path=source_path)
+        asset = cls(navmesh=navmesh, name=asset_name, source_path=source_path)
+        asset._declare_runtime_resource()
+        return asset

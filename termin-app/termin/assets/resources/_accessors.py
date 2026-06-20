@@ -319,17 +319,13 @@ class AccessorsMixin:
 
         if kind == "voxel_grid":
             from termin.voxels._voxels_native import VoxelGridHandle
-            asset = self.get_voxel_grid_asset_by_uuid(uuid)
-            if asset:
-                return VoxelGridHandle.from_asset(asset)
-            return None
+            handle = VoxelGridHandle.from_uuid(uuid)
+            return handle if handle.is_valid else None
 
         if kind == "navmesh":
             from termin.default_assets.navmesh.handle import NavMeshHandle
-            asset = self.get_navmesh_asset_by_uuid(uuid)
-            if asset:
-                return NavMeshHandle.from_asset(asset)
-            return None
+            handle = NavMeshHandle.from_uuid(uuid)
+            return handle if handle.is_valid else None
 
         if kind == "skeleton":
             from termin.skeleton._skeleton_native import TcSkeleton

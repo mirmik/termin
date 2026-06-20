@@ -42,6 +42,16 @@ class VoxelGridAsset(DataAsset["VoxelGrid"]):
         """Set grid and bump version."""
         self.data = value
 
+    def parse_spec(self, spec_data: dict | None) -> None:
+        super().parse_spec(spec_data)
+        self._declare_runtime_resource()
+
+    def _declare_runtime_resource(self) -> None:
+        from termin.voxels._voxels_native import set_voxel_grid_asset_metadata
+
+        source_path = self.source_path.as_posix() if self.source_path is not None else ""
+        set_voxel_grid_asset_metadata(self.uuid, self.name, source_path)
+
     def _parse_content(self, content: str) -> "VoxelGrid | None":
         """Parse JSON content into VoxelGrid."""
         from termin.voxels.persistence import VoxelPersistence
@@ -60,4 +70,6 @@ class VoxelGridAsset(DataAsset["VoxelGrid"]):
     ) -> "VoxelGridAsset":
         """Create VoxelGridAsset from existing VoxelGrid."""
         asset_name = name or grid.name or "voxel_grid"
-        return cls(grid=grid, name=asset_name, source_path=source_path)
+        asset = cls(grid=grid, name=asset_name, source_path=source_path)
+        asset._declare_runtime_resource()
+        return asset

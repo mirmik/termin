@@ -137,7 +137,10 @@ class NavMeshHandleKind:
     @staticmethod
     def serialize(obj):
         from termin.default_assets.navmesh.handle import NavMeshHandle
+        from termin.navmesh._navmesh_native import TcNavMesh
         if isinstance(obj, NavMeshHandle):
+            return obj.serialize()
+        if isinstance(obj, TcNavMesh):
             return obj.serialize()
         return None
 

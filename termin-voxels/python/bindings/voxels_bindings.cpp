@@ -501,17 +501,59 @@ NB_MODULE(_voxels_native, m) {
             return grid;
         });
 
+    // ========== TcVoxelGrid ==========
+    nb::class_<TcVoxelGrid>(m, "TcVoxelGrid")
+        .def(nb::init<>())
+        .def_static("from_uuid", &TcVoxelGrid::from_uuid, nb::arg("uuid"))
+        .def_static("from_name", &TcVoxelGrid::from_name, nb::arg("name"))
+        .def_static("declare", &TcVoxelGrid::declare, nb::arg("uuid"), nb::arg("name") = "")
+        .def_prop_ro("is_valid", &TcVoxelGrid::is_valid)
+        .def_prop_ro("is_loaded", &TcVoxelGrid::is_loaded)
+        .def_prop_ro("uuid", [](const TcVoxelGrid& self) { return std::string(self.uuid()); })
+        .def_prop_ro("name", [](const TcVoxelGrid& self) { return std::string(self.name()); })
+        .def_prop_ro("source_path", [](const TcVoxelGrid& self) { return std::string(self.source_path()); })
+        .def_prop_ro("version", &TcVoxelGrid::version)
+        .def("ensure_loaded", &TcVoxelGrid::ensure_loaded)
+        .def("serialize", [](const TcVoxelGrid& self) {
+            nb::dict result;
+            if (self.is_valid()) {
+                result["uuid"] = std::string(self.uuid());
+                result["name"] = std::string(self.name());
+            }
+            return result;
+        });
+
+    m.def("declare_voxel_grid_asset", [](const std::string& uuid, const std::string& name) {
+        TcVoxelGrid grid = TcVoxelGrid::declare(uuid, name);
+        return grid.is_valid();
+    }, nb::arg("uuid"), nb::arg("name") = "");
+
+    m.def("set_voxel_grid_asset_metadata",
+          [](const std::string& uuid, const std::string& name, const std::string& source_path) {
+              TcVoxelGrid grid = TcVoxelGrid::declare(uuid, name);
+              tc_voxel_grid* raw = grid.get();
+              if (!raw) {
+                  return false;
+              }
+              return tc_voxel_grid_set_metadata(
+                  raw,
+                  name.empty() ? nullptr : name.c_str(),
+                  source_path.empty() ? nullptr : source_path.c_str());
+          },
+          nb::arg("uuid"), nb::arg("name") = "", nb::arg("source_path") = "");
+
     // ========== VoxelGridHandle ==========
     nb::class_<VoxelGridHandle>(m, "VoxelGridHandle")
         .def(nb::init<>())
         .def("__init__", [](VoxelGridHandle* self, nb::object asset) {
-            new (self) VoxelGridHandle(asset);
+            new (self) VoxelGridHandle(VoxelGridHandle::from_asset(asset));
         }, nb::arg("asset"))
         .def_static("from_name", &VoxelGridHandle::from_name, nb::arg("name"))
         .def_static("from_asset", &VoxelGridHandle::from_asset, nb::arg("asset"))
         .def_static("from_uuid", &VoxelGridHandle::from_uuid, nb::arg("uuid"))
         .def_static("deserialize", &VoxelGridHandle::deserialize, nb::arg("data"))
         .def_rw("asset", &VoxelGridHandle::asset)
+        .def_rw("native", &VoxelGridHandle::native)
         .def_prop_ro("is_valid", &VoxelGridHandle::is_valid)
         .def_prop_ro("name", &VoxelGridHandle::name)
         .def_prop_ro("grid", &VoxelGridHandle::grid)
