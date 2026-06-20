@@ -412,6 +412,73 @@ def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_pat
     assert "Runtime exporter used fallback mesh because registry entry is unavailable" not in diagnostic_messages
 
 
+def test_export_runtime_package_reports_malformed_mesh_meta_before_dev_smoke_fallback(tmp_path: Path) -> None:
+    project = tmp_path / "MalformedMeshMetaGame"
+    project.mkdir()
+    mesh_uuid = "broken-meta-mesh-uuid"
+
+    models_dir = project / "Models"
+    models_dir.mkdir()
+    mesh_path = models_dir / "Triangle.obj"
+    mesh_path.write_text(
+        "\n".join(
+            [
+                "v 0 0 0",
+                "v 1 0 0",
+                "v 0 1 0",
+                "f 1 2 3",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    Path(str(mesh_path) + ".meta").write_text("{", encoding="utf-8")
+    _write_json(
+        project / "Main.scene",
+        {
+            "uuid": "scene-uuid",
+            "entities": [
+                {
+                    "uuid": "entity-uuid",
+                    "components": [
+                        {
+                            "type": "MeshComponent",
+                            "data": {
+                                "mesh": {
+                                    "uuid": mesh_uuid,
+                                    "name": "Triangle",
+                                    "type": "uuid",
+                                },
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "dev_smoke" / "MalformedMeshMetaGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+        resource_policy="dev_smoke",
+    )
+
+    assert (result.package_dir / "meshes" / f"{mesh_uuid}.tmesh.json").exists()
+    diagnostics = [(diagnostic.path, diagnostic.message) for diagnostic in result.diagnostics]
+    assert any(
+        path == "Models/Triangle.obj.meta"
+        and message.startswith("Runtime exporter failed to inspect mesh metadata:")
+        for path, message in diagnostics
+    )
+    assert any(
+        path == f"meshes/{mesh_uuid}.tmesh.json"
+        and message == "Runtime exporter used fallback mesh because registry entry is unavailable"
+        for path, message in diagnostics
+    )
+
+
 def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     project = tmp_path / "DesktopGame"
     project.mkdir()
@@ -831,6 +898,58 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
         "name": "VrPipeline",
         "path": f"pipelines/{pipeline_uuid}.pipeline.json",
     } in manifest["resources"]
+
+
+def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) -> None:
+    project = tmp_path / "MalformedPipelineMetaGame"
+    project.mkdir()
+    pipeline_uuid = "pipeline-with-broken-meta"
+
+    _write_json(
+        project / "Main.scene",
+        {
+            "scene": {
+                "uuid": "scene-uuid",
+                "entities": [],
+                "render_mount": {
+                    "render_target_configs": [
+                        {
+                            "name": "XRStereoTarget",
+                            "kind": "xr_stereo",
+                            "pipeline_uuid": pipeline_uuid,
+                            "pipeline_name": "VrPipeline",
+                            "enabled": True,
+                        }
+                    ],
+                },
+            },
+        },
+    )
+    _write_json(
+        project / "VrPipeline.pipeline",
+        {
+            "name": "graph_pipeline",
+            "nodes": [
+                {"type": "PipelineOutput", "node_type": "pipeline_output"},
+            ],
+            "connections": [],
+        },
+    )
+    (project / "VrPipeline.pipeline.meta").write_text("{", encoding="utf-8")
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "quest_openxr" / "MalformedPipelineMetaGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    assert (result.package_dir / "pipelines" / f"{pipeline_uuid}.pipeline.json").exists()
+    assert any(
+        diagnostic.path == "VrPipeline.pipeline.meta"
+        and diagnostic.message.startswith("Runtime exporter failed to inspect pipeline metadata:")
+        for diagnostic in result.diagnostics
+    )
 
 
 def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -> None:
