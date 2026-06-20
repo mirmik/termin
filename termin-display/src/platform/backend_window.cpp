@@ -2,6 +2,7 @@
 #include "termin/platform/sdl_backend_window.hpp"
 
 #include <cstdint>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -15,6 +16,12 @@
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/render_runtime.hpp"
 #include "termin/platform/sdl_window.hpp"
+
+#ifdef TGFX2_HAS_D3D11
+#include <SDL2/SDL_syswm.h>
+#include "tgfx2/d3d11/d3d11_render_device.hpp"
+#include "tgfx2/d3d11/d3d11_swapchain.hpp"
+#endif
 
 extern "C" {
 #include <tcbase/tc_log.h>
@@ -59,6 +66,20 @@ uint32_t event_window_id(const SDL_Event& ev) {
     }
 }
 
+#ifdef TGFX2_HAS_D3D11
+HWND get_sdl_hwnd(SDL_Window* window) {
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (!SDL_GetWindowWMInfo(window, &info)) {
+        throw std::runtime_error(std::string("SDL_GetWindowWMInfo failed: ") + SDL_GetError());
+    }
+    if (!info.info.win.window) {
+        throw std::runtime_error("SDL_GetWindowWMInfo returned an empty Win32 window handle");
+    }
+    return info.info.win.window;
+}
+#endif
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -90,6 +111,12 @@ struct SDLBackendWindow::Impl {
 #ifdef TGFX2_HAS_VULKAN
     VkSurfaceKHR secondary_surface = VK_NULL_HANDLE;
     std::unique_ptr<tgfx::VulkanSwapchain> secondary_swapchain;
+#endif
+
+#ifdef TGFX2_HAS_D3D11
+    // D3D11 keeps swapchains outside the device so primary and
+    // secondary windows share the same device model.
+    std::unique_ptr<tgfx::D3D11Swapchain> d3d11_swapchain;
 #endif
 };
 
@@ -187,6 +214,35 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         impl_->device_ref = &impl_->runtime->device();
     }
 #endif
+#ifdef TGFX2_HAS_D3D11
+    else if (impl_->backend == tgfx::BackendType::D3D11) {
+        Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
+        window_ = SDL_CreateWindow(title.c_str(),
+                                    SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                    width, height, flags);
+        if (!window_) {
+            throw std::runtime_error(std::string("SDL_CreateWindow(D3D11) failed: ") +
+                                     SDL_GetError());
+        }
+
+        int fb_w = 0, fb_h = 0;
+        SDL_GetWindowSize(window_, &fb_w, &fb_h);
+        if (fb_w <= 0 || fb_h <= 0) {
+            fb_w = width;
+            fb_h = height;
+        }
+
+        auto d3d_device = std::make_unique<tgfx::D3D11RenderDevice>();
+        auto* d3d_device_ref = d3d_device.get();
+        impl_->runtime = std::make_unique<tgfx::RenderRuntime>(std::move(d3d_device));
+        impl_->device_ref = &impl_->runtime->device();
+        impl_->d3d11_swapchain = std::make_unique<tgfx::D3D11Swapchain>(
+            *d3d_device_ref,
+            get_sdl_hwnd(window_),
+            static_cast<uint32_t>(fb_w),
+            static_cast<uint32_t>(fb_h));
+    }
+#endif
     else {
         SDL_DestroyWindow(window_);
         throw std::runtime_error("BackendWindow: unsupported backend");
@@ -270,6 +326,31 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
             static_cast<uint32_t>(fb_h));
     }
 #endif
+#ifdef TGFX2_HAS_D3D11
+    else if (impl_->backend == tgfx::BackendType::D3D11) {
+        Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
+        window_ = SDL_CreateWindow(title.c_str(),
+                                    SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+                                    width, height, flags);
+        if (!window_) {
+            throw std::runtime_error(std::string("SDL_CreateWindow(D3D11 secondary) failed: ") +
+                                     SDL_GetError());
+        }
+
+        int fb_w = 0, fb_h = 0;
+        SDL_GetWindowSize(window_, &fb_w, &fb_h);
+        if (fb_w <= 0 || fb_h <= 0) {
+            fb_w = width;
+            fb_h = height;
+        }
+        auto* d3d_dev = static_cast<tgfx::D3D11RenderDevice*>(impl_->device_ref);
+        impl_->d3d11_swapchain = std::make_unique<tgfx::D3D11Swapchain>(
+            *d3d_dev,
+            get_sdl_hwnd(window_),
+            static_cast<uint32_t>(fb_w),
+            static_cast<uint32_t>(fb_h));
+    }
+#endif
     else {
         SDL_DestroyWindow(window_);
         throw std::runtime_error("BackendWindow(secondary): unsupported backend");
@@ -304,6 +385,14 @@ void SDLBackendWindow::close() {
     // context/device reset because those are owned by the primary —
     // tearing them down here would yank the rug out from under the
     // primary and every other secondary.
+#ifdef TGFX2_HAS_D3D11
+    if (impl_->d3d11_swapchain) {
+        if (impl_->device_ref) {
+            impl_->device_ref->wait_idle();
+        }
+        impl_->d3d11_swapchain.reset();
+    }
+#endif
 #ifdef TGFX2_HAS_VULKAN
     // Vulkan secondary: wait idle before destroying the swapchain /
     // surface to avoid killing resources still in flight.
@@ -534,6 +623,24 @@ void SDLBackendWindow::present(tgfx::TextureHandle color_tex) {
             int nw = 0, nh = 0;
             SDL_Vulkan_GetDrawableSize(window_, &nw, &nh);
             sc->recreate(static_cast<uint32_t>(nw), static_cast<uint32_t>(nh));
+        }
+    }
+#endif
+#ifdef TGFX2_HAS_D3D11
+    else if (impl_->backend == tgfx::BackendType::D3D11) {
+        tgfx::D3D11Swapchain* sc = impl_->d3d11_swapchain.get();
+        if (!sc) {
+            tc_log(TC_LOG_ERROR, "[BackendWindow] present: no D3D11 swapchain");
+            return;
+        }
+
+        if (sc->width() != static_cast<uint32_t>(w) ||
+            sc->height() != static_cast<uint32_t>(h)) {
+            sc->resize(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+        }
+
+        if (!sc->compose_and_present(color_tex)) {
+            tc_log(TC_LOG_ERROR, "[BackendWindow] present: D3D11 present failed");
         }
     }
 #endif
