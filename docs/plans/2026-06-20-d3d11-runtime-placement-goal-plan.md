@@ -25,6 +25,36 @@
 после того, как resource placement model перестанет быть переходной
 эвристикой.
 
+## Result 2026-06-20
+
+Goal-pass выполнен для runtime placement path:
+
+- `tc_shader_resource_binding` расширен D3D11 placement metadata:
+  `has_d3d11_placement`, `d3d11.register_class`, `d3d11.register_index`.
+- `tc_shader_bridge` читает schema v2 `d3d11` blocks и требует их для
+  `target == "d3d11"`.
+- `tc_shader_set_resource_layout()` валидирует D3D11 register conflicts по
+  `register_class/register_index` с учетом пересечения `stage_mask`.
+- `RenderContext2` переносит `stage_mask` и D3D11 placement из shader layout в
+  `ResourceBinding` для symbolic bindings и `bind_uniform_data()`.
+- `D3D11CommandList::bind_resource_set()` использует explicit D3D11 placement
+  при наличии, применяет stage mask и оставляет compatibility path для ручных
+  low-level `ResourceSetDesc` без shader layout metadata.
+- Добавлены focused tests для registry placement preservation/conflicts и
+  runtime загрузки D3D11 `.cso.layout.json`.
+
+Проверено:
+
+- `cmake --build build\Release --target termin_graphics --config Release`
+- `cmake --build build\Release --target termin_graphics2 --config Release`
+- `build\d3d11-layout-tests\bin\Debug\tgfx_tests.exe`
+- `build\d3d11-layout-tests\bin\Debug\tgfx2_device_factory_test.exe`
+
+Оставшиеся D3D11 MVP шаги после этого pass: собрать/запустить
+`tgfx2_d3d11_smoke`, добавить DXGI/SDL present path, решить dynamic offsets /
+push constants / UAV-storage story, затем расширить smoke coverage на material,
+skinned, foliage и editor window.
+
 ## Current State
 
 - `termin_shaderc --target d3d11` генерирует `.cso` и `.layout.json` v2.
