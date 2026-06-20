@@ -29,19 +29,11 @@ TC_API void tc_component_set_field_string(tc_component* c, const char* path, con
 TC_API void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, void* context);
 TC_API void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, void* context);
 TC_API void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 value, void* context);
-
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable: 4190)
-#endif
-TC_API tc_vec3 tc_component_get_field_vec3(tc_component* c, const char* path);
 TC_API void tc_component_set_field_quat(tc_component* c, const char* path, tc_quat value, void* context);
-TC_API tc_quat tc_component_get_field_quat(tc_component* c, const char* path);
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
 
 // Simplified field getters.
+TC_API void tc_component_get_field_vec3(tc_component* c, const char* path, tc_vec3* out_value);
+TC_API void tc_component_get_field_quat(tc_component* c, const char* path, tc_quat* out_value);
 TC_API int64_t tc_component_get_field_int(tc_component* c, const char* path);
 TC_API float tc_component_get_field_float(tc_component* c, const char* path);
 TC_API double tc_component_get_field_double(tc_component* c, const char* path);
