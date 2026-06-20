@@ -41,6 +41,14 @@ D3D11 shader artifact and layout path that a future backend can consume.
   the requested shader target list through to runtime package export, and the
   legacy direct desktop CLI accepts repeated `--shader-target` values. D3D11
   is still opt-in so Linux/Android builds do not require Windows SDK `fxc`.
+- Status update 2026-06-20: a minimal DXGI/SDL window path exists through
+  `D3D11Swapchain`. The swapchain exposes its backbuffer as a tgfx2
+  `TextureHandle`, so existing `ICommandList` render passes can render into
+  the presented target. It also supports an offscreen-present path through
+  `compose_and_present(color_texture)`, currently implemented as an exact-size
+  GPU copy into the backbuffer followed by `Present`. `tgfx2_d3d11_window`
+  covers SDL HWND extraction, DXGI swapchain creation, offscreen render target
+  clear, backbuffer copy/readback, and `Present`.
 - `BackendType::D3D11` exists and `TERMIN_BACKEND=d3d11` / `dx11` parses.
 - Runtime artifact paths already reserve `shaders/d3d11/<uuid>.<stage>.cso`
   with D3D stage suffixes such as `.vs.cso` and `.ps.cso`.
