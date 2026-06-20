@@ -16,12 +16,14 @@ VULKAN_MODE="on"
 SDL_MODE="on"
 OPENGL_MODE="on"
 CCACHE_MODE="on"
+PYTHON_BINDINGS_MODE=0
 CLEAN=0
 CONFIGURE_ONLY=0
 NO_CONFIGURE=0
 CMAKE_GENERATOR_NAME="${CMAKE_GENERATOR_NAME:-${TERMIN_CMAKE_GENERATOR:-}}"
 CLANG_TIDY_BIN="${CLANG_TIDY_BIN:-clang-tidy}"
 CHECKS="${CLANG_TIDY_CHECKS:--*,clang-diagnostic-*,-clang-diagnostic-nan-infinity-disabled,clang-analyzer-*,-clang-analyzer-deadcode.*,-clang-analyzer-optin.*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling}"
+CHECKS_OVERRIDDEN=0
 WARNINGS_AS_ERRORS="${CLANG_TIDY_WARNINGS_AS_ERRORS:-*}"
 HEADER_FILTER="^$SCRIPT_DIR/(termin-|tcplot|cmake|scripts|tools|CMakeLists\.txt)"
 PATH_FILTERS=()
@@ -43,6 +45,8 @@ Options:
   --opengl             Enable OpenGL support (default)
   --ccache             Use ccache if available (default)
   --no-ccache          Disable ccache compiler launcher
+  --python-bindings    Include Python/nanobind binding translation units.
+                       Uses ./build/<type>-lint-python by default.
   --ninja              Use Ninja generator for a new build dir
   --jobs N, -j N       Parallel clang-tidy jobs (default: nproc)
   --checks CHECKS      Override clang-tidy checks
@@ -81,6 +85,7 @@ while [[ $# -gt 0 ]]; do
         --opengl) OPENGL_MODE="on"; shift ;;
         --ccache) CCACHE_MODE="on"; shift ;;
         --no-ccache) CCACHE_MODE="off"; shift ;;
+        --python-bindings) PYTHON_BINDINGS_MODE=1; shift ;;
         --ninja) CMAKE_GENERATOR_NAME="Ninja"; shift ;;
         --jobs|-j)
             if [[ $# -lt 2 ]]; then
@@ -96,6 +101,7 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             CHECKS="$2"
+            CHECKS_OVERRIDDEN=1
             shift 2
             ;;
         --warnings-as-errors)
@@ -130,7 +136,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$BUILD_DIR" ]]; then
-    BUILD_DIR="$SCRIPT_DIR/build/${BUILD_TYPE}-lint"
+    if [[ $PYTHON_BINDINGS_MODE -eq 1 ]]; then
+        BUILD_DIR="$SCRIPT_DIR/build/${BUILD_TYPE}-lint-python"
+    else
+        BUILD_DIR="$SCRIPT_DIR/build/${BUILD_TYPE}-lint"
+    fi
+fi
+
+if [[ $PYTHON_BINDINGS_MODE -eq 1 ]]; then
+    TERMIN_BUILD_PYTHON=ON
+    if [[ $CHECKS_OVERRIDDEN -eq 0 ]]; then
+        # clang-analyzer-core.NullDereference repeatedly reports false
+        # positives inside nanobind's list caster when analyzing binding
+        # translation units. Keep the default bindings baseline useful while
+        # preserving the stricter default for repository-owned non-binding C++.
+        CHECKS="$CHECKS,-clang-analyzer-core.NullDereference"
+    fi
+else
+    TERMIN_BUILD_PYTHON=OFF
 fi
 
 case "$VULKAN_MODE" in
@@ -165,6 +188,7 @@ echo "clang-tidy:  $CLANG_TIDY_BIN"
 echo "Vulkan:      $TERMIN_ENABLE_VULKAN"
 echo "SDL2:        $TERMIN_ENABLE_SDL"
 echo "OpenGL:      $TERMIN_ENABLE_OPENGL"
+echo "Python:      $TERMIN_BUILD_PYTHON"
 echo "ccache:      $TERMIN_USE_CCACHE"
 echo "Unity build: OFF"
 echo "PCH:         OFF"
@@ -209,7 +233,7 @@ if [[ $NO_CONFIGURE -eq 0 ]]; then
         -DTERMIN_USE_CCACHE="$TERMIN_USE_CCACHE" \
         -DTERMIN_ENABLE_UNITY_BUILD=OFF \
         -DTERMIN_ENABLE_PCH=OFF \
-        -DTERMIN_BUILD_PYTHON=OFF \
+        -DTERMIN_BUILD_PYTHON="$TERMIN_BUILD_PYTHON" \
         -DTERMIN_BUILD_TESTS=OFF \
         -DTERMIN_BUILD_TGFX2_TESTS=OFF \
         -DTERMIN_BUILD_WINDOW_TESTS=OFF \

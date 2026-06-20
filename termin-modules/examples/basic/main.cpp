@@ -49,6 +49,8 @@ const char* state_to_string(ModuleState state) {
             return "failed";
         case ModuleState::Unloaded:
             return "unloaded";
+        case ModuleState::Ignored:
+            return "ignored";
     }
     return "unknown";
 }
