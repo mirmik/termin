@@ -6,6 +6,19 @@ This package owns the standard `termin-assets` integrations for domain data
 packages. Domain packages such as `tmesh` should remain usable without the
 project asset runtime.
 
+Runtime manager boundary:
+
+- `termin_assets.AssetRuntimeManager` owns only neutral plugin dispatch,
+  UUID lookup, runtime registry attachment and external asset catalog mechanics.
+- `termin.default_assets.resource_manager.DefaultResourceManager` is the
+  canonical runtime manager for the standard Termin SDK asset set.
+- `termin.default_assets.resource_accessors.DefaultResourceAccessorsMixin` and
+  `termin.default_assets.handle_accessors.HandleAccessors` own default handle
+  selector access for standard kinds such as `tc_mesh`, `texture_handle`,
+  `voxel_grid_handle`, and `navmesh_handle`.
+- `termin.assets.resources.ResourceManager` in `termin-app` is only an
+  app-specific extension/compatibility path for visualization/editor additions.
+
 Current adapters:
 
 - `termin.default_assets.mesh`: `MeshAsset`, mesh import/runtime plugins,

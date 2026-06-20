@@ -178,6 +178,14 @@ inherits this core and remains the domain/application facade for typed
 registries, builtins, render/material/pipeline/prefab/UI/GLB accessors,
 component/frame-pass registration, and legacy import paths.
 
+Status 2026-06-20: the default typed runtime facade moved below the app layer.
+`termin.default_assets.resource_manager.DefaultResourceManager` is now the
+canonical manager for the standard SDK asset set, and default handle selector
+logic lives in `termin.default_assets.resource_accessors` /
+`termin.default_assets.handle_accessors`. `termin.assets.resources` remains as
+an app-specific extension/compatibility path for visualization additions,
+material fallback behavior, and old imports.
+
 Status 2026-06-17: component class and frame-pass class registries moved out of
 the app resource manager into domain packages. `termin.scene.component_registry`
 now owns `ComponentClassRegistry`, while

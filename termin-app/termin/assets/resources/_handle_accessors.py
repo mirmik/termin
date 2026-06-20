@@ -1,36 +1,5 @@
-"""HandleAccessors class for unified resource access."""
+"""Compatibility import for default resource handle selector helpers."""
 
-from typing import Any, Callable, List, Optional, Tuple
+from termin.default_assets.handle_accessors import HandleAccessors
 
-
-class HandleAccessors:
-    """
-    Unified accessors for handle-based resource types.
-
-    Provides a consistent interface for listing, getting, and finding
-    resources by name/handle for use in generic selector widgets.
-    """
-
-    def __init__(
-        self,
-        list_names: Callable[[], list[str]],
-        get_by_name: Callable[[str], Any],
-        find_name: Callable[[Any], Optional[str]],
-        find_uuid: Callable[[str], Optional[str]],
-        create_item: Callable[[], tuple[str, Optional[str]] | None] | None = None,
-        allow_none: bool = True,
-    ):
-        self.list_names = list_names
-        self.get_by_name = get_by_name
-        self.find_name = find_name
-        self.find_uuid = find_uuid
-        self.create_item = create_item
-        self.allow_none = allow_none
-
-    def list_items(self) -> List[Tuple[str, Optional[str]]]:
-        """Return list of (name, uuid) tuples for all items."""
-        result = []
-        for name in self.list_names():
-            uuid = self.find_uuid(name)
-            result.append((name, uuid))
-        return result
+__all__ = ["HandleAccessors"]

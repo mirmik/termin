@@ -9,7 +9,7 @@ from ._accessors import AccessorsMixin
 from ._serialization import SerializationMixin
 
 
-class ResourceManager(
+class AppResourceManager(
     ResourceManagerBase,
     AssetsMixin,
     ComponentsMixin,
@@ -17,8 +17,16 @@ class ResourceManager(
     SerializationMixin,
 ):
     """
-    Central manager for all resources: materials, meshes, textures, shaders, etc.
+    App resource manager extension over the default runtime manager.
 
-    This is a singleton class. Use ResourceManager.instance() to get the instance.
+    Runtime/default asset ownership lives in ``termin.default_assets``. This
+    class adds app-specific material fallback and visualization component/
+    frame-pass registrations. Use ``ResourceManager`` as the legacy public app
+    alias.
     """
     pass
+
+
+ResourceManager = AppResourceManager
+
+__all__ = ["AppResourceManager", "ResourceManager"]
