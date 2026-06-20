@@ -2,10 +2,11 @@
 """Find files exceeding a line-count threshold in the project.
 
 Usage:
-    python scripts/find-long-files.py [--threshold N] [--exclude GLOB] [dir]
+    python scripts/find-long-files.py [--threshold N] [--fail] [dir]
 
 Defaults:
     threshold  2000
+    extensions .c, .cc, .cpp, .cxx, .h, .hh, .hpp, .hxx, .cs, .py
     dir        project root
     exclude    .git, node_modules, __pycache__, .venv, build, dist,
                thirdparty, termin-thirdparty, sdk,
@@ -19,6 +20,18 @@ from pathlib import Path
 
 
 DEFAULT_THRESHOLD = 2000
+DEFAULT_EXTENSIONS = (
+    ".c",
+    ".cc",
+    ".cpp",
+    ".cs",
+    ".cxx",
+    ".h",
+    ".hh",
+    ".hpp",
+    ".hxx",
+    ".py",
+)
 DEFAULT_EXCLUDES = (
     ".git",
     "node_modules",
@@ -49,6 +62,15 @@ def count_lines(path: Path) -> int:
 
 def normalize_exclude(value: str) -> str:
     return value.replace("\\", "/").strip("/")
+
+
+def normalize_extension(value: str) -> str:
+    value = value.strip().lower()
+    if not value:
+        raise ValueError("empty extension")
+    if not value.startswith("."):
+        value = "." + value
+    return value
 
 
 def should_skip_dir(dirname: str, rel_dir: str, excludes: tuple[str, ...]) -> bool:
@@ -84,6 +106,20 @@ def main() -> None:
         default=list(DEFAULT_EXCLUDES),
         help="Directory name to exclude (may be repeated)",
     )
+    parser.add_argument(
+        "-x", "--extension",
+        action="append",
+        default=None,
+        help=(
+            "Source file extension to include, for example .cpp or py. "
+            "May be repeated; defaults to C/C++/C#/Python source extensions."
+        ),
+    )
+    parser.add_argument(
+        "--fail",
+        action="store_true",
+        help="Exit with status 1 when matching long source files are found.",
+    )
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
@@ -92,6 +128,14 @@ def main() -> None:
         sys.exit(1)
 
     excludes = tuple(normalize_exclude(value) for value in args.exclude)
+    try:
+        extensions = tuple(
+            normalize_extension(value)
+            for value in (args.extension if args.extension is not None else DEFAULT_EXTENSIONS)
+        )
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(2)
     results: list[tuple[Path, int]] = []
 
     for dirpath, dirnames, filenames in os.walk(root):
@@ -106,7 +150,7 @@ def main() -> None:
 
         for fname in filenames:
             fpath = Path(dirpath) / fname
-            if fpath.suffix in (".pyc", ".png", ".so"):
+            if fpath.suffix.lower() not in extensions:
                 continue
             lines = count_lines(fpath)
             if lines >= args.threshold:
@@ -116,16 +160,18 @@ def main() -> None:
     results.sort(key=lambda x: x[1], reverse=True)
 
     if not results:
-        print(f"No files with >= {args.threshold} lines found.")
+        print(f"No source files with >= {args.threshold} lines found.")
         return
 
-    print(f"Files with >= {args.threshold} lines:\n")
+    print(f"Source files with >= {args.threshold} lines:\n")
     rel_root = root
     for fpath, lines in results:
         rel = fpath.relative_to(rel_root)
         print(f"  {lines:>6}  {rel}")
 
     print(f"\nTotal: {len(results)} file(s)")
+    if args.fail:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
