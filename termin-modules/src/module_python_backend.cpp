@@ -126,9 +126,15 @@ std::string fetch_python_error_string() {
 std::string shell_quote(const std::string& value) {
     std::string result = "\"";
     for (char ch : value) {
+#ifdef _WIN32
+        if (ch == '"') {
+            result.push_back('\\');
+        }
+#else
         if (ch == '\\' || ch == '"') {
             result.push_back('\\');
         }
+#endif
         result.push_back(ch);
     }
     result.push_back('"');
@@ -143,7 +149,15 @@ bool run_command_capture(
     output.clear();
     error.clear();
 
-    FILE* pipe = popen(command.c_str(), "r");
+    std::string popen_command = command;
+#ifdef _WIN32
+    // _popen delegates to cmd.exe. A command that starts with a quoted
+    // executable and also contains quoted arguments is parsed incorrectly by
+    // `cmd /c` unless the whole command is wrapped with cmd's /S quoting rule.
+    popen_command = "cmd /S /C \"" + command + "\"";
+#endif
+
+    FILE* pipe = popen(popen_command.c_str(), "r");
     if (pipe == nullptr) {
         error = "Failed to start process";
         return false;
