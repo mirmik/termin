@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from termin.project_build import android_build, build_desktop_project, export_runtime_package, quest_openxr_build
+from termin.project_build.desktop_runtime_packager import package_desktop_runtime
 from termin.project_build.runtime_package_exporter import (
     ENGINE_TEXT3D_SHADER_UUID,
     RuntimePackageExportDiagnostic,
@@ -63,6 +64,67 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     )
     (share_dir / "termin_prelude.slang").write_text("// prelude\n", encoding="utf-8")
     return sdk
+
+
+def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
+    sdk = tmp_path / "fake-windows-sdk"
+    bin_dir = sdk / "bin"
+    lib_dir = sdk / "lib"
+    python_lib = sdk / "python" / "Lib"
+    site_packages = python_lib / "site-packages"
+    python_overlay = lib_dir / "python"
+    share_dir = sdk / "share" / "termin" / "builtin_shaders"
+
+    bin_dir.mkdir(parents=True)
+    lib_dir.mkdir(parents=True)
+    site_packages.mkdir(parents=True)
+    share_dir.mkdir(parents=True)
+
+    (bin_dir / "termin_player.exe").write_bytes(b"player")
+    (bin_dir / "termin_base.dll").write_bytes(b"termin")
+    (bin_dir / "python312.dll").write_bytes(b"python")
+    (python_lib / "os.py").write_text("", encoding="utf-8")
+    (site_packages / "termin").mkdir()
+    (site_packages / "termin" / "__init__.py").write_text("", encoding="utf-8")
+    (python_overlay / "termin" / "player").mkdir(parents=True)
+    (python_overlay / "termin" / "player" / "__main__.py").write_text(
+        "# fresh player overlay\n",
+        encoding="utf-8",
+    )
+    (share_dir / "termin_prelude.slang").write_text("// prelude\n", encoding="utf-8")
+    return sdk
+
+
+def _write_fake_distribution(
+    site_packages: Path,
+    distribution: str,
+    files: dict[str, str],
+    requires: list[str] | None = None,
+) -> None:
+    normalized = distribution.replace("-", "_")
+    dist_info = site_packages / f"{normalized}-1.0.dist-info"
+    dist_info.mkdir(parents=True)
+    metadata_lines = [
+        "Metadata-Version: 2.1",
+        f"Name: {distribution}",
+        "Version: 1.0",
+    ]
+    for requirement in requires or []:
+        metadata_lines.append(f"Requires-Dist: {requirement}")
+    (dist_info / "METADATA").write_text("\n".join(metadata_lines) + "\n", encoding="utf-8")
+
+    record_paths: list[str] = []
+    for rel_path, text in files.items():
+        path = site_packages / rel_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        record_paths.append(rel_path)
+    record_paths.append(f"{dist_info.name}/METADATA")
+    record_paths.append(f"{dist_info.name}/RECORD")
+    (dist_info / "RECORD").write_text(
+        "".join(f"{path},,\n" for path in record_paths),
+        encoding="utf-8",
+    )
 
 
 def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
@@ -613,6 +675,70 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         ],
         "diagnostics": [],
     }
+
+
+def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist" / "WindowsGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[],
+        sdk_root=_write_fake_windows_desktop_sdk(tmp_path),
+    )
+
+    assert result.diagnostics == []
+    assert result.python_home == dist_dir.resolve() / "python"
+    assert result.python_site_packages == dist_dir.resolve() / "python" / "Lib" / "site-packages"
+    assert (dist_dir / "bin" / "termin_player.exe").exists()
+    assert (dist_dir / "bin" / "termin_base.dll").exists()
+    assert (dist_dir / "bin" / "python312.dll").exists()
+    assert (dist_dir / "python" / "Lib" / "os.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "__init__.py").exists()
+    assert (
+        dist_dir
+        / "python"
+        / "Lib"
+        / "site-packages"
+        / "termin"
+        / "player"
+        / "__main__.py"
+    ).exists()
+    assert (dist_dir / "share" / "termin" / "builtin_shaders" / "termin_prelude.slang").exists()
+
+
+def test_desktop_runtime_packager_copies_requirements_from_project_venv(
+    tmp_path: Path,
+) -> None:
+    source_site_packages = tmp_path / "project" / ".venv" / "Lib" / "site-packages"
+    source_site_packages.mkdir(parents=True)
+    _write_fake_distribution(
+        source_site_packages,
+        "python-chess",
+        {},
+        requires=["chess"],
+    )
+    _write_fake_distribution(
+        source_site_packages,
+        "chess",
+        {
+            "chess/__init__.py": "VALUE = 'copied from project venv'\n",
+        },
+    )
+    dist_dir = tmp_path / "dist" / "RequirementGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=["python-chess"],
+        sdk_root=_write_fake_windows_desktop_sdk(tmp_path),
+        requirement_search_paths=[source_site_packages],
+    )
+
+    target_site_packages = dist_dir.resolve() / "python" / "Lib" / "site-packages"
+    assert result.diagnostics == []
+    assert (target_site_packages / "python_chess-1.0.dist-info" / "METADATA").exists()
+    assert (target_site_packages / "chess" / "__init__.py").read_text(encoding="utf-8") == (
+        "VALUE = 'copied from project venv'\n"
+    )
 
 
 def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path: Path) -> None:

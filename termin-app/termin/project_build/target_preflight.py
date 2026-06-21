@@ -444,20 +444,38 @@ def _validate_desktop_capabilities(
         )
 
     if not capabilities.desktop.native_libraries:
+        runtime_dirs = _desktop_native_runtime_dirs(sdk_root)
         diagnostics.append(
             build_error(
-                str(sdk_root / "lib"),
-                f"No native libraries were found in SDK lib directory: {sdk_root / 'lib'}",
+                str(runtime_dirs[0]),
+                "No native libraries were found in SDK runtime directories: "
+                + ", ".join(str(path) for path in runtime_dirs),
             )
         )
 
     if not capabilities.desktop.python_runtime:
+        python_dirs = _desktop_python_runtime_dirs(sdk_root)
         diagnostics.append(
             build_error(
-                str(sdk_root / "lib" / "python"),
-                f"Bundled Python stdlib was not found in SDK: {sdk_root / 'lib'}",
+                str(python_dirs[0]),
+                "Bundled Python stdlib was not found in SDK runtime directories: "
+                + ", ".join(str(path) for path in python_dirs),
             )
         )
+
+
+def _desktop_native_runtime_dirs(sdk_root: Path) -> tuple[Path, ...]:
+    return (
+        sdk_root / "lib",
+        sdk_root / "bin",
+    )
+
+
+def _desktop_python_runtime_dirs(sdk_root: Path) -> tuple[Path, ...]:
+    return (
+        sdk_root / "lib" / "python",
+        sdk_root / "python" / "Lib",
+    )
 
 
 def _validate_android_capabilities(

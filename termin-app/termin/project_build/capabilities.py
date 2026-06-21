@@ -389,20 +389,21 @@ def _default_openxr_config_path(android_sdk_root: Path, abi: str) -> Path:
 def _has_native_libraries(sdk_root: Path | None) -> bool:
     if sdk_root is None:
         return False
-    lib_dir = sdk_root / "lib"
-    if not lib_dir.is_dir():
-        return False
-    patterns = ("*.so", "*.so.*", "*.dylib", "*.dll")
-    for pattern in patterns:
-        for path in lib_dir.glob(pattern):
-            if path.is_file():
-                return True
+    candidates = (
+        (sdk_root / "lib", ("*.so", "*.so.*", "*.dylib", "*.dll")),
+        (sdk_root / "bin", ("*.dll",)),
+    )
+    for directory, patterns in candidates:
+        if not directory.is_dir():
+            continue
+        for pattern in patterns:
+            for path in directory.glob(pattern):
+                if path.is_file():
+                    return True
     return False
 
 
-def _has_python_runtime(sdk_root: Path | None) -> bool:
-    if sdk_root is None:
-        return False
+def _has_posix_python_runtime(sdk_root: Path) -> bool:
     lib_dir = sdk_root / "lib"
     if not lib_dir.is_dir():
         return False
@@ -410,6 +411,16 @@ def _has_python_runtime(sdk_root: Path | None) -> bool:
         if path.is_dir() and path.name.startswith("python3.") and (path / "os.py").is_file():
             return True
     return False
+
+
+def _has_windows_python_runtime(sdk_root: Path) -> bool:
+    return (sdk_root / "python" / "Lib" / "os.py").is_file()
+
+
+def _has_python_runtime(sdk_root: Path | None) -> bool:
+    if sdk_root is None:
+        return False
+    return _has_posix_python_runtime(sdk_root) or _has_windows_python_runtime(sdk_root)
 
 
 def _has_builtin_shaders(sdk_root: Path | None) -> bool:
