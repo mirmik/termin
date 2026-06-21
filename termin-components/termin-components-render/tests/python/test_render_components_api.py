@@ -6,6 +6,7 @@ from termin.render_components import (
     LineRenderer,
     LineRenderMode,
     MaterialPass,
+    MeshRenderer,
     WorldTextAnchor,
     WorldTextComponent,
     WorldTextOrientation,
@@ -103,6 +104,18 @@ def test_line_renderer_cast_shadow_uses_default_shadow_phase_when_material_lacks
     renderer = LineRenderer(points=[(0, 0, 0), (1, 0, 0)], cast_shadow=True)
 
     assert renderer.phase_marks == {"opaque", "shadow"}
+
+
+def test_mesh_renderer_get_phases_for_mark_returns_non_owning_phase_refs():
+    material = create_line_test_material()
+    renderer = MeshRenderer(material=material)
+
+    opaque = renderer.get_phases_for_mark("opaque")
+    shadow = renderer.get_phases_for_mark("shadow")
+
+    assert [phase.phase_mark for phase in opaque] == ["opaque"]
+    assert [phase.phase_mark for phase in shadow] == ["shadow"]
+    assert material.phases[0].phase_mark == "opaque"
 
 
 def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():
