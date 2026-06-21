@@ -359,6 +359,14 @@ Status 2026-06-21:
   SDL2 OpenGL context, binds a UBO through `BoundResourceSetDesc` with explicit
   OpenGL placement, renders offscreen, and verifies the result with
   `read_pixel_rgba8()`.
+- D3D11 backend started consuming the boundary directly:
+  `D3D11RenderDevice::create_bound_resource_set()` stores
+  `BoundResourceSetDesc`, and `D3D11CommandList::bind_resource_set()` applies
+  planned bindings through D3D11 register class/index placement. Legacy numeric
+  bindings remain supported beside the new path. The existing
+  `tgfx2_d3d11_smoke` normal-material pass now creates its constant-buffer
+  resource set through `BoundResourceSetDesc`; Windows runtime validation is
+  still required.
 
 ### Phase 0: Freeze Current Contract
 
@@ -490,6 +498,9 @@ Focused tests:
    not a silent compatibility bind.
 7. OpenGL runtime path creates a bound resource set from
    `BoundResourceSetDesc` and applies backend-native UBO placement during draw.
+8. D3D11 runtime path creates a bound resource set from
+   `BoundResourceSetDesc` and applies backend-native `b/t/s/u` placement
+   during draw.
 
 Regression commands:
 
