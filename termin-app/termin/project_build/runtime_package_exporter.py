@@ -369,6 +369,10 @@ def _read_scene_data(scene_path: Path) -> dict[str, Any]:
     raise ValueError(f"Scene file has no scene data: {scene_path}")
 
 
+def _project_relative_path(project_root: Path, path: Path) -> str:
+    return path.relative_to(project_root).as_posix()
+
+
 def _collect_runtime_refs(scene_data: dict[str, Any]) -> _RuntimeRefs:
     refs = _RuntimeRefs()
     _collect_refs_recursive(scene_data, refs, "")
@@ -425,7 +429,7 @@ def _collect_project_material_refs(
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     level="warning",
-                    path=str(path.relative_to(project_root)),
+                    path=_project_relative_path(project_root, path),
                     message=f"Runtime exporter failed to inspect material asset: {exc}",
                 )
             )
@@ -435,7 +439,7 @@ def _collect_project_material_refs(
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     level="warning",
-                    path=str(path.relative_to(project_root)),
+                    path=_project_relative_path(project_root, path),
                     message="Runtime exporter skipped material asset because JSON root is not an object",
                 )
             )
@@ -446,7 +450,7 @@ def _collect_project_material_refs(
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     level="warning",
-                    path=str(path.relative_to(project_root)),
+                    path=_project_relative_path(project_root, path),
                     message="Runtime exporter skipped material asset because it has no uuid",
                 )
             )
@@ -1048,7 +1052,7 @@ def _write_pipelines(
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     level="error",
-                    path=str(source.relative_to(project_root)),
+                    path=_project_relative_path(project_root, source),
                     message=f"Runtime exporter failed to read pipeline asset: {exc}",
                 )
             )
@@ -1091,7 +1095,7 @@ def _append_project_file_diagnostic(
     diagnostics.append(
         RuntimePackageExportDiagnostic(
             level=level,
-            path=str(path.relative_to(project_root)),
+            path=_project_relative_path(project_root, path),
             message=message,
         )
     )
@@ -1243,7 +1247,7 @@ def _export_mesh_spec(
             diagnostics.append(
                 RuntimePackageExportDiagnostic(
                     level="warning",
-                    path=str(mesh_source.relative_to(project_root)),
+                    path=_project_relative_path(project_root, mesh_source),
                     message=f"Runtime exporter failed to read mesh asset: {exc}",
                 )
             )
