@@ -56,21 +56,3 @@ class AssetsMixin(DefaultAssetResourceMixin):
                 self.materials[asset.name] = asset.material
             return asset.material
         return UnknownMaterial.for_missing_material(asset.name or f"uuid:{uuid}")
-
-    def register_builtin_materials(self) -> None:
-        """Register builtin materials."""
-        from termin.default_assets.builtin_resources import register_builtin_materials
-
-        register_builtin_materials(self)
-
-    def register_builtin_textures(self) -> None:
-        """Register builtin placeholder textures."""
-        from termin.default_assets.builtin_resources import register_builtin_textures
-
-        register_builtin_textures(self)
-
-    def register_builtin_meshes(self) -> list[str]:
-        """Register builtin primitive meshes."""
-        from termin.default_assets.builtin_resources import register_builtin_meshes
-
-        return register_builtin_meshes(self)

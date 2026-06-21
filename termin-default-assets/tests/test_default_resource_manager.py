@@ -19,3 +19,16 @@ def test_default_resource_manager_exposes_handle_accessor_contracts() -> None:
 
     assert isinstance(manager.get_handle_accessors("mesh_handle"), HandleAccessors)
     assert isinstance(manager.get_handle_accessors("texture_handle"), HandleAccessors)
+
+
+def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
+    manager = DefaultResourceManager()
+
+    manager.register_builtin_textures()
+    manager.register_builtin_materials()
+    registered_meshes = manager.register_builtin_meshes()
+
+    assert manager.get_texture_asset("__white_1x1__") is not None
+    assert manager.get_texture_asset("__normal_1x1__") is not None
+    assert set(registered_meshes) == {"Cube", "Sphere", "Plane", "Cylinder"}
+    assert manager.get_mesh_asset("Cube") is not None
