@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from termin.viewport import Viewport
     from termin.scene import TcScene as Scene
     from termin.render_framework import RenderPipeline
-    from termin.visualization.render.offscreen_context import OffscreenContext
+    from termin.editor_tcgui.offscreen_context import OffscreenContext
     from tgfx._tgfx_native import Tgfx2Context
 
 

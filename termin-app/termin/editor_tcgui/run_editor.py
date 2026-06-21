@@ -275,7 +275,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
         main_window.device_ptr(), main_window.context_ptr())
 
     # Create initial scene
-    from termin.visualization.core.scene import create_scene
+    from termin.scene_rendering import create_scene
 
     if no_scene:
         initial_scene = None

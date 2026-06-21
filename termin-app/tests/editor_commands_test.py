@@ -17,7 +17,7 @@ from termin.editor_core.editor_commands import (
 from termin.editor_core.undo_stack import UndoStack
 from termin.geombase import GeneralPose3
 from termin.scene import TcScene
-from termin.visualization.core.scene import scene_render_state
+from termin.scene_rendering import scene_render_state
 
 
 class TestEditorUndoCommands(unittest.TestCase):

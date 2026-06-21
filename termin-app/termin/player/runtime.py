@@ -201,8 +201,10 @@ class PlayerRuntime:
         else:
             self._scan_project_assets()
 
-        # Ensure GLSL fallback loader is set up (import triggers setup)
-        import termin.visualization.render.glsl_preprocessor  # noqa: F401
+        # Ensure GLSL fallback loader is set up for app ResourceManager includes.
+        from termin.shader_runtime import configure_glsl_preprocessor_fallback
+
+        configure_glsl_preprocessor_fallback()
 
         # Create default pipeline and configure RenderingManager
         pipeline = RenderingManager.instance().create_pipeline("Default")
@@ -239,7 +241,7 @@ class PlayerRuntime:
             return False
 
         import json
-        from termin.visualization.core.scene import create_scene
+        from termin.scene_rendering import create_scene
 
         with open(scene_path, "r", encoding="utf-8") as f:
             data = json.load(f)

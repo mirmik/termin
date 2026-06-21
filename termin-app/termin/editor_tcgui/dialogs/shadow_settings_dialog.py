@@ -25,7 +25,7 @@ def show_shadow_settings_dialog(
 
     Uses SceneRenderState.shadow_settings property (read/write).
     """
-    from termin.visualization.core.scene import scene_render_state
+    from termin.scene_rendering import scene_render_state
     rs = scene_render_state(scene)
     ss = rs.shadow_settings
 

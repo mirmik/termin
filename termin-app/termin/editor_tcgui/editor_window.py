@@ -29,7 +29,7 @@ from termin.editor_core.settings import EditorSettings
 from termin.editor_core.signal import Signal
 from termin.assets.resources import ResourceManager
 from termin.display import FBOSurface
-from termin.visualization.core.scene import default_scene_extensions
+from termin.scene_rendering import default_scene_extensions
 
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui

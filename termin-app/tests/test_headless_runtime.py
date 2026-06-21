@@ -8,7 +8,7 @@ import pytest
 from termin.player.headless import HeadlessRuntime, HeadlessRuntimeError
 from termin.physics_components import PhysicsWorldComponent
 from termin.scene import PythonComponent
-from termin.visualization.core.scene import create_scene, scene_ext_attached_names
+from termin.scene_rendering import create_scene, scene_ext_attached_names
 
 
 class HeadlessCounterComponent(PythonComponent):

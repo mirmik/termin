@@ -11,7 +11,7 @@ from tcgui.widgets.message_box import MessageBox
 
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.engine import scene as engine_scene
-from termin.visualization.core.scene import default_scene_extensions
+from termin.scene_rendering import default_scene_extensions
 
 SceneMode = engine_scene.SceneMode
 
