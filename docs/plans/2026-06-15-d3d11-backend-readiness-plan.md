@@ -41,6 +41,20 @@ D3D11 shader artifact and layout path that a future backend can consume.
   the requested shader target list through to runtime package export, and the
   legacy direct desktop CLI accepts repeated `--shader-target` values. D3D11
   is still opt-in so Linux/Android builds do not require Windows SDK `fxc`.
+- Status update 2026-06-20: a minimal DXGI/SDL window path exists through
+  `D3D11Swapchain`. The swapchain exposes its backbuffer as a tgfx2
+  `TextureHandle`, so existing `ICommandList` render passes can render into
+  the presented target. It also supports an offscreen-present path through
+  `compose_and_present(color_texture)`, currently implemented as an exact-size
+  GPU copy into the backbuffer followed by `Present`. `tgfx2_d3d11_window`
+  covers SDL HWND extraction, DXGI swapchain creation, offscreen render target
+  clear, backbuffer copy/readback, and `Present`.
+- Status update 2026-06-20: `termin::SDLBackendWindow` can now create D3D11
+  primary and secondary windows when `TERMIN_BACKEND=d3d11` is selected. This
+  keeps the editor/player model aligned with OpenGL and Vulkan: the engine
+  renders into an offscreen tgfx2 texture, then `BackendWindow::present()`
+  composes that texture into the window swapchain. `backend_window_d3d11_present`
+  covers the window-level path without depending on shader pipeline support.
 - `BackendType::D3D11` exists and `TERMIN_BACKEND=d3d11` / `dx11` parses.
 - Runtime artifact paths already reserve `shaders/d3d11/<uuid>.<stage>.cso`
   with D3D stage suffixes such as `.vs.cso` and `.ps.cso`.
@@ -357,12 +371,13 @@ Acceptance:
 
 ## Immediate Next Steps
 
-1. Prototype extended sidecar metadata with explicit D3D11 `register_class` and
-   `register_index` fields.
-2. Add a `termin_shaderc` unit test matrix for D3D11 placement allocation using
-   fake compilation output.
+1. Run a real editor/player smoke with `TERMIN_BACKEND=d3d11` and a minimal
+   scene whose shaders already have D3D11 `.cso` artifacts.
+2. Add D3D11-friendly fullscreen/material smoke coverage above the clear-only
+   window test, using runtime package shader artifacts instead of GLSL source.
 3. Decide MVP resource-kind support for standalone samplers and storage
-   textures.
-4. Implement `termin_shaderc --target d3d11` as a Windows-only artifact path.
-5. Start `D3D11RenderDevice` only after `.cso + .layout.json` artifacts exist
-   for the representative shader matrix.
+   textures, then reject or implement them consistently in shaderc and runtime.
+4. Fill the remaining `RenderContext2` gaps needed by default editor/runtime
+   passes, especially bind-by-name sampler handling if selected for MVP.
+5. Revisit `D3D11Swapchain::compose_and_present()` scaling/format handling
+   once a real scene exposes the engine output format contract.
