@@ -112,6 +112,13 @@ void prepend_env_path(const char* name, const fs::path& value) {
 
 std::vector<fs::path> python_module_paths(const fs::path& install_root, const fs::path& exe_dir) {
     std::vector<fs::path> paths;
+#ifdef _WIN32
+    fs::path windows_site_packages = install_root / "python" / "Lib" / "site-packages";
+    std::error_code ec;
+    if (fs::exists(windows_site_packages, ec)) {
+        paths.push_back(windows_site_packages);
+    }
+#else
     const fs::path lib_dir = install_root / "lib";
     std::error_code ec;
     if (fs::exists(lib_dir, ec)) {
@@ -131,6 +138,7 @@ std::vector<fs::path> python_module_paths(const fs::path& install_root, const fs
             }
         }
     }
+#endif
 
     fs::path sdk_python = install_root / "lib" / "python";
     if (fs::exists(sdk_python, ec)) {
@@ -160,15 +168,22 @@ void configure_python_backend_environment() {
     }
     prepend_env_path("PATH", exe_dir);
 
-    std::string pythonpath = current_env("PYTHONPATH");
+    std::string pythonpath_prefix;
     for (const fs::path& path : python_module_paths(install_root, exe_dir)) {
         if (!fs::exists(path)) {
             continue;
         }
+        if (!pythonpath_prefix.empty()) {
+            pythonpath_prefix += env_path_separator();
+        }
+        pythonpath_prefix += path.string();
+    }
+    std::string pythonpath = current_env("PYTHONPATH");
+    if (!pythonpath_prefix.empty()) {
         if (!pythonpath.empty()) {
-            pythonpath = path.string() + env_path_separator() + pythonpath;
+            pythonpath = pythonpath_prefix + env_path_separator() + pythonpath;
         } else {
-            pythonpath = path.string();
+            pythonpath = pythonpath_prefix;
         }
     }
     if (!pythonpath.empty()) {
@@ -732,7 +747,36 @@ int maybe_build_profile(
     return run_process(build_command);
 }
 
+std::optional<fs::path> bundled_python_executable(const fs::path& install_root) {
+#ifdef _WIN32
+    std::vector<fs::path> candidates = {
+        install_root / "python" / "python.exe",
+        install_root / "bin" / "python.exe",
+    };
+#else
+    std::vector<fs::path> candidates = {
+        install_root / "bin" / "python3",
+        install_root / "bin" / "python",
+    };
+#endif
+    std::error_code ec;
+    for (const fs::path& candidate : candidates) {
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            return candidate;
+        }
+    }
+    return std::nullopt;
+}
+
 std::vector<std::string> python_module_command() {
+    fs::path install_root = executable_dir().parent_path();
+    if (std::optional<fs::path> python = bundled_python_executable(install_root)) {
+        return {
+            python->string(),
+            "-m",
+            "termin.player",
+        };
+    }
     return {
 #ifdef _WIN32
         "python",
