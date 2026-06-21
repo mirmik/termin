@@ -338,6 +338,12 @@ Status 2026-06-21:
   the backend boundary in `flatten_pending_bindings()`. Numeric binding APIs
   remain legacy `ResourceBinding` paths, and backend `ResourceSetDesc` is not
   split yet.
+- Phase 4 boundary type added: `backend_binding_plan.hpp` now exposes
+  `BoundResourceValue`, `BoundResourceBinding`, and `BoundResourceSetDesc`.
+  `RenderContext2` builds `BoundResourceSetDesc` first, then adapts it to the
+  transitional `ResourceSetDesc` in one place before calling
+  `IRenderDevice::create_resource_set()`. Backend APIs still consume
+  `ResourceSetDesc`.
 
 ### Phase 0: Freeze Current Contract
 
