@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Callable
@@ -14,6 +15,29 @@ from termin_modules import (
     ModuleRuntime,
     PythonModuleBackend,
 )
+
+
+def _is_python_executable(path: Path) -> bool:
+    name = path.name.lower()
+    return name in {"python", "python3", "python.exe", "pythonw.exe"} or name.startswith("python3.")
+
+
+def _sdk_python_executable(prefix_root: Path) -> Path | None:
+    if sys.platform == "win32":
+        candidates = (
+            prefix_root / "python" / "python.exe",
+            prefix_root / "bin" / "python.exe",
+        )
+    else:
+        candidates = (
+            prefix_root / "bin" / "python3",
+            prefix_root / "bin" / "python",
+        )
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 class ProjectModulesRuntime:
@@ -164,7 +188,6 @@ class ProjectModulesRuntime:
 
     def _configure_environment(self) -> None:
         environment = ModuleEnvironment()
-        environment.python_executable = sys.executable
 
         # Use the canonical SDK discovery helper shared with all subpackages.
         # find_sdk() checks $TERMIN_SDK → /opt/termin → %LOCALAPPDATA%/termin-sdk,
@@ -175,6 +198,23 @@ class ProjectModulesRuntime:
             raise RuntimeError(
                 "termin SDK not found. Set TERMIN_SDK or install to /opt/termin."
             )
+
+        override = os.environ.get("TERMIN_MODULES_PYTHON")
+        if override:
+            environment.python_executable = override
+        else:
+            sdk_python = _sdk_python_executable(prefix_root)
+            if sdk_python is not None:
+                environment.python_executable = str(sdk_python)
+            elif _is_python_executable(Path(sys.executable)):
+                environment.python_executable = sys.executable
+            else:
+                log.error(
+                    "[ProjectModulesRuntime] SDK Python executable was not found. "
+                    f"Expected bundled interpreter under {prefix_root / 'python'}; "
+                    "rebuild SDK or set TERMIN_MODULES_PYTHON."
+                )
+                environment.python_executable = ""
 
         environment.sdk_prefix = str(prefix_root)
         environment.cmake_prefix_path = str(prefix_root)
