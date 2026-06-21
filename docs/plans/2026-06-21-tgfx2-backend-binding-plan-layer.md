@@ -344,6 +344,12 @@ Status 2026-06-21:
   transitional `ResourceSetDesc` in one place before calling
   `IRenderDevice::create_resource_set()`. Backend APIs still consume
   `ResourceSetDesc`.
+- Backend boundary API started: `IRenderDevice` now exposes
+  `create_bound_resource_set(BoundResourceSetDesc, legacy_numeric_bindings)`
+  with a default adapter to `create_resource_set(ResourceSetDesc)`.
+  `RenderContext2` calls this boundary API instead of adapting directly. The
+  shared adapter lives in the binding-plan layer; concrete backends still use
+  the default wrapper.
 
 ### Phase 0: Freeze Current Contract
 
