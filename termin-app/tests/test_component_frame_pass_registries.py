@@ -150,8 +150,12 @@ def test_legacy_ui_component_and_pass_paths_are_removed() -> None:
 
 def test_dead_visualization_legacy_paths_are_removed() -> None:
     removed_modules = [
+        "termin.visualization",
+        "termin.visualization.core",
+        "termin.visualization.core.scene",
         "termin.visualization.components",
         "termin.visualization.ui",
+        "termin.visualization.render",
         "termin.visualization.render.shadow",
         "termin.visualization.render.shadow.shadow_camera",
         "termin.visualization.render.materials.pick_material",
@@ -160,6 +164,9 @@ def test_dead_visualization_legacy_paths_are_removed() -> None:
         "termin.visualization.render.materials.unknown_material",
         "termin.visualization.render.materials.shadow_material",
         "termin.visualization.render.materials.depth_material",
+        "termin.visualization.render.glsl_preprocessor",
+        "termin.visualization.render.offscreen_context",
+        "termin.visualization.render.texture",
         "termin.visualization.render.lighting",
         "termin.visualization.render.lighting.light_setup",
         "termin.visualization.render.lighting.shading",

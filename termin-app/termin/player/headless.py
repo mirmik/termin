@@ -170,7 +170,7 @@ class HeadlessRuntime:
 
         scene_data = _extract_scene_data(data)
 
-        from termin.visualization.core.scene import create_scene
+        from termin.scene_rendering import create_scene
 
         scene = create_scene(
             name=self.scene_name,
@@ -207,7 +207,7 @@ def _default_headless_scene_extensions() -> tuple[int, ...]:
     preload_sdk_libs("termin_graphics", "termin_graphics2")
 
     from termin._native import register_default_scene_extensions
-    from termin.visualization.core.scene import SCENE_EXT_TYPE_COLLISION_WORLD
+    from termin.scene_rendering import SCENE_EXT_TYPE_COLLISION_WORLD
 
     register_default_scene_extensions()
     return (SCENE_EXT_TYPE_COLLISION_WORLD,)

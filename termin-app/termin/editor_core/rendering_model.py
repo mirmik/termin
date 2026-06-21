@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from termin.display import Display
     from termin.scene import TcScene as Scene
     from termin.viewport import Viewport
-    from termin.visualization.core.render_pipeline import RenderPipeline
+    from termin.render_framework import RenderPipeline
     from termin.engine import RenderingManager
 
 
@@ -231,7 +231,7 @@ class RenderingModel:
     def _pipeline_for_viewport(self, viewport: "Viewport"):
         managed_by = viewport.managed_by_scene_pipeline
         if managed_by and viewport.scene is not None:
-            from termin.visualization.core.scene import scene_render_mount
+            from termin.scene_rendering import scene_render_mount
             return scene_render_mount(viewport.scene).get_pipeline(managed_by)
         render_target = viewport.render_target
         if render_target is not None:
@@ -241,7 +241,7 @@ class RenderingModel:
     def _pipeline_for_viewport_render_target(self, viewport: "Viewport", render_target):
         managed_by = viewport.managed_by_scene_pipeline
         if managed_by and viewport.scene is not None:
-            from termin.visualization.core.scene import scene_render_mount
+            from termin.scene_rendering import scene_render_mount
             return scene_render_mount(viewport.scene).get_pipeline(managed_by)
         return render_target.pipeline
 
@@ -260,7 +260,7 @@ class RenderingModel:
         render_target.free()
 
     def _remove_render_target_config_by_name(self, scene: "Scene", name: str) -> None:
-        from termin.visualization.core.scene import scene_render_mount
+        from termin.scene_rendering import scene_render_mount
 
         rm = scene_render_mount(scene)
         for index in range(rm.render_target_config_count() - 1, -1, -1):
@@ -330,7 +330,7 @@ class RenderingModel:
         Matches on (display_name, render_target_name) when the viewport
         has a render target. Falls back to (display_name, viewport.name).
         """
-        from termin.visualization.core.scene import scene_render_mount
+        from termin.scene_rendering import scene_render_mount
 
         if display is None:
             display = self._manager.get_display_for_viewport(viewport)
@@ -434,7 +434,7 @@ class RenderingModel:
     def sync_viewport_configs_to_scene(self, scene: "Scene") -> None:
         """Snapshot this scene's viewports into ``scene.viewport_configs``."""
         from termin.render import ViewportConfig
-        from termin.visualization.core.scene import scene_render_mount
+        from termin.scene_rendering import scene_render_mount
 
         rm = scene_render_mount(scene)
         rm.clear_viewport_configs()
@@ -469,7 +469,7 @@ class RenderingModel:
     def sync_render_target_configs_to_scene(self, scene: "Scene") -> None:
         """Snapshot manager-owned render targets into ``scene.render_target_configs``."""
         from termin.render import RenderTargetConfig
-        from termin.visualization.core.scene import scene_render_mount
+        from termin.scene_rendering import scene_render_mount
 
         rm = scene_render_mount(scene)
         rm.clear_render_target_configs()
