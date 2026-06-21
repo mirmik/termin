@@ -10,7 +10,6 @@ from tcbase import log
 from tcgui.widgets.message_box import MessageBox
 
 from termin.editor_core.editor_state_io import EditorStateIO
-from termin.editor_core.settings import EditorSettings
 from termin.engine import scene as engine_scene
 from termin.visualization.core.scene import default_scene_extensions
 
@@ -111,7 +110,7 @@ class SceneFileController:
             ui,
             title="Save Scene As",
             directory=directory,
-            filter_str="Scene Files (*.tc_scene);;All Files (*)",
+            filter_str="Scene Files (*.scene);;Legacy Scene Files (*.tc_scene);;All Files (*)",
             on_result=lambda path: self.save_scene_to_file(path) if path else None,
             windowed=True,
         )
@@ -128,7 +127,7 @@ class SceneFileController:
             ui,
             title="Load Scene",
             directory=directory,
-            filter_str="Scene Files (*.tc_scene);;All Files (*)",
+            filter_str="Scene Files (*.scene);;Legacy Scene Files (*.tc_scene);;All Files (*)",
             on_result=lambda path: self.load_scene_from_file(path) if path else None,
             windowed=True,
         )
@@ -155,7 +154,6 @@ class SceneFileController:
             state_io = self._get_editor_state_io()
             editor_data = state_io.collect() if state_io else None
             self._scene_manager.save_scene(scene_name, path, editor_data)
-            EditorSettings.instance().set_last_scene_path(path)
             from termin.project.settings import ProjectSettingsManager
 
             ProjectSettingsManager.instance().set_last_scene(path)
@@ -187,7 +185,6 @@ class SceneFileController:
             upgrade_scene_unknown_components(self._scene_manager.get_scene(scene_name))
             self._scene_manager.set_mode(scene_name, SceneMode.STOP)
 
-            EditorSettings.instance().set_last_scene_path(path)
             from termin.project.settings import ProjectSettingsManager
 
             ProjectSettingsManager.instance().set_last_scene(path)
@@ -244,11 +241,6 @@ class SceneFileController:
         project_scene = psm.get_last_scene()
         if project_scene is not None and Path(project_scene).is_file():
             self.load_scene_from_file(project_scene)
-            return
-
-        last_path = EditorSettings.instance().get_last_scene_path()
-        if last_path is not None:
-            self.load_scene_from_file(str(last_path))
 
     def _sync_scene_tree(self) -> None:
         scene_tree = self._get_scene_tree_controller()

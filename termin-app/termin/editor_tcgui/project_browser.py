@@ -25,6 +25,7 @@ _KNOWN_EXTENSIONS = {
     ".material": "Material",
     ".pipeline": "Pipeline",
     ".prefab": "Prefab",
+    ".scene": "Scene",
     ".shader": "Shader",
     ".py": "Python",
     ".tc_scene": "Scene",

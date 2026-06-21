@@ -8,6 +8,9 @@ from typing import Callable
 from tcbase import log
 
 
+SCENE_FILE_EXTENSIONS = {".scene", ".tc_scene"}
+
+
 class ProjectFileActionController:
     def __init__(
         self,
@@ -24,7 +27,7 @@ class ProjectFileActionController:
 
     def activate_file(self, path: str) -> None:
         ext = Path(path).suffix.lower()
-        if ext == ".tc_scene":
+        if ext in SCENE_FILE_EXTENSIONS:
             self._load_scene_from_file(path)
             return
         if ext == ".tc_prefab":
