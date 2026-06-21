@@ -355,6 +355,10 @@ Status 2026-06-21:
   `BoundResourceSetDesc`, and `OpenGLCommandList::bind_resource_set()` applies
   planned bindings through OpenGL binding points / texture units. Legacy
   numeric bindings remain supported beside the new path.
+- OpenGL runtime coverage added: `tgfx2_opengl_bound_resource_set` creates an
+  SDL2 OpenGL context, binds a UBO through `BoundResourceSetDesc` with explicit
+  OpenGL placement, renders offscreen, and verifies the result with
+  `read_pixel_rgba8()`.
 
 ### Phase 0: Freeze Current Contract
 
@@ -484,6 +488,8 @@ Focused tests:
    resolution.
 6. Missing backend placement for active backend is a hard error or clear log,
    not a silent compatibility bind.
+7. OpenGL runtime path creates a bound resource set from
+   `BoundResourceSetDesc` and applies backend-native UBO placement during draw.
 
 Regression commands:
 
@@ -495,6 +501,7 @@ Focused Linux checks before Windows D3D11 verification:
 
 ```bash
 ctest --test-dir build/Release-tests -R 'tgfx|render_context|backend_window' --output-on-failure
+ctest --test-dir build/Release-tests -R '^tgfx2_opengl_bound_resource_set$' --output-on-failure
 ./run-tests-python.sh termin-graphics/tests/python/test_termin_shaderc_cli.py
 ```
 
