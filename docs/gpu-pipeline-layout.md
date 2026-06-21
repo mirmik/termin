@@ -209,8 +209,8 @@ the CPU side and the shader stay in sync:
 | DepthPass | `DepthDrawStd140` via `depth_draw` | `mat4 u_model` | 64 B |
 | IdPass | `IdPushStd140` via `u_push` draw resource | `mat4 u_model`, `vec4 u_pickColor` | 80 B |
 | NormalPass | `NormalDrawStd140` via `normal_draw` | `mat4 u_model` | 64 B |
-| SolidPrimitive | `SolidPushBlock` | `mat4 u_mvp`, `vec4 u_color` | 80 B |
-| Immediate | `ImmediatePushBlock` | `mat4 u_mvp` | 64 B |
+| SolidPrimitive | `u_push` / `SolidPush` | `mat4 u_mvp`, `vec4 u_color` | 80 B |
+| Immediate | `u_push` / `ImmPush` | `mat4 u_mvp` | 64 B |
 | Text2D | `Text2DPushBlock` | `mat4 u_projection`, `vec4 u_color` | 80 B |
 | UIRenderer | `UIPushBlock` | `mat4 u_projection`, `vec4 u_tint`, flags | ≤80 B |
 
