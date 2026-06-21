@@ -47,6 +47,16 @@ scripts/termin-editor-mcp screenshot --path /tmp/editor.png
 scripts/termin-editor-mcp framegraph
 ```
 
+On Windows PowerShell use the wrapper:
+
+```powershell
+./scripts/termin-editor-mcp.ps1 tools-list
+./scripts/termin-editor-mcp.ps1 exec 'print(project_path)'
+./scripts/termin-editor-mcp.ps1 exec-file C:\tmp\probe_editor.py
+./scripts/termin-editor-mcp.ps1 screenshot --path C:\tmp\editor.png
+./scripts/termin-editor-mcp.ps1 framegraph
+```
+
 The Python namespace contains:
 
 - `editor`: the live `EditorWindowTcgui`.

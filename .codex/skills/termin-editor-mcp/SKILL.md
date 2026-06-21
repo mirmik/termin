@@ -5,15 +5,18 @@ description: Use when Codex should interact with a running Termin editor through
 
 # Termin Editor MCP
 
-Use `scripts/termin-editor-mcp` from the repository root to talk to a running
-Termin editor MCP endpoint. Prefer this helper over raw HTTP calls; it reads the
-session file and handles JSON-RPC details.
+Use the repository helper from the repository root to talk to a running Termin
+editor MCP endpoint. On Linux/macOS use `scripts/termin-editor-mcp`; on Windows
+PowerShell use `./scripts/termin-editor-mcp.ps1`. Prefer this helper over raw
+HTTP calls; it reads the session file and handles JSON-RPC details.
 
 ## Prerequisites
 
 - Start the editor with MCP enabled: `TERMIN_EDITOR_MCP=1 ./sdk/bin/termin_editor`
   or enable the editor setting when the environment variable is not set.
-- The helper reads `/tmp/termin-editor-mcp.json` by default.
+- The helper reads `/tmp/termin-editor-mcp.json` by default. On Windows, the
+  PowerShell wrapper also checks `%TEMP%\termin-editor-mcp.json` when `--session`
+  was not passed explicitly.
 - `./sdk/bin/termin_editor` without a project argument opens the last launched
   project.
 
@@ -26,6 +29,15 @@ scripts/termin-editor-mcp exec-file /tmp/script.py
 scripts/termin-editor-mcp screenshot --path /tmp/editor.png
 scripts/termin-editor-mcp framegraph --include-pass-json --include-debugger-pass
 scripts/termin-editor-mcp framegraph-capture --target-index 0 --resource OUTPUT --path /tmp/output.png
+```
+
+```powershell
+./scripts/termin-editor-mcp.ps1 tools-list
+./scripts/termin-editor-mcp.ps1 exec 'print(scene, selected)'
+./scripts/termin-editor-mcp.ps1 exec-file C:\tmp\script.py
+./scripts/termin-editor-mcp.ps1 screenshot --path C:\tmp\editor.png
+./scripts/termin-editor-mcp.ps1 framegraph --include-pass-json --include-debugger-pass
+./scripts/termin-editor-mcp.ps1 framegraph-capture --target-index 0 --resource OUTPUT --path C:\tmp\output.png
 ```
 
 ## Editor Namespace
