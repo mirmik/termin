@@ -71,6 +71,21 @@ def _write_desktop_sdk(tmp_path: Path) -> Path:
     return sdk_root
 
 
+def _write_windows_desktop_sdk(tmp_path: Path) -> Path:
+    sdk_root = tmp_path / "desktop-sdk"
+    bin_dir = sdk_root / "bin"
+    lib_dir = sdk_root / "lib"
+    python_lib = sdk_root / "python" / "Lib"
+    bin_dir.mkdir(parents=True)
+    lib_dir.mkdir(parents=True)
+    python_lib.mkdir(parents=True)
+    player = bin_dir / "termin_player.exe"
+    player.write_text("# fake exe\n", encoding="utf-8")
+    (bin_dir / "termin_base.dll").write_bytes(b"termin")
+    (python_lib / "os.py").write_text("", encoding="utf-8")
+    return sdk_root
+
+
 def _write_fake_gradle(tmp_path: Path) -> Path:
     gradle = tmp_path / "fake-gradle"
     gradle.write_text("# fake gradle\n", encoding="utf-8")
@@ -230,6 +245,19 @@ def test_preflight_desktop_accepts_sdk_capabilities(tmp_path: Path, monkeypatch)
 
     assert result.sdk_root == sdk_root.resolve()
     assert result.capabilities.desktop.player is True
+    assert result.capabilities.desktop.python_runtime is True
+    assert result.diagnostics == []
+
+
+def test_preflight_desktop_accepts_windows_sdk_layout(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("TERMIN_SDK", raising=False)
+    sdk_root = _write_windows_desktop_sdk(tmp_path)
+
+    result = preflight_desktop_build(sdk_root=sdk_root)
+
+    assert result.sdk_root == sdk_root.resolve()
+    assert result.capabilities.desktop.player is True
+    assert result.capabilities.desktop.native_libraries is True
     assert result.capabilities.desktop.python_runtime is True
     assert result.diagnostics == []
 

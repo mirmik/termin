@@ -159,6 +159,21 @@ dist/<app>/
     termin/
 ```
 
+Windows bundles use the runtime layout expected by `termin_player.exe`:
+
+```text
+dist/<app>/
+  app.json
+  bin/
+    termin_player.exe
+    *.dll
+  python/
+    Lib/
+      site-packages/
+        termin/
+        ...
+```
+
 `app.json` is the bundle entry manifest. Paths inside it are relative to the
 bundle root, so the directory can be moved without keeping the original project
 path.
@@ -166,7 +181,8 @@ path.
 Project `.pymodule` descriptors are copied into `package/python`. The generated
 `package/python/modules.json` records module descriptors, package files, and
 Python requirements for the desktop runtime host. Cache directories such as
-`__pycache__` are not copied into the bundle.
+`__pycache__` are not copied into the bundle. Requirement packages are copied
+from the project `.venv` when present, then from the build backend environment.
 
 Desktop bundles also include a player MCP diagnostics contract in
 `app.json` under `runtime.mcp`. It is disabled by default and can be enabled at

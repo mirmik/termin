@@ -116,6 +116,31 @@ def test_sdk_capabilities_synthesize_from_current_layout(tmp_path: Path, monkeyp
     assert capabilities.quest_openxr.openxr_config_path("arm64-v8a") == openxr_config.resolve()
 
 
+def test_sdk_capabilities_synthesize_from_windows_desktop_layout(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("TERMIN_SDK", raising=False)
+    monkeypatch.delenv("TERMIN_ANDROID_SDK_ROOT", raising=False)
+    sdk_root = tmp_path / "sdk"
+    _write_executable(sdk_root / "bin" / "termin_shaderc.exe")
+    _write_executable(sdk_root / "bin" / "termin_player.exe")
+    (sdk_root / "bin" / "termin_base.dll").write_bytes(b"termin")
+    python_lib = sdk_root / "python" / "Lib"
+    python_lib.mkdir(parents=True)
+    (python_lib / "os.py").write_text("", encoding="utf-8")
+    (sdk_root / "share" / "termin" / "builtin_shaders").mkdir(parents=True)
+
+    capabilities = load_sdk_capabilities(sdk_root=sdk_root)
+
+    assert capabilities.tools.termin_shaderc == sdk_root.resolve() / "bin" / "termin_shaderc.exe"
+    assert capabilities.tools.termin_player == sdk_root.resolve() / "bin" / "termin_player.exe"
+    assert capabilities.desktop.player is True
+    assert capabilities.desktop.native_libraries is True
+    assert capabilities.desktop.python_runtime is True
+    assert capabilities.desktop.builtin_shaders is True
+
+
 def test_sdk_capabilities_prefer_explicit_termin_root_over_env_sdk(
     tmp_path: Path,
     monkeypatch,

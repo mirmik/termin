@@ -117,6 +117,7 @@ def _package_desktop_target(
             for requirement in module.requirements
         ],
         sdk_root=preflight_result.sdk_root,
+        requirement_search_paths=_project_requirement_search_paths(context.project_root),
     )
 
     app_manifest_path = context.dist_dir / "app.json"
@@ -140,18 +141,12 @@ def _package_desktop_target(
                 "launcher": "bin/termin_player",
                 "python": {
                     "enabled": bool(python_result.modules),
-                    "home": (
-                        f"lib/{runtime_result.python_home.name}"
-                        if runtime_result.python_home is not None
-                        else ""
-                    ),
+                    "home": _relative_runtime_path(context.dist_dir, runtime_result.python_home),
                     "project_modules": "package/python",
                     "module_manifest": "package/python/modules.json",
                     "descriptors": python_descriptors,
                 },
-                "native_library_dirs": [
-                    "lib",
-                ],
+                "native_library_dirs": _runtime_native_library_dirs(context.dist_dir, runtime_result),
                 "mcp": {
                     "enabled": False,
                     "host": "127.0.0.1",
@@ -176,6 +171,50 @@ def _package_desktop_target(
             *runtime_result.diagnostics,
         ],
     )
+
+
+def _relative_runtime_path(dist_dir: Path, path: Path | None) -> str:
+    if path is None:
+        return ""
+    return path.relative_to(dist_dir).as_posix()
+
+
+def _runtime_native_library_dirs(
+    dist_dir: Path,
+    runtime_result: DesktopRuntimeBundleResult,
+) -> list[str]:
+    result: list[str] = []
+    for path in (runtime_result.bin_dir, runtime_result.lib_dir):
+        if _contains_native_library(path):
+            result.append(path.relative_to(dist_dir).as_posix())
+    return result or ["lib"]
+
+
+def _contains_native_library(path: Path) -> bool:
+    if not path.is_dir():
+        return False
+    for child in path.iterdir():
+        if not child.is_file():
+            continue
+        name = child.name.lower()
+        if name.endswith(".dll") or name.endswith(".dylib") or ".so" in name:
+            return True
+    return False
+
+
+def _project_requirement_search_paths(project_root: Path) -> list[Path]:
+    venv = project_root / ".venv"
+    candidates = [
+        venv / "Lib" / "site-packages",
+    ]
+    unix_lib = venv / "lib"
+    if unix_lib.is_dir():
+        candidates.extend(sorted(unix_lib.glob("python*/site-packages")))
+    return [
+        path
+        for path in candidates
+        if path.is_dir()
+    ]
 
 
 def _prepare_dist_dir(project_root: Path, dist_dir: Path) -> None:
