@@ -326,6 +326,12 @@ Status 2026-06-21:
   existing `tc_shader_resource_binding` metadata. Focused tests cover
   Vulkan/D3D11/OpenGL placement separation, D3D11 register conflicts, and the
   current Vulkan set-0 guard. `RenderContext2` does not consume this plan yet.
+- Phase 3 started: `RenderContext2::use_shader_resource_layout()` builds and
+  caches `BackendBindingPlan` for the active backend. `bind_uniform_data()` and
+  queued symbolic bindings now resolve placement through plan entries instead
+  of copying backend placement directly from `tc_shader_resource_binding`.
+  Compatibility remains: resolved values still flatten into `ResourceBinding`
+  and `ResourceSetDesc`.
 
 ### Phase 0: Freeze Current Contract
 
