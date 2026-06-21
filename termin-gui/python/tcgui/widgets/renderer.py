@@ -257,26 +257,6 @@ class UIRenderer:
         if self._canvas is None:
             self._canvas = Canvas2DRenderer(self.font)
 
-        if self._ui_vs is None:
-            # Register the UI shader with the tc_shader registry — hash-
-            # based dedup keeps compiled VkShaderModules / GL programs
-            # alive across UIRenderer instances (each new RenderContext2
-            # on Play/Stop otherwise re-runs shaderc).
-            if self._ui_tc_shader is None:
-                self._ui_tc_shader = TcShader.get_or_create(UI_SHADER_UUID)
-                self._ui_tc_shader.set_sources(
-                    UI_VERTEX_SHADER,
-                    UI_FRAGMENT_SHADER,
-                    "",
-                    UI_SHADER_NAME,
-                    "tcgui/widgets/renderer.py",
-                )
-            pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
-            self._ui_vs = pair.vs
-            self._ui_fs = pair.fs
-            if not self._ui_vs or not self._ui_fs:
-                raise RuntimeError("UIRenderer: UI shader compile failed")
-
         if need_offscreen and self._offscreen_size != (w, h):
             if self._offscreen_color_tex is not None:
                 self._graphics.destroy_texture(self._offscreen_color_tex)
@@ -299,6 +279,40 @@ class UIRenderer:
             white = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
             self._placeholder_tex = self._graphics.create_texture_rgba8(
                 1, 1, white.reshape(-1))
+
+    def _ensure_legacy_ui_shader(self) -> None:
+        """Compile the legacy immediate UI shader on first real use.
+
+        Most UI primitives now go through Canvas2DRenderer. The shader
+        below remains only for fallback texture preview paths with
+        channel/HDR inspection modes, so compiling it during renderer
+        startup makes D3D11 fail before those modes are actually needed.
+        """
+        if self._ui_vs is not None and self._ui_fs is not None:
+            return
+        if self._graphics.backend == "d3d11":
+            raise RuntimeError(
+                "UIRenderer: legacy image preview shader is GLSL-only; "
+                "D3D11 needs a Slang/HLSL port or Canvas2D channel preview"
+            )
+
+        # Register the UI shader with the tc_shader registry — hash-
+        # based dedup keeps compiled VkShaderModules / GL programs alive
+        # across UIRenderer instances.
+        if self._ui_tc_shader is None:
+            self._ui_tc_shader = TcShader.get_or_create(UI_SHADER_UUID)
+            self._ui_tc_shader.set_sources(
+                UI_VERTEX_SHADER,
+                UI_FRAGMENT_SHADER,
+                "",
+                UI_SHADER_NAME,
+                "tcgui/widgets/renderer.py",
+            )
+        pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
+        self._ui_vs = pair.vs
+        self._ui_fs = pair.fs
+        if not self._ui_vs or not self._ui_fs:
+            raise RuntimeError("UIRenderer: UI shader compile failed")
 
     # ------------------------------------------------------------------
     # Frame lifecycle
@@ -539,6 +553,7 @@ class UIRenderer:
         sides (`pc.u_projection`, `pc.u_color`, texture mode and preview
         channel flags)."""
         ctx = self._ctx
+        self._ensure_legacy_ui_shader()
         ctx.bind_shader(self._ui_vs, self._ui_fs)
         # Projection is row-major in Python but GLSL expects column-major
         # mat4. Transpose here once instead of a shader-side transpose
