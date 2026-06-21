@@ -206,6 +206,7 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("tmesh._tmesh_native");
     nb::module_::import_("termin.scene._scene_native");
     nb::module_::import_("termin.lighting._lighting_native");
+    nb::module_::import_("termin.materials._materials_native");
     nb::module_::import_("termin.render._render_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
     nb::module_::import_("termin.skeleton._components_skeleton_native");
@@ -537,7 +538,6 @@ NB_MODULE(_components_render_native, m) {
             return marks;
         })
         .def("draw_geometry", &MeshRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
-        .def("get_phases_for_mark", &MeshRenderer::get_phases_for_mark, nb::arg("phase_mark"))
         .def("get_geometry_draws", [](MeshRenderer& self, nb::object phase_mark) {
             if (phase_mark.is_none()) {
                 return self.get_geometry_draws(nullptr);
