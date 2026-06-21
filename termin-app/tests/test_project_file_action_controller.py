@@ -53,7 +53,7 @@ def _make_controller(
     )
 
 
-def test_project_file_actions_activate_scene_and_prefab() -> None:
+def test_project_file_actions_activate_legacy_scene_and_prefab() -> None:
     recorder = _Recorder()
     controller = _make_controller(recorder)
 
@@ -62,6 +62,15 @@ def test_project_file_actions_activate_scene_and_prefab() -> None:
 
     assert recorder.scene_path == "/project/Main.tc_scene"
     assert recorder.prefab_path == "/project/Tree.tc_prefab"
+
+
+def test_project_file_actions_activate_scene_file() -> None:
+    recorder = _Recorder()
+    controller = _make_controller(recorder)
+
+    controller.activate_file("/project/Main.scene")
+
+    assert recorder.scene_path == "/project/Main.scene"
 
 
 def test_project_file_actions_activate_other_file_in_text_editor() -> None:

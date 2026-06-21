@@ -31,6 +31,10 @@ def test_project_browser_labels_stl_as_mesh(tmp_path):
     assert _get_file_subtitle(tmp_path / "piece.stl") == "Mesh"
 
 
+def test_project_browser_labels_scene_as_scene(tmp_path):
+    assert _get_file_subtitle(tmp_path / "scene.scene") == "Scene"
+
+
 def test_project_browser_hides_project_ignored_paths(tmp_path, monkeypatch):
     manager = ProjectSettingsManager()
     manager._settings = ProjectSettings(ignored_resource_paths=["tests"])

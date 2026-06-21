@@ -45,12 +45,18 @@ class ProjectBuildController:
 
         self._save_scene()
 
-        from termin.editor_core.settings import EditorSettings
-
         cmd = [sys.executable, "-m", "termin.main", "--project", project_path]
-        last_scene = EditorSettings.instance().get("last_scene_file")
-        if last_scene:
-            cmd.extend(["--scene", last_scene])
+        scene_name = self._get_editor_scene_name()
+        scene_path = self._scene_manager.get_scene_path(scene_name) if scene_name else None
+        if scene_path is not None:
+            project_root = Path(project_path).resolve()
+            scene_path_obj = Path(scene_path).resolve()
+            try:
+                scene_rel_path = scene_path_obj.relative_to(project_root)
+            except ValueError:
+                self._log_to_console("Standalone entry scene must be inside the current project.")
+                return
+            cmd.extend(["--scene", str(scene_rel_path)])
         self._log_to_console(f"Launching standalone: {' '.join(cmd)}")
         try:
             subprocess.Popen(cmd)

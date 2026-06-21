@@ -25,7 +25,6 @@ class EditorSettings:
 
     # Ключи настроек
     KEY_LAST_PROJECT_PATH = "ProjectBrowser/lastProjectPath"
-    KEY_LAST_SCENE_PATH = "Editor/lastScenePath"
     KEY_TEXT_EDITOR = "Editor/textEditor"
     KEY_FONT_SIZE = "Editor/fontSize"
     KEY_FONT_SIZE_SMALL = "Editor/fontSizeSmall"
@@ -73,19 +72,6 @@ class EditorSettings:
         """Сохранить путь к файлу проекта."""
         self.set(self.KEY_LAST_PROJECT_PATH, str(path))
 
-
-    def get_last_scene_path(self) -> Path | None:
-        """Получить путь последней открытой сцены."""
-        path_str = self.get(self.KEY_LAST_SCENE_PATH)
-        if path_str:
-            path = Path(path_str)
-            if path.exists():
-                return path
-        return None
-
-    def set_last_scene_path(self, path: Path | str) -> None:
-        """Сохранить путь сцены."""
-        self.set(self.KEY_LAST_SCENE_PATH, str(path))
 
     def get_text_editor(self) -> str | None:
         """Получить путь к внешнему текстовому редактору."""
