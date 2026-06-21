@@ -41,6 +41,25 @@ if TYPE_CHECKING:
 class DefaultAssetResourceMixin:
     """Public ResourceManager methods for asset types owned by default-assets."""
 
+    # --------- Built-ins ---------
+    def register_builtin_materials(self) -> None:
+        """Register built-in material dependencies."""
+        from termin.default_assets.builtin_resources import register_builtin_materials
+
+        register_builtin_materials(self)
+
+    def register_builtin_textures(self) -> None:
+        """Register built-in placeholder textures."""
+        from termin.default_assets.builtin_resources import register_builtin_textures
+
+        register_builtin_textures(self)
+
+    def register_builtin_meshes(self) -> list[str]:
+        """Register built-in primitive meshes."""
+        from termin.default_assets.builtin_resources import register_builtin_meshes
+
+        return register_builtin_meshes(self)
+
     # --------- Prefabs ---------
     def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:
         """Get PrefabAsset by name."""
