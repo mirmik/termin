@@ -732,10 +732,10 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert skybox_layout["source_language"] == "shader"
     assert skybox_layout["program"] == {"path": "termin-engine-skybox.shader"}
     assert {
-        "name": "MaterialParams",
-        "logical_name": "material_params",
+        "name": "material",
+        "logical_name": "material",
         "kind": "constant_buffer",
-        "binding": 1,
+        "scope": "material",
     } in skybox_layout["resources"]
 
 

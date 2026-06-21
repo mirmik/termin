@@ -332,7 +332,11 @@ TEST_CASE("module runtime ignores configured discovery roots") {
 
 TEST_CASE("module text diagnostics are sanitized to utf8") {
     expect(is_valid_utf8("plain ascii"), "ascii is valid utf8");
-    expect(is_valid_utf8(u8"русский текст"), "utf8 cyrillic is valid utf8");
+    expect(
+        is_valid_utf8(
+            "\xd1\x80\xd1\x83\xd1\x81\xd1\x81\xd0\xba\xd0\xb8\xd0\xb9 "
+            "\xd1\x82\xd0\xb5\xd0\xba\xd1\x81\xd1\x82"),
+        "utf8 cyrillic is valid utf8");
 
     std::string external_text = "prefix ";
     external_text.push_back(static_cast<char>(0x91));
