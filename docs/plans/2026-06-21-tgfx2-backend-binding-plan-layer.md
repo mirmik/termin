@@ -15,6 +15,25 @@
 - Kanboard #18 - `[render] Довести Direct3D11 backend MVP`
 - Kanboard #21 - `[render] Decide shaderc reflected placement policy`
 
+## Status
+
+Этот документ был исходным архитектурным планом. Основной contract уже вынесен в
+живую документацию: `termin-graphics/docs/architecture/backend-binding-plan.md`.
+
+На 2026-06-21 реализованы OpenGL, D3D11 and Vulkan bound resource-set paths,
+scope-preserving `BoundResourceGroup` boundary, dirty-scope rebinding for
+native-slot backends, and validation hardening for backend placement metadata.
+
+Отложенный completion gate: Windows runtime validation for the D3D11 bound path.
+Эта проверка вынесена в отдельный Windows pass. До этого слой считается locally
+integrated on Linux, but not fully closed for cross-platform completion.
+
+Для этого gate добавлен `scripts/validate-tgfx2-d3d11-bound-path.ps1` and CI job
+`tgfx2-d3d11-bound-windows`. Passing result from that Windows job, or an
+equivalent Windows host run, is still required before closing the goal.
+Tracking: Kanboard #92 - `[graphics/d3d11] Validate tgfx2 bound resource path
+on Windows`.
+
 ## Goal
 
 Выделить в tgfx2 явный слой, который переводит semantic shader resources в
@@ -193,9 +212,11 @@ name -> ShaderResourceKey -> BackendBindingPlanEntry -> backend value binding
 - draw bucket;
 - transient bucket.
 
-The flattening step into one `ResourceSetDesc` is transitional. The target
-flush API should allow backends to bind only the dirty scope/resource groups
-that make sense for them.
+The flattening step into one `ResourceSetDesc` was transitional. Migrated
+paths now preserve scope buckets in `BoundResourceSetDesc::groups`, and
+`BoundResourceGroup::dirty` lets native-slot backends bind only changed scopes.
+Vulkan still consumes complete grouped state while descriptor-set ownership is
+single-set.
 
 ### 4. Backend Resource Binding
 
@@ -319,8 +340,7 @@ Status 2026-06-21:
   `descriptor_set_layout`; Vulkan accepts either through
   `effective_resource_layout_token()`.
 - `RenderContext2` uses resource-layout terminology and calls the neutral
-  token API. Behavior is intentionally unchanged: resource values are still
-  flattened into `ResourceSetDesc`.
+  token API.
 - Phase 2 started: `tgfx2/backend_binding_plan.hpp` defines semantic resource
   keys, backend placement variants, `BackendBindingPlan`, and a builder from
   existing `tc_shader_resource_binding` metadata. Focused tests cover
@@ -330,20 +350,15 @@ Status 2026-06-21:
   caches `BackendBindingPlan` for the active backend. `bind_uniform_data()` and
   queued symbolic bindings now resolve placement through plan entries instead
   of copying backend placement directly from `tc_shader_resource_binding`.
-  Compatibility remains: resolved values still flatten into `ResourceBinding`
-  and `ResourceSetDesc`.
+  Compatibility remains for explicit numeric bindings only.
 - Phase 4 started internally: `RenderContext2` now stores migrated symbolic
-  bindings as `PlannedResourceBinding { BackendBindingPlanEntry,
-  BoundResourceValue }`. The legacy `ResourceBinding` object is now produced at
-  the backend boundary in `flatten_pending_bindings()`. Numeric binding APIs
-  remain legacy `ResourceBinding` paths, and backend `ResourceSetDesc` is not
-  split yet.
+  bindings as `BoundResourceBinding { BackendBindingPlanEntry,
+  BoundResourceValue }`. Numeric binding APIs remain legacy `ResourceBinding`
+  paths.
 - Phase 4 boundary type added: `backend_binding_plan.hpp` now exposes
-  `BoundResourceValue`, `BoundResourceBinding`, and `BoundResourceSetDesc`.
-  `RenderContext2` builds `BoundResourceSetDesc` first, then adapts it to the
-  transitional `ResourceSetDesc` in one place before calling
-  `IRenderDevice::create_resource_set()`. Backend APIs still consume
-  `ResourceSetDesc`.
+  `BoundResourceValue`, `BoundResourceBinding`, `BoundResourceGroup`, and
+  `BoundResourceSetDesc`. `RenderContext2` builds `BoundResourceSetDesc` with
+  grouped planned bindings and calls `IRenderDevice::create_bound_resource_set()`.
 - Backend boundary API started: `IRenderDevice` now exposes
   `create_bound_resource_set(BoundResourceSetDesc, legacy_numeric_bindings)`
   with a default adapter to `create_resource_set(ResourceSetDesc)`.
@@ -367,6 +382,21 @@ Status 2026-06-21:
   `tgfx2_d3d11_smoke` normal-material pass now creates its constant-buffer
   resource set through `BoundResourceSetDesc`; Windows runtime validation is
   still required.
+- Vulkan backend started consuming the boundary directly:
+  `VulkanRenderDevice::create_bound_resource_set()` stores
+  `BoundResourceSetDesc`, and descriptor updates resolve placement from
+  `BackendBindingPlanEntry::placement.vulkan`. Legacy `ResourceSetDesc` remains
+  supported beside the new path. `tgfx2_vulkan_smoke` now includes an offscreen
+  bound-resource-set UBO render/readback case.
+- Binding-plan validation hardened: duplicate semantic names with incompatible
+  kind/scope, D3D11 register conflicts, OpenGL binding point / texture unit
+  conflicts, and Vulkan duplicate `(set,binding)` conflicts are rejected. Vulkan
+  bound resource-set creation also rejects wrong backend placement and
+  descriptor-kind/value-kind mismatches.
+- Live architecture contract added in
+  `termin-graphics/docs/architecture/backend-binding-plan.md`. Public comments
+  mark `ResourceBinding` / `ResourceSetDesc` as legacy numeric compatibility
+  types and `create_bound_resource_set()` as the migrated backend boundary.
 
 ### Phase 0: Freeze Current Contract
 
@@ -451,6 +481,9 @@ Acceptance:
 ### Phase 5: Backend-Native Resource Groups
 
 Remove the assumption that every backend receives one flat `ResourceSetDesc`.
+Boundary-level grouping is now implemented through
+`BoundResourceSetDesc::groups`; OpenGL/D3D11 use group dirty flags to skip
+clean native-slot rebinding.
 
 Possible shapes:
 
@@ -460,7 +493,10 @@ Possible shapes:
 
 Acceptance:
 
-- frame/pass/material/draw dirty tracking can avoid rebinding unrelated scopes;
+- frame/pass/material/draw scopes reach the backend boundary without name
+  inference;
+- dirty tracking can avoid rebinding unrelated native-slot scopes on
+  OpenGL/D3D11;
 - Vulkan multi-set layout can be introduced without changing pass code;
 - D3D11 no longer depends on descriptor-set-shaped data.
 
