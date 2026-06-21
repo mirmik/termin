@@ -332,6 +332,12 @@ Status 2026-06-21:
   of copying backend placement directly from `tc_shader_resource_binding`.
   Compatibility remains: resolved values still flatten into `ResourceBinding`
   and `ResourceSetDesc`.
+- Phase 4 started internally: `RenderContext2` now stores migrated symbolic
+  bindings as `PlannedResourceBinding { BackendBindingPlanEntry,
+  BoundResourceValue }`. The legacy `ResourceBinding` object is now produced at
+  the backend boundary in `flatten_pending_bindings()`. Numeric binding APIs
+  remain legacy `ResourceBinding` paths, and backend `ResourceSetDesc` is not
+  split yet.
 
 ### Phase 0: Freeze Current Contract
 
