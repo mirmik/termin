@@ -66,6 +66,7 @@ VertexOutput main(VertexInput input)
 @stage fragment
 struct FragmentInput
 {
+    float4 screen_pos : SV_Position;
     float3 normal_world : NORMAL;
     float2 uv : TEXCOORD0;
 };
