@@ -30,6 +30,7 @@ add_library(termin_modules SHARED
     src/module_cpp_backend.cpp
     src/module_descriptor_parser.cpp
     src/module_runtime.cpp
+    src/text_encoding.cpp
 )
 add_library(termin_modules::termin_modules ALIAS termin_modules)
 

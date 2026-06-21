@@ -1,4 +1,5 @@
 #include "termin_modules/module_runtime.hpp"
+#include "termin_modules/text_encoding.hpp"
 
 #include "guard_main.h"
 
@@ -327,6 +328,19 @@ TEST_CASE("module runtime ignores dist build output") {
 
 TEST_CASE("module runtime ignores configured discovery roots") {
     test_discovery_ignores_configured_roots();
+}
+
+TEST_CASE("module text diagnostics are sanitized to utf8") {
+    expect(is_valid_utf8("plain ascii"), "ascii is valid utf8");
+    expect(is_valid_utf8(u8"русский текст"), "utf8 cyrillic is valid utf8");
+
+    std::string external_text = "prefix ";
+    external_text.push_back(static_cast<char>(0x91));
+    external_text += " suffix";
+    const std::string sanitized = sanitize_external_text(external_text);
+    expect(is_valid_utf8(sanitized), "sanitized external text must be valid utf8");
+    expect(sanitized.find("prefix ") == 0, "sanitized text should preserve ascii prefix");
+    expect(sanitized.find(" suffix") != std::string::npos, "sanitized text should preserve ascii suffix");
 }
 
 GUARD_TEST_MAIN();

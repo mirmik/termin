@@ -1,4 +1,5 @@
 #include "termin_modules/module_cpp_backend.hpp"
+#include "termin_modules/text_encoding.hpp"
 
 #include <tcbase/tc_log.hpp>
 
@@ -315,10 +316,11 @@ bool CppModuleBackend::run_build_command(
 
     char buffer[512];
     while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        output += buffer;
+        const std::string sanitized = sanitize_external_text(buffer);
+        output += sanitized;
         if (_output_callback) {
             // Strip trailing newline for callback
-            std::string line(buffer);
+            std::string line(sanitized);
             while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
                 line.pop_back();
             }
