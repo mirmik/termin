@@ -223,9 +223,9 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     if (skybox_layout_.block_size == 0) return;
 
     // Collect material values: variant selector + camera matrices + colors.
-    // u_skybox_type matches the TC_SKYBOX_* enum (0=gradient, 1=solid); the
-    // fragment shader branches on it so we bind one pipeline regardless of
-    // variant. u_skybox_type = Int here, not Bool, so the shader comparison
+    // u_skybox_type is a shader-local variant selector (0=gradient, 1=solid).
+    // The fragment shader branches on it so we bind one pipeline regardless
+    // of variant. u_skybox_type = Int here, not Bool, so the shader comparison
     // uses GLSL int semantics.
     int variant_int = (skybox_type == TC_SKYBOX_SOLID) ? 1 : 0;
 
@@ -261,7 +261,9 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->begin_pass(output_tex2);
     ctx.ctx2->set_viewport(0, 0, w, h);
 
-    ctx.ctx2->set_depth_test(true);
+    // Skybox writes the background before the scene depth pass and does not
+    // attach a depth target, so depth testing is semantically disabled here.
+    ctx.ctx2->set_depth_test(false);
     ctx.ctx2->set_depth_write(false);
     ctx.ctx2->set_depth_func(tgfx::CompareOp::LessEqual);
     ctx.ctx2->set_blend(false);
