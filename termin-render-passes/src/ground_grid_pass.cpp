@@ -3,6 +3,7 @@
 #include <tcbase/tc_log.hpp>
 
 #include <tgfx2/render_context.hpp>
+#include <tgfx2/clip_space.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
@@ -95,7 +96,9 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
     Mat44 view64  = ctx.camera->get_view_matrix();
     Mat44 proj64  = ctx.camera->get_projection_matrix();
     Mat44f view   = view64.to_float();
-    Mat44f proj   = proj64.to_float();
+    Mat44f proj   = tgfx::adapt_projection_for_backend(
+        ctx2->device().backend_type(),
+        proj64.to_float());
     Mat44f vp     = proj * view;
     Mat44f inv_vp = vp.inverse();
 
