@@ -350,6 +350,11 @@ Status 2026-06-21:
   `RenderContext2` calls this boundary API instead of adapting directly. The
   shared adapter lives in the binding-plan layer; concrete backends still use
   the default wrapper.
+- OpenGL backend started consuming the boundary directly:
+  `OpenGLRenderDevice::create_bound_resource_set()` stores
+  `BoundResourceSetDesc`, and `OpenGLCommandList::bind_resource_set()` applies
+  planned bindings through OpenGL binding points / texture units. Legacy
+  numeric bindings remain supported beside the new path.
 
 ### Phase 0: Freeze Current Contract
 
