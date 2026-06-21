@@ -321,6 +321,11 @@ Status 2026-06-21:
 - `RenderContext2` uses resource-layout terminology and calls the neutral
   token API. Behavior is intentionally unchanged: resource values are still
   flattened into `ResourceSetDesc`.
+- Phase 2 started: `tgfx2/backend_binding_plan.hpp` defines semantic resource
+  keys, backend placement variants, `BackendBindingPlan`, and a builder from
+  existing `tc_shader_resource_binding` metadata. Focused tests cover
+  Vulkan/D3D11/OpenGL placement separation, D3D11 register conflicts, and the
+  current Vulkan set-0 guard. `RenderContext2` does not consume this plan yet.
 
 ### Phase 0: Freeze Current Contract
 
