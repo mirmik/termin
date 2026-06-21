@@ -56,6 +56,7 @@ import termin_lighting;
 import termin_shadows;
 
 struct FragmentInput {
+    float4 screen_pos : SV_Position;
     float3 world_pos : TEXCOORD0;
     float3 normal_world : TEXCOORD1;
     float2 uv : TEXCOORD2;

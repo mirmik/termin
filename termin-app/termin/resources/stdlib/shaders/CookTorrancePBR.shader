@@ -91,6 +91,7 @@ import termin_shadows;
 static const float PI = 3.14159265359;
 
 struct FragmentInput {
+    float4 screen_pos : SV_Position;
     float3 world_pos : TEXCOORD0;
     float3 normal_world : TEXCOORD1;
     float2 uv : TEXCOORD2;
