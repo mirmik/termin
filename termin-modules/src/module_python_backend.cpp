@@ -1,4 +1,5 @@
 #include "termin_modules/module_python_backend.hpp"
+#include "termin_modules/text_encoding.hpp"
 
 #include <Python.h>
 
@@ -152,6 +153,7 @@ bool run_command_capture(
     while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
         output += buffer;
     }
+    output = sanitize_external_text(output);
 
     const int result = pclose(pipe);
     if (result != 0) {

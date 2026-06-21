@@ -7,6 +7,7 @@
 #include "termin_modules/module_cpp_backend.hpp"
 #include "termin_modules/module_python_backend.hpp"
 #include "termin_modules/module_runtime.hpp"
+#include "termin_modules/text_encoding.hpp"
 
 namespace nb = nanobind;
 using namespace termin_modules;
@@ -35,7 +36,9 @@ NB_MODULE(_termin_modules_native, m) {
     nb::class_<ModuleEvent>(m, "ModuleEvent")
         .def_ro("kind", &ModuleEvent::kind)
         .def_ro("module_id", &ModuleEvent::module_id)
-        .def_ro("message", &ModuleEvent::message);
+        .def_prop_ro("message", [](const ModuleEvent& self) {
+            return sanitize_external_text(self.message);
+        });
 
     nb::class_<ModuleEnvironment>(m, "ModuleEnvironment")
         .def(nb::init<>())
@@ -82,8 +85,12 @@ NB_MODULE(_termin_modules_native, m) {
         .def_prop_ro("dependencies", [](const ModuleRecord& self) { return self.spec.dependencies; })
         .def_prop_ro("components", [](const ModuleRecord& self) { return self.spec.components; })
         .def_ro("state", &ModuleRecord::state)
-        .def_ro("error_message", &ModuleRecord::error_message)
-        .def_ro("diagnostics", &ModuleRecord::diagnostics)
+        .def_prop_ro("error_message", [](const ModuleRecord& self) {
+            return sanitize_external_text(self.error_message);
+        })
+        .def_prop_ro("diagnostics", [](const ModuleRecord& self) {
+            return sanitize_external_text(self.diagnostics);
+        })
         .def_prop_ro("clean_command", [](const ModuleRecord& self) -> std::string {
             auto config = std::dynamic_pointer_cast<CppModuleConfig>(self.spec.config);
             return config ? config->clean_command : "";
@@ -123,7 +130,9 @@ NB_MODULE(_termin_modules_native, m) {
         .def("find", [](const ModuleRuntime& self, const std::string& module_id) -> const ModuleRecord* {
             return self.find(module_id);
         }, nb::arg("module_id"), nb::rv_policy::reference)
-        .def_prop_ro("last_error", &ModuleRuntime::last_error)
+        .def_prop_ro("last_error", [](const ModuleRuntime& self) {
+            return sanitize_external_text(self.last_error());
+        })
         .def("set_event_callback", [](ModuleRuntime& self, nb::callable callback) {
             self.set_event_callback([callback](const ModuleEvent& event) {
                 nb::gil_scoped_acquire gil;
