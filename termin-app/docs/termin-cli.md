@@ -81,7 +81,7 @@ Initial schema:
       "target": "desktop",
       "entry_scene": "Main.scene",
       "output_dir": "dist/dev",
-      "shader_targets": ["vulkan", "opengl"]
+      "shader_targets": ["vulkan", "opengl", "d3d11"]
     },
     "quest": {
       "target": "quest_openxr",
@@ -108,7 +108,9 @@ Supported build targets:
 
 Profiles may set `shader_targets` to a list of `vulkan`, `opengl`, and `d3d11`.
 When present, the runtime package manifest records those target requirements
-and the exporter emits only the requested shader artifact families.
+and the exporter emits only the requested shader artifact families. When the
+field is omitted, Slang shaders are exported for all three desktop backends:
+Vulkan, OpenGL, and D3D11.
 
 `termin_builder` resolves the project and profile, then delegates to the
 canonical Python backend:
@@ -132,9 +134,8 @@ Desktop builds are written as runtime bundles:
 
 ```text
 dist/<app>/
+  <app>
   app.json
-  bin/
-    termin_player
   lib/
     libpython3.10.so*
     libtermin_*.so*
@@ -163,10 +164,9 @@ Windows bundles use the runtime layout expected by `termin_player.exe`:
 
 ```text
 dist/<app>/
+  <app>.exe
   app.json
-  bin/
-    termin_player.exe
-    *.dll
+  *.dll
   python/
     DLLs/
       _ctypes.pyd
@@ -247,19 +247,20 @@ python -m termin.player --build <output_dir>/build.json
 Packaged desktop bundles launch through the bundle-local C++ host:
 
 ```bash
-dist/<app>/bin/termin_player
+dist/<app>/<app>
 ```
 
-The host embeds CPython from `dist/<app>/lib/python3.10`, adds bundled
-`site-packages` and `package/python` to `sys.path`, and calls
+The host embeds the bundle-local CPython runtime, adds bundled `site-packages`
+and `package/python` to `sys.path`, and calls
 `termin.player --bundle dist/<app>/app.json`.
 `--backend <name>` is consumed by the C++ host and translated to
 `TERMIN_BACKEND` before CPython is initialized; display options such as
 `--width`, `--height`, `--title`, and `--windowed` are forwarded to the Python
-player. By default the player switches the window to borderless desktop
-fullscreen after creating it; `--width` and `--height` define the normal-window
-size used when `--windowed` is passed and the initial size before the OS applies
-fullscreen mode.
+player. If `TERMIN_BACKEND` is not set explicitly, standalone player runs use
+D3D11 on Windows and Vulkan on other platforms. By default the player switches
+the window to borderless desktop fullscreen after creating it; `--width` and
+`--height` define the normal-window size used when `--windowed` is passed and
+the initial size before the OS applies fullscreen mode.
 
 By default `run` does not rebuild implicitly and expects a packaged desktop
 bundle. Pass `--build-if-missing` to build when packaged output is absent, or

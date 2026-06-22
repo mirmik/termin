@@ -7,6 +7,7 @@ from __future__ import annotations
 import time
 import json
 import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -410,8 +411,11 @@ class PlayerRuntime:
             log.info(f"[PlayerRuntime] Using TERMIN_BACKEND={os.environ['TERMIN_BACKEND']}")
             return
 
-        os.environ["TERMIN_BACKEND"] = "vulkan"
-        log.info("[PlayerRuntime] TERMIN_BACKEND not set; using vulkan for standalone player")
+        default_backend = "d3d11" if sys.platform == "win32" else "vulkan"
+        os.environ["TERMIN_BACKEND"] = default_backend
+        log.info(
+            f"[PlayerRuntime] TERMIN_BACKEND not set; using {default_backend} for standalone player"
+        )
 
     def _configure_build_shader_runtime(self) -> None:
         """Make build.json runs consume prebuilt shader artifacts from the build."""

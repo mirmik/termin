@@ -3,6 +3,7 @@ import sys
 import types
 from pathlib import Path
 
+from termin.player import runtime as player_runtime
 from termin.player.runtime import PlayerRuntime
 from termin import shader_runtime
 
@@ -75,3 +76,48 @@ def test_player_packaged_runtime_uses_prebuilt_shader_artifacts(monkeypatch, tmp
 
     assert runtime._configure_shader_runtime()
     assert calls == [Path("build")]
+
+
+def test_player_backend_default_uses_d3d11_on_windows(monkeypatch, tmp_path: Path):
+    logs: list[str] = []
+    fake_tcbase = types.ModuleType("tcbase")
+    fake_tcbase.log = types.SimpleNamespace(info=logs.append)
+    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
+    monkeypatch.delenv("TERMIN_BACKEND", raising=False)
+    monkeypatch.setattr(player_runtime.sys, "platform", "win32")
+
+    runtime = PlayerRuntime(project_path=tmp_path, scene_name="scene.scene")
+    runtime._configure_backend_default()
+
+    assert os.environ["TERMIN_BACKEND"] == "d3d11"
+    assert logs == ["[PlayerRuntime] TERMIN_BACKEND not set; using d3d11 for standalone player"]
+
+
+def test_player_backend_default_uses_vulkan_off_windows(monkeypatch, tmp_path: Path):
+    logs: list[str] = []
+    fake_tcbase = types.ModuleType("tcbase")
+    fake_tcbase.log = types.SimpleNamespace(info=logs.append)
+    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
+    monkeypatch.delenv("TERMIN_BACKEND", raising=False)
+    monkeypatch.setattr(player_runtime.sys, "platform", "linux")
+
+    runtime = PlayerRuntime(project_path=tmp_path, scene_name="scene.scene")
+    runtime._configure_backend_default()
+
+    assert os.environ["TERMIN_BACKEND"] == "vulkan"
+    assert logs == ["[PlayerRuntime] TERMIN_BACKEND not set; using vulkan for standalone player"]
+
+
+def test_player_backend_default_keeps_explicit_backend(monkeypatch, tmp_path: Path):
+    logs: list[str] = []
+    fake_tcbase = types.ModuleType("tcbase")
+    fake_tcbase.log = types.SimpleNamespace(info=logs.append)
+    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
+    monkeypatch.setenv("TERMIN_BACKEND", "opengl")
+    monkeypatch.setattr(player_runtime.sys, "platform", "win32")
+
+    runtime = PlayerRuntime(project_path=tmp_path, scene_name="scene.scene")
+    runtime._configure_backend_default()
+
+    assert os.environ["TERMIN_BACKEND"] == "opengl"
+    assert logs == ["[PlayerRuntime] Using TERMIN_BACKEND=opengl"]

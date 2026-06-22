@@ -16,6 +16,7 @@ class DesktopRuntimeBundleResult:
     sdk_root: Path | None
     bin_dir: Path
     lib_dir: Path
+    launcher_path: Path | None
     python_home: Path | None
     python_site_packages: Path | None = None
     diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
@@ -30,6 +31,7 @@ class _PythonRuntimeCopyResult:
 def package_desktop_runtime(
     dist_dir: str | Path,
     requirements: list[str],
+    app_name: str | None = None,
     sdk_root: str | Path | None = None,
     requirement_search_paths: list[str | Path] | None = None,
 ) -> DesktopRuntimeBundleResult:
@@ -41,6 +43,7 @@ def package_desktop_runtime(
     bin_dir = dist_dir_path / "bin"
     lib_dir = dist_dir_path / "lib"
     windows_python_home = dist_dir_path / "python"
+    launcher_path: Path | None = None
     python_home: Path | None = None
     python_site_packages: Path | None = None
 
@@ -56,6 +59,7 @@ def package_desktop_runtime(
             sdk_root=None,
             bin_dir=bin_dir,
             lib_dir=lib_dir,
+            launcher_path=None,
             python_home=None,
             python_site_packages=None,
             diagnostics=diagnostics,
@@ -64,8 +68,13 @@ def package_desktop_runtime(
     _replace_dir(bin_dir)
     _replace_dir(lib_dir)
 
-    _copy_player_executable(resolved_sdk_root, bin_dir, diagnostics)
-    _copy_native_libraries(resolved_sdk_root, bin_dir, lib_dir, diagnostics)
+    launcher_path = _copy_player_executable(
+        resolved_sdk_root,
+        dist_dir_path,
+        app_name or dist_dir_path.name,
+        diagnostics,
+    )
+    _copy_native_libraries(resolved_sdk_root, dist_dir_path, bin_dir, lib_dir, diagnostics)
     python_runtime = _copy_python_home(
         resolved_sdk_root,
         lib_dir,
@@ -88,6 +97,7 @@ def package_desktop_runtime(
         sdk_root=resolved_sdk_root,
         bin_dir=bin_dir,
         lib_dir=lib_dir,
+        launcher_path=launcher_path,
         python_home=python_home,
         python_site_packages=python_site_packages,
         diagnostics=diagnostics,
@@ -118,34 +128,57 @@ def _resolve_sdk_root(sdk_root: str | Path | None) -> Path | None:
 
 def _copy_player_executable(
     sdk_root: Path,
-    bin_dir: Path,
+    dist_dir: Path,
+    app_name: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
-) -> None:
+) -> Path | None:
     names = ["termin_player.exe", "termin_player"]
     for name in names:
         source = sdk_root / "bin" / name
         if source.exists() and source.is_file():
-            shutil.copy2(source, bin_dir / source.name)
-            return
+            target = dist_dir / _desktop_launcher_filename(app_name, source)
+            shutil.copy2(source, target)
+            return target
 
     diagnostics.append(
         RuntimePackageExportDiagnostic(
             "error",
-            "bin/termin_player",
+            _desktop_launcher_filename(app_name, sdk_root / "bin" / "termin_player"),
             f"termin_player executable was not found in SDK: {sdk_root / 'bin'}",
         )
     )
+    return None
+
+
+def _desktop_launcher_filename(app_name: str, source_executable: Path) -> str:
+    stem = _safe_launcher_stem(app_name)
+    if source_executable.suffix.lower() == ".exe":
+        return f"{stem}.exe"
+    return stem
+
+
+def _safe_launcher_stem(app_name: str) -> str:
+    text = app_name.strip()
+    if text == "":
+        text = "TerminPlayer"
+
+    invalid = set('<>:"/\\|?*')
+    result = "".join("_" if ch in invalid or ord(ch) < 32 else ch for ch in text)
+    result = result.strip(" .")
+    return result or "TerminPlayer"
 
 
 def _copy_native_libraries(
     sdk_root: Path,
+    dist_dir: Path,
     bin_dir: Path,
     lib_dir: Path,
     diagnostics: list[RuntimePackageExportDiagnostic],
 ) -> None:
+    sdk_bin_target = dist_dir if _is_windows_desktop_sdk_layout(sdk_root) else bin_dir
     source_sets = (
         (sdk_root / "lib", lib_dir, ("*.so", "*.so.*", "*.dylib", "*.dll")),
-        (sdk_root / "bin", bin_dir, ("*.dll",)),
+        (sdk_root / "bin", sdk_bin_target, ("*.dll",)),
     )
     copied: set[Path] = set()
     checked_dirs: list[Path] = []
@@ -172,6 +205,13 @@ def _copy_native_libraries(
                 + ", ".join(str(path) for path in checked_dirs),
             )
         )
+
+
+def _is_windows_desktop_sdk_layout(sdk_root: Path) -> bool:
+    return (
+        (sdk_root / "bin" / "termin_player.exe").is_file()
+        or (sdk_root / "python" / "Lib" / "os.py").is_file()
+    )
 
 
 def _copy_python_home(
