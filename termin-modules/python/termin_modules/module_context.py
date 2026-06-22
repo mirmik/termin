@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterable, Iterator
+from typing import Iterator
 
 from tcbase import log
 
 
 _owner_stack: list[str] = []
+_native_component_owner_stack: list[str | None] = []
 
 
 @dataclass
@@ -34,6 +35,7 @@ def begin_module_import(module_id: str) -> None:
     if not module_id:
         return
     _owner_stack.append(module_id)
+    _native_component_owner_stack.append(_begin_native_component_owner_scope(module_id))
     _registrations_by_owner[module_id] = ModuleOwnedRegistrations()
 
 
@@ -44,10 +46,16 @@ def end_module_import(module_id: str) -> None:
         log.error(f"[termin_modules] module owner context underflow for {module_id}")
         return
     popped = _owner_stack.pop()
+    previous_native_owner = None
+    if _native_component_owner_stack:
+        previous_native_owner = _native_component_owner_stack.pop()
+    else:
+        log.error(f"[termin_modules] native component owner context underflow for {module_id}")
     if popped != module_id:
         log.error(
             f"[termin_modules] module owner context mismatch: expected {module_id}, got {popped}"
         )
+    _end_native_component_owner_scope(module_id, previous_native_owner)
 
 
 @contextmanager
@@ -111,25 +119,42 @@ def registrations_for_owner(module_id: str) -> ModuleOwnedRegistrations:
     )
 
 
-def validate_declared_components(module_id: str, declared_components: Iterable[str]) -> None:
-    registrations = _registrations_by_owner.get(module_id)
-    actual = set() if registrations is None else set(registrations.components)
-    declared = set(declared_components)
+def _begin_native_component_owner_scope(module_id: str) -> str | None:
+    try:
+        from termin.scene import ComponentRegistry
 
-    missing = sorted(declared - actual)
-    undeclared = sorted(actual - declared)
-    if not missing and not undeclared:
+        registry = ComponentRegistry.instance()
+        previous_owner = registry.registration_owner()
+        registry.set_registration_owner(module_id)
+        return previous_owner
+    except Exception:
+        log.error(
+            f"[termin_modules] failed to begin native component owner scope for '{module_id}'",
+            exc_info=True,
+        )
+        return None
+
+
+def _end_native_component_owner_scope(module_id: str, previous_owner: str | None) -> None:
+    if previous_owner is None:
         return
 
-    details: list[str] = []
-    if missing:
-        details.append("declared but not registered: " + ", ".join(missing))
-    if undeclared:
-        details.append("registered but not declared: " + ", ".join(undeclared))
-    raise RuntimeError(
-        f"Python module '{module_id}' component declaration mismatch: "
-        + "; ".join(details)
-    )
+    try:
+        from termin.scene import ComponentRegistry
+
+        registry = ComponentRegistry.instance()
+        current_owner = registry.registration_owner()
+        if current_owner and current_owner != module_id:
+            log.error(
+                f"[termin_modules] native component owner context mismatch: "
+                f"expected {module_id}, got {current_owner}"
+            )
+        registry.set_registration_owner(previous_owner)
+    except Exception:
+        log.error(
+            f"[termin_modules] failed to end native component owner scope for '{module_id}'",
+            exc_info=True,
+        )
 
 
 def unregister_module_owner(module_id: str) -> None:
@@ -250,5 +275,4 @@ __all__ = [
     "record_python_kind",
     "registrations_for_owner",
     "unregister_module_owner",
-    "validate_declared_components",
 ]

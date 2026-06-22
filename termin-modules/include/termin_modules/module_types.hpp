@@ -43,7 +43,6 @@ struct ModuleSpec {
     ModuleKind kind = ModuleKind::Cpp;
     std::filesystem::path descriptor_path;
     std::vector<std::string> dependencies;
-    std::vector<std::string> components;
     std::shared_ptr<IModuleConfig> config;
 };
 

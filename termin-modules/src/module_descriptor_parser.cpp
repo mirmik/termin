@@ -169,9 +169,9 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
         error += " in " + path.string();
         return std::nullopt;
     }
-    spec.components = get_optional_string_list(root, "components", error);
-    if (!error.empty()) {
-        error += " in " + path.string();
+    if (root.contains("components")) {
+        error = "Field 'components' is no longer supported in module descriptors; "
+                "component ownership is inferred from runtime registrations in " + path.string();
         return std::nullopt;
     }
 

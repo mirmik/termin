@@ -31,8 +31,8 @@ std::vector<TcSceneRef> collect_scenes() {
     return scenes;
 }
 
-const std::vector<std::string>& module_component_types(const termin_modules::ModuleRecord& record) {
-    return record.spec.components;
+std::vector<std::string> module_component_types(const termin_modules::ModuleRecord& record) {
+    return ComponentRegistry::instance().list_owned(record.spec.id);
 }
 
 void begin_module_registration_scope(const termin_modules::ModuleRecord& record) {
@@ -90,7 +90,7 @@ bool cleanup_module_registrations(const termin_modules::ModuleRecord& record, st
 }
 
 void degrade_module_components(const termin_modules::ModuleRecord& record) {
-    const std::vector<std::string>& type_names = module_component_types(record);
+    const std::vector<std::string> type_names = module_component_types(record);
     if (type_names.empty()) {
         return;
     }
@@ -118,7 +118,7 @@ void degrade_module_components(const termin_modules::ModuleRecord& record) {
 }
 
 void upgrade_module_components(const termin_modules::ModuleRecord& record) {
-    const std::vector<std::string>& type_names = module_component_types(record);
+    const std::vector<std::string> type_names = module_component_types(record);
     if (type_names.empty()) {
         return;
     }
@@ -167,7 +167,7 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     auto restore_reload_state = [](const termin_modules::ModuleRecord& record,
                                    const std::shared_ptr<termin_modules::IModuleReloadState>&,
                                    std::string& error) {
-        const std::vector<std::string>& type_names = module_component_types(record);
+        const std::vector<std::string> type_names = module_component_types(record);
         if (type_names.empty()) {
             return true;
         }
@@ -205,8 +205,20 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     cpp_callbacks.restore_reload_state = restore_reload_state;
 
     termin_modules::PythonModuleCallbacks python_callbacks;
+    python_callbacks.before_load = [](const termin_modules::ModuleRecord& record) {
+        begin_module_registration_scope(record);
+    };
+    python_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
+                                            const std::string&) {
+        std::string error;
+        cleanup_module_registrations(record, error);
+        end_module_registration_scope(record);
+    };
     python_callbacks.before_unload = before_unload;
-    python_callbacks.after_load = after_load;
+    python_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
+        end_module_registration_scope(record);
+        after_load(record);
+    };
     python_callbacks.restore_reload_state = restore_reload_state;
 
     runtime.set_cpp_callbacks(std::move(cpp_callbacks));

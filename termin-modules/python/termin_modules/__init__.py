@@ -18,7 +18,6 @@ from .module_context import (
     module_import_context,
     registrations_for_owner,
     unregister_module_owner,
-    validate_declared_components,
 )
 
 __all__ = [
@@ -35,5 +34,4 @@ __all__ = [
     "module_import_context",
     "registrations_for_owner",
     "unregister_module_owner",
-    "validate_declared_components",
 ]

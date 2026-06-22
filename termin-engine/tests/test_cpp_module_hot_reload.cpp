@@ -90,7 +90,6 @@ void write_descriptor(const std::filesystem::path& descriptor,
     write_text_file(
         descriptor,
         "name: native_probe\n"
-        "components: [HotReloadNativeProbeComponent]\n"
         "build:\n"
         "  output: " + yaml_quote(artifact.string()) + "\n"
     );

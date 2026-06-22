@@ -60,12 +60,12 @@
 - `dependencies`: необязательный список зависимостей на другие проектные модули
 - `root`: import root; если путь относительный, он считается от директории дескриптора
 - `packages`: список Python-пакетов для импорта
-- `components`: список component type names, которые модуль обязан зарегистрировать при import
 - `requirements`: необязательный список внешних Python-зависимостей
 - `ignore`: необязательный флаг, позволяющий пропустить модуль
 
-Для Python-модулей поле `components` является строгим контрактом между
-дескриптором, scene migration и регистрациями, выполненными во время import
-пакетов из `packages`. Load/reload завершается ошибкой, если дескриптор
-объявляет component, который не был зарегистрирован, или если import
-зарегистрировал component, отсутствующий в `components`.
+Поле `components` в дескрипторах запрещено. Владение component type names
+выводится из фактических регистраций, выполненных во время load модуля:
+runtime выставляет registration owner, Python import context прокидывает его в
+native `ComponentRegistry`, а registry запоминает владельца каждого
+зарегистрированного типа. Scene migration, hot reload и cleanup должны
+использовать этот runtime ownership, а не ручной список в descriptor.

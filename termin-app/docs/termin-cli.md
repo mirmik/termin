@@ -168,6 +168,9 @@ dist/<app>/
     termin_player.exe
     *.dll
   python/
+    DLLs/
+      _ctypes.pyd
+      ...
     Lib/
       site-packages/
         termin/

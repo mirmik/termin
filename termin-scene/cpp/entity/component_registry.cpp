@@ -44,6 +44,27 @@ std::string ComponentRegistry::owner_of(const std::string& name) const {
     return owner ? std::string(owner) : std::string();
 }
 
+std::vector<std::string> ComponentRegistry::list_owned(const std::string& owner) const {
+    std::vector<std::string> result;
+    if (owner.empty()) {
+        return result;
+    }
+
+    size_t count = tc_component_registry_type_count();
+    for (size_t i = 0; i < count; i++) {
+        const char* name = tc_component_registry_type_at(i);
+        if (!name) {
+            continue;
+        }
+        const char* current_owner = tc_component_registry_get_owner(name);
+        if (current_owner && owner == current_owner) {
+            result.emplace_back(name);
+        }
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
 size_t ComponentRegistry::unregister_owner(const std::string& owner) {
     return tc_component_registry_unregister_owner(owner.c_str());
 }

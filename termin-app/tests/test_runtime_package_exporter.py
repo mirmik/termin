@@ -71,6 +71,7 @@ def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
     bin_dir = sdk / "bin"
     lib_dir = sdk / "lib"
     python_lib = sdk / "python" / "Lib"
+    python_dlls = sdk / "python" / "DLLs"
     site_packages = python_lib / "site-packages"
     python_overlay = lib_dir / "python"
     share_dir = sdk / "share" / "termin" / "builtin_shaders"
@@ -78,12 +79,17 @@ def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
     bin_dir.mkdir(parents=True)
     lib_dir.mkdir(parents=True)
     site_packages.mkdir(parents=True)
+    python_dlls.mkdir(parents=True)
     share_dir.mkdir(parents=True)
 
     (bin_dir / "termin_player.exe").write_bytes(b"player")
     (bin_dir / "termin_base.dll").write_bytes(b"termin")
     (bin_dir / "python312.dll").write_bytes(b"python")
+    (sdk / "python" / "python.exe").write_bytes(b"python cli")
+    (sdk / "python" / "python312.dll").write_bytes(b"python")
     (python_lib / "os.py").write_text("", encoding="utf-8")
+    (python_dlls / "_ctypes.pyd").write_bytes(b"ctypes extension")
+    (python_dlls / "libffi-8.dll").write_bytes(b"libffi")
     (site_packages / "termin").mkdir()
     (site_packages / "termin" / "__init__.py").write_text("", encoding="utf-8")
     (python_overlay / "termin" / "player").mkdir(parents=True)
@@ -692,7 +698,11 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "bin" / "termin_player.exe").exists()
     assert (dist_dir / "bin" / "termin_base.dll").exists()
     assert (dist_dir / "bin" / "python312.dll").exists()
+    assert (dist_dir / "python" / "python.exe").exists()
+    assert (dist_dir / "python" / "python312.dll").exists()
     assert (dist_dir / "python" / "Lib" / "os.py").exists()
+    assert (dist_dir / "python" / "DLLs" / "_ctypes.pyd").exists()
+    assert (dist_dir / "python" / "DLLs" / "libffi-8.dll").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "__init__.py").exists()
     assert (
         dist_dir
