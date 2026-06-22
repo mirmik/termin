@@ -40,7 +40,7 @@ SUPPORTED_RESOURCE_POLICIES = {"dev", "dev_smoke", "strict"}
 
 _DEFAULT_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
     "glsl": ("vulkan",),
-    "slang": ("vulkan", "opengl"),
+    "slang": ("vulkan", "opengl", "d3d11"),
 }
 
 _SUPPORTED_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {

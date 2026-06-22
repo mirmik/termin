@@ -395,7 +395,7 @@ if(WIN32)
 endif()
 install(TARGETS termin_player RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 set_target_properties(termin_player PROPERTIES
-    INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN"
+    INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/lib;$ORIGIN"
     BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
     BUILD_WITH_INSTALL_RPATH FALSE
 )

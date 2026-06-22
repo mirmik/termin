@@ -700,6 +700,80 @@ fs::path resolve_output_dir(const fs::path& project_root, const BuildProfile& pr
     return output_dir;
 }
 
+std::optional<fs::path> read_bundle_launcher_path(
+    const fs::path& output_dir,
+    const fs::path& app_manifest_path
+) {
+    std::error_code ec;
+    if (!fs::exists(app_manifest_path, ec)) {
+        return std::nullopt;
+    }
+
+    nos::trent manifest = nos::json::parse_file(app_manifest_path.string());
+    if (!manifest.is_dict()) {
+        throw std::runtime_error("app manifest root must be a JSON object: " + app_manifest_path.string());
+    }
+
+    const nos::trent* runtime = manifest._get("runtime");
+    if (runtime == nullptr || runtime->is_nil()) {
+        return std::nullopt;
+    }
+    if (!runtime->is_dict()) {
+        throw std::runtime_error("app manifest field 'runtime' must be a JSON object: " + app_manifest_path.string());
+    }
+
+    const nos::trent* launcher = runtime->_get("launcher");
+    if (launcher == nullptr || launcher->is_nil()) {
+        return std::nullopt;
+    }
+    if (!launcher->is_string()) {
+        throw std::runtime_error("app manifest field 'runtime.launcher' must be a string: " + app_manifest_path.string());
+    }
+
+    fs::path launcher_path = launcher->as_string();
+    if (launcher_path.empty()) {
+        return std::nullopt;
+    }
+    if (!launcher_path.is_absolute()) {
+        launcher_path = output_dir / launcher_path;
+    }
+    return launcher_path;
+}
+
+std::vector<fs::path> packaged_launcher_candidates(
+    const fs::path& output_dir,
+    const fs::path& app_manifest_path
+) {
+    std::vector<fs::path> candidates;
+    if (std::optional<fs::path> manifest_launcher = read_bundle_launcher_path(output_dir, app_manifest_path)) {
+        candidates.push_back(*manifest_launcher);
+    }
+
+#ifdef _WIN32
+    candidates.push_back(output_dir / (output_dir.filename().string() + ".exe"));
+#else
+    candidates.push_back(output_dir / output_dir.filename());
+#endif
+    candidates.push_back(output_dir / "bin" / "termin_player");
+#ifdef _WIN32
+    candidates.push_back(output_dir / "bin" / "termin_player.exe");
+#endif
+    return candidates;
+}
+
+std::optional<fs::path> resolve_packaged_launcher(
+    const fs::path& output_dir,
+    const fs::path& app_manifest_path
+) {
+    std::error_code ec;
+    for (const fs::path& candidate : packaged_launcher_candidates(output_dir, app_manifest_path)) {
+        if (fs::exists(candidate, ec) && fs::is_regular_file(candidate, ec)) {
+            return candidate;
+        }
+    }
+    return std::nullopt;
+}
+
 void print_command(const std::vector<std::string>& command) {
     for (std::size_t i = 0; i < command.size(); ++i) {
         if (i != 0) {
@@ -837,21 +911,16 @@ int command_run(const ParsedArgs& args) {
         }
         const bool has_bundle_after_build = fs::exists(app_manifest_path) && fs::exists(package_manifest_path);
         if (has_bundle_after_build) {
-            fs::path player_path = output_dir / "bin" / "termin_player";
-#ifdef _WIN32
-            if (!fs::exists(player_path)) {
-                player_path += ".exe";
-            }
-#endif
-            if (!fs::exists(player_path)) {
+            std::optional<fs::path> player_path = resolve_packaged_launcher(output_dir, app_manifest_path);
+            if (!player_path.has_value()) {
                 std::cerr
                     << "termin_runner: packaged desktop bundle player does not exist: "
-                    << player_path << "\n"
-                    << "Rebuild the profile with a Termin SDK that installs termin_player.\n";
+                    << app_manifest_path << "\n"
+                    << "Rebuild the profile with a Termin SDK that writes the bundle launcher.\n";
                 return 5;
             }
             command.clear();
-            command.emplace_back(player_path.string());
+            command.emplace_back(player_path->string());
         }
         if (!has_bundle_after_build) {
             std::cerr

@@ -116,6 +116,7 @@ def _package_desktop_target(
             for module in python_result.modules
             for requirement in module.requirements
         ],
+        app_name=context.project_name,
         sdk_root=preflight_result.sdk_root,
         requirement_search_paths=_project_requirement_search_paths(context.project_root),
     )
@@ -138,7 +139,7 @@ def _package_desktop_target(
                 "scene": "package/scene.json",
             },
             "runtime": {
-                "launcher": "bin/termin_player",
+                "launcher": _relative_runtime_path(context.dist_dir, runtime_result.launcher_path),
                 "python": {
                     "enabled": bool(python_result.modules),
                     "home": _relative_runtime_path(context.dist_dir, runtime_result.python_home),
@@ -184,7 +185,14 @@ def _runtime_native_library_dirs(
     runtime_result: DesktopRuntimeBundleResult,
 ) -> list[str]:
     result: list[str] = []
-    for path in (runtime_result.bin_dir, runtime_result.lib_dir):
+    paths = [runtime_result.lib_dir, runtime_result.bin_dir]
+    if runtime_result.launcher_path is not None:
+        paths.insert(0, runtime_result.launcher_path.parent)
+    seen: set[Path] = set()
+    for path in paths:
+        if path in seen:
+            continue
+        seen.add(path)
         if _contains_native_library(path):
             result.append(path.relative_to(dist_dir).as_posix())
     return result or ["lib"]

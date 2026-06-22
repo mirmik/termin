@@ -43,6 +43,20 @@ fs::path get_executable_dir() {
 #endif
 }
 
+fs::path resolve_bundle_root(const fs::path& exe_dir) {
+    std::error_code ec;
+    if (fs::exists(exe_dir / "app.json", ec)) {
+        return exe_dir;
+    }
+
+    fs::path parent = exe_dir.parent_path();
+    if (!parent.empty() && fs::exists(parent / "app.json", ec)) {
+        return parent;
+    }
+
+    return parent.empty() ? exe_dir : parent;
+}
+
 fs::path find_python_stdlib(const fs::path& install_root) {
 #ifdef _WIN32
     fs::path lib_dir = install_root / "python" / "Lib";
@@ -85,6 +99,34 @@ void set_env_value(const char* name, const std::string& value) {
 #else
     setenv(name, value.c_str(), 1);
 #endif
+}
+
+std::string env_path_separator() {
+#ifdef _WIN32
+    return ";";
+#else
+    return ":";
+#endif
+}
+
+void prepend_env_path(const char* name, const fs::path& value) {
+    if (value.empty()) {
+        return;
+    }
+    std::string next = value.string();
+    const char* current = std::getenv(name);
+    if (current != nullptr && current[0] != '\0') {
+        next += env_path_separator();
+        next += current;
+    }
+    set_env_value(name, next);
+}
+
+void configure_bundle_runtime_paths(const fs::path& bundle_root, const fs::path& exe_dir) {
+    prepend_env_path("PATH", exe_dir);
+    prepend_env_path("PATH", bundle_root);
+    prepend_env_path("PATH", bundle_root / "bin");
+    prepend_env_path("PATH", bundle_root / "lib");
 }
 
 void set_python_argv(int argc, char* argv[]) {
@@ -184,7 +226,7 @@ std::string build_bootstrap_code(
 
 int main(int argc, char* argv[]) {
     fs::path exe_dir = get_executable_dir();
-    fs::path bundle_root = exe_dir.parent_path();
+    fs::path bundle_root = resolve_bundle_root(exe_dir);
     fs::path python_stdlib = find_python_stdlib(bundle_root);
     if (python_stdlib.empty()) {
         std::cerr << "termin_player: bundled Python stdlib was not found under "
@@ -193,6 +235,7 @@ int main(int argc, char* argv[]) {
     }
 
     set_env_if_missing("TERMIN_SDK", bundle_root);
+    configure_bundle_runtime_paths(bundle_root, exe_dir);
     std::vector<std::string> args = player_args(argc, argv, bundle_root);
 
     static std::string python_home_str =

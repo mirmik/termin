@@ -600,7 +600,9 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "package" / "python" / "Scripts" / "__init__.py").exists()
     assert (result.dist_dir / "package" / "python" / "Scripts" / "Controller.py").exists()
     assert not (result.dist_dir / "package" / "python" / "Scripts" / "__pycache__").exists()
-    assert (result.dist_dir / "bin" / "termin_player").exists()
+    assert result.runtime_result.launcher_path == result.dist_dir / "DesktopGame"
+    assert (result.dist_dir / "DesktopGame").exists()
+    assert not (result.dist_dir / "bin" / "termin_player").exists()
     assert (result.dist_dir / "lib" / "libpython3.10.so").exists()
     assert (result.dist_dir / "lib" / "libtermin_base.so").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "os.py").exists()
@@ -630,7 +632,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
             "scene": "package/scene.json",
         },
         "runtime": {
-            "launcher": "bin/termin_player",
+            "launcher": "DesktopGame",
             "python": {
                 "enabled": True,
                 "home": "lib/python3.10",
@@ -695,9 +697,11 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert result.diagnostics == []
     assert result.python_home == dist_dir.resolve() / "python"
     assert result.python_site_packages == dist_dir.resolve() / "python" / "Lib" / "site-packages"
-    assert (dist_dir / "bin" / "termin_player.exe").exists()
-    assert (dist_dir / "bin" / "termin_base.dll").exists()
-    assert (dist_dir / "bin" / "python312.dll").exists()
+    assert result.launcher_path == dist_dir.resolve() / "WindowsGame.exe"
+    assert (dist_dir / "WindowsGame.exe").exists()
+    assert (dist_dir / "termin_base.dll").exists()
+    assert (dist_dir / "python312.dll").exists()
+    assert not (dist_dir / "bin" / "termin_player.exe").exists()
     assert (dist_dir / "python" / "python.exe").exists()
     assert (dist_dir / "python" / "python312.dll").exists()
     assert (dist_dir / "python" / "Lib" / "os.py").exists()
@@ -925,6 +929,10 @@ def test_export_runtime_package_can_use_slang_default_shader(tmp_path: Path) -> 
         "opengl": {
             "vertex": "shaders/opengl/termin-runtime-default-color.vert.glsl",
             "fragment": "shaders/opengl/termin-runtime-default-color.frag.glsl",
+        },
+        "d3d11": {
+            "vertex": "shaders/d3d11/termin-runtime-default-color.vs.cso",
+            "fragment": "shaders/d3d11/termin-runtime-default-color.ps.cso",
         },
     }
     assert (
@@ -1279,14 +1287,19 @@ def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -
             "vertex": f"shaders/opengl/{shader_uuid}.vert.glsl",
             "fragment": f"shaders/opengl/{shader_uuid}.frag.glsl",
         },
+        "d3d11": {
+            "vertex": f"shaders/d3d11/{shader_uuid}.vs.cso",
+            "fragment": f"shaders/d3d11/{shader_uuid}.ps.cso",
+        },
     }
     assert (result.package_dir / "shaders" / "vulkan" / f"{shader_uuid}.vert.spv").read_bytes() == b"ARTIFACT-vulkan"
     assert (result.package_dir / "shaders" / "opengl" / f"{shader_uuid}.frag.glsl").read_bytes() == b"ARTIFACT-opengl"
+    assert (result.package_dir / "shaders" / "d3d11" / f"{shader_uuid}.ps.cso").read_bytes() == b"ARTIFACT-d3d11"
     calls = [
         json.loads(line)
         for line in (tmp_path / "target_shaderc_calls.jsonl").read_text(encoding="utf-8").splitlines()
     ]
-    assert {call[call.index("--target") + 1] for call in calls} == {"vulkan", "opengl"}
+    assert {call[call.index("--target") + 1] for call in calls} == {"vulkan", "opengl", "d3d11"}
     assert all("--layout-scheme" not in call for call in calls)
     assert result.diagnostics == []
 
