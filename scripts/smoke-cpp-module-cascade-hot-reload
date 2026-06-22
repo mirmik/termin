@@ -1,0 +1,639 @@
+#!/usr/bin/env python3
+"""Run an editor-process smoke test for C++ module cascade hot reload."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+from pathlib import Path
+from typing import Any, Callable
+
+
+class SmokeError(RuntimeError):
+    pass
+
+
+COMPONENT_TYPE = "HotReloadNativeProbeComponent"
+CORE_MODULE = "native_core"
+LEAF_MODULE = "native_leaf"
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _shared_library_name(stem: str) -> str:
+    if sys.platform == "win32":
+        return f"{stem}.dll"
+    if sys.platform == "darwin":
+        return f"lib{stem}.dylib"
+    return f"lib{stem}.so"
+
+
+def _locate_core_artifact(root: Path) -> Path:
+    name = _shared_library_name("termin_engine_cpp_hot_reload_test_module")
+    candidates = (
+        root / "build" / "Release" / "bin" / name,
+        root / "build" / "Release-tests" / "bin" / name,
+        root / "sdk" / "bin" / name,
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    raise SmokeError(
+        "C++ hot-reload test module artifact was not found. "
+        "Build the SDK first with ./build-sdk.sh --no-wheels."
+    )
+
+
+def _compile_leaf_artifact(project_root: Path) -> Path:
+    if sys.platform == "win32":
+        raise SmokeError("This smoke script currently builds the no-op leaf module only on Unix-like hosts.")
+
+    source = project_root / "native_leaf.cpp"
+    artifact = project_root / _shared_library_name("native_leaf")
+    source.write_text(
+        "\n".join(
+            [
+                "#if defined(_WIN32)",
+                "#define TERMIN_SMOKE_API __declspec(dllexport)",
+                "#else",
+                "#define TERMIN_SMOKE_API __attribute__((visibility(\"default\")))",
+                "#endif",
+                "",
+                "extern \"C\" TERMIN_SMOKE_API void module_init() {}",
+                "extern \"C\" TERMIN_SMOKE_API void module_shutdown() {}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    cxx = os.environ.get("CXX", "c++")
+    command = [
+        cxx,
+        "-std=c++17",
+        "-shared",
+        "-fPIC",
+        str(source),
+        "-o",
+        str(artifact),
+    ]
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+    if result.returncode != 0:
+        raise SmokeError(
+            "Failed to build no-op native_leaf module: "
+            + " ".join(command)
+            + f"\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    return artifact
+
+
+def _copy_core_artifact(project_root: Path, source: Path) -> Path:
+    artifact = project_root / _shared_library_name("native_core")
+    shutil.copy2(source, artifact)
+    return artifact
+
+
+def _yaml_quote(value: str) -> str:
+    return json.dumps(value)
+
+
+def _write_descriptor(path: Path, *, module_id: str, artifact: Path, dependencies: list[str], components: list[str]) -> None:
+    lines = [
+        f"name: {module_id}",
+        "type: cpp",
+    ]
+    if dependencies:
+        lines.append("dependencies: [" + ", ".join(dependencies) + "]")
+    if components:
+        lines.append("components: [" + ", ".join(components) + "]")
+    lines.extend(
+        [
+            "build:",
+            "  output: " + _yaml_quote(str(artifact)),
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _write_project(project_root: Path, core_artifact_source: Path) -> Path:
+    project_root.mkdir(parents=True, exist_ok=True)
+    project_file = project_root / "NativeCascadeSmoke.terminproj"
+    project_file.write_text(
+        json.dumps({"version": 1, "name": "NativeCascadeSmoke"}, indent=2),
+        encoding="utf-8",
+    )
+
+    core_artifact = _copy_core_artifact(project_root, core_artifact_source)
+    leaf_artifact = _compile_leaf_artifact(project_root)
+    _write_descriptor(
+        project_root / "native_core.module",
+        module_id=CORE_MODULE,
+        artifact=core_artifact,
+        dependencies=[],
+        components=[COMPONENT_TYPE],
+    )
+    _write_descriptor(
+        project_root / "native_leaf.module",
+        module_id=LEAF_MODULE,
+        artifact=leaf_artifact,
+        dependencies=[CORE_MODULE],
+        components=[],
+    )
+
+    (project_root / "Main.scene").write_text(
+        json.dumps(
+            {
+                "scene": {
+                    "entities": [
+                        {
+                            "uuid": "00000000-0000-0000-7100-000000000001",
+                            "name": "NativeProbe",
+                            "priority": 0,
+                            "visible": True,
+                            "enabled": True,
+                            "pickable": True,
+                            "selectable": True,
+                            "layer": 0,
+                            "flags": 0,
+                            "pose": {
+                                "position": [0, 0, 0],
+                                "rotation": [0, 0, 0, 1],
+                            },
+                            "scale": [1, 1, 1],
+                            "components": [
+                                {
+                                    "type": COMPONENT_TYPE,
+                                    "data": {"value": 5},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    settings_dir = project_root / "project_settings"
+    settings_dir.mkdir()
+    (settings_dir / "project.json").write_text(
+        json.dumps(
+            {
+                "render_sync_mode": "none",
+                "build_output_dir": "dist",
+                "ignored_resource_paths": [],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (settings_dir / ".editor_state.json").write_text(
+        json.dumps({"last_scene": str(project_root / "Main.scene")}, indent=2),
+        encoding="utf-8",
+    )
+    return project_file
+
+
+def _status_script() -> str:
+    return textwrap.dedent(
+        f"""
+        import json
+
+        from termin.modules import get_project_modules_runtime
+        from termin.scene import ComponentRegistry
+
+        COMPONENT_TYPE = {COMPONENT_TYPE!r}
+        runtime = get_project_modules_runtime()
+
+        records = {{}}
+        for record in runtime.records():
+            records[record.id] = {{
+                "state": record.state.name,
+                "dependencies": list(record.dependencies),
+                "error": record.error_message,
+            }}
+
+        counts = {{}}
+        component_count = 0
+        component_value = None
+        component_data = None
+        unknown_count = 0
+
+        def collect_component_data(node, result):
+            if isinstance(node, dict):
+                if node.get("type") == COMPONENT_TYPE and isinstance(node.get("data"), dict):
+                    result.append(dict(node["data"]))
+                for value in node.values():
+                    collect_component_data(value, result)
+            elif isinstance(node, list):
+                for item in node:
+                    collect_component_data(item, result)
+
+        if scene is not None:
+            counts = dict(scene.get_component_type_counts())
+            unknown_count = int(counts.get("UnknownComponent", 0) or 0)
+            component_count = int(counts.get(COMPONENT_TYPE, 0) or 0)
+            component_datas = []
+            collect_component_data(scene.serialize(), component_datas)
+            if component_datas:
+                component_data = component_datas[0]
+                component_value = component_data.get("value")
+
+        status = {{
+            "project_path": project_path,
+            "scene_name": scene_name,
+            "has_scene": scene is not None,
+            "records": records,
+            "core_state": records.get({CORE_MODULE!r}, {{}}).get("state"),
+            "leaf_state": records.get({LEAF_MODULE!r}, {{}}).get("state"),
+            "leaf_dependencies": records.get({LEAF_MODULE!r}, {{}}).get("dependencies"),
+            "component_registry_has": ComponentRegistry.instance().has(COMPONENT_TYPE),
+            "component_count": component_count,
+            "component_value": component_value,
+            "component_data": component_data,
+            "unknown_count": unknown_count,
+            "component_type_counts": counts,
+        }}
+        print(json.dumps(status, sort_keys=True))
+        """
+    ).strip()
+
+
+def _reload_script() -> str:
+    return textwrap.dedent(
+        f"""
+        import json
+
+        from termin.modules import get_project_modules_runtime
+        from termin.scene import ComponentRegistry
+
+        COMPONENT_TYPE = {COMPONENT_TYPE!r}
+        runtime = get_project_modules_runtime()
+        events = []
+
+        def listener(event):
+            events.append([event.kind.name, event.module_id, event.message])
+
+        runtime.add_listener(listener)
+        try:
+            success = runtime.reload_module({CORE_MODULE!r})
+        finally:
+            runtime.remove_listener(listener)
+
+        records = {{}}
+        for record in runtime.records():
+            records[record.id] = {{
+                "state": record.state.name,
+                "dependencies": list(record.dependencies),
+                "error": record.error_message,
+            }}
+
+        counts = {{}}
+        component_count = 0
+        component_value = None
+        component_data = None
+        unknown_count = 0
+
+        def collect_component_data(node, result):
+            if isinstance(node, dict):
+                if node.get("type") == COMPONENT_TYPE and isinstance(node.get("data"), dict):
+                    result.append(dict(node["data"]))
+                for value in node.values():
+                    collect_component_data(value, result)
+            elif isinstance(node, list):
+                for item in node:
+                    collect_component_data(item, result)
+
+        if scene is not None:
+            counts = dict(scene.get_component_type_counts())
+            unknown_count = int(counts.get("UnknownComponent", 0) or 0)
+            component_count = int(counts.get(COMPONENT_TYPE, 0) or 0)
+            component_datas = []
+            collect_component_data(scene.serialize(), component_datas)
+            if component_datas:
+                component_data = component_datas[0]
+                component_value = component_data.get("value")
+
+        status = {{
+            "reload_success": bool(success),
+            "last_error": runtime.last_error,
+            "events": events,
+            "records": records,
+            "core_state": records.get({CORE_MODULE!r}, {{}}).get("state"),
+            "leaf_state": records.get({LEAF_MODULE!r}, {{}}).get("state"),
+            "component_registry_has": ComponentRegistry.instance().has(COMPONENT_TYPE),
+            "component_count": component_count,
+            "component_value": component_value,
+            "component_data": component_data,
+            "unknown_count": unknown_count,
+            "component_type_counts": counts,
+        }}
+        print(json.dumps(status, sort_keys=True))
+        """
+    ).strip()
+
+
+def _write_probe(tmp_dir: Path, name: str, source: str) -> Path:
+    path = tmp_dir / name
+    path.write_text(source + "\n", encoding="utf-8")
+    return path
+
+
+def _run(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    timeout: float,
+    cwd: Path,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+    if check and result.returncode != 0:
+        raise SmokeError(
+            "Command failed: "
+            + " ".join(command)
+            + f"\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    return result
+
+
+def _wait_for_mcp(helper: Path, session_file: Path, env: dict[str, str], timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    last_error = ""
+    while time.monotonic() < deadline:
+        if session_file.exists():
+            result = _run(
+                [str(helper), "--session", str(session_file), "tools-list"],
+                env=env,
+                timeout=5.0,
+                cwd=_repo_root(),
+                check=False,
+            )
+            if result.returncode == 0:
+                return
+            last_error = result.stderr or result.stdout
+        time.sleep(0.25)
+    raise SmokeError(f"Editor MCP endpoint did not become ready within {timeout:.1f}s: {last_error}")
+
+
+def _read_probe_status(
+    helper: Path,
+    session_file: Path,
+    probe: Path,
+    env: dict[str, str],
+) -> dict[str, Any]:
+    result = _run(
+        [str(helper), "--session", str(session_file), "exec-file", str(probe), "--timeout", "10"],
+        env=env,
+        timeout=15.0,
+        cwd=_repo_root(),
+    )
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise SmokeError("Probe returned no output")
+    try:
+        return json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise SmokeError(f"Probe returned non-JSON output:\n{result.stdout}") from exc
+
+
+def _wait_for_status(
+    description: str,
+    predicate: Callable[[dict[str, Any]], bool],
+    *,
+    helper: Path,
+    session_file: Path,
+    probe: Path,
+    env: dict[str, str],
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last_status: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        last_status = _read_probe_status(helper, session_file, probe, env)
+        if predicate(last_status):
+            return last_status
+        time.sleep(0.5)
+    formatted = json.dumps(last_status, indent=2, sort_keys=True)
+    raise SmokeError(f"Timed out waiting for {description}. Last status:\n{formatted}")
+
+
+def _editor_command(
+    editor: Path,
+    project_file: Path,
+    *,
+    require_xvfb: bool,
+    allow_xvfb: bool,
+) -> list[str]:
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return [str(editor), str(project_file)]
+
+    xvfb = shutil.which("xvfb-run")
+    if xvfb is not None and allow_xvfb:
+        return [
+            xvfb,
+            "-a",
+            "--server-args=-screen 0 1280x720x24",
+            str(editor),
+            str(project_file),
+        ]
+
+    if require_xvfb:
+        raise SmokeError(
+            "No DISPLAY/WAYLAND_DISPLAY is available and xvfb-run was not found. "
+            "Install xvfb or run with a graphical display."
+        )
+    return [str(editor), str(project_file)]
+
+
+def _terminate_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=8.0)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    process.wait(timeout=5.0)
+
+
+def _event_index(events: list[list[str]], kind: str, module_id: str) -> int:
+    for index, event in enumerate(events):
+        if len(event) >= 2 and event[0] == kind and event[1] == module_id:
+            return index
+    return -1
+
+
+def _validate_reload_events(status: dict[str, Any]) -> None:
+    events = status.get("events")
+    if not isinstance(events, list):
+        raise SmokeError(f"Reload probe did not return event list: {status}")
+
+    leaf_unloading = _event_index(events, "Unloading", LEAF_MODULE)
+    core_unloading = _event_index(events, "Unloading", CORE_MODULE)
+    core_loading = _event_index(events, "Loading", CORE_MODULE)
+    leaf_loading = _event_index(events, "Loading", LEAF_MODULE)
+
+    if min(leaf_unloading, core_unloading, core_loading, leaf_loading) < 0:
+        raise SmokeError(f"Reload events did not include expected module lifecycle events: {events}")
+    if leaf_unloading > core_unloading:
+        raise SmokeError(f"Dependent module did not unload before dependency: {events}")
+    if core_loading > leaf_loading:
+        raise SmokeError(f"Dependency module did not load before dependent: {events}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--timeout", type=float, default=45.0, help="Per-stage wait timeout in seconds.")
+    parser.add_argument("--keep-temp", action="store_true", help="Keep the temporary project and logs.")
+    parser.add_argument(
+        "--no-xvfb",
+        action="store_true",
+        help="Do not wrap the editor in xvfb-run when no display is available.",
+    )
+    args = parser.parse_args()
+
+    root = _repo_root()
+    editor = root / "sdk" / "bin" / "termin_editor"
+    helper = root / "scripts" / "termin-editor-mcp"
+    if not editor.exists():
+        raise SmokeError(f"Editor executable not found: {editor}. Build the SDK first.")
+    if not helper.exists():
+        raise SmokeError(f"Editor MCP helper not found: {helper}")
+
+    core_artifact_source = _locate_core_artifact(root)
+
+    tmp_handle = tempfile.TemporaryDirectory(prefix="termin-cpp-cascade-smoke-")
+    tmp_dir = Path(tmp_handle.name)
+    project_root = tmp_dir / "project"
+    session_file = tmp_dir / "editor-mcp.json"
+    editor_log = tmp_dir / "editor.log"
+    project_file = _write_project(project_root, core_artifact_source)
+    status_probe = _write_probe(tmp_dir, "probe_cpp_cascade_status.py", _status_script())
+    reload_probe = _write_probe(tmp_dir, "probe_cpp_cascade_reload.py", _reload_script())
+
+    env = os.environ.copy()
+    env["HOME"] = str(tmp_dir / "home")
+    env["TERMIN_EDITOR_MCP"] = "1"
+    env["TERMIN_EDITOR_MCP_PORT"] = "0"
+    env["TERMIN_EDITOR_MCP_SESSION_FILE"] = str(session_file)
+    env.setdefault("TERMIN_BACKEND", "opengl")
+    env.setdefault("TERMIN_SDK", str(root / "sdk"))
+
+    process: subprocess.Popen[str] | None = None
+    try:
+        command = _editor_command(
+            editor,
+            project_file,
+            require_xvfb=not args.no_xvfb,
+            allow_xvfb=not args.no_xvfb,
+        )
+        print("[smoke] project:", project_root, flush=True)
+        print("[smoke] editor log:", editor_log, flush=True)
+        print("[smoke] core artifact:", core_artifact_source, flush=True)
+        print("[smoke] command:", " ".join(command), flush=True)
+
+        with editor_log.open("w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(
+                command,
+                cwd=root,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+
+            _wait_for_mcp(helper, session_file, env, args.timeout)
+
+            initial = _wait_for_status(
+                "initial editor scene/native module load",
+                lambda status: (
+                    status["has_scene"]
+                    and status["core_state"] == "Loaded"
+                    and status["leaf_state"] == "Loaded"
+                    and status["leaf_dependencies"] == [CORE_MODULE]
+                    and status["component_registry_has"]
+                    and status["component_count"] == 1
+                    and status["component_value"] == 5
+                    and status["unknown_count"] == 0
+                ),
+                helper=helper,
+                session_file=session_file,
+                probe=status_probe,
+                env=env,
+                timeout=args.timeout,
+            )
+            print("[smoke] initial:", json.dumps(initial, sort_keys=True), flush=True)
+
+            reloaded = _read_probe_status(helper, session_file, reload_probe, env)
+            _validate_reload_events(reloaded)
+            if not (
+                reloaded["reload_success"]
+                and reloaded["core_state"] == "Loaded"
+                and reloaded["leaf_state"] == "Loaded"
+                and reloaded["component_registry_has"]
+                and reloaded["component_count"] == 1
+                and reloaded["component_value"] == 5
+                and reloaded["unknown_count"] == 0
+            ):
+                formatted = json.dumps(reloaded, indent=2, sort_keys=True)
+                raise SmokeError(f"Cascade reload did not restore the native scene component:\n{formatted}")
+            print("[smoke] reloaded:", json.dumps(reloaded, sort_keys=True), flush=True)
+
+        print("[smoke] PASS", flush=True)
+        return 0
+    except Exception:
+        if process is not None and process.poll() is not None:
+            print(f"[smoke] editor exited with code {process.returncode}", file=sys.stderr)
+        if editor_log.exists():
+            print(f"[smoke] editor log tail ({editor_log}):", file=sys.stderr)
+            lines = editor_log.read_text(encoding="utf-8", errors="replace").splitlines()
+            for line in lines[-100:]:
+                print(line, file=sys.stderr)
+        raise
+    finally:
+        if process is not None:
+            _terminate_process(process)
+        if args.keep_temp:
+            print("[smoke] kept temp:", tmp_dir, flush=True)
+        else:
+            tmp_handle.cleanup()
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except SmokeError as exc:
+        print(f"[smoke] FAIL: {exc}", file=sys.stderr)
+        raise SystemExit(1)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Iterator
+from typing import Iterable, Iterator
 
 from tcbase import log
 
@@ -108,6 +108,27 @@ def registrations_for_owner(module_id: str) -> ModuleOwnedRegistrations:
         python_kinds=set(current.python_kinds),
         app_components=set(current.app_components),
         frame_passes=set(current.frame_passes),
+    )
+
+
+def validate_declared_components(module_id: str, declared_components: Iterable[str]) -> None:
+    registrations = _registrations_by_owner.get(module_id)
+    actual = set() if registrations is None else set(registrations.components)
+    declared = set(declared_components)
+
+    missing = sorted(declared - actual)
+    undeclared = sorted(actual - declared)
+    if not missing and not undeclared:
+        return
+
+    details: list[str] = []
+    if missing:
+        details.append("declared but not registered: " + ", ".join(missing))
+    if undeclared:
+        details.append("registered but not declared: " + ", ".join(undeclared))
+    raise RuntimeError(
+        f"Python module '{module_id}' component declaration mismatch: "
+        + "; ".join(details)
     )
 
 
@@ -229,4 +250,5 @@ __all__ = [
     "record_python_kind",
     "registrations_for_owner",
     "unregister_module_owner",
+    "validate_declared_components",
 ]

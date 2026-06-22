@@ -11,6 +11,7 @@ from termin_modules import (
     CppModuleBackend,
     ModuleEnvironment,
     ModuleEvent,
+    ModuleKind,
     ModuleRecord,
     ModuleRuntime,
     PythonModuleBackend,
@@ -45,6 +46,7 @@ class ProjectModulesRuntime:
         self._project_root: Path | None = None
         self._integration = TermModulesIntegration()
         self._runtime = ModuleRuntime()
+        self._auto_reload_enabled = False
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
         self._configure_environment()
@@ -57,6 +59,14 @@ class ProjectModulesRuntime:
     @property
     def last_error(self) -> str:
         return self._runtime.last_error
+
+    @property
+    def auto_reload_enabled(self) -> bool:
+        return self._auto_reload_enabled
+
+    @auto_reload_enabled.setter
+    def auto_reload_enabled(self, enabled: bool) -> None:
+        self._auto_reload_enabled = bool(enabled)
 
     def runtime(self) -> ModuleRuntime:
         return self._runtime
@@ -116,7 +126,44 @@ class ProjectModulesRuntime:
         return not self._runtime.last_error
 
     def reload_module(self, module_id: str) -> bool:
-        return self._runtime.reload_module(module_id)
+        return self._runtime.reload_module_with_dependents(module_id)
+
+    def reload_descriptor(self, descriptor_path: str | Path) -> str | None:
+        descriptor = Path(descriptor_path).resolve()
+        record = self.find_by_descriptor(descriptor)
+        if record is None:
+            if not self.load_descriptor(descriptor):
+                return None
+            record = self.find_by_descriptor(descriptor)
+            return None if record is None else record.id
+
+        if not self.reload_module(record.id):
+            return None
+        return record.id
+
+    def reload_modules_for_path(self, path: str | Path) -> list[str]:
+        target = Path(path).resolve()
+        module_ids = self.module_ids_for_path(target)
+        reloaded: list[str] = []
+        for module_id in module_ids:
+            if self.reload_module(module_id):
+                reloaded.append(module_id)
+            else:
+                log.error(
+                    f"[ProjectModulesRuntime] failed to reload module '{module_id}' for changed path {target}: "
+                    f"{self.last_error}"
+                )
+        return reloaded
+
+    def module_ids_for_path(self, path: str | Path) -> list[str]:
+        target = Path(path).resolve()
+        result: list[str] = []
+        for record in self.records():
+            if record.kind != ModuleKind.Python:
+                continue
+            if self._python_record_owns_path(record, target):
+                result.append(record.id)
+        return result
 
     def needs_rebuild(self, module_id: str) -> bool:
         return self._runtime.needs_rebuild(module_id)
@@ -137,7 +184,7 @@ class ProjectModulesRuntime:
         success = True
         for module_id in stale:
             log.info(f"[ProjectModulesRuntime] Rebuilding stale module: {module_id}")
-            if not self._runtime.reload_module(module_id):
+            if not self.reload_module(module_id):
                 log.error(f"[ProjectModulesRuntime] Failed to rebuild: {module_id}: {self._runtime.last_error}")
                 success = False
         return success
@@ -178,6 +225,29 @@ class ProjectModulesRuntime:
             if Path(record.descriptor_path).resolve() == target:
                 return record
         return None
+
+    def _python_record_owns_path(self, record: ModuleRecord, target: Path) -> bool:
+        descriptor = Path(record.descriptor_path).resolve()
+        if target == descriptor:
+            return True
+
+        root_text = record.python_root
+        if not root_text:
+            return False
+        root = Path(root_text).resolve()
+
+        for package_name in record.python_packages:
+            if not package_name:
+                log.error(f"[ProjectModulesRuntime] Python module '{record.id}' has an empty package name")
+                continue
+            package_rel = Path(*package_name.split("."))
+            package_dir = root / package_rel
+            package_module = package_dir.with_suffix(".py")
+            if target == package_module:
+                return True
+            if target == package_dir or package_dir in target.parents:
+                return True
+        return False
 
     def _dispatch_event(self, event: ModuleEvent) -> None:
         for listener in list(self._listeners):

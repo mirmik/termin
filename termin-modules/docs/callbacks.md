@@ -32,15 +32,26 @@
 Типичный смысл такой:
 
 - `before_load`
-  - подготовить runtime к появлению нового модуля, если это нужно
+  - подготовить runtime к появлению нового модуля
+  - в `termin-engine` включает owner scope для C++ registrations
 
 - `after_load`
   - обработать эффекты загрузки модуля
   - при необходимости дочитать появившиеся регистрации типов и компонентов
+  - выключить owner scope
 
 - `before_unload`
   - выполнить cleanup перед выгрузкой
   - снять связи со сценой и runtime-объектами, если они завязаны на код модуля
+  - в `termin-engine` деградирует live scene components в `UnknownComponent`
+
+- `before_native_close`
+  - вызывается только для staged C++ unload после `module_shutdown`, но до
+    `dlclose`/`FreeLibrary`
+  - должен удалить все module-owned `InspectRegistry`/`ComponentRegistry`
+    registrations, чтобы не осталось callbacks/factory pointers в выгружаемый код
+  - если возвращает ошибку, backend handle не закрывается, а модуль остаётся в
+    fail-safe состоянии для повторной попытки cleanup
 
 - `after_unload`
   - завершить cleanup после фактической выгрузки shared library
@@ -61,6 +72,7 @@
 - `after_failed_load`
   - залогировать ошибку
   - пометить модуль как broken на уровне UI/runtime
+  - выключить owner scope, если load упал
 
 ### Чего C++ коллбеки делать не должны
 
@@ -116,6 +128,28 @@ callbacks для scene component migration: перед unload module-owned compo
 - вручную импортировать пакеты вместо backend-а
 - вручную править dependency graph
 - смешивать свою логику с C++ lifecycle
+
+## Dependency-aware reload
+
+`ModuleRuntime` сам отвечает за dependency graph. Если нужно перезагрузить
+модуль вместе с уже загруженными dependents, хост должен вызывать
+`reload_module_with_dependents(...)`, а не пытаться повторить graph traversal в
+callbacks или UI-слое.
+
+Для каждого affected-модуля runtime вызывает обычную lifecycle-цепочку:
+
+- `capture_reload_state`
+- `before_unload`
+- backend unload
+- `after_unload`
+- `before_load`
+- backend load
+- `after_load`
+- `restore_reload_state`
+- `after_reload`
+
+Порядок между модулями остаётся обязанностью runtime: unload идёт от dependents
+к dependencies, load идёт от dependencies к dependents.
 
 ## Какой объект состояния передавать
 

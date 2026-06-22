@@ -25,6 +25,18 @@ public:
         const ModuleEnvironment& environment
     ) override;
 
+    bool supports_staged_unload() const override { return true; }
+
+    bool begin_unload(
+        ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) override;
+
+    bool finish_unload(
+        ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) override;
+
     bool clean(
         ModuleRecord& record,
         const ModuleEnvironment& environment

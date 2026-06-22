@@ -5,6 +5,7 @@ from termin.editor_core.file_processors.mesh_processor import MeshPreLoader
 from termin.editor_core.file_processors.shader_processor import ShaderPreLoader
 from termin.editor_core.file_processors.texture_processor import TexturePreLoader
 from termin.editor_core.file_processors.component_processor import ComponentFileProcessor
+from termin.editor_core.file_processors.module_processor import ModuleFileProcessor
 from termin.editor_core.file_processors.pipeline_preloader import PipelinePreLoader
 from termin.editor_core.file_processors.scene_pipeline_preloader import ScenePipelinePreLoader
 from termin.editor_core.file_processors.voxel_grid_processor import VoxelGridPreLoader
@@ -21,6 +22,7 @@ __all__ = [
     "ShaderPreLoader",
     "TexturePreLoader",
     "ComponentFileProcessor",
+    "ModuleFileProcessor",
     "PipelinePreLoader",
     "ScenePipelinePreLoader",
     "VoxelGridPreLoader",

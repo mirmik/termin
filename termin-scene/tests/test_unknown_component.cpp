@@ -70,6 +70,14 @@ public:
         : termin::CxxComponent("CycleBComponent") {}
 };
 
+class OwnerScopedComponent : public termin::CxxComponent {
+public:
+    OwnerScopedComponent()
+        : termin::CxxComponent("OwnerScopedComponent") {}
+
+    int value = 0;
+};
+
 static ::termin::ComponentRegistrar<ReloadableComponent>
     reloadable_component_registrar("ReloadableComponent", "CxxComponent");
 static ::termin::ComponentRegistrar<SecondaryComponent>
@@ -128,6 +136,69 @@ void reregister_reloadable_component() {
         nullptr,
         "CxxComponent"
     );
+}
+
+int test_module_owner_registration_cleanup() {
+    std::cout << "Testing module-owned component and inspect cleanup...\n";
+
+    constexpr const char* module_id = "owner_cleanup_test";
+    auto& components = termin::ComponentRegistry::instance();
+    auto& inspect = tc::InspectRegistry::instance();
+
+    components.unregister("OwnerScopedComponent");
+    inspect.unregister_type("OwnerScopedComponent");
+    components.set_registration_owner(module_id);
+    inspect.set_registration_owner(module_id);
+
+    components.register_native(
+        "OwnerScopedComponent",
+        &termin::CxxComponentFactoryData<OwnerScopedComponent>::create,
+        nullptr,
+        "CxxComponent"
+    );
+    inspect.add<OwnerScopedComponent, int>(
+        "OwnerScopedComponent",
+        &OwnerScopedComponent::value,
+        "value",
+        "Value",
+        "int"
+    );
+
+    TEST_ASSERT(components.owner_of("OwnerScopedComponent") == module_id,
+                "component owner captured");
+    TEST_ASSERT(inspect.owner_of("OwnerScopedComponent") == module_id,
+                "inspect owner captured");
+    TEST_ASSERT(components.has("OwnerScopedComponent"), "owned component registered");
+    TEST_ASSERT(inspect.find_field("OwnerScopedComponent", "value") != nullptr,
+                "owned inspect field registered");
+
+    components.set_registration_owner("");
+    inspect.set_registration_owner("");
+
+    TEST_ASSERT(inspect.unregister_owner(module_id) == 1, "inspect owner cleanup count");
+    TEST_ASSERT(components.unregister_owner(module_id) == 1, "component owner cleanup count");
+    TEST_ASSERT(!components.has("OwnerScopedComponent"), "owned component unregistered");
+    TEST_ASSERT(inspect.find_field("OwnerScopedComponent", "value") == nullptr,
+                "owned inspect field removed");
+    TEST_ASSERT(inspect.unregister_owner(module_id) == 0, "inspect owner cleanup idempotent");
+    TEST_ASSERT(components.unregister_owner(module_id) == 0, "component owner cleanup idempotent");
+
+    components.register_native(
+        "OwnerScopedComponent",
+        &termin::CxxComponentFactoryData<OwnerScopedComponent>::create,
+        nullptr,
+        "CxxComponent"
+    );
+    TEST_ASSERT(components.owner_of("OwnerScopedComponent").empty(),
+                "unowned component registration remains unowned");
+    TEST_ASSERT(components.unregister_owner(module_id) == 0,
+                "owner cleanup does not remove unowned component");
+    TEST_ASSERT(components.has("OwnerScopedComponent"),
+                "unowned component survives owner cleanup");
+    components.unregister("OwnerScopedComponent");
+
+    std::cout << "  Module owner cleanup: PASS\n";
+    return 0;
 }
 
 int test_cpp_inspect_registry_roundtrip() {
@@ -556,6 +627,7 @@ int main() {
     result |= test_unknown_only_deserialization();
     result |= test_custom_upgrade_strategy();
     result |= test_custom_upgrade_from_unregistered_source_type();
+    result |= test_module_owner_registration_cleanup();
 
     if (result == 0) {
         std::cout << "\nAll UnknownComponent tests passed.\n";

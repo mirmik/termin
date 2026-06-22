@@ -3,9 +3,12 @@
 #include <tcbase/tc_log.hpp>
 
 #include <termin/entity/unknown_component_ops.hpp>
+#include <termin/entity/component_registry.hpp>
 #include <termin/tc_scene.hpp>
 
 #include <termin/scene/scene_manager.hpp>
+
+#include <tc_inspect_cpp.hpp>
 
 namespace termin {
 namespace {
@@ -30,6 +33,60 @@ std::vector<TcSceneRef> collect_scenes() {
 
 const std::vector<std::string>& module_component_types(const termin_modules::ModuleRecord& record) {
     return record.spec.components;
+}
+
+void begin_module_registration_scope(const termin_modules::ModuleRecord& record) {
+    ComponentRegistry::instance().set_registration_owner(record.spec.id);
+    tc::InspectRegistry::instance().set_registration_owner(record.spec.id);
+}
+
+void end_module_registration_scope(const termin_modules::ModuleRecord& record) {
+    auto& components = ComponentRegistry::instance();
+    auto& inspect = tc::InspectRegistry::instance();
+
+    if (!components.registration_owner().empty() &&
+        components.registration_owner() != record.spec.id) {
+        tc::Log::warn(
+            "TermModulesIntegration: component registration owner scope mismatch while ending module '%s'",
+            record.spec.id.c_str()
+        );
+    }
+    if (!inspect.registration_owner().empty() &&
+        inspect.registration_owner() != record.spec.id) {
+        tc::Log::warn(
+            "TermModulesIntegration: inspect registration owner scope mismatch while ending module '%s'",
+            record.spec.id.c_str()
+        );
+    }
+
+    components.set_registration_owner("");
+    inspect.set_registration_owner("");
+}
+
+bool cleanup_module_registrations(const termin_modules::ModuleRecord& record, std::string& error) {
+    error.clear();
+
+    try {
+        const size_t inspect_count = tc::InspectRegistry::instance().unregister_owner(record.spec.id);
+        const size_t component_count = ComponentRegistry::instance().unregister_owner(record.spec.id);
+        if (inspect_count > 0 || component_count > 0) {
+            tc::Log::info(
+                "TermModulesIntegration: cleaned %zu inspect and %zu component registrations for module '%s'",
+                inspect_count,
+                component_count,
+                record.spec.id.c_str()
+            );
+        }
+        return true;
+    } catch (const std::exception& e) {
+        error = "Failed to clean module registrations for '" + record.spec.id + "': " + e.what();
+        tc::Log::error("TermModulesIntegration: %s", error.c_str());
+        return false;
+    } catch (...) {
+        error = "Failed to clean module registrations for '" + record.spec.id + "'";
+        tc::Log::error("TermModulesIntegration: %s", error.c_str());
+        return false;
+    }
 }
 
 void degrade_module_components(const termin_modules::ModuleRecord& record) {
@@ -127,8 +184,24 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     };
 
     termin_modules::CppModuleCallbacks cpp_callbacks;
+    cpp_callbacks.before_load = [](const termin_modules::ModuleRecord& record) {
+        begin_module_registration_scope(record);
+    };
+    cpp_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
+                                         const std::string&) {
+        std::string error;
+        cleanup_module_registrations(record, error);
+        end_module_registration_scope(record);
+    };
     cpp_callbacks.before_unload = before_unload;
-    cpp_callbacks.after_load = after_load;
+    cpp_callbacks.before_native_close = [](const termin_modules::ModuleRecord& record,
+                                           std::string& error) {
+        return cleanup_module_registrations(record, error);
+    };
+    cpp_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
+        end_module_registration_scope(record);
+        after_load(record);
+    };
     cpp_callbacks.restore_reload_state = restore_reload_state;
 
     termin_modules::PythonModuleCallbacks python_callbacks;

@@ -55,6 +55,7 @@ struct CppModuleHandle : IModuleHandle {
     std::filesystem::path artifact_path;
     std::filesystem::path loaded_path;
     void* native_handle = nullptr;
+    bool shutdown_called = false;
 };
 
 struct PythonModuleHandle : IModuleHandle {

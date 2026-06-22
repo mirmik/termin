@@ -19,6 +19,7 @@ struct CppModuleCallbacks {
     std::function<void(const ModuleRecord&)> after_unload;
     std::function<void(const ModuleRecord&)> after_reload;
     std::function<void(const ModuleRecord&, const std::string&)> after_failed_load;
+    std::function<bool(const ModuleRecord&, std::string&)> before_native_close;
     std::function<std::shared_ptr<IModuleReloadState>(const ModuleRecord&)> capture_reload_state;
     std::function<bool(const ModuleRecord&, const std::shared_ptr<IModuleReloadState>&, std::string&)> restore_reload_state;
 };

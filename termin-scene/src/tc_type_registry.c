@@ -138,6 +138,7 @@ tc_type_entry* tc_type_registry_register_with_parent(
     entry->type_name = tgfx_intern_string(type_name);
     entry->factory = factory;
     entry->factory_userdata = factory_userdata;
+    entry->owner = NULL;
     entry->version = 1;
     entry->registered = true;
     tc_dlist_init_head(&entry->instances);

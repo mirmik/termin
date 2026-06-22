@@ -123,6 +123,63 @@ bool call_module_context_function(
     return true;
 }
 
+bool validate_module_context_components(
+    const std::string& module_id,
+    const std::vector<std::string>& declared_components,
+    std::string& error
+) {
+    PyObject* context_module = PyImport_ImportModule("termin_modules.module_context");
+    if (context_module == nullptr) {
+        error = "Failed to import termin_modules.module_context: " + fetch_python_error_string();
+        return false;
+    }
+
+    PyObject* function = PyObject_GetAttrString(context_module, "validate_declared_components");
+    Py_DECREF(context_module);
+    if (function == nullptr) {
+        error = "termin_modules.module_context.validate_declared_components is unavailable: " + fetch_python_error_string();
+        return false;
+    }
+
+    PyObject* components = PyList_New(static_cast<Py_ssize_t>(declared_components.size()));
+    if (components == nullptr) {
+        Py_DECREF(function);
+        error = "Failed to allocate Python component declaration list: " + fetch_python_error_string();
+        return false;
+    }
+
+    for (size_t i = 0; i < declared_components.size(); ++i) {
+        PyObject* value = PyUnicode_FromString(declared_components[i].c_str());
+        if (value == nullptr) {
+            Py_DECREF(components);
+            Py_DECREF(function);
+            error = "Failed to encode declared component name: " + fetch_python_error_string();
+            return false;
+        }
+        PyList_SET_ITEM(components, static_cast<Py_ssize_t>(i), value);
+    }
+
+    PyObject* module_id_object = PyUnicode_FromString(module_id.c_str());
+    if (module_id_object == nullptr) {
+        Py_DECREF(components);
+        Py_DECREF(function);
+        error = "Failed to encode module id: " + fetch_python_error_string();
+        return false;
+    }
+
+    PyObject* result = PyObject_CallFunctionObjArgs(function, module_id_object, components, nullptr);
+    Py_DECREF(module_id_object);
+    Py_DECREF(components);
+    Py_DECREF(function);
+    if (result == nullptr) {
+        error = fetch_python_error_string();
+        return false;
+    }
+
+    Py_DECREF(result);
+    return true;
+}
+
 bool module_name_matches_package(const std::string& module_name, const std::string& package) {
     if (module_name == package) {
         return true;
@@ -678,6 +735,19 @@ bool PythonModuleBackend::load(
     }
 
     handle->imported_modules = collect_imported_module_subtree(config->packages);
+
+    if (!validate_module_context_components(record.spec.id, record.spec.components, error)) {
+        std::string context_error;
+        if (!call_module_context_function("end_module_import", record.spec.id, context_error)) {
+            error += "; " + context_error;
+        }
+        import_context_active = false;
+        PyGILState_Release(gil);
+        record.error_message = error;
+        record.handle = handle;
+        unload(record, environment);
+        return false;
+    }
 
     if (import_context_active && !call_module_context_function("end_module_import", record.spec.id, error)) {
         PyGILState_Release(gil);
