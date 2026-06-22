@@ -129,6 +129,28 @@ callbacks для scene component migration: перед unload module-owned compo
 - вручную править dependency graph
 - смешивать свою логику с C++ lifecycle
 
+## Dependency-aware reload
+
+`ModuleRuntime` сам отвечает за dependency graph. Если нужно перезагрузить
+модуль вместе с уже загруженными dependents, хост должен вызывать
+`reload_module_with_dependents(...)`, а не пытаться повторить graph traversal в
+callbacks или UI-слое.
+
+Для каждого affected-модуля runtime вызывает обычную lifecycle-цепочку:
+
+- `capture_reload_state`
+- `before_unload`
+- backend unload
+- `after_unload`
+- `before_load`
+- backend load
+- `after_load`
+- `restore_reload_state`
+- `after_reload`
+
+Порядок между модулями остаётся обязанностью runtime: unload идёт от dependents
+к dependencies, load идёт от dependencies к dependents.
+
 ## Какой объект состояния передавать
 
 Для reload используется opaque object:

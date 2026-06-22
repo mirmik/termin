@@ -24,6 +24,8 @@ class FakeCppBackend final : public IModuleBackend {
 public:
     std::vector<std::string> load_calls;
     std::vector<std::string> unload_calls;
+    std::string fail_load_module;
+    std::string fail_unload_module;
 
     ModuleKind kind() const override {
         return ModuleKind::Cpp;
@@ -31,6 +33,10 @@ public:
 
     bool load(ModuleRecord& record, const ModuleEnvironment&) override {
         load_calls.push_back(record.spec.id);
+        if (record.spec.id == fail_load_module) {
+            record.error_message = "load failed: " + record.spec.id;
+            return false;
+        }
         auto handle = std::make_shared<CppModuleHandle>();
         const auto config = std::dynamic_pointer_cast<CppModuleConfig>(record.spec.config);
         if (config) {
@@ -43,6 +49,10 @@ public:
 
     bool unload(ModuleRecord& record, const ModuleEnvironment&) override {
         unload_calls.push_back(record.spec.id);
+        if (record.spec.id == fail_unload_module) {
+            record.error_message = "unload failed: " + record.spec.id;
+            return false;
+        }
         record.handle.reset();
         return true;
     }
@@ -216,10 +226,119 @@ void test_load_order_and_unload_guard() {
 
     expect(!runtime.unload_module("core"), "unloading loaded dependency must fail");
     expect(runtime.last_error().find("game") != std::string::npos, "dependent name should be mentioned");
+    expect(!runtime.reload_module("core"), "single-module reload should keep loaded dependent guard");
+    expect(runtime.last_error().find("game") != std::string::npos, "reload guard should mention dependent");
 
     expect(runtime.unload_module("game"), "dependent unload should succeed");
     expect(runtime.unload_module("core"), "dependency unload should succeed after dependent");
     expect(backend->unload_calls.size() == 2, "two unload calls expected");
+}
+
+void write_dependency_chain(TempDir& tmp) {
+    write_text_file(
+        tmp.path / "core.module",
+        "name: core\n"
+        "build:\n"
+        "  output: build/libcore.so\n"
+    );
+
+    write_text_file(
+        tmp.path / "game.module",
+        "name: game\n"
+        "dependencies: [core]\n"
+        "build:\n"
+        "  output: build/libgame.so\n"
+    );
+
+    write_text_file(
+        tmp.path / "ui.module",
+        "name: ui\n"
+        "dependencies: [game]\n"
+        "build:\n"
+        "  output: build/libui.so\n"
+    );
+}
+
+void test_cascade_reload_unloads_dependents_before_dependency() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    runtime.discover(tmp.path);
+
+    expect(runtime.load_all(), "load_all should succeed for dependency chain");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    expect(runtime.reload_module_with_dependents("core"), runtime.last_error());
+
+    expect(backend->unload_calls.size() == 3, "cascade should unload three modules");
+    expect(backend->unload_calls[0] == "ui", "deepest dependent should unload first");
+    expect(backend->unload_calls[1] == "game", "direct dependent should unload before dependency");
+    expect(backend->unload_calls[2] == "core", "dependency should unload last");
+
+    expect(backend->load_calls.size() == 3, "cascade should reload three modules");
+    expect(backend->load_calls[0] == "core", "dependency should load first");
+    expect(backend->load_calls[1] == "game", "direct dependent should load after dependency");
+    expect(backend->load_calls[2] == "ui", "deepest dependent should load last");
+
+    expect(runtime.find("core")->state == ModuleState::Loaded, "core loaded after cascade");
+    expect(runtime.find("game")->state == ModuleState::Loaded, "game loaded after cascade");
+    expect(runtime.find("ui")->state == ModuleState::Loaded, "ui loaded after cascade");
+}
+
+void test_cascade_reload_leaves_unloaded_dependents_unloaded() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    runtime.discover(tmp.path);
+
+    expect(runtime.load_module("core"), "core load should succeed");
+    expect(runtime.load_module("game"), "game load should succeed");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    expect(runtime.reload_module_with_dependents("core"), runtime.last_error());
+
+    expect(backend->unload_calls.size() == 2, "cascade should unload only loaded modules");
+    expect(backend->unload_calls[0] == "game", "loaded dependent should unload first");
+    expect(backend->unload_calls[1] == "core", "target should unload second");
+    expect(backend->load_calls.size() == 2, "cascade should reload only target and loaded dependents");
+    expect(backend->load_calls[0] == "core", "target should load first");
+    expect(backend->load_calls[1] == "game", "loaded dependent should load second");
+    expect(runtime.find("ui")->state == ModuleState::Discovered, "unloaded dependent should remain discovered");
+}
+
+void test_cascade_reload_stops_on_dependent_load_failure() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    runtime.discover(tmp.path);
+
+    expect(runtime.load_all(), "load_all should succeed before failure injection");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+    backend->fail_load_module = "game";
+
+    expect(!runtime.reload_module_with_dependents("core"), "cascade should fail when dependent reload fails");
+    expect(runtime.last_error() == "load failed: game", "dependent load failure should be reported");
+
+    expect(backend->unload_calls.size() == 3, "all affected modules should have been unloaded before reload");
+    expect(backend->unload_calls[0] == "ui", "ui unload before failed reload");
+    expect(backend->unload_calls[1] == "game", "game unload before failed reload");
+    expect(backend->unload_calls[2] == "core", "core unload before failed reload");
+    expect(backend->load_calls.size() == 2, "reload should stop at failed dependent");
+    expect(backend->load_calls[0] == "core", "core should reload before dependent failure");
+    expect(backend->load_calls[1] == "game", "game load should fail");
+
+    expect(runtime.find("core")->state == ModuleState::Loaded, "core remains loaded after dependent failure");
+    expect(runtime.find("game")->state == ModuleState::Failed, "failed dependent should be marked failed");
+    expect(runtime.find("ui")->state == ModuleState::Unloaded, "later dependent remains unloaded");
 }
 
 void test_cycle_detection() {
@@ -428,6 +547,18 @@ TEST_CASE("module runtime parses descriptors and discovers modules") {
 
 TEST_CASE("module runtime respects load order and unload guards") {
     test_load_order_and_unload_guard();
+}
+
+TEST_CASE("module runtime cascade reload unloads dependents before dependencies") {
+    test_cascade_reload_unloads_dependents_before_dependency();
+}
+
+TEST_CASE("module runtime cascade reload does not load inactive dependents") {
+    test_cascade_reload_leaves_unloaded_dependents_unloaded();
+}
+
+TEST_CASE("module runtime cascade reload stops on dependent load failure") {
+    test_cascade_reload_stops_on_dependent_load_failure();
 }
 
 TEST_CASE("module runtime rejects dependency cycles") {

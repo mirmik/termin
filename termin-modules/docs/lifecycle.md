@@ -128,11 +128,33 @@ factory/accessor callbacks перед `dlclose`/`FreeLibrary`.
 
 То есть сейчас у backend-ов нет отдельного специализированного `reload`; runtime собирает его из `unload + load`.
 
+`reload_module(name)` остаётся одиночной операцией. Если у модуля есть
+загруженные dependents, сработает обычный unload guard и reload завершится
+ошибкой. Для hot reload dependency-модулей используется отдельная операция
+`ModuleRuntime::reload_module_with_dependents(name)`:
+
+1. runtime собирает `name` и все транзитивные dependents, которые сейчас
+   находятся в `Loaded` или всё ещё держат backend handle
+2. выгружает affected-модули в обратном dependency order: сначала самые верхние
+   dependents, затем их dependencies
+3. загружает affected-модули обратно в dependency order
+4. вызывает reload-state callbacks для каждого affected-модуля
+
+Dependents, которые не были загружены к моменту reload, не включаются в graph и
+не поднимаются автоматически.
+
 Если восстановление state после reload падает, runtime переводит модуль в
 `Failed` и публикует `Failed` event. Старую версию модуля runtime не пытается
 автоматически оживлять; scene state должен оставаться в безопасном degraded
 состоянии (`UnknownComponent`) до следующего успешного reload или ручного
 восстановления.
+
+Если cascade reload падает на unload/load/restore одного из affected-модулей,
+операция останавливается на первом сбое. Уже выгруженные модули остаются
+выгруженными, уже успешно загруженные остаются загруженными, а failing module
+получает `Failed` и диагностическое сообщение. Runtime намеренно не делает
+автоматический rollback, потому что после закрытия native handle старую версию
+модуля нельзя считать безопасно восстанавливаемой.
 
 В editor auto-reload сейчас подключен для Python `.pymodule`: изменение
 дескриптора вызывает load/reload descriptor, а изменение `.py` файла внутри
