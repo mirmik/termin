@@ -118,3 +118,8 @@ cleanup, затем удаляет package subtree из `sys.modules`.
 автоматически оживлять; scene state должен оставаться в безопасном degraded
 состоянии (`UnknownComponent`) до следующего успешного reload или ручного
 восстановления.
+
+В editor auto-reload сейчас подключен для Python `.pymodule`: изменение
+дескриптора вызывает load/reload descriptor, а изменение `.py` файла внутри
+пакета из `packages` перезагружает владеющий Python-модуль. Loose `.py` файлы
+вне `.pymodule` продолжают обрабатываться legacy component scanner-ом.

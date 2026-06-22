@@ -84,6 +84,14 @@ NB_MODULE(_termin_modules_native, m) {
         .def_prop_ro("descriptor_path", [](const ModuleRecord& self) { return self.spec.descriptor_path; })
         .def_prop_ro("dependencies", [](const ModuleRecord& self) { return self.spec.dependencies; })
         .def_prop_ro("components", [](const ModuleRecord& self) { return self.spec.components; })
+        .def_prop_ro("python_root", [](const ModuleRecord& self) -> std::string {
+            auto config = std::dynamic_pointer_cast<PythonModuleConfig>(self.spec.config);
+            return config ? config->root.string() : "";
+        })
+        .def_prop_ro("python_packages", [](const ModuleRecord& self) -> std::vector<std::string> {
+            auto config = std::dynamic_pointer_cast<PythonModuleConfig>(self.spec.config);
+            return config ? config->packages : std::vector<std::string>{};
+        })
         .def_ro("state", &ModuleRecord::state)
         .def_prop_ro("error_message", [](const ModuleRecord& self) {
             return sanitize_external_text(self.error_message);

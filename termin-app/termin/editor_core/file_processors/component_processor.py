@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from typing import Set
 
 from tcbase import log
@@ -29,6 +30,15 @@ def _is_inside_package(path: str) -> bool:
 class ComponentFileProcessor(FilePreLoader):
     """Handles .py files containing Component subclasses."""
 
+    def __init__(
+        self,
+        resource_manager: object,
+        on_resource_reloaded: Callable[[str, str], None] | None = None,
+        modules_runtime_provider: Callable[[], object] | None = None,
+    ) -> None:
+        super().__init__(resource_manager, on_resource_reloaded=on_resource_reloaded)
+        self._modules_runtime_provider = modules_runtime_provider
+
     @property
     def extensions(self) -> Set[str]:
         return {".py"}
@@ -46,6 +56,7 @@ class ComponentFileProcessor(FilePreLoader):
 
         # Skip files inside packages (they should be imported via .pymodule)
         if _is_inside_package(path):
+            self._reload_owning_modules(path)
             return
 
         try:
@@ -70,6 +81,7 @@ class ComponentFileProcessor(FilePreLoader):
 
         # Skip files inside packages (they should be imported via .pymodule)
         if _is_inside_package(path):
+            self._reload_owning_modules(path)
             return
 
         try:
@@ -92,3 +104,20 @@ class ComponentFileProcessor(FilePreLoader):
         """Handle Python file deletion."""
         if path in self._file_to_resources:
             del self._file_to_resources[path]
+
+    def _reload_owning_modules(self, path: str) -> None:
+        runtime = self._modules_runtime()
+        if not runtime.auto_reload_enabled:
+            return
+
+        module_ids = runtime.reload_modules_for_path(path)
+        for module_id in module_ids:
+            log.info(f"[ComponentProcessor] Reloaded Python module {module_id} after package file change")
+
+    def _modules_runtime(self):
+        if self._modules_runtime_provider is not None:
+            return self._modules_runtime_provider()
+
+        from termin.modules import get_project_modules_runtime
+
+        return get_project_modules_runtime()

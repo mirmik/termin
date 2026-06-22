@@ -57,7 +57,8 @@ class ModulesPanel(VStack):
         self._auto_reload_check = Checkbox()
         self._auto_reload_check.text = "Auto-reload"
         self._auto_reload_check.font_size = 12
-        self._auto_reload_check.enabled = False
+        self._auto_reload_check.enabled = True
+        self._auto_reload_check.checked = self._modules_runtime.auto_reload_enabled
         self._auto_reload_check.on_changed = self._on_auto_reload_toggled
         toolbar.add_child(self._auto_reload_check)
 
@@ -150,8 +151,9 @@ class ModulesPanel(VStack):
             log.info(f"{_TAG} {event.message}")
 
     def _on_auto_reload_toggled(self, checked: bool) -> None:
-        if checked:
-            log.warn(f"{_TAG} Auto-reload is not implemented yet")
+        self._modules_runtime.auto_reload_enabled = checked
+        state = "enabled" if checked else "disabled"
+        log.info(f"{_TAG} Auto-reload {state}")
 
     def _on_rescan_clicked(self) -> None:
         project_root = self._modules_runtime.project_root
