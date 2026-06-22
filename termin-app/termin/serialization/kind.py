@@ -27,6 +27,7 @@ Usage:
 """
 
 from termin._native.kind import KindRegistry as _KindRegistry
+from tcbase import log
 
 
 class KindRegistry:
@@ -55,6 +56,20 @@ class KindRegistry:
             serialize or (lambda x: None),
             deserialize or (lambda x: None)
         )
+        try:
+            from termin_modules.module_context import record_python_kind
+        except ModuleNotFoundError as exc:
+            if exc.name not in ("termin_modules", "termin_modules.module_context"):
+                log.error("Failed to load module ownership context", exc_info=True)
+            return
+        except Exception:
+            log.error("Failed to load module ownership context", exc_info=True)
+            return
+
+        try:
+            record_python_kind(name)
+        except Exception:
+            log.error(f"Failed to record module ownership for Python kind {name}", exc_info=True)
 
     @staticmethod
     def serialize(kind: str, obj):

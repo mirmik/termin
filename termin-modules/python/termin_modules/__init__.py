@@ -13,6 +13,12 @@ from ._termin_modules_native import (
     ModuleState,
     PythonModuleBackend,
 )
+from .module_context import (
+    current_module_owner,
+    module_import_context,
+    registrations_for_owner,
+    unregister_module_owner,
+)
 
 __all__ = [
     "CppModuleBackend",
@@ -24,4 +30,8 @@ __all__ = [
     "ModuleRuntime",
     "ModuleState",
     "PythonModuleBackend",
+    "current_module_owner",
+    "module_import_context",
+    "registrations_for_owner",
+    "unregister_module_owner",
 ]

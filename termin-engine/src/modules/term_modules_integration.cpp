@@ -101,15 +101,43 @@ const termin_modules::ModuleEnvironment& TermModulesIntegration::environment() c
 void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& runtime) const {
     runtime.set_environment(_environment);
 
-    termin_modules::CppModuleCallbacks callbacks;
-    callbacks.before_unload = [](const termin_modules::ModuleRecord& record) {
+    auto before_unload = [](const termin_modules::ModuleRecord& record) {
         degrade_module_components(record);
     };
-    callbacks.after_load = [](const termin_modules::ModuleRecord& record) {
+    auto after_load = [](const termin_modules::ModuleRecord& record) {
         upgrade_module_components(record);
     };
+    auto restore_reload_state = [](const termin_modules::ModuleRecord& record,
+                                   const std::shared_ptr<termin_modules::IModuleReloadState>&,
+                                   std::string& error) {
+        const std::vector<std::string>& type_names = module_component_types(record);
+        if (type_names.empty()) {
+            return true;
+        }
 
-    runtime.set_cpp_callbacks(std::move(callbacks));
+        const std::vector<TcSceneRef> scenes = collect_scenes();
+        for (const TcSceneRef& scene : scenes) {
+            const UnknownComponentStats stats = upgrade_unknown_components(scene, type_names);
+            if (stats.failed > 0) {
+                error = "Failed to restore module component state for '" + record.spec.id + "'";
+                return false;
+            }
+        }
+        return true;
+    };
+
+    termin_modules::CppModuleCallbacks cpp_callbacks;
+    cpp_callbacks.before_unload = before_unload;
+    cpp_callbacks.after_load = after_load;
+    cpp_callbacks.restore_reload_state = restore_reload_state;
+
+    termin_modules::PythonModuleCallbacks python_callbacks;
+    python_callbacks.before_unload = before_unload;
+    python_callbacks.after_load = after_load;
+    python_callbacks.restore_reload_state = restore_reload_state;
+
+    runtime.set_cpp_callbacks(std::move(cpp_callbacks));
+    runtime.set_python_callbacks(std::move(python_callbacks));
 }
 
 } // namespace termin

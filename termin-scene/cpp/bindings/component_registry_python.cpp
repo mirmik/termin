@@ -66,6 +66,11 @@ void ComponentRegistryPython::register_python(const std::string& name, nb::objec
     );
 }
 
+void ComponentRegistryPython::unregister_python(const std::string& name) {
+    python_classes().erase(name);
+    tc_component_registry_unregister(name.c_str());
+}
+
 tc_component* ComponentRegistryPython::create_tc_component(const std::string& name) {
     return tc_component_registry_create(name.c_str());
 }

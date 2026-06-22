@@ -104,6 +104,11 @@
 - `after_failed_load`
   - логирование и UI-диагностика
 
+В интеграции `termin-engine` Python callbacks используются так же, как C++
+callbacks для scene component migration: перед unload module-owned components
+деградируют в `UnknownComponent`, после load/reload выполняется upgrade по
+типам из `ModuleSpec.components`.
+
 ### Чего Python коллбеки делать не должны
 
 Они не должны:

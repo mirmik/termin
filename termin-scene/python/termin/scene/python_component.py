@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 from termin.scene._scene_native import TcComponent, ComponentRegistry
 from termin.inspect import InspectField
+from tcbase import log
 
 
 class PythonComponent:
@@ -57,11 +58,27 @@ class PythonComponent:
 
         from termin.inspect import InspectRegistry
         registry = InspectRegistry.instance()
+        try:
+            from termin_modules.module_context import (
+                record_component,
+                record_inspect_type,
+            )
+        except ModuleNotFoundError as exc:
+            if exc.name not in ("termin_modules", "termin_modules.module_context"):
+                log.error("Failed to load module ownership context", exc_info=True)
+            record_component = None
+            record_inspect_type = None
+        except Exception:
+            log.error("Failed to load module ownership context", exc_info=True)
+            record_component = None
+            record_inspect_type = None
 
         # Register only own fields (not inherited)
         own_fields = cls.__dict__.get('inspect_fields', {})
         if own_fields:
             registry.register_python_fields(cls.__name__, own_fields)
+            if record_inspect_type is not None:
+                record_inspect_type(cls.__name__)
 
         # Find parent component type and register inheritance
         parent_name = None
@@ -75,9 +92,15 @@ class PythonComponent:
 
         if parent_name:
             registry.set_type_parent(cls.__name__, parent_name)
+            if record_inspect_type is not None:
+                record_inspect_type(cls.__name__)
 
         # Register factory in C++ ComponentRegistry
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
+        if record_component is not None:
+            record_component(cls.__name__)
+        if record_inspect_type is not None:
+            record_inspect_type(cls.__name__)
 
         # capability registration moved to respective subclasses:
         # - drawable: termin.render.DrawableComponent

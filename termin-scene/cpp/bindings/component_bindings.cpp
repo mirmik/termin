@@ -90,6 +90,9 @@ void bind_component_registry(nb::module_& m) {
                 ComponentRegistryPython::register_python(name, cls, parent_str.c_str());
             }
         }, nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none())
+        .def("unregister_python", [](ComponentRegistry&, const std::string& name) {
+            ComponentRegistryPython::unregister_python(name);
+        }, nb::arg("name"))
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
         .def_prop_ro("component_names", [](ComponentRegistry& reg) {

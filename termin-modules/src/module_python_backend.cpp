@@ -4,6 +4,7 @@
 #include <Python.h>
 
 #include <cstdio>
+#include <algorithm>
 #include <filesystem>
 #include <sstream>
 #include <string>
@@ -16,6 +17,8 @@
 
 namespace termin_modules {
 namespace {
+
+std::string fetch_python_error_string();
 
 std::filesystem::path venv_python_path(const ModuleEnvironment& environment) {
 #ifdef _WIN32
@@ -95,6 +98,102 @@ void remove_sys_path(const std::filesystem::path& path) {
         if (raw != nullptr && path == std::filesystem::path(raw)) {
             PySequence_DelItem(sys_path, i);
         }
+    }
+}
+
+bool call_module_context_function(
+    const char* function_name,
+    const std::string& module_id,
+    std::string& error
+) {
+    PyObject* context_module = PyImport_ImportModule("termin_modules.module_context");
+    if (context_module == nullptr) {
+        error = "Failed to import termin_modules.module_context: " + fetch_python_error_string();
+        return false;
+    }
+
+    PyObject* result = PyObject_CallMethod(context_module, function_name, "s", module_id.c_str());
+    Py_DECREF(context_module);
+    if (result == nullptr) {
+        error = std::string("termin_modules.module_context.") + function_name + " failed: " + fetch_python_error_string();
+        return false;
+    }
+
+    Py_DECREF(result);
+    return true;
+}
+
+bool module_name_matches_package(const std::string& module_name, const std::string& package) {
+    if (module_name == package) {
+        return true;
+    }
+
+    if (module_name.size() <= package.size() + 1) {
+        return false;
+    }
+
+    return module_name.compare(0, package.size(), package) == 0 &&
+        module_name[package.size()] == '.';
+}
+
+std::vector<std::string> collect_imported_module_subtree(
+    const std::vector<std::string>& packages
+) {
+    std::vector<std::string> result;
+
+    PyObject* sys_modules = PyImport_GetModuleDict();
+    if (sys_modules == nullptr) {
+        return result;
+    }
+
+    PyObject* keys = PyDict_Keys(sys_modules);
+    if (keys == nullptr) {
+        PyErr_Clear();
+        return result;
+    }
+
+    const Py_ssize_t size = PyList_Size(keys);
+    for (Py_ssize_t i = 0; i < size; ++i) {
+        PyObject* key = PyList_GetItem(keys, i);
+        if (key == nullptr || !PyUnicode_Check(key)) {
+            continue;
+        }
+
+        const char* raw_name = PyUnicode_AsUTF8(key);
+        if (raw_name == nullptr) {
+            PyErr_Clear();
+            continue;
+        }
+
+        std::string module_name(raw_name);
+        for (const std::string& package : packages) {
+            if (module_name_matches_package(module_name, package)) {
+                result.push_back(std::move(module_name));
+                break;
+            }
+        }
+    }
+
+    Py_DECREF(keys);
+
+    std::sort(result.begin(), result.end(), [](const std::string& lhs, const std::string& rhs) {
+        if (lhs.size() != rhs.size()) {
+            return lhs.size() > rhs.size();
+        }
+        return lhs > rhs;
+    });
+    result.erase(std::unique(result.begin(), result.end()), result.end());
+    return result;
+}
+
+void remove_sys_module(const std::string& name) {
+    PyObject* sys_modules = PyImport_GetModuleDict();
+    if (sys_modules == nullptr) {
+        return;
+    }
+
+    if (PyDict_DelItemString(sys_modules, name.c_str()) != 0) {
+        PyErr_Clear();
     }
 }
 
@@ -553,10 +652,22 @@ bool PythonModuleBackend::load(
         return false;
     }
 
+    if (!call_module_context_function("begin_module_import", record.spec.id, error)) {
+        PyGILState_Release(gil);
+        record.error_message = error;
+        return false;
+    }
+
+    bool import_context_active = true;
     for (const std::string& package : config->packages) {
         PyObject* module = PyImport_ImportModule(package.c_str());
         if (module == nullptr) {
             record.error_message = "Failed to import package '" + package + "': " + fetch_python_error();
+            std::string context_error;
+            if (!call_module_context_function("end_module_import", record.spec.id, context_error)) {
+                record.error_message += "; " + context_error;
+            }
+            import_context_active = false;
             PyGILState_Release(gil);
             record.handle = handle;
             unload(record, environment);
@@ -564,7 +675,16 @@ bool PythonModuleBackend::load(
         }
 
         Py_DECREF(module);
-        handle->imported_modules.push_back(package);
+    }
+
+    handle->imported_modules = collect_imported_module_subtree(config->packages);
+
+    if (import_context_active && !call_module_context_function("end_module_import", record.spec.id, error)) {
+        PyGILState_Release(gil);
+        record.error_message = error;
+        record.handle = handle;
+        unload(record, environment);
+        return false;
     }
 
     PyGILState_Release(gil);
@@ -591,9 +711,15 @@ bool PythonModuleBackend::unload(
 
     PyGILState_STATE gil = PyGILState_Ensure();
 
-    PyObject* sys_modules = PyImport_GetModuleDict();
+    std::string cleanup_error;
+    if (!call_module_context_function("unregister_module_owner", record.spec.id, cleanup_error)) {
+        record.error_message = cleanup_error;
+        PyGILState_Release(gil);
+        return false;
+    }
+
     for (const std::string& name : handle->imported_modules) {
-        PyDict_DelItemString(sys_modules, name.c_str());
+        remove_sys_module(name);
     }
     for (const auto& path : handle->added_paths) {
         remove_sys_path(path);
