@@ -240,7 +240,7 @@ uint64_t offset_in_slot =
     ring_ubo_heads_[slot].fetch_add(padded, std::memory_order_relaxed);
 
 if (offset_in_slot + padded > ring_ubo_slot_size_) {
-    static thread_local bool s_warned = false;
+    static std::atomic_bool s_warned = false;
     if (!s_warned) {
         tc_log(TC_LOG_ERROR, "[RingUBO] slot %u overflow: ...");
         s_warned = true;
@@ -251,7 +251,7 @@ if (offset_in_slot + padded > ring_ubo_slot_size_) {
 
 **Проблемы:**
 1. При overflow функция возвращает `base` (начало слота), что означает **перезапись** данных, записанных ранее в этот же слот
-2. Логирование **один раз на поток** (`thread_local bool`), что делает проблему невидимой при многопоточной записи
+2. Логирование через локальный флаг скрывает повторные overflow-события; флаг должен быть потокобезопасным и не должен использовать thread-local состояние
 3. Нет механизма восстановления — последующие draw-коллы используют повреждённые UBO
 
 **Размер слота:** 8 MB (6 слотов × 8 MB = 48 MB total). При ~10 KB UBO на draw и 1600 worst-case draws/frame нужно ~16 MB, так что слот в 8 MB **тесен**.
