@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(TERMIN_ENGINE_BUILD_SHARED "Build shared library" ON)
+option(TERMIN_ENGINE_BUILD_TESTS "Build termin-engine tests" ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-engine" OFF)
 
 if(COMMAND termin_require_package)
@@ -186,3 +187,45 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_engineConfigVersion.cmake
     DESTINATION lib/cmake/termin_engine
 )
+
+if(TERMIN_ENGINE_BUILD_TESTS)
+    enable_testing()
+
+    add_library(termin_engine_cpp_hot_reload_test_module SHARED
+        tests/cpp_hot_reload_module.cpp
+    )
+    target_link_libraries(termin_engine_cpp_hot_reload_test_module
+        PRIVATE
+            termin_scene::termin_scene
+            termin_inspect::termin_inspect
+    )
+    set_target_properties(termin_engine_cpp_hot_reload_test_module PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    termin_set_rpath_lib(termin_engine_cpp_hot_reload_test_module)
+
+    add_executable(termin_engine_cpp_module_hot_reload_test
+        tests/test_cpp_module_hot_reload.cpp
+    )
+    target_link_libraries(termin_engine_cpp_module_hot_reload_test
+        PRIVATE
+            termin_engine
+            termin_modules::termin_modules
+            termin_scene::termin_scene
+            termin_inspect::termin_inspect
+    )
+    target_compile_definitions(termin_engine_cpp_module_hot_reload_test PRIVATE
+        TERMIN_ENGINE_CPP_HOT_RELOAD_TEST_MODULE="$<TARGET_FILE:termin_engine_cpp_hot_reload_test_module>"
+    )
+    set_target_properties(termin_engine_cpp_module_hot_reload_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_dependencies(termin_engine_cpp_module_hot_reload_test termin_engine_cpp_hot_reload_test_module)
+
+    add_test(
+        NAME termin_engine_cpp_module_hot_reload_test
+        COMMAND termin_engine_cpp_module_hot_reload_test
+    )
+endif()
