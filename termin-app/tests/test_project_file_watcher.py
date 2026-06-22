@@ -3,6 +3,7 @@ from typing import Set
 
 from termin.default_assets.render.texture_plugin import TextureImportPlugin
 from termin.assets.project_file_watcher import ProjectFileWatcher
+from termin.editor_core.file_processors import ComponentFileProcessor, ModuleFileProcessor
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
@@ -46,6 +47,27 @@ class RecordingPythonPreLoader(RecordingPreLoader):
         return "python"
 
 
+class RecordingModulesRuntime:
+    def __init__(self) -> None:
+        self.auto_reload_enabled = True
+        self.last_error = ""
+        self.reloaded_descriptors: list[Path] = []
+        self.reloaded_paths: list[Path] = []
+
+    def reload_descriptor(self, path: Path) -> str | None:
+        self.reloaded_descriptors.append(Path(path))
+        return "gameplay"
+
+    def reload_modules_for_path(self, path: str) -> list[str]:
+        self.reloaded_paths.append(Path(path))
+        return ["gameplay"]
+
+
+class FailingComponentResourceManager:
+    def scan_components(self, paths: list[str]) -> list[str]:
+        raise AssertionError(f"package component files must not be scanned directly: {paths}")
+
+
 def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> None:
     shader_path = tmp_path / "HotReload.shader"
     shader_path.write_text("@program HotReload\n@language slang\n", encoding="utf-8")
@@ -60,6 +82,55 @@ def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> 
     watcher.poll()
 
     assert processor.changed == [str(shader_path)]
+
+
+def test_module_file_processor_reloads_pymodule_when_auto_reload_enabled(tmp_path: Path) -> None:
+    descriptor = tmp_path / "gameplay.pymodule"
+    descriptor.write_text("name: gameplay\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    reloaded: list[tuple[str, str]] = []
+    processor = ModuleFileProcessor(
+        resource_manager=None,
+        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_changed(str(descriptor))
+
+    assert runtime.reloaded_descriptors == [descriptor]
+    assert reloaded == [("module", "gameplay")]
+
+
+def test_module_file_processor_ignores_changes_when_auto_reload_disabled(tmp_path: Path) -> None:
+    descriptor = tmp_path / "gameplay.pymodule"
+    descriptor.write_text("name: gameplay\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    runtime.auto_reload_enabled = False
+    processor = ModuleFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_changed(str(descriptor))
+
+    assert runtime.reloaded_descriptors == []
+
+
+def test_component_processor_routes_package_python_files_to_module_reload(tmp_path: Path) -> None:
+    package = tmp_path / "gameplay"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    component = package / "components.py"
+    component.write_text("class Probe: pass\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ComponentFileProcessor(
+        FailingComponentResourceManager(),
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_changed(str(component))
+
+    assert runtime.reloaded_paths == [component]
 
 
 def test_project_file_watcher_ignores_service_termin_directory_events(tmp_path: Path) -> None:

@@ -13,6 +13,14 @@
 
 static tc_type_registry* g_component_registry = NULL;
 
+#if defined(_MSC_VER)
+    #define TC_THREAD_LOCAL __declspec(thread)
+#else
+    #define TC_THREAD_LOCAL _Thread_local
+#endif
+
+static TC_THREAD_LOCAL const char* g_component_registration_owner = NULL;
+
 // Offset macro for intrusive list node
 #define COMPONENT_REGISTRY_NODE_OFFSET offsetof(tc_component, registry_node)
 
@@ -77,7 +85,7 @@ void tc_component_registry_register_with_parent(
 
     ensure_registry_initialized();
 
-    tc_type_registry_register_with_parent(
+    tc_type_entry* entry = tc_type_registry_register_with_parent(
         g_component_registry,
         type_name,
         (tc_type_factory_fn)factory,
@@ -85,6 +93,9 @@ void tc_component_registry_register_with_parent(
         (int)kind,
         parent_type_name
     );
+    if (entry) {
+        entry->owner = g_component_registration_owner;
+    }
 }
 
 void tc_component_registry_register_abstract(
@@ -105,6 +116,7 @@ void tc_component_registry_register_abstract(
         parent_type_name
     );
     if (entry) {
+        entry->owner = g_component_registration_owner;
         tc_type_entry_set_flag(entry, TC_TYPE_FLAG_ABSTRACT, true);
     }
 }
@@ -117,6 +129,45 @@ void tc_component_registry_unregister(const char* type_name) {
 bool tc_component_registry_has(const char* type_name) {
     if (!g_component_registry) return false;
     return tc_type_registry_has(g_component_registry, type_name);
+}
+
+void tc_component_registry_set_registration_owner(const char* owner) {
+    g_component_registration_owner = owner && owner[0] ? tgfx_intern_string(owner) : NULL;
+}
+
+const char* tc_component_registry_get_registration_owner(void) {
+    return g_component_registration_owner;
+}
+
+const char* tc_component_registry_get_owner(const char* type_name) {
+    if (!type_name || !g_component_registry) return NULL;
+
+    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
+    if (!entry || !entry->registered) return NULL;
+    return entry->owner;
+}
+
+typedef struct {
+    const char* owner;
+    size_t count;
+} unregister_owner_ctx;
+
+static bool unregister_owner_component_type(tc_type_entry* entry, void* user_data) {
+    unregister_owner_ctx* ctx = (unregister_owner_ctx*)user_data;
+    if (!entry || !ctx || !ctx->owner || !entry->owner) return true;
+    if (strcmp(entry->owner, ctx->owner) != 0) return true;
+
+    tc_component_registry_unregister(entry->type_name);
+    ctx->count++;
+    return true;
+}
+
+size_t tc_component_registry_unregister_owner(const char* owner) {
+    if (!owner || !owner[0] || !g_component_registry) return 0;
+
+    unregister_owner_ctx ctx = { tgfx_intern_string(owner), 0 };
+    tc_type_registry_foreach(g_component_registry, unregister_owner_component_type, &ctx);
+    return ctx.count;
 }
 
 tc_component* tc_component_registry_create(const char* type_name) {

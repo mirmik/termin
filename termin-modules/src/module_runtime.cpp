@@ -1,6 +1,7 @@
 #include "termin_modules/module_runtime.hpp"
 
 #include <filesystem>
+#include <unordered_map>
 
 namespace termin_modules {
 namespace {
@@ -69,6 +70,10 @@ std::vector<std::string> collect_loaded_dependents(
     }
 
     return dependents;
+}
+
+bool is_loaded_or_holding_handle(const ModuleRecord& record) {
+    return record.state == ModuleState::Loaded || record.handle != nullptr;
 }
 
 } // namespace
@@ -222,6 +227,14 @@ bool ModuleRuntime::load_module(const std::string& module_id) {
         return true;
     }
 
+    if (target->handle) {
+        target->state = ModuleState::Failed;
+        target->error_message = "Module still has an active backend handle: " + module_id;
+        _last_error = target->error_message;
+        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        return false;
+    }
+
     if (should_skip(target->spec)) {
         target->state = ModuleState::Ignored;
         target->error_message.clear();
@@ -309,7 +322,7 @@ bool ModuleRuntime::unload_module(const std::string& module_id) {
     }
     refresh_spec(*target);
 
-    if (target->state != ModuleState::Loaded) {
+    if (target->state != ModuleState::Loaded && !target->handle) {
         target->state = ModuleState::Unloaded;
         return true;
     }
@@ -346,10 +359,28 @@ bool ModuleRuntime::unload_module(const std::string& module_id) {
         }
     }
 
-    if (!backend->unload(*target, _environment)) {
+    bool unload_ok = true;
+    if (target->spec.kind == ModuleKind::Cpp && backend->supports_staged_unload()) {
+        unload_ok = backend->begin_unload(*target, _environment);
+        if (unload_ok && _cpp_callbacks.before_native_close) {
+            std::string error;
+            unload_ok = _cpp_callbacks.before_native_close(*target, error);
+            if (!unload_ok && !error.empty()) {
+                target->error_message = error;
+            }
+        }
+        if (unload_ok) {
+            unload_ok = backend->finish_unload(*target, _environment);
+        }
+    } else {
+        unload_ok = backend->unload(*target, _environment);
+    }
+
+    if (!unload_ok) {
         if (target->error_message.empty()) {
             target->error_message = "Backend unload failed";
         }
+        target->state = ModuleState::Failed;
         _last_error = target->error_message;
         emit(ModuleEventKind::Failed, module_id, target->error_message);
         return false;
@@ -383,18 +414,9 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
         return false;
     }
 
-    std::shared_ptr<IModuleReloadState> reload_state;
-    if (current->spec.kind == ModuleKind::Cpp) {
-        if (_cpp_callbacks.capture_reload_state) {
-            reload_state = _cpp_callbacks.capture_reload_state(*current);
-        }
-    } else {
-        if (_python_callbacks.capture_reload_state) {
-            reload_state = _python_callbacks.capture_reload_state(*current);
-        }
-    }
+    std::shared_ptr<IModuleReloadState> reload_state = capture_reload_state(*current);
 
-    const bool was_loaded = current->state == ModuleState::Loaded;
+    const bool was_loaded = is_loaded_or_holding_handle(*current);
     if (was_loaded && !unload_module(module_id)) {
         return false;
     }
@@ -403,44 +425,53 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
         return false;
     }
 
-    const ModuleRecord* reloaded = find(module_id);
-    if (reloaded == nullptr) {
+    return restore_reload_state(module_id, reload_state);
+}
+
+bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) {
+    std::vector<std::string> ordered;
+    std::string error;
+    if (!build_reload_order_with_loaded_dependents(module_id, ordered, error)) {
+        _last_error = error;
+        emit(ModuleEventKind::Failed, module_id, error);
         return false;
     }
 
-    if (reloaded->spec.kind == ModuleKind::Cpp) {
-        if (_cpp_callbacks.restore_reload_state) {
-            std::string error;
-            if (!_cpp_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
-                _last_error = error.empty() ? "Failed to restore C++ reload state" : error;
-                ModuleRecord* failed = find_mutable_record(_records, module_id);
-                if (failed != nullptr) {
-                    failed->state = ModuleState::Failed;
-                    failed->error_message = _last_error;
-                }
-                emit(ModuleEventKind::Failed, module_id, _last_error);
-                return false;
-            }
+    std::unordered_map<std::string, std::shared_ptr<IModuleReloadState>> reload_states;
+    for (const std::string& affected_id : ordered) {
+        ModuleRecord* record = find_mutable_record(_records, affected_id);
+        if (record == nullptr) {
+            _last_error = "Module not found: " + affected_id;
+            emit(ModuleEventKind::Failed, affected_id, _last_error);
+            return false;
         }
-        if (_cpp_callbacks.after_reload) {
-            _cpp_callbacks.after_reload(*reloaded);
+        refresh_spec(*record);
+        emit(ModuleEventKind::Reloading, affected_id);
+        reload_states.emplace(affected_id, capture_reload_state(*record));
+    }
+
+    for (auto it = ordered.rbegin(); it != ordered.rend(); ++it) {
+        const ModuleRecord* record = find(*it);
+        if (record == nullptr) {
+            _last_error = "Module not found: " + *it;
+            emit(ModuleEventKind::Failed, *it, _last_error);
+            return false;
         }
-    } else {
-        if (_python_callbacks.restore_reload_state) {
-            std::string error;
-            if (!_python_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
-                _last_error = error.empty() ? "Failed to restore Python reload state" : error;
-                ModuleRecord* failed = find_mutable_record(_records, module_id);
-                if (failed != nullptr) {
-                    failed->state = ModuleState::Failed;
-                    failed->error_message = _last_error;
-                }
-                emit(ModuleEventKind::Failed, module_id, _last_error);
-                return false;
-            }
+        if (is_loaded_or_holding_handle(*record) && !unload_module(*it)) {
+            return false;
         }
-        if (_python_callbacks.after_reload) {
-            _python_callbacks.after_reload(*reloaded);
+    }
+
+    for (const std::string& affected_id : ordered) {
+        if (!load_module(affected_id)) {
+            return false;
+        }
+
+        const auto state_it = reload_states.find(affected_id);
+        const std::shared_ptr<IModuleReloadState> reload_state =
+            state_it != reload_states.end() ? state_it->second : nullptr;
+        if (!restore_reload_state(affected_id, reload_state)) {
+            return false;
         }
     }
 
@@ -579,6 +610,101 @@ bool ModuleRuntime::build_load_order(std::vector<ModuleRecord*>& ordered, std::s
     return true;
 }
 
+bool ModuleRuntime::build_reload_order_with_loaded_dependents(
+    const std::string& module_id,
+    std::vector<std::string>& ordered,
+    std::string& error
+) {
+    ordered.clear();
+
+    ModuleRecord* target = find_mutable_record(_records, module_id);
+    if (target == nullptr) {
+        error = "Module not found: " + module_id;
+        return false;
+    }
+    refresh_spec(*target);
+
+    std::unordered_map<std::string, bool> affected;
+    std::vector<std::string> pending;
+    affected.emplace(module_id, true);
+    pending.push_back(module_id);
+
+    for (size_t index = 0; index < pending.size(); ++index) {
+        const std::string current_id = pending[index];
+        for (const ModuleRecord& record : _records) {
+            if (!is_loaded_or_holding_handle(record)) {
+                continue;
+            }
+            if (affected.find(record.spec.id) != affected.end()) {
+                continue;
+            }
+
+            for (const std::string& dependency : record.spec.dependencies) {
+                if (dependency == current_id) {
+                    affected.emplace(record.spec.id, true);
+                    pending.push_back(record.spec.id);
+                    break;
+                }
+            }
+        }
+    }
+
+    std::unordered_map<std::string, int> marks;
+    for (const auto& entry : affected) {
+        marks.emplace(entry.first, 0);
+    }
+
+    for (const ModuleRecord& record : _records) {
+        if (affected.find(record.spec.id) == affected.end()) {
+            continue;
+        }
+        if (marks[record.spec.id] == 0 && !visit_reload_module(record.spec.id, affected, marks, ordered, error)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool ModuleRuntime::visit_reload_module(
+    const std::string& module_id,
+    const std::unordered_map<std::string, bool>& affected,
+    std::unordered_map<std::string, int>& marks,
+    std::vector<std::string>& ordered,
+    std::string& error
+) {
+    const int current_mark = marks[module_id];
+    if (current_mark == 2) {
+        return true;
+    }
+
+    if (current_mark == 1) {
+        error = "Dependency cycle detected at module: " + module_id;
+        return false;
+    }
+
+    ModuleRecord* record = find_mutable_record(_records, module_id);
+    if (record == nullptr) {
+        error = "Module not found: " + module_id;
+        return false;
+    }
+
+    marks[module_id] = 1;
+
+    for (const std::string& dependency : record->spec.dependencies) {
+        if (affected.find(dependency) == affected.end()) {
+            continue;
+        }
+        if (!visit_reload_module(dependency, affected, marks, ordered, error)) {
+            return false;
+        }
+    }
+
+    marks[module_id] = 2;
+    ordered.push_back(module_id);
+    return true;
+}
+
 bool ModuleRuntime::visit_module(
     ModuleRecord& record,
     std::unordered_map<std::string, int>& marks,
@@ -641,6 +767,70 @@ void ModuleRuntime::refresh_spec(ModuleRecord& record) {
     new_spec->id = record.spec.id;
     new_spec->descriptor_path = record.spec.descriptor_path;
     record.spec = std::move(*new_spec);
+}
+
+std::shared_ptr<IModuleReloadState> ModuleRuntime::capture_reload_state(const ModuleRecord& record) const {
+    if (record.spec.kind == ModuleKind::Cpp) {
+        if (_cpp_callbacks.capture_reload_state) {
+            return _cpp_callbacks.capture_reload_state(record);
+        }
+        return nullptr;
+    }
+
+    if (_python_callbacks.capture_reload_state) {
+        return _python_callbacks.capture_reload_state(record);
+    }
+    return nullptr;
+}
+
+bool ModuleRuntime::restore_reload_state(
+    const std::string& module_id,
+    const std::shared_ptr<IModuleReloadState>& reload_state
+) {
+    const ModuleRecord* reloaded = find(module_id);
+    if (reloaded == nullptr) {
+        _last_error = "Module not found: " + module_id;
+        emit(ModuleEventKind::Failed, module_id, _last_error);
+        return false;
+    }
+
+    if (reloaded->spec.kind == ModuleKind::Cpp) {
+        if (_cpp_callbacks.restore_reload_state) {
+            std::string error;
+            if (!_cpp_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
+                _last_error = error.empty() ? "Failed to restore C++ reload state" : error;
+                ModuleRecord* failed = find_mutable_record(_records, module_id);
+                if (failed != nullptr) {
+                    failed->state = ModuleState::Failed;
+                    failed->error_message = _last_error;
+                }
+                emit(ModuleEventKind::Failed, module_id, _last_error);
+                return false;
+            }
+        }
+        if (_cpp_callbacks.after_reload) {
+            _cpp_callbacks.after_reload(*reloaded);
+        }
+        return true;
+    }
+
+    if (_python_callbacks.restore_reload_state) {
+        std::string error;
+        if (!_python_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
+            _last_error = error.empty() ? "Failed to restore Python reload state" : error;
+            ModuleRecord* failed = find_mutable_record(_records, module_id);
+            if (failed != nullptr) {
+                failed->state = ModuleState::Failed;
+                failed->error_message = _last_error;
+            }
+            emit(ModuleEventKind::Failed, module_id, _last_error);
+            return false;
+        }
+    }
+    if (_python_callbacks.after_reload) {
+        _python_callbacks.after_reload(*reloaded);
+    }
+    return true;
 }
 
 bool ModuleRuntime::should_skip(const ModuleSpec& spec) const {

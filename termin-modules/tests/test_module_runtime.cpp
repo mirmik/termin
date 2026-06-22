@@ -24,6 +24,8 @@ class FakeCppBackend final : public IModuleBackend {
 public:
     std::vector<std::string> load_calls;
     std::vector<std::string> unload_calls;
+    std::string fail_load_module;
+    std::string fail_unload_module;
 
     ModuleKind kind() const override {
         return ModuleKind::Cpp;
@@ -31,6 +33,10 @@ public:
 
     bool load(ModuleRecord& record, const ModuleEnvironment&) override {
         load_calls.push_back(record.spec.id);
+        if (record.spec.id == fail_load_module) {
+            record.error_message = "load failed: " + record.spec.id;
+            return false;
+        }
         auto handle = std::make_shared<CppModuleHandle>();
         const auto config = std::dynamic_pointer_cast<CppModuleConfig>(record.spec.config);
         if (config) {
@@ -43,6 +49,46 @@ public:
 
     bool unload(ModuleRecord& record, const ModuleEnvironment&) override {
         unload_calls.push_back(record.spec.id);
+        if (record.spec.id == fail_unload_module) {
+            record.error_message = "unload failed: " + record.spec.id;
+            return false;
+        }
+        record.handle.reset();
+        return true;
+    }
+};
+
+class FakeStagedCppBackend final : public IModuleBackend {
+public:
+    std::vector<std::string> order;
+
+    ModuleKind kind() const override {
+        return ModuleKind::Cpp;
+    }
+
+    bool supports_staged_unload() const override {
+        return true;
+    }
+
+    bool load(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("load:" + record.spec.id);
+        record.handle = std::make_shared<CppModuleHandle>();
+        return true;
+    }
+
+    bool unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("legacy-unload:" + record.spec.id);
+        record.handle.reset();
+        return true;
+    }
+
+    bool begin_unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("begin:" + record.spec.id);
+        return true;
+    }
+
+    bool finish_unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("finish:" + record.spec.id);
         record.handle.reset();
         return true;
     }
@@ -180,10 +226,119 @@ void test_load_order_and_unload_guard() {
 
     expect(!runtime.unload_module("core"), "unloading loaded dependency must fail");
     expect(runtime.last_error().find("game") != std::string::npos, "dependent name should be mentioned");
+    expect(!runtime.reload_module("core"), "single-module reload should keep loaded dependent guard");
+    expect(runtime.last_error().find("game") != std::string::npos, "reload guard should mention dependent");
 
     expect(runtime.unload_module("game"), "dependent unload should succeed");
     expect(runtime.unload_module("core"), "dependency unload should succeed after dependent");
     expect(backend->unload_calls.size() == 2, "two unload calls expected");
+}
+
+void write_dependency_chain(TempDir& tmp) {
+    write_text_file(
+        tmp.path / "core.module",
+        "name: core\n"
+        "build:\n"
+        "  output: build/libcore.so\n"
+    );
+
+    write_text_file(
+        tmp.path / "game.module",
+        "name: game\n"
+        "dependencies: [core]\n"
+        "build:\n"
+        "  output: build/libgame.so\n"
+    );
+
+    write_text_file(
+        tmp.path / "ui.module",
+        "name: ui\n"
+        "dependencies: [game]\n"
+        "build:\n"
+        "  output: build/libui.so\n"
+    );
+}
+
+void test_cascade_reload_unloads_dependents_before_dependency() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    runtime.discover(tmp.path);
+
+    expect(runtime.load_all(), "load_all should succeed for dependency chain");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    expect(runtime.reload_module_with_dependents("core"), runtime.last_error());
+
+    expect(backend->unload_calls.size() == 3, "cascade should unload three modules");
+    expect(backend->unload_calls[0] == "ui", "deepest dependent should unload first");
+    expect(backend->unload_calls[1] == "game", "direct dependent should unload before dependency");
+    expect(backend->unload_calls[2] == "core", "dependency should unload last");
+
+    expect(backend->load_calls.size() == 3, "cascade should reload three modules");
+    expect(backend->load_calls[0] == "core", "dependency should load first");
+    expect(backend->load_calls[1] == "game", "direct dependent should load after dependency");
+    expect(backend->load_calls[2] == "ui", "deepest dependent should load last");
+
+    expect(runtime.find("core")->state == ModuleState::Loaded, "core loaded after cascade");
+    expect(runtime.find("game")->state == ModuleState::Loaded, "game loaded after cascade");
+    expect(runtime.find("ui")->state == ModuleState::Loaded, "ui loaded after cascade");
+}
+
+void test_cascade_reload_leaves_unloaded_dependents_unloaded() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    runtime.discover(tmp.path);
+
+    expect(runtime.load_module("core"), "core load should succeed");
+    expect(runtime.load_module("game"), "game load should succeed");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    expect(runtime.reload_module_with_dependents("core"), runtime.last_error());
+
+    expect(backend->unload_calls.size() == 2, "cascade should unload only loaded modules");
+    expect(backend->unload_calls[0] == "game", "loaded dependent should unload first");
+    expect(backend->unload_calls[1] == "core", "target should unload second");
+    expect(backend->load_calls.size() == 2, "cascade should reload only target and loaded dependents");
+    expect(backend->load_calls[0] == "core", "target should load first");
+    expect(backend->load_calls[1] == "game", "loaded dependent should load second");
+    expect(runtime.find("ui")->state == ModuleState::Discovered, "unloaded dependent should remain discovered");
+}
+
+void test_cascade_reload_stops_on_dependent_load_failure() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    runtime.discover(tmp.path);
+
+    expect(runtime.load_all(), "load_all should succeed before failure injection");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+    backend->fail_load_module = "game";
+
+    expect(!runtime.reload_module_with_dependents("core"), "cascade should fail when dependent reload fails");
+    expect(runtime.last_error() == "load failed: game", "dependent load failure should be reported");
+
+    expect(backend->unload_calls.size() == 3, "all affected modules should have been unloaded before reload");
+    expect(backend->unload_calls[0] == "ui", "ui unload before failed reload");
+    expect(backend->unload_calls[1] == "game", "game unload before failed reload");
+    expect(backend->unload_calls[2] == "core", "core unload before failed reload");
+    expect(backend->load_calls.size() == 2, "reload should stop at failed dependent");
+    expect(backend->load_calls[0] == "core", "core should reload before dependent failure");
+    expect(backend->load_calls[1] == "game", "game load should fail");
+
+    expect(runtime.find("core")->state == ModuleState::Loaded, "core remains loaded after dependent failure");
+    expect(runtime.find("game")->state == ModuleState::Failed, "failed dependent should be marked failed");
+    expect(runtime.find("ui")->state == ModuleState::Unloaded, "later dependent remains unloaded");
 }
 
 void test_cycle_detection() {
@@ -304,6 +459,86 @@ void test_discovery_ignores_configured_roots() {
     expect(discovered_count == 1, "only non-ignored module should be discovered");
 }
 
+void test_staged_cpp_unload_runs_cleanup_before_close() {
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "native.module",
+        "name: native\n"
+        "build:\n"
+        "  output: build/libnative.so\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakeStagedCppBackend>();
+    runtime.register_backend(backend);
+
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_close = [backend](const ModuleRecord& record, std::string& error) {
+        (void)error;
+        backend->order.push_back("cleanup:" + record.spec.id);
+        return true;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+
+    runtime.discover(tmp.path);
+    expect(runtime.load_module("native"), "native load should succeed");
+    expect(runtime.unload_module("native"), "native unload should succeed");
+
+    expect(backend->order.size() == 4, "staged unload order event count");
+    expect(backend->order[0] == "load:native", "staged load order");
+    expect(backend->order[1] == "begin:native", "begin_unload before cleanup");
+    expect(backend->order[2] == "cleanup:native", "cleanup before finish_unload");
+    expect(backend->order[3] == "finish:native", "finish_unload after cleanup");
+
+    const ModuleRecord* record = runtime.find("native");
+    expect(record != nullptr && record->state == ModuleState::Unloaded, "native unloaded after staged cleanup");
+    expect(record != nullptr && !record->handle, "native handle reset after staged finish");
+}
+
+void test_staged_cpp_unload_keeps_handle_when_cleanup_fails() {
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "native.module",
+        "name: native\n"
+        "build:\n"
+        "  output: build/libnative.so\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakeStagedCppBackend>();
+    runtime.register_backend(backend);
+
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_close = [backend](const ModuleRecord& record, std::string& error) {
+        backend->order.push_back("cleanup:" + record.spec.id);
+        error = "cleanup failed";
+        return false;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+
+    runtime.discover(tmp.path);
+    expect(runtime.load_module("native"), "native load before failed cleanup should succeed");
+    expect(!runtime.unload_module("native"), "native unload should fail when cleanup fails");
+
+    expect(backend->order.size() == 3, "failed cleanup order event count");
+    expect(backend->order[0] == "load:native", "failed cleanup load order");
+    expect(backend->order[1] == "begin:native", "failed cleanup begin order");
+    expect(backend->order[2] == "cleanup:native", "failed cleanup before skipped finish");
+
+    const ModuleRecord* record = runtime.find("native");
+    expect(record != nullptr && record->state == ModuleState::Failed, "native marked failed after cleanup failure");
+    expect(record != nullptr && record->handle, "native handle retained when cleanup fails");
+    expect(runtime.last_error() == "cleanup failed", "cleanup failure propagated to last_error");
+
+    const size_t order_after_failed_unload = backend->order.size();
+    expect(!runtime.load_module("native"), "load should be blocked while failed module retains handle");
+    expect(backend->order.size() == order_after_failed_unload, "blocked load must not call backend load");
+}
+
 } // namespace
 
 TEST_CASE("module runtime parses descriptors and discovers modules") {
@@ -312,6 +547,18 @@ TEST_CASE("module runtime parses descriptors and discovers modules") {
 
 TEST_CASE("module runtime respects load order and unload guards") {
     test_load_order_and_unload_guard();
+}
+
+TEST_CASE("module runtime cascade reload unloads dependents before dependencies") {
+    test_cascade_reload_unloads_dependents_before_dependency();
+}
+
+TEST_CASE("module runtime cascade reload does not load inactive dependents") {
+    test_cascade_reload_leaves_unloaded_dependents_unloaded();
+}
+
+TEST_CASE("module runtime cascade reload stops on dependent load failure") {
+    test_cascade_reload_stops_on_dependent_load_failure();
 }
 
 TEST_CASE("module runtime rejects dependency cycles") {
@@ -328,6 +575,14 @@ TEST_CASE("module runtime ignores dist build output") {
 
 TEST_CASE("module runtime ignores configured discovery roots") {
     test_discovery_ignores_configured_roots();
+}
+
+TEST_CASE("module runtime stages C++ unload cleanup before native close") {
+    test_staged_cpp_unload_runs_cleanup_before_close();
+}
+
+TEST_CASE("module runtime keeps native handle loaded when C++ cleanup fails") {
+    test_staged_cpp_unload_keeps_handle_when_cleanup_fails();
 }
 
 TEST_CASE("module text diagnostics are sanitized to utf8") {

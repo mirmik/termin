@@ -46,6 +46,7 @@ public:
     bool load_module(const std::string& module_id);
     bool unload_module(const std::string& module_id);
     bool reload_module(const std::string& module_id);
+    bool reload_module_with_dependents(const std::string& module_id);
     bool needs_rebuild(const std::string& module_id);
     bool build_module(const std::string& module_id);
     bool clean_module(const std::string& module_id);
@@ -60,6 +61,18 @@ private:
     const CppModuleCallbacks* get_cpp_callbacks() const;
     const PythonModuleCallbacks* get_python_callbacks() const;
     bool build_load_order(std::vector<ModuleRecord*>& ordered, std::string& error);
+    bool build_reload_order_with_loaded_dependents(
+        const std::string& module_id,
+        std::vector<std::string>& ordered,
+        std::string& error
+    );
+    bool visit_reload_module(
+        const std::string& module_id,
+        const std::unordered_map<std::string, bool>& affected,
+        std::unordered_map<std::string, int>& marks,
+        std::vector<std::string>& ordered,
+        std::string& error
+    );
     bool visit_module(
         ModuleRecord& record,
         std::unordered_map<std::string, int>& marks,
@@ -67,6 +80,11 @@ private:
         std::string& error
     );
     void refresh_spec(ModuleRecord& record);
+    std::shared_ptr<IModuleReloadState> capture_reload_state(const ModuleRecord& record) const;
+    bool restore_reload_state(
+        const std::string& module_id,
+        const std::shared_ptr<IModuleReloadState>& reload_state
+    );
     IModuleBackend* get_backend(ModuleKind kind) const;
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;

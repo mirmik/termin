@@ -218,10 +218,23 @@ bool CppModuleBackend::unload(
     ModuleRecord& record,
     const ModuleEnvironment& environment
 ) {
+    if (!begin_unload(record, environment)) {
+        return false;
+    }
+    return finish_unload(record, environment);
+}
+
+bool CppModuleBackend::begin_unload(
+    ModuleRecord& record,
+    const ModuleEnvironment& environment
+) {
     (void)environment;
 
     auto handle = std::dynamic_pointer_cast<CppModuleHandle>(record.handle);
     if (!handle) {
+        return true;
+    }
+    if (handle->shutdown_called) {
         return true;
     }
 
@@ -229,8 +242,23 @@ bool CppModuleBackend::unload(
     if (shutdown_fn != nullptr) {
         shutdown_fn();
     }
+    handle->shutdown_called = true;
+    return true;
+}
+
+bool CppModuleBackend::finish_unload(
+    ModuleRecord& record,
+    const ModuleEnvironment& environment
+) {
+    (void)environment;
+
+    auto handle = std::dynamic_pointer_cast<CppModuleHandle>(record.handle);
+    if (!handle) {
+        return true;
+    }
 
     unload_shared_library(handle->native_handle);
+    handle->native_handle = nullptr;
     return true;
 }
 
