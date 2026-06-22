@@ -538,6 +538,13 @@ public static class TerminCore
     [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_string", CharSet = CharSet.Ansi)]
     public static extern IntPtr ComponentGetFieldString(IntPtr component, string path);
 
+    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_string_buffer", CharSet = CharSet.Ansi)]
+    public static extern nuint ComponentGetFieldStringBuffer(
+        IntPtr component,
+        string path,
+        [Out] byte[] buffer,
+        nuint bufferSize);
+
     // ========================================================================
     // Pass Registry
     // ========================================================================
