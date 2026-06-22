@@ -289,6 +289,7 @@ def test_profile_build_routes_profile_shader_targets(tmp_path: Path, monkeypatch
         )
 
     monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+    monkeypatch.setattr(profile_build, "_d3d11_shader_compiler_available", lambda sdk_root: True)
 
     assert profile_build.main(
         [
@@ -406,6 +407,41 @@ def test_profile_build_rejects_invalid_shader_targets_before_wrapper(
 
     profile = profile_build.load_build_profile(project, profiles_path, "dev")
     with pytest.raises(profile_build.ProfileBuildError, match=message):
+        profile_build.build_profile(profile)
+
+    assert calls == []
+
+
+def test_profile_build_rejects_d3d11_without_fxc_before_wrapper(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                    "shader_targets": ["vulkan", "opengl", "d3d11"],
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+    monkeypatch.setattr(profile_build, "_d3d11_shader_compiler_available", lambda sdk_root: False)
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    with pytest.raises(profile_build.ProfileBuildError, match="requests shader target 'd3d11'.*fxc"):
         profile_build.build_profile(profile)
 
     assert calls == []

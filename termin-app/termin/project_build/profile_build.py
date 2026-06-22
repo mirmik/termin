@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -239,15 +241,19 @@ def normalize_profile_build_request(
 
     android = _optional_object(profile.data, "android", context=f"profile '{profile.name}'")
     openxr = _optional_object(profile.data, "openxr", context=f"profile '{profile.name}'")
+    shader_compiler_path = _profile_path(profile, "shader_compiler", shader_compiler)
+    shader_targets = _profile_shader_targets(profile)
+    sdk_root = _desktop_path(profile, "sdk_root") if profile.target == "desktop" else None
+    _validate_shader_target_tools(profile, shader_targets, shader_compiler_path, sdk_root)
 
     return ProfileBuildRequest(
         name=profile.name,
         target=profile.target,
         context=context,
-        shader_compiler=_profile_path(profile, "shader_compiler", shader_compiler),
+        shader_compiler=shader_compiler_path,
         default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
-        shader_targets=_profile_shader_targets(profile),
-        sdk_root=_desktop_path(profile, "sdk_root") if profile.target == "desktop" else None,
+        shader_targets=shader_targets,
+        sdk_root=sdk_root,
         termin_root=_target_termin_root(profile, android),
         build_script=_target_build_script(profile, android, openxr),
         gradle=_android_path(profile, android, "gradle")
@@ -493,6 +499,50 @@ def _profile_shader_targets(profile: BuildProfile) -> tuple[str, ...] | None:
     if not normalized:
         raise ProfileBuildError(f"profile '{profile.name}' field 'shader_targets' must not be empty")
     return tuple(normalized)
+
+
+def _validate_shader_target_tools(
+    profile: BuildProfile,
+    shader_targets: tuple[str, ...] | None,
+    shader_compiler: Path | None,
+    sdk_root: Path | None,
+) -> None:
+    if profile.target != "desktop":
+        return
+    if shader_targets is None or "d3d11" not in shader_targets:
+        return
+    if shader_compiler is not None:
+        return
+    if _d3d11_shader_compiler_available(sdk_root):
+        return
+    raise ProfileBuildError(
+        f"profile '{profile.name}' requests shader target 'd3d11', but fxc was not found. "
+        "D3D11 shader artifacts require TERMIN_FXC, fxc in PATH, or fxc under TERMIN_SDK/bin. "
+        "For a Linux desktop build, use shader_targets [\"vulkan\", \"opengl\"] or build the "
+        "D3D11 artifacts on a Windows SDK host."
+    )
+
+
+def _d3d11_shader_compiler_available(sdk_root: Path | None) -> bool:
+    explicit = os.environ.get("TERMIN_FXC")
+    if explicit:
+        return Path(explicit).is_file()
+    if shutil.which("fxc") is not None:
+        return True
+
+    sdk_candidates = []
+    if sdk_root is not None:
+        sdk_candidates.append(sdk_root)
+    env_sdk = os.environ.get("TERMIN_SDK")
+    if env_sdk:
+        sdk_candidates.append(Path(env_sdk))
+    for sdk in sdk_candidates:
+        if (sdk / "bin" / "fxc").is_file() or (sdk / "bin" / "fxc.exe").is_file():
+            return True
+
+    if os.name == "nt":
+        return True
+    return False
 
 
 def _android_string(android: Mapping[str, Any], key: str, default: str) -> str:
