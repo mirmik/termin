@@ -62,6 +62,11 @@ def main():
         help="Window title",
     )
     parser.add_argument(
+        "--windowed",
+        action="store_true",
+        help="Start in a normal window instead of fullscreen desktop mode",
+    )
+    parser.add_argument(
         "--headless",
         action="store_true",
         help="Run project scene update loop without window, RenderingManager, or rendering",
@@ -143,6 +148,7 @@ def main():
             width=args.width,
             height=args.height,
             title=args.title,
+            fullscreen=not args.windowed,
             mcp_enabled=args.mcp,
             mcp_options=mcp_options,
         )
@@ -177,6 +183,7 @@ def main():
             width=args.width,
             height=args.height,
             title=args.title,
+            fullscreen=not args.windowed,
             mcp_enabled=args.mcp,
             mcp_options=mcp_options,
         )
@@ -225,6 +232,7 @@ def main():
         width=args.width,
         height=args.height,
         title=args.title,
+        fullscreen=not args.windowed,
         mcp_enabled=args.mcp,
         mcp_options=mcp_options,
     )

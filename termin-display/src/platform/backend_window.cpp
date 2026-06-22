@@ -363,6 +363,16 @@ void SDLBackendWindow::maximize() {
     }
 }
 
+void SDLBackendWindow::set_fullscreen(bool enabled) {
+    if (!window_) {
+        return;
+    }
+    const Uint32 flags = enabled ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0;
+    if (SDL_SetWindowFullscreen(window_, flags) != 0) {
+        tc_log(TC_LOG_ERROR, "[BackendWindow] SDL_SetWindowFullscreen failed: %s", SDL_GetError());
+    }
+}
+
 void SDLBackendWindow::set_always_on_top(bool enabled) {
     if (!window_) {
         return;

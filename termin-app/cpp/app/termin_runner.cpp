@@ -261,6 +261,7 @@ void print_help() {
         << "  --width <pixels>          Forward to termin.player.\n"
         << "  --height <pixels>         Forward to termin.player.\n"
         << "  --title <text>            Forward to termin.player.\n"
+        << "  --windowed                Forward to termin.player normal-window mode.\n"
         << "  --mcp                     Enable player MCP diagnostics endpoint.\n"
         << "  --mcp-host <host>         Forward player MCP bind host.\n"
         << "  --mcp-port <port>         Forward player MCP bind port.\n"
@@ -375,7 +376,8 @@ ParsedArgs parse_args(int argc, char** argv) {
                 throw std::runtime_error("scene specified both positionally and with --scene");
             }
             parsed.options.scene_override = take_value(argc, argv, i, arg);
-        } else if (arg == "--headless" || arg == "--no-assets" || arg == "--no-modules") {
+        } else if (arg == "--headless" || arg == "--no-assets" ||
+                   arg == "--no-modules" || arg == "--windowed") {
             parsed.options.player_args.emplace_back(arg);
         } else if (arg == "--frames" || arg == "--dt") {
             parsed.options.player_args.emplace_back(arg);

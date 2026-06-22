@@ -32,6 +32,7 @@ public:
     virtual void set_should_close(bool v) = 0;
 
     virtual void maximize() = 0;
+    virtual void set_fullscreen(bool enabled) = 0;
     virtual void close() = 0;
     virtual void poll_events() = 0;
     virtual std::pair<int, int> framebuffer_size() const = 0;
