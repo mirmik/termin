@@ -134,7 +134,6 @@ void test_descriptor_parsing_and_discovery() {
     write_text_file(
         tmp.path / "alpha.module",
         "name: alpha\n"
-        "components: [AlphaComponent]\n"
         "build:\n"
         "  command:\n"
         "    linux: cmake --build build --target ${name}\n"
@@ -162,7 +161,6 @@ void test_descriptor_parsing_and_discovery() {
     const ModuleRecord* alpha = runtime.find("alpha");
     expect(alpha != nullptr, "alpha should be discovered");
     expect(alpha->spec.kind == ModuleKind::Cpp, "alpha kind");
-    expect(alpha->spec.components.size() == 1 && alpha->spec.components[0] == "AlphaComponent", "alpha components");
 
     auto alpha_config = std::dynamic_pointer_cast<CppModuleConfig>(alpha->spec.config);
     expect(alpha_config != nullptr, "alpha config type");
@@ -190,6 +188,26 @@ void test_descriptor_parsing_and_discovery() {
         }
     }
     expect(discovered_count == 2, "two discovered events expected");
+}
+
+void test_descriptor_rejects_explicit_components() {
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "legacy.pymodule",
+        "name: legacy\n"
+        "root: .\n"
+        "packages: [legacy]\n"
+        "components: [LegacyComponent]\n"
+    );
+
+    ModuleRuntime runtime;
+    make_runtime(runtime);
+    runtime.discover(tmp.path);
+
+    expect(runtime.last_error().find("Field 'components' is no longer supported") != std::string::npos,
+           "components field should be rejected");
+    expect(runtime.find("legacy") == nullptr, "legacy module should not be discovered");
 }
 
 void test_load_order_and_unload_guard() {
@@ -543,6 +561,10 @@ void test_staged_cpp_unload_keeps_handle_when_cleanup_fails() {
 
 TEST_CASE("module runtime parses descriptors and discovers modules") {
     test_descriptor_parsing_and_discovery();
+}
+
+TEST_CASE("module runtime rejects explicit component descriptor lists") {
+    test_descriptor_rejects_explicit_components();
 }
 
 TEST_CASE("module runtime respects load order and unload guards") {

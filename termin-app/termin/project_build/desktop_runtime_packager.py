@@ -192,8 +192,10 @@ def _copy_python_home(
         return _PythonRuntimeCopyResult(home=target, site_packages=site_packages)
 
     if (windows_python_lib / "os.py").is_file():
+        _replace_dir(windows_python_home)
         target_lib = windows_python_home / "Lib"
         _copytree_clean(windows_python_lib, target_lib)
+        _copy_windows_python_runtime_support(sdk_root, windows_python_home)
         site_packages = target_lib / "site-packages"
         _copy_sdk_python_overlay(sdk_root, site_packages)
         return _PythonRuntimeCopyResult(home=windows_python_home, site_packages=site_packages)
@@ -207,6 +209,19 @@ def _copy_python_home(
         )
     )
     return None
+
+
+def _copy_windows_python_runtime_support(sdk_root: Path, python_home: Path) -> None:
+    source_home = sdk_root / "python"
+    for runtime_dir in ("DLLs", "tcl"):
+        source = source_home / runtime_dir
+        if source.is_dir():
+            _copytree_clean(source, python_home / runtime_dir)
+
+    for pattern in ("python.exe", "pythonw.exe", "python*.dll"):
+        for source in source_home.glob(pattern):
+            if source.is_file():
+                shutil.copy2(source, python_home / source.name)
 
 
 def _posix_python_homes(sdk_root: Path) -> list[Path]:

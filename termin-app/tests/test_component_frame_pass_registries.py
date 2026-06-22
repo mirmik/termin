@@ -103,6 +103,7 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
     assert component_name in registrations.components
     assert component_name in registrations.inspect_types
     assert component_registry.has(component_name)
+    assert component_name in component_registry.list_owned(module_id)
     assert inspect_registry.has_type(component_name)
 
     unregister_module_owner(module_id)

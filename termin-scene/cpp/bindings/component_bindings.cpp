@@ -95,11 +95,16 @@ void bind_component_registry(nb::module_& m) {
         }, nb::arg("name"))
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))
+        .def("set_registration_owner", &ComponentRegistry::set_registration_owner, nb::arg("owner"))
+        .def("registration_owner", &ComponentRegistry::registration_owner)
+        .def("owner_of", &ComponentRegistry::owner_of, nb::arg("name"))
         .def_prop_ro("component_names", [](ComponentRegistry& reg) {
             return reg.list_all();
         })
         .def("list_all", &ComponentRegistry::list_all)
         .def("list_native", &ComponentRegistry::list_native)
+        .def("list_owned", &ComponentRegistry::list_owned, nb::arg("owner"))
+        .def("unregister_owner", &ComponentRegistry::unregister_owner, nb::arg("owner"))
         .def("list_python", [](ComponentRegistry& /*self*/) {
             return ComponentRegistryPython::list_python();
         })

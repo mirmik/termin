@@ -92,12 +92,7 @@ def _write_scene_with_physics_world(
     )
 
 
-def _write_hot_reload_project(
-    project_path: Path,
-    *,
-    components: list[str] | None = None,
-) -> None:
-    declared_components = ["HotReloadProbeComponent"] if components is None else components
+def _write_hot_reload_project(project_path: Path) -> None:
     (project_path / "gameplay").mkdir()
     (project_path / "gameplay.pymodule").write_text(
         "\n".join(
@@ -106,7 +101,6 @@ def _write_hot_reload_project(
                 "type: python",
                 "root: .",
                 "packages: [gameplay]",
-                "components: [" + ", ".join(declared_components) + "]",
                 "",
             ]
         ),
@@ -216,20 +210,17 @@ def _reset_project_modules_runtime() -> None:
     modules_runtime._instance = None
 
 
-def test_python_module_load_rejects_component_descriptor_mismatch(tmp_path: Path) -> None:
+def test_python_module_load_discovers_components_without_descriptor_list(tmp_path: Path) -> None:
     _reset_project_modules_runtime()
-    _write_hot_reload_project(tmp_path, components=["MissingComponent"])
+    _write_hot_reload_project(tmp_path)
 
     try:
         project_modules = modules_runtime.get_project_modules_runtime()
 
-        assert not project_modules.load_project(tmp_path)
+        assert project_modules.load_project(tmp_path), project_modules.last_error
         record = project_modules.find("gameplay")
         assert record is not None
-        assert record.state.name == "Failed"
-        assert "component declaration mismatch" in project_modules.last_error
-        assert "declared but not registered: MissingComponent" in project_modules.last_error
-        assert "registered but not declared: HotReloadProbeComponent" in project_modules.last_error
+        assert record.state.name == "Loaded"
     finally:
         _reset_project_modules_runtime()
 

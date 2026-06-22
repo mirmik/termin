@@ -33,6 +33,7 @@ public:
     void set_registration_owner(const std::string& owner);
     std::string registration_owner() const;
     std::string owner_of(const std::string& name) const;
+    std::vector<std::string> list_owned(const std::string& owner) const;
     size_t unregister_owner(const std::string& owner);
 
     // Queries

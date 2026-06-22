@@ -127,7 +127,7 @@ class ModulesPanel(VStack):
 
         header.add_child(_hdr("Module", stretch=True))
         header.add_child(_hdr("Status", 70))
-        header.add_child(_hdr("Kind / Components", 260))
+        header.add_child(_hdr("Kind", 260))
         self.add_child(header)
 
         list_scroll = ScrollArea()
@@ -252,7 +252,7 @@ class ModulesPanel(VStack):
             row = self._make_module_row(
                 record.id,
                 record.state.name.lower(),
-                ", ".join(record.components) if record.components else record.kind.name.lower(),
+                record.kind.name.lower(),
             )
             node = TreeNode(content=row)
             node.data = record.id
@@ -268,7 +268,7 @@ class ModulesPanel(VStack):
                 parts.append(f"{failed_count} failed")
             self._status_label.text = ", ".join(parts)
 
-    def _make_module_row(self, name: str, status: str, components: str) -> Widget:
+    def _make_module_row(self, name: str, status: str, details: str) -> Widget:
         row = HStack()
         row.spacing = 4
 
@@ -286,11 +286,11 @@ class ModulesPanel(VStack):
         status_lbl.preferred_width = px(70)
         row.add_child(status_lbl)
 
-        comp_lbl = Label()
-        comp_lbl.text = components
-        comp_lbl.font_size = 12
-        comp_lbl.text_color = _TEXT_DIM
-        comp_lbl.preferred_width = px(260)
-        row.add_child(comp_lbl)
+        details_lbl = Label()
+        details_lbl.text = details
+        details_lbl.font_size = 12
+        details_lbl.text_color = _TEXT_DIM
+        details_lbl.preferred_width = px(260)
+        row.add_child(details_lbl)
 
         return row
