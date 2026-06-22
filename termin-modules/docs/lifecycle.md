@@ -160,3 +160,20 @@ Dependents, которые не были загружены к моменту re
 дескриптора вызывает load/reload descriptor, а изменение `.py` файла внутри
 пакета из `packages` перезагружает владеющий Python-модуль. Loose `.py` файлы
 вне `.pymodule` продолжают обрабатываться legacy component scanner-ом.
+
+## 8. Smoke-проверки
+
+Для проверки editor-process hot reload есть два headless smoke-скрипта:
+
+- `scripts/smoke-python-module-hot-reload` проверяет Python `.pymodule` reload,
+  failed reload degradation в `UnknownComponent` и последующее восстановление.
+- `scripts/smoke-cpp-module-cascade-hot-reload` проверяет C++ dependency cascade
+  reload внутри editor process: `native_leaf` зависит от `native_core`, reload
+  `native_core` должен выгрузить dependent раньше dependency, загрузить обратно
+  в dependency order и восстановить live C++ scene component.
+
+Оба скрипта используют `scripts/termin-editor-mcp`; на headless Linux они
+автоматически запускают editor через `xvfb-run`, если нет активного display.
+Они также входят в центральный `./run-tests.sh` после C++ и Python тестов.
+Для окружений без editor SDK/editor MCP можно временно пропустить эту стадию
+через `./run-tests.sh --no-editor-smoke`.
