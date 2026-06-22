@@ -82,6 +82,25 @@ the main editor thread.
 `execute_python_script` executes Python inside the editor namespace. It is meant
 for diagnostics and automation while the editor is running.
 
+## Smoke Tests
+
+The repository includes an editor-process smoke test for Python `.pymodule`
+hot reload:
+
+```bash
+scripts/smoke-python-module-hot-reload
+```
+
+The script creates a temporary project, starts `sdk/bin/termin_editor` with MCP
+enabled, changes a Python module package file on disk, and verifies through MCP
+that the live editor scene degrades to `UnknownComponent` on a failed reload
+and restores the Python component after a successful reload.
+
+On headless Linux the script uses `xvfb-run` automatically when no
+`DISPLAY`/`WAYLAND_DISPLAY` is available. Install the `xvfb` package or run the
+script in a graphical session. Use `--keep-temp` to keep the generated project
+and editor log for debugging.
+
 `capture_editor_screenshot` captures the editor viewport FBO as a PNG file. It
 accepts:
 

@@ -1,0 +1,501 @@
+#!/usr/bin/env python3
+"""Run an editor-process smoke test for Python .pymodule hot reload."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import textwrap
+import time
+from pathlib import Path
+from typing import Any, Callable
+
+
+class SmokeError(RuntimeError):
+    pass
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _write_component_sources(project_root: Path, *, step: int, mtime: int) -> None:
+    package = project_root / "gameplay"
+    version_path = package / "version.py"
+    component_path = package / "components.py"
+
+    version_path.write_text(f"STEP = {step}\n", encoding="utf-8")
+    component_path.write_text(
+        "\n".join(
+            [
+                "from termin.inspect import InspectField",
+                "from termin.scene import PythonComponent",
+                "from .version import STEP",
+                "",
+                "",
+                "class HotReloadProbeComponent(PythonComponent):",
+                "    inspect_fields = {",
+                "        'value': InspectField(path='value', label='Value', kind='int'),",
+                "    }",
+                "",
+                "    def __init__(self):",
+                "        super().__init__()",
+                "        self.value = 0",
+                "        self.step = STEP",
+                "",
+                "    def update(self, dt: float) -> None:",
+                "        self.value += STEP",
+                "        self.step = STEP",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    os.utime(version_path, (mtime, mtime))
+    os.utime(component_path, (mtime, mtime))
+
+
+def _write_broken_component_source(project_root: Path, *, mtime: int) -> None:
+    component_path = project_root / "gameplay" / "components.py"
+    component_path.write_text(
+        "\n".join(
+            [
+                "from termin.scene import PythonComponent",
+                "",
+                "",
+                "class HotReloadProbeComponent(PythonComponent):",
+                "    def update(self, dt: float) -> None:",
+                "        self.value += ",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    os.utime(component_path, (mtime, mtime))
+
+
+def _write_project(project_root: Path) -> Path:
+    project_root.mkdir(parents=True, exist_ok=True)
+    (project_root / "gameplay").mkdir()
+    project_file = project_root / "HotReloadSmoke.terminproj"
+    project_file.write_text(
+        json.dumps({"version": 1, "name": "HotReloadSmoke"}, indent=2),
+        encoding="utf-8",
+    )
+    (project_root / "gameplay.pymodule").write_text(
+        "\n".join(
+            [
+                "name: gameplay",
+                "type: python",
+                "root: .",
+                "packages: [gameplay]",
+                "components: [HotReloadProbeComponent]",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (project_root / "gameplay" / "__init__.py").write_text(
+        "from .components import HotReloadProbeComponent\n",
+        encoding="utf-8",
+    )
+    _write_component_sources(project_root, step=1, mtime=1_800_000_001)
+    (project_root / "Main.scene").write_text(
+        json.dumps(
+            {
+                "scene": {
+                    "entities": [
+                        {
+                            "uuid": "00000000-0000-0000-7000-000000000001",
+                            "name": "Probe",
+                            "priority": 0,
+                            "visible": True,
+                            "enabled": True,
+                            "pickable": True,
+                            "selectable": True,
+                            "layer": 0,
+                            "flags": 0,
+                            "pose": {
+                                "position": [0, 0, 0],
+                                "rotation": [0, 0, 0, 1],
+                            },
+                            "scale": [1, 1, 1],
+                            "components": [
+                                {
+                                    "type": "HotReloadProbeComponent",
+                                    "data": {"value": 5},
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    settings_dir = project_root / "project_settings"
+    settings_dir.mkdir()
+    (settings_dir / "project.json").write_text(
+        json.dumps(
+            {
+                "render_sync_mode": "none",
+                "build_output_dir": "dist",
+                "ignored_resource_paths": [],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (settings_dir / ".editor_state.json").write_text(
+        json.dumps({"last_scene": str(project_root / "Main.scene")}, indent=2),
+        encoding="utf-8",
+    )
+    return project_file
+
+
+def _write_probe(tmp_dir: Path) -> Path:
+    probe = tmp_dir / "probe_editor_hot_reload.py"
+    probe.write_text(
+        textwrap.dedent(
+            """
+            import json
+
+            from termin.modules import get_project_modules_runtime
+
+            runtime = get_project_modules_runtime()
+            runtime.auto_reload_enabled = True
+
+            poll_error = None
+            try:
+                editor._project_file_watcher.poll()
+            except Exception as exc:
+                poll_error = f"{type(exc).__name__}: {exc}"
+
+            record = runtime.find("gameplay")
+            component_count = 0
+            component_value = None
+            component_step = None
+            component_module = None
+            unknown_count = 0
+            counts = {}
+
+            if scene is not None:
+                counts = dict(scene.get_component_type_counts())
+                unknown_count = int(counts.get("UnknownComponent", 0) or 0)
+                components = scene.get_components_of_type("HotReloadProbeComponent")
+                component_count = len(components)
+                if components:
+                    component = components[0]
+                    component_value = component.value
+                    component_step = component.step
+                    component_module = type(component).__module__
+
+            status = {
+                "project_path": project_path,
+                "scene_name": scene_name,
+                "has_scene": scene is not None,
+                "module_found": record is not None,
+                "module_state": None if record is None else record.state.name,
+                "module_error": "" if record is None else record.error_message,
+                "component_count": component_count,
+                "component_value": component_value,
+                "component_step": component_step,
+                "component_module": component_module,
+                "unknown_count": unknown_count,
+                "component_type_counts": counts,
+                "poll_error": poll_error,
+            }
+            print(json.dumps(status, sort_keys=True))
+            """
+        ).strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return probe
+
+
+def _run(
+    command: list[str],
+    *,
+    env: dict[str, str],
+    timeout: float,
+    cwd: Path,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+    if check and result.returncode != 0:
+        raise SmokeError(
+            "Command failed: "
+            + " ".join(command)
+            + f"\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    return result
+
+
+def _wait_for_mcp(helper: Path, session_file: Path, env: dict[str, str], timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    last_error = ""
+    while time.monotonic() < deadline:
+        if session_file.exists():
+            result = _run(
+                [str(helper), "--session", str(session_file), "tools-list"],
+                env=env,
+                timeout=5.0,
+                cwd=_repo_root(),
+                check=False,
+            )
+            if result.returncode == 0:
+                return
+            last_error = result.stderr or result.stdout
+        time.sleep(0.25)
+    raise SmokeError(f"Editor MCP endpoint did not become ready within {timeout:.1f}s: {last_error}")
+
+
+def _read_probe_status(
+    helper: Path,
+    session_file: Path,
+    probe: Path,
+    env: dict[str, str],
+) -> dict[str, Any]:
+    result = _run(
+        [str(helper), "--session", str(session_file), "exec-file", str(probe), "--timeout", "10"],
+        env=env,
+        timeout=15.0,
+        cwd=_repo_root(),
+    )
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if not lines:
+        raise SmokeError("Probe returned no output")
+    try:
+        status = json.loads(lines[-1])
+    except json.JSONDecodeError as exc:
+        raise SmokeError(f"Probe returned non-JSON output:\n{result.stdout}") from exc
+    if status.get("poll_error"):
+        raise SmokeError(f"Editor watcher poll failed: {status['poll_error']}")
+    return status
+
+
+def _wait_for_status(
+    description: str,
+    predicate: Callable[[dict[str, Any]], bool],
+    *,
+    helper: Path,
+    session_file: Path,
+    probe: Path,
+    env: dict[str, str],
+    timeout: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    last_status: dict[str, Any] | None = None
+    while time.monotonic() < deadline:
+        last_status = _read_probe_status(helper, session_file, probe, env)
+        if predicate(last_status):
+            return last_status
+        time.sleep(0.5)
+    formatted = json.dumps(last_status, indent=2, sort_keys=True)
+    raise SmokeError(f"Timed out waiting for {description}. Last status:\n{formatted}")
+
+
+def _editor_command(
+    editor: Path,
+    project_file: Path,
+    *,
+    require_xvfb: bool,
+    allow_xvfb: bool,
+) -> list[str]:
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return [str(editor), str(project_file)]
+
+    xvfb = shutil.which("xvfb-run")
+    if xvfb is not None and allow_xvfb:
+        return [
+            xvfb,
+            "-a",
+            "--server-args=-screen 0 1280x720x24",
+            str(editor),
+            str(project_file),
+        ]
+
+    if require_xvfb:
+        raise SmokeError(
+            "No DISPLAY/WAYLAND_DISPLAY is available and xvfb-run was not found. "
+            "Install xvfb or run with a graphical display."
+        )
+    return [str(editor), str(project_file)]
+
+
+def _terminate_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=8.0)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    process.wait(timeout=5.0)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--timeout", type=float, default=45.0, help="Per-stage wait timeout in seconds.")
+    parser.add_argument("--keep-temp", action="store_true", help="Keep the temporary project and logs.")
+    parser.add_argument(
+        "--no-xvfb",
+        action="store_true",
+        help="Do not wrap the editor in xvfb-run when no display is available.",
+    )
+    args = parser.parse_args()
+
+    root = _repo_root()
+    editor = root / "sdk" / "bin" / "termin_editor"
+    helper = root / "scripts" / "termin-editor-mcp"
+    if not editor.exists():
+        raise SmokeError(f"Editor executable not found: {editor}. Build the SDK first.")
+    if not helper.exists():
+        raise SmokeError(f"Editor MCP helper not found: {helper}")
+
+    tmp_handle = tempfile.TemporaryDirectory(prefix="termin-hot-reload-smoke-")
+    tmp_dir = Path(tmp_handle.name)
+    project_root = tmp_dir / "project"
+    session_file = tmp_dir / "editor-mcp.json"
+    editor_log = tmp_dir / "editor.log"
+    project_file = _write_project(project_root)
+    probe = _write_probe(tmp_dir)
+
+    env = os.environ.copy()
+    env["HOME"] = str(tmp_dir / "home")
+    env["TERMIN_EDITOR_MCP"] = "1"
+    env["TERMIN_EDITOR_MCP_PORT"] = "0"
+    env["TERMIN_EDITOR_MCP_SESSION_FILE"] = str(session_file)
+    env.setdefault("TERMIN_BACKEND", "opengl")
+    env.setdefault("TERMIN_SDK", str(root / "sdk"))
+
+    process: subprocess.Popen[str] | None = None
+    try:
+        command = _editor_command(
+            editor,
+            project_file,
+            require_xvfb=not args.no_xvfb,
+            allow_xvfb=not args.no_xvfb,
+        )
+        print("[smoke] project:", project_root)
+        print("[smoke] editor log:", editor_log)
+        print("[smoke] command:", " ".join(command))
+
+        with editor_log.open("w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(
+                command,
+                cwd=root,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+
+            _wait_for_mcp(helper, session_file, env, args.timeout)
+
+            initial = _wait_for_status(
+                "initial editor scene/module load",
+                lambda status: (
+                    status["has_scene"]
+                    and status["module_state"] == "Loaded"
+                    and status["component_count"] == 1
+                    and status["component_value"] == 5
+                    and status["component_step"] == 1
+                    and status["unknown_count"] == 0
+                ),
+                helper=helper,
+                session_file=session_file,
+                probe=probe,
+                env=env,
+                timeout=args.timeout,
+            )
+            print("[smoke] initial:", json.dumps(initial, sort_keys=True))
+
+            _write_broken_component_source(project_root, mtime=1_800_000_020)
+            failed = _wait_for_status(
+                "failed reload to degrade the component",
+                lambda status: (
+                    status["module_state"] == "Failed"
+                    and status["component_count"] == 0
+                    and status["unknown_count"] == 1
+                    and "Failed to import package 'gameplay'" in status["module_error"]
+                ),
+                helper=helper,
+                session_file=session_file,
+                probe=probe,
+                env=env,
+                timeout=args.timeout,
+            )
+            print("[smoke] failed reload:", json.dumps(failed, sort_keys=True))
+
+            _write_component_sources(project_root, step=10, mtime=1_800_000_030)
+            restored = _wait_for_status(
+                "successful reload to restore the component",
+                lambda status: (
+                    status["module_state"] == "Loaded"
+                    and status["component_count"] == 1
+                    and status["component_value"] == 5
+                    and status["component_step"] == 10
+                    and status["unknown_count"] == 0
+                ),
+                helper=helper,
+                session_file=session_file,
+                probe=probe,
+                env=env,
+                timeout=args.timeout,
+            )
+            print("[smoke] restored:", json.dumps(restored, sort_keys=True))
+
+        print("[smoke] PASS")
+        return 0
+    except Exception:
+        if process is not None and process.poll() is not None:
+            print(f"[smoke] editor exited with code {process.returncode}", file=sys.stderr)
+        if editor_log.exists():
+            print(f"[smoke] editor log tail ({editor_log}):", file=sys.stderr)
+            lines = editor_log.read_text(encoding="utf-8", errors="replace").splitlines()
+            for line in lines[-80:]:
+                print(line, file=sys.stderr)
+        raise
+    finally:
+        if process is not None:
+            _terminate_process(process)
+        if args.keep_temp:
+            print("[smoke] kept temp:", tmp_dir)
+        else:
+            tmp_handle.cleanup()
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except SmokeError as exc:
+        print(f"[smoke] FAIL: {exc}", file=sys.stderr)
+        raise SystemExit(1)
