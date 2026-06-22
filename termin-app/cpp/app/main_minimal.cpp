@@ -12,6 +12,7 @@
 #include <iostream>
 #include <filesystem>
 #include <cstdlib>
+#include <string>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,6 +21,7 @@
 #ifdef __linux__
 #include <unistd.h>
 #include <linux/limits.h>
+#include <link.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -58,6 +60,54 @@ static void configure_windows_sdl_dll_path(const fs::path& exe_dir,
         }
         _putenv_s("PYSDL2_DLL_PATH", dll_path.c_str());
     }
+}
+#endif
+
+#ifdef __linux__
+static bool should_override_pysdl2_dll_path(const char* current) {
+    if (current == nullptr || current[0] == '\0') {
+        return true;
+    }
+    std::string value(current);
+    return value.find("/site-packages/sdl2dll/dll") != std::string::npos
+        || value.find("\\site-packages\\sdl2dll\\dll") != std::string::npos;
+}
+
+static int find_loaded_sdl2_callback(dl_phdr_info* info, size_t, void* userdata) {
+    if (info == nullptr || info->dlpi_name == nullptr || info->dlpi_name[0] == '\0') {
+        return 0;
+    }
+
+    fs::path library_path(info->dlpi_name);
+    std::string filename = library_path.filename().string();
+    if (filename.rfind("libSDL2", 0) != 0) {
+        return 0;
+    }
+
+    auto* result = static_cast<std::string*>(userdata);
+    fs::path parent = library_path.parent_path();
+    if (!parent.empty()) {
+        *result = parent.string();
+        return 1;
+    }
+    return 0;
+}
+
+static void configure_linux_sdl_dll_path() {
+    const char* current = std::getenv("PYSDL2_DLL_PATH");
+    if (!should_override_pysdl2_dll_path(current)) {
+        return;
+    }
+
+    std::string sdl_dir;
+    dl_iterate_phdr(find_loaded_sdl2_callback, &sdl_dir);
+    if (sdl_dir.empty()) {
+        std::cerr << "Could not locate loaded libSDL2 for PySDL2; "
+                  << "Python may load pysdl2-dll's private SDL runtime" << std::endl;
+        return;
+    }
+
+    setenv("PYSDL2_DLL_PATH", sdl_dir.c_str(), 1);
 }
 #endif
 
@@ -114,6 +164,8 @@ int main(int argc, char* argv[]) {
     fs::path python_stdlib = find_python_stdlib(install_root);
 #ifdef _WIN32
     configure_windows_sdl_dll_path(exe_dir, python_stdlib);
+#elif defined(__linux__)
+    configure_linux_sdl_dll_path();
 #endif
 
     fs::path termin_path;
