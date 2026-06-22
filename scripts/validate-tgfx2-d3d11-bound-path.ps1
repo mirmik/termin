@@ -14,6 +14,8 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
+. (Join-Path $ScriptDir "Normalize-WindowsBuildEnvironment.ps1")
+Normalize-WindowsBuildEnvironment
 
 $isWindowsHost = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
     [System.Runtime.InteropServices.OSPlatform]::Windows)
