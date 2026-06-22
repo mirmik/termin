@@ -354,9 +354,7 @@ def _relative_tool_path(sdk_root: Path, value: Any) -> Path | None:
 def _tool_path(sdk_root: Path | None, name: str) -> Path | None:
     if sdk_root is None:
         return None
-    names = [name]
-    if os.name == "nt":
-        names.insert(0, f"{name}.exe")
+    names = [f"{name}.exe", name] if os.name == "nt" else [name, f"{name}.exe"]
     for candidate_name in names:
         candidate = sdk_root / "bin" / candidate_name
         if candidate.is_file():

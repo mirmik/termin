@@ -55,7 +55,7 @@ pip install --upgrade pip setuptools wheel nanobind
 # 4. Runtime and test dependencies
 echo ""
 echo "--- installing runtime and test dependencies ---"
-pip install numpy scipy Pillow pytest PyYAML pysdl2 pysdl2-dll ruff
+pip install -r "$SCRIPT_DIR/termin-app/requirements.txt" pytest ruff
 
 # 5. Locate and export TERMIN_SDK
 _sdk_valid() { [[ -d "$1/lib" ]]; }
