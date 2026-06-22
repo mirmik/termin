@@ -118,6 +118,7 @@ class PlayerRuntime:
         width: int = 1280,
         height: int = 720,
         title: str = "Termin Player",
+        fullscreen: bool = True,
         asset_manifest_path: str | Path | None = None,
         build_json_path: str | Path | None = None,
         mcp_enabled: bool = False,
@@ -128,6 +129,7 @@ class PlayerRuntime:
         self.width = width
         self.height = height
         self.title = title
+        self.fullscreen = bool(fullscreen)
         self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
         self.build_json_path = Path(build_json_path) if build_json_path is not None else None
         self.mcp_enabled = bool(mcp_enabled)
@@ -221,6 +223,8 @@ class PlayerRuntime:
 
         try:
             self.window = SDLBackendWindow(self.title, self.width, self.height)
+            if self.fullscreen:
+                self.window.set_fullscreen(True)
         except Exception as e:
             log.error(f"[PlayerRuntime] Failed to create backend window: {e}")
             return False
@@ -879,6 +883,7 @@ def run_project(
     width: int = 1280,
     height: int = 720,
     title: str = "Termin Player",
+    fullscreen: bool = True,
     mcp_enabled: bool = False,
     mcp_options: dict | None = None,
 ):
@@ -891,6 +896,7 @@ def run_project(
         width: Window width
         height: Window height
         title: Window title
+        fullscreen: Enable borderless desktop fullscreen after window creation
     """
     runtime = PlayerRuntime(
         project_path=project_path,
@@ -898,6 +904,7 @@ def run_project(
         width=width,
         height=height,
         title=title,
+        fullscreen=fullscreen,
         mcp_enabled=mcp_enabled,
         mcp_options=mcp_options,
     )
@@ -909,6 +916,7 @@ def run_build(
     width: int = 1280,
     height: int = 720,
     title: str = "Termin Player",
+    fullscreen: bool = True,
     mcp_enabled: bool = False,
     mcp_options: dict | None = None,
 ):
@@ -920,6 +928,7 @@ def run_build(
         width: Window width
         height: Window height
         title: Window title
+        fullscreen: Enable borderless desktop fullscreen after window creation
     """
     build_path = Path(build_json_path).resolve()
     with open(build_path, "r", encoding="utf-8") as f:
@@ -938,6 +947,7 @@ def run_build(
         width=width,
         height=height,
         title=title,
+        fullscreen=fullscreen,
         asset_manifest_path=asset_manifest,
         build_json_path=build_path,
         mcp_enabled=mcp_enabled,
@@ -951,6 +961,7 @@ def run_bundle(
     width: int = 1280,
     height: int = 720,
     title: str = "Termin Player",
+    fullscreen: bool = True,
     mcp_enabled: bool = False,
     mcp_options: dict | None = None,
 ):
@@ -997,6 +1008,7 @@ def run_bundle(
         width=width,
         height=height,
         title=title,
+        fullscreen=fullscreen,
         asset_manifest_path=manifest_path,
         build_json_path=app_path,
         mcp_enabled=mcp_enabled,

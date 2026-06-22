@@ -255,7 +255,11 @@ The host embeds CPython from `dist/<app>/lib/python3.10`, adds bundled
 `termin.player --bundle dist/<app>/app.json`.
 `--backend <name>` is consumed by the C++ host and translated to
 `TERMIN_BACKEND` before CPython is initialized; display options such as
-`--width`, `--height`, and `--title` are forwarded to the Python player.
+`--width`, `--height`, `--title`, and `--windowed` are forwarded to the Python
+player. By default the player switches the window to borderless desktop
+fullscreen after creating it; `--width` and `--height` define the normal-window
+size used when `--windowed` is passed and the initial size before the OS applies
+fullscreen mode.
 
 By default `run` does not rebuild implicitly and expects a packaged desktop
 bundle. Pass `--build-if-missing` to build when packaged output is absent, or
@@ -311,6 +315,7 @@ Useful run/play options:
 
 ```bash
 termin run dev --backend opengl --width 1600 --height 900 --title Chess
+termin run dev --windowed --width 1600 --height 900 --title Chess
 termin play Scenes/scene2.scene
 termin play --headless --frames 1 --no-assets --no-modules
 ```

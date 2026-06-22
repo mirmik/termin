@@ -216,6 +216,9 @@ void bind_sdl(nb::module_& m) {
             "Set the OS window title.")
         .def("maximize", &SDLBackendWindow::maximize,
              "Maximize the OS window via SDL_MaximizeWindow.")
+        .def("set_fullscreen", &SDLBackendWindow::set_fullscreen,
+             nb::arg("enabled"),
+             "Toggle borderless desktop fullscreen via SDL_SetWindowFullscreen.")
         .def("set_always_on_top", &SDLBackendWindow::set_always_on_top,
              nb::arg("enabled"),
              "Set whether the OS window should stay above normal windows.")
