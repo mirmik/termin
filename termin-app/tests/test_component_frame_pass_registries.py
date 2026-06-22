@@ -68,6 +68,49 @@ def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
     assert rm.list_frame_pass_names() == ["ProbeFramePass"]
 
 
+def test_module_owner_context_unregisters_python_component_registrations() -> None:
+    from termin.inspect import InspectField, InspectRegistry
+    from termin.scene import ComponentRegistry, PythonComponent
+    from termin_modules.module_context import (
+        module_import_context,
+        registrations_for_owner,
+        unregister_module_owner,
+    )
+
+    module_id = "owner_context_probe"
+    component_name = "OwnerContextProbeComponent"
+    component_registry = ComponentRegistry.instance()
+    inspect_registry = InspectRegistry.instance()
+
+    try:
+        component_registry.unregister_python(component_name)
+    except AttributeError:
+        component_registry.unregister(component_name)
+    inspect_registry.unregister_type(component_name)
+    unregister_module_owner(module_id)
+
+    with module_import_context(module_id):
+        class OwnerContextProbeComponent(PythonComponent):
+            inspect_fields = {
+                "value": InspectField(path="value", label="Value", kind="int")
+            }
+
+            def __init__(self):
+                super().__init__()
+                self.value = 7
+
+    registrations = registrations_for_owner(module_id)
+    assert component_name in registrations.components
+    assert component_name in registrations.inspect_types
+    assert component_registry.has(component_name)
+    assert inspect_registry.has_type(component_name)
+
+    unregister_module_owner(module_id)
+
+    assert not component_registry.has(component_name)
+    assert not inspect_registry.has_type(component_name)
+
+
 def test_default_builtin_specs_live_below_app_layer() -> None:
     from termin.default_assets.builtin_types import (
         get_default_builtin_component_specs,

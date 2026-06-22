@@ -14,6 +14,9 @@ public:
     // Register a Python component class
     static void register_python(const std::string& name, nb::object cls, const char* parent = nullptr);
 
+    // Unregister a Python component class and release the stored Python class object
+    static void unregister_python(const std::string& name);
+
     // Create tc_component* for any component type (C++ or Python)
     static tc_component* create_tc_component(const std::string& name);
 

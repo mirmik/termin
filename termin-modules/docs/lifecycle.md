@@ -92,8 +92,15 @@
 
 Для Python:
 
-- импортированные модули удаляются из `sys.modules`
+- импортированный package subtree удаляется из `sys.modules`
 - добавленные пути удаляются из `sys.path`
+- регистрации, выполненные под module import context, снимаются по `module_id`
+
+Python backend включает `termin_modules.module_context` на время импорта
+пакетов из `.pymodule`. Компоненты, inspect-типы, Python kind handlers и
+editor-side class registries, которые умеют читать этот context, помечают
+регистрации владельцем модуля. При unload backend сначала вызывает owner
+cleanup, затем удаляет package subtree из `sys.modules`.
 
 ## 7. reload
 
@@ -105,3 +112,9 @@
 4. после успешной перезагрузки вызывается integration hook `after_reload`
 
 То есть сейчас у backend-ов нет отдельного специализированного `reload`; runtime собирает его из `unload + load`.
+
+Если восстановление state после reload падает, runtime переводит модуль в
+`Failed` и публикует `Failed` event. Старую версию модуля runtime не пытается
+автоматически оживлять; scene state должен оставаться в безопасном degraded
+состоянии (`UnknownComponent`) до следующего успешного reload или ручного
+восстановления.

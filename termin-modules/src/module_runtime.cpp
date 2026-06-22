@@ -413,6 +413,12 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
             std::string error;
             if (!_cpp_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
                 _last_error = error.empty() ? "Failed to restore C++ reload state" : error;
+                ModuleRecord* failed = find_mutable_record(_records, module_id);
+                if (failed != nullptr) {
+                    failed->state = ModuleState::Failed;
+                    failed->error_message = _last_error;
+                }
+                emit(ModuleEventKind::Failed, module_id, _last_error);
                 return false;
             }
         }
@@ -424,6 +430,12 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
             std::string error;
             if (!_python_callbacks.restore_reload_state(*reloaded, reload_state, error)) {
                 _last_error = error.empty() ? "Failed to restore Python reload state" : error;
+                ModuleRecord* failed = find_mutable_record(_records, module_id);
+                if (failed != nullptr) {
+                    failed->state = ModuleState::Failed;
+                    failed->error_message = _last_error;
+                }
+                emit(ModuleEventKind::Failed, module_id, _last_error);
                 return false;
             }
         }
