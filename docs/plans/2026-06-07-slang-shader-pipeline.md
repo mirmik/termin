@@ -357,8 +357,8 @@ Status:
   option, while keeping `glsl` as the default.
 - Tests cover Slang default artifact layout and explicit rejection of an
   unsupported default shader language.
-- Verified with `slangc` 2026.5.2 from the official GitHub release, installed
-  as an external host tool under `~/soft` and exposed through `TERMIN_SLANGC`.
+- Verified with `slangc` 2026.5.2 from the official GitHub release, provided
+  as an external host tool through `TERMIN_SLANGC` or `PATH`.
 - Real `termin_shaderc` smoke checks compile the default shader to Vulkan SPIR-V
   and OpenGL GLSL, and runtime package export succeeds with
   `default_shader_language="slang"`.

@@ -1,5 +1,7 @@
 #include "termin_modules/text_encoding.hpp"
 
+#include <cstdint>
+
 #ifdef _WIN32
     #ifndef NOMINMAX
         #define NOMINMAX
