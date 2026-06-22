@@ -126,7 +126,7 @@ class ProjectModulesRuntime:
         return not self._runtime.last_error
 
     def reload_module(self, module_id: str) -> bool:
-        return self._runtime.reload_module(module_id)
+        return self._runtime.reload_module_with_dependents(module_id)
 
     def reload_descriptor(self, descriptor_path: str | Path) -> str | None:
         descriptor = Path(descriptor_path).resolve()
@@ -184,7 +184,7 @@ class ProjectModulesRuntime:
         success = True
         for module_id in stale:
             log.info(f"[ProjectModulesRuntime] Rebuilding stale module: {module_id}")
-            if not self._runtime.reload_module(module_id):
+            if not self.reload_module(module_id):
                 log.error(f"[ProjectModulesRuntime] Failed to rebuild: {module_id}: {self._runtime.last_error}")
                 success = False
         return success
