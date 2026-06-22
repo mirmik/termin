@@ -29,6 +29,12 @@ public:
     // Unregistration (for hot-reload)
     void unregister(const std::string& name);
 
+    // Module ownership scope for hot-reload registrations.
+    void set_registration_owner(const std::string& owner);
+    std::string registration_owner() const;
+    std::string owner_of(const std::string& name) const;
+    size_t unregister_owner(const std::string& owner);
+
     // Queries
     bool has(const std::string& name) const;
     bool is_native(const std::string& name) const;

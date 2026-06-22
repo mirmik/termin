@@ -64,6 +64,9 @@
 
 - глобальные статические конструкторы shared library вызываются загрузчиком ОС при `dlopen`/`LoadLibrary`
 - `module_init` это дополнительная явная точка входа поверх static initialization
+- integration layer включает owner scope регистрации на время `dlopen`/`LoadLibrary`
+  и `module_init`; C++ component/inspect registrations, сделанные в этот момент,
+  помечаются `module_id`
 
 ## 5. load для Python модуля
 
@@ -78,17 +81,24 @@
 
 `ModuleRuntime::unload_module(name)`:
 
-1. проверяет, что модуль находится в состоянии `Loaded`
+1. проверяет, что модуль находится в состоянии `Loaded` или всё ещё держит backend handle
 2. вызывает integration hook `before_unload`
-3. вызывает backend `unload(...)`
-4. очищает `handle`
-5. переводит модуль в `Unloaded`
-6. публикует событие
+3. для staged backend-ов вызывает `begin_unload(...)`
+4. вызывает integration hook, который должен очистить регистрации до закрытия native handle
+5. вызывает `finish_unload(...)`
+6. очищает `handle`
+7. переводит модуль в `Unloaded`
+8. публикует событие
 
 Для C++:
 
 - если найден `module_shutdown`, он вызывается
+- затем `termin-engine` снимает module-owned `InspectRegistry` и `ComponentRegistry`
+  registrations по `module_id`
 - затем shared library выгружается
+- если owner cleanup падает, native handle остаётся загруженным, модуль получает
+  `Failed`, а следующий unload может повторить cleanup без повторного закрытия
+  уже выгруженной библиотеки
 
 Для Python:
 
@@ -101,6 +111,11 @@ Python backend включает `termin_modules.module_context` на время 
 editor-side class registries, которые умеют читать этот context, помечают
 регистрации владельцем модуля. При unload backend сначала вызывает owner
 cleanup, затем удаляет package subtree из `sys.modules`.
+
+Unowned C++ registrations считаются допустимыми для встроенных engine/component
+libraries. Project C++ modules, которые участвуют в hot reload, должны грузиться
+через module runtime owner scope; иначе runtime не сможет гарантированно снять
+factory/accessor callbacks перед `dlclose`/`FreeLibrary`.
 
 ## 7. reload
 

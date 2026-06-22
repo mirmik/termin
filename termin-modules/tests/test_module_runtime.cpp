@@ -48,6 +48,42 @@ public:
     }
 };
 
+class FakeStagedCppBackend final : public IModuleBackend {
+public:
+    std::vector<std::string> order;
+
+    ModuleKind kind() const override {
+        return ModuleKind::Cpp;
+    }
+
+    bool supports_staged_unload() const override {
+        return true;
+    }
+
+    bool load(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("load:" + record.spec.id);
+        record.handle = std::make_shared<CppModuleHandle>();
+        return true;
+    }
+
+    bool unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("legacy-unload:" + record.spec.id);
+        record.handle.reset();
+        return true;
+    }
+
+    bool begin_unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("begin:" + record.spec.id);
+        return true;
+    }
+
+    bool finish_unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        order.push_back("finish:" + record.spec.id);
+        record.handle.reset();
+        return true;
+    }
+};
+
 class TempDir {
 public:
     std::filesystem::path path;
@@ -304,6 +340,86 @@ void test_discovery_ignores_configured_roots() {
     expect(discovered_count == 1, "only non-ignored module should be discovered");
 }
 
+void test_staged_cpp_unload_runs_cleanup_before_close() {
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "native.module",
+        "name: native\n"
+        "build:\n"
+        "  output: build/libnative.so\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakeStagedCppBackend>();
+    runtime.register_backend(backend);
+
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_close = [backend](const ModuleRecord& record, std::string& error) {
+        (void)error;
+        backend->order.push_back("cleanup:" + record.spec.id);
+        return true;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+
+    runtime.discover(tmp.path);
+    expect(runtime.load_module("native"), "native load should succeed");
+    expect(runtime.unload_module("native"), "native unload should succeed");
+
+    expect(backend->order.size() == 4, "staged unload order event count");
+    expect(backend->order[0] == "load:native", "staged load order");
+    expect(backend->order[1] == "begin:native", "begin_unload before cleanup");
+    expect(backend->order[2] == "cleanup:native", "cleanup before finish_unload");
+    expect(backend->order[3] == "finish:native", "finish_unload after cleanup");
+
+    const ModuleRecord* record = runtime.find("native");
+    expect(record != nullptr && record->state == ModuleState::Unloaded, "native unloaded after staged cleanup");
+    expect(record != nullptr && !record->handle, "native handle reset after staged finish");
+}
+
+void test_staged_cpp_unload_keeps_handle_when_cleanup_fails() {
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "native.module",
+        "name: native\n"
+        "build:\n"
+        "  output: build/libnative.so\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakeStagedCppBackend>();
+    runtime.register_backend(backend);
+
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_close = [backend](const ModuleRecord& record, std::string& error) {
+        backend->order.push_back("cleanup:" + record.spec.id);
+        error = "cleanup failed";
+        return false;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+
+    runtime.discover(tmp.path);
+    expect(runtime.load_module("native"), "native load before failed cleanup should succeed");
+    expect(!runtime.unload_module("native"), "native unload should fail when cleanup fails");
+
+    expect(backend->order.size() == 3, "failed cleanup order event count");
+    expect(backend->order[0] == "load:native", "failed cleanup load order");
+    expect(backend->order[1] == "begin:native", "failed cleanup begin order");
+    expect(backend->order[2] == "cleanup:native", "failed cleanup before skipped finish");
+
+    const ModuleRecord* record = runtime.find("native");
+    expect(record != nullptr && record->state == ModuleState::Failed, "native marked failed after cleanup failure");
+    expect(record != nullptr && record->handle, "native handle retained when cleanup fails");
+    expect(runtime.last_error() == "cleanup failed", "cleanup failure propagated to last_error");
+
+    const size_t order_after_failed_unload = backend->order.size();
+    expect(!runtime.load_module("native"), "load should be blocked while failed module retains handle");
+    expect(backend->order.size() == order_after_failed_unload, "blocked load must not call backend load");
+}
+
 } // namespace
 
 TEST_CASE("module runtime parses descriptors and discovers modules") {
@@ -328,6 +444,14 @@ TEST_CASE("module runtime ignores dist build output") {
 
 TEST_CASE("module runtime ignores configured discovery roots") {
     test_discovery_ignores_configured_roots();
+}
+
+TEST_CASE("module runtime stages C++ unload cleanup before native close") {
+    test_staged_cpp_unload_runs_cleanup_before_close();
+}
+
+TEST_CASE("module runtime keeps native handle loaded when C++ cleanup fails") {
+    test_staged_cpp_unload_keeps_handle_when_cleanup_fails();
 }
 
 TEST_CASE("module text diagnostics are sanitized to utf8") {
