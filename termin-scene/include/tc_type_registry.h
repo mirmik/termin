@@ -33,6 +33,7 @@ struct tc_type_entry {
     const char* type_name;          // Interned string, stable pointer
     tc_type_factory_fn factory;     // Factory function (takes userdata)
     void* factory_userdata;         // Context passed to factory
+    const char* owner;              // Optional owning module id, interned string
     uint32_t version;               // Incremented on re-register
     bool registered;                // false after unregister, entry NOT deleted
 

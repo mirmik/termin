@@ -25,6 +25,26 @@ public:
         const ModuleEnvironment& environment
     ) = 0;
 
+    virtual bool supports_staged_unload() const {
+        return false;
+    }
+
+    virtual bool begin_unload(
+        ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) {
+        return unload(record, environment);
+    }
+
+    virtual bool finish_unload(
+        ModuleRecord& record,
+        const ModuleEnvironment& environment
+    ) {
+        (void)record;
+        (void)environment;
+        return true;
+    }
+
     virtual bool build(
         ModuleRecord& record,
         const ModuleEnvironment& environment

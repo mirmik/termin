@@ -222,6 +222,14 @@ bool ModuleRuntime::load_module(const std::string& module_id) {
         return true;
     }
 
+    if (target->handle) {
+        target->state = ModuleState::Failed;
+        target->error_message = "Module still has an active backend handle: " + module_id;
+        _last_error = target->error_message;
+        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        return false;
+    }
+
     if (should_skip(target->spec)) {
         target->state = ModuleState::Ignored;
         target->error_message.clear();
@@ -309,7 +317,7 @@ bool ModuleRuntime::unload_module(const std::string& module_id) {
     }
     refresh_spec(*target);
 
-    if (target->state != ModuleState::Loaded) {
+    if (target->state != ModuleState::Loaded && !target->handle) {
         target->state = ModuleState::Unloaded;
         return true;
     }
@@ -346,10 +354,28 @@ bool ModuleRuntime::unload_module(const std::string& module_id) {
         }
     }
 
-    if (!backend->unload(*target, _environment)) {
+    bool unload_ok = true;
+    if (target->spec.kind == ModuleKind::Cpp && backend->supports_staged_unload()) {
+        unload_ok = backend->begin_unload(*target, _environment);
+        if (unload_ok && _cpp_callbacks.before_native_close) {
+            std::string error;
+            unload_ok = _cpp_callbacks.before_native_close(*target, error);
+            if (!unload_ok && !error.empty()) {
+                target->error_message = error;
+            }
+        }
+        if (unload_ok) {
+            unload_ok = backend->finish_unload(*target, _environment);
+        }
+    } else {
+        unload_ok = backend->unload(*target, _environment);
+    }
+
+    if (!unload_ok) {
         if (target->error_message.empty()) {
             target->error_message = "Backend unload failed";
         }
+        target->state = ModuleState::Failed;
         _last_error = target->error_message;
         emit(ModuleEventKind::Failed, module_id, target->error_message);
         return false;
@@ -394,7 +420,7 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
         }
     }
 
-    const bool was_loaded = current->state == ModuleState::Loaded;
+    const bool was_loaded = current->state == ModuleState::Loaded || current->handle != nullptr;
     if (was_loaded && !unload_module(module_id)) {
         return false;
     }
