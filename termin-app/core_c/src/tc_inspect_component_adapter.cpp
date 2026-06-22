@@ -8,6 +8,9 @@
 #include "inspect/tc_inspect_component_adapter.h"
 #include "inspect/tc_inspect_init.h"
 
+#include <algorithm>
+#include <cstring>
+#include <mutex>
 #include <string>
 
 namespace {
@@ -19,6 +22,19 @@ void* get_inspect_object(tc_component* c) {
     }
     return c->body;
 }
+
+std::string read_component_field_string(tc_component* c, const char* path) {
+    tc_value v = tc_component_inspect_get(c, path);
+    std::string result;
+    if (v.type == TC_VALUE_STRING && v.data.s) {
+        result = v.data.s;
+    }
+    tc_value_free(&v);
+    return result;
+}
+
+std::mutex g_legacy_field_string_mutex;
+std::string g_legacy_field_string_result;
 
 } // namespace
 
@@ -222,16 +238,23 @@ bool tc_component_get_field_bool(tc_component* c, const char* path) {
     return result;
 }
 
-static thread_local std::string g_field_string_result;
+size_t tc_component_get_field_string_buffer(
+    tc_component* c, const char* path, char* buffer, size_t buffer_size) {
+    std::string result = read_component_field_string(c, path);
+    if (buffer && buffer_size > 0) {
+        const size_t copy_size = std::min(result.size(), buffer_size - 1);
+        if (copy_size > 0) {
+            std::memcpy(buffer, result.data(), copy_size);
+        }
+        buffer[copy_size] = '\0';
+    }
+    return result.size();
+}
 
 const char* tc_component_get_field_string(tc_component* c, const char* path) {
-    tc_value v = tc_component_inspect_get(c, path);
-    g_field_string_result.clear();
-    if (v.type == TC_VALUE_STRING && v.data.s) {
-        g_field_string_result = v.data.s;
-    }
-    tc_value_free(&v);
-    return g_field_string_result.c_str();
+    std::lock_guard<std::mutex> lock(g_legacy_field_string_mutex);
+    g_legacy_field_string_result = read_component_field_string(c, path);
+    return g_legacy_field_string_result.c_str();
 }
 
 } // extern "C"

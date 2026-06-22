@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace Termin.Native;
 
@@ -277,8 +278,13 @@ public readonly struct ComponentRef
     public string? GetFieldString(string path)
     {
         if (_ptr == IntPtr.Zero) return null;
-        var ptr = TerminCore.ComponentGetFieldString(_ptr, path);
-        return Marshal.PtrToStringUTF8(ptr);
+        nuint byteCount = TerminCore.ComponentGetFieldStringBuffer(_ptr, path, Array.Empty<byte>(), 0);
+        if (byteCount == 0) return string.Empty;
+
+        int length = checked((int)byteCount);
+        var buffer = new byte[length + 1];
+        TerminCore.ComponentGetFieldStringBuffer(_ptr, path, buffer, (nuint)buffer.Length);
+        return Encoding.UTF8.GetString(buffer, 0, length);
     }
 
     // ========================================================================
