@@ -464,40 +464,12 @@ void bind_tc_scene(nb::module_& m) {
 
     // Destroy scene with render cleanup
     m.def("destroy_scene", [](TcSceneRef& scene) {
-        if (!scene.is_alive()) return;
-        for (Entity& e : scene.get_all_entities()) {
-            size_t count = e.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* c = e.component_at(i);
-                if (c) {
-                    tc_component_on_destroy(c);
-                }
-            }
-        }
         destroy_scene_with_render(scene);
     }, nb::arg("scene"), "Destroy scene and clean up render resources");
 
     // Deserialize scene
     m.def("deserialize_scene", [](nb::handle data, const std::string& name) -> TcSceneRef {
-        TcSceneRef scene = create_scene_with_extensions(name, "", default_scene_extension_ids());
-        nos::trent t = python_to_trent(data);
-
-        if (t.contains("uuid") && t["uuid"].is_string()) {
-            scene.set_uuid(t["uuid"].as_string());
-        }
-        if (t.contains("background_color") && t["background_color"].is_list()) {
-            const auto& bg = t["background_color"].as_list();
-            if (bg.size() >= 4) {
-                scene_set_background_color(scene,
-                    static_cast<float>(bg[0].as_numer_default(0.05)),
-                    static_cast<float>(bg[1].as_numer_default(0.05)),
-                    static_cast<float>(bg[2].as_numer_default(0.08)),
-                    static_cast<float>(bg[3].as_numer_default(1.0)));
-            }
-        }
-
-        scene.load_from_data(t, true);
-        return scene;
+        return deserialize_scene_with_render(python_to_trent(data), name);
     }, nb::arg("data"), nb::arg("name") = "",
        "Create scene from serialized data");
 
