@@ -121,6 +121,8 @@ Verification:
 
 ### Batch 3: `termin.graphics` facade
 
+Status: done, 2026-06-23.
+
 Goal: remove app-owned graphics facade from non-app code.
 
 Canonical owners:
@@ -132,14 +134,19 @@ Canonical owners:
 Work:
 
 1. Replace `from termin.graphics import Color4/RenderState` with `tgfx`.
-2. Move render sync mode binding out of `termin._native` or leave it temporarily
-   in an explicit compatibility module until owner is selected.
-3. Remove `termin-app/termin/graphics` after downstream users are gone.
+2. Keep render sync mode under `termin.project.settings` for now. It is a
+   project/app settings API, not a graphics facade API; moving the underlying C
+   binding out of `_native` is a separate project settings/runtime ownership
+   cleanup.
+3. Remove `termin-app/termin/graphics` after downstream users are gone: done.
 
 Verification:
 
-- `rg "termin\\.graphics|from termin\\.graphics" .`
-- render/editor smoke tests
+- `rg "termin\\.graphics|from termin\\.graphics"` outside build/sdk/docs:
+  no matches.
+- stale package check in source/sdk/venv: no `termin/graphics` paths.
+- `./run-tests.sh`: passed, 585 Python tests passed, 1 skipped; C/C++ tests
+  and editor smoke tests passed.
 
 ### Batch 4: picking helpers
 
