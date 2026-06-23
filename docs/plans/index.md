@@ -33,3 +33,4 @@
 - [D3D11 runtime placement goal plan](2026-06-20-d3d11-runtime-placement-goal-plan.md)
 - [tgfx2 backend binding plan layer](2026-06-21-tgfx2-backend-binding-plan-layer.md)
 - [tgfx2 backend binding layer completion goal plan](2026-06-21-tgfx2-backend-binding-layer-completion-goal-plan.md)
+- [termin-app native re-export cleanup plan](2026-06-23-termin-app-native-reexport-cleanup-plan.md)
