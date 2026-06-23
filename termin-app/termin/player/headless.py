@@ -206,7 +206,7 @@ def _default_headless_scene_extensions() -> tuple[int, ...]:
 
     preload_sdk_libs("termin_graphics", "termin_graphics2")
 
-    from termin._native import register_default_scene_extensions
+    from termin.engine import register_default_scene_extensions
     from termin.scene_rendering import SCENE_EXT_TYPE_COLLISION_WORLD
 
     register_default_scene_extensions()

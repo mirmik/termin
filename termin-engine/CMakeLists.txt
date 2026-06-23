@@ -135,6 +135,7 @@ if(TERMIN_BUILD_PYTHON)
         python/engine_module.cpp
         bindings/engine_core_bindings.cpp
         bindings/scene_manager_bindings.cpp
+        bindings/scene_render_ext_bindings.cpp
         bindings/rendering_manager_bindings.cpp
         bindings/term_modules_integration_bindings.cpp
     )

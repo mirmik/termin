@@ -1,28 +1,30 @@
 """Scene render extension helpers.
 
-This module is the app-owned transitional home for scene render state and
-render mount bindings that are still exported by ``termin._native``.
+This module is the app-owned transitional facade for scene render helpers.
+Canonical render extension bindings live in ``termin.render``; engine-level
+default scene lifecycle helpers live in ``termin.engine``.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, List, Type, TypeVar
 
-from termin._native import (
+from termin.engine import (
     SCENE_EXT_TYPE_COLLISION_WORLD,
+    create_scene,
+    create_scene_with_extensions,
+    default_scene_extensions,
+    scene_ext_attached_names,
+)
+from termin.render import (
     SCENE_EXT_TYPE_RENDER_MOUNT,
     SCENE_EXT_TYPE_RENDER_STATE,
     SceneRenderMount,
     SceneRenderState,
-    create_scene,
-    create_scene_with_extensions,
-    default_scene_extensions,
-    deserialize_scene,
-    destroy_scene,
-    scene_ext_attached_names,
     scene_render_mount,
     scene_render_state,
 )
+from termin._native import deserialize_scene, destroy_scene
 from termin.lighting import ShadowSettings
 from termin.scene import TcScene as Scene
 
