@@ -35,6 +35,58 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
     return compiler
 
 
+
+
+def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
+    distributions: dict[str, tuple[dict[str, str], list[str]]] = {
+        "termin-app": ({"termin_app_seed/__init__.py": "VALUE = 'termin app seed'\n"}, ["scipy"]),
+        "termin-nanobind": ({"termin_nanobind/__init__.py": "VALUE = 'nanobind seed'\n"}, []),
+        "tcbase": ({"tcbase/__init__.py": "VALUE = 'runtime seed'\n"}, []),
+        "termin-assets": ({"termin_assets_seed/__init__.py": "VALUE = 'assets seed'\n"}, []),
+        "termin-default-assets": ({"termin/default_assets/__init__.py": "VALUE = 'default assets seed'\n"}, []),
+        "termin-prefab": ({"termin/prefab_seed/__init__.py": "VALUE = 'prefab seed'\n"}, []),
+        "termin-glb": ({"termin/glb/__init__.py": "VALUE = 'glb seed'\n"}, ["termin-skeleton", "termin-animation"]),
+        "termin-tween": ({"termin/tween/__init__.py": "VALUE = 'tween seed'\n"}, []),
+        "termin-components-tween": ({"termin/tween_components/__init__.py": "VALUE = 'tween components seed'\n"}, []),
+        "termin-audio": ({"termin/audio/__init__.py": "VALUE = 'audio seed'\n"}, []),
+        "termin-voxels": ({"termin/voxels/__init__.py": "VALUE = 'voxels seed'\n"}, []),
+        "termin-components-voxels": ({"termin/voxel_components/__init__.py": "VALUE = 'voxel components seed'\n"}, []),
+        "termin-components-physics": ({"termin/physics_components/__init__.py": "VALUE = 'physics components seed'\n"}, []),
+        "termin-components-ui": ({"termin/ui_components/__init__.py": "VALUE = 'ui components seed'\n"}, []),
+        "termin-materials": ({"termin/materials/__init__.py": "VALUE = 'materials seed'\n"}, []),
+        "termin-render-passes": ({"termin/render_passes/__init__.py": "VALUE = 'render passes seed'\n"}, []),
+        "termin-modules": ({"termin/modules/__init__.py": "VALUE = 'modules seed'\n"}, []),
+        "termin-scene": ({"termin/scene/__init__.py": "VALUE = 'scene seed'\n"}, []),
+        "termin-display": (
+            {
+                "termin/display/__init__.py": "VALUE = 'display seed'\n",
+                "termin/viewport/__init__.py": "VALUE = 'viewport seed'\n",
+            },
+            ["Pillow", "optional-extra; extra == 'debug'"],
+        ),
+        "termin-engine": ({"termin/engine/__init__.py": "VALUE = 'engine seed'\n"}, []),
+        "termin-render": ({"termin/render/__init__.py": "VALUE = 'render seed'\n"}, []),
+        "termin-components-render": ({"termin/render_components/__init__.py": "VALUE = 'render components seed'\n"}, []),
+        "termin-input": ({"termin/input/__init__.py": "VALUE = 'input seed'\n"}, []),
+        "termin-inspect": ({"termin/inspect/__init__.py": "VALUE = 'inspect seed'\n"}, []),
+        "termin-collision": ({"termin/collision/__init__.py": "VALUE = 'collision seed'\n"}, []),
+        "termin-physics": ({"termin/physics/__init__.py": "VALUE = 'physics seed'\n"}, []),
+        "termin-navmesh": ({"termin/navmesh/__init__.py": "VALUE = 'navmesh seed'\n"}, []),
+        "termin-lighting": ({"termin/lighting/__init__.py": "VALUE = 'lighting seed'\n"}, []),
+        "tmesh": ({"tmesh/__init__.py": "VALUE = 'tmesh seed'\n"}, []),
+        "tgfx": ({"tgfx/__init__.py": "VALUE = 'tgfx seed'\n"}, []),
+        "tcgui": ({"tcgui/__init__.py": "VALUE = 'tcgui seed'\n"}, []),
+        "numpy": ({"numpy/__init__.py": "VALUE = 'numpy seed'\n"}, []),
+        "Pillow": ({"PIL/__init__.py": "VALUE = 'pillow seed'\n"}, []),
+        "scipy": ({"scipy/__init__.py": "VALUE = 'scipy dependency'\n"}, []),
+        "termin-skeleton": ({"termin/skeleton/__init__.py": "VALUE = 'skeleton seed'\n"}, []),
+        "termin-animation": ({"termin/animation/__init__.py": "VALUE = 'animation seed'\n"}, []),
+        "optional-extra": ({"optional_extra/__init__.py": "VALUE = 'optional extra'\n"}, []),
+        "termin-build-tools": ({"termin_build/__init__.py": "VALUE = 'build tools'\n"}, ["setuptools"]),
+    }
+    for distribution, (files, requires) in distributions.items():
+        _write_fake_distribution(site_packages, distribution, files, requires=requires)
+
 def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     sdk = tmp_path / "fake-sdk"
     bin_dir = sdk / "bin"
@@ -57,23 +109,7 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     (python_home / "os.py").write_text("", encoding="utf-8")
     (site_packages / "termin").mkdir()
     (site_packages / "termin" / "__init__.py").write_text("", encoding="utf-8")
-    (site_packages / "scipy").mkdir()
-    (site_packages / "scipy" / "__init__.py").write_text("SHOULD_NOT_COPY = True\n", encoding="utf-8")
-    _write_fake_distribution(
-        site_packages,
-        "tcbase",
-        {
-            "tcbase/__init__.py": "VALUE = 'runtime seed'\n",
-        },
-    )
-    _write_fake_distribution(
-        site_packages,
-        "termin-display",
-        {
-            "termin/display/__init__.py": "VALUE = 'display seed'\n",
-            "termin/viewport/__init__.py": "VALUE = 'viewport seed'\n",
-        },
-    )
+    _write_fake_player_runtime_distributions(site_packages)
     (python_overlay / "termin" / "player").mkdir(parents=True)
     (python_overlay / "termin" / "__init__.py").write_text("", encoding="utf-8")
     (python_overlay / "termin" / "player" / "__main__.py").write_text(
@@ -110,23 +146,7 @@ def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
     (python_dlls / "libffi-8.dll").write_bytes(b"libffi")
     (site_packages / "termin").mkdir()
     (site_packages / "termin" / "__init__.py").write_text("", encoding="utf-8")
-    (site_packages / "scipy").mkdir()
-    (site_packages / "scipy" / "__init__.py").write_text("SHOULD_NOT_COPY = True\n", encoding="utf-8")
-    _write_fake_distribution(
-        site_packages,
-        "tcbase",
-        {
-            "tcbase/__init__.py": "VALUE = 'runtime seed'\n",
-        },
-    )
-    _write_fake_distribution(
-        site_packages,
-        "termin-display",
-        {
-            "termin/display/__init__.py": "VALUE = 'display seed'\n",
-            "termin/viewport/__init__.py": "VALUE = 'viewport seed'\n",
-        },
-    )
+    _write_fake_player_runtime_distributions(site_packages)
     (python_overlay / "termin" / "player").mkdir(parents=True)
     (python_overlay / "termin" / "__init__.py").write_text("", encoding="utf-8")
     (python_overlay / "termin" / "player" / "__main__.py").write_text(
@@ -648,8 +668,12 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "display" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
-    assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "scipy").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "PIL" / "__init__.py").exists()
+    assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin_build").exists()
+    assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "optional_extra").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "scipy" / "__init__.py").exists()
     assert (
         result.dist_dir
         / "lib"
@@ -738,7 +762,17 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
     assert {
+        "name": "Pillow",
+        "version": "1.0",
+        "source": "termin-runtime",
+    } in runtime_manifest["distributions"]
+    assert {
         "name": "termin-display",
+        "version": "1.0",
+        "source": "termin-runtime",
+    } in runtime_manifest["distributions"]
+    assert {
+        "name": "termin-skeleton",
         "version": "1.0",
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
@@ -771,8 +805,12 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "display" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "tcbase" / "__init__.py").exists()
-    assert not (dist_dir / "python" / "Lib" / "site-packages" / "scipy").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "PIL" / "__init__.py").exists()
+    assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin_build").exists()
+    assert not (dist_dir / "python" / "Lib" / "site-packages" / "optional_extra").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "scipy" / "__init__.py").exists()
     assert (
         dist_dir
         / "python"

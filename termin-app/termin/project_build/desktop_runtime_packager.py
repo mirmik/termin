@@ -9,6 +9,9 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
+
 from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
 
 
@@ -53,7 +56,6 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "tcgui",
     "numpy",
 )
-
 
 @dataclass(frozen=True)
 class PythonBundledDistribution:
@@ -464,11 +466,12 @@ def _copy_runtime_seed_distributions(
         diagnostics,
         search_paths,
         source="termin-runtime",
-        include_transitive=False,
-        missing_is_error=False,
-        missing_files_is_error=False,
+        include_transitive=True,
+        missing_is_error=True,
+        missing_files_is_error=True,
         allow_environment=False,
     )
+
 
 
 def _copy_distributions(
@@ -489,15 +492,8 @@ def _copy_distributions(
 
     while pending:
         requirement = pending.pop(0)
-        package_name = _requirement_distribution_name(requirement)
-        if package_name == "":
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    "error",
-                    "python/requirements",
-                    f"Invalid Python requirement name: {requirement}",
-                )
-            )
+        package_name = _requirement_distribution_name(requirement, diagnostics)
+        if package_name is None:
             continue
 
         normalized = _normalize_distribution_name(package_name)
@@ -548,25 +544,56 @@ def _copy_distributions(
 
         if include_transitive:
             for required in distribution.requires or []:
-                required_name = _requirement_distribution_name(required)
-                if required_name and _normalize_distribution_name(required_name) not in copied:
+                required_name = _active_dependency_distribution_name(required, diagnostics)
+                if required_name is not None and _normalize_distribution_name(required_name) not in copied:
                     pending.append(required_name)
 
     return bundled
 
 
-def _requirement_distribution_name(requirement: str) -> str:
-    text = requirement.split(";", 1)[0].strip()
-    if " " in text:
-        text = text.split(" ", 1)[0]
-    for separator in ("==", ">=", "<=", "~=", "!=", ">", "<", "["):
-        if separator in text:
-            text = text.split(separator, 1)[0]
-    return text.strip()
+def _requirement_distribution_name(
+    requirement: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> str | None:
+    try:
+        parsed = Requirement(requirement)
+        if parsed.marker is not None and not parsed.marker.evaluate({"extra": ""}):
+            return None
+        return parsed.name
+    except InvalidRequirement:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "python/requirements",
+                f"Invalid Python requirement: {requirement}",
+            )
+        )
+        return None
+
+
+def _active_dependency_distribution_name(
+    requirement: str,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> str | None:
+    try:
+        parsed = Requirement(requirement)
+    except InvalidRequirement:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "python/requirements",
+                f"Invalid Python dependency metadata requirement: {requirement}",
+            )
+        )
+        return None
+
+    if parsed.marker is not None and not parsed.marker.evaluate({"extra": ""}):
+        return None
+    return parsed.name
 
 
 def _normalize_distribution_name(name: str) -> str:
-    return name.lower().replace("_", "-")
+    return str(canonicalize_name(name))
 
 
 def _normalize_search_paths(paths: list[str | Path] | None) -> list[Path]:

@@ -155,6 +155,7 @@ if(BUNDLE_PYTHON)
         scipy
         glfw
         OpenGL
+        packaging
         pyassimp
         pyopengl
         sdl2
