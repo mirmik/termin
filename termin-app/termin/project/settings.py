@@ -18,7 +18,7 @@ from pathlib import PurePosixPath
 from typing import Optional
 
 from tcbase import log
-from termin._native import (
+from termin.render import (
     RenderSyncMode as CRenderSyncMode,
     set_render_sync_mode as c_set_render_sync_mode,
 )
