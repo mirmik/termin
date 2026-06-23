@@ -4,7 +4,6 @@
 #include <nanobind/stl/vector.h>
 
 extern "C" {
-#include "tc_picking.h"
 #include "tc_project_settings.h"
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene_extension_ids.h"
@@ -184,19 +183,6 @@ NB_MODULE(_native, m) {
     termin::init_python_component_callbacks();
 
     termin::bind_assets(assets_module);
-
-    // Picking utilities (id <-> rgb conversion with cache)
-    m.def("tc_picking_id_to_rgb", [](int id) {
-        int r, g, b;
-        tc_picking_id_to_rgb(id, &r, &g, &b);
-        return std::make_tuple(r, g, b);
-    }, "Convert entity pick ID to RGB (0-255 range), caches for reverse lookup");
-
-    m.def("tc_picking_rgb_to_id", &tc_picking_rgb_to_id,
-        "Convert RGB (0-255) back to entity pick ID, returns 0 if not cached");
-
-    m.def("tc_picking_cache_clear", &tc_picking_cache_clear,
-        "Clear the picking cache");
 
     // Register cleanup function to be called before Python shutdown
     m.def("_cleanup_python_objects", []() {},

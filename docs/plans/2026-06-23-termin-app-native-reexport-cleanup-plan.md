@@ -150,6 +150,8 @@ Verification:
 
 ### Batch 4: picking helpers
 
+Status: done, 2026-06-23.
+
 Goal: picking utility imports use `termin.render_passes`, not `termin._native`.
 
 Canonical owner:
@@ -163,9 +165,18 @@ Work:
 
 Verification:
 
-- render pass tests
-- editor picking/highlight tests
-- `rg "tc_picking_.*termin\\._native|termin\\._native.*tc_picking"`
+- picking helper smoke: `termin.render_passes.tc_picking_*` roundtrips pick id
+  12345, while `termin._native` no longer exposes these names.
+- focused pytest: `termin-render-passes/tests` and
+  `termin-app/tests/test_tcgui_framegraph_debugger_handle.py` passed.
+- `./build-sdk.sh --no-wheels`: passed.
+- `./setup-test-venv.sh --force`: passed.
+- `./run-tests.sh`: passed, 585 Python tests passed, 1 skipped; C/C++ tests
+  and editor smoke tests passed.
+- `rg "termin\\._native.*tc_picking|_native\\.tc_picking|from termin\\._native import .*tc_picking|m\\.def\\(\"tc_picking"`
+  outside build/sdk/docs: no legacy app `_native` exports/imports remain.
+  Remaining `tc_picking.h` users are canonical render-passes code and app C++
+  editor interaction using the C API directly.
 
 ### Batch 5: scene/entity compatibility re-export
 
