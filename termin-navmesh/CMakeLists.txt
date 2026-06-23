@@ -156,12 +156,16 @@ if(TERMIN_HAS_RECAST)
     if(TERMIN_BUILD_PYTHON)
         find_package(Python 3.8 COMPONENTS Interpreter Development REQUIRED)
         find_package(nanobind CONFIG REQUIRED)
+        if(NOT TARGET termin_inspect::termin_inspect_python)
+            message(FATAL_ERROR "termin-navmesh Python build requires termin_inspect::termin_inspect_python")
+        endif()
 
         nanobind_add_module(_navmesh_native NB_SHARED
             python/bindings/navmesh_module.cpp
         )
         target_link_libraries(_navmesh_native PRIVATE
             termin_navmesh_components
+            termin_inspect::termin_inspect_python
         )
         target_compile_features(_navmesh_native PRIVATE cxx_std_20)
         termin_set_rpath_python(_navmesh_native)

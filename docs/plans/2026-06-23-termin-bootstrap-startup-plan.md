@@ -2,7 +2,7 @@
 
 Дата: 2026-06-23
 
-Статус: Phase 1/2 implemented; Phase 3+ pending.
+Статус: Phase 1-4 implemented; Phase 5 cleanup pending.
 
 ## Цель
 
@@ -16,10 +16,10 @@
 - профильные bootstrap-последовательности для runtime, player и editor.
 
 Главная цель - убрать скрытые side effects из `import termin._native`,
-`import termin.animation._animation_native`, `import termin.skeleton._skeleton_native`
-и похожих импортов. Программы должны явно вызывать startup-регистрацию в своей
-composition root, а не получать измененное глобальное состояние от случайного
-импорта.
+`import termin.animation._animation_native`, `import termin.skeleton._skeleton_native`,
+`import termin.navmesh._navmesh_native` и похожих импортов. Программы должны
+явно вызывать startup-регистрацию в своей composition root, а не получать
+измененное глобальное состояние от случайного импорта.
 
 ## Почему отдельный пакет
 
@@ -63,6 +63,8 @@ composition root, а не получать измененное глобальн
   `tc_animation_clip` при импорте `_animation_native`;
 - `termin-skeleton/cpp/bindings/skeleton_module.cpp` регистрирует
   `tc_skeleton` при импорте `_skeleton_native`;
+- `termin-navmesh/src/detour_navmesh_asset_utils.cpp` регистрирует
+  `navmesh_handle` при загрузке components library;
 - `termin-voxels/python/bindings/voxels_bindings.cpp` регистрирует
   `voxel_grid_handle` при импорте `_voxels_native`;
 - `termin-app/cpp/termin/assets/assets_bindings.cpp` дублирует регистрацию
@@ -81,8 +83,17 @@ composition root, а не получать измененное глобальн
   startup to call `termin-bootstrap` explicitly.
 - Added focused tests for import-without-side-effects, explicit kind
   registration, Python kind mappings and partial/full bootstrap idempotence.
-- Kept old `_native` and domain-native import side effects in place
-  intentionally; removing them is Phase 3/4 work.
+- Removed import-time kind/inspect/callback/scene-extension registration from
+  `termin._native`.
+- Removed import-time kind registration from `_animation_native`,
+  `_skeleton_native`, `_navmesh_native`/navmesh components and
+  `_voxels_native`.
+- Kept explicit domain registration functions for standalone compatibility:
+  `register_animation_kind_handlers()`, `register_tc_skeleton_kind()`,
+  `register_navmesh_kind_handlers()` and `register_voxel_grid_kind_handlers()`.
+- `termin-bootstrap` remains the normal composition root for runtime, player
+  and editor startup. Domain-native registration functions are explicit
+  compatibility APIs rather than import side effects.
 
 Verification completed for this phase:
 
@@ -112,6 +123,7 @@ struct RuntimeKindOptions {
     bool skeleton = true;
     bool animation = true;
     bool voxel_grid = true;
+    bool navmesh = true;
     bool entity = true;
 };
 

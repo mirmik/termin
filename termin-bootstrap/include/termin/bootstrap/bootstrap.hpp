@@ -18,6 +18,7 @@ struct RuntimeKindOptions {
     bool skeleton = true;
     bool animation = true;
     bool voxel_grid = true;
+    bool navmesh = true;
     bool entity = true;
 };
 

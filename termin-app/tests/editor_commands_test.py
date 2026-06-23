@@ -17,11 +17,13 @@ from termin.editor_core.editor_commands import (
 from termin.editor_core.undo_stack import UndoStack
 from termin.geombase import GeneralPose3
 from termin.scene import TcScene
+from termin.bootstrap import register_scene_extensions
 from termin.scene_rendering import scene_render_state
 
 
 class TestEditorUndoCommands(unittest.TestCase):
     def setUp(self) -> None:
+        register_scene_extensions()
         self.scene = TcScene.create("editor-command-test")
 
     def tearDown(self) -> None:

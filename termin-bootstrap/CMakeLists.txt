@@ -53,6 +53,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_voxels REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_navmesh termin_navmesh::termin_navmesh)
+else()
+    find_package(termin_navmesh REQUIRED)
+endif()
 
 set(TERMIN_BOOTSTRAP_HAS_ANIMATION OFF)
 if(TARGET termin_animation::termin_animation)
@@ -121,6 +126,7 @@ target_link_libraries(termin_bootstrap
         tgfx::termin_graphics2
         termin_skeleton::termin_skeleton
         termin_voxels::termin_voxels
+        termin_navmesh::termin_navmesh
 )
 
 if(TERMIN_BOOTSTRAP_HAS_ANIMATION)

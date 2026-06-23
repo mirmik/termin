@@ -8,6 +8,7 @@
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/input/input_events.hpp>
+#include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/render_context.hpp>
@@ -82,6 +83,7 @@ static bool g_material_python_kind_initialized = false;
 static bool g_skeleton_python_kind_initialized = false;
 static bool g_animation_python_kind_initialized = false;
 static bool g_voxel_grid_python_kind_initialized = false;
+static bool g_navmesh_python_kind_initialized = false;
 
 bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
     PyGILState_STATE gstate = PyGILState_Ensure();
@@ -248,6 +250,11 @@ void init_python_kind_handlers(const RuntimeKindOptions& options) {
         nb::module_ voxels_module = nb::module_::import_("termin.voxels._voxels_native");
         register_python_uuid_handle_kind<voxels::TcVoxelGrid>("voxel_grid_handle", voxels_module.attr("TcVoxelGrid"));
         g_voxel_grid_python_kind_initialized = true;
+    }
+    if (options.navmesh && !g_navmesh_python_kind_initialized) {
+        nb::module_ navmesh_module = nb::module_::import_("termin.navmesh");
+        register_python_uuid_handle_kind<TcNavMesh>("navmesh_handle", navmesh_module.attr("TcNavMesh"));
+        g_navmesh_python_kind_initialized = true;
     }
 }
 

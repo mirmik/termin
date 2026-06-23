@@ -8,6 +8,8 @@
 #include "termin/navmesh/tc_navmesh_handle.hpp"
 #include <termin/entity/component.hpp>
 #include <termin/bindings/entity_helpers.hpp>
+#include <inspect/tc_inspect_python.hpp>
+#include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <nanobind/stl/string.h>
 #include <mutex>
 #include <unordered_map>
@@ -22,6 +24,36 @@ static std::unordered_map<std::string, nb::callable> g_navmesh_load_callbacks;
 void cleanup_navmesh_callbacks() {
     std::lock_guard<std::mutex> lock(g_navmesh_callback_mutex);
     g_navmesh_load_callbacks.clear();
+}
+
+void register_navmesh_kind_handlers() {
+    static bool registered = false;
+    if (registered) {
+        return;
+    }
+
+    tc::register_cpp_handle_kind<TcNavMesh>("navmesh_handle");
+
+    nb::module_ navmesh_module = nb::module_::import_("termin.navmesh._navmesh_native");
+    nb::object navmesh_type = navmesh_module.attr("TcNavMesh");
+    tc::KindRegistry::instance().register_type(navmesh_type, "navmesh_handle");
+    tc::KindRegistry::instance().register_python(
+        "navmesh_handle",
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            TcNavMesh navmesh = nb::cast<TcNavMesh>(obj);
+            nb::dict result;
+            if (navmesh.is_valid()) {
+                result["uuid"] = std::string(navmesh.uuid());
+                result["name"] = std::string(navmesh.name());
+                result["type"] = "uuid";
+            }
+            return result;
+        }),
+        nb::cpp_function([navmesh_type](nb::dict data) {
+            return navmesh_type.attr("deserialize")(data);
+        }));
+
+    registered = true;
 }
 
 bool python_navmesh_load_callback(tc_navmesh* navmesh, void* user_data) {
@@ -459,4 +491,6 @@ void bind_recast_navmesh_builder(nb::module_& m) {
 NB_MODULE(_navmesh_native, m) {
     m.doc() = "NavMesh native module (RecastNavMeshBuilderComponent)";
     termin::bind_recast_navmesh_builder(m);
+    m.def("register_navmesh_kind_handlers", &termin::register_navmesh_kind_handlers,
+        "Register navmesh_handle kind handlers explicitly.");
 }

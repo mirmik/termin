@@ -2,6 +2,7 @@
 
 #include <termin/entity/entity.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
+#include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/voxels/tc_voxel_grid_handle.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
@@ -40,6 +41,7 @@ void register_runtime_kinds(const RuntimeKindOptions& options) {
     static bool skeleton_registered = false;
     static bool animation_registered = false;
     static bool voxel_grid_registered = false;
+    static bool navmesh_registered = false;
     static bool entity_registered = false;
 
     if (options.mesh) {
@@ -60,6 +62,9 @@ void register_runtime_kinds(const RuntimeKindOptions& options) {
     }
     if (options.voxel_grid) {
         register_once<voxels::TcVoxelGrid>("voxel_grid_handle", voxel_grid_registered);
+    }
+    if (options.navmesh) {
+        register_once<TcNavMesh>("navmesh_handle", navmesh_registered);
     }
     if (options.entity) {
         register_once<Entity>("entity", entity_registered);

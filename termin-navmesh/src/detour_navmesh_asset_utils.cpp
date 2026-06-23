@@ -4,7 +4,6 @@
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <DetourNavMesh.h>
 #include <DetourStatus.h>
-#include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <tcbase/trent/json.h>
 #include <algorithm>
 #include <any>
@@ -63,15 +62,6 @@ bool set_debug_shader_entries(tc_material_phase* phase, const char* shader_name)
 
     return true;
 }
-
-struct NavMeshHandleKindRegistrar {
-    NavMeshHandleKindRegistrar() {
-        tc::register_cpp_handle_kind<TcNavMesh>("navmesh_handle");
-    }
-};
-
-NavMeshHandleKindRegistrar navmesh_handle_kind_registrar;
-
 
 } // namespace
 
