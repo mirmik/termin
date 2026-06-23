@@ -1,4 +1,5 @@
 using Termin.Native;
+using System.Runtime.InteropServices;
 
 Console.WriteLine("Testing SWIG bindings...");
 
@@ -39,5 +40,22 @@ var eye = new Vec3(0, -5, 2);
 var target = new Vec3(0, 0, 0);
 var viewMatrix = Camera.view_matrix_look_at(eye, target);
 Console.WriteLine("View matrix created successfully");
+
+// Test TcValue ABI and dict helpers used by ComponentRef asset field setters.
+if (Marshal.SizeOf<TcValue>() != 32)
+    throw new InvalidOperationException($"TcValue ABI size mismatch: {Marshal.SizeOf<TcValue>()}");
+
+var dict = TerminCore.ValueDictNew();
+try
+{
+    if (dict.Type != TcValueType.Dict)
+        throw new InvalidOperationException($"Expected TcValueType.Dict, got {dict.Type}");
+    TerminCore.ValueDictSet(ref dict, "uuid", TerminCore.ValueString("test-uuid"));
+    TerminCore.ValueDictSet(ref dict, "name", TerminCore.ValueString("test-name"));
+}
+finally
+{
+    TerminCore.ValueFree(ref dict);
+}
 
 Console.WriteLine("\nAll tests passed!");

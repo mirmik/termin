@@ -14,10 +14,8 @@ public enum TcValueType : int
     Float = 3,
     Double = 4,
     String = 5,
-    Vec3 = 6,
-    Quat = 7,
-    List = 8,
-    Dict = 9,
+    List = 6,
+    Dict = 7,
 }
 
 /// <summary>
@@ -57,7 +55,7 @@ public struct TcQuat
 /// Tagged union value type matching tc_value in C.
 /// Used for field inspection and serialization.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 40)]
+[StructLayout(LayoutKind.Explicit, Size = 32)]
 public struct TcValue
 {
     [FieldOffset(0)]
@@ -79,18 +77,17 @@ public struct TcValue
     [FieldOffset(8)]
     public IntPtr StringPtr;
 
+    // List and dict payloads are native structs. C# code should manipulate
+    // them through TerminCore.ValueList*/ValueDict* helpers, not by reading
+    // these fields directly.
     [FieldOffset(8)]
-    public TcVec3 Vec3Value;
+    public IntPtr ContainerItems;
 
-    [FieldOffset(8)]
-    public TcQuat QuatValue;
+    [FieldOffset(16)]
+    public nuint ContainerCount;
 
-    // List and Dict are complex - use IntPtr for now
-    [FieldOffset(8)]
-    public IntPtr ListPtr;
-
-    [FieldOffset(8)]
-    public IntPtr DictPtr;
+    [FieldOffset(24)]
+    public nuint ContainerCapacity;
 
     /// <summary>
     /// Get string value (copies from native memory).

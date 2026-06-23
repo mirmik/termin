@@ -32,7 +32,6 @@ message(STATUS "termin_core: using external termin_inspect package")
 # Header files (only .h, for IDE integration)
 set(TC_HEADERS
     include/inspect/tc_inspect_init.h
-    include/inspect/tc_inspect_component_adapter.h
     include/core/tc_scene_registry.h
     include/tc_opengl.h
     include/termin_core.h
