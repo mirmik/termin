@@ -2,7 +2,7 @@
 
 Дата: 2026-06-23
 
-Статус: Phase 1-4 implemented; Phase 5 cleanup pending.
+Статус: Phase 1-5 implemented; residual follow-up cleanup only.
 
 ## Цель
 
@@ -44,9 +44,9 @@
 - Не добавлять implicit registration при импорте `termin.bootstrap`.
 - Не менять scene JSON schema в рамках первого шага.
 
-## Текущее состояние
+## Pre-Migration State
 
-Сейчас startup-регистрации размазаны по нескольким местам.
+Before this migration startup-регистрации были размазаны по нескольким местам.
 
 `termin._native` при импорте выполняет:
 
@@ -91,6 +91,8 @@
 - Kept explicit domain registration functions for standalone compatibility:
   `register_animation_kind_handlers()`, `register_tc_skeleton_kind()`,
   `register_navmesh_kind_handlers()` and `register_voxel_grid_kind_handlers()`.
+- Deleted duplicate app-side registration helpers and dead `_native.render`
+  binding sources from `termin-app`.
 - `termin-bootstrap` remains the normal composition root for runtime, player
   and editor startup. Domain-native registration functions are explicit
   compatibility APIs rather than import side effects.
@@ -270,6 +272,7 @@ must map canonical Python classes to kind names explicitly:
 - `termin.skeleton.TcSkeleton` -> `tc_skeleton`
 - `termin.animation.TcAnimationClip` -> `tc_animation_clip`
 - `termin.voxels.TcVoxelGrid` -> `voxel_grid_handle`
+- `termin.navmesh.TcNavMesh` -> `navmesh_handle`
 
 ## Migration Plan
 
@@ -309,14 +312,16 @@ must map canonical Python classes to kind names explicitly:
 
 ### Phase 4: Remove domain native import side effects
 
-1. Replace auto-registration in `_animation_native` with an explicit
-   `register_animation_runtime_kinds()` function.
-2. Replace auto-registration in `_skeleton_native` with an explicit
-   `register_skeleton_runtime_kinds()` function.
-3. Replace auto-registration in `_voxels_native` with an explicit
-   `register_voxel_runtime_kinds()` function.
-4. Have `termin-bootstrap` call these explicit domain functions as part of the
-   selected profile.
+1. Replace auto-registration in `_animation_native` with explicit
+   `register_animation_kind_handlers()`.
+2. Replace auto-registration in `_skeleton_native` with explicit
+   `register_tc_skeleton_kind()`.
+3. Replace auto-registration in `_navmesh_native`/navmesh components with
+   explicit `register_navmesh_kind_handlers()`.
+4. Replace auto-registration in `_voxels_native` with explicit
+   `register_voxel_grid_kind_handlers()`.
+5. Keep `termin-bootstrap` as the normal composition root for runtime/player/
+   editor profiles.
 
 ### Phase 5: Delete duplicate app registrations
 
@@ -325,8 +330,9 @@ must map canonical Python classes to kind names explicitly:
    `termin-app/cpp/termin/assets/assets_bindings.cpp`.
 2. Remove duplicate `tc_skeleton` registration from
    `termin-app/cpp/termin/assets/assets_bindings.cpp`.
-3. Move or remove `entity` kind registration after deciding whether it is a
-   runtime scene kind or editor-only domain helper.
+3. Remove duplicate `entity` kind registration from
+   `termin-app/cpp/termin/assets/assets_bindings.cpp`; `termin-bootstrap`
+   owns it as a runtime scene kind.
 4. Update `docs/plans/2026-06-23-termin-app-native-reexport-cleanup-plan.md`
    once `_native` becomes a pure compatibility module.
 

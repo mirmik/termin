@@ -3,10 +3,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-#include "render_bindings.hpp"
-#include "inspect_bindings.hpp"
 #include "tc_component_python_bindings.hpp"
-#include "assets/assets_bindings.hpp"
 
 namespace nb = nanobind;
 
@@ -41,7 +38,6 @@ NB_MODULE(_native, m) {
     auto component_module = m.def_submodule("component", "Component module");
     auto editor_module = m.def_submodule("editor", "Editor module");
 
-    termin::bind_render(render_module);
     nb::module_ render_components = nb::module_::import_("termin.render_components");
     const char* render_component_exports[] = {
         "Camera",
