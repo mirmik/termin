@@ -21,7 +21,7 @@ def show_core_registry_viewer(ui) -> None:
         from tmesh import tc_mesh_get_all_info, tc_mesh_count
         from tgfx import tc_texture_get_all_info, tc_texture_count
         from tgfx import TcShader, shader_get_all_info, shader_count
-        from termin._native.render import (
+        from termin.materials import (
             tc_material_get_all_info,
             tc_material_count,
             TcMaterial,

@@ -17,8 +17,9 @@ from termin.scene import Entity, TcScene
 from termin.render_components import PerspectiveCameraComponent, MeshRenderer
 from termin.geombase import Pose3
 from tgfx import TcShader
-from termin._native.render import RenderEngine, ColorPass, PresentToScreenPass, TcMaterial
-from termin.render_framework import RenderPipeline
+from termin.materials import TcMaterial
+from termin.render_framework import RenderEngine, RenderPipeline
+from termin.render_passes import ColorPass, PresentToScreenPass
 from tmesh import TcMesh, CubeMesh
 
 

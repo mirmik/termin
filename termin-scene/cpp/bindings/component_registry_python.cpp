@@ -91,7 +91,7 @@ nb::object ComponentRegistryPython::get_class(const std::string& name) {
         if (nb::hasattr(scene_mod, name.c_str())) {
             return scene_mod.attr(name.c_str());
         }
-        nb::object render_mod = nb::module_::import_("termin._native.render");
+        nb::object render_mod = nb::module_::import_("termin.render_components._components_render_native");
         if (nb::hasattr(render_mod, name.c_str())) {
             return render_mod.attr(name.c_str());
         }
