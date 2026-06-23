@@ -1,4 +1,5 @@
 from termin.editor_tcgui.material_inspector import MaterialInspectorTcgui
+from tgfx import TcTexture
 
 
 class _Phase:
@@ -29,7 +30,7 @@ class _ResourceManager:
         return None
 
 
-def test_material_inspector_default_texture_uses_render_texture_handle_module() -> None:
+def test_material_inspector_default_texture_assigns_tc_texture() -> None:
     inspector = MaterialInspectorTcgui.__new__(MaterialInspectorTcgui)
     inspector._material = _Material()
     inspector._rm = _ResourceManager()
@@ -40,4 +41,5 @@ def test_material_inspector_default_texture_uses_render_texture_handle_module() 
     assigned = inspector._material.phases[0].assigned
     assert len(assigned) == 1
     assert assigned[0][0] == "u_albedo_texture"
+    assert isinstance(assigned[0][1], TcTexture)
     assert assigned[0][1].is_valid

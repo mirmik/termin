@@ -1,5 +1,6 @@
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.handle_accessors import HandleAccessors
+from tgfx import TcTexture
 
 
 def test_default_resource_manager_owns_default_runtime_registries() -> None:
@@ -30,5 +31,13 @@ def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
 
     assert manager.get_texture_asset("__white_1x1__") is not None
     assert manager.get_texture_asset("__normal_1x1__") is not None
+    white_texture = manager.get_texture_handle("__white_1x1__")
+    normal_texture = manager.get_texture_handle("__normal_1x1__")
+    assert isinstance(white_texture, TcTexture)
+    assert isinstance(normal_texture, TcTexture)
+    assert white_texture.is_valid
+    assert normal_texture.is_valid
+    assert white_texture.uuid == "__white_1x1__"
+    assert normal_texture.uuid == "__normal_1x1__"
     assert set(registered_meshes) == {"Cube", "Sphere", "Plane", "Cylinder"}
     assert manager.get_mesh_asset("Cube") is not None

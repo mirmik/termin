@@ -4,7 +4,6 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/ndarray.h>
 
-#include "handles.hpp"
 #include <tgfx/tgfx_material_handle.hpp>
 #include <termin/entity/entity.hpp>
 #include "termin/inspect/tc_kind.hpp"
@@ -20,39 +19,6 @@ namespace termin {
 void register_kind_handlers();
 
 void bind_assets(nb::module_& m) {
-    // Note: TcTexture is now in _texture_native module
-
-    // ========== TextureHandle ==========
-    nb::class_<TextureHandle>(m, "TextureHandle")
-        .def(nb::init<>())
-        .def(nb::init<nb::object>(), nb::arg("asset"))
-        .def_static("from_name", &TextureHandle::from_name, nb::arg("name"))
-        .def_static("from_asset", &TextureHandle::from_asset, nb::arg("asset"))
-        .def_static("from_direct", &TextureHandle::from_direct, nb::arg("texture"))
-        .def_static("from_file", &TextureHandle::from_file,
-            nb::arg("path"), nb::arg("name") = "")
-        .def_static("from_texture_data", &TextureHandle::from_texture_data,
-            nb::arg("texture_data"), nb::arg("name") = "texture")
-        .def_static("deserialize", &TextureHandle::deserialize, nb::arg("data"))
-        .def_rw("_direct", &TextureHandle::_direct)
-        .def_rw("asset", &TextureHandle::asset)
-        .def_prop_ro("is_valid", &TextureHandle::is_valid)
-        .def_prop_ro("is_direct", &TextureHandle::is_direct)
-        .def_prop_ro("name", &TextureHandle::name)
-        .def_prop_ro("version", &TextureHandle::version)
-        .def_prop_ro("source_path", &TextureHandle::source_path)
-        .def("get", &TextureHandle::get)
-        .def("get_asset", [](const TextureHandle& self) { return self.asset; })
-        .def("serialize", &TextureHandle::serialize);
-
-    // Note: TcMaterial is bound in _render_native module
-
-    // Note: TcSkeleton is now in _skeleton_native module
-
-    // ========== Free functions ==========
-    m.def("get_white_texture_handle", &get_white_texture_handle,
-        "Get a white 1x1 texture handle (singleton).");
-
     // Register kind handlers for serialization
     register_kind_handlers();
 }
