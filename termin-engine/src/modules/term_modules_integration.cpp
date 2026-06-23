@@ -157,16 +157,25 @@ const termin_modules::ModuleEnvironment& TermModulesIntegration::environment() c
 
 void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& runtime) const {
     runtime.set_environment(_environment);
+    const bool sync_live_scenes = _environment.sync_live_scenes;
 
-    auto before_unload = [](const termin_modules::ModuleRecord& record) {
-        degrade_module_components(record);
+    auto before_unload = [sync_live_scenes](const termin_modules::ModuleRecord& record) {
+        if (sync_live_scenes) {
+            degrade_module_components(record);
+        }
     };
-    auto after_load = [](const termin_modules::ModuleRecord& record) {
-        upgrade_module_components(record);
+    auto after_load = [sync_live_scenes](const termin_modules::ModuleRecord& record) {
+        if (sync_live_scenes) {
+            upgrade_module_components(record);
+        }
     };
-    auto restore_reload_state = [](const termin_modules::ModuleRecord& record,
-                                   const std::shared_ptr<termin_modules::IModuleReloadState>&,
-                                   std::string& error) {
+    auto restore_reload_state = [sync_live_scenes](const termin_modules::ModuleRecord& record,
+                                                   const std::shared_ptr<termin_modules::IModuleReloadState>&,
+                                                   std::string& error) {
+        if (!sync_live_scenes) {
+            return true;
+        }
+
         const std::vector<std::string> type_names = module_component_types(record);
         if (type_names.empty()) {
             return true;

@@ -69,7 +69,8 @@ NB_MODULE(_termin_modules_native, m) {
         )
         .def_rw("python_executable", &ModuleEnvironment::python_executable)
         .def_rw("use_project_venv", &ModuleEnvironment::use_project_venv)
-        .def_rw("allow_python_package_install", &ModuleEnvironment::allow_python_package_install);
+        .def_rw("allow_python_package_install", &ModuleEnvironment::allow_python_package_install)
+        .def_rw("sync_live_scenes", &ModuleEnvironment::sync_live_scenes);
 
     nb::class_<ModuleSpec>(m, "ModuleSpec")
         .def_ro("id", &ModuleSpec::id)
