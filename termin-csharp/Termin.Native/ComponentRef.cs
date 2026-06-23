@@ -138,7 +138,6 @@ public readonly struct ComponentRef
     public void SetField(string path, object value, Scene? scene = null)
     {
         if (_ptr == IntPtr.Zero || path == null) return;
-        // Entity_lib functions still use IntPtr for scene, pass zero for now
         var scenePtr = IntPtr.Zero;
 
         switch (value)
@@ -162,10 +161,10 @@ public readonly struct ComponentRef
                 TerminCore.ComponentSetFieldString(_ptr, path, s, scenePtr);
                 break;
             case TcMeshHandle mh:
-                TerminCore.ComponentSetFieldMesh(_ptr, path, mh, scenePtr);
+                SetFieldMesh(path, mh, scene);
                 break;
             case TcMaterialHandle matH:
-                TerminCore.ComponentSetFieldMaterial(_ptr, path, matH, scenePtr);
+                SetFieldMaterial(path, matH, scene);
                 break;
             case TcVec3 v3:
                 TerminCore.ComponentSetFieldVec3(_ptr, path, v3, scenePtr);
@@ -184,8 +183,11 @@ public readonly struct ComponentRef
     public void SetFieldMesh(string path, TcMeshHandle handle, Scene? scene = null)
     {
         if (_ptr == IntPtr.Zero) return;
-        // Entity_lib functions still use IntPtr for scene, pass zero for now
-        TerminCore.ComponentSetFieldMesh(_ptr, path, handle, IntPtr.Zero);
+        var uuid = PtrToString(TerminCore.MeshGetUuidStr(handle));
+        if (string.IsNullOrEmpty(uuid)) return;
+
+        var name = PtrToString(TerminCore.MeshGetNameStr(handle));
+        SetFieldAssetRef(path, uuid, name);
     }
 
     /// <summary>
@@ -194,8 +196,32 @@ public readonly struct ComponentRef
     public void SetFieldMaterial(string path, TcMaterialHandle handle, Scene? scene = null)
     {
         if (_ptr == IntPtr.Zero) return;
-        // Entity_lib functions still use IntPtr for scene, pass zero for now
-        TerminCore.ComponentSetFieldMaterial(_ptr, path, handle, IntPtr.Zero);
+        var uuid = PtrToString(TerminCore.MaterialGetUuidStr(handle));
+        if (string.IsNullOrEmpty(uuid)) return;
+
+        var name = PtrToString(TerminCore.MaterialGetNameStr(handle));
+        SetFieldAssetRef(path, uuid, name);
+    }
+
+    private void SetFieldAssetRef(string path, string uuid, string? name)
+    {
+        var value = TerminCore.ValueDictNew();
+        try
+        {
+            TerminCore.ValueDictSet(ref value, "uuid", TerminCore.ValueString(uuid));
+            if (!string.IsNullOrEmpty(name))
+                TerminCore.ValueDictSet(ref value, "name", TerminCore.ValueString(name));
+            TerminCore.ComponentInspectSet(_ptr, path, value, IntPtr.Zero);
+        }
+        finally
+        {
+            TerminCore.ValueFree(ref value);
+        }
+    }
+
+    private static string? PtrToString(IntPtr ptr)
+    {
+        return ptr == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(ptr);
     }
 
     /// <summary>

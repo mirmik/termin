@@ -21,7 +21,8 @@ extern "C" {
 // Core inspect/kind init (generic only, no scene/render domain registrations).
 TC_INSPECT_INIT_API void tc_inspect_kind_core_init(void);
 
-// Scene/component adapter init (domain kinds and adapter wiring).
+// Scene/component adapter init. The adapter ABI is owned by termin_scene;
+// domain-specific kind registration is performed by domain bindings.
 TC_API void tc_inspect_component_adapter_init(void);
 
 // Python adapter init.

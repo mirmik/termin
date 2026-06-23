@@ -8,6 +8,8 @@
 #include <cstdint>
 
 #include <termin/entity/component.hpp>
+#include <termin/inspect/tc_kind_cpp_ext.hpp>
+#include <tgfx/tgfx_mesh_handle.hpp>
 #include "material/tc_material_handle.hpp"
 #include "inspect/tc_inspect_init.h"
 #include <inspect/tc_inspect_pass_adapter.h>
@@ -18,10 +20,24 @@ namespace nb = nanobind;
 
 namespace termin {
 
+namespace {
+
+void register_domain_inspect_kinds() {
+    static bool registered = false;
+    if (registered) return;
+    registered = true;
+
+    tc::register_cpp_handle_kind<TcMesh>("tc_mesh");
+    tc::register_cpp_handle_kind<TcMaterial>("tc_material");
+}
+
+} // namespace
+
 void bind_inspect(nb::module_& m) {
     // Domain-specific init (must run before types are used)
     tc_inspect_kind_core_init();
     tc_inspect_component_adapter_init();
+    register_domain_inspect_kinds();
     tc_inspect_pass_adapter_init();
     tc_inspect_python_adapter_init();
 

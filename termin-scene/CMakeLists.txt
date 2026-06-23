@@ -54,6 +54,7 @@ set(TERMIN_SCENE_SOURCES
 )
 
 set(TERMIN_SCENE_CXX_SOURCES
+    cpp/inspect/tc_inspect_component_adapter.cpp
     cpp/geom/general_transform3.cpp
     cpp/entity/entity.cpp
     cpp/entity/component.cpp
@@ -76,6 +77,7 @@ set(TERMIN_SCENE_CXX_HEADERS
     include/termin/entity/vtable_utils.hpp
     include/termin/tc_scene.hpp
     include/inspect/tc_inspect_context.h
+    include/inspect/tc_inspect_component_adapter.h
 )
 
 set(TERMIN_SCENE_HEADERS

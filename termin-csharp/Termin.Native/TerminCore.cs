@@ -9,7 +9,10 @@ namespace Termin.Native;
 public static class TerminCore
 {
     const string DLL = "termin_core";
+    const string BASE_DLL = "termin_base";
+    const string SCENE_DLL = "termin_scene";
     const string MESH_DLL = "termin_mesh";
+    const string GRAPHICS_DLL = "termin_graphics";
     const string TGFX2_DLL = "termin_graphics2";
 
     // ========================================================================
@@ -410,6 +413,12 @@ public static class TerminCore
     [DllImport(DLL, EntryPoint = "tc_material_get")]
     public static extern IntPtr MaterialGet(TcMaterialHandle handle);
 
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_get_uuid_str", CharSet = CharSet.Ansi)]
+    public static extern IntPtr MaterialGetUuidStr(TcMaterialHandle handle);
+
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_get_name_str", CharSet = CharSet.Ansi)]
+    public static extern IntPtr MaterialGetNameStr(TcMaterialHandle handle);
+
     [DllImport(DLL, EntryPoint = "tc_material_add_phase", CharSet = CharSet.Ansi)]
     public static extern IntPtr MaterialAddPhase(IntPtr material, TcShaderHandle shader, string phaseMark, int priority);
 
@@ -478,67 +487,59 @@ public static class TerminCore
     public static extern TcEntityHandle ComponentGetOwner(IntPtr component);
 
     // ========================================================================
-    // Component Field Access (Inspect) - in entity_lib
+    // Component Field Access (Inspect) - in termin_scene
     // ========================================================================
 
-    private const string ENTITY_DLL = "entity_lib";
-
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_inspect_get", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_inspect_get", CharSet = CharSet.Ansi)]
     public static extern TcValue ComponentInspectGet(IntPtr component, string path);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_inspect_set", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_inspect_set", CharSet = CharSet.Ansi)]
     public static extern void ComponentInspectSet(IntPtr component, string path, TcValue value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_int", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_field_int", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldInt(IntPtr component, string path, long value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_float", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_field_float", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldFloat(IntPtr component, string path, float value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_double", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_field_double", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldDouble(IntPtr component, string path, double value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_bool", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_field_bool", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldBool(IntPtr component, string path, [MarshalAs(UnmanagedType.U1)] bool value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_string", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_field_string", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldString(IntPtr component, string path, string value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_mesh", CharSet = CharSet.Ansi)]
-    public static extern void ComponentSetFieldMesh(IntPtr component, string path, TcMeshHandle handle, IntPtr scene);
-
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_material", CharSet = CharSet.Ansi)]
-    public static extern void ComponentSetFieldMaterial(IntPtr component, string path, TcMaterialHandle handle, IntPtr scene);
-
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_vec3", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_field_vec3", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldVec3(IntPtr component, string path, TcVec3 value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_vec3", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_vec3", CharSet = CharSet.Ansi)]
     public static extern void ComponentGetFieldVec3(IntPtr component, string path, out TcVec3 value);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_set_field_quat", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_field_quat", CharSet = CharSet.Ansi)]
     public static extern void ComponentSetFieldQuat(IntPtr component, string path, TcQuat value, IntPtr scene);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_quat", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_quat", CharSet = CharSet.Ansi)]
     public static extern void ComponentGetFieldQuat(IntPtr component, string path, out TcQuat value);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_int", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_int", CharSet = CharSet.Ansi)]
     public static extern long ComponentGetFieldInt(IntPtr component, string path);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_float", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_float", CharSet = CharSet.Ansi)]
     public static extern float ComponentGetFieldFloat(IntPtr component, string path);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_double", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_double", CharSet = CharSet.Ansi)]
     public static extern double ComponentGetFieldDouble(IntPtr component, string path);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_bool", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_bool", CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ComponentGetFieldBool(IntPtr component, string path);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_string", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_string", CharSet = CharSet.Ansi)]
     public static extern IntPtr ComponentGetFieldString(IntPtr component, string path);
 
-    [DllImport(ENTITY_DLL, EntryPoint = "tc_component_get_field_string_buffer", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_field_string_buffer", CharSet = CharSet.Ansi)]
     public static extern nuint ComponentGetFieldStringBuffer(
         IntPtr component,
         string path,
@@ -598,25 +599,37 @@ public static class TerminCore
     // tc_value - Tagged union for field values
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_value_nil")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_nil")]
     public static extern TcValue ValueNil();
 
-    [DllImport(DLL, EntryPoint = "tc_value_bool")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_bool")]
     public static extern TcValue ValueBool([MarshalAs(UnmanagedType.U1)] bool v);
 
-    [DllImport(DLL, EntryPoint = "tc_value_int")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_int")]
     public static extern TcValue ValueInt(long v);
 
-    [DllImport(DLL, EntryPoint = "tc_value_float")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_float")]
     public static extern TcValue ValueFloat(float v);
 
-    [DllImport(DLL, EntryPoint = "tc_value_double")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_double")]
     public static extern TcValue ValueDouble(double v);
 
-    [DllImport(DLL, EntryPoint = "tc_value_string", CharSet = CharSet.Ansi)]
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_string", CharSet = CharSet.Ansi)]
     public static extern TcValue ValueString(string s);
 
-    [DllImport(DLL, EntryPoint = "tc_value_free")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_list_new")]
+    public static extern TcValue ValueListNew();
+
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_dict_new")]
+    public static extern TcValue ValueDictNew();
+
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_list_push")]
+    public static extern void ValueListPush(ref TcValue list, TcValue item);
+
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_dict_set", CharSet = CharSet.Ansi)]
+    public static extern void ValueDictSet(ref TcValue dict, string key, TcValue item);
+
+    [DllImport(BASE_DLL, EntryPoint = "tc_value_free")]
     public static extern void ValueFree(ref TcValue v);
 
     // ========================================================================

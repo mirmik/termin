@@ -1,12 +1,8 @@
 // tc_inspect_component_adapter.cpp - Scene/component adapter for inspect API
 
 #include <termin/entity/component.hpp>
-#include "../../cpp/termin/inspect/tc_kind_cpp_ext.hpp"
-#include <tgfx/tgfx_mesh_handle.hpp>
-#include <tgfx/tgfx_material_handle.hpp>
 
 #include "inspect/tc_inspect_component_adapter.h"
-#include "inspect/tc_inspect_init.h"
 
 #include <algorithm>
 #include <cstring>
@@ -38,23 +34,9 @@ std::string g_legacy_field_string_result;
 
 } // namespace
 
-namespace tc {
-
-void register_component_adapter_kinds() {
-    static bool registered = false;
-    if (registered) return;
-    registered = true;
-
-    register_cpp_handle_kind<termin::TcMesh>("tc_mesh");
-    register_cpp_handle_kind<termin::TcMaterial>("tc_material");
-}
-
-} // namespace tc
-
 extern "C" {
 
 void tc_inspect_component_adapter_init(void) {
-    tc::register_component_adapter_kinds();
 }
 
 tc_value tc_component_inspect_get(tc_component* c, const char* path) {
@@ -169,32 +151,6 @@ void tc_component_set_field_bool(tc_component* c, const char* path, bool value, 
 
 void tc_component_set_field_string(tc_component* c, const char* path, const char* value, void* context) {
     tc_value v = tc_value_string(value ? value : "");
-    tc_component_inspect_set(c, path, v, context);
-    tc_value_free(&v);
-}
-
-void tc_component_set_field_mesh(tc_component* c, const char* path, tc_mesh_handle handle, void* context) {
-    const char* uuid = tc_mesh_uuid(handle);
-    if (!uuid) return;
-
-    tc_value v = tc_value_dict_new();
-    tc_value_dict_set(&v, "uuid", tc_value_string(uuid));
-    const char* name = tc_mesh_name(handle);
-    if (name) tc_value_dict_set(&v, "name", tc_value_string(name));
-
-    tc_component_inspect_set(c, path, v, context);
-    tc_value_free(&v);
-}
-
-void tc_component_set_field_material(tc_component* c, const char* path, tc_material_handle handle, void* context) {
-    const char* uuid = tc_material_uuid(handle);
-    if (!uuid) return;
-
-    tc_value v = tc_value_dict_new();
-    tc_value_dict_set(&v, "uuid", tc_value_string(uuid));
-    const char* name = tc_material_name(handle);
-    if (name) tc_value_dict_set(&v, "name", tc_value_string(name));
-
     tc_component_inspect_set(c, path, v, context);
     tc_value_free(&v);
 }
