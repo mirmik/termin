@@ -24,7 +24,6 @@ setup(
         "termin-components-physics",
         "termin-components-ui",
         "termin-physics",
-        "termin-physics-fem",
         "termin-scene",
         "termin-voxels",
         "tcgui",
