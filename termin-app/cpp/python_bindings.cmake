@@ -34,8 +34,6 @@ set(TERMIN_APP_NATIVE_SOURCES
 
     # Entity domain bindings (migrated from _entity_native)
     termin/bindings/entity/entity_native_to_native.cpp
-    termin/tc_scene_bindings.cpp
-    termin/tc_scene_lighting_bindings.cpp
 )
 
 if(TERMIN_HAS_RECAST)

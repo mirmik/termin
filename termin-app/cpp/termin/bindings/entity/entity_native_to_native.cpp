@@ -2,7 +2,7 @@
 //
 // Core ECS/input/render component types are owned by their domain packages and
 // should be imported from termin.scene, termin.input, and termin.render_components.
-// This module keeps only app-owned scene render extensions and process cleanup.
+// This module keeps only app-level inspect registration and process cleanup.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -10,8 +10,6 @@
 
 #include <utility>
 #include <tcbase/tc_log.hpp>
-
-#include "../../scene_bindings.hpp"
 
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
@@ -22,24 +20,6 @@ namespace nb = nanobind;
 using namespace termin;
 
 void bind_entity_domain(nb::module_& m) {
-    // Import _scene_native first. It owns the ECS nanobind types used by the
-    // scene render extension bindings below.
-    nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");
-
-    // Import tmesh native module so TcMesh is registered before
-    // SceneRenderState::skybox_mesh() bindings are attached.
-    nb::module_::import_("tmesh._tmesh_native");
-
-    // Import _viewport_native for TcViewport type.
-    nb::module_::import_("termin.viewport._viewport_native");
-
-    // Import tcbase for Action, MouseButton, Mods enums used by callbacks.
-    nb::module_::import_("tcbase._tcbase_native");
-
-    // --- TcScene render extensions (ViewportConfig, background_color, pipelines, etc.) ---
-    bind_tc_scene(m);
-    bind_tc_scene_lighting(m);
-
     // Register CxxComponent base fields in InspectRegistry.
     tc::InspectFieldInfo display_name_field;
     display_name_field.type_name = "Component";
