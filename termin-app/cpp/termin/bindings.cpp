@@ -4,7 +4,6 @@
 #include <nanobind/stl/vector.h>
 
 #include "render_bindings.hpp"
-#include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
 #include "tc_component_python_bindings.hpp"
 #include "assets/assets_bindings.hpp"
@@ -15,12 +14,6 @@
 #include <tcbase/tc_log.hpp>
 
 namespace nb = nanobind;
-
-namespace termin {
-void bind_gizmo(nb::module_& m);
-void bind_editor_interaction(nb::module_& m);
-void bind_frame_graph_debugger(nb::module_& m);
-}
 
 // Entity domain bindings (migrated from _entity_native)
 void bind_entity_domain(nb::module_& m);
@@ -124,23 +117,36 @@ NB_MODULE(_native, m) {
     register_tc_mesh_kind();
 
     auto render_module = m.def_submodule("render", "Render module");
-    // SDL platform bindings moved to termin-display/_platform_native
-    auto scene_module = m.def_submodule("scene", "Scene module");
     auto modules_module = m.def_submodule("modules", "Modules integration");
-    auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
-    // log_module removed — log is imported from tcbase
     auto component_module = m.def_submodule("component", "Component module");
-    auto assets_module = m.def_submodule("assets", "Assets module");
     auto editor_module = m.def_submodule("editor", "Editor module");
 
     termin::bind_render(render_module);
-    termin::bind_gizmo(editor_module);
-    termin::bind_editor_interaction(editor_module);
-    termin::bind_frame_graph_debugger(editor_module);
+    nb::module_ editor_native = nb::module_::import_("termin.editor._editor_native");
+    const char* editor_exports[] = {
+        "EditorInteractionSystem",
+        "EditorViewportInputManager",
+        "FrameGraphCapture",
+        "FrameGraphDebuggerCore",
+        "FrameGraphPresenter",
+        "Gizmo",
+        "GizmoCollider",
+        "GizmoHit",
+        "GizmoManager",
+        "HDRStats",
+        "SelectionManager",
+        "TextureInfo",
+        "TransformElement",
+        "TransformGizmo",
+    };
+    for (const char* name : editor_exports) {
+        editor_module.attr(name) = editor_native.attr(name);
+    }
+    render_module.attr("SolidPrimitiveRenderer") =
+        editor_native.attr("SolidPrimitiveRenderer");
     nb::module_ engine_native = nb::module_::import_("termin.engine._engine_native");
     modules_module.attr("TermModulesIntegration") =
         engine_native.attr("modules").attr("TermModulesIntegration");
-    termin::bind_skeleton(skeleton_module);
     termin::init_domain_inspect();
     // Import log and profiler from tcbase instead of keeping local bindings
     nb::module_ tcbase = nb::module_::import_("tcbase._tcbase_native");
@@ -153,7 +159,7 @@ NB_MODULE(_native, m) {
     // Initialize termin-specific drawable and input callbacks
     termin::init_python_component_callbacks();
 
-    termin::bind_assets(assets_module);
+    termin::init_asset_kind_handlers();
 
     // Register cleanup function to be called before Python shutdown
     m.def("_cleanup_python_objects", []() {},

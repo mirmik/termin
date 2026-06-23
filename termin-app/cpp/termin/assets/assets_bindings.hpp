@@ -1,9 +1,7 @@
 #pragma once
 
-#include <nanobind/nanobind.h>
-
 namespace termin {
 
-void bind_assets(nanobind::module_& m);
+void init_asset_kind_handlers();
 
 } // namespace termin

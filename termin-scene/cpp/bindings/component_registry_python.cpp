@@ -107,10 +107,6 @@ nb::object ComponentRegistryPython::get_class(const std::string& name) {
         if (nb::hasattr(navmesh_native_mod, name.c_str())) {
             return navmesh_native_mod.attr(name.c_str());
         }
-        nb::object skeleton_mod = nb::module_::import_("termin._native.skeleton");
-        if (nb::hasattr(skeleton_mod, name.c_str())) {
-            return skeleton_mod.attr(name.c_str());
-        }
     } catch (...) {
         tc::Log::error("ComponentRegistry::get_class: error importing module for component %s", name.c_str());
     }

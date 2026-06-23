@@ -18,8 +18,7 @@ namespace termin {
 // Forward declaration
 void register_kind_handlers();
 
-void bind_assets(nb::module_& m) {
-    // Register kind handlers for serialization
+void init_asset_kind_handlers() {
     register_kind_handlers();
 }
 

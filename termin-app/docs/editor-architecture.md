@@ -31,8 +31,8 @@
                         │ uses
            ┌────────────▼────────────┐
            │  Engine / Scene         │
-           │  termin/_native/…       │
-           │  termin/visualization/… │
+           │  editor native module   │
+           │  scene/render packages  │
            └─────────────────────────┘
 ```
 

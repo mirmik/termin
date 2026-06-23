@@ -10,7 +10,7 @@ def make_editor_pipeline() -> RenderPipeline:
     Returns:
         RenderPipeline configured for editor use.
     """
-    from termin._native.editor import EditorInteractionSystem
+    from termin.editor._editor_native import EditorInteractionSystem
     from termin.render_components import DepthPass
     from termin.render_framework import ResourceSpec
     from termin.render_passes import (
