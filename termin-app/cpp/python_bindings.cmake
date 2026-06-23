@@ -9,13 +9,9 @@ set(TERMIN_APP_NATIVE_SOURCES
     # Python bindings entry point + per-subsystem registration files.
     termin/bindings.cpp
     termin/bindings/render/render_module.cpp
-    termin/bindings/render/shader_parser.cpp
     termin/bindings/render/camera.cpp
     termin/bindings/render/shadow.cpp
-    termin/bindings/render/frame_pass.cpp
     termin/bindings/render/material.cpp
-    termin/bindings/render/drawable.cpp
-    termin/bindings/render/renderers.cpp
     termin/bindings/render/solid_primitive.cpp
     termin/bindings/editor/gizmo_bindings.cpp
     termin/bindings/editor/editor_interaction_bindings.cpp

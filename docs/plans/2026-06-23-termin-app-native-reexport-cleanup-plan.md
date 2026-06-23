@@ -46,6 +46,8 @@
 
 ### Batch 1: `termin._native.render` imports
 
+Status: done, 2026-06-23.
+
 Goal: убрать прямые зависимости доменных пакетов от app-level render submodule.
 
 Known users:
@@ -76,11 +78,13 @@ Work:
 
 Verification:
 
-- `./run-tests.sh`
-- import smoke for affected packages:
+- `./run-tests.sh`: passed, 585 Python tests passed, 1 skipped; C/C++ tests
+  and editor smoke tests passed.
+- import smoke for affected packages: passed for
   `termin.navmesh`, `termin.default_assets`, `termin.render`,
   `termin.scene`
-- `rg "termin\\._native\\.render|_native\\.render" termin-* examples`
+- `rg "termin\\._native\\.render|_native\\.render"` outside build/sdk/docs:
+  no matches.
 
 ### Batch 2: inspect/kind compatibility imports
 

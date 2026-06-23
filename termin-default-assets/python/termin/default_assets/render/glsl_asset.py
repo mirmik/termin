@@ -77,7 +77,7 @@ class GlslAsset(DataAsset[str]):
             return
 
         try:
-            from termin._native.render import glsl_preprocessor
+            from termin.materials import glsl_preprocessor
             glsl_preprocessor().register_include(self._name, self._data)
             self._registered_in_preprocessor = True
         except ImportError:
