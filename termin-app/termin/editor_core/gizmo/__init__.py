@@ -13,8 +13,8 @@ Core classes:
 - TransformGizmo: Standard translate/rotate gizmo
 """
 
-# Import from C++ native module
-from termin._native.editor import (
+# Import from editor-private C++ native module
+from termin.editor._editor_native import (
     Gizmo,
     GizmoCollider,
     GizmoHit,

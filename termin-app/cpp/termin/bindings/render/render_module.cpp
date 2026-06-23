@@ -37,9 +37,6 @@ void bind_render(nb::module_& m) {
     // Register kind handlers for TcMaterial serialization
     register_material_kind_handlers();
 
-    // SolidPrimitiveRenderer
-    bind_solid_primitive(m);
-
 }
 
 } // namespace termin

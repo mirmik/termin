@@ -1,6 +1,16 @@
-import termin._native.assets as native_assets
+import importlib
+
+import pytest
 
 
-def test_app_native_assets_does_not_export_texture_handle() -> None:
-    assert "TextureHandle" not in dir(native_assets)
-    assert "get_white_texture_handle" not in dir(native_assets)
+@pytest.mark.parametrize(
+    "module_name",
+    [
+        "termin._native.assets",
+        "termin._native.scene",
+        "termin._native.skeleton",
+    ],
+)
+def test_empty_app_native_compat_submodules_are_removed(module_name: str) -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(module_name)

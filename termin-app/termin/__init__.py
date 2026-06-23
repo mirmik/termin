@@ -25,7 +25,7 @@ def _preload_native_dependencies() -> None:
 
 class _TerminNativePreloadFinder(MetaPathFinder):
     def find_spec(self, fullname: str, path=None, target=None):
-        if fullname == "termin._native":
+        if fullname in {"termin._native", "termin.editor._editor_native"}:
             _preload_native_dependencies()
         return None
 

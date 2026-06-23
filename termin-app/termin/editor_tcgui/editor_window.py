@@ -324,7 +324,7 @@ class EditorWindowTcgui:
         )
 
         # Editor interaction system
-        from termin._native.editor import EditorInteractionSystem
+        from termin.editor._editor_native import EditorInteractionSystem
         self._interaction_system = EditorInteractionSystem()
         EditorInteractionSystem.set_instance(self._interaction_system)
         self.gizmo_manager = self._interaction_system.gizmo_manager
@@ -541,7 +541,7 @@ class EditorWindowTcgui:
 
     def _setup_editor_viewport_input_managers(self, display) -> None:
         """Create EditorViewportInputManager for each viewport on the display."""
-        from termin._native.editor import EditorViewportInputManager
+        from termin.editor._editor_native import EditorViewportInputManager
 
         self._editor_viewport_input_managers.clear()
 

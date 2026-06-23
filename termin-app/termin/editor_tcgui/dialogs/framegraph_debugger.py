@@ -324,7 +324,7 @@ def show_framegraph_debugger(
         log.error("[FrameDebugger] ui.create_window is not available — cannot open")
         return None
 
-    from termin._native.editor import FrameGraphDebuggerCore
+    from termin.editor._editor_native import FrameGraphDebuggerCore
 
     core = FrameGraphDebuggerCore()
     model = FramegraphDebuggerModel(

@@ -276,7 +276,7 @@ class EditorFramegraphDebuggerService:
         if rendering_controller is None:
             raise RuntimeError("Rendering controller is not available")
 
-        from termin._native.editor import FrameGraphDebuggerCore
+        from termin.editor._editor_native import FrameGraphDebuggerCore
         from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
 
         self._core = FrameGraphDebuggerCore()
