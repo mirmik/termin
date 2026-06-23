@@ -19,7 +19,7 @@ def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
     """Collect inspect_fields from InspectRegistry for obj."""
     result: dict[str, InspectField] = {}
     try:
-        from termin._native.inspect import InspectRegistry, TypeBackend
+        from termin.inspect import InspectRegistry, TypeBackend
         from termin.scene import TcComponentRef
         registry = InspectRegistry.instance()
 
@@ -125,7 +125,7 @@ def _type_name_for_target(obj: Any) -> str:
 
 def _collect_inspector_metadata(obj: Any) -> dict[str, Any]:
     try:
-        from termin._native.inspect import InspectRegistry
+        from termin.inspect import InspectRegistry
         registry = InspectRegistry.instance()
         metadata = registry.get_type_metadata(_type_name_for_target(obj))
         inspector = metadata.get("inspector", {}) if isinstance(metadata, dict) else {}

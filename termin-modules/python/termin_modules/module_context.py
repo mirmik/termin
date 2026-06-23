@@ -216,7 +216,7 @@ def _unregister_python_kinds(registrations: ModuleOwnedRegistrations) -> None:
         return
 
     try:
-        from termin._native.kind import KindRegistry
+        from termin.inspect.kind import KindRegistry
 
         registry = KindRegistry.instance()
         for name in sorted(registrations.python_kinds):

@@ -25,7 +25,6 @@ set(TERMIN_APP_NATIVE_SOURCES
     termin/tc_component_python_bindings.cpp
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
-    termin/kind_bindings.cpp
     termin/assets/assets_bindings.cpp
     termin/assets/handles.cpp
 

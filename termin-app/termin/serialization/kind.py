@@ -26,98 +26,7 @@ Usage:
     )
 """
 
-from termin._native.kind import KindRegistry as _KindRegistry
-from tcbase import log
-
-
-class KindRegistry:
-    """Registry for kind serialization handlers."""
-
-    @staticmethod
-    def instance() -> _KindRegistry:
-        """Get the singleton instance."""
-        return _KindRegistry.instance()
-
-    @staticmethod
-    def register_python(
-        name: str,
-        serialize=None,
-        deserialize=None
-    ):
-        """Register Python handlers for a kind.
-
-        Args:
-            name: Kind name (e.g., "mesh_handle", "my_enum")
-            serialize: callable(obj) -> dict
-            deserialize: callable(dict) -> obj
-        """
-        _KindRegistry.instance().register_python(
-            name,
-            serialize or (lambda x: None),
-            deserialize or (lambda x: None)
-        )
-        try:
-            from termin_modules.module_context import record_python_kind
-        except ModuleNotFoundError as exc:
-            if exc.name not in ("termin_modules", "termin_modules.module_context"):
-                log.error("Failed to load module ownership context", exc_info=True)
-            return
-        except Exception:
-            log.error("Failed to load module ownership context", exc_info=True)
-            return
-
-        try:
-            record_python_kind(name)
-        except Exception:
-            log.error(f"Failed to record module ownership for Python kind {name}", exc_info=True)
-
-    @staticmethod
-    def serialize(kind: str, obj):
-        """Serialize object using registered handler."""
-        return _KindRegistry.instance().serialize(kind, obj)
-
-    @staticmethod
-    def deserialize(kind: str, data):
-        """Deserialize data using registered handler."""
-        return _KindRegistry.instance().deserialize(kind, data)
-
-    @staticmethod
-    def kinds():
-        """Get all registered kind names."""
-        return _KindRegistry.instance().kinds()
-
-
-def register_kind(name: str):
-    """Decorator to register a kind handler class.
-
-    The class should have static methods:
-    - serialize(obj) -> dict
-    - deserialize(dict) -> obj
-
-    Example:
-        @register_kind("light_type")
-        class LightTypeKind:
-            @staticmethod
-            def serialize(obj):
-                return obj.value  # enum to int
-
-            @staticmethod
-            def deserialize(data):
-                from termin.lighting import LightType
-                return LightType(data)
-    """
-    def decorator(cls):
-        serialize_fn = getattr(cls, 'serialize', None)
-        deserialize_fn = getattr(cls, 'deserialize', None)
-
-        KindRegistry.register_python(
-            name,
-            serialize=serialize_fn,
-            deserialize=deserialize_fn
-        )
-        return cls
-
-    return decorator
+from termin.inspect.kind import KindRegistry, register_kind
 
 
 __all__ = ["KindRegistry", "register_kind"]
@@ -126,24 +35,6 @@ __all__ = ["KindRegistry", "register_kind"]
 # ============================================================================
 # Builtin kind handlers
 # ============================================================================
-
-@register_kind("layer_mask")
-class LayerMaskKind:
-    """Handler for layer_mask kind (64-bit unsigned int as hex string)."""
-
-    @staticmethod
-    def serialize(obj):
-        # Serialize as hex string to handle values > int64_t max
-        if isinstance(obj, str):
-            return obj  # Already serialized
-        return hex(obj)
-
-    @staticmethod
-    def deserialize(data):
-        if isinstance(data, str):
-            return int(data, 16) if data.startswith("0x") else int(data)
-        return int(data)
-
 
 @register_kind("navmesh_handle")
 class NavMeshHandleKind:

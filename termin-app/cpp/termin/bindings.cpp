@@ -16,7 +16,6 @@ extern "C" {
 #include "render_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
-#include "kind_bindings.hpp"
 #include "tc_component_python_bindings.hpp"
 #include "assets/assets_bindings.hpp"
 
@@ -159,9 +158,7 @@ NB_MODULE(_native, m) {
     auto scene_module = m.def_submodule("scene", "Scene module");
     auto modules_module = m.def_submodule("modules", "Modules integration");
     auto skeleton_module = m.def_submodule("skeleton", "Skeleton module");
-    auto inspect_module = m.def_submodule("inspect", "Inspect module");
     // log_module removed — log is imported from tcbase
-    auto kind_module = m.def_submodule("kind", "Kind serialization module");
     auto component_module = m.def_submodule("component", "Component module");
     auto assets_module = m.def_submodule("assets", "Assets module");
     auto editor_module = m.def_submodule("editor", "Editor module");
@@ -174,12 +171,11 @@ NB_MODULE(_native, m) {
     modules_module.attr("TermModulesIntegration") =
         engine_native.attr("modules").attr("TermModulesIntegration");
     termin::bind_skeleton(skeleton_module);
-    termin::bind_inspect(inspect_module);
+    termin::init_domain_inspect();
     // Import log and profiler from tcbase instead of keeping local bindings
     nb::module_ tcbase = nb::module_::import_("tcbase._tcbase_native");
     m.attr("log") = tcbase.attr("log");
     m.attr("profiler") = tcbase.attr("profiler");
-    termin::bind_kind(kind_module);
 
     // TcComponent is registered in _scene_native — re-export it
     nb::module_ scene_native = nb::module_::import_("termin.scene._scene_native");

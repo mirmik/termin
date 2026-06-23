@@ -873,7 +873,7 @@ class ClipSelectorWidget(FieldWidget):
         self._combo.add_item("(none)")
         if self._target is not None:
             try:
-                from termin._native.inspect import InspectRegistry
+                from termin.inspect import InspectRegistry
                 clips = InspectRegistry.instance().get(self._target, "clips")
                 if clips:
                     for item in sorted(clips, key=lambda x: x.get("name", "")):
