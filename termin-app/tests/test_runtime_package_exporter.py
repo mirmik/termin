@@ -66,6 +66,14 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
             "tcbase/__init__.py": "VALUE = 'runtime seed'\n",
         },
     )
+    _write_fake_distribution(
+        site_packages,
+        "termin-display",
+        {
+            "termin/display/__init__.py": "VALUE = 'display seed'\n",
+            "termin/viewport/__init__.py": "VALUE = 'viewport seed'\n",
+        },
+    )
     (python_overlay / "termin" / "player").mkdir(parents=True)
     (python_overlay / "termin" / "__init__.py").write_text("", encoding="utf-8")
     (python_overlay / "termin" / "player" / "__main__.py").write_text(
@@ -109,6 +117,14 @@ def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
         "tcbase",
         {
             "tcbase/__init__.py": "VALUE = 'runtime seed'\n",
+        },
+    )
+    _write_fake_distribution(
+        site_packages,
+        "termin-display",
+        {
+            "termin/display/__init__.py": "VALUE = 'display seed'\n",
+            "termin/viewport/__init__.py": "VALUE = 'viewport seed'\n",
         },
     )
     (python_overlay / "termin" / "player").mkdir(parents=True)
@@ -630,6 +646,8 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "lib" / "libtermin_base.so").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "os.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "display" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "scipy").exists()
     assert (
@@ -719,6 +737,11 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         "version": "1.0",
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
+    assert {
+        "name": "termin-display",
+        "version": "1.0",
+        "source": "termin-runtime",
+    } in runtime_manifest["distributions"]
 
 
 def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> None:
@@ -746,6 +769,8 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "python" / "DLLs" / "_ctypes.pyd").exists()
     assert (dist_dir / "python" / "DLLs" / "libffi-8.dll").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "display" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "tcbase" / "__init__.py").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "scipy").exists()
     assert (

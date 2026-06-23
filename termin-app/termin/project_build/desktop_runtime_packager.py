@@ -38,6 +38,7 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-render-passes",
     "termin-modules",
     "termin-scene",
+    "termin-display",
     "termin-engine",
     "termin-render",
     "termin-components-render",
