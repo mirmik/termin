@@ -95,7 +95,6 @@ def _write_project(project_root: Path) -> Path:
                 "type: python",
                 "root: .",
                 "packages: [gameplay]",
-                "components: [HotReloadProbeComponent]",
                 "",
             ]
         ),
