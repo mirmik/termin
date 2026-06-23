@@ -180,6 +180,8 @@ Verification:
 
 ### Batch 5: scene/entity compatibility re-export
 
+Status: done, 2026-06-23.
+
 Goal: `termin._native` no longer acts as the public scene/entity module.
 
 Canonical owners:
@@ -198,9 +200,19 @@ Work:
 
 Verification:
 
-- scene/component tests
-- editor/player smoke tests
-- `rg "from termin\\._native import .*TcScene|termin\\._native.*Entity"`
+- scene/entity root re-export smoke: canonical imports from `termin.scene`,
+  `termin.input`, and `termin.render_components` work; `termin._native` no
+  longer exposes root aliases for `TcScene`, `Entity`, `Component`,
+  `TcComponentRef`, input event classes, or `OrbitCameraController`.
+- focused pytest: scene/editor/component registry coverage passed.
+- `./build-sdk.sh --no-wheels`: passed.
+- `./setup-test-venv.sh --force`: passed.
+- `./run-tests.sh`: passed, 585 Python tests passed, 1 skipped; C/C++ tests
+  and editor smoke tests passed.
+- `rg` for removed root aliases outside build/sdk/docs: no matches.
+  Remaining `termin._native` users are app-owned/editor-specific surfaces:
+  scene render extensions, project render sync settings, editor submodule,
+  inspect singleton smoke, and skeleton callback hook.
 
 ## Non-mechanical / Needs Design
 

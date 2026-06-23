@@ -14,7 +14,6 @@ from termin._native import (
     SCENE_EXT_TYPE_RENDER_STATE,
     SceneRenderMount,
     SceneRenderState,
-    TcScene as Scene,
     create_scene,
     create_scene_with_extensions,
     default_scene_extensions,
@@ -25,6 +24,7 @@ from termin._native import (
     scene_render_state,
 )
 from termin.lighting import ShadowSettings
+from termin.scene import TcScene as Scene
 
 if TYPE_CHECKING:
     from termin.input import InputComponent
