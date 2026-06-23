@@ -52,8 +52,5 @@ void bind_entity_domain(nb::module_& m) {
     });
     atexit_mod.attr("register")(cleanup_fn);
 
-    // Expose singleton address helpers at _native top level (for backward compat with shim)
-    nb::module_ inspect_native = nb::module_::import_("termin.inspect._inspect_native");
-    m.attr("_inspect_registry_address") = inspect_native.attr("inspect_registry_address");
-    m.attr("_kind_registry_cpp_address") = inspect_native.attr("kind_registry_cpp_address");
+    (void)m;
 }
