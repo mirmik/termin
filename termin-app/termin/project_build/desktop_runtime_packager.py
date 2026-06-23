@@ -49,6 +49,7 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-inspect",
     "termin-collision",
     "termin-physics",
+    "termin-physics-fem",
     "termin-navmesh",
     "termin-lighting",
     "tmesh",

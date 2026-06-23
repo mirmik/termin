@@ -71,6 +71,7 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-inspect": ({"termin/inspect/__init__.py": "VALUE = 'inspect seed'\n"}, []),
         "termin-collision": ({"termin/collision/__init__.py": "VALUE = 'collision seed'\n"}, []),
         "termin-physics": ({"termin/physics/__init__.py": "VALUE = 'physics seed'\n"}, []),
+        "termin-physics-fem": ({"termin/physics_fem/__init__.py": "VALUE = 'physics fem seed'\n"}, ["termin-qopt"]),
         "termin-navmesh": ({"termin/navmesh/__init__.py": "VALUE = 'navmesh seed'\n"}, []),
         "termin-lighting": ({"termin/lighting/__init__.py": "VALUE = 'lighting seed'\n"}, []),
         "tmesh": ({"tmesh/__init__.py": "VALUE = 'tmesh seed'\n"}, []),
@@ -79,6 +80,7 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "numpy": ({"numpy/__init__.py": "VALUE = 'numpy seed'\n"}, []),
         "Pillow": ({"PIL/__init__.py": "VALUE = 'pillow seed'\n"}, []),
         "scipy": ({"scipy/__init__.py": "VALUE = 'scipy dependency'\n"}, []),
+        "termin-qopt": ({"termin/fem/__init__.py": "VALUE = 'qopt fem seed'\n"}, ["scipy"]),
         "termin-skeleton": ({"termin/skeleton/__init__.py": "VALUE = 'skeleton seed'\n"}, []),
         "termin-animation": ({"termin/animation/__init__.py": "VALUE = 'animation seed'\n"}, []),
         "optional-extra": ({"optional_extra/__init__.py": "VALUE = 'optional extra'\n"}, []),
@@ -669,6 +671,8 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "display" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "physics_fem" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "fem" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "PIL" / "__init__.py").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin_build").exists()

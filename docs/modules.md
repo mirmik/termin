@@ -179,7 +179,13 @@ Source of truth: [termin-collision docs](../termin-collision/docs/index.md)
 
 Source of truth: [termin-physics docs](../termin-physics/docs/index.md)
 
-Physics layer. Collision primitives должны оставаться в [termin-collision](#termin-collision), если они не требуют physics simulation state.
+C++ rigid-body physics layer. Collision primitives должны оставаться в [termin-collision](#termin-collision), если они не требуют physics simulation state. Experimental FEM scene components live in [termin-physics-fem](../termin-physics-fem/docs/index.md), not in `termin.physics`.
+
+### termin-physics-fem
+
+Source of truth: [termin-physics-fem docs](../termin-physics-fem/docs/index.md)
+
+Experimental Python FEM scene components over `termin-qopt`. This package may depend on the Python optimization stack; `termin-physics` must stay independent from it.
 
 ### termin-input
 

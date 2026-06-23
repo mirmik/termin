@@ -30,7 +30,8 @@
 | [termin-inspect](../termin-inspect/docs/index.md) | Система инспекции: Kind-типы, рефлексия полей, сериализация C/C++/Python |
 | [termin-scene](../termin-scene/docs/index.md) | ECS-сцена: Entity, Component, SoA-хранилище, хэндлы, lifecycle |
 | [termin-collision](../termin-collision/docs/index.md) | Коллизии: GJK, коллайдеры, collision world, C/Python API |
-| [termin-physics](../termin-physics/docs/index.md) | Physics-domain bindings |
+| [termin-physics](../termin-physics/docs/index.md) | C++ rigid-body physics bindings |
+| [termin-physics-fem](../termin-physics-fem/docs/index.md) | Experimental Python FEM scene components |
 | [termin-input](../termin-input/docs/index.md) | Input abstractions |
 | [termin-gui](../termin-gui/docs/index.md) | UI фреймворк (tcgui): виджеты, лейауты, диалоги, Canvas/Viewport |
 | [termin-modules](../termin-modules/docs/index.md) | Система модулей: C++/Python плагины, дескрипторы, lifecycle, callbacks |

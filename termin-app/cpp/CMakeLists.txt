@@ -517,6 +517,7 @@ set(TERMIN_SDK_PYTHON_PACKAGE_DIRS
     ${TERMIN_ROOT}/../termin-input/python/termin/
     ${TERMIN_ROOT}/../termin-lighting/python/termin/
     ${TERMIN_ROOT}/../termin-navmesh/python/termin/
+    ${TERMIN_ROOT}/../termin-physics-fem/python/termin/
     ${TERMIN_ROOT}/../termin-physics/python/termin/
     ${TERMIN_ROOT}/../termin-render-passes/python/termin/
     ${TERMIN_ROOT}/../termin-render/python/termin/

@@ -11,9 +11,9 @@ from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent
-    from termin.physics.fem_fixed_joint_component import FEMFixedJointComponent
-    from termin.physics.fem_revolute_joint_component import FEMRevoluteJointComponent
+    from termin.physics_fem.fem_rigid_body_component import FEMRigidBodyComponent
+    from termin.physics_fem.fem_fixed_joint_component import FEMFixedJointComponent
+    from termin.physics_fem.fem_revolute_joint_component import FEMRevoluteJointComponent
 
 
 class FEMPhysicsWorldComponent(PythonComponent):
@@ -127,9 +127,9 @@ class FEMPhysicsWorldComponent(PythonComponent):
 
     def _collect_from_entity(self, entity, visited: set):
         """Рекурсивно собрать FEM компоненты из дерева сущностей."""
-        from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent
-        from termin.physics.fem_fixed_joint_component import FEMFixedJointComponent
-        from termin.physics.fem_revolute_joint_component import FEMRevoluteJointComponent
+        from termin.physics_fem.fem_rigid_body_component import FEMRigidBodyComponent
+        from termin.physics_fem.fem_fixed_joint_component import FEMFixedJointComponent
+        from termin.physics_fem.fem_revolute_joint_component import FEMRevoluteJointComponent
 
         entity_id = id(entity)
         if entity_id in visited:
