@@ -220,7 +220,6 @@ add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 set(ENTITY_LIB_SOURCES
     # Entity-related sources that remain in termin (not migrated to termin-scene)
     termin/entity/entity_registry.cpp
-    ${TERMIN_ROOT}/core_c/src/tc_editor_interaction_instance.cpp
 )
 
 if(NOT TC_EXTERNAL_INSPECT_ACTIVE)

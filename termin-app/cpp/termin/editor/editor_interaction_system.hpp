@@ -98,7 +98,7 @@ public:
     EditorInteractionSystem();
     ~EditorInteractionSystem();
 
-    // Singleton via C API
+    // Singleton for editor input/picking coordination inside the app native module.
     static EditorInteractionSystem* instance();
     static void set_instance(EditorInteractionSystem* inst);
 
