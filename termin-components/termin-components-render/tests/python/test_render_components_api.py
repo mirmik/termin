@@ -2,7 +2,9 @@ from pathlib import Path
 
 from termin.materials import TcMaterial
 from termin.render_components import (
+    Camera,
     CameraController,
+    CameraProjection,
     LineRenderer,
     LineRenderMode,
     MaterialPass,
@@ -51,6 +53,9 @@ def create_line_test_material() -> TcMaterial:
 
 
 def test_render_components_exports_camera_controller_and_material_pass_helpers():
+    camera = Camera.perspective_deg(60.0, 16.0 / 9.0)
+
+    assert camera.projection_type == CameraProjection.Perspective
     assert CameraController.__name__ == "CameraController"
     assert MaterialPass.inspect_fields["material"].kind == "tc_material"
     assert MaterialPass.get_texture_inputs_for_material is not None
