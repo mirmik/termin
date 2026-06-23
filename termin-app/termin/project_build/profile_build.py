@@ -13,6 +13,10 @@ from typing import Any, Mapping, Sequence
 
 from termin.project_build import build_android_project, build_desktop_project, build_quest_openxr_project
 from termin.project_build.build_context import BuildContext, create_build_context
+from termin.project_build.desktop_runtime_packager import (
+    MINIMAL_PYTHON_PACKAGE_POLICY,
+    SUPPORTED_PYTHON_PACKAGE_POLICIES,
+)
 from termin.project_build.pipeline import ProjectBuildPipelineError
 from termin.project_build.target_preflight import TargetPreflightError, preflight_project_build_context
 
@@ -77,6 +81,8 @@ class ProfileBuildRequest:
     default_shader_language: str
     shader_targets: tuple[str, ...] | None
     sdk_root: Path | None
+    python_package_policy: str
+    python_requirements: tuple[str, ...]
     termin_root: Path | None
     build_script: Path | None
     gradle: Path | None
@@ -147,17 +153,22 @@ def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) ->
 
     try:
         if request.target == "desktop":
-            result = build_desktop_project(
-                project_root=request.context.project_root,
-                entry_scene=request.context.entry_scene,
-                output_dir=request.context.dist_dir,
-                shader_compiler=request.shader_compiler,
-                default_shader_language=request.default_shader_language,
-                shader_targets=request.shader_targets,
-                sdk_root=request.sdk_root,
-                configuration=request.context.configuration,
-                resource_policy=request.context.resource_policy,
-            )
+            kwargs: dict[str, Any] = {
+                "project_root": request.context.project_root,
+                "entry_scene": request.context.entry_scene,
+                "output_dir": request.context.dist_dir,
+                "shader_compiler": request.shader_compiler,
+                "default_shader_language": request.default_shader_language,
+                "shader_targets": request.shader_targets,
+                "sdk_root": request.sdk_root,
+                "configuration": request.context.configuration,
+                "resource_policy": request.context.resource_policy,
+            }
+            if request.python_package_policy != MINIMAL_PYTHON_PACKAGE_POLICY:
+                kwargs["python_package_policy"] = request.python_package_policy
+            if request.python_requirements:
+                kwargs["python_requirements"] = request.python_requirements
+            result = build_desktop_project(**kwargs)
             _print_desktop_result(result)
             return _exit_code_for_diagnostics(result.diagnostics)
 
@@ -245,6 +256,16 @@ def normalize_profile_build_request(
     shader_targets = _profile_shader_targets(profile)
     sdk_root = _desktop_path(profile, "sdk_root") if profile.target == "desktop" else None
     _validate_shader_target_tools(profile, shader_targets, shader_compiler_path, sdk_root)
+    python_package_policy = (
+        _desktop_python_package_policy(profile)
+        if profile.target == "desktop"
+        else MINIMAL_PYTHON_PACKAGE_POLICY
+    )
+    python_requirements = (
+        _desktop_python_requirements(profile)
+        if profile.target == "desktop"
+        else ()
+    )
 
     return ProfileBuildRequest(
         name=profile.name,
@@ -254,6 +275,8 @@ def normalize_profile_build_request(
         default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
         shader_targets=shader_targets,
         sdk_root=sdk_root,
+        python_package_policy=python_package_policy,
+        python_requirements=python_requirements,
         termin_root=_target_termin_root(profile, android),
         build_script=_target_build_script(profile, android, openxr),
         gradle=_android_path(profile, android, "gradle")
@@ -499,6 +522,44 @@ def _profile_shader_targets(profile: BuildProfile) -> tuple[str, ...] | None:
     if not normalized:
         raise ProfileBuildError(f"profile '{profile.name}' field 'shader_targets' must not be empty")
     return tuple(normalized)
+
+
+def _desktop_python_package_policy(profile: BuildProfile) -> str:
+    python = _optional_object(profile.data, "python", context=f"profile '{profile.name}'")
+    value = python.get("package_policy")
+    if value is None:
+        return MINIMAL_PYTHON_PACKAGE_POLICY
+    if not isinstance(value, str) or value == "":
+        raise ProfileBuildError(
+            f"profile '{profile.name}' field 'python.package_policy' must be a non-empty string"
+        )
+    if value not in SUPPORTED_PYTHON_PACKAGE_POLICIES:
+        supported = ", ".join(SUPPORTED_PYTHON_PACKAGE_POLICIES)
+        raise ProfileBuildError(
+            f"profile '{profile.name}' field 'python.package_policy' has unsupported value "
+            f"'{value}'. Supported values: {supported}"
+        )
+    return value
+
+
+def _desktop_python_requirements(profile: BuildProfile) -> tuple[str, ...]:
+    python = _optional_object(profile.data, "python", context=f"profile '{profile.name}'")
+    value = python.get("requirements")
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ProfileBuildError(
+            f"profile '{profile.name}' field 'python.requirements' must be a list"
+        )
+    result: list[str] = []
+    for index, requirement in enumerate(value):
+        if not isinstance(requirement, str) or requirement == "":
+            raise ProfileBuildError(
+                f"profile '{profile.name}' field 'python.requirements[{index}]' "
+                "must be a non-empty string"
+            )
+        result.append(requirement)
+    return tuple(result)
 
 
 def _validate_shader_target_tools(
