@@ -54,8 +54,17 @@ endif()
 nanobind_add_module(_native NB_SHARED ${TERMIN_APP_NATIVE_SOURCES})
 target_link_libraries(_native PRIVATE
     tcbase::termin_base
-    entity_lib
+    termin_core
+    termin_inspect::termin_inspect
     termin_inspect::termin_inspect_python
+    termin_scene::termin_scene
+    termin_input::termin_input
+    termin_collision::termin_collision
+    termin_components_collision::termin_components_collision
+    termin_components_kinematic::termin_components_kinematic
+    termin_components_render::termin_components_render
+    termin_render::termin_render
+    termin_display::termin_display
     termin_skeleton::termin_skeleton
     termin_components_skeleton::termin_components_skeleton
     termin_voxels::termin_voxels
@@ -92,7 +101,11 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
-    target_link_libraries(_cpp_tests PRIVATE entity_lib)
+    target_link_libraries(_cpp_tests PRIVATE
+        tcbase::termin_base
+        termin_core
+        termin_scene::termin_scene
+    )
     target_compile_options(_cpp_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
     install(TARGETS _cpp_tests DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/tests)
 endif()
@@ -103,10 +116,6 @@ endif()
 # by walking up from package subdirs.
 set(TERMIN_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib")
 
-set_target_properties(entity_lib PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE

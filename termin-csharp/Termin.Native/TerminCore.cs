@@ -14,6 +14,7 @@ public static class TerminCore
     const string MESH_DLL = "termin_mesh";
     const string GRAPHICS_DLL = "termin_graphics";
     const string TGFX2_DLL = "termin_graphics2";
+    const string COLLISION_DLL = "termin_collision";
 
     // ========================================================================
     // Library Initialization
@@ -25,8 +26,7 @@ public static class TerminCore
     /// <summary>
     /// Full initialization: core registries + inspect system + kind handlers.
     /// Call this instead of Init() to enable serialization/deserialization and SetField.
-    /// Exported from termin_inspect.dll (moved from entity_lib during
-    /// the inspect-lib split).
+    /// Exported from termin_inspect.dll.
     /// </summary>
     [DllImport("termin_inspect", EntryPoint = "tc_init_full")]
     public static extern void InitFull();
@@ -904,28 +904,24 @@ public static class TerminCore
 
     // ========================================================================
     // Collision Detection (tc_collision)
-    // Note: These functions are in entity_lib.dll because collision detection
-    // requires the C++ CollisionWorld class which is part of entity_lib.
     // ========================================================================
-
-    private const string ENTITY_LIB_DLL = "entity_lib";
 
     /// <summary>
     /// Update all collider positions in the collision world.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_collision_update")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_scene_collision_update")]
     public static extern void SceneCollisionUpdate(TcSceneHandle scene);
 
     /// <summary>
     /// Check if there are any collisions in the scene.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_has_collisions")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_scene_has_collisions")]
     public static extern int SceneHasCollisions(TcSceneHandle scene);
 
     /// <summary>
     /// Get the number of collision pairs detected.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_collision_count")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_scene_collision_count")]
     public static extern nuint SceneCollisionCount(TcSceneHandle scene);
 
     /// <summary>
@@ -957,13 +953,13 @@ public static class TerminCore
     /// <summary>
     /// Detect all collisions and get manifolds.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_detect_collisions")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_scene_detect_collisions")]
     public static extern IntPtr SceneDetectCollisions(TcSceneHandle scene, out nuint outCount);
 
     /// <summary>
     /// Get collision manifold at index.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_scene_get_collision")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_scene_get_collision")]
     public static extern IntPtr SceneGetCollision(TcSceneHandle scene, nuint index);
 
     // ========================================================================
@@ -973,31 +969,31 @@ public static class TerminCore
     /// <summary>
     /// Create a new CollisionWorld.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_collision_world_create")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_collision_world_create")]
     public static extern IntPtr CollisionWorldCreate();
 
     /// <summary>
     /// Destroy a CollisionWorld.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_collision_world_destroy")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_collision_world_destroy")]
     public static extern void CollisionWorldDestroy(IntPtr cw);
 
     /// <summary>
     /// Get number of colliders in the world.
     /// </summary>
-    [DllImport(ENTITY_LIB_DLL, EntryPoint = "tc_collision_world_size")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_collision_world_size")]
     public static extern int CollisionWorldSize(IntPtr cw);
 
     /// <summary>
     /// Set the collision world for a scene.
     /// </summary>
-    [DllImport(DLL, EntryPoint = "tc_collision_world_set_scene")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_collision_world_set_scene")]
     public static extern bool CollisionWorldSetScene(TcSceneHandle scene, IntPtr cw);
 
     /// <summary>
     /// Get the collision world for a scene.
     /// </summary>
-    [DllImport(DLL, EntryPoint = "tc_collision_world_get_scene")]
+    [DllImport(COLLISION_DLL, EntryPoint = "tc_collision_world_get_scene")]
     public static extern IntPtr CollisionWorldGetScene(TcSceneHandle scene);
 
     // ========================================================================

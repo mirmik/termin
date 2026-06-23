@@ -134,13 +134,13 @@ endif()
 
     target_include_directories(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${TERMIN_INCLUDE_DIRS}
     )
     target_compile_definitions(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE TCBASE_EXPORTS TC_EXPORTS)
 
     target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         OpenGL::GL
         tcbase::termin_base
-        termin::entity_lib
         termin_engine::termin_engine
         termin_scene::termin_scene
         termin_collision::termin_collision
@@ -158,7 +158,6 @@ endif()
     # ABI-mismatch source. To verify: dumpbin /DEPENDENTS termin.dll
     # after a build and diff against the files in runtimes/win-x64/native/.
     set(_termin_csharp_runtime_targets
-        termin::entity_lib
         termin::termin_core
         tcbase::termin_base
         termin_inspect::termin_inspect

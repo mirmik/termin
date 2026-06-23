@@ -3,7 +3,7 @@
 # terminConfig.cmake - CMake package config for termin engine
 # Usage:
 #   find_package(termin REQUIRED)
-#   target_link_libraries(my_module PRIVATE termin::entity_lib)
+#   target_link_libraries(my_module PRIVATE termin::termin_core termin_scene::termin_scene)
 
 include(CMakeFindDependencyMacro)
 
@@ -33,8 +33,10 @@ include("${CMAKE_CURRENT_LIST_DIR}/terminTargets.cmake")
 
 # Provide include directories for convenience
 set(TERMIN_INCLUDE_DIRS
+    "${PACKAGE_PREFIX_DIR}/include"
     "${PACKAGE_PREFIX_DIR}/include/cpp"
     "${PACKAGE_PREFIX_DIR}/include/core_c"
+    "${PACKAGE_PREFIX_DIR}/include/termin_core"
 )
 
 # Check that required targets exist

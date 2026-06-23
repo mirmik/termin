@@ -214,60 +214,6 @@ else()
 endif()
 add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
-# ============== Entity shared library ==============
-# Must be SHARED so that singletons (ComponentRegistry, InspectRegistry, KindRegistryCpp, EntityRegistry)
-# are the same instance across all Python extension modules.
-set(ENTITY_LIB_SOURCES
-    # Entity-related sources that remain in termin (not migrated to termin-scene)
-    termin/entity/entity_registry.cpp
-)
-
-if(NOT TC_EXTERNAL_INSPECT_ACTIVE)
-    list(APPEND ENTITY_LIB_SOURCES
-        ${TERMIN_ROOT}/core_c/src/tc_inspect_core_instance.cpp
-        termin/inspect/tc_kind_cpp.cpp
-    )
-else()
-    message(STATUS "entity_lib: using inspect/kind C++ core from external termin_inspect")
-endif()
-add_library(entity_lib SHARED ${ENTITY_LIB_SOURCES})
-if(COMMAND termin_add_alias_if_missing)
-    termin_add_alias_if_missing(termin::entity_lib entity_lib)
-endif()
-target_include_directories(entity_lib PUBLIC
-    $<BUILD_INTERFACE:${TERMIN_ROOT}/core_c/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${TERMIN_ROOT}/../termin-components/termin-components-render>
-    $<BUILD_INTERFACE:${TERMIN_ROOT}/../termin-render/include>
-    $<INSTALL_INTERFACE:include/core_c>
-    $<INSTALL_INTERFACE:include/cpp>
-    $<INSTALL_INTERFACE:include>
-)
-if(TERMIN_BUILD_PYTHON)
-    find_package(nanobind CONFIG REQUIRED)
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render termin_display::termin_display PRIVATE nanobind Python::Python)
-    target_link_libraries(entity_lib PUBLIC termin_inspect::termin_inspect_python)
-    target_compile_definitions(entity_lib PRIVATE TERMIN_HAS_NANOBIND)
-else()
-    target_link_libraries(entity_lib PUBLIC termin_core tcbase::termin_base termin_inspect::termin_inspect termin_scene::termin_scene termin_input::termin_input termin_collision::termin_collision termin_components_collision::termin_components_collision termin_components_kinematic::termin_components_kinematic termin_components_render::termin_components_render termin_render::termin_render termin_display::termin_display)
-endif()
-target_compile_definitions(entity_lib PRIVATE TERMIN_SCENE_EXPORTS ENTITY_LIB_EXPORTS TC_EXPORTS)
-target_compile_options(entity_lib PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-if(COMMAND termin_enable_pch_for)
-    termin_enable_pch_for(entity_lib)
-else()
-    target_precompile_headers(entity_lib PRIVATE termin/pch.hpp)
-endif()
-set_target_properties(entity_lib PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    INSTALL_RPATH "$ORIGIN;${CMAKE_INSTALL_PREFIX}/lib"
-)
-if(COMMAND termin_enable_unity_build_for)
-    termin_enable_unity_build_for(entity_lib)
-endif()
-
 # ============== SDL2 (optional) ==============
 option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
 
@@ -496,7 +442,11 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
     )
     target_link_libraries(termin_tests PRIVATE
-        entity_lib
+        tcbase::termin_base
+        termin_core
+        termin_inspect::termin_inspect
+        termin_scene::termin_scene
+        termin_input::termin_input
         termin_engine::termin_engine
         termin_components_render::termin_components_render
         ${CMAKE_DL_LIBS}
@@ -512,7 +462,7 @@ if(BUILD_TESTS)
 endif()
 
 # ============== Install shared libraries ==============
-set(TERMIN_INSTALL_TARGETS entity_lib termin_core)
+set(TERMIN_INSTALL_TARGETS termin_core)
 install(TARGETS ${TERMIN_INSTALL_TARGETS}
     EXPORT terminTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

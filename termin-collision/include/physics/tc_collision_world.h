@@ -20,7 +20,7 @@ typedef tc_collision_world* (*tc_collision_world_alloc_fn)(void);
 typedef void (*tc_collision_world_free_fn)(tc_collision_world* cw);
 
 // Register collision world allocator/deallocator functions
-// Called by entity_lib during initialization
+// Called by termin_collision during initialization.
 TERMIN_COLLISION_API void tc_collision_world_set_allocator(
     tc_collision_world_alloc_fn alloc_fn,
     tc_collision_world_free_fn free_fn
