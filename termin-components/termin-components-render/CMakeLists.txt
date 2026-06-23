@@ -69,6 +69,7 @@ termin_add_module(
     NAMESPACE termin_components_render::
     SOURCES
         src/camera_component.cpp
+        src/orbit_camera_controller.cpp
         src/geometry_pass_base.cpp
         src/light_component.cpp
         src/xr_origin_component.cpp
@@ -128,6 +129,7 @@ if(TERMIN_BUILD_PYTHON)
 
     nanobind_add_module(_components_render_native NB_SHARED
         components/render_components_bindings.cpp
+        components/orbit_camera_bindings.cpp
     )
     target_link_libraries(_components_render_native PRIVATE termin_components_render)
 
@@ -139,7 +141,10 @@ if(TERMIN_BUILD_PYTHON)
     install(TARGETS _components_render_native DESTINATION ${_py_dest})
     install(FILES
         python/termin/render_components/__init__.py
+        python/termin/render_components/builtins.py
+        python/termin/render_components/camera.py
         python/termin/render_components/line_renderer.py
+        python/termin/render_components/material_pass.py
         python/termin/render_components/skinned_mesh_renderer.py
         python/termin/render_components/skybox_renderer.py
         python/termin/render_components/skeleton_controller.py

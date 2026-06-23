@@ -3,8 +3,9 @@
 //
 // Core ECS types (Entity, Component, ComponentRegistry, TcScene, TcComponentRef,
 // TcComponent) are owned by _scene_native and should be imported from there.
-// This module provides domain-specific bindings: EntityRegistry,
-// OrbitCameraController, TcScene render extensions.
+// This module provides domain-specific bindings: EntityRegistry and TcScene
+// render extensions. Render component bindings are owned by their packages and
+// re-exported here for backward compatibility.
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
@@ -14,7 +15,6 @@
 #include <utility>
 #include <tcbase/tc_log.hpp>
 
-#include "../camera/orbit_camera_bindings.hpp"
 #include "../../scene_bindings.hpp"
 
 #include <termin/entity/component.hpp>
@@ -49,8 +49,7 @@ void bind_entity_domain(nb::module_& m) {
     // SceneRenderState::skybox_mesh() bindings are attached.
     nb::module_::import_("tmesh._tmesh_native");
 
-    // Import display native so viewport-bound input event types are registered
-    // before OrbitCameraController bindings reference them.
+    // Import display native and re-export event types for backward compatibility.
     nb::module_ display_native = nb::module_::import_("termin.display._display_native");
     m.attr("MouseButtonEvent") = display_native.attr("MouseButtonEvent");
     m.attr("MouseMoveEvent") = display_native.attr("MouseMoveEvent");
@@ -67,8 +66,9 @@ void bind_entity_domain(nb::module_& m) {
     bind_tc_scene(m);
     bind_tc_scene_lighting(m);
 
-    // --- OrbitCameraController ---
-    bind_orbit_camera_controller(m);
+    // --- Backward-compatible render component re-exports ---
+    nb::module_ render_components = nb::module_::import_("termin.render_components._components_render_native");
+    m.attr("OrbitCameraController") = render_components.attr("OrbitCameraController");
 
     // --- EntityRegistry ---
     nb::class_<EntityRegistry>(m, "EntityRegistry")

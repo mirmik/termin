@@ -1,4 +1,4 @@
-#include "orbit_camera_controller.hpp"
+#include <termin/camera/orbit_camera_controller.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <tcbase/tc_log.hpp>
 

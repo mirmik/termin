@@ -27,6 +27,8 @@
 #include <termin/xr/xr_thumbstick_locomotion_component.hpp>
 #include <tcbase/tc_log.hpp>
 
+#include "orbit_camera_bindings.hpp"
+
 namespace nb = nanobind;
 
 namespace termin {
@@ -210,7 +212,9 @@ NB_MODULE(_components_render_native, m) {
     nb::module_::import_("termin.render._render_native");
     nb::module_::import_("termin.render_framework._render_framework_native");
     nb::module_::import_("termin.skeleton._components_skeleton_native");
+    nb::module_::import_("termin.display._display_native");
     nb::module_::import_("termin.viewport._viewport_native");
+    nb::module_::import_("tcbase._tcbase_native");
 
     tc::init_cpp_inspect_vtable();
 
@@ -364,6 +368,8 @@ NB_MODULE(_components_render_native, m) {
     nb::arg("near") = 0.1,
     nb::arg("far") = 100.0,
     nb::rv_policy::take_ownership);
+
+    bind_orbit_camera_controller(m);
 
     nb::class_<XrOriginComponent, CxxComponent>(m, "XrOriginComponent")
         .def("__init__", [](nb::handle self) {
