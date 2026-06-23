@@ -218,11 +218,19 @@ Verification:
 
 ### Scene render extensions
 
-`termin-app/termin/scene_rendering.py` and `tc_scene_bindings.cpp` expose
-`SceneRenderState`, `SceneRenderMount`, default scene extensions and scene
-creation helpers. The likely owner is not app, but the dependency graph crosses
-scene/render/display/collision. Do not move this in the same pass as simple
-re-export cleanup.
+Canonical ownership split now starts outside app:
+
+- `termin.render` owns `SceneRenderState`, `SceneRenderMount`,
+  `scene_render_state`, `scene_render_mount` and render extension type names.
+- `termin.engine` owns default scene extension registration and scene creation
+  helpers because that layer composes render, collision and scene lifecycle.
+- `termin-app/termin/scene_rendering.py` remains a transitional facade for
+  app/editor compatibility.
+
+Remaining cleanup: `tc_scene_bindings.cpp` still exposes the old app-native
+symbols for compatibility, and `termin-app/termin/scene_rendering.py` still
+imports app-native `deserialize_scene`/`destroy_scene`. Move those after the
+deserialization/destroy callback boundary has an engine-owned home.
 
 ### TextureHandle
 

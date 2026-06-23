@@ -484,7 +484,7 @@ class PlayerRuntime:
             return True
 
         try:
-            from termin._native import register_default_scene_extensions
+            from termin.engine import register_default_scene_extensions
 
             register_default_scene_extensions()
             self._engine = EngineCore()

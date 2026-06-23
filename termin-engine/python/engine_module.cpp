@@ -8,6 +8,7 @@ namespace nb = nanobind;
 
 namespace termin {
 void bind_rendering_manager(nb::module_& m);
+void bind_scene_render_ext(nb::module_& m);
 }
 
 NB_MODULE(_engine_native, m) {
@@ -25,5 +26,6 @@ NB_MODULE(_engine_native, m) {
     termin::bind_scene_manager(scene_module);
     termin::bind_rendering_manager(render_module);
     termin::bind_term_modules_integration(modules_module);
+    termin::bind_scene_render_ext(m);
     termin::bind_engine_core(m);
 }
