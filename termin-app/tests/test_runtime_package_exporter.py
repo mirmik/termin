@@ -176,14 +176,15 @@ def _write_fake_distribution(
     distribution: str,
     files: dict[str, str],
     requires: list[str] | None = None,
+    version: str = "1.0",
 ) -> None:
     normalized = distribution.replace("-", "_")
-    dist_info = site_packages / f"{normalized}-1.0.dist-info"
+    dist_info = site_packages / f"{normalized}-{version}.dist-info"
     dist_info.mkdir(parents=True)
     metadata_lines = [
         "Metadata-Version: 2.1",
         f"Name: {distribution}",
-        "Version: 1.0",
+        f"Version: {version}",
     ]
     for requirement in requires or []:
         metadata_lines.append(f"Requires-Dist: {requirement}")
@@ -893,6 +894,44 @@ def test_desktop_runtime_packager_copies_requirements_from_project_venv(
     assert (target_site_packages / "chess" / "__init__.py").read_text(encoding="utf-8") == (
         "VALUE = 'copied from project venv'\n"
     )
+
+
+def test_desktop_runtime_packager_prefers_newest_duplicate_distribution_metadata(
+    tmp_path: Path,
+) -> None:
+    sdk_root = _write_fake_desktop_sdk(tmp_path)
+    sdk_site_packages = sdk_root / "lib" / "python3.10" / "site-packages"
+    _write_fake_distribution(
+        sdk_site_packages,
+        "numpy",
+        {
+            "numpy/__init__.py": "from ._expired_attrs_2_0 import VALUE\n",
+        },
+        version="1.26.4",
+    )
+    _write_fake_distribution(
+        sdk_site_packages,
+        "numpy",
+        {
+            "numpy/__init__.py": "from ._expired_attrs_2_0 import VALUE\n",
+            "numpy/_expired_attrs_2_0.py": "VALUE = 2\n",
+        },
+        version="2.2.6",
+    )
+    dist_dir = tmp_path / "dist" / "DuplicateMetadataGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[],
+        sdk_root=sdk_root,
+    )
+
+    target_site_packages = dist_dir.resolve() / "lib" / "python3.10" / "site-packages"
+    assert result.diagnostics == []
+    assert (target_site_packages / "numpy-2.2.6.dist-info" / "METADATA").exists()
+    assert (target_site_packages / "numpy" / "_expired_attrs_2_0.py").read_text(
+        encoding="utf-8"
+    ) == "VALUE = 2\n"
 
 
 def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path: Path) -> None:
