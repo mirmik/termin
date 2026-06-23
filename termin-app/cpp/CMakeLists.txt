@@ -372,6 +372,20 @@ set_target_properties(termin_runner PROPERTIES
 termin_set_rpath_tool(termin_runner)
 install(TARGETS termin_runner RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+add_executable(termin_modules_cli
+    app/termin_modules_cli.cpp
+)
+target_compile_features(termin_modules_cli PRIVATE cxx_std_20)
+target_include_directories(termin_modules_cli PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_options(termin_modules_cli PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
+set_target_properties(termin_modules_cli PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+termin_set_rpath_tool(termin_modules_cli)
+install(TARGETS termin_modules_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
 add_executable(termin_player
     app/termin_player.cpp
 )
