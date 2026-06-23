@@ -5,6 +5,7 @@ from __future__ import annotations
 COMPONENT_SPECS: list[tuple[str, str]] = [
     ("termin.render_components", "CameraComponent"),
     ("termin.render_components", "CameraController"),
+    ("termin.render_components", "OrbitCameraController"),
     ("termin.render_components", "MeshRenderer"),
     ("termin.render_components", "SkinnedMeshRenderer"),
     ("termin.render_components", "LineRenderer"),
