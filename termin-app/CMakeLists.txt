@@ -152,7 +152,6 @@ if(BUNDLE_PYTHON)
         sipbuild
         PIL
         Pillow
-        scipy
         glfw
         OpenGL
         packaging
@@ -225,8 +224,8 @@ if(BUNDLE_PYTHON)
         )
     endif()
 
-    # Copy .libs directories (numpy.libs, scipy.libs, pillow.libs contain vendored shared libs)
-    foreach(pkg numpy scipy pillow Pillow)
+    # Copy .libs directories (numpy.libs, pillow.libs contain vendored shared libs)
+    foreach(pkg numpy pillow Pillow)
         if(EXISTS "${PYTHON_SITEPACKAGES}/${pkg}.libs")
             install(DIRECTORY "${PYTHON_SITEPACKAGES}/${pkg}.libs"
                 DESTINATION ${SITEPACKAGES_INSTALL_DIR}
