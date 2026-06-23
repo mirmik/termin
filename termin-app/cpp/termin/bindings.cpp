@@ -3,10 +3,6 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
-extern "C" {
-#include "tc_project_settings.h"
-}
-
 #include "render_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
@@ -123,20 +119,6 @@ NB_MODULE(_native, m) {
 
     // Entity domain bindings (migrated from _entity_native)
     bind_entity_domain(m);
-
-    // Termin-specific: RenderSyncMode (from tc_project_settings.h)
-    nb::enum_<tc_render_sync_mode>(m, "RenderSyncMode")
-        .value("NONE", TC_RENDER_SYNC_NONE)
-        .value("FLUSH", TC_RENDER_SYNC_FLUSH)
-        .value("FINISH", TC_RENDER_SYNC_FINISH);
-
-    m.def("get_render_sync_mode", []() {
-        return tc_project_settings_get_render_sync_mode();
-    }, "Get render sync mode between passes");
-
-    m.def("set_render_sync_mode", [](tc_render_sync_mode mode) {
-        tc_project_settings_set_render_sync_mode(mode);
-    }, nb::arg("mode"), "Set render sync mode between passes");
 
     // Register tc_mesh kind handler for InspectRegistry (moved from _mesh_native)
     register_tc_mesh_kind();

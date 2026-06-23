@@ -128,24 +128,29 @@ Goal: remove app-owned graphics facade from non-app code.
 Canonical owners:
 
 - `Color4`, `RenderState` -> `tgfx`
-- `RenderSyncMode`, `get_render_sync_mode`, `set_render_sync_mode` -> decide
-  owner, likely `termin-render` or a small project settings/runtime API.
+- `RenderSyncMode`, `get_render_sync_mode`, `set_render_sync_mode` ->
+  `termin.render`.
 
 Work:
 
 1. Replace `from termin.graphics import Color4/RenderState` with `tgfx`.
 2. Keep render sync mode under `termin.project.settings` for now. It is a
    project/app settings API, not a graphics facade API; moving the underlying C
-   binding out of `_native` is a separate project settings/runtime ownership
-   cleanup.
+   binding out of `_native` is done: runtime sync binding now belongs to
+   `termin.render`.
 3. Remove `termin-app/termin/graphics` after downstream users are gone: done.
+4. Move render sync runtime binding from root `termin._native` to
+   `termin.render`.
 
 Verification:
 
 - `rg "termin\\.graphics|from termin\\.graphics"` outside build/sdk/docs:
   no matches.
 - stale package check in source/sdk/venv: no `termin/graphics` paths.
-- `./run-tests.sh`: passed, 585 Python tests passed, 1 skipped; C/C++ tests
+- render sync owner test: `termin.render` exposes `RenderSyncMode`,
+  `get_render_sync_mode`, and `set_render_sync_mode`; root `termin._native`
+  does not.
+- `./run-tests.sh`: passed, 596 Python tests passed, 1 skipped; C/C++ tests
   and editor smoke tests passed.
 
 ### Batch 4: picking helpers
@@ -282,9 +287,6 @@ ownership.
 - `termin-app/core_c/src/tc_scene_registry.c` is not built; the public header is
   already a legacy inline delegate to `tc_scene_pool`.
 - `termin._native` still exports many symbols whose canonical owner exists.
-- `termin.project.settings` still imports `RenderSyncMode` and
-  `set_render_sync_mode` from root `termin._native`; this should move to the
-  render/runtime settings owner instead of staying in app-native glue.
 - Some tests still validate singleton topology through app compatibility paths.
 - C++ binding modules in non-app packages still import app native submodules for
   type lookup in a few places.
