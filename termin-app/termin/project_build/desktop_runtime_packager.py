@@ -11,6 +11,7 @@ from pathlib import Path
 
 from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import canonicalize_name
+from packaging.version import InvalidVersion, Version
 
 from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
 
@@ -635,16 +636,39 @@ def _find_distribution(
 ) -> importlib.metadata.Distribution | None:
     normalized = _normalize_distribution_name(package_name)
     for search_path in search_paths:
+        matches: list[importlib.metadata.Distribution] = []
         for distribution in importlib.metadata.distributions(path=[str(search_path)]):
             metadata_name = distribution.metadata.get("Name", "")
             if _normalize_distribution_name(metadata_name) == normalized:
-                return distribution
+                matches.append(distribution)
+        if matches:
+            return _select_best_distribution(matches)
     if not allow_environment:
         return None
     try:
         return importlib.metadata.distribution(package_name)
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def _select_best_distribution(
+    distributions: list[importlib.metadata.Distribution],
+) -> importlib.metadata.Distribution:
+    return max(distributions, key=_distribution_sort_key)
+
+
+def _distribution_sort_key(
+    distribution: importlib.metadata.Distribution,
+) -> tuple[int, Version, str, str]:
+    version_text = distribution.version
+    try:
+        version = Version(version_text)
+        valid_version = 1
+    except InvalidVersion:
+        version = Version("0")
+        valid_version = 0
+    metadata_path = getattr(distribution, "_path", "")
+    return (valid_version, version, version_text, str(metadata_path))
 
 
 def _replace_dir(path: Path) -> None:
