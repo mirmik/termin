@@ -224,13 +224,17 @@ Canonical ownership split now starts outside app:
   `scene_render_state`, `scene_render_mount` and render extension type names.
 - `termin.engine` owns default scene extension registration and scene creation
   helpers because that layer composes render, collision and scene lifecycle.
+- `termin.engine` also owns render-enabled `deserialize_scene`/`destroy_scene`:
+  deserialize creates a default render scene and applies the render legacy
+  adapter before `TcSceneRef::load_from_data`; destroy notifies components,
+  clears render pipelines, then destroys the core scene.
 - `termin-app/termin/scene_rendering.py` remains a transitional facade for
   app/editor compatibility.
 
 Remaining cleanup: `tc_scene_bindings.cpp` still exposes the old app-native
-symbols for compatibility, and `termin-app/termin/scene_rendering.py` still
-imports app-native `deserialize_scene`/`destroy_scene`. Move those after the
-deserialization/destroy callback boundary has an engine-owned home.
+symbols for compatibility, but those symbols now delegate to engine lifecycle
+helpers. The next pass can remove the duplicate app-native scene render binding
+surface after direct users of `termin._native` are gone.
 
 ### TextureHandle
 

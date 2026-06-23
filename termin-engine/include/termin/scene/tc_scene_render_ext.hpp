@@ -12,6 +12,10 @@ extern "C" {
 #include "core/tc_scene_extension.h"
 }
 
+namespace nos {
+class trent;
+}
+
 namespace termin {
 
 // --- Scene creation/destruction with render extensions ---
@@ -29,7 +33,13 @@ TERMIN_ENGINE_API TcSceneRef create_scene_with_extensions(
 // Create scene with builtin render extensions attached (render_mount, render_state, collision_world)
 TERMIN_ENGINE_API TcSceneRef create_scene_with_render(const std::string& name = "", const std::string& uuid = "");
 
-// Destroy scene and clean up render pipeline cache
+// Create render-enabled scene from serialized scene data.
+TERMIN_ENGINE_API TcSceneRef deserialize_scene_with_render(
+    const nos::trent& data,
+    const std::string& name = ""
+);
+
+// Destroy scene, notify components, and clean up render pipeline cache.
 TERMIN_ENGINE_API void destroy_scene_with_render(TcSceneRef& scene);
 
 // --- Compiled pipelines ---

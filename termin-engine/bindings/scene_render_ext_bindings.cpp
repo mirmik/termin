@@ -1,8 +1,10 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
 #include <termin/scene/tc_scene_render_ext.hpp>
+#include <trent/trent.h>
 
 extern "C" {
 #include "core/tc_scene_extension.h"
@@ -12,6 +14,42 @@ extern "C" {
 namespace nb = nanobind;
 
 namespace termin {
+
+static nos::trent python_to_trent(nb::handle obj) {
+    if (obj.is_none()) {
+        return nos::trent();
+    }
+    if (nb::isinstance<nb::bool_>(obj)) {
+        return nos::trent(nb::cast<bool>(obj));
+    }
+    if (nb::isinstance<nb::int_>(obj)) {
+        return nos::trent(static_cast<int64_t>(nb::cast<int64_t>(obj)));
+    }
+    if (nb::isinstance<nb::float_>(obj)) {
+        return nos::trent(nb::cast<double>(obj));
+    }
+    if (nb::isinstance<nb::str>(obj)) {
+        return nos::trent(nb::cast<std::string>(obj));
+    }
+    if (nb::isinstance<nb::list>(obj) || nb::isinstance<nb::tuple>(obj)) {
+        nos::trent result;
+        result.init(nos::trent::type::list);
+        for (auto item : obj) {
+            result.push_back(python_to_trent(item));
+        }
+        return result;
+    }
+    if (nb::isinstance<nb::dict>(obj)) {
+        nos::trent result;
+        result.init(nos::trent::type::dict);
+        for (auto [key, value] : nb::cast<nb::dict>(obj)) {
+            std::string key_str = nb::cast<std::string>(nb::str(key));
+            result[key_str] = python_to_trent(value);
+        }
+        return result;
+    }
+    return nos::trent(nb::cast<std::string>(nb::str(obj)));
+}
 
 void bind_scene_render_ext(nb::module_& m) {
     m.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_MOUNT);
@@ -46,6 +84,19 @@ void bind_scene_render_ext(nb::module_& m) {
     m.def("destroy_scene_with_render", &destroy_scene_with_render,
         nb::arg("scene"),
         "Destroy a scene and clear engine render pipeline state.");
+    m.def("destroy_scene", &destroy_scene_with_render,
+        nb::arg("scene"),
+        "Destroy a render-enabled scene and clear engine render pipeline state.");
+
+    m.def("deserialize_scene_with_render", [](nb::handle data, const std::string& name) -> TcSceneRef {
+        return deserialize_scene_with_render(python_to_trent(data), name);
+    }, nb::arg("data"), nb::arg("name") = "",
+       "Create render-enabled scene from serialized data.");
+
+    m.def("deserialize_scene", [](nb::handle data, const std::string& name) -> TcSceneRef {
+        return deserialize_scene_with_render(python_to_trent(data), name);
+    }, nb::arg("data"), nb::arg("name") = "",
+       "Create render-enabled scene from serialized data.");
 
     m.def("scene_ext_attached_names", [](const TcSceneRef& scene) -> std::vector<std::string> {
         std::vector<std::string> result;

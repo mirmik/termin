@@ -14,6 +14,8 @@ from termin.engine import (
     create_scene,
     create_scene_with_extensions,
     default_scene_extensions,
+    deserialize_scene,
+    destroy_scene,
     scene_ext_attached_names,
 )
 from termin.render import (
@@ -24,7 +26,6 @@ from termin.render import (
     scene_render_mount,
     scene_render_state,
 )
-from termin._native import deserialize_scene, destroy_scene
 from termin.lighting import ShadowSettings
 from termin.scene import TcScene as Scene
 
