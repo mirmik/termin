@@ -169,6 +169,7 @@ PYTHON_MODULES=(
     "termin-navmesh       | termin/navmesh    |                                   | termin-navmesh/python/termin/navmesh"
     "termin-voxels        | termin/voxels     | _voxels_native*.so                | termin-voxels/python/termin/voxels"
     "termin-physics       | termin/physics    | _physics_native*.so               | termin-physics/python/termin/physics"
+    "termin-physics-fem   | termin/physics_fem |                                  | termin-physics-fem/python/termin/physics_fem"
     "termin-engine        | termin/engine     | _engine_native*.so                | termin-engine/python/termin/engine"
     "termin-skeleton      | termin/skeleton   | _skeleton_native*.so              | termin-skeleton/python/termin/skeleton"
     "termin-animation     | termin/animation  | _animation_native*.so             | termin-animation/python/termin/animation"

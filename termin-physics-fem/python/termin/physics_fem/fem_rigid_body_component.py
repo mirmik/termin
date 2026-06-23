@@ -13,7 +13,7 @@ from termin.geombase import Pose3
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.physics.fem_physics_world_component import FEMPhysicsWorldComponent
+    from termin.physics_fem.fem_physics_world_component import FEMPhysicsWorldComponent
 
 
 class FEMRigidBodyComponent(PythonComponent):

@@ -26,6 +26,7 @@
 - `termin.colliders`
 - `termin.lighting`
 - `termin.physics`
+- `termin.physics_fem`
 - `termin.skeleton`
 - `termin.animation`
 
@@ -54,7 +55,8 @@
 
 - Канонический core API: `termin.physics`
 - Канонический component API: `termin.physics_components`
-- FEM остается в `termin.physics` как отдельная ветка API
+- Канонический experimental FEM scene API: `termin.physics_fem`
+- Python FEM/optimization solver API остаётся в `termin.fem` и принадлежит `termin-qopt`; `termin.physics` не должен зависеть от `termin-qopt`/`scipy`.
 
 ### Render components
 
@@ -68,6 +70,7 @@
 - импортировать `SkeletonController` из `termin.skeleton_components`
 - импортировать render-компоненты из `termin.render_components`
 - импортировать physics-компоненты из `termin.physics_components`
+- импортировать experimental FEM scene components из `termin.physics_fem`
 
 Внутренний код репозитория не должен:
 

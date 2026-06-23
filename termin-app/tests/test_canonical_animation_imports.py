@@ -143,13 +143,17 @@ def test_builtins_no_legacy_render_components_paths():
 
 
 def test_physics_facade_modules_removed():
-    """Legacy facade modules under termin.physics should not exist in repo tree."""
+    """Legacy facade/component modules under termin.physics should not exist in repo tree."""
     import os
     repo_physics = os.path.join(os.path.dirname(__file__), "..", "termin", "physics")
     repo_physics = os.path.normpath(repo_physics)
     facade_files = [
         "physics_world_component.py",
         "rigid_body_component.py",
+        "fem_physics_world_component.py",
+        "fem_rigid_body_component.py",
+        "fem_fixed_joint_component.py",
+        "fem_revolute_joint_component.py",
     ]
     for fname in facade_files:
         fpath = os.path.join(repo_physics, fname)
@@ -166,4 +170,7 @@ def test_builtins_no_legacy_physics_paths():
         )
         assert not module_path.startswith("termin.physics.rigid_body_component"), (
             f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+        )
+        assert not module_path.startswith("termin.physics.fem_"), (
+            f"Legacy FEM path found in BUILTIN_COMPONENTS: {module_path}"
         )

@@ -13,8 +13,8 @@ from tcbase import log
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
     from termin.scene import Entity
-    from termin.physics.fem_physics_world_component import FEMPhysicsWorldComponent
-    from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent
+    from termin.physics_fem.fem_physics_world_component import FEMPhysicsWorldComponent
+    from termin.physics_fem.fem_rigid_body_component import FEMRigidBodyComponent
     from termin.render import ImmediateRenderer
 
 
@@ -93,7 +93,7 @@ class FEMRevoluteJointComponent(PythonComponent):
 
     def _register_with_fem_world(self, world: "FEMPhysicsWorldComponent", scene: "Scene"):
         """Зарегистрировать joint в FEM мире."""
-        from termin.physics.fem_rigid_body_component import FEMRigidBodyComponent
+        from termin.physics_fem.fem_rigid_body_component import FEMRigidBodyComponent
 
         self._fem_world = world
 

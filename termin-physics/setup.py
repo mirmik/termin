@@ -22,7 +22,7 @@ setup(
     python_requires=">=3.8",
     packages=["termin.physics"],
     package_dir={"termin.physics": "python/termin/physics"},
-    install_requires=["termin-nanobind", "termin-qopt", "termin-voxels"],
+    install_requires=["termin-nanobind"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,
