@@ -6,13 +6,9 @@ find_package(nanobind CONFIG REQUIRED)
 # ============== Main unified module ==============
 
 set(TERMIN_APP_NATIVE_SOURCES
-    # Python bindings entry point + per-subsystem registration files.
+    # Python bindings entry point and remaining compatibility exports.
     termin/bindings.cpp
-    termin/bindings/render/render_module.cpp
-    termin/bindings/render/material.cpp
     termin/tc_component_python_bindings.cpp
-    termin/inspect_bindings.cpp
-    termin/assets/assets_bindings.cpp
 
     # Entity domain bindings (migrated from _entity_native)
     termin/bindings/entity/entity_native_to_native.cpp

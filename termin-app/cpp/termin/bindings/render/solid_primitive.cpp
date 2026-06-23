@@ -1,7 +1,11 @@
-#include "common.hpp"
 #include "termin/render/solid_primitive_renderer.hpp"
 #include <termin/geom/mat44.hpp>
 #include <tgfx2/render_context.hpp>
+#include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/tuple.h>
+
+namespace nb = nanobind;
 
 namespace termin {
 
