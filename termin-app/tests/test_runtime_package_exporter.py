@@ -39,7 +39,7 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
 
 def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
     distributions: dict[str, tuple[dict[str, str], list[str]]] = {
-        "termin-app": ({"termin_app_seed/__init__.py": "VALUE = 'termin app seed'\n"}, ["scipy"]),
+        "termin-app": ({"termin_app_seed/__init__.py": "VALUE = 'termin app seed'\n"}, []),
         "termin-nanobind": ({"termin_nanobind/__init__.py": "VALUE = 'nanobind seed'\n"}, []),
         "tcbase": ({"tcbase/__init__.py": "VALUE = 'runtime seed'\n"}, []),
         "termin-assets": ({"termin_assets_seed/__init__.py": "VALUE = 'assets seed'\n"}, []),
@@ -120,6 +120,18 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     )
     (share_dir / "termin_prelude.slang").write_text("// prelude\n", encoding="utf-8")
     return sdk
+
+
+def test_legacy_app_runtime_lists_exclude_experimental_fem_stack() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    cmake_install = (repo_root / "termin-app" / "CMakeLists.txt").read_text(encoding="utf-8")
+    legacy_build = (repo_root / "termin-app" / "build.sh").read_text(encoding="utf-8")
+    cpp_cmake = (repo_root / "termin-app" / "cpp" / "CMakeLists.txt").read_text(encoding="utf-8")
+
+    assert "\n        scipy\n" not in cmake_install
+    assert "foreach(pkg numpy scipy" not in cmake_install
+    assert "termin-physics-fem" not in legacy_build
+    assert "termin-physics-fem" not in cpp_cmake
 
 
 def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
@@ -671,13 +683,13 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "display" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
-    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "physics_fem" / "__init__.py").exists()
-    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "fem" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "PIL" / "__init__.py").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin_build").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "optional_extra").exists()
-    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "scipy" / "__init__.py").exists()
+    assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "physics_fem").exists()
+    assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "fem").exists()
+    assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "scipy").exists()
     assert (
         result.dist_dir
         / "lib"
@@ -814,7 +826,9 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "python" / "Lib" / "site-packages" / "PIL" / "__init__.py").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin_build").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "optional_extra").exists()
-    assert (dist_dir / "python" / "Lib" / "site-packages" / "scipy" / "__init__.py").exists()
+    assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "physics_fem").exists()
+    assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "fem").exists()
+    assert not (dist_dir / "python" / "Lib" / "site-packages" / "scipy").exists()
     assert (
         dist_dir
         / "python"
