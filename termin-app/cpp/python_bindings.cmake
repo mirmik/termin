@@ -26,7 +26,6 @@ set(TERMIN_APP_NATIVE_SOURCES
     termin/skeleton_bindings.cpp
     termin/inspect_bindings.cpp
     termin/assets/assets_bindings.cpp
-    termin/assets/handles.cpp
 
     # Renderer sources unique to _native.
     # Keep this list tight — most render implementations live in extracted packages.

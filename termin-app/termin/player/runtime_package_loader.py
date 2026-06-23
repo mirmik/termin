@@ -326,8 +326,8 @@ def _builtin_texture_for_material_slot(name: str) -> Any | None:
     from termin.render.texture_handle import get_normal_texture_handle, get_white_texture_handle
 
     if "normal" in name.lower():
-        return get_normal_texture_handle().get()
-    return get_white_texture_handle().get()
+        return get_normal_texture_handle()
+    return get_white_texture_handle()
 
 
 def _apply_material_textures(material: Any, textures: object, uuid_value: str) -> None:

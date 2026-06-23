@@ -247,14 +247,11 @@ Status 2026-06-18 cleanup: unused app compatibility modules
 `termin.loaders.texture_spec` were removed. Use the
 `termin.default_assets.render.*` paths directly.
 
-Status 2026-06-18: texture handles and simple texture helper/singleton wrappers
-moved to `termin-render` as `termin.render.texture_handle` and
-`termin.render.texture`. The old app modules `termin.visualization.render.texture`
-and `termin.assets.texture_handle` were removed on 2026-06-18 after app C++
-handle helpers were redirected to canonical Python modules. The Python API is
-now canonical in `termin-render`; the underlying native `TextureHandle` binding
-still comes from the transitional app-owned `termin._native.assets` module and
-remains a C++ extraction follow-up.
+Status 2026-06-23: the app-native `TextureHandle` binding was removed. Runtime
+texture APIs now use `tgfx.TcTexture`, backed by the C `tc_texture` pool. The
+remaining `termin.render.texture_handle` module only provides compatibility
+helpers for default white/normal `TcTexture` instances; asset lookups are owned
+by `termin-default-assets`.
 
 Status 2026-06-18: material and shader asset runtime moved to `termin-render`,
 then to `termin-default-assets`.

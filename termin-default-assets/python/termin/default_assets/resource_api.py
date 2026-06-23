@@ -28,13 +28,13 @@ if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
     from termin.prefab.asset import PrefabAsset
     from termin.render.texture import Texture
-    from termin.render.texture_handle import TextureHandle
     from termin.scene import Entity, GeneralTransform3
     from termin.render_framework import RenderPipeline
     from termin.voxels._voxels_native import TcVoxelGrid
     from termin.voxels.grid import VoxelGrid
     from termin.skeleton import TcSkeleton
     from termin.skeleton.asset import SkeletonAsset
+    from tgfx import TcTexture
     from tmesh import TcMesh
 
 
@@ -638,7 +638,7 @@ class DefaultAssetResourceMixin:
             return asset
         return None
 
-    def get_texture_handle(self, name: str) -> Optional["TextureHandle"]:
+    def get_texture_handle(self, name: str) -> Optional["TcTexture"]:
         return self._texture_registry.get(name)
 
     def get_texture(self, name: str) -> Optional["Texture"]:
@@ -662,20 +662,8 @@ class DefaultAssetResourceMixin:
         return self._texture_registry.list_names()
 
     def find_texture_name(self, texture) -> Optional[str]:
-        from termin.render.texture_handle import TextureHandle
         from tgfx import TcTexture
 
-        if isinstance(texture, TextureHandle):
-            asset = texture.asset
-            if asset is not None:
-                try:
-                    asset_uuid = asset.uuid
-                    for name, registered_asset in self._texture_registry.assets.items():
-                        if registered_asset.uuid == asset_uuid:
-                            return name
-                except (AttributeError, TypeError) as e:
-                    log.debug(f"[DefaultAssetResourceMixin] Failed to get asset uuid for texture lookup: {e}")
-            return self._texture_registry.find_name(texture)
         if isinstance(texture, TcTexture):
             tex_uuid = texture.uuid
             if tex_uuid:

@@ -78,7 +78,7 @@ class DefaultResourceAccessorsMixin:
             return HandleAccessors(
                 list_names=self.list_texture_names,
                 get_by_name=self.get_texture_handle,
-                find_name=self._find_texture_handle_name,
+                find_name=self._find_tc_texture_name,
                 find_uuid=self._find_texture_uuid_by_name,
             )
         if kind == "ui_handle":
@@ -199,11 +199,11 @@ class DefaultResourceAccessorsMixin:
             return handle.name
         return None
 
-    def _find_texture_handle_name(self, handle: Any) -> Optional[str]:
-        """Find name for a TextureHandle."""
-        from termin.render.texture_handle import TextureHandle
+    def _find_tc_texture_name(self, handle: Any) -> Optional[str]:
+        """Find name for a TcTexture."""
+        from tgfx import TcTexture
 
-        if isinstance(handle, TextureHandle):
+        if isinstance(handle, TcTexture):
             return self.find_texture_name(handle)
         return None
 
@@ -328,11 +328,14 @@ class DefaultResourceAccessorsMixin:
             return self.get_audio_clip_by_uuid(uuid)
 
         if kind == "texture":
-            from termin.render.texture_handle import TextureHandle
+            from tgfx import TcTexture
 
             asset = self.get_texture_asset_by_uuid(uuid)
             if asset:
-                return TextureHandle.from_asset(asset)
+                texture = TcTexture.from_uuid(asset.uuid)
+                if texture.is_valid:
+                    return texture
+                return asset.texture_data
             return None
 
         return None

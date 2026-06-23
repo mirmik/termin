@@ -337,7 +337,13 @@ class MaterialInspectorTcgui(VStack):
             phase.set_param(uniform_name, value)
         self._emit_changed()
 
-    def _set_texture_all_phases(self, uniform_name: str, tag: str, texture_name: str, default_tex: str = "white") -> None:
+    def _set_texture_all_phases(
+        self,
+        uniform_name: str,
+        tag: str,
+        texture_name: str,
+        default_tex: str = "white",
+    ) -> None:
         if self._material is None:
             return
         from termin.render.texture_handle import (
@@ -346,10 +352,13 @@ class MaterialInspectorTcgui(VStack):
         )
 
         if tag == "default" or not texture_name:
-            handle = get_normal_texture_handle() if default_tex == "normal" else get_white_texture_handle()
-            if handle is not None:
-                tc_tex = handle.get()
-                if tc_tex is None or not tc_tex.is_valid:
+            tc_tex = (
+                get_normal_texture_handle()
+                if default_tex == "normal"
+                else get_white_texture_handle()
+            )
+            if tc_tex is not None:
+                if not tc_tex.is_valid:
                     log.error(f"[MaterialInspectorTcgui] default texture is invalid: {default_tex}")
                     return
                 applied = self._material.set_texture(uniform_name, tc_tex)
@@ -362,12 +371,11 @@ class MaterialInspectorTcgui(VStack):
             return
 
         if tag == "file":
-            handle = self._rm.get_texture_handle(texture_name)
-            if handle is None:
-                log.error(f"[MaterialInspectorTcgui] texture handle not found: {texture_name}")
+            tc_tex = self._rm.get_texture_handle(texture_name)
+            if tc_tex is None:
+                log.error(f"[MaterialInspectorTcgui] texture not found: {texture_name}")
                 return
-            tc_tex = handle.get()
-            if tc_tex is None or not tc_tex.is_valid:
+            if not tc_tex.is_valid:
                 log.error(f"[MaterialInspectorTcgui] texture is invalid: {texture_name}")
                 return
             applied = self._material.set_texture(uniform_name, tc_tex)

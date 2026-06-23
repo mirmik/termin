@@ -266,13 +266,12 @@ def _apply_texture_defaults(phase, shader_phase, rm):
 
         # Get default texture based on property default value
         if isinstance(default, str) and default == "normal":
-            tex_handle = get_normal_texture_handle()
+            texture = get_normal_texture_handle()
         else:
-            tex_handle = get_white_texture_handle()
+            texture = get_white_texture_handle()
 
-        tc_tex = tex_handle.get()
-        if tc_tex is not None:
-            phase.set_texture(name, tc_tex)
+        if texture is not None and texture.is_valid:
+            phase.set_texture(name, texture)
         else:
             log.warn(f"[MaterialAsset] Failed to get default texture for '{name}'")
 

@@ -266,10 +266,17 @@ Verification:
 
 ### TextureHandle
 
-`TextureHandle` currently lives in app native assets bindings and reaches into
-`ResourceManager`/`termin.default_assets`. This is not a base concept. Candidate
-owners are `termin-render` plus default-assets integration, or
-`termin-default-assets` if the asset lookup semantics remain central.
+The app-native `TextureHandle` wrapper was removed. Runtime texture APIs now
+traffic in `tgfx.TcTexture`, backed by the C `tc_texture` pool. The remaining
+`termin.render.texture_handle` module is a compatibility home for default white
+and normal texture helpers only; it no longer exports a `TextureHandle` class.
+
+`termin-default-assets` owns the asset lookup integration:
+
+- lazy texture registration declares pool entries with `tc_texture_declare`;
+- `ResourceManager.get_texture_handle()` returns `TcTexture`;
+- the legacy selector kind name `texture_handle` remains as a UI/serialization
+  alias while internal data uses `TcTexture`.
 
 ### Editor native bindings
 

@@ -136,8 +136,8 @@ class ResourceLoader:
             material = create_material_from_parsed(
                 program,
                 source_path=file_path,
-                default_white_texture=get_white_texture_handle().get(),
-                default_normal_texture=get_normal_texture_handle().get(),
+                default_white_texture=get_white_texture_handle(),
+                default_normal_texture=get_normal_texture_handle(),
             )
 
             # Determine material name

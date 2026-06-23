@@ -142,15 +142,25 @@ class DefaultAssetRegistryFactoryMixin:
         """Create AssetRegistry for textures."""
         from termin_assets import AssetRegistry
         from termin.default_assets.render.texture_asset import TextureAsset
-        from termin.render.texture_handle import TextureHandle
+        from tgfx import TcTexture
 
-        def data_from_asset(asset: TextureAsset) -> TextureHandle:
-            return TextureHandle.from_asset(asset)
+        def data_from_asset(asset: TextureAsset) -> TcTexture | None:
+            texture = TcTexture.from_uuid(asset.uuid)
+            if texture.is_valid:
+                return texture
+            if asset.texture_data is None:
+                asset.ensure_loaded()
+            return asset.texture_data
 
-        def data_to_asset(handle: TextureHandle) -> TextureAsset | None:
-            return handle.asset
+        def data_to_asset(texture: TcTexture) -> TextureAsset | None:
+            if texture is None or not texture.is_valid:
+                return None
+            for asset in self._texture_registry.assets.values():
+                if asset.uuid == texture.uuid:
+                    return asset
+            return None
 
-        return AssetRegistry[TextureAsset, TextureHandle](
+        return AssetRegistry[TextureAsset, TcTexture](
             asset_class=TextureAsset,
             uuid_registry=self._assets_by_uuid,
             data_from_asset=data_from_asset,
