@@ -68,6 +68,16 @@ class ProjectModulesRuntime:
     def auto_reload_enabled(self, enabled: bool) -> None:
         self._auto_reload_enabled = bool(enabled)
 
+    @property
+    def sync_live_scenes(self) -> bool:
+        return bool(self._integration.environment.sync_live_scenes)
+
+    def set_sync_live_scenes(self, enabled: bool) -> None:
+        environment = self._integration.environment
+        environment.sync_live_scenes = bool(enabled)
+        self._integration.set_environment(environment)
+        self._runtime.set_environment(environment)
+
     def runtime(self) -> ModuleRuntime:
         return self._runtime
 
@@ -291,6 +301,7 @@ class ProjectModulesRuntime:
         environment.lib_dir = str(prefix_root / "lib")
         environment.allow_python_package_install = True
         environment.use_project_venv = False
+        environment.sync_live_scenes = True
         self._integration.set_environment(environment)
         self._runtime.set_environment(environment)
 

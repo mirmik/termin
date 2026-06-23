@@ -24,6 +24,22 @@
 4. Вызвать `discover(project_root)`
 5. Вызвать `load_all()` или `load_module(name)`
 
+Консольный прогрев проектных модулей:
+
+```bash
+termin modules --project /path/to/project
+termin modules warmup --project /path/to/project --module gameplay
+```
+
+Команда использует тот же `ProjectModulesRuntime`, что и редактор при открытии
+проекта. Для Python-модулей она создаёт/дополняет проектный `.venv`, ставит
+requirements из `.pymodule` и импортирует указанные пакеты. Для C++-модулей
+проходит обычный runtime load path, включая сборку stale-модулей перед
+загрузкой. Live scene synchronization при этом отключена: команда не пытается
+деградировать или восстанавливать компоненты в сценах через `UnknownComponent`,
+потому что в консольном warmup-сценарии открытых сцен нет. Это позволяет
+подготовить проект из CI или консоли без запуска редактора.
+
 Сборка в монорепозитории:
 
 - `./build-and-install.sh` собирает и устанавливает `termin-modules` вместе с остальными пакетами
