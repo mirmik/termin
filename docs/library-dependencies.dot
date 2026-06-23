@@ -217,8 +217,6 @@ digraph termin_dependencies {
 	"termin-navmesh" -> "termin-default-assets";
 	"termin-nodegraph" -> "termin-app";
 	"termin-physics" -> "termin-components-physics";
-	"termin-physics-fem" -> "termin-app";
-	"termin-physics-fem" -> "termin-default-assets";
 	"termin-qopt" -> "termin-physics-fem";
 	"termin-render" -> "termin-components-foliage";
 	"termin-render" -> "termin-display";
