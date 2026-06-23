@@ -218,6 +218,8 @@ Verification:
 
 ### Scene render extensions
 
+Status: done, 2026-06-23.
+
 Canonical ownership split now starts outside app:
 
 - `termin.render` owns `SceneRenderState`, `SceneRenderMount`,
@@ -228,13 +230,34 @@ Canonical ownership split now starts outside app:
   deserialize creates a default render scene and applies the render legacy
   adapter before `TcSceneRef::load_from_data`; destroy notifies components,
   clears render pipelines, then destroys the core scene.
+- `termin.render` also owns `TcSceneLighting`, because
+  `SceneRenderState.lighting()` returns the scene lighting handle and no longer
+  reaches through app-native lighting bindings.
 - `termin-app/termin/scene_rendering.py` remains a transitional facade for
   app/editor compatibility.
 
-Remaining cleanup: `tc_scene_bindings.cpp` still exposes the old app-native
-symbols for compatibility, but those symbols now delegate to engine lifecycle
-helpers. The next pass can remove the duplicate app-native scene render binding
-surface after direct users of `termin._native` are gone.
+App-native cleanup:
+
+- `termin-app/cpp/termin/tc_scene_bindings.cpp` removed from `_native` and
+  deleted.
+- `termin-app/cpp/termin/tc_scene_lighting_bindings.cpp` removed from
+  `_native` and deleted.
+- `termin-app/cpp/termin/scene_bindings.hpp` deleted.
+- root `termin._native` no longer exports scene render extension symbols or
+  render-enabled scene lifecycle helpers.
+
+Verification:
+
+- app-native scene render smoke: removed names are absent from `termin._native`;
+  `termin.engine.deserialize_scene` creates render-enabled scenes; migrated
+  legacy lighting returns `termin.render.TcSceneLighting`.
+- focused pytest: `termin-app/tests/test_scene_rendering_lifecycle.py`,
+  `termin-app/tests/test_headless_runtime.py`,
+  `termin-app/tests/editor_commands_test.py`,
+  `termin-app/tests/test_game_mode_model.py`, and
+  `termin-app/tests/test_rendering_model_render_target_restore.py` passed.
+- `./build-sdk.sh --no-wheels`: passed.
+- `./setup-test-venv.sh --force`: passed.
 
 ### TextureHandle
 
@@ -259,6 +282,9 @@ ownership.
 - `termin-app/core_c/src/tc_scene_registry.c` is not built; the public header is
   already a legacy inline delegate to `tc_scene_pool`.
 - `termin._native` still exports many symbols whose canonical owner exists.
+- `termin.project.settings` still imports `RenderSyncMode` and
+  `set_render_sync_mode` from root `termin._native`; this should move to the
+  render/runtime settings owner instead of staying in app-native glue.
 - Some tests still validate singleton topology through app compatibility paths.
 - C++ binding modules in non-app packages still import app native submodules for
   type lookup in a few places.

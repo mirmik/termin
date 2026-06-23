@@ -5,13 +5,8 @@
 
 extern "C" {
 #include "tc_project_settings.h"
-#include "core/tc_scene_extension.h"
-#include "core/tc_scene_extension_ids.h"
-#include "core/tc_scene_render_mount.h"
-#include "core/tc_scene_render_state.h"
 }
 
-#include <termin/scene/tc_scene_render_ext.hpp>
 #include "render_bindings.hpp"
 #include "skeleton_bindings.hpp"
 #include "inspect_bindings.hpp"
@@ -134,12 +129,6 @@ NB_MODULE(_native, m) {
         .value("NONE", TC_RENDER_SYNC_NONE)
         .value("FLUSH", TC_RENDER_SYNC_FLUSH)
         .value("FINISH", TC_RENDER_SYNC_FINISH);
-
-    m.attr("SCENE_EXT_TYPE_RENDER_MOUNT") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_MOUNT);
-    m.attr("SCENE_EXT_TYPE_RENDER_STATE") = nb::int_(TC_SCENE_EXT_TYPE_RENDER_STATE);
-    m.attr("SCENE_EXT_TYPE_COLLISION_WORLD") = nb::int_(TC_SCENE_EXT_TYPE_COLLISION_WORLD);
-    m.def("default_scene_extensions", &termin::default_scene_extension_ids);
-    m.def("register_default_scene_extensions", &termin::register_default_scene_extensions);
 
     m.def("get_render_sync_mode", []() {
         return tc_project_settings_get_render_sync_mode();

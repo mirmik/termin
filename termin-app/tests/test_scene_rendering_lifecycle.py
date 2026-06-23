@@ -3,7 +3,7 @@ from termin.engine import (
     destroy_scene as engine_destroy_scene,
     scene_ext_attached_names,
 )
-from termin.render import scene_render_state
+from termin.render import TcSceneLighting, scene_render_state
 from termin.scene_rendering import (
     deserialize_scene as app_deserialize_scene,
     destroy_scene as app_destroy_scene,
@@ -23,6 +23,7 @@ def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_
     )
     try:
         render_state = scene_render_state(scene)
+        lighting = render_state.lighting()
 
         assert scene.uuid == "legacy-render-scene"
         assert scene_ext_attached_names(scene) == [
@@ -42,6 +43,13 @@ def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_
             0.3,
         )
         assert round(render_state.ambient_intensity, 3) == 2.0
+        assert isinstance(lighting, TcSceneLighting)
+        assert lighting.valid()
+        assert tuple(round(value, 3) for value in lighting.ambient_color) == (
+            0.1,
+            0.2,
+            0.3,
+        )
     finally:
         engine_destroy_scene(scene)
 
