@@ -137,7 +137,7 @@ def _add_node_param(
 
 def _add_inspect_params(node, class_name: str, cls, seen: set[str]) -> None:
     try:
-        from termin._native.inspect import InspectRegistry
+        from termin.inspect import InspectRegistry
         registry = InspectRegistry.instance()
         for info in registry.all_fields(class_name):
             if not info.is_inspectable:

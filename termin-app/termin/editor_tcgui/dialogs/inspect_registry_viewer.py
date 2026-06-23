@@ -18,7 +18,7 @@ def show_inspect_registry_viewer(ui) -> None:
     from tcbase import log
 
     try:
-        from termin._native.inspect import InspectRegistry
+        from termin.inspect import InspectRegistry
         registry = InspectRegistry.instance()
     except ImportError:
         log.error("InspectRegistry not available")

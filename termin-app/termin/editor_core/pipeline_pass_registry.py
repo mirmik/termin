@@ -7,7 +7,7 @@ from tcbase import log
 
 def _metadata_graph(class_name: str) -> dict:
     try:
-        from termin._native.inspect import InspectRegistry
+        from termin.inspect import InspectRegistry
 
         registry = InspectRegistry.instance()
         metadata = registry.get_type_metadata(class_name)

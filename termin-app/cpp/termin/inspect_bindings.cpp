@@ -33,7 +33,7 @@ void register_domain_inspect_kinds() {
 
 } // namespace
 
-void bind_inspect(nb::module_& m) {
+void init_domain_inspect() {
     // Domain-specific init (must run before types are used)
     tc_inspect_kind_core_init();
     tc_inspect_component_adapter_init();
@@ -41,16 +41,8 @@ void bind_inspect(nb::module_& m) {
     tc_inspect_pass_adapter_init();
     tc_inspect_python_adapter_init();
 
-    // Import _inspect_native — types are registered there
+    // Import _inspect_native — core types and diagnostics are registered there.
     nb::module_ inspect_native = nb::module_::import_("termin.inspect._inspect_native");
-
-    // Re-export all types into termin._native.inspect submodule
-    m.attr("TypeBackend") = inspect_native.attr("TypeBackend");
-    m.attr("EnumChoice") = inspect_native.attr("EnumChoice");
-    m.attr("InspectFieldInfo") = inspect_native.attr("InspectFieldInfo");
-    m.attr("InspectRegistry") = inspect_native.attr("InspectRegistry");
-    m.attr("inspect_registry_address") = inspect_native.attr("inspect_registry_address");
-    m.attr("kind_registry_cpp_address") = inspect_native.attr("kind_registry_cpp_address");
 
     // Register domain-specific pointer extractors
     nb::object register_fn = inspect_native.attr("register_ptr_extractor");

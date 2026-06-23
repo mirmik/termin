@@ -88,6 +88,8 @@ Verification:
 
 ### Batch 2: inspect/kind compatibility imports
 
+Status: done, 2026-06-23.
+
 Goal: internal code stops depending on `termin._native.inspect` and
 `termin._native.kind`.
 
@@ -95,8 +97,9 @@ Canonical owners:
 
 - inspect registry/types -> `termin.inspect`
 - low-level inspect binding, if absolutely needed -> `termin.inspect._inspect_native`
-- kind registry wrapper -> move out of `termin-app/termin/serialization/kind.py`
-  into an inspect/serialization owner after deciding module ownership hook shape.
+- kind registry wrapper -> `termin.inspect.kind`
+- legacy app/domain builtin registration -> `termin.serialization.kind`, now a
+  thin wrapper over `termin.inspect.kind`.
 
 Work:
 
@@ -108,9 +111,13 @@ Work:
 
 Verification:
 
-- inspect singleton topology test
-- component/frame-pass registry tests
-- `rg "termin\\._native\\.(inspect|kind)" termin-*`
+- inspect singleton topology test: passed.
+- component/frame-pass registry tests: covered by focused tcgui/widget tests and
+  full `./run-tests.sh`.
+- `./run-tests.sh`: passed, 585 Python tests passed, 1 skipped; C/C++ tests
+  and editor smoke tests passed.
+- `rg "termin\\._native\\.(inspect|kind)|_native\\.(inspect|kind)"`
+  outside build/sdk/docs: no matches.
 
 ### Batch 3: `termin.graphics` facade
 

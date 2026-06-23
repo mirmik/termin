@@ -4,6 +4,6 @@
 
 namespace termin {
 
-void bind_inspect(nanobind::module_& m);
+void init_domain_inspect();
 
 } // namespace termin

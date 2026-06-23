@@ -314,7 +314,7 @@ def _remap_duplicate_internal_entity_refs(scene, source_data: dict, copy_entity:
         return
 
     try:
-        from termin._native.inspect import InspectRegistry
+        from termin.inspect import InspectRegistry
         registry = InspectRegistry.instance()
     except (ImportError, RuntimeError) as e:
         _logger.error("Duplicate remap: failed to access InspectRegistry: %s", e)
