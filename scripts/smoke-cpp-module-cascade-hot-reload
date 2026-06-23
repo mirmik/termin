@@ -108,15 +108,13 @@ def _yaml_quote(value: str) -> str:
     return json.dumps(value)
 
 
-def _write_descriptor(path: Path, *, module_id: str, artifact: Path, dependencies: list[str], components: list[str]) -> None:
+def _write_descriptor(path: Path, *, module_id: str, artifact: Path, dependencies: list[str]) -> None:
     lines = [
         f"name: {module_id}",
         "type: cpp",
     ]
     if dependencies:
         lines.append("dependencies: [" + ", ".join(dependencies) + "]")
-    if components:
-        lines.append("components: [" + ", ".join(components) + "]")
     lines.extend(
         [
             "build:",
@@ -142,14 +140,12 @@ def _write_project(project_root: Path, core_artifact_source: Path) -> Path:
         module_id=CORE_MODULE,
         artifact=core_artifact,
         dependencies=[],
-        components=[COMPONENT_TYPE],
     )
     _write_descriptor(
         project_root / "native_leaf.module",
         module_id=LEAF_MODULE,
         artifact=leaf_artifact,
         dependencies=[CORE_MODULE],
-        components=[],
     )
 
     (project_root / "Main.scene").write_text(
