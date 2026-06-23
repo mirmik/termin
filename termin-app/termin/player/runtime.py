@@ -172,7 +172,9 @@ class PlayerRuntime:
     def initialize(self) -> bool:
         """Initialize player systems."""
         from tcbase import log
+        from termin.bootstrap import bootstrap_player
 
+        bootstrap_player()
         self._configure_backend_default()
         if not self._configure_shader_runtime():
             return False

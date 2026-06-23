@@ -255,8 +255,10 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
 
     Called from C++ before EngineCore.run(). Does NOT call engine.run().
     """
+    from termin.bootstrap import bootstrap_editor
     from termin.engine import EngineCore
 
+    bootstrap_editor()
     engine = EngineCore.instance()
     if engine is None:
         raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")

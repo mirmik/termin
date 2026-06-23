@@ -60,12 +60,14 @@ class HeadlessRuntime:
 
     def initialize(self) -> None:
         from tcbase import log
+        from termin.bootstrap import bootstrap_player
 
         if self.initialized:
             return
         if not self.project_path.exists():
             raise HeadlessRuntimeError(f"Project path does not exist: {self.project_path}")
 
+        bootstrap_player()
         log.info(f"[HeadlessRuntime] Initializing project: {self.project_path}")
         if self.register_builtin_resources:
             register_project_runtime_resources(

@@ -108,6 +108,7 @@ if __name__ == "__main__":
             "tcbase",
             "termin-assets",
             "termin-default-assets",
+            "termin-bootstrap",
             "termin-prefab",
             "termin-glb",
             "termin-tween",
