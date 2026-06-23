@@ -1,16 +1,12 @@
-def test_native_render_reexports_canonical_render_modules():
+def test_app_native_no_longer_reexports_render_surface():
     import termin._native as native
-    from termin.editor._editor_native import SolidPrimitiveRenderer
-    from termin.render_components import Camera, CameraProjection
-    from termin.render_passes import (
-        ShadowCameraParams,
-        build_shadow_view_matrix,
-        fit_shadow_frustum_to_camera,
-    )
 
-    assert native.render.Camera is Camera
-    assert native.render.CameraProjection is CameraProjection
-    assert native.render.ShadowCameraParams is ShadowCameraParams
-    assert native.render.build_shadow_view_matrix is build_shadow_view_matrix
-    assert native.render.fit_shadow_frustum_to_camera is fit_shadow_frustum_to_camera
-    assert native.render.SolidPrimitiveRenderer is SolidPrimitiveRenderer
+    assert "render" not in dir(native)
+
+
+def test_editor_native_is_the_editor_private_binding_surface():
+    from termin.editor import _editor_native as editor_native
+
+    assert "EditorInteractionSystem" in dir(editor_native)
+    assert "FrameGraphDebuggerCore" in dir(editor_native)
+    assert "SolidPrimitiveRenderer" in dir(editor_native)

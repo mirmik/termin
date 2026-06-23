@@ -1,4 +1,3 @@
-from termin import _native as app_native
 from termin.project.settings import ProjectSettings, RenderSyncMode
 from termin.render import (
     RenderSyncMode as CRenderSyncMode,
@@ -36,6 +35,8 @@ def test_project_settings_serializes_ignored_resource_paths() -> None:
 
 
 def test_render_sync_mode_runtime_binding_belongs_to_render_package() -> None:
+    import termin._native as app_native
+
     assert "RenderSyncMode" not in dir(app_native)
     assert "set_render_sync_mode" not in dir(app_native)
     assert "get_render_sync_mode" not in dir(app_native)

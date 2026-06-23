@@ -6,11 +6,10 @@ find_package(nanobind CONFIG REQUIRED)
 # ============== Main unified module ==============
 
 set(TERMIN_APP_NATIVE_SOURCES
-    # Python bindings entry point and remaining compatibility exports.
+    # Python bindings entry point and remaining app-private startup glue.
     termin/bindings.cpp
-    termin/tc_component_python_bindings.cpp
 
-    # Entity domain bindings (migrated from _entity_native)
+    # Remaining Component inspect registration and shutdown cleanup.
     termin/bindings/entity/entity_native_to_native.cpp
 )
 
@@ -44,29 +43,7 @@ target_link_libraries(_native PRIVATE
     termin_inspect::termin_inspect
     termin_inspect::termin_inspect_python
     termin_scene::termin_scene
-    termin_input::termin_input
-    termin_collision::termin_collision
-    termin_components_collision::termin_components_collision
-    termin_components_kinematic::termin_components_kinematic
-    termin_components_render::termin_components_render
-    termin_render::termin_render
-    termin_display::termin_display
-    termin_skeleton::termin_skeleton
-    termin_components_skeleton::termin_components_skeleton
-    termin_voxels::termin_voxels
-    termin_engine::termin_engine
-    termin_render_passes::termin_render_passes
-    tgfx::termin_graphics
-    tgfx::termin_graphics2
 )
-if(TGFX2_ENABLE_OPENGL)
-    target_link_libraries(_native PRIVATE OpenGL::GL)
-endif()
-if(TERMIN_HAS_RECAST)
-    target_link_libraries(_native PRIVATE termin_navmesh::termin_navmesh_components)
-endif()
-
-
 if(UNIX AND NOT APPLE)
     target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
 endif()

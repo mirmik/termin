@@ -17,4 +17,4 @@ Shadow camera helpers (`ShadowCameraParams`, `build_shadow_view_matrix`,
 `build_shadow_projection_matrix`, `compute_light_space_matrix`,
 `compute_frustum_corners`, `fit_shadow_frustum_to_camera`) are part of the
 public `termin.render_passes` Python API. The legacy `termin._native.render`
-surface re-exports them without owning separate bindings.
+surface has been removed; use the canonical package directly.

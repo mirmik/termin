@@ -293,8 +293,10 @@ ownership.
 
 - `termin-app/core_c/src/tc_scene_registry.c` is not built; the public header is
   already a legacy inline delegate to `tc_scene_pool`.
-- `termin._native` still exports many symbols whose canonical owner exists.
-- Some tests still validate singleton topology through app compatibility paths.
+- `termin._native` still contains app-private Component inspect registration;
+  this should move to the owning scene/bootstrap layer.
+- The old `termin._native` compatibility re-export surface was removed on
+  2026-06-24; tests now validate canonical owners directly.
 - C++ binding modules in non-app packages still import app native submodules for
   type lookup in a few places.
 
