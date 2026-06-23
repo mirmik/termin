@@ -10,7 +10,6 @@
 #include "termin/render/mesh_renderer.hpp"
 #include <components/mesh_component.hpp>
 #include <termin/entity/component.hpp>
-#include "editor/tc_editor_interaction.h"
 #include "render/tc_viewport.h"
 #include "render/tc_display.h"
 #include "render/tc_render_target.h"
@@ -25,6 +24,8 @@
 namespace termin {
 
 namespace {
+
+EditorInteractionSystem* g_editor_interaction_instance = nullptr;
 
 static bool mesh_triangle_indices(const tc_mesh* mesh, uint32_t tri, uint32_t out[3]) {
     if (!mesh || !mesh->indices) {
@@ -47,8 +48,7 @@ static bool mesh_triangle_indices(const tc_mesh* mesh, uint32_t tri, uint32_t ou
 // ============================================================================
 
 EditorInteractionSystem::EditorInteractionSystem() {
-    tc_editor_interaction_set_instance(
-        reinterpret_cast<tc_editor_interaction_system*>(this));
+    g_editor_interaction_instance = this;
 
     // Setup transform gizmo
     _transform_gizmo.size = 1.5f;
@@ -70,9 +70,8 @@ EditorInteractionSystem::~EditorInteractionSystem() {
     _clear_component_visual_gizmos();
     gizmo_manager.remove_gizmo(&_transform_gizmo);
 
-    if (tc_editor_interaction_instance() ==
-        reinterpret_cast<tc_editor_interaction_system*>(this)) {
-        tc_editor_interaction_set_instance(nullptr);
+    if (g_editor_interaction_instance == this) {
+        g_editor_interaction_instance = nullptr;
     }
     tc_log(TC_LOG_INFO, "[EditorInteractionSystem] Destroyed");
 }
@@ -82,13 +81,11 @@ EditorInteractionSystem::~EditorInteractionSystem() {
 // ============================================================================
 
 EditorInteractionSystem* EditorInteractionSystem::instance() {
-    return reinterpret_cast<EditorInteractionSystem*>(
-        tc_editor_interaction_instance());
+    return g_editor_interaction_instance;
 }
 
 void EditorInteractionSystem::set_instance(EditorInteractionSystem* inst) {
-    tc_editor_interaction_set_instance(
-        reinterpret_cast<tc_editor_interaction_system*>(inst));
+    g_editor_interaction_instance = inst;
 }
 
 // ============================================================================

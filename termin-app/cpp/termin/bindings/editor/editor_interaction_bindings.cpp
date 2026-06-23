@@ -59,7 +59,10 @@ void bind_editor_interaction(nb::module_& m) {
         .def(nb::init<>())
         .def_static("instance", &EditorInteractionSystem::instance,
             nb::rv_policy::reference)
-        .def_static("set_instance", &EditorInteractionSystem::set_instance)
+        .def_static("set_instance", [](nb::object obj) {
+            EditorInteractionSystem::set_instance(
+                obj.is_none() ? nullptr : nb::cast<EditorInteractionSystem*>(obj));
+        }, nb::arg("instance").none())
         .def_prop_ro("selection",
             [](EditorInteractionSystem& s) -> SelectionManager& {
                 return s.selection;
