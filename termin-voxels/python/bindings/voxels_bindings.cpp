@@ -184,6 +184,57 @@ VoxelGrid voxel_grid_from_dict(const nb::dict& data) {
     return grid;
 }
 
+void register_voxel_grid_kind_handlers() {
+    static bool registered = false;
+    if (registered) {
+        return;
+    }
+
+    // The legacy kind name is kept for scene compatibility; the value type is TcVoxelGrid.
+    tc::register_cpp_handle_kind<TcVoxelGrid>("voxel_grid_handle");
+
+    nb::module_ voxels_module = nb::module_::import_("termin.voxels._voxels_native");
+    tc::KindRegistry::instance().register_type(voxels_module.attr("TcVoxelGrid"), "voxel_grid_handle");
+
+    tc::KindRegistry::instance().register_python(
+        "voxel_grid_handle",
+        // serialize
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            TcVoxelGrid handle = nb::cast<TcVoxelGrid>(obj);
+            nb::dict result;
+            if (handle.is_valid()) {
+                result["uuid"] = std::string(handle.uuid());
+                result["name"] = std::string(handle.name());
+                std::string path = std::string(handle.source_path());
+                result["type"] = path.empty() ? "uuid" : "path";
+                if (!path.empty()) {
+                    result["path"] = path;
+                }
+            }
+            return result;
+        }),
+        // deserialize
+        nb::cpp_function([](nb::object data) -> nb::object {
+            if (nb::isinstance<nb::str>(data)) {
+                return nb::cast(TcVoxelGrid::from_uuid(nb::cast<std::string>(data)));
+            }
+
+            if (nb::isinstance<nb::dict>(data)) {
+                nb::dict d = nb::cast<nb::dict>(data);
+                if (d.contains("uuid")) {
+                    return nb::cast(TcVoxelGrid::from_uuid(nb::cast<std::string>(d["uuid"])));
+                }
+                if (d.contains("name")) {
+                    return nb::cast(TcVoxelGrid::from_name(nb::cast<std::string>(d["name"])));
+                }
+            }
+            return nb::cast(TcVoxelGrid());
+        })
+    );
+
+    registered = true;
+}
+
 NB_MODULE(_voxels_native, m) {
     m.doc() = "Native C++ voxelization module";
 
@@ -618,48 +669,8 @@ NB_MODULE(_voxels_native, m) {
 
     m.attr("VoxelGridHandle") = m.attr("TcVoxelGrid");
 
-    // Register kind handler for voxel_grid_handle.
-    // The legacy kind name is kept for scene compatibility; the value type is TcVoxelGrid.
-    tc::register_cpp_handle_kind<TcVoxelGrid>("voxel_grid_handle");
-
-    // Python handler for Python fields
-    tc::KindRegistry::instance().register_python(
-        "voxel_grid_handle",
-        // serialize
-        nb::cpp_function([](nb::object obj) -> nb::object {
-            TcVoxelGrid handle = nb::cast<TcVoxelGrid>(obj);
-            nb::dict result;
-            if (handle.is_valid()) {
-                result["uuid"] = std::string(handle.uuid());
-                result["name"] = std::string(handle.name());
-                std::string path = std::string(handle.source_path());
-                result["type"] = path.empty() ? "uuid" : "path";
-                if (!path.empty()) {
-                    result["path"] = path;
-                }
-            }
-            return result;
-        }),
-        // deserialize
-        nb::cpp_function([](nb::object data) -> nb::object {
-            // Handle UUID string
-            if (nb::isinstance<nb::str>(data)) {
-                return nb::cast(TcVoxelGrid::from_uuid(nb::cast<std::string>(data)));
-            }
-
-            // Handle dict format
-            if (nb::isinstance<nb::dict>(data)) {
-                nb::dict d = nb::cast<nb::dict>(data);
-                if (d.contains("uuid")) {
-                    return nb::cast(TcVoxelGrid::from_uuid(nb::cast<std::string>(d["uuid"])));
-                }
-                if (d.contains("name")) {
-                    return nb::cast(TcVoxelGrid::from_name(nb::cast<std::string>(d["name"])));
-                }
-            }
-            return nb::cast(TcVoxelGrid());
-        })
-    );
+    m.def("register_voxel_grid_kind_handlers", &register_voxel_grid_kind_handlers,
+        "Register voxel_grid_handle kind handlers explicitly.");
 
     // Standalone function for testing
     m.def("triangle_aabb_intersect", [](

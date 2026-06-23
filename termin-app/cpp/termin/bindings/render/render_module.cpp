@@ -8,24 +8,10 @@
 #include "common.hpp"
 #include "termin/render_bindings.hpp"
 
-extern "C" {
-#include "core/tc_scene_render_state.h"
-#include "core/tc_scene_render_mount.h"
-}
-
 namespace termin {
 
 void bind_render(nb::module_& m) {
-    // Register scene extensions that render passes depend on. Idempotent;
-    // a no-op if another init path (EngineCore) already registered them.
-    // Needed so standalone Python scripts that don't construct an
-    // EngineCore still get render_state (skybox, lighting, ...) available.
-    tc_scene_render_mount_extension_init();
-    tc_scene_render_state_extension_init();
-
-    // Register kind handlers for TcMaterial serialization
-    register_material_kind_handlers();
-
+    (void)m;
 }
 
 } // namespace termin

@@ -11,6 +11,7 @@ find_dependency(termin_mesh REQUIRED)
 find_dependency(termin_graphics REQUIRED)
 find_dependency(termin_skeleton REQUIRED)
 find_dependency(termin_voxels REQUIRED)
+find_dependency(termin_navmesh REQUIRED)
 @TERMIN_BOOTSTRAP_CONFIG_FIND_ANIMATION@
 @TERMIN_BOOTSTRAP_CONFIG_FIND_PYTHON_DEPS@
 

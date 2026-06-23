@@ -12,6 +12,7 @@ termin::bootstrap::RuntimeKindOptions runtime_kind_options_from_kwargs(
     bool skeleton,
     bool animation,
     bool voxel_grid,
+    bool navmesh,
     bool entity
 ) {
     termin::bootstrap::RuntimeKindOptions options;
@@ -20,6 +21,7 @@ termin::bootstrap::RuntimeKindOptions runtime_kind_options_from_kwargs(
     options.skeleton = skeleton;
     options.animation = animation;
     options.voxel_grid = voxel_grid;
+    options.navmesh = navmesh;
     options.entity = entity;
     return options;
 }
@@ -42,9 +44,9 @@ NB_MODULE(_bootstrap_native, m) {
     m.doc() = "Explicit startup bootstrap helpers for Termin runtime/player/editor";
 
     m.def("register_runtime_kinds",
-        [](bool mesh, bool material, bool skeleton, bool animation, bool voxel_grid, bool entity) {
+        [](bool mesh, bool material, bool skeleton, bool animation, bool voxel_grid, bool navmesh, bool entity) {
             termin::bootstrap::register_runtime_kinds(
-                runtime_kind_options_from_kwargs(mesh, material, skeleton, animation, voxel_grid, entity)
+                runtime_kind_options_from_kwargs(mesh, material, skeleton, animation, voxel_grid, navmesh, entity)
             );
         },
         nb::arg("mesh") = true,
@@ -52,6 +54,7 @@ NB_MODULE(_bootstrap_native, m) {
         nb::arg("skeleton") = true,
         nb::arg("animation") = true,
         nb::arg("voxel_grid") = true,
+        nb::arg("navmesh") = true,
         nb::arg("entity") = true);
 
     m.def("register_scene_extensions",
@@ -66,9 +69,9 @@ NB_MODULE(_bootstrap_native, m) {
 
     m.def("init_inspect_adapters", &termin::bootstrap::init_inspect_adapters);
     m.def("init_python_kind_handlers",
-        [](bool mesh, bool material, bool skeleton, bool animation, bool voxel_grid, bool entity) {
+        [](bool mesh, bool material, bool skeleton, bool animation, bool voxel_grid, bool navmesh, bool entity) {
             termin::bootstrap::init_python_kind_handlers(
-                runtime_kind_options_from_kwargs(mesh, material, skeleton, animation, voxel_grid, entity)
+                runtime_kind_options_from_kwargs(mesh, material, skeleton, animation, voxel_grid, navmesh, entity)
             );
         },
         nb::arg("mesh") = true,
@@ -76,6 +79,7 @@ NB_MODULE(_bootstrap_native, m) {
         nb::arg("skeleton") = true,
         nb::arg("animation") = true,
         nb::arg("voxel_grid") = true,
+        nb::arg("navmesh") = true,
         nb::arg("entity") = true);
     m.def("init_pointer_extractors", &termin::bootstrap::init_pointer_extractors);
     m.def("init_python_component_callbacks", &termin::bootstrap::init_python_component_callbacks);
