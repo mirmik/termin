@@ -367,6 +367,78 @@ def test_profile_build_normalizes_explicit_profile_policy(tmp_path: Path) -> Non
     assert request.context.resource_policy == "dev_smoke"
 
 
+def test_profile_build_routes_desktop_python_package_policy(tmp_path: Path, monkeypatch) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                    "python": {
+                        "package_policy": "sdk_broad_copy",
+                        "requirements": ["python-chess"],
+                    },
+                }
+            },
+        },
+    )
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            dist_dir=kwargs["output_dir"],
+            app_manifest_path=kwargs["output_dir"] / "app.json",
+            package_result=_package_result(tmp_path),
+            diagnostics=[],
+        )
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
+
+    assert profile_build.main(
+        [
+            "build",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+            "--profile",
+            "dev",
+            "--target",
+            "desktop",
+        ]
+    ) == 0
+
+    assert calls[0]["python_package_policy"] == "sdk_broad_copy"
+    assert calls[0]["python_requirements"] == ("python-chess",)
+
+
+def test_profile_build_rejects_invalid_desktop_python_package_policy(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_json(
+        profiles_path,
+        {
+            "version": 1,
+            "profiles": {
+                "dev": {
+                    "target": "desktop",
+                    "entry_scene": "Scenes/Main.scene",
+                    "output_dir": "dist/dev",
+                    "python": {"package_policy": "guess_imports"},
+                }
+            },
+        },
+    )
+
+    profile = profile_build.load_build_profile(project, profiles_path, "dev")
+    with pytest.raises(profile_build.ProfileBuildError, match="python.package_policy"):
+        profile_build.normalize_profile_build_request(profile)
+
+
 @pytest.mark.parametrize(
     ("shader_targets", "message"),
     [

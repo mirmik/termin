@@ -3,12 +3,62 @@
 from __future__ import annotations
 
 import importlib.metadata
+import json
 import os
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from termin.project_build.runtime_package_exporter import RuntimePackageExportDiagnostic
+
+
+MINIMAL_PYTHON_PACKAGE_POLICY = "minimal_strict"
+SDK_BROAD_COPY_PYTHON_PACKAGE_POLICY = "sdk_broad_copy"
+SUPPORTED_PYTHON_PACKAGE_POLICIES = (
+    MINIMAL_PYTHON_PACKAGE_POLICY,
+    SDK_BROAD_COPY_PYTHON_PACKAGE_POLICY,
+)
+
+TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
+    "termin-app",
+    "termin-nanobind",
+    "tcbase",
+    "termin-assets",
+    "termin-default-assets",
+    "termin-prefab",
+    "termin-glb",
+    "termin-tween",
+    "termin-components-tween",
+    "termin-audio",
+    "termin-voxels",
+    "termin-components-voxels",
+    "termin-components-physics",
+    "termin-components-ui",
+    "termin-materials",
+    "termin-render-passes",
+    "termin-modules",
+    "termin-scene",
+    "termin-engine",
+    "termin-render",
+    "termin-components-render",
+    "termin-input",
+    "termin-inspect",
+    "termin-collision",
+    "termin-physics",
+    "termin-navmesh",
+    "termin-lighting",
+    "tmesh",
+    "tgfx",
+    "tcgui",
+    "numpy",
+)
+
+
+@dataclass(frozen=True)
+class PythonBundledDistribution:
+    name: str
+    version: str
+    source: str
 
 
 @dataclass
@@ -19,6 +69,9 @@ class DesktopRuntimeBundleResult:
     launcher_path: Path | None
     python_home: Path | None
     python_site_packages: Path | None = None
+    python_runtime_manifest_path: Path | None = None
+    python_package_policy: str = MINIMAL_PYTHON_PACKAGE_POLICY
+    bundled_distributions: list[PythonBundledDistribution] = field(default_factory=list)
     diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
 
 
@@ -34,11 +87,22 @@ def package_desktop_runtime(
     app_name: str | None = None,
     sdk_root: str | Path | None = None,
     requirement_search_paths: list[str | Path] | None = None,
+    python_package_policy: str = MINIMAL_PYTHON_PACKAGE_POLICY,
 ) -> DesktopRuntimeBundleResult:
     """Copy the SDK runtime needed by the bundle-local C++ player."""
     dist_dir_path = Path(dist_dir).resolve()
     diagnostics: list[RuntimePackageExportDiagnostic] = []
     resolved_sdk_root = _resolve_sdk_root(sdk_root)
+    if python_package_policy not in SUPPORTED_PYTHON_PACKAGE_POLICIES:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                "python/package_policy",
+                "Unsupported Python package policy: "
+                f"{python_package_policy}. Supported policies: "
+                + ", ".join(SUPPORTED_PYTHON_PACKAGE_POLICIES),
+            )
+        )
 
     bin_dir = dist_dir_path / "bin"
     lib_dir = dist_dir_path / "lib"
@@ -46,6 +110,8 @@ def package_desktop_runtime(
     launcher_path: Path | None = None
     python_home: Path | None = None
     python_site_packages: Path | None = None
+    python_runtime_manifest_path: Path | None = None
+    bundled_distributions: list[PythonBundledDistribution] = []
 
     if resolved_sdk_root is None:
         diagnostics.append(
@@ -62,6 +128,7 @@ def package_desktop_runtime(
             launcher_path=None,
             python_home=None,
             python_site_packages=None,
+            python_package_policy=python_package_policy,
             diagnostics=diagnostics,
         )
 
@@ -80,17 +147,39 @@ def package_desktop_runtime(
         lib_dir,
         windows_python_home,
         diagnostics,
+        python_package_policy,
     )
     _copy_shared_data(resolved_sdk_root, dist_dir_path, diagnostics)
 
     if python_runtime is not None:
         python_home = python_runtime.home
         python_site_packages = python_runtime.site_packages
-        _copy_requirements(
-            requirements,
-            python_site_packages,
-            diagnostics,
+        search_paths = _runtime_distribution_search_paths(
+            resolved_sdk_root,
             _normalize_search_paths(requirement_search_paths),
+        )
+        if python_package_policy == MINIMAL_PYTHON_PACKAGE_POLICY:
+            bundled_distributions.extend(
+                _copy_runtime_seed_distributions(
+                    python_site_packages,
+                    diagnostics,
+                    search_paths,
+                )
+            )
+        bundled_distributions.extend(
+            _copy_requirements(
+                requirements,
+                python_site_packages,
+                diagnostics,
+                search_paths,
+            )
+        )
+        python_runtime_manifest_path = dist_dir_path / "python-runtime.json"
+        _write_python_runtime_manifest(
+            python_runtime_manifest_path,
+            python_runtime,
+            python_package_policy,
+            bundled_distributions,
         )
 
     return DesktopRuntimeBundleResult(
@@ -100,6 +189,9 @@ def package_desktop_runtime(
         launcher_path=launcher_path,
         python_home=python_home,
         python_site_packages=python_site_packages,
+        python_runtime_manifest_path=python_runtime_manifest_path,
+        python_package_policy=python_package_policy,
+        bundled_distributions=bundled_distributions,
         diagnostics=diagnostics,
     )
 
@@ -219,24 +311,36 @@ def _copy_python_home(
     lib_dir: Path,
     windows_python_home: Path,
     diagnostics: list[RuntimePackageExportDiagnostic],
+    python_package_policy: str,
 ) -> _PythonRuntimeCopyResult | None:
     posix_python_homes = _posix_python_homes(sdk_root)
     windows_python_lib = sdk_root / "python" / "Lib"
+    broad_copy = python_package_policy == SDK_BROAD_COPY_PYTHON_PACKAGE_POLICY
 
     if posix_python_homes:
         source = posix_python_homes[0]
         target = lib_dir / source.name
-        _copytree_clean(source, target)
+        _copytree_clean(
+            source,
+            target,
+            ignore_names=set() if broad_copy else _stdlib_copy_ignored_names(),
+        )
         site_packages = target / "site-packages"
+        site_packages.mkdir(parents=True, exist_ok=True)
         _copy_sdk_python_overlay(sdk_root, site_packages)
         return _PythonRuntimeCopyResult(home=target, site_packages=site_packages)
 
     if (windows_python_lib / "os.py").is_file():
         _replace_dir(windows_python_home)
         target_lib = windows_python_home / "Lib"
-        _copytree_clean(windows_python_lib, target_lib)
+        _copytree_clean(
+            windows_python_lib,
+            target_lib,
+            ignore_names=set() if broad_copy else _stdlib_copy_ignored_names(),
+        )
         _copy_windows_python_runtime_support(sdk_root, windows_python_home)
         site_packages = target_lib / "site-packages"
+        site_packages.mkdir(parents=True, exist_ok=True)
         _copy_sdk_python_overlay(sdk_root, site_packages)
         return _PythonRuntimeCopyResult(home=windows_python_home, site_packages=site_packages)
 
@@ -249,6 +353,17 @@ def _copy_python_home(
         )
     )
     return None
+
+
+def _stdlib_copy_ignored_names() -> set[str]:
+    return {
+        "site-packages",
+        "test",
+        "tests",
+        "idle_test",
+        "turtledemo",
+        "lib2to3",
+    }
 
 
 def _copy_windows_python_runtime_support(sdk_root: Path, python_home: Path) -> None:
@@ -323,9 +438,53 @@ def _copy_requirements(
     site_packages: Path,
     diagnostics: list[RuntimePackageExportDiagnostic],
     search_paths: list[Path],
-) -> None:
+) -> list[PythonBundledDistribution]:
+    return _copy_distributions(
+        requirements,
+        site_packages,
+        diagnostics,
+        search_paths,
+        source="project-requirement",
+        include_transitive=True,
+        missing_is_error=True,
+        missing_files_is_error=True,
+        allow_environment=True,
+    )
+
+
+def _copy_runtime_seed_distributions(
+    site_packages: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    search_paths: list[Path],
+) -> list[PythonBundledDistribution]:
+    return _copy_distributions(
+        list(TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS),
+        site_packages,
+        diagnostics,
+        search_paths,
+        source="termin-runtime",
+        include_transitive=False,
+        missing_is_error=False,
+        missing_files_is_error=False,
+        allow_environment=False,
+    )
+
+
+def _copy_distributions(
+    requirements: list[str],
+    site_packages: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    search_paths: list[Path],
+    *,
+    source: str,
+    include_transitive: bool,
+    missing_is_error: bool,
+    missing_files_is_error: bool,
+    allow_environment: bool,
+) -> list[PythonBundledDistribution]:
     pending = sorted(set(requirements))
     copied: set[str] = set()
+    bundled: list[PythonBundledDistribution] = []
 
     while pending:
         requirement = pending.pop(0)
@@ -345,41 +504,54 @@ def _copy_requirements(
             continue
         copied.add(normalized)
 
-        distribution = _find_distribution(package_name, search_paths)
+        distribution = _find_distribution(package_name, search_paths, allow_environment)
         if distribution is None:
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    "error",
-                    "python/requirements",
-                    "Python requirement is not installed in the build environment "
-                    f"or project requirement paths: {requirement}",
+            if missing_is_error:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        "python/requirements",
+                        "Python requirement is not installed in the build environment "
+                        f"or project requirement paths: {requirement}",
+                    )
                 )
-            )
             continue
 
         files = distribution.files
         if files is None:
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    "error",
-                    "python/requirements",
-                    f"Python requirement has no file list and cannot be copied: {requirement}",
+            if missing_files_is_error:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        "python/requirements",
+                        f"Python requirement has no file list and cannot be copied: {requirement}",
+                    )
                 )
-            )
             continue
 
         for file in files:
-            source = Path(distribution.locate_file(file))
-            if not source.is_file():
+            source_file = Path(distribution.locate_file(file))
+            if not source_file.is_file():
                 continue
             target = site_packages / Path(file)
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
+            shutil.copy2(source_file, target)
 
-        for required in distribution.requires or []:
-            required_name = _requirement_distribution_name(required)
-            if required_name and _normalize_distribution_name(required_name) not in copied:
-                pending.append(required_name)
+        bundled.append(
+            PythonBundledDistribution(
+                name=distribution.metadata.get("Name", package_name),
+                version=distribution.version,
+                source=source,
+            )
+        )
+
+        if include_transitive:
+            for required in distribution.requires or []:
+                required_name = _requirement_distribution_name(required)
+                if required_name and _normalize_distribution_name(required_name) not in copied:
+                    pending.append(required_name)
+
+    return bundled
 
 
 def _requirement_distribution_name(requirement: str) -> str:
@@ -410,9 +582,28 @@ def _normalize_search_paths(paths: list[str | Path] | None) -> list[Path]:
     return result
 
 
+def _runtime_distribution_search_paths(sdk_root: Path, project_paths: list[Path]) -> list[Path]:
+    result: list[Path] = []
+    for path in [
+        *_sdk_site_packages(sdk_root),
+        *project_paths,
+    ]:
+        if path not in result:
+            result.append(path)
+    return result
+
+
+def _sdk_site_packages(sdk_root: Path) -> list[Path]:
+    candidates = [sdk_root / "python" / "Lib" / "site-packages"]
+    for python_home in _posix_python_homes(sdk_root):
+        candidates.append(python_home / "site-packages")
+    return [path for path in candidates if path.is_dir()]
+
+
 def _find_distribution(
     package_name: str,
     search_paths: list[Path],
+    allow_environment: bool = True,
 ) -> importlib.metadata.Distribution | None:
     normalized = _normalize_distribution_name(package_name)
     for search_path in search_paths:
@@ -420,6 +611,8 @@ def _find_distribution(
             metadata_name = distribution.metadata.get("Name", "")
             if _normalize_distribution_name(metadata_name) == normalized:
                 return distribution
+    if not allow_environment:
+        return None
     try:
         return importlib.metadata.distribution(package_name)
     except importlib.metadata.PackageNotFoundError:
@@ -432,14 +625,15 @@ def _replace_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _copytree_clean(source: Path, target: Path) -> None:
+def _copytree_clean(source: Path, target: Path, ignore_names: set[str] | None = None) -> None:
     if target.exists():
         shutil.rmtree(target)
+    ignored = {"__pycache__", "*.pyc", "*.pyo", *(ignore_names or set())}
     shutil.copytree(
         source,
         target,
         symlinks=True,
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+        ignore=shutil.ignore_patterns(*ignored),
     )
 
 
@@ -454,3 +648,31 @@ def _copytree_merge_clean(source: Path, target: Path) -> None:
         elif child.is_file():
             child_target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(child, child_target)
+
+
+def _write_python_runtime_manifest(
+    path: Path,
+    python_runtime: _PythonRuntimeCopyResult,
+    package_policy: str,
+    bundled_distributions: list[PythonBundledDistribution],
+) -> None:
+    data = {
+        "version": 1,
+        "package_policy": package_policy,
+        "python_home": python_runtime.home.name,
+        "site_packages": python_runtime.site_packages.relative_to(python_runtime.home).as_posix(),
+        "distributions": [
+            {
+                "name": distribution.name,
+                "version": distribution.version,
+                "source": distribution.source,
+            }
+            for distribution in sorted(
+                bundled_distributions,
+                key=lambda item: (_normalize_distribution_name(item.name), item.source),
+            )
+        ],
+    }
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")

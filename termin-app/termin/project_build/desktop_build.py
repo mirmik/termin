@@ -12,6 +12,7 @@ from termin.project_build.build_context import BuildContext, create_build_contex
 from termin.project_build.diagnostics import DiagnosticLike
 from termin.project_build.desktop_runtime_packager import (
     DesktopRuntimeBundleResult,
+    MINIMAL_PYTHON_PACKAGE_POLICY,
     package_desktop_runtime,
 )
 from termin.project_build.pipeline import (
@@ -51,6 +52,8 @@ def build_desktop_project(
     sdk_root: str | Path | None = None,
     configuration: str = "dev",
     resource_policy: str = "strict",
+    python_package_policy: str = MINIMAL_PYTHON_PACKAGE_POLICY,
+    python_requirements: Iterable[str] | None = None,
 ) -> DesktopBuildResult:
     context = create_build_context(
         project_root=project_root,
@@ -73,6 +76,8 @@ def build_desktop_project(
             build_context,
             package_result,
             preflight_result,
+            python_package_policy,
+            tuple(python_requirements or ()),
         ),
         shader_compiler=shader_compiler,
         default_shader_language=default_shader_language,
@@ -104,21 +109,28 @@ def _package_desktop_target(
     context: BuildContext,
     _package_result: RuntimePackageExportResult,
     preflight_result: DesktopPreflightResult,
+    python_package_policy: str,
+    python_requirements: tuple[str, ...],
 ) -> TargetPackageStepResult[_DesktopTargetPackagePayload]:
     python_result = package_python_modules(
         project_root=context.project_root,
         output_dir=context.package_dir / "python",
     )
-    runtime_result = package_desktop_runtime(
-        dist_dir=context.dist_dir,
-        requirements=[
+    resolved_python_requirements = [
+        *python_requirements,
+        *[
             requirement
             for module in python_result.modules
             for requirement in module.requirements
         ],
+    ]
+    runtime_result = package_desktop_runtime(
+        dist_dir=context.dist_dir,
+        requirements=resolved_python_requirements,
         app_name=context.project_name,
         sdk_root=preflight_result.sdk_root,
         requirement_search_paths=_project_requirement_search_paths(context.project_root),
+        python_package_policy=python_package_policy,
     )
 
     app_manifest_path = context.dist_dir / "app.json"
@@ -143,6 +155,11 @@ def _package_desktop_target(
                 "python": {
                     "enabled": bool(python_result.modules),
                     "home": _relative_runtime_path(context.dist_dir, runtime_result.python_home),
+                    "package_policy": runtime_result.python_package_policy,
+                    "runtime_manifest": _relative_runtime_path(
+                        context.dist_dir,
+                        runtime_result.python_runtime_manifest_path,
+                    ),
                     "project_modules": "package/python",
                     "module_manifest": "package/python/modules.json",
                     "descriptors": python_descriptors,

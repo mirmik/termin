@@ -57,7 +57,17 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     (python_home / "os.py").write_text("", encoding="utf-8")
     (site_packages / "termin").mkdir()
     (site_packages / "termin" / "__init__.py").write_text("", encoding="utf-8")
+    (site_packages / "scipy").mkdir()
+    (site_packages / "scipy" / "__init__.py").write_text("SHOULD_NOT_COPY = True\n", encoding="utf-8")
+    _write_fake_distribution(
+        site_packages,
+        "tcbase",
+        {
+            "tcbase/__init__.py": "VALUE = 'runtime seed'\n",
+        },
+    )
     (python_overlay / "termin" / "player").mkdir(parents=True)
+    (python_overlay / "termin" / "__init__.py").write_text("", encoding="utf-8")
     (python_overlay / "termin" / "player" / "__main__.py").write_text(
         "# fresh player overlay\n",
         encoding="utf-8",
@@ -92,7 +102,17 @@ def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:
     (python_dlls / "libffi-8.dll").write_bytes(b"libffi")
     (site_packages / "termin").mkdir()
     (site_packages / "termin" / "__init__.py").write_text("", encoding="utf-8")
+    (site_packages / "scipy").mkdir()
+    (site_packages / "scipy" / "__init__.py").write_text("SHOULD_NOT_COPY = True\n", encoding="utf-8")
+    _write_fake_distribution(
+        site_packages,
+        "tcbase",
+        {
+            "tcbase/__init__.py": "VALUE = 'runtime seed'\n",
+        },
+    )
     (python_overlay / "termin" / "player").mkdir(parents=True)
+    (python_overlay / "termin" / "__init__.py").write_text("", encoding="utf-8")
     (python_overlay / "termin" / "player" / "__main__.py").write_text(
         "# fresh player overlay\n",
         encoding="utf-8",
@@ -591,9 +611,12 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert result.package_result.scene_path == result.dist_dir / "package" / "scene.json"
     assert result.python_result.manifest_path == result.dist_dir / "package" / "python" / "modules.json"
     assert result.runtime_result.python_home == result.dist_dir / "lib" / "python3.10"
+    assert result.runtime_result.python_package_policy == "minimal_strict"
+    assert result.runtime_result.python_runtime_manifest_path == result.dist_dir / "python-runtime.json"
     assert result.app_manifest_path.exists()
     assert result.package_result.manifest_path.exists()
     assert result.python_result.manifest_path.exists()
+    assert result.runtime_result.python_runtime_manifest_path.exists()
     assert not (result.dist_dir / "build.json").exists()
     assert not (result.dist_dir / "assets").exists()
     assert (result.dist_dir / "package" / "python" / "game.pymodule").exists()
@@ -607,6 +630,8 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "lib" / "libtermin_base.so").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "os.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
+    assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "scipy").exists()
     assert (
         result.dist_dir
         / "lib"
@@ -636,6 +661,8 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
             "python": {
                 "enabled": True,
                 "home": "lib/python3.10",
+                "package_policy": "minimal_strict",
+                "runtime_manifest": "python-runtime.json",
                 "project_modules": "package/python",
                 "module_manifest": "package/python/modules.json",
                 "descriptors": [
@@ -683,6 +710,15 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         ],
         "diagnostics": [],
     }
+    runtime_manifest = json.loads(
+        result.runtime_result.python_runtime_manifest_path.read_text(encoding="utf-8")
+    )
+    assert runtime_manifest["package_policy"] == "minimal_strict"
+    assert {
+        "name": "tcbase",
+        "version": "1.0",
+        "source": "termin-runtime",
+    } in runtime_manifest["distributions"]
 
 
 def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> None:
@@ -697,6 +733,8 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert result.diagnostics == []
     assert result.python_home == dist_dir.resolve() / "python"
     assert result.python_site_packages == dist_dir.resolve() / "python" / "Lib" / "site-packages"
+    assert result.python_package_policy == "minimal_strict"
+    assert result.python_runtime_manifest_path == dist_dir.resolve() / "python-runtime.json"
     assert result.launcher_path == dist_dir.resolve() / "WindowsGame.exe"
     assert (dist_dir / "WindowsGame.exe").exists()
     assert (dist_dir / "termin_base.dll").exists()
@@ -708,6 +746,8 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "python" / "DLLs" / "_ctypes.pyd").exists()
     assert (dist_dir / "python" / "DLLs" / "libffi-8.dll").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "tcbase" / "__init__.py").exists()
+    assert not (dist_dir / "python" / "Lib" / "site-packages" / "scipy").exists()
     assert (
         dist_dir
         / "python"
@@ -718,6 +758,25 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
         / "__main__.py"
     ).exists()
     assert (dist_dir / "share" / "termin" / "builtin_shaders" / "termin_prelude.slang").exists()
+
+
+def test_desktop_runtime_packager_legacy_policy_copies_sdk_site_packages(tmp_path: Path) -> None:
+    dist_dir = tmp_path / "dist" / "LegacyGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[],
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
+        python_package_policy="sdk_broad_copy",
+    )
+
+    assert result.diagnostics == []
+    assert result.python_package_policy == "sdk_broad_copy"
+    assert (dist_dir / "lib" / "python3.10" / "site-packages" / "scipy" / "__init__.py").exists()
+    runtime_manifest = json.loads(
+        result.python_runtime_manifest_path.read_text(encoding="utf-8")
+    )
+    assert runtime_manifest["package_policy"] == "sdk_broad_copy"
 
 
 def test_desktop_runtime_packager_copies_requirements_from_project_venv(
