@@ -1029,7 +1029,7 @@ class PathfindingWorldComponent(PythonComponent):
         """Отрисовка отладочной визуализации."""
         from termin.render import ImmediateRenderer
         from termin.geombase import Vec3
-        from termin.graphics import Color4
+        from tgfx import Color4
 
         renderer = ImmediateRenderer.instance()
         if renderer is None:
