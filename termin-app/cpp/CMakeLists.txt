@@ -522,6 +522,7 @@ set(TERMIN_SDK_PYTHON_PACKAGE_DIRS
     ${TERMIN_ROOT}/../termin-render/python/termin/
     ${TERMIN_ROOT}/../termin-scene/python/termin/
     ${TERMIN_ROOT}/../termin-skeleton/python/termin/
+    ${TERMIN_ROOT}/../termin-bootstrap/python/termin/
 )
 foreach(package_dir IN LISTS TERMIN_SDK_PYTHON_PACKAGE_DIRS)
     if(EXISTS ${package_dir})

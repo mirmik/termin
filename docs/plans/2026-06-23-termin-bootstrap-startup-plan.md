@@ -2,7 +2,7 @@
 
 Дата: 2026-06-23
 
-Статус: предварительный архитектурный план.
+Статус: Phase 1/2 implemented; Phase 3+ pending.
 
 ## Цель
 
@@ -70,6 +70,26 @@ composition root, а не получать измененное глобальн
 - `termin-runtime/src/runtime_package.cpp` уже локально регистрирует
   `tc_mesh` и `tc_material` перед scene deserialization. Это хороший образец
   явного runtime policy.
+
+## Implementation Status
+
+2026-06-23:
+
+- Added `termin-bootstrap` as an explicit C++/Python startup package.
+- Added idempotent bootstrap profiles for runtime, player and editor startup.
+- Switched `termin-runtime`, `PlayerRuntime`, `HeadlessRuntime` and editor
+  startup to call `termin-bootstrap` explicitly.
+- Added focused tests for import-without-side-effects, explicit kind
+  registration, Python kind mappings and partial/full bootstrap idempotence.
+- Kept old `_native` and domain-native import side effects in place
+  intentionally; removing them is Phase 3/4 work.
+
+Verification completed for this phase:
+
+- `./build-sdk.sh --no-wheels`
+- `./setup-test-venv.sh --force`
+- focused bootstrap/player/headless/runtime-loader tests
+- `./run-tests.sh`
 
 ## Target Package Shape
 
@@ -322,4 +342,3 @@ Each migration phase should keep these checks green:
 - `./run-tests.sh`
 - `rg` check that no new production code depends on `_native` import side
   effects
-

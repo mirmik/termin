@@ -21,6 +21,7 @@
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
 #include <tgfx2/tc_shader_bridge.hpp>
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/foliage/foliage_data_registry.hpp>
 
 namespace termin::runtime {
@@ -620,34 +621,8 @@ std::string resource_label(const nos::trent& entry) {
     return type + ":" + path;
 }
 
-template<typename H>
-void register_runtime_handle_kind(const std::string& kind_name) {
-    tc::KindRegistryCpp::instance().register_kind(
-        kind_name,
-        [](const std::any& value) -> tc_value {
-            const H& handle = std::any_cast<const H&>(value);
-            return handle.serialize_to_value();
-        },
-        [](const tc_value* value, void* context) -> std::any {
-            H handle;
-            handle.deserialize_from(value, context);
-            return handle;
-        }
-    );
-}
-
-void register_runtime_kinds() {
-    static bool registered = false;
-    if (registered) {
-        return;
-    }
-    registered = true;
-    register_runtime_handle_kind<TcMesh>("tc_mesh");
-    register_runtime_handle_kind<TcMaterial>("tc_material");
-}
-
 TcSceneRef load_runtime_scene(const std::filesystem::path& root, const std::string& rel_path) {
-    register_runtime_kinds();
+    termin::bootstrap::bootstrap_runtime();
 
     const std::filesystem::path scene_path = package_path(root, rel_path);
     TcSceneRef scene = TcSceneRef::create("runtime-scene");
