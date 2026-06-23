@@ -44,6 +44,7 @@ void print_help() {
         << "  build <profile>        Run termin_builder build <profile>.\n"
         << "  run <profile>          Run packaged build output for a profile.\n"
         << "  play [scene]           Run project scene without building.\n"
+        << "  modules [args...]      Warm up project modules and dependencies.\n"
         << "  profiles [args...]     Run termin_builder profiles [args...].\n"
         << "  profile <name>         Run termin_builder profile <name>.\n"
         << "  stdlib [args...]       Run termin_stdlib sync [args...].\n"
@@ -178,6 +179,8 @@ Dispatch resolve_dispatch(int argc, char** argv, const fs::path& own_dir) {
         dispatch.args.emplace_back("play");
         std::vector<std::string> rest = tail_args(argc, argv, 2);
         dispatch.args.insert(dispatch.args.end(), rest.begin(), rest.end());
+    } else if (command == "modules") {
+        direct("termin_modules_cli", 2);
     } else if (command == "profiles") {
         dispatch.executable = "termin_builder";
         dispatch.args.emplace_back("profiles");

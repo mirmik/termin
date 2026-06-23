@@ -22,7 +22,12 @@ setup(
     python_requires=">=3.8",
     packages=["termin.engine"],
     package_dir={"termin.engine": "python/termin/engine"},
-    install_requires=["termin-nanobind"],
+    install_requires=[
+        "termin-nanobind",
+        "termin-scene",
+        "termin-display",
+        "termin-render",
+    ],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},
     zip_safe=False,
