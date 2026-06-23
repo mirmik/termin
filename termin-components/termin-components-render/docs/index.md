@@ -17,6 +17,10 @@ Render component package for attaching rendering data to entities/scenes.
 
 Component-level render API is installed through this package and participates in the canonical `termin.render_components` namespace.
 
+Standalone camera math types (`Camera`, `CameraProjection`) are exported from
+`termin.render_components`. The legacy `termin._native.render` surface only
+re-exports these objects for compatibility.
+
 ## LineRenderer
 
 `LineRenderer` is implemented in C++ and re-exported from `termin.render_components`.

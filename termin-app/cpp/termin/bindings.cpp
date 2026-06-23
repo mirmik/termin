@@ -122,6 +122,26 @@ NB_MODULE(_native, m) {
     auto editor_module = m.def_submodule("editor", "Editor module");
 
     termin::bind_render(render_module);
+    nb::module_ render_components = nb::module_::import_("termin.render_components");
+    const char* render_component_exports[] = {
+        "Camera",
+        "CameraProjection",
+    };
+    for (const char* name : render_component_exports) {
+        render_module.attr(name) = render_components.attr(name);
+    }
+    nb::module_ render_passes = nb::module_::import_("termin.render_passes");
+    const char* render_pass_exports[] = {
+        "ShadowCameraParams",
+        "build_shadow_projection_matrix",
+        "build_shadow_view_matrix",
+        "compute_frustum_corners",
+        "compute_light_space_matrix",
+        "fit_shadow_frustum_to_camera",
+    };
+    for (const char* name : render_pass_exports) {
+        render_module.attr(name) = render_passes.attr(name);
+    }
     nb::module_ editor_native = nb::module_::import_("termin.editor._editor_native");
     const char* editor_exports[] = {
         "EditorInteractionSystem",

@@ -8,7 +8,9 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("nanobind", "termin_components_render")
 
 from termin.render_components._components_render_native import (
+    Camera,
     CameraComponent,
+    CameraProjection,
     ColorToDepthPass,
     DepthOnlyPass,
     DepthPass,
@@ -45,8 +47,10 @@ def _mesh_renderer_get_phases_for_mark(self, phase_mark):
 MeshRenderer.get_phases_for_mark = _mesh_renderer_get_phases_for_mark
 
 __all__ = [
+    "Camera",
     "CameraComponent",
     "CameraController",
+    "CameraProjection",
     "ColorToDepthPass",
     "DepthOnlyPass",
     "DepthPass",

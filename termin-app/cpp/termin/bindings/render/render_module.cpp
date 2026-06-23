@@ -23,17 +23,6 @@ void bind_render(nb::module_& m) {
     tc_scene_render_mount_extension_init();
     tc_scene_render_state_extension_init();
 
-    // Order matters - dependencies must be bound first
-
-    // NOTE: Shared types (Color4, Size2i, TcShader, TcTexture, TcMesh, etc.)
-    // are defined in tgfx._tgfx_native and imported in bindings.cpp
-
-    // Camera
-    bind_camera(m);
-
-    // Shadow camera
-    bind_shadow(m);
-
     // Register kind handlers for TcMaterial serialization
     register_material_kind_handlers();
 
