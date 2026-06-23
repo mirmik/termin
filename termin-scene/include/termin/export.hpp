@@ -13,7 +13,7 @@
 #endif
 #endif
 
-// Backward compat alias (entity_lib used ENTITY_API)
+// Backward-compatible ABI macro retained for component headers.
 #ifndef ENTITY_API
 #define ENTITY_API TERMIN_SCENE_API
 #endif

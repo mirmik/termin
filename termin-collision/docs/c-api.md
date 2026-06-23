@@ -63,7 +63,7 @@ typedef void tc_collision_world;
 // ID типа scene extension
 #define TC_SCENE_EXT_TYPE_COLLISION_WORLD UINT64_C(0x636f6c6c6973696f)
 
-// Регистрация аллокатора (вызывается entity_lib при инициализации)
+// Регистрация аллокатора (выполняется termin_collision при инициализации)
 void tc_collision_world_set_allocator(
     tc_collision_world_alloc_fn alloc_fn,
     tc_collision_world_free_fn free_fn

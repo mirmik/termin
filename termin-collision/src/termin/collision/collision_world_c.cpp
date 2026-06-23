@@ -20,7 +20,7 @@ static void collision_world_free(tc_collision_world* cw) {
     delete static_cast<CollisionWorld*>(cw);
 }
 
-// Static registration: registers allocator when entity_lib loads
+// Static registration: registers allocator when termin_collision loads.
 namespace {
 struct CollisionWorldAllocatorRegistrar {
     CollisionWorldAllocatorRegistrar() {

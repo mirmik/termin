@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from setuptools import setup
+from setuptools import find_namespace_packages, setup
 
 
 setup(
@@ -11,8 +11,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.10",
-    packages=["termin.physics_components"],
-    package_dir={"termin.physics_components": "python/termin/physics_components"},
+    packages=find_namespace_packages(
+        where="python",
+        include=["termin.physics_components", "termin.physics_components.*"],
+    ),
+    package_dir={"": "python"},
     install_requires=[
         "numpy",
         "tcbase",

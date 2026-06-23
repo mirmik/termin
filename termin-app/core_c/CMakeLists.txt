@@ -108,6 +108,7 @@ target_include_directories(termin_core
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+        $<INSTALL_INTERFACE:include/termin_core>
 )
 
 target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_base)
