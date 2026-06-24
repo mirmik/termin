@@ -14,7 +14,10 @@ def test_resource_manager_reset_restores_process_factory() -> None:
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
 
-    assert get_resource_manager() is rm
+    try:
+        assert get_resource_manager() is rm
+    finally:
+        ResourceManager.shutdown_instance()
 
 
 def test_mesh_register_file_uses_asset_plugin(tmp_path) -> None:
