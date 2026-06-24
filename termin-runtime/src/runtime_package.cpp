@@ -337,6 +337,193 @@ void ensure_runtime_builtin_textures() {
     }
 }
 
+TcTexture runtime_builtin_texture(const std::string& name) {
+    ensure_runtime_builtin_textures();
+    const char* expected_name = nullptr;
+    if (name == "white") {
+        expected_name = "__white_1x1__";
+    } else if (name == "normal") {
+        expected_name = "__normal_1x1__";
+    } else {
+        return {};
+    }
+
+    for (const TcTexture& texture : runtime_builtin_texture_keepalive()) {
+        if (texture.is_valid() && std::string(texture.name()) == expected_name) {
+            return texture;
+        }
+    }
+    return {};
+}
+
+TcTexture runtime_material_texture_from_spec(const nos::trent& spec, const std::string& material_uuid) {
+    if (spec.is_string()) {
+        const std::string uuid = spec.as_string();
+        if (uuid.empty()) {
+            return {};
+        }
+        TcTexture texture = TcTexture::from_uuid(uuid);
+        if (!texture.is_valid()) {
+            tc_log_error(
+                "RuntimePackageLoader: material '%s' references missing texture asset '%s'",
+                material_uuid.c_str(),
+                uuid.c_str()
+            );
+        }
+        return texture;
+    }
+
+    if (!spec.is_dict()) {
+        tc_log_error(
+            "RuntimePackageLoader: material '%s' texture spec must be an object or uuid string",
+            material_uuid.c_str()
+        );
+        return {};
+    }
+
+    const std::string kind = string_field(spec, "kind");
+    if (kind == "builtin") {
+        const std::string name = string_field(spec, "name");
+        TcTexture texture = runtime_builtin_texture(name);
+        if (!texture.is_valid()) {
+            tc_log_error(
+                "RuntimePackageLoader: material '%s' references unknown builtin texture '%s'",
+                material_uuid.c_str(),
+                name.c_str()
+            );
+        }
+        return texture;
+    }
+
+    if (kind == "asset") {
+        const std::string uuid = string_field(spec, "uuid");
+        if (uuid.empty()) {
+            tc_log_error(
+                "RuntimePackageLoader: material '%s' asset texture spec has no uuid",
+                material_uuid.c_str()
+            );
+            return {};
+        }
+        TcTexture texture = TcTexture::from_uuid(uuid);
+        if (!texture.is_valid()) {
+            tc_log_error(
+                "RuntimePackageLoader: material '%s' references missing texture asset '%s'",
+                material_uuid.c_str(),
+                uuid.c_str()
+            );
+        }
+        return texture;
+    }
+
+    tc_log_error(
+        "RuntimePackageLoader: material '%s' texture spec has unsupported kind '%s'",
+        material_uuid.c_str(),
+        kind.c_str()
+    );
+    return {};
+}
+
+void apply_material_uniforms(TcMaterial& material, const nos::trent* uniforms, const std::string& material_uuid) {
+    if (!uniforms) {
+        return;
+    }
+    if (!uniforms->is_dict()) {
+        tc_log_error(
+            "RuntimePackageLoader: material '%s' uniforms must be an object",
+            material_uuid.c_str()
+        );
+        return;
+    }
+
+    for (const auto& item : uniforms->as_dict()) {
+        const std::string& name = item.first;
+        const nos::trent& value = item.second;
+        if (name.empty()) {
+            tc_log_error(
+                "RuntimePackageLoader: material '%s' uniform name must not be empty",
+                material_uuid.c_str()
+            );
+            continue;
+        }
+        if (value.is_bool()) {
+            int v = value.as_bool() ? 1 : 0;
+            material.set_uniform_int(name.c_str(), v);
+            continue;
+        }
+        if (value.is_numer()) {
+            material.set_uniform_float(name.c_str(), static_cast<float>(value.as_numer()));
+            continue;
+        }
+        if (value.is_list()) {
+            const auto& values = value.as_list();
+            bool all_numbers = true;
+            for (const nos::trent& element : values) {
+                if (!element.is_numer()) {
+                    all_numbers = false;
+                    break;
+                }
+            }
+            if (all_numbers && values.size() == 3) {
+                material.set_uniform_vec3(
+                    name.c_str(),
+                    Vec3{
+                        static_cast<float>(values[0].as_numer()),
+                        static_cast<float>(values[1].as_numer()),
+                        static_cast<float>(values[2].as_numer()),
+                    }
+                );
+                continue;
+            }
+            if (all_numbers && values.size() == 4) {
+                material.set_uniform_vec4(
+                    name.c_str(),
+                    Vec4{
+                        static_cast<float>(values[0].as_numer()),
+                        static_cast<float>(values[1].as_numer()),
+                        static_cast<float>(values[2].as_numer()),
+                        static_cast<float>(values[3].as_numer()),
+                    }
+                );
+                continue;
+            }
+        }
+        tc_log_error(
+            "RuntimePackageLoader: material '%s' uniform '%s' has unsupported value",
+            material_uuid.c_str(),
+            name.c_str()
+        );
+    }
+}
+
+void apply_material_textures(TcMaterial& material, const nos::trent* textures, const std::string& material_uuid) {
+    if (!textures) {
+        return;
+    }
+    if (!textures->is_dict()) {
+        tc_log_error(
+            "RuntimePackageLoader: material '%s' textures must be an object",
+            material_uuid.c_str()
+        );
+        return;
+    }
+
+    for (const auto& item : textures->as_dict()) {
+        const std::string& name = item.first;
+        if (name.empty()) {
+            tc_log_error(
+                "RuntimePackageLoader: material '%s' texture name must not be empty",
+                material_uuid.c_str()
+            );
+            continue;
+        }
+        TcTexture texture = runtime_material_texture_from_spec(item.second, material_uuid);
+        if (!texture.is_valid()) {
+            continue;
+        }
+        material.set_texture(name.c_str(), texture);
+    }
+}
+
 bool load_shader_resource(
     const std::filesystem::path& root,
     const nos::trent& spec,
@@ -438,6 +625,10 @@ bool load_material_resource(
             return false;
         }
     }
+
+    apply_material_uniforms(material, dict_get(spec, "uniforms"), uuid);
+    apply_material_textures(material, dict_get(spec, "textures"), uuid);
+
     keepalive.materials.push_back(std::move(material));
     return true;
 }

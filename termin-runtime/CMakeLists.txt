@@ -5,6 +5,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(TERMIN_RUNTIME_BUILD_TESTS "Build termin-runtime tests" ON)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -101,6 +102,24 @@ if(MSVC)
     target_compile_options(termin_runtime PRIVATE /W3 /wd4251 /wd4275)
 else()
     target_compile_options(termin_runtime PRIVATE -Wall -Wextra)
+endif()
+
+if(TERMIN_RUNTIME_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_runtime_package_loader_test
+        tests/test_runtime_package_loader.cpp
+    )
+    target_include_directories(termin_runtime_package_loader_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_runtime_package_loader_test PRIVATE
+        termin_runtime
+    )
+    set_target_properties(termin_runtime_package_loader_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(NAME termin_runtime_package_loader_test COMMAND termin_runtime_package_loader_test)
 endif()
 
 install(TARGETS termin_runtime
