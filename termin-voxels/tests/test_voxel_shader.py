@@ -16,16 +16,16 @@ def test_voxel_display_shader_does_not_duplicate_reflected_material_layout():
     assert "ConstantBuffer<VoxelDisplayParams> material" in shader.fragment_source
 
 
-def test_native_import_before_tgfx_keeps_builtin_shader_catalog_available():
+def test_bootstrap_import_before_tgfx_keeps_builtin_shader_catalog_available():
     code = textwrap.dedent(
         """
-        import termin._native
+        import termin.bootstrap
         from tgfx import TcShader
 
         shader = TcShader.from_builtin_catalog("termin-engine-voxel-display")
         if not shader.is_valid:
             raise SystemExit(
-                "termin-engine-voxel-display did not load after importing termin._native first"
+                "termin-engine-voxel-display did not load after importing termin.bootstrap first"
             )
         if shader.language.name != "SLANG":
             raise SystemExit(f"unexpected shader language: {shader.language}")

@@ -99,7 +99,7 @@ Source of truth: [termin-render docs](../termin-render/docs/index.md)
 
 `termin-render` не обязан инкапсулировать `termin-graphics` как implementation detail. Публичная зависимость от `tgfx`/`tgfx2` допустима для API, которые непосредственно описывают GPU execution, frame graph, render contexts, texture handles или bridge к graphics device. Граница проходит не по факту include-а `tgfx`, а по смыслу контракта: scene/asset/build/editor policy не должны случайно зависеть от backend-specific деталей, если они не являются render-facing API.
 
-Здесь должны оставаться части, которые знают про frame graph, pass interfaces, engine views, render scene mount config (`ViewportConfig`, `RenderTargetConfig`, scene pipeline templates), render-state accessors и legacy render-state/mount migration helpers. Python bindings для `ViewportConfig` и `RenderTargetConfig` также принадлежат `termin.render`; app `_native` не должен регистрировать собственные Python-классы для этих типов. Glue, который напрямую вызывает `termin-engine` `RenderingManager`, пока не относится к `termin-render`, чтобы не создавать обратную зависимость.
+Здесь должны оставаться части, которые знают про frame graph, pass interfaces, engine views, render scene mount config (`ViewportConfig`, `RenderTargetConfig`, scene pipeline templates), render-state accessors и legacy render-state/mount migration helpers. Python bindings для `ViewportConfig` и `RenderTargetConfig` также принадлежат `termin.render`. Glue, который напрямую вызывает `termin-engine` `RenderingManager`, пока не относится к `termin-render`, чтобы не создавать обратную зависимость.
 
 Кандидаты на вынос в [termin-graphics](#termin-graphics):
 
@@ -115,7 +115,7 @@ Source of truth: [termin-render-passes docs](../termin-render-passes/docs/index.
 
 На 2026-06-20 сюда перенесены standard/scene/postprocess/debug passes: `PresentToScreenPass`, `DebugTrianglePass`, `GroundGridPass`, `ColliderGizmoPass`, `ImmediateDepthPass`, `UnifiedGizmoPass`, `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`, `SkyBoxPass`, `IdPass`, picking RGB/id cache helper, shadow camera helpers, shader skinning injection, material UBO apply helper и Python API `termin.render_passes`.
 
-Оставшийся долг миграции: `SolidPrimitiveRenderer` требует отдельного решения по debug/editor ownership. App `_native` пока сохраняет compatibility bindings для некоторых перенесённых типов/functions, но они вызывают символы из `termin-render-passes`.
+`SolidPrimitiveRenderer` сейчас живет в editor-private native surface `termin.editor._editor_native`; публичные render-pass helpers импортируются из `termin.render_passes`.
 
 ### termin-display
 

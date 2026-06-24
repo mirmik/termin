@@ -1,5 +1,5 @@
 // tc_component_python_bindings.cpp - Core TcComponent binding for _scene_native
-// Drawable and input callback setup stays in termin/_native.
+// Drawable and input callback setup belongs to the render/input owner packages.
 #include <termin/bindings/tc_component_python_bindings.hpp>
 
 #include <nanobind/nanobind.h>

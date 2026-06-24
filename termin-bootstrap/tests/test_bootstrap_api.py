@@ -24,14 +24,13 @@ def test_importing_bootstrap_has_no_kind_registration_side_effects():
     )
 
 
-def test_importing_legacy_native_modules_has_no_kind_registration_side_effects():
+def test_importing_domain_native_modules_has_no_kind_registration_side_effects():
     _run_python(
         """
         from termin.inspect import KindRegistry
 
         before = set(KindRegistry.instance().kinds())
 
-        import termin._native  # noqa: F401
         import termin.animation._animation_native  # noqa: F401
         import termin.navmesh._navmesh_native  # noqa: F401
         import termin.skeleton._skeleton_native  # noqa: F401
@@ -39,6 +38,21 @@ def test_importing_legacy_native_modules_has_no_kind_registration_side_effects()
 
         after = set(KindRegistry.instance().kinds())
         assert after == before
+        """
+    )
+
+
+def test_legacy_app_native_module_is_removed():
+    _run_python(
+        """
+        import importlib
+
+        try:
+            importlib.import_module("termin._native")
+        except ModuleNotFoundError:
+            pass
+        else:
+            raise AssertionError("termin._native should not be importable")
         """
     )
 
@@ -62,6 +76,26 @@ def test_explicit_runtime_bootstrap_registers_core_resource_kinds():
         kinds = set(KindRegistry.instance().kinds())
         assert "tc_mesh" in kinds
         assert "tc_material" in kinds
+        """
+    )
+
+
+def test_explicit_inspect_bootstrap_registers_component_base_fields():
+    _run_python(
+        """
+        import termin.bootstrap
+        from termin.inspect import InspectRegistry
+
+        registry = InspectRegistry.instance()
+        before = {field.path for field in registry.fields("Component")}
+        assert "display_name" not in before
+        assert "enabled" not in before
+
+        termin.bootstrap.init_inspect_adapters()
+
+        after = {field.path for field in registry.fields("Component")}
+        assert "display_name" in after
+        assert "enabled" in after
         """
     )
 
