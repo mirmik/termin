@@ -30,6 +30,8 @@ DEFAULT_ROOT_PREFIXES = ("termin-", "tcplot")
 RISKY_CALL_NAMES = {
     "AudioEngine",
     "Canvas2DRenderer",
+    "CanvasColor",
+    "Color4",
     "DefaultResourceManager",
     "FontTextureAtlas",
     "Profiler",
@@ -61,6 +63,52 @@ SAFE_CALLS = {
     "logging.getLogger",
     "re.compile",
     "TypeVar",
+}
+MUTABLE_CALL_NAMES = {
+    "defaultdict",
+    "deque",
+    "dict",
+    "list",
+    "OrderedDict",
+    "set",
+    "WeakKeyDictionary",
+    "WeakValueDictionary",
+}
+MUTABLE_STATE_NAME_HINTS = {
+    "builtin",
+    "cache",
+    "catalog",
+    "component",
+    "extension",
+    "factory",
+    "handler",
+    "instance",
+    "kind",
+    "loader",
+    "manager",
+    "pending",
+    "plugin",
+    "processor",
+    "provider",
+    "registry",
+    "resource",
+    "runtime",
+    "singleton",
+    "state",
+    "store",
+    "type",
+}
+IMPORTANT_UPPERCASE_STATE_NAMES = {
+    "DEFAULT_DOMAIN_COMPONENT_SPECS",
+}
+IMMUTABLE_INITIALIZER_CALLS = {
+    "frozenset",
+    "tuple",
+}
+CONFIDENCE_RANKS = {
+    "low": 1,
+    "medium": 2,
+    "high": 3,
 }
 
 
@@ -94,6 +142,55 @@ def _assignment_target_name(node: ast.AST) -> str:
     return type(node).__name__
 
 
+def _assignment_target_names(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.Name):
+        return [node.id]
+    if isinstance(node, ast.Attribute):
+        return [node.attr]
+    if isinstance(node, ast.Tuple):
+        names: list[str] = []
+        for item in node.elts:
+            names.extend(_assignment_target_names(item))
+        return names
+    return []
+
+
+def _looks_like_mutable_state_name(name: str) -> bool:
+    if name == "__all__" or (name.startswith("__") and name.endswith("__")):
+        return False
+    if name in IMPORTANT_UPPERCASE_STATE_NAMES:
+        return True
+    if name.isupper() and "BUILTIN" in name:
+        return True
+    if name.isupper() and (
+        name.endswith("_FACTORIES")
+        or name.endswith("_REGISTRIES")
+        or name.endswith("_REGISTRY")
+    ):
+        return True
+    if name.isupper():
+        return False
+    lowered = name.lower()
+    if any(hint in lowered for hint in MUTABLE_STATE_NAME_HINTS):
+        return True
+    return name.startswith("_") and not name.startswith("__") and not name.isupper()
+
+
+def _statement_target_names(statement: ast.Assign | ast.AnnAssign) -> list[str]:
+    if isinstance(statement, ast.Assign):
+        names: list[str] = []
+        for target in statement.targets:
+            names.extend(_assignment_target_names(target))
+        return names
+    return _assignment_target_names(statement.target)
+
+
+def _statement_looks_like_mutable_state(statement: ast.Assign | ast.AnnAssign) -> bool:
+    return any(
+        _looks_like_mutable_state_name(name) for name in _statement_target_names(statement)
+    )
+
+
 def _top_level_call_from_statement(statement: ast.stmt) -> tuple[ast.Call, str] | None:
     if isinstance(statement, ast.Assign) and isinstance(statement.value, ast.Call):
         targets = ", ".join(_assignment_target_name(target) for target in statement.targets)
@@ -102,6 +199,34 @@ def _top_level_call_from_statement(statement: ast.stmt) -> tuple[ast.Call, str] 
         return statement.value, _assignment_target_name(statement.target)
     if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
         return statement.value, "<expr>"
+    return None
+
+
+def _top_level_mutable_state_from_statement(
+    statement: ast.stmt,
+) -> tuple[ast.AST, str, str] | None:
+    if isinstance(statement, ast.Assign):
+        targets = ", ".join(_assignment_target_name(target) for target in statement.targets)
+        value = statement.value
+    elif isinstance(statement, ast.AnnAssign):
+        targets = _assignment_target_name(statement.target)
+        value = statement.value
+    else:
+        return None
+
+    if value is None:
+        return None
+    if not _statement_looks_like_mutable_state(statement):
+        return None
+    if isinstance(value, (ast.Dict, ast.List, ast.Set)):
+        return value, targets, type(value).__name__.lower()
+    if isinstance(value, ast.Call):
+        call_name = _call_name(value.func)
+        if call_name is None:
+            return None
+        leaf = call_name.rsplit(".", 1)[-1]
+        if leaf in MUTABLE_CALL_NAMES:
+            return value, targets, call_name
     return None
 
 
@@ -130,7 +255,12 @@ def _classify_call(call: ast.Call) -> tuple[str, str] | None:
     return None
 
 
-def audit_file(path: Path, *, root: Path | None = None) -> list[Finding]:
+def audit_file(
+    path: Path,
+    *,
+    root: Path | None = None,
+    include_mutable_state: bool = False,
+) -> list[Finding]:
     root = root or Path.cwd()
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -139,26 +269,63 @@ def audit_file(path: Path, *, root: Path | None = None) -> list[Finding]:
     findings: list[Finding] = []
     for statement in tree.body:
         call_info = _top_level_call_from_statement(statement)
-        if call_info is None:
-            continue
-        call, target = call_info
-        if _is_allowed(lines, call.lineno):
-            continue
-        classification = _classify_call(call)
-        if classification is None:
-            continue
-        category, confidence = classification
-        call_name = _call_name(call.func) or "<call>"
         rel_path = path.relative_to(root) if path.is_relative_to(root) else path
+
+        if call_info is not None:
+            call, target = call_info
+            if not _is_allowed(lines, call.lineno):
+                classification = _classify_call(call)
+                if classification is not None:
+                    category, confidence = classification
+                    call_name = _call_name(call.func) or "<call>"
+                    findings.append(
+                        Finding(
+                            path=str(rel_path),
+                            line=call.lineno,
+                            column=call.col_offset + 1,
+                            category=category,
+                            confidence=confidence,
+                            target=f"{target} = {call_name}",
+                            code=lines[call.lineno - 1].strip(),
+                        )
+                    )
+                elif include_mutable_state and isinstance(statement, (ast.Assign, ast.AnnAssign)):
+                    if (
+                        _statement_looks_like_mutable_state(statement)
+                        and _call_name(call.func) not in SAFE_CALLS
+                        and _call_name(call.func) not in IMMUTABLE_INITIALIZER_CALLS
+                        and _top_level_mutable_state_from_statement(statement) is None
+                    ):
+                        call_name = _call_name(call.func) or "<call>"
+                        findings.append(
+                            Finding(
+                                path=str(rel_path),
+                                line=call.lineno,
+                                column=call.col_offset + 1,
+                                category="module-state-initializer-call",
+                                confidence="low",
+                                target=f"{target} = {call_name}",
+                                code=lines[call.lineno - 1].strip(),
+                            )
+                        )
+
+        if not include_mutable_state:
+            continue
+        mutable_info = _top_level_mutable_state_from_statement(statement)
+        if mutable_info is None:
+            continue
+        value, target, value_name = mutable_info
+        if _is_allowed(lines, value.lineno):
+            continue
         findings.append(
             Finding(
                 path=str(rel_path),
-                line=call.lineno,
-                column=call.col_offset + 1,
-                category=category,
-                confidence=confidence,
-                target=f"{target} = {call_name}",
-                code=lines[call.lineno - 1].strip(),
+                line=value.lineno,
+                column=value.col_offset + 1,
+                category="module-mutable-state",
+                confidence="low",
+                target=f"{target} = {value_name}",
+                code=lines[value.lineno - 1].strip(),
             )
         )
     return findings
@@ -218,8 +385,13 @@ def main(argv: list[str] | None = None) -> int:
         help="Emit JSON instead of a text report.",
     )
     parser.add_argument(
+        "--include-mutable-state",
+        action="store_true",
+        help="Also report top-level mutable containers as low-confidence bootstrap debt.",
+    )
+    parser.add_argument(
         "--fail-on",
-        choices=("none", "high", "medium"),
+        choices=("none", "high", "medium", "low"),
         default="none",
         help="Return exit code 1 when findings at this confidence or higher exist.",
     )
@@ -229,7 +401,13 @@ def main(argv: list[str] | None = None) -> int:
     roots = [path.resolve() for path in args.paths] if args.paths else default_roots(repo_root)
     findings: list[Finding] = []
     for path in iter_python_files(roots, DEFAULT_EXCLUDED_DIRS):
-        findings.extend(audit_file(path.resolve(), root=repo_root))
+        findings.extend(
+            audit_file(
+                path.resolve(),
+                root=repo_root,
+                include_mutable_state=args.include_mutable_state,
+            )
+        )
     findings.sort(key=lambda item: (item.path, item.line, item.column))
 
     if args.json:
@@ -237,10 +415,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(format_text(findings))
 
-    if args.fail_on == "high":
-        return int(any(finding.confidence == "high" for finding in findings))
-    if args.fail_on == "medium":
-        return int(bool(findings))
+    if args.fail_on != "none":
+        threshold = CONFIDENCE_RANKS[args.fail_on]
+        return int(
+            any(CONFIDENCE_RANKS[finding.confidence] >= threshold for finding in findings)
+        )
     return 0
 
 

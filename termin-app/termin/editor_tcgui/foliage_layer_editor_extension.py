@@ -21,10 +21,10 @@ from termin.editor_tcgui.component_editor_extension import (
 from termin.foliage import FoliageInstance, TcFoliageData
 
 
-_COLOR_INSTANCE = Color4(0.35, 1.00, 0.25, 1.00)
-_COLOR_BRUSH = Color4(0.05, 0.95, 1.00, 1.00)
-_COLOR_ERASE = Color4(1.00, 0.32, 0.20, 1.00)
-_COLOR_NORMAL = Color4(1.00, 0.90, 0.25, 1.00)
+_COLOR_INSTANCE = (0.35, 1.00, 0.25, 1.00)
+_COLOR_BRUSH = (0.05, 0.95, 1.00, 1.00)
+_COLOR_ERASE = (1.00, 0.32, 0.20, 1.00)
+_COLOR_NORMAL = (1.00, 0.90, 0.25, 1.00)
 _MODE_LABELS = {
     "idle": "Off",
     "paint": "Paint",
@@ -418,23 +418,27 @@ class FoliageLayerEditorExtension:
         for instance in handle.instances:
             world = self._world_point_from_local((instance.px, instance.py, instance.pz))
             if world is not None:
-                renderer.sphere_wireframe(_vec3(world), 0.07, _COLOR_INSTANCE, 8, False)
+                renderer.sphere_wireframe(_vec3(world), 0.07, _color(_COLOR_INSTANCE), 8, False)
 
         hit = self._last_hit
         if hit is None or self._mode == "idle":
             return
         color = _COLOR_ERASE if self._mode == "erase" else _COLOR_BRUSH
-        renderer.sphere_wireframe(_vec3(hit.world_point), self._radius, color, 24, False)
+        renderer.sphere_wireframe(_vec3(hit.world_point), self._radius, _color(color), 24, False)
         normal_end = (
             hit.world_point[0] + hit.world_normal[0] * 0.5,
             hit.world_point[1] + hit.world_normal[1] * 0.5,
             hit.world_point[2] + hit.world_normal[2] * 0.5,
         )
-        renderer.line(_vec3(hit.world_point), _vec3(normal_end), _COLOR_NORMAL, False)
+        renderer.line(_vec3(hit.world_point), _vec3(normal_end), _color(_COLOR_NORMAL), False)
 
 
 def _vec3(point: tuple[float, float, float]) -> Vec3:
     return Vec3(point[0], point[1], point[2])
+
+
+def _color(value: tuple[float, float, float, float]) -> Color4:
+    return Color4(value[0], value[1], value[2], value[3])
 
 
 def _normalized(vector: tuple[float, float, float]) -> tuple[float, float, float]:

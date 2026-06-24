@@ -104,6 +104,32 @@ Verification completed for this phase:
 - focused bootstrap/player/headless/runtime-loader tests
 - `./run-tests.sh`
 
+2026-06-24:
+
+- Added `tools/import_side_effects_audit.py` as a static import-time resource
+  audit. The default mode is a conservative gate for top-level native/resource
+  constructors, singleton factories, I/O calls and registration calls.
+- Added an optional `--include-mutable-state` report mode for low-confidence
+  bootstrap debt: module-level mutable containers such as registries, caches
+  and factory tables that may need to move behind explicit startup later.
+- Removed the app `ResourceManager` process factory registration from
+  `import termin.assets.resources`. Editor startup now registers that factory
+  explicitly after `bootstrap_editor()`.
+- Added Python smoke coverage proving selected runtime/build/editor-facing
+  imports do not create `Profiler`, resource manager or render-pass singleton
+  instances and do not emit nanobind leak reports.
+
+Useful audit commands:
+
+```bash
+.venv/bin/python tools/import_side_effects_audit.py --fail-on high
+.venv/bin/python tools/import_side_effects_audit.py --include-mutable-state --json
+```
+
+The first command is suitable as a regression gate. The second command is a
+debt map; it intentionally reports low-confidence mutable global state and
+should be used to plan follow-up bootstrap cleanup rather than as a hard gate.
+
 ## Target Package Shape
 
 ### C++ target

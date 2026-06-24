@@ -11,10 +11,10 @@ from tgfx._tgfx_native import Color4
 from termin.mesh.surface_edge_query import find_surface_edge_for_entity
 
 
-_COLOR_CLICK = Color4(1.00, 1.00, 1.00, 1.00)
-_COLOR_EDGE_POINT = Color4(1.00, 0.82, 0.10, 1.00)
-_COLOR_EDGE = Color4(0.05, 0.95, 1.00, 1.00)
-_COLOR_NORMAL = Color4(0.35, 1.00, 0.25, 1.00)
+_COLOR_CLICK = (1.00, 1.00, 1.00, 1.00)
+_COLOR_EDGE_POINT = (1.00, 0.82, 0.10, 1.00)
+_COLOR_EDGE = (0.05, 0.95, 1.00, 1.00)
+_COLOR_NORMAL = (0.35, 1.00, 0.25, 1.00)
 
 
 @dataclass
@@ -195,10 +195,10 @@ class SurfaceEdgeDebugTool:
 
         renderer = ImmediateRenderer.instance()
         hit = self._last_hit
-        renderer.line(_vec3(hit.edge_a), _vec3(hit.edge_b), _COLOR_EDGE, False)
-        renderer.line(_vec3(hit.edge_point), _vec3(hit.normal_end), _COLOR_NORMAL, False)
-        renderer.sphere_wireframe(_vec3(hit.click_point), 0.055, _COLOR_CLICK, 8, False)
-        renderer.sphere_wireframe(_vec3(hit.edge_point), 0.075, _COLOR_EDGE_POINT, 8, False)
+        renderer.line(_vec3(hit.edge_a), _vec3(hit.edge_b), _color(_COLOR_EDGE), False)
+        renderer.line(_vec3(hit.edge_point), _vec3(hit.normal_end), _color(_COLOR_NORMAL), False)
+        renderer.sphere_wireframe(_vec3(hit.click_point), 0.055, _color(_COLOR_CLICK), 8, False)
+        renderer.sphere_wireframe(_vec3(hit.edge_point), 0.075, _color(_COLOR_EDGE_POINT), 8, False)
 
 
 def _tuple3(v) -> tuple[float, float, float]:
@@ -207,6 +207,10 @@ def _tuple3(v) -> tuple[float, float, float]:
 
 def _vec3(point: tuple[float, float, float]) -> Vec3:
     return Vec3(point[0], point[1], point[2])
+
+
+def _color(value: tuple[float, float, float, float]) -> Color4:
+    return Color4(value[0], value[1], value[2], value[3])
 
 
 def _mesh_point_to_world(pose, mesh_offset, point) -> Vec3:
