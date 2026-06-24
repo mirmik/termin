@@ -7,14 +7,32 @@ import pytest
 
 def _builtin_component_specs_for_static_checks() -> list[tuple[str, str]]:
     from termin.assets.resources._builtins import APP_BUILTIN_COMPONENTS
-    from termin.default_assets.builtin_types import DEFAULT_DOMAIN_COMPONENT_SPECS
+    from termin_animation_component_specs import COMPONENT_SPECS as ANIMATION_COMPONENT_SPECS
+    from termin_audio_component_specs import COMPONENT_SPECS as AUDIO_COMPONENT_SPECS
+    from termin_collision_component_specs import COMPONENT_SPECS as COLLISION_COMPONENT_SPECS
+    from termin_kinematic_component_specs import COMPONENT_SPECS as KINEMATIC_COMPONENT_SPECS
+    from termin_mesh_component_specs import COMPONENT_SPECS as MESH_COMPONENT_SPECS
+    from termin_navmesh_component_specs import COMPONENT_SPECS as NAVMESH_COMPONENT_SPECS
+    from termin_physics_component_specs import COMPONENT_SPECS as PHYSICS_COMPONENT_SPECS
     from termin_render_component_specs import COMPONENT_SPECS as RENDER_COMPONENT_SPECS
+    from termin_skeleton_component_specs import COMPONENT_SPECS as SKELETON_COMPONENT_SPECS
+    from termin_tween_component_specs import COMPONENT_SPECS as TWEEN_COMPONENT_SPECS
     from termin_ui_component_specs import COMPONENT_SPECS as UI_COMPONENT_SPECS
+    from termin_voxel_component_specs import COMPONENT_SPECS as VOXEL_COMPONENT_SPECS
 
     return [
         *RENDER_COMPONENT_SPECS,
         *UI_COMPONENT_SPECS,
-        *DEFAULT_DOMAIN_COMPONENT_SPECS,
+        *SKELETON_COMPONENT_SPECS,
+        *ANIMATION_COMPONENT_SPECS,
+        *KINEMATIC_COMPONENT_SPECS,
+        *PHYSICS_COMPONENT_SPECS,
+        *COLLISION_COMPONENT_SPECS,
+        *MESH_COMPONENT_SPECS,
+        *VOXEL_COMPONENT_SPECS,
+        *NAVMESH_COMPONENT_SPECS,
+        *AUDIO_COMPONENT_SPECS,
+        *TWEEN_COMPONENT_SPECS,
         *APP_BUILTIN_COMPONENTS,
     ]
 

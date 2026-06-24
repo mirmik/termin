@@ -20,8 +20,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
-    packages=["termin.kinematic"],
-    package_dir={"termin.kinematic": "python/termin/kinematic"},
+    packages=["termin.kinematic", "termin_kinematic_component_specs"],
+    package_dir={
+        "termin.kinematic": "python/termin/kinematic",
+        "termin_kinematic_component_specs": "python/termin_kinematic_component_specs",
+    },
     install_requires=["termin-nanobind", "tcbase"],
     ext_modules=native_extensions_for_source(_DIR),
     cmdclass={"build": TerminCMakeBuild, "build_ext": BuildExt},

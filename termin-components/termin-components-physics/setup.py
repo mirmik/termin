@@ -11,10 +11,13 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.10",
-    packages=find_namespace_packages(
-        where="python",
-        include=["termin.physics_components", "termin.physics_components.*"],
-    ),
+    packages=[
+        *find_namespace_packages(
+            where="python",
+            include=["termin.physics_components", "termin.physics_components.*"],
+        ),
+        "termin_physics_component_specs",
+    ],
     package_dir={"": "python"},
     install_requires=[
         "numpy",

@@ -20,10 +20,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
-    packages=["termin.colliders", "termin.collision"],
+    packages=["termin.colliders", "termin.collision", "termin_collision_component_specs"],
     package_dir={
         "termin.colliders": "python/termin/colliders",
         "termin.collision": "python/termin/collision",
+        "termin_collision_component_specs": "python/termin_collision_component_specs",
     },
     install_requires=[
         "tcbase",
