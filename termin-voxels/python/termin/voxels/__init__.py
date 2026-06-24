@@ -56,15 +56,15 @@ def __getattr__(name: str):
         return VoxelGridAsset
 
     if name == "VoxelGridComponent":
-        from termin.voxels.component import VoxelGridComponent
+        from termin_voxel_components.component import VoxelGridComponent
         return VoxelGridComponent
 
     if name == "VoxelVisualizer":
-        from termin.voxels.visualization import VoxelVisualizer
+        from termin_voxel_components.visualization import VoxelVisualizer
         return VoxelVisualizer
 
     if name in ("VoxelizerComponent", "VoxelizeMode", "VoxelizeSource"):
-        from termin.voxels.voxelizer_component import (
+        from termin_voxel_components.voxelizer_component import (
             VoxelizerComponent,
             VoxelizeMode,
             VoxelizeSource,
@@ -76,7 +76,7 @@ def __getattr__(name: str):
         }[name]
 
     if name == "VoxelDisplayComponent":
-        from termin.voxels.display_component import VoxelDisplayComponent
+        from termin_voxel_components.display_component import VoxelDisplayComponent
         return VoxelDisplayComponent
 
     if name == "voxel_display_shader":

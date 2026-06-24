@@ -11,13 +11,10 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.10",
-    py_modules=[
-        "termin.voxels.component",
-        "termin.voxels.display_component",
-        "termin.voxels.visualization",
-        "termin.voxels.voxelizer_component",
+    packages=[
+        "termin_voxel_components",
+        "termin_voxel_component_specs",
     ],
-    packages=["termin_voxel_component_specs"],
     package_dir={"": "python"},
     install_requires=[
         "numpy",

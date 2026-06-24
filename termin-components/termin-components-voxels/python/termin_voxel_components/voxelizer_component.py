@@ -898,7 +898,7 @@ class VoxelizerComponent(DrawableComponent):
 
     def _rebuild_voxel_display_mesh(self) -> None:
         """Перестроить меш для отображения вокселей (после voxelize)."""
-        from termin.voxels.display_component import (
+        from termin_voxel_components.display_component import (
             _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS,
             VERTS_PER_CUBE, TRIS_PER_CUBE, CUBE_SCALE,
         )
@@ -976,7 +976,7 @@ class VoxelizerComponent(DrawableComponent):
 
     def _rebuild_debug_mesh(self) -> None:
         """Перестроить отладочные меши для регионов."""
-        from termin.voxels.display_component import (
+        from termin_voxel_components.display_component import (
             _CUBE_VERTICES, _CUBE_TRIANGLES, _CUBE_NORMALS,
             VERTS_PER_CUBE, TRIS_PER_CUBE, CUBE_SCALE,
         )
