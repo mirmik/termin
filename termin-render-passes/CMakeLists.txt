@@ -75,6 +75,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/skybox_pass.cpp
     src/tc_picking.c
     src/tonemap_pass.cpp
+    src/ui_widget_pass.cpp
 )
 
 set(TERMIN_RENDER_PASSES_HEADERS
@@ -96,6 +97,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render/shadow_pass.hpp
     include/termin/render/skybox_pass.hpp
     include/termin/render/tonemap_pass.hpp
+    include/termin/render/ui_widget_pass.hpp
     include/tc_picking.h
 )
 

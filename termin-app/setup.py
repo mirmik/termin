@@ -9,10 +9,8 @@ _DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class BuildExt(TerminCMakeBuildExt):
-    # Main termin's own C++ native modules, built by termin/cpp/python_bindings.cmake:
-    #   _native          — compatibility render/scene/skeleton/inspect kernel.
-    #   editor._editor_native — editor-private interaction/gizmo bindings.
-    # Extracted native modules, including termin.voxels._voxels_native, are
+    # termin-app owns only editor-private C++ bindings.
+    # Extracted native modules, including render/scene/skeleton/inspect, are
     # owned and built by their package CMake projects.
     #
     # These are NOT yet extracted into standalone pip subprojects. cmake_ext

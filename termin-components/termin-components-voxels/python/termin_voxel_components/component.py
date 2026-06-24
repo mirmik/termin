@@ -10,7 +10,7 @@ from termin.scene.python_component import PythonComponent
 from termin.voxels.grid import VoxelGrid
 
 if TYPE_CHECKING:
-    from termin.voxels.visualization import VoxelVisualizer
+    from termin_voxel_components.visualization import VoxelVisualizer
 
 
 class VoxelGridComponent(PythonComponent):
@@ -49,7 +49,7 @@ class VoxelGridComponent(PythonComponent):
 
     def on_added(self) -> None:
         """Создать визуализатор при добавлении."""
-        from termin.voxels.visualization import VoxelVisualizer
+        from termin_voxel_components.visualization import VoxelVisualizer
 
         if self._visualizer is None and self.entity is not None:
             self._visualizer = VoxelVisualizer(self._grid, self.entity)

@@ -71,6 +71,8 @@ def _default_for_param_kind(kind: str, choices) -> object:
 def _default_for_inspect_field(registry, cls, class_name: str, field_path: str, kind: str, choices) -> object:
     try:
         instance = cls()
+        if "." not in field_path:
+            return getattr(instance, field_path)
         return registry.get(instance, field_path)
     except Exception as e:
         log.warn(f"[PipelineEditor] failed to read default for {class_name}.{field_path}: {e}")

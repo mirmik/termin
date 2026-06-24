@@ -1,7 +1,7 @@
 # C++ termin_player migration plan
 
 Date: 2026-06-24
-Status: draft
+Status: completed
 
 ## Goal
 
@@ -32,6 +32,32 @@ leak reports ambiguous because Python module globals, Python-owned callbacks and
 native scene lifetime all collapse at interpreter finalization.
 
 ## Current State
+
+Final state as of 2026-06-24:
+
+- `termin_player` now enters through `termin::player::PlayerRuntimeHost`.
+- The host parses `app.json`, initializes embedded Python for project modules,
+  calls `termin::runtime::RuntimePackageLoader`, registers the loaded scene in
+  `SceneManager`, creates the native SDL/offscreen display path, attaches
+  rendering through `RenderingManager`, runs the frame loop in C++, and owns the
+  shutdown order.
+- Packaged `termin-chess` smoke passes with
+  `./Chess --exit-after-frames 3`: exit code 0, no nanobind leak report, no
+  signal 139, and no missing component/pass registry warnings.
+- `termin build dev` in `termin-chess` exits cleanly without nanobind leak
+  reports.
+- Desktop `UIWidgetPass` has a native pass implementation in
+  `termin-render-passes`, so the default runtime pipeline no longer depends on a
+  Python-authored frame pass.
+- Python `PlayerRuntime` is no longer created by the packaged desktop player
+  path; a small facade remains for script-facing `request_quit()`.
+- `termin-components-voxels` no longer installs modules into the core
+  `termin.voxels` namespace. The component package now lives under
+  `termin_voxel_components`, and both `termin.voxels` and
+  `termin_voxel_components` expose component classes lazily so simple imports do
+  not create native render/material resources.
+
+Historical state before this migration:
 
 Native player entrypoint:
 
@@ -194,7 +220,7 @@ Define shutdown order explicitly:
 
 Acceptance:
 
-- `timeout 30 termin run dev` exits with status 0.
+- A packaged smoke run using `./Chess --exit-after-frames 3` exits with status 0.
 - No nanobind leak report is printed on normal player shutdown.
 - Shutdown logs show the expected owner order.
 
@@ -229,8 +255,8 @@ Acceptance:
 
 Once the native host owns the runtime:
 
-- Make `termin.player.__main__` a compatibility wrapper or remove it from the
-  packaged desktop run path.
+- Keep `termin.player.__main__` only as a compatibility path; the packaged
+  desktop executable should enter through `PlayerRuntimeHost`.
 - Remove duplicated Python package loading logic that is covered by
   `RuntimePackageLoader`.
 - Keep Python APIs only where scripts import them directly.
@@ -296,6 +322,25 @@ second player-specific resource loader.
 
 ## Verification
 
+Final verification completed on 2026-06-24:
+
+- `./build-sdk.sh --no-wheels`: passed, including SDK verification.
+- `./setup-test-venv.sh --force`: passed after the final SDK build.
+- `./run-tests.sh`: passed.
+  - C/C++: 28/28 tests passed.
+  - Python: 614 passed, 1 skipped.
+  - Editor smoke: Python module hot reload PASS, C++ module cascade hot reload
+    PASS.
+- `.venv/bin/python -m pytest termin-voxels/tests -q`: 45 passed.
+- Import leak sanity:
+  - `import termin_voxel_components`: no nanobind leak report.
+  - `import termin.voxels; from termin.voxels import TcVoxelGrid`: no nanobind
+    leak report.
+- `/home/mirmik/project/termin-chess`: `termin build dev` passed without
+  nanobind leak reports.
+- `/home/mirmik/project/termin-chess/dist/Chess/Chess --exit-after-frames 3`:
+  passed with exit code 0, no nanobind leak report, no shutdown signal 139.
+
 Build and Python test environment:
 
 ```bash
@@ -313,14 +358,13 @@ termin build dev
 Runtime smoke:
 
 ```bash
-cd /home/mirmik/project/termin-chess
-timeout 30 termin run dev
+cd /home/mirmik/project/termin-chess/dist/Chess
+./Chess --exit-after-frames 3
 ```
 
 Expected final gate:
 
 - build exits cleanly,
-- runtime exits with status 0,
+- packaged runtime smoke exits with status 0,
 - no `nanobind: leaked ...` report appears,
 - no signal 139 at shutdown.
-

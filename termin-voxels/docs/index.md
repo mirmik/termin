@@ -15,10 +15,9 @@ payload through the core registry. `VoxelGridHandle` is only a compatibility
 alias for `TcVoxelGrid`, matching the `TcMeshHandle = TcMesh` pattern.
 
 Scene/render components are shipped by `termin-components-voxels` under the
-same import namespace (`termin.voxels.display_component`,
-`termin.voxels.voxelizer_component`, etc.). The core package keeps
-`termin.voxels` extensible so those component modules can be installed
-separately.
+separate `termin_voxel_components` package. `termin.voxels` keeps lazy
+top-level re-exports for the component classes, but the component package does
+not install modules inside the core `termin.voxels` namespace.
 
 Voxel-grid asset adapters live in `termin-default-assets` under
 `termin.default_assets.voxels`.
