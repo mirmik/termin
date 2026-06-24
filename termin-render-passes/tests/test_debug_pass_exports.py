@@ -1,5 +1,5 @@
 from termin.render_passes import ImmediateDepthPass, UnifiedGizmoPass
-from termin.render_passes.builtins import FRAME_PASS_SPECS
+from termin_render_pass_specs import FRAME_PASS_SPECS
 
 
 def test_debug_passes_are_public_render_passes() -> None:

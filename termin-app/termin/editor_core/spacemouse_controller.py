@@ -51,6 +51,10 @@ class _SpnavEvent(ctypes.Union):
     ]
 
 
+_libspnav = None
+_libspnav_loaded = False
+
+
 def _load_libspnav():
     """Try to load libspnav shared library."""
     lib_path = ctypes.util.find_library("spnav")
@@ -81,7 +85,12 @@ def _load_libspnav():
     return lib
 
 
-_libspnav = _load_libspnav()
+def _get_libspnav():
+    global _libspnav, _libspnav_loaded
+    if not _libspnav_loaded:
+        _libspnav = _load_libspnav()
+        _libspnav_loaded = True
+    return _libspnav
 
 
 class SpaceMouseController:
@@ -135,10 +144,11 @@ class SpaceMouseController:
         if self._is_open:
             return True
 
-        if _libspnav is None:
+        libspnav = _get_libspnav()
+        if libspnav is None:
             return False
 
-        if _libspnav.spnav_open() == -1:
+        if libspnav.spnav_open() == -1:
             log.warn("[SpaceMouse] Failed to connect to spacenavd")
             return False
 
@@ -153,8 +163,9 @@ class SpaceMouseController:
         if not self._is_open:
             return
 
-        if _libspnav is not None:
-            _libspnav.spnav_close()
+        libspnav = _get_libspnav()
+        if libspnav is not None:
+            libspnav.spnav_close()
 
         self._is_open = False
         self._editor_attachment = None
@@ -177,13 +188,17 @@ class SpaceMouseController:
 
     def poll(self) -> None:
         """Poll pending spacenavd events and request a redraw if movement occurred."""
-        if _libspnav is None or not self._is_open:
+        if not self._is_open:
+            return
+
+        libspnav = _get_libspnav()
+        if libspnav is None:
             return
 
         event = _SpnavEvent()
         moved = False
 
-        while _libspnav.spnav_poll_event(ctypes.byref(event)) != 0:
+        while libspnav.spnav_poll_event(ctypes.byref(event)) != 0:
             if event.type == SPNAV_EVENT_MOTION:
                 if self._handle_motion(event.motion):
                     moved = True

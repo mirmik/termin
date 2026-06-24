@@ -8,9 +8,9 @@ from termin.default_assets.builtin_types import (
     get_default_builtin_frame_pass_specs,
 )
 
-APP_BUILTIN_COMPONENTS: list[BuiltinTypeSpec] = []
+APP_BUILTIN_COMPONENTS: tuple[BuiltinTypeSpec, ...] = ()
 
-APP_BUILTIN_FRAME_PASSES: list[BuiltinTypeSpec] = []
+APP_BUILTIN_FRAME_PASSES: tuple[BuiltinTypeSpec, ...] = ()
 
 
 def get_builtin_component_specs() -> list[BuiltinTypeSpec]:

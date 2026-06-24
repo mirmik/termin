@@ -1,9 +1,5 @@
-"""Builtin component specs owned by termin-components-ui."""
+"""Compatibility re-export for UI component builtin specs."""
 
-from __future__ import annotations
-
-COMPONENT_SPECS: list[tuple[str, str]] = [
-    ("termin.ui_components", "UIComponent"),
-]
+from termin_ui_component_specs import COMPONENT_SPECS
 
 __all__ = ["COMPONENT_SPECS"]
