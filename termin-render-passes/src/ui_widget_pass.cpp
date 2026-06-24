@@ -5,6 +5,8 @@
 
 #include <tcbase/tc_log.hpp>
 
+#if TERMIN_RENDER_PASSES_ENABLE_NATIVE_UI_WIDGET_PASS
+
 namespace termin {
 
 UIWidgetPass::UIWidgetPass(
@@ -51,3 +53,5 @@ void UIWidgetPass::execute(ExecuteContext& ctx) {
 TC_REGISTER_FRAME_PASS(UIWidgetPass);
 
 } // namespace termin
+
+#endif
