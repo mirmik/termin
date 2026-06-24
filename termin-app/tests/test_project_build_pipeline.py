@@ -120,6 +120,56 @@ def test_project_build_pipeline_orders_export_validation_and_target_packaging(tm
     ]
 
 
+def test_project_build_pipeline_cleans_runtime_state_after_target_packaging(tmp_path: Path) -> None:
+    project, scene = _write_project(tmp_path)
+    context = create_build_context(
+        project_root=project,
+        entry_scene=scene,
+        target="desktop",
+        output_dir=project / "dist" / "pipeline",
+    )
+    events: list[str] = []
+
+    def export_package(
+        project_root,
+        entry_scene,
+        output_dir,
+        shader_compiler,
+        default_shader_language,
+        shader_targets,
+        resource_policy,
+    ):
+        events.append("export")
+        output_dir.mkdir(parents=True)
+        manifest_path = output_dir / "manifest.json"
+        scene_path = output_dir / "scene.json"
+        manifest_path.write_text("{}\n", encoding="utf-8")
+        scene_path.write_text("{}\n", encoding="utf-8")
+        return RuntimePackageExportResult(
+            package_dir=output_dir,
+            manifest_path=manifest_path,
+            scene_path=scene_path,
+        )
+
+    def package_target(_context, _package_result, _payload):
+        events.append("package")
+        return TargetPackageStepResult(payload="target-artifact")
+
+    run_project_build_pipeline(
+        context=context,
+        target_name="Desktop",
+        preload_log_tag="[PipelineTest]",
+        prepare_output=lambda _context: events.append("prepare"),
+        run_target_preflight=lambda: TargetPreflightStepResult(payload="target-env"),
+        package_target=package_target,
+        export_package=export_package,
+        validate_package=lambda _package_dir: [],
+        cleanup_runtime_state=lambda log_tag: events.append(f"cleanup:{log_tag}"),
+    )
+
+    assert events == ["prepare", "export", "package", "cleanup:[PipelineTest]"]
+
+
 def test_project_build_pipeline_stops_before_output_prepare_when_project_preflight_fails(
     tmp_path: Path,
 ) -> None:
@@ -145,6 +195,56 @@ def test_project_build_pipeline_stops_before_output_prepare_when_project_preflig
         )
 
     assert events == []
+
+
+def test_project_build_pipeline_cleans_runtime_state_when_validation_fails(tmp_path: Path) -> None:
+    project, scene = _write_project(tmp_path)
+    context = create_build_context(
+        project_root=project,
+        entry_scene=scene,
+        target="desktop",
+        output_dir=project / "dist" / "pipeline",
+    )
+    events: list[str] = []
+    validation_diagnostic = build_error("manifest.json", "validation error")
+
+    def export_package(
+        project_root,
+        entry_scene,
+        output_dir,
+        shader_compiler,
+        default_shader_language,
+        shader_targets,
+        resource_policy,
+    ):
+        events.append("export")
+        output_dir.mkdir(parents=True)
+        manifest_path = output_dir / "manifest.json"
+        scene_path = output_dir / "scene.json"
+        manifest_path.write_text("{}\n", encoding="utf-8")
+        scene_path.write_text("{}\n", encoding="utf-8")
+        return RuntimePackageExportResult(
+            package_dir=output_dir,
+            manifest_path=manifest_path,
+            scene_path=scene_path,
+        )
+
+    with pytest.raises(ProjectBuildPipelineError):
+        run_project_build_pipeline(
+            context=context,
+            target_name="Desktop",
+            preload_log_tag="[PipelineTest]",
+            prepare_output=lambda _context: events.append("prepare"),
+            run_target_preflight=lambda: TargetPreflightStepResult(payload="target-env"),
+            package_target=lambda _context, _package_result, _payload: TargetPackageStepResult(
+                payload="target-artifact"
+            ),
+            export_package=export_package,
+            validate_package=lambda _package_dir: [validation_diagnostic],
+            cleanup_runtime_state=lambda log_tag: events.append(f"cleanup:{log_tag}"),
+        )
+
+    assert events == ["prepare", "export", "cleanup:[PipelineTest]"]
 
 
 def test_project_build_pipeline_stops_before_target_packaging_when_validation_fails(

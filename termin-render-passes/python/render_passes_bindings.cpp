@@ -56,7 +56,6 @@ void init_pass_from_python(T* self, const char* type_name) {
     self->link_to_type_registry(type_name);
     nb::object wrapper = nb::cast(self, nb::rv_policy::reference);
     self->set_python_ref(wrapper.ptr(), &g_py_cxx_pass_ref_vtable);
-    Py_INCREF(wrapper.ptr());
 }
 
 } // namespace

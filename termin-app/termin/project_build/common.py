@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import gc
 from pathlib import Path
 
 
@@ -42,6 +43,19 @@ def preload_project_resources(project_root: Path, log_prefix: str) -> None:
     except Exception:
         from tcbase import log
         log.error(f"{log_prefix} Failed to preload project resources", exc_info=True)
+
+
+def cleanup_project_build_runtime_state(log_prefix: str) -> None:
+    """Release process-wide resource state created during project build."""
+    try:
+        from termin.default_assets.resource_manager import DefaultResourceManager
+
+        DefaultResourceManager.shutdown_instance()
+        gc.collect()
+    except Exception:
+        from tcbase import log
+
+        log.error(f"{log_prefix} Failed to clean project build runtime state", exc_info=True)
 
 
 def read_project_name(project_root: Path) -> str:

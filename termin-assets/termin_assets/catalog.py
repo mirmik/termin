@@ -63,3 +63,8 @@ class AssetCatalog:
     def has_type(self, type_id: str) -> bool:
         return type_id in self._records_by_type
 
+    def clear(self) -> None:
+        """Remove all indexed external asset records."""
+        self.project_root = None
+        self._records_by_type.clear()
+        self._records_by_path.clear()
