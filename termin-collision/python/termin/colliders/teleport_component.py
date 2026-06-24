@@ -29,7 +29,7 @@ class TeleportComponent(InputComponent):
             return
 
         scene = event.viewport.scene
-        hit = CollisionWorld.raycast_scene(scene, ray)
+        hit = CollisionWorld.from_scene(scene).raycast_closest(ray)
         if not hit.valid:
             return
 
