@@ -9,10 +9,13 @@ GUARD_TEST_MAIN();
 #include <string>
 
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 
 extern "C" {
+#include <core/tc_light_capability.h>
+#include <core/tc_scene.h>
 #include <tgfx/resources/tc_material_registry.h>
 #include <tgfx/resources/tc_texture_registry.h>
 }
@@ -44,7 +47,8 @@ std::string shader_spec() {
         << "{\n"
         << "  \"uuid\": \"" << kShaderUuid << "\",\n"
         << "  \"name\": \"RuntimeLoaderTestShader\",\n"
-        << "  \"fragment_source_path\": \"shaders/test.frag\"\n"
+        << "  \"fragment_source_path\": \"shaders/test.frag\",\n"
+        << "  \"features\": 1\n"
         << "}\n";
     return out.str();
 }
@@ -118,8 +122,51 @@ std::string scene_json() {
           }
         }
       ]
+    },
+    {
+      "uuid": "runtime-loader-test-light",
+      "name": "RuntimeLoaderTestLight",
+      "visible": true,
+      "enabled": true,
+      "pose": {
+        "position": [0.0, 2.0, 3.0],
+        "rotation": [0.0, 0.0, 0.0, 1.0]
+      },
+      "scale": [1.0, 1.0, 1.0],
+      "components": [
+        {
+          "type": "LightComponent",
+          "data": {
+            "light_type": "directional",
+            "color": [0.8, 0.9, 1.0],
+            "intensity": 3.5,
+            "shadows_enabled": true,
+            "shadows_bias": 0.002,
+            "shadows_normal_bias": 0.1,
+            "shadows_map_resolution": 1024,
+            "cascade_count": 2,
+            "max_distance": 50.0,
+            "split_lambda": 0.4,
+            "cascade_blend": true
+          }
+        }
+      ]
     }
-  ]
+  ],
+  "extensions": {
+    "render_state": {
+      "background_color": [0.05, 0.06, 0.07, 1.0],
+      "lighting": {
+        "ambient_color": [0.7, 0.8, 0.9],
+        "ambient_intensity": 0.33,
+        "shadow_settings": {
+          "method": 1,
+          "softness": 0.75,
+          "bias": 0.003
+        }
+      }
+    }
+  }
 }
 )";
 }
@@ -162,6 +209,26 @@ tc_material_texture* require_texture(tc_material_phase* phase, const char* name)
     return texture;
 }
 
+struct LightProbe {
+    size_t count = 0;
+    tc_light_data first{};
+};
+
+bool collect_test_light(tc_component* c, void* user_data) {
+    LightProbe* probe = static_cast<LightProbe*>(user_data);
+    const tc_light_capability* cap = tc_light_capability_get(c);
+    REQUIRE(cap != nullptr);
+    REQUIRE(cap->vtable != nullptr);
+    REQUIRE(cap->vtable->get_light_data != nullptr);
+    tc_light_data data{};
+    REQUIRE(cap->vtable->get_light_data(c, &data));
+    if (probe->count == 0) {
+        probe->first = data;
+    }
+    ++probe->count;
+    return true;
+}
+
 } // namespace
 
 TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures") {
@@ -177,6 +244,10 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     REQUIRE(material.is_valid());
     tc_material_phase* phase = material.default_phase();
     REQUIRE(phase != nullptr);
+
+    termin::TcShader shader = termin::TcShader::from_uuid(kShaderUuid);
+    REQUIRE(shader.is_valid());
+    CHECK(shader.has_feature(TC_SHADER_FEATURE_LIGHTING_UBO));
 
     tc_uniform_value* color = require_uniform(phase, "u_color", TC_UNIFORM_VEC4);
     CHECK(std::fabs(color->data.v4[0] - 0.25f) < 0.0001f);
@@ -197,4 +268,32 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
 
     require_texture(phase, "u_albedo_texture");
     require_texture(phase, "u_normal_texture");
+
+    tc_scene_handle scene = result.scene.handle();
+    CHECK_EQ(tc_scene_count_components_of_type(scene, "LightComponent"), 1);
+
+    tc_component_cap_id light_cap = tc_light_capability_id();
+    REQUIRE(light_cap != TC_COMPONENT_CAPABILITY_INVALID_ID);
+    CHECK_EQ(tc_scene_capability_count(scene, light_cap), 1);
+
+    LightProbe probe;
+    tc_scene_foreach_with_capability(
+        scene,
+        light_cap,
+        collect_test_light,
+        &probe,
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
+    REQUIRE_EQ(probe.count, 1);
+    CHECK_EQ(probe.first.type, TC_LIGHT_DIRECTIONAL);
+    CHECK(std::fabs(probe.first.color[0] - 0.8) < 0.0001);
+    CHECK(std::fabs(probe.first.color[1] - 0.9) < 0.0001);
+    CHECK(std::fabs(probe.first.color[2] - 1.0) < 0.0001);
+    CHECK(std::fabs(probe.first.intensity - 3.5) < 0.0001);
+
+    tc_scene_lighting* lighting = termin::scene_lighting(result.scene);
+    REQUIRE(lighting != nullptr);
+    CHECK(std::fabs(lighting->ambient_color[0] - 0.7f) < 0.0001f);
+    CHECK(std::fabs(lighting->ambient_color[1] - 0.8f) < 0.0001f);
+    CHECK(std::fabs(lighting->ambient_color[2] - 0.9f) < 0.0001f);
+    CHECK(std::fabs(lighting->ambient_intensity - 0.33f) < 0.0001f);
 }
