@@ -49,6 +49,46 @@ def test_import_side_effect_audit_reports_top_level_runtime_resources(tmp_path: 
     ]
 
 
+def test_import_side_effect_audit_can_report_mutable_module_state(tmp_path: Path) -> None:
+    audit_tool = _load_audit_tool()
+    module_path = tmp_path / "sample_state.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "from collections import defaultdict",
+                "",
+                "registry = {}",
+                "pending_items = []",
+                "resource_factories = defaultdict(list)",
+                "builtin_components = collect_builtin_components()",
+                "# termin-import-ok: constant lookup populated intentionally",
+                "known_values = set()",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert audit_tool.audit_file(module_path, root=tmp_path) == []
+
+    findings = audit_tool.audit_file(
+        module_path,
+        root=tmp_path,
+        include_mutable_state=True,
+    )
+
+    assert [(finding.category, finding.confidence, finding.target) for finding in findings] == [
+        ("module-mutable-state", "low", "registry = dict"),
+        ("module-mutable-state", "low", "pending_items = list"),
+        ("module-mutable-state", "low", "resource_factories = defaultdict"),
+        (
+            "module-state-initializer-call",
+            "low",
+            "builtin_components = collect_builtin_components",
+        ),
+    ]
+
+
 def test_importing_runtime_surfaces_does_not_create_runtime_singletons() -> None:
     script = """
 import importlib

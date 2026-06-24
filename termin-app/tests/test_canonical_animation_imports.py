@@ -1,7 +1,56 @@
 """Test that animation native modules are accessible via canonical paths."""
 
+import ast
 import importlib
+from pathlib import Path
+
 import pytest
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _literal_specs_from_file(path: Path, variable_name: str) -> list[tuple[str, str]]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for statement in tree.body:
+        if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            if statement.target.id == variable_name:
+                return ast.literal_eval(statement.value)
+        if isinstance(statement, ast.Assign):
+            for target in statement.targets:
+                if isinstance(target, ast.Name) and target.id == variable_name:
+                    return ast.literal_eval(statement.value)
+    raise AssertionError(f"{variable_name} not found in {path}")
+
+
+def _builtin_component_specs_for_static_checks() -> list[tuple[str, str]]:
+    from termin.assets.resources._builtins import APP_BUILTIN_COMPONENTS
+    from termin.default_assets.builtin_types import DEFAULT_DOMAIN_COMPONENT_SPECS
+
+    return [
+        *_literal_specs_from_file(
+            REPO_ROOT
+            / "termin-components"
+            / "termin-components-render"
+            / "python"
+            / "termin"
+            / "render_components"
+            / "builtins.py",
+            "COMPONENT_SPECS",
+        ),
+        *_literal_specs_from_file(
+            REPO_ROOT
+            / "termin-components"
+            / "termin-components-ui"
+            / "python"
+            / "termin"
+            / "ui_components"
+            / "builtins.py",
+            "COMPONENT_SPECS",
+        ),
+        *DEFAULT_DOMAIN_COMPONENT_SPECS,
+        *APP_BUILTIN_COMPONENTS,
+    ]
 
 
 def test_animation_native_via_canonical_path():
@@ -109,11 +158,9 @@ def test_animation_facade_modules_removed():
 
 def test_builtins_no_legacy_animation_paths():
     """_builtins.py should not reference legacy animation paths."""
-    from termin.assets.resources._builtins import BUILTIN_COMPONENTS
-
-    for module_path, _cls in BUILTIN_COMPONENTS:
+    for module_path, _cls in _builtin_component_specs_for_static_checks():
         assert not module_path.startswith("termin.visualization.animation"), (
-            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+            f"Legacy path found in builtin component specs: {module_path}"
         )
 
 
@@ -134,11 +181,9 @@ def test_render_components_facade_modules_removed():
 
 def test_builtins_no_legacy_render_components_paths():
     """_builtins.py should not reference legacy render components paths."""
-    from termin.assets.resources._builtins import BUILTIN_COMPONENTS
-
-    for module_path, _cls in BUILTIN_COMPONENTS:
+    for module_path, _cls in _builtin_component_specs_for_static_checks():
         assert not module_path.startswith("termin.visualization.render.components"), (
-            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+            f"Legacy path found in builtin component specs: {module_path}"
         )
 
 
@@ -162,15 +207,13 @@ def test_physics_facade_modules_removed():
 
 def test_builtins_no_legacy_physics_paths():
     """_builtins.py should not reference legacy physics facade paths."""
-    from termin.assets.resources._builtins import BUILTIN_COMPONENTS
-
-    for module_path, _cls in BUILTIN_COMPONENTS:
+    for module_path, _cls in _builtin_component_specs_for_static_checks():
         assert not module_path.startswith("termin.physics.physics_world_component"), (
-            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+            f"Legacy path found in builtin component specs: {module_path}"
         )
         assert not module_path.startswith("termin.physics.rigid_body_component"), (
-            f"Legacy path found in BUILTIN_COMPONENTS: {module_path}"
+            f"Legacy path found in builtin component specs: {module_path}"
         )
         assert not module_path.startswith("termin.physics.fem_"), (
-            f"Legacy FEM path found in BUILTIN_COMPONENTS: {module_path}"
+            f"Legacy FEM path found in builtin component specs: {module_path}"
         )
