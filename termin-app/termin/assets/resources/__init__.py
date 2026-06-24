@@ -11,13 +11,12 @@ Usage:
 """
 
 from ._manager import ResourceManager
-from termin_assets.resource_handle import set_resource_manager_factory
 
 
-def _termin_app_resource_manager():
-    return ResourceManager.instance()
+def configure_app_resource_manager_factory() -> None:
+    """Register the app ResourceManager factory in an explicit bootstrap step."""
+    from termin.bootstrap import configure_resource_manager_factory
 
+    configure_resource_manager_factory(ResourceManager.instance)
 
-set_resource_manager_factory(_termin_app_resource_manager)
-
-__all__ = ["ResourceManager"]
+__all__ = ["ResourceManager", "configure_app_resource_manager_factory"]

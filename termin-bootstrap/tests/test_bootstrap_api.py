@@ -80,6 +80,24 @@ def test_explicit_runtime_bootstrap_registers_core_resource_kinds():
     )
 
 
+def test_explicit_bootstrap_configures_resource_manager_factory():
+    _run_python(
+        """
+        import termin.bootstrap
+        from termin_assets import get_resource_manager
+
+        marker = object()
+        assert get_resource_manager() is None
+
+        termin.bootstrap.configure_resource_manager_factory(lambda: marker)
+        assert get_resource_manager() is marker
+
+        termin.bootstrap.configure_resource_manager_factory(None)
+        assert get_resource_manager() is None
+        """
+    )
+
+
 def test_explicit_inspect_bootstrap_registers_component_base_fields():
     _run_python(
         """
