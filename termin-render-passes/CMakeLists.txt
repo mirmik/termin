@@ -10,6 +10,11 @@ option(TERMIN_RENDER_PASSES_BUILD_SHARED "Build shared library" ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings for termin-render-passes" OFF)
 option(TERMIN_RENDER_PASSES_BUILD_TESTS "Build termin-render-passes tests" ON)
 
+set(TERMIN_RENDER_PASSES_ENABLE_NATIVE_UI_WIDGET_PASS 0)
+if(ANDROID)
+    set(TERMIN_RENDER_PASSES_ENABLE_NATIVE_UI_WIDGET_PASS 1)
+endif()
+
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
 else()
@@ -143,6 +148,7 @@ target_compile_definitions(termin_render_passes PRIVATE
     TERMIN_RENDER_PASSES_EXPORTS
     TERMIN_RENDER_EXPORTS
     TC_EXPORTS
+    TERMIN_RENDER_PASSES_ENABLE_NATIVE_UI_WIDGET_PASS=${TERMIN_RENDER_PASSES_ENABLE_NATIVE_UI_WIDGET_PASS}
 )
 
 if(MSVC)

@@ -1,5 +1,5 @@
 from termin.engine import RenderingManager
-from termin.render_passes import ResolvePass
+from termin.render_passes import ResolvePass, UIWidgetPass
 
 
 def test_builtin_default_pipeline_color_fbos_follow_output_render_target():
@@ -31,6 +31,17 @@ def test_builtin_default_pipeline_resolves_msaa_before_postfx():
 
     assert "ResolvePass" in pass_types
     assert pass_names.index("Resolve") < pass_names.index("Bloom")
+
+
+def test_builtin_default_pipeline_uses_python_ui_widget_pass_when_available():
+    pipeline = RenderingManager.instance().create_pipeline("Default")
+
+    widget_pass = next(
+        frame_pass for frame_pass in pipeline.passes
+        if frame_pass.type_name == "UIWidgetPass"
+    )
+
+    assert isinstance(widget_pass.to_python(), UIWidgetPass)
 
 
 def test_resolve_pass_strategy_defaults_to_average():

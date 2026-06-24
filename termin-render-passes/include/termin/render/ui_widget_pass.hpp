@@ -6,9 +6,8 @@
 
 namespace termin {
 
-// Native desktop placeholder for widget UI composition.
-// The player runtime cannot depend on Python-authored frame passes, but the
-// default pipeline still needs the same resource edge.
+// Native placeholder for targets that do not run Python-authored frame passes.
+// Desktop builds leave the UIWidgetPass registry name to the Python pass.
 class TERMIN_RENDER_PASSES_API UIWidgetPass : public CxxFramePass {
 public:
     std::string input_res = "color";
