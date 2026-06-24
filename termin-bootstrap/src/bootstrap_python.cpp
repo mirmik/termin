@@ -77,6 +77,8 @@ void register_python_uuid_handle_kind(const char* kind_name, nb::handle type_obj
 
 static bool g_pointer_extractors_initialized = false;
 static bool g_callbacks_initialized = false;
+static bool g_python_inspect_adapters_initialized = false;
+static bool g_python_render_passes_initialized = false;
 
 static bool g_mesh_python_kind_initialized = false;
 static bool g_material_python_kind_initialized = false;
@@ -219,6 +221,30 @@ void py_input_cb_on_key(void* py_self, tc_key_event* event) {
 }
 
 } // namespace
+
+void init_python_inspect_adapters() {
+    if (g_python_inspect_adapters_initialized) {
+        return;
+    }
+    tc::init_python_lang_vtable();
+    tc::init_python_inspect_vtable();
+    g_python_inspect_adapters_initialized = true;
+}
+
+void init_python_render_passes() {
+    if (g_python_render_passes_initialized) {
+        return;
+    }
+
+    try {
+        nb::module_::import_("termin.render_passes");
+        g_python_render_passes_initialized = true;
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "[termin-bootstrap] Failed to import Python render passes");
+        PyErr_Print();
+        throw;
+    }
+}
 
 void init_python_kind_handlers(const RuntimeKindOptions& options) {
     if (options.mesh && !g_mesh_python_kind_initialized) {

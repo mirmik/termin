@@ -105,6 +105,8 @@ void bootstrap_runtime() {
 
 void bootstrap_player() {
     bootstrap_runtime();
+    init_python_inspect_adapters();
+    init_python_render_passes();
     init_python_kind_handlers();
     init_pointer_extractors();
     init_python_component_callbacks();

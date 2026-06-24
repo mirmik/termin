@@ -195,3 +195,18 @@ def test_partial_python_kind_init_does_not_block_later_full_player_bootstrap():
         assert registry.kind_for_object(TcSkeleton()) == "tc_skeleton"
         """
     )
+
+
+def test_player_bootstrap_imports_default_python_render_passes():
+    _run_python(
+        """
+        import sys
+        import termin.bootstrap
+
+        assert "termin.render_passes" not in sys.modules
+
+        termin.bootstrap.bootstrap_player()
+
+        assert "termin.render_passes" in sys.modules
+        """
+    )

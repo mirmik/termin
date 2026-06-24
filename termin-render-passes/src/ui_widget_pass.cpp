@@ -1,11 +1,11 @@
+#if defined(__ANDROID__)
+
 #include <termin/render/ui_widget_pass.hpp>
 
 #include "termin/render/execute_context.hpp"
 #include "tgfx2/render_context.hpp"
 
 #include <tcbase/tc_log.hpp>
-
-#if TERMIN_RENDER_PASSES_ENABLE_NATIVE_UI_WIDGET_PASS
 
 namespace termin {
 
@@ -54,4 +54,4 @@ TC_REGISTER_FRAME_PASS(UIWidgetPass);
 
 } // namespace termin
 
-#endif
+#endif // defined(__ANDROID__)

@@ -13,7 +13,9 @@ from termin.bootstrap._bootstrap_native import (
     init_inspect_adapters,
     init_pointer_extractors,
     init_python_component_callbacks,
+    init_python_inspect_adapters,
     init_python_kind_handlers,
+    init_python_render_passes,
     register_runtime_kinds,
     register_scene_extensions,
 )
@@ -34,7 +36,9 @@ __all__ = [
     "init_inspect_adapters",
     "init_pointer_extractors",
     "init_python_component_callbacks",
+    "init_python_inspect_adapters",
     "init_python_kind_handlers",
+    "init_python_render_passes",
     "register_runtime_kinds",
     "register_scene_extensions",
 ]
