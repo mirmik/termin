@@ -275,8 +275,10 @@ and normal texture helpers only; it no longer exports a `TextureHandle` class.
 
 - lazy texture registration declares pool entries with `tc_texture_declare`;
 - `ResourceManager.get_texture_handle()` returns `TcTexture`;
-- the legacy selector kind name `texture_handle` remains as a UI/serialization
-  alias while internal data uses `TcTexture`.
+- `tc_texture` is the canonical UI/serialization selector kind for these pool
+  handles;
+- the legacy selector kind name `texture_handle` remains accepted as an alias
+  for old metadata while internal data uses `TcTexture`.
 
 ### Editor native bindings
 

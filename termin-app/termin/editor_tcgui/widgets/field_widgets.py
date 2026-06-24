@@ -1295,7 +1295,7 @@ class FieldWidgetFactory:
             "tc_material", "mesh_handle", "tc_mesh",
             "skeleton_handle", "tc_skeleton",
             "voxel_grid_handle", "navmesh_handle",
-            "texture_handle", "ui_handle",
+            "tc_texture", "texture_handle", "ui_handle",
             "foliage_data_handle",
         ):
             return HandleSelectorWidget(

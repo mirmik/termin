@@ -1,6 +1,7 @@
 from termin.editor_tcgui.widgets.field_widgets import (
     ComboFieldWidget,
     FieldWidgetFactory,
+    HandleSelectorWidget,
     Vec3ListFieldWidget,
 )
 from termin.inspect import InspectField
@@ -49,3 +50,11 @@ def test_field_widget_factory_uses_combo_for_enum_choices():
 
     assert isinstance(widget, ComboFieldWidget)
     assert widget.get_value() == "4"
+
+
+def test_field_widget_factory_uses_handle_selector_for_tc_texture():
+    field = InspectField(path="albedo", label="Albedo", kind="tc_texture")
+
+    widget = FieldWidgetFactory().create(field)
+
+    assert isinstance(widget, HandleSelectorWidget)
