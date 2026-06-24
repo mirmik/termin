@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 from termin_assets import AssetRuntimeManager
@@ -160,9 +161,72 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
             register_all_builtins(cls._instance)
         return cls._instance
 
+    def clear_runtime_state(self) -> None:
+        """Drop runtime asset registries and direct native wrapper caches."""
+        self._destroy_cached_pipelines()
+
+        for registry in list(self._runtime_asset_registries.values()):
+            registry.clear()
+        self._assets_by_uuid.clear()
+        self.external_assets.clear()
+
+        self.materials.clear()
+        self.shaders.clear()
+        self.voxel_grids.clear()
+        self.navmeshes.clear()
+        self.animation_clips.clear()
+        self.skeletons.clear()
+
+        self.component_registry.classes.clear()
+        self.frame_pass_registry.classes.clear()
+
+        self._clear_default_texture_caches()
+
+    def _destroy_cached_pipelines(self) -> None:
+        for asset in list(self._pipeline_registry.assets.values()):
+            pipeline = asset.cached_data
+            if pipeline is None:
+                continue
+            try:
+                pipeline.destroy()
+            except Exception:
+                from tcbase import log
+
+                log.error(
+                    f"[DefaultResourceManager] Failed to destroy pipeline '{asset.name}'",
+                    exc_info=True,
+                )
+            asset.unload()
+
+    def _clear_default_texture_caches(self) -> None:
+        texture_module = sys.modules.get("termin.render.texture")
+        if texture_module is not None:
+            texture_module._white_texture = None
+            texture_module._normal_texture = None
+
+        texture_handle_module = sys.modules.get("termin.render.texture_handle")
+        if texture_handle_module is not None:
+            texture_handle_module._white_texture_handle = None
+            texture_handle_module._normal_texture_handle = None
+
+    @classmethod
+    def shutdown_instance(cls) -> None:
+        """Clear and detach the process-wide default resource manager, if any."""
+        instance = cls._instance
+        if instance is None:
+            return
+
+        try:
+            instance.clear_runtime_state()
+        finally:
+            cls._instance = None
+            from termin_assets import set_resource_manager_factory
+
+            set_resource_manager_factory(cls.instance)
+
     @classmethod
     def _reset_for_testing(cls) -> None:
-        cls._instance = None
+        cls.shutdown_instance()
         from termin_assets import set_resource_manager_factory
 
         set_resource_manager_factory(cls.instance)

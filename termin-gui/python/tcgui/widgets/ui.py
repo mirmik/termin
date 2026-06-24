@@ -16,8 +16,6 @@ from tcgui.widgets.loader import UILoader
 from tcgui.widgets.shortcuts import ShortcutRegistry
 from tcbase.profiler import Profiler
 
-_profiler = Profiler.instance()
-
 
 @dataclass
 class _OverlayEntry:
@@ -26,6 +24,10 @@ class _OverlayEntry:
     modal: bool = False
     dismiss_on_outside: bool = True
     on_dismiss: Callable[[], None] | None = None
+
+
+def _profiler() -> Profiler:
+    return Profiler.instance()
 
 
 class UI:
@@ -328,7 +330,7 @@ class UI:
         if not self._compose(viewport_w, viewport_h, background_color,
                              target_color):
             return None
-        with _profiler.section("Renderer.end"):
+        with _profiler().section("Renderer.end"):
             return self._renderer.end_compose()
 
     def _compose(
@@ -341,8 +343,8 @@ class UI:
         if not self._root and not self._overlays:
             return False
 
-        # Re-layout if viewport changed or layout invalidated
-        with _profiler.section("Layout"):
+        with _profiler().section("Layout"):
+            # Re-layout if viewport changed or layout invalidated
             if (viewport_w != self._viewport_w or viewport_h != self._viewport_h
                     or self._needs_layout):
                 self._needs_layout = False
@@ -351,15 +353,16 @@ class UI:
             # Check tooltip timer
             self._update_tooltip()
 
-        with _profiler.section("Renderer.begin"):
+        with _profiler().section("Renderer.begin"):
             self._renderer.begin(viewport_w, viewport_h, background_color,
                                  target_color=target_color)
-        with _profiler.section("Root.render"):
+
+        with _profiler().section("Root.render"):
             if self._root:
                 self._root.render(self._renderer)
 
-        # Render overlays on top (re-center modal dialogs if viewport changed)
-        with _profiler.section("Overlays"):
+        with _profiler().section("Overlays"):
+            # Render overlays on top (re-center modal dialogs if viewport changed)
             for entry in self._overlays:
                 if entry.modal:
                     w, h = entry.widget.compute_size(viewport_w, viewport_h)

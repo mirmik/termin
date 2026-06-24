@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Callable, Generic, TypeVar
 
 from termin.project_build.build_context import BuildContext
-from termin.project_build.common import preload_project_resources
+from termin.project_build.common import (
+    cleanup_project_build_runtime_state,
+    preload_project_resources,
+)
 from termin.project_build.diagnostics import DiagnosticLike, format_diagnostics
 from termin.project_build.runtime_package_exporter import (
     RuntimePackageExportResult,
@@ -72,6 +75,7 @@ TargetPackageStep = Callable[
 ]
 RuntimePackageExporter = Callable[..., RuntimePackageExportResult]
 RuntimePackageValidator = Callable[[Path], list[DiagnosticLike]]
+RuntimeStateCleanup = Callable[[str], None]
 
 
 def run_project_build_pipeline(
@@ -86,58 +90,62 @@ def run_project_build_pipeline(
     shader_targets: Iterable[str] | None = None,
     export_package: RuntimePackageExporter = export_runtime_package,
     validate_package: RuntimePackageValidator = validate_runtime_package,
+    cleanup_runtime_state: RuntimeStateCleanup = cleanup_project_build_runtime_state,
 ) -> ProjectBuildPipelineResult[PreflightPayloadT, TargetPayloadT]:
     project_preflight_result = preflight_project_build_context(
         context=context,
         target_name=target_name,
     )
     target_preflight_result = run_target_preflight()
-    prepare_output(context)
+    try:
+        prepare_output(context)
 
-    preload_project_resources(context.project_root, preload_log_tag)
+        preload_project_resources(context.project_root, preload_log_tag)
 
-    package_result = export_package(
-        project_root=context.project_root,
-        entry_scene=context.entry_scene,
-        output_dir=context.package_dir,
-        shader_compiler=shader_compiler,
-        default_shader_language=default_shader_language,
-        shader_targets=shader_targets,
-        resource_policy=context.resource_policy,
-    )
-    package_validation_diagnostics = validate_package(package_result.package_dir)
-    pre_target_diagnostics = [
-        *project_preflight_result.diagnostics,
-        *target_preflight_result.diagnostics,
-        *package_result.diagnostics,
-        *package_validation_diagnostics,
-    ]
-    if _has_error_diagnostic(pre_target_diagnostics):
-        raise ProjectBuildPipelineError(
-            target_name,
-            pre_target_diagnostics,
-            package_result=package_result,
-            package_validation_diagnostics=package_validation_diagnostics,
+        package_result = export_package(
+            project_root=context.project_root,
+            entry_scene=context.entry_scene,
+            output_dir=context.package_dir,
+            shader_compiler=shader_compiler,
+            default_shader_language=default_shader_language,
+            shader_targets=shader_targets,
+            resource_policy=context.resource_policy,
+        )
+        package_validation_diagnostics = validate_package(package_result.package_dir)
+        pre_target_diagnostics = [
+            *project_preflight_result.diagnostics,
+            *target_preflight_result.diagnostics,
+            *package_result.diagnostics,
+            *package_validation_diagnostics,
+        ]
+        if _has_error_diagnostic(pre_target_diagnostics):
+            raise ProjectBuildPipelineError(
+                target_name,
+                pre_target_diagnostics,
+                package_result=package_result,
+                package_validation_diagnostics=package_validation_diagnostics,
+            )
+
+        target_package_result = package_target(
+            context,
+            package_result,
+            target_preflight_result.payload,
         )
 
-    target_package_result = package_target(
-        context,
-        package_result,
-        target_preflight_result.payload,
-    )
-
-    return ProjectBuildPipelineResult(
-        context=context,
-        project_preflight_result=project_preflight_result,
-        target_preflight_result=target_preflight_result,
-        package_result=package_result,
-        package_validation_diagnostics=package_validation_diagnostics,
-        target_package_result=target_package_result,
-        diagnostics=[
-            *pre_target_diagnostics,
-            *target_package_result.diagnostics,
-        ],
-    )
+        return ProjectBuildPipelineResult(
+            context=context,
+            project_preflight_result=project_preflight_result,
+            target_preflight_result=target_preflight_result,
+            package_result=package_result,
+            package_validation_diagnostics=package_validation_diagnostics,
+            target_package_result=target_package_result,
+            diagnostics=[
+                *pre_target_diagnostics,
+                *target_package_result.diagnostics,
+            ],
+        )
+    finally:
+        cleanup_runtime_state(preload_log_tag)
 
 
 def _has_error_diagnostic(diagnostics: list[DiagnosticLike]) -> bool:

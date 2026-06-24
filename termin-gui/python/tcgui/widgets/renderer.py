@@ -30,8 +30,6 @@ from tgfx._tgfx_native import (
 )
 from tcbase.profiler import Profiler
 
-_prof = Profiler.instance()
-
 
 UI_SHADER_UUID = "termin-tcgui-ui-engine"
 UI_SHADER_NAME = "UIEngineVSFS"
@@ -117,6 +115,10 @@ void main() {
 import struct as _struct
 _UI_PUSH_FMT = "=16f4f3I4x"   # projection, color, texture_mode/channel/hdr + pad
 _UI_PUSH_SIZE = _struct.calcsize(_UI_PUSH_FMT)
+
+
+def _profiler() -> Profiler:
+    return Profiler.instance()
 
 
 def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
@@ -664,7 +666,7 @@ class UIRenderer:
         # the public UIRenderer API historically takes a baseline y.
         top_y = y - font.ascent_at(font_size)
 
-        with _prof.section("text2d.draw"):
+        with _profiler().section("text2d.draw"):
             self._canvas.draw_text(
                 text, x, top_y, float(font_size), color, font, "left",
             )
@@ -679,7 +681,7 @@ class UIRenderer:
         if not font or not text:
             return
 
-        with _prof.section("draw_text_centered.measure"):
+        with _profiler().section("draw_text_centered.measure"):
             # Route through self.measure_text so glyphs get baked at
             # this size before the width query — otherwise the first
             # draw at a new size would centre on a zero width (atlas
