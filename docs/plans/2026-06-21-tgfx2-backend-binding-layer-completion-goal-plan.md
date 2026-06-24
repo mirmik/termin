@@ -705,12 +705,14 @@ later renderer work.
 
 ## Completion Checklist
 
-- [ ] D3D11 smoke validated on Windows. Deferred to Kanboard #92.
+- [x] D3D11 smoke validated on Windows. GitHub Actions run 28085505260
+  passed `tgfx2-d3d11-bound-windows`.
 - [x] Vulkan stores `BoundResourceSetDesc`.
 - [x] Vulkan descriptor writes use `placement.vulkan`.
 - [x] Vulkan bound runtime test added.
 - [x] OpenGL bound runtime test remains passing.
-- [ ] D3D11 bound runtime test remains passing. Deferred to Kanboard #92.
+- [x] D3D11 bound runtime test remains passing. GitHub Actions run 28085505260
+  passed `tgfx2-d3d11-bound-windows`.
 - [x] `RenderContext2` migrated path is bound-first.
 - [x] `RenderContext2` preserves planned binding scopes in `BoundResourceGroup`.
 - [x] Dirty-scope rebinding uses preserved groups for update minimization.
