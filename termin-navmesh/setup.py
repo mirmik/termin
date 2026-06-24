@@ -24,8 +24,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
-    packages=["termin.navmesh"],
-    package_dir={"termin.navmesh": "python/termin/navmesh"},
+    packages=["termin.navmesh", "termin_navmesh_component_specs"],
+    package_dir={
+        "termin.navmesh": "python/termin/navmesh",
+        "termin_navmesh_component_specs": "python/termin_navmesh_component_specs",
+    },
     install_requires=[
         "tcbase",
         "tgfx",

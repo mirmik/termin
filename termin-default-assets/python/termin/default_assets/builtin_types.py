@@ -12,6 +12,16 @@ from termin_assets.builtin_types import BuiltinTypeSpec, collect_builtin_type_sp
 _DEFAULT_COMPONENT_PROVIDER_MODULES = (
     "termin_render_component_specs",
     "termin_ui_component_specs",
+    "termin_skeleton_component_specs",
+    "termin_animation_component_specs",
+    "termin_kinematic_component_specs",
+    "termin_physics_component_specs",
+    "termin_collision_component_specs",
+    "termin_mesh_component_specs",
+    "termin_voxel_component_specs",
+    "termin_navmesh_component_specs",
+    "termin_audio_component_specs",
+    "termin_tween_component_specs",
 )
 
 _DEFAULT_FRAME_PASS_PROVIDER_MODULES = (
@@ -20,40 +30,9 @@ _DEFAULT_FRAME_PASS_PROVIDER_MODULES = (
     "termin_render_framework_specs",
 )
 
-DEFAULT_DOMAIN_COMPONENT_SPECS: tuple[BuiltinTypeSpec, ...] = (
-    ("termin.skeleton_components", "SkeletonController"),
-    ("termin.animation_components", "AnimationPlayer"),
-    ("termin.kinematic.kinematic_components", "ActuatorComponent"),
-    ("termin.kinematic.kinematic_components", "RotatorComponent"),
-    ("termin.physics_components.physics_world_component", "PhysicsWorldComponent"),
-    ("termin.physics_components.rigid_body_component", "RigidBodyComponent"),
-    ("termin.colliders.collider_component", "ColliderComponent"),
-    ("termin.colliders.teleport_component", "TeleportComponent"),
-    ("termin.mesh.mesh_component", "MeshComponent"),
-    ("termin.mesh.script_mesh_component", "ScriptMeshComponent"),
-    ("termin.mesh.procedural_mesh_component", "ProceduralMeshComponent"),
-    ("termin.voxels.voxelizer_component", "VoxelizerComponent"),
-    ("termin.voxels.display_component", "VoxelDisplayComponent"),
-    ("termin.navmesh.display_component", "NavMeshDisplayComponent"),
-    ("termin.navmesh.material_component", "NavMeshMaterialComponent"),
-    ("termin.navmesh.pathfinding_world_component", "PathfindingWorldComponent"),
-    ("termin.navmesh.agent_component", "NavMeshAgentComponent"),
-    ("termin.navmesh.builder_component", "NavMeshBuilderComponent"),
-    ("termin.navmesh", "DetourPathfindingWorldComponent"),
-    ("termin.navmesh", "NavMeshKeeperComponent"),
-    ("termin.navmesh", "RecastNavMeshBuilderComponent"),
-    ("termin.audio.components.audio_source", "AudioSource"),
-    ("termin.audio.components.audio_listener", "AudioListener"),
-    ("termin.tween.component", "TweenManagerComponent"),
-)
-
-
 def get_default_builtin_component_specs() -> list[BuiltinTypeSpec]:
     """Return default component specs contributed below termin-app."""
-    return [
-        *collect_builtin_type_specs(_DEFAULT_COMPONENT_PROVIDER_MODULES, "COMPONENT_SPECS"),
-        *DEFAULT_DOMAIN_COMPONENT_SPECS,
-    ]
+    return collect_builtin_type_specs(_DEFAULT_COMPONENT_PROVIDER_MODULES, "COMPONENT_SPECS")
 
 
 def get_default_builtin_frame_pass_specs() -> list[BuiltinTypeSpec]:
@@ -62,7 +41,6 @@ def get_default_builtin_frame_pass_specs() -> list[BuiltinTypeSpec]:
 
 
 __all__ = [
-    "DEFAULT_DOMAIN_COMPONENT_SPECS",
     "get_default_builtin_component_specs",
     "get_default_builtin_frame_pass_specs",
 ]

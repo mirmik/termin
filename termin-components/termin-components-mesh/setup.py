@@ -20,8 +20,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
-    packages=["termin.mesh"],
-    package_dir={"termin.mesh": "python/termin/mesh"},
+    packages=["termin.mesh", "termin_mesh_component_specs"],
+    package_dir={
+        "termin.mesh": "python/termin/mesh",
+        "termin_mesh_component_specs": "python/termin_mesh_component_specs",
+    },
     install_requires=[
         "termin-nanobind",
         "tcbase",

@@ -122,10 +122,14 @@ Verification completed for this phase:
   into lightweight packages:
   `termin_render_component_specs`, `termin_ui_component_specs`,
   `termin_render_pass_specs` and `termin_render_framework_specs`.
+- Moved the remaining default domain component specs out of
+  `termin-default-assets` into lightweight owner packages such as
+  `termin_mesh_component_specs`, `termin_navmesh_component_specs`,
+  `termin_audio_component_specs`, etc. `termin-default-assets` now owns the
+  default composition policy, not the individual domain catalog entries.
   `get_default_builtin_component_specs()` and
   `get_default_builtin_frame_pass_specs()` now collect provider metadata
-  without importing `termin.render_components`, `termin.render_passes`,
-  `termin.render_framework` or `termin.ui_components`.
+  without importing runtime component/pass packages.
 
 Useful audit commands:
 

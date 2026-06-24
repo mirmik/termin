@@ -160,10 +160,21 @@ from termin.default_assets.builtin_types import (
 component_specs = get_default_builtin_component_specs()
 frame_pass_specs = get_default_builtin_frame_pass_specs()
 runtime_packages = [
+    "termin.animation_components",
+    "termin.audio",
+    "termin.audio.components",
+    "termin.colliders",
+    "termin.kinematic",
+    "termin.mesh",
+    "termin.navmesh",
+    "termin.physics_components",
     "termin.render_components",
     "termin.render_passes",
     "termin.render_framework",
+    "termin.skeleton_components",
+    "termin.tween",
     "termin.ui_components",
+    "termin.voxels",
 ]
 
 print(json.dumps({

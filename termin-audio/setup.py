@@ -14,10 +14,12 @@ setup(
     packages=[
         "termin.audio",
         "termin.audio.components",
+        "termin_audio_component_specs",
     ],
     package_dir={
         "termin.audio": "python/termin/audio",
         "termin.audio.components": "python/termin/audio/components",
+        "termin_audio_component_specs": "python/termin_audio_component_specs",
     },
     install_requires=[
         "numpy",

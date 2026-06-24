@@ -17,6 +17,7 @@ setup(
         "termin.voxels.visualization",
         "termin.voxels.voxelizer_component",
     ],
+    packages=["termin_voxel_component_specs"],
     package_dir={"": "python"},
     install_requires=[
         "numpy",

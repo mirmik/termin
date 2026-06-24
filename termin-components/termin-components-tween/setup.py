@@ -12,6 +12,7 @@ setup(
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.10",
     py_modules=["termin.tween.component"],
+    packages=["termin_tween_component_specs"],
     package_dir={"": "python"},
     install_requires=[
         "numpy",
