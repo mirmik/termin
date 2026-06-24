@@ -118,6 +118,14 @@ Verification completed for this phase:
 - Added Python smoke coverage proving selected runtime/build/editor-facing
   imports do not create `Profiler`, resource manager or render-pass singleton
   instances and do not emit nanobind leak reports.
+- Split builtin spec provider lists out of heavy runtime package namespaces
+  into lightweight packages:
+  `termin_render_component_specs`, `termin_ui_component_specs`,
+  `termin_render_pass_specs` and `termin_render_framework_specs`.
+  `get_default_builtin_component_specs()` and
+  `get_default_builtin_frame_pass_specs()` now collect provider metadata
+  without importing `termin.render_components`, `termin.render_passes`,
+  `termin.render_framework` or `termin.ui_components`.
 
 Useful audit commands:
 

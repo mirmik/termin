@@ -1,8 +1,8 @@
 """Default builtin component and frame-pass specs.
 
 The asset layer owns the default composition of type providers. Application
-packages may append their own specs without becoming the source of truth for
-engine/domain defaults.
+packages may contribute their own specs without becoming the source of truth
+for engine/domain defaults.
 """
 
 from __future__ import annotations
@@ -10,17 +10,17 @@ from __future__ import annotations
 from termin_assets.builtin_types import BuiltinTypeSpec, collect_builtin_type_specs
 
 _DEFAULT_COMPONENT_PROVIDER_MODULES = (
-    "termin.render_components.builtins",
-    "termin.ui_components.builtins",
+    "termin_render_component_specs",
+    "termin_ui_component_specs",
 )
 
 _DEFAULT_FRAME_PASS_PROVIDER_MODULES = (
-    "termin.render_components.builtins",
-    "termin.render_passes.builtins",
-    "termin.render_framework.builtins",
+    "termin_render_component_specs",
+    "termin_render_pass_specs",
+    "termin_render_framework_specs",
 )
 
-DEFAULT_DOMAIN_COMPONENT_SPECS: list[BuiltinTypeSpec] = [
+DEFAULT_DOMAIN_COMPONENT_SPECS: tuple[BuiltinTypeSpec, ...] = (
     ("termin.skeleton_components", "SkeletonController"),
     ("termin.animation_components", "AnimationPlayer"),
     ("termin.kinematic.kinematic_components", "ActuatorComponent"),
@@ -45,7 +45,7 @@ DEFAULT_DOMAIN_COMPONENT_SPECS: list[BuiltinTypeSpec] = [
     ("termin.audio.components.audio_source", "AudioSource"),
     ("termin.audio.components.audio_listener", "AudioListener"),
     ("termin.tween.component", "TweenManagerComponent"),
-]
+)
 
 
 def get_default_builtin_component_specs() -> list[BuiltinTypeSpec]:

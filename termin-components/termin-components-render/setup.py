@@ -20,8 +20,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
-    packages=["termin.render_components"],
-    package_dir={"termin.render_components": "python/termin/render_components"},
+    packages=["termin.render_components", "termin_render_component_specs"],
+    package_dir={
+        "termin.render_components": "python/termin/render_components",
+        "termin_render_component_specs": "python/termin_render_component_specs",
+    },
     install_requires=[
         "termin-assets",
         "termin-input",

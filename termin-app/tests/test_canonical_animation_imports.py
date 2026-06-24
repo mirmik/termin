@@ -1,53 +1,19 @@
 """Test that animation native modules are accessible via canonical paths."""
 
-import ast
 import importlib
-from pathlib import Path
 
 import pytest
-
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _literal_specs_from_file(path: Path, variable_name: str) -> list[tuple[str, str]]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for statement in tree.body:
-        if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
-            if statement.target.id == variable_name:
-                return ast.literal_eval(statement.value)
-        if isinstance(statement, ast.Assign):
-            for target in statement.targets:
-                if isinstance(target, ast.Name) and target.id == variable_name:
-                    return ast.literal_eval(statement.value)
-    raise AssertionError(f"{variable_name} not found in {path}")
 
 
 def _builtin_component_specs_for_static_checks() -> list[tuple[str, str]]:
     from termin.assets.resources._builtins import APP_BUILTIN_COMPONENTS
     from termin.default_assets.builtin_types import DEFAULT_DOMAIN_COMPONENT_SPECS
+    from termin_render_component_specs import COMPONENT_SPECS as RENDER_COMPONENT_SPECS
+    from termin_ui_component_specs import COMPONENT_SPECS as UI_COMPONENT_SPECS
 
     return [
-        *_literal_specs_from_file(
-            REPO_ROOT
-            / "termin-components"
-            / "termin-components-render"
-            / "python"
-            / "termin"
-            / "render_components"
-            / "builtins.py",
-            "COMPONENT_SPECS",
-        ),
-        *_literal_specs_from_file(
-            REPO_ROOT
-            / "termin-components"
-            / "termin-components-ui"
-            / "python"
-            / "termin"
-            / "ui_components"
-            / "builtins.py",
-            "COMPONENT_SPECS",
-        ),
+        *RENDER_COMPONENT_SPECS,
+        *UI_COMPONENT_SPECS,
         *DEFAULT_DOMAIN_COMPONENT_SPECS,
         *APP_BUILTIN_COMPONENTS,
     ]

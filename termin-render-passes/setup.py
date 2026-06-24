@@ -21,8 +21,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.8",
-    packages=["termin.render_passes"],
-    package_dir={"termin.render_passes": "python/termin/render_passes"},
+    packages=["termin.render_passes", "termin_render_pass_specs"],
+    package_dir={
+        "termin.render_passes": "python/termin/render_passes",
+        "termin_render_pass_specs": "python/termin_render_pass_specs",
+    },
     install_requires=[
         "tcbase",
         "termin-nanobind",

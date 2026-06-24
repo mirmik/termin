@@ -11,8 +11,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.10",
-    packages=["termin.ui_components"],
-    package_dir={"termin.ui_components": "python/termin/ui_components"},
+    packages=["termin.ui_components", "termin_ui_component_specs"],
+    package_dir={
+        "termin.ui_components": "python/termin/ui_components",
+        "termin_ui_component_specs": "python/termin_ui_component_specs",
+    },
     install_requires=[
         "tcbase",
         "tcgui",

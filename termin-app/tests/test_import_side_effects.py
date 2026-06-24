@@ -106,12 +106,21 @@ modules = [
 for module in modules:
     importlib.import_module(module)
 
+from termin.default_assets.builtin_types import (
+    get_default_builtin_component_specs,
+    get_default_builtin_frame_pass_specs,
+)
 from tcbase.profiler import Profiler
 from termin_assets import get_resource_manager
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.render_framework import tc_pass_registry_get_all_instance_info
 
+component_specs = get_default_builtin_component_specs()
+frame_pass_specs = get_default_builtin_frame_pass_specs()
+
 print(json.dumps({
+    "component_specs": len(component_specs),
+    "frame_pass_specs": len(frame_pass_specs),
     "profiler_instance": Profiler._instance is not None,
     "resource_manager_factory_active": get_resource_manager() is not None,
     "resource_manager_instance": DefaultResourceManager._instance is not None,
@@ -128,9 +137,97 @@ print(json.dumps({
 
     state = json.loads(result.stdout)
     assert state == {
+        "component_specs": 35,
+        "frame_pass_specs": 23,
         "profiler_instance": False,
         "resource_manager_factory_active": False,
         "resource_manager_instance": False,
         "pass_instances": [],
+    }
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_collecting_builtin_specs_does_not_import_runtime_packages() -> None:
+    script = """
+import json
+import sys
+
+from termin.default_assets.builtin_types import (
+    get_default_builtin_component_specs,
+    get_default_builtin_frame_pass_specs,
+)
+
+component_specs = get_default_builtin_component_specs()
+frame_pass_specs = get_default_builtin_frame_pass_specs()
+runtime_packages = [
+    "termin.render_components",
+    "termin.render_passes",
+    "termin.render_framework",
+    "termin.ui_components",
+]
+
+print(json.dumps({
+    "component_specs": len(component_specs),
+    "frame_pass_specs": len(frame_pass_specs),
+    "loaded_runtime_packages": [
+        module for module in runtime_packages if module in sys.modules
+    ],
+}, sort_keys=True))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    state = json.loads(result.stdout)
+    assert state == {
+        "component_specs": 35,
+        "frame_pass_specs": 23,
+        "loaded_runtime_packages": [],
+    }
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_spacemouse_controller_loads_libspnav_lazily() -> None:
+    script = """
+import ctypes.util
+import json
+
+calls = []
+
+def fake_find_library(name):
+    calls.append(name)
+    return None
+
+ctypes.util.find_library = fake_find_library
+
+import termin.editor_core.spacemouse_controller as spacemouse_controller
+
+calls_after_import = list(calls)
+controller = spacemouse_controller.SpaceMouseController()
+opened = controller.open(None, lambda: None)
+
+print(json.dumps({
+    "calls_after_import": calls_after_import,
+    "calls_after_open": calls,
+    "opened": opened,
+}, sort_keys=True))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    state = json.loads(result.stdout)
+    assert state == {
+        "calls_after_import": [],
+        "calls_after_open": ["spnav"],
+        "opened": False,
     }
     assert "nanobind: leaked" not in result.stderr
