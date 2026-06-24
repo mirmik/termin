@@ -33,19 +33,30 @@ _MATERIAL_TEMPLATE = '''{
 '''
 
 _SHADER_TEMPLATE = '''@program NewShader
+@language slang
 
 @phase opaque
 
 @stage vertex
-#version 330 core
+struct VertexOutput {
+    float4 position : SV_POSITION;
+};
 
-void main() {}
+VertexOutput main(uint vertex_id : SV_VertexID) {
+    float2 positions[3] = {
+        float2(-0.5, -0.5),
+        float2(0.5, -0.5),
+        float2(0.0, 0.5)
+    };
+    VertexOutput output;
+    output.position = float4(positions[vertex_id], 0.0, 1.0);
+    return output;
+}
 
 @stage fragment
-#version 330 core
-
-out vec4 frag_color;
-void main() { frag_color = vec4(1.0); }
+float4 main() : SV_Target {
+    return float4(1.0, 1.0, 1.0, 1.0);
+}
 '''
 
 _COMPONENT_TEMPLATE = '''"""
