@@ -26,8 +26,8 @@ class DefaultResourceAccessorsMixin:
         Get unified handle accessors for a resource kind.
 
         Args:
-            kind: Resource kind such as ``tc_material``, ``mesh_handle``,
-                ``texture_handle``, ``voxel_grid_handle`` or ``navmesh_handle``.
+            kind: Resource kind such as ``tc_material``, ``tc_texture``,
+                ``mesh_handle``, ``voxel_grid_handle`` or ``navmesh_handle``.
 
         Returns:
             ``HandleAccessors`` for the kind, or ``None`` if the kind is unknown.
@@ -74,7 +74,7 @@ class DefaultResourceAccessorsMixin:
                 find_name=self._find_tc_skeleton_name,
                 find_uuid=self._find_skeleton_uuid_by_name,
             )
-        if kind == "texture_handle":
+        if kind in ("tc_texture", "texture_handle"):
             return HandleAccessors(
                 list_names=self.list_texture_names,
                 get_by_name=self.get_texture_handle,
@@ -293,7 +293,8 @@ class DefaultResourceAccessorsMixin:
 
         Args:
             kind: Resource kind such as ``mesh``, ``material``, ``voxel_grid``,
-                ``navmesh``, ``skeleton``, ``audio_clip`` or ``texture``.
+                ``navmesh``, ``skeleton``, ``audio_clip``, ``texture`` or
+                ``tc_texture``.
             uuid: Asset UUID.
 
         Returns:
@@ -327,7 +328,7 @@ class DefaultResourceAccessorsMixin:
         if kind == "audio_clip":
             return self.get_audio_clip_by_uuid(uuid)
 
-        if kind == "texture":
+        if kind in ("texture", "tc_texture"):
             from tgfx import TcTexture
 
             asset = self.get_texture_asset_by_uuid(uuid)

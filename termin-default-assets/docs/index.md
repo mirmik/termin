@@ -14,7 +14,7 @@ Runtime manager boundary:
   canonical runtime manager for the standard Termin SDK asset set.
 - `termin.default_assets.resource_accessors.DefaultResourceAccessorsMixin` and
   `termin.default_assets.handle_accessors.HandleAccessors` own default handle
-  selector access for standard kinds such as `tc_mesh`, `texture_handle`,
+  selector access for standard kinds such as `tc_mesh`, `tc_texture`,
   `voxel_grid_handle`, and `navmesh_handle`.
 - `termin.materials.UnknownMaterial` owns the standard missing-material visual
   fallback used by editor and runtime resource managers.
@@ -47,5 +47,7 @@ Current adapters:
 
 Compatibility paths:
 
+- `texture_handle` remains accepted as a legacy selector kind for old
+  metadata, but new texture selectors should use `tc_texture`.
 - `termin.default_assets.prefab`: compatibility re-exports for prefab classes
   that now live in `termin.prefab`.

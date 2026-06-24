@@ -19,6 +19,7 @@ def test_default_resource_manager_exposes_handle_accessor_contracts() -> None:
     manager = DefaultResourceManager()
 
     assert isinstance(manager.get_handle_accessors("mesh_handle"), HandleAccessors)
+    assert isinstance(manager.get_handle_accessors("tc_texture"), HandleAccessors)
     assert isinstance(manager.get_handle_accessors("texture_handle"), HandleAccessors)
 
 
@@ -39,5 +40,6 @@ def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
     assert normal_texture.is_valid
     assert white_texture.uuid == "__white_1x1__"
     assert normal_texture.uuid == "__normal_1x1__"
+    assert manager.get_handle_by_uuid("tc_texture", "__white_1x1__").uuid == "__white_1x1__"
     assert set(registered_meshes) == {"Cube", "Sphere", "Plane", "Cylinder"}
     assert manager.get_mesh_asset("Cube") is not None
