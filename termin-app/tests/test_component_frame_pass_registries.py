@@ -156,11 +156,18 @@ def test_default_builtin_specs_include_migrated_app_types() -> None:
 
 
 def test_ui_component_and_pass_use_canonical_paths() -> None:
-    from termin.render_passes import UIWidgetPass
-    from termin.ui_components import UIComponent
+    try:
+        from termin.render_passes import UIWidgetPass
+        from termin.ui_components import UIComponent
 
-    assert UIWidgetPass.__module__ == "termin.render_passes.ui_widget"
-    assert UIComponent.__module__ == "termin.ui_components.component"
+        assert UIWidgetPass.__module__ == "termin.render_passes.ui_widget"
+        assert UIComponent.__module__ == "termin.ui_components.component"
+    finally:
+        from termin.inspect import InspectRegistry
+        from termin.scene import ComponentRegistry
+
+        ComponentRegistry.instance().unregister_python("UIComponent")
+        InspectRegistry.instance().unregister_type("UIComponent")
 
 
 def test_render_config_types_use_canonical_paths() -> None:
