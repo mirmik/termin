@@ -63,6 +63,36 @@ double number_field(const nos::trent& t, const char* key, double def = 0.0) {
     return static_cast<double>(v->as_numer());
 }
 
+uint32_t uint32_field(const nos::trent& t, const char* key, uint32_t def = 0) {
+    const nos::trent* v = dict_get(t, key);
+    if (!v || !v->is_numer()) {
+        return def;
+    }
+    const double value = static_cast<double>(v->as_numer());
+    if (value <= 0.0) {
+        return 0;
+    }
+    if (value >= static_cast<double>(UINT32_MAX)) {
+        return UINT32_MAX;
+    }
+    return static_cast<uint32_t>(value);
+}
+
+std::string lowercase_copy(std::string s) {
+    for (char& ch : s) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return s;
+}
+
+tc_shader_language shader_language_from_spec(const nos::trent& spec) {
+    const std::string language = lowercase_copy(string_field(spec, "language", "glsl"));
+    if (language == "slang") {
+        return TC_SHADER_LANGUAGE_SLANG;
+    }
+    return TC_SHADER_LANGUAGE_GLSL;
+}
+
 struct RuntimeMaterialUboEntry {
     std::string name;
     std::string property_type;
@@ -526,6 +556,7 @@ void apply_material_textures(TcMaterial& material, const nos::trent* textures, c
 
 bool load_shader_resource(
     const std::filesystem::path& root,
+    const std::filesystem::path& spec_path,
     const nos::trent& spec,
     RuntimeResourceKeepalive& keepalive,
     std::string& error
@@ -562,14 +593,32 @@ bool load_shader_resource(
     }
 
     const std::string name = string_field(spec, "name", uuid);
-    const std::string source_path = string_field(spec, "source_path", "runtime-package");
-    shader.set_sources(vertex_source, fragment_source, geometry_source, name, source_path);
+    const std::string source_path = spec_path.string();
+    const std::string vertex_entry = string_field(spec, "vertex_entry");
+    const std::string fragment_entry = string_field(spec, "fragment_entry");
+    const std::string geometry_entry = string_field(spec, "geometry_entry");
+    const tc_shader_language language = shader_language_from_spec(spec);
+    shader.set_language(language);
+    shader.set_artifact_policy(
+        language == TC_SHADER_LANGUAGE_SLANG
+            ? TC_SHADER_ARTIFACT_REQUIRED
+            : TC_SHADER_ARTIFACT_OPTIONAL);
+    shader.set_sources_with_entries(
+        vertex_source,
+        fragment_source,
+        geometry_source,
+        name,
+        source_path,
+        vertex_entry,
+        fragment_entry,
+        geometry_entry);
     tc_shader* raw = shader.get();
     if (!raw || !raw->fragment_source) {
         error = "shader '" + uuid + "' has no registered fragment source";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());
         return false;
     }
+    shader.set_features(uint32_field(spec, "features", 0));
     set_shader_features_from_glsl(raw, fragment_source);
     set_shader_material_ubo_layout_from_glsl(raw, fragment_source);
     keepalive.shaders.push_back(std::move(shader));
@@ -790,9 +839,10 @@ bool load_resource(
         return load_foliage_data_resource(root, entry, keepalive, error);
     }
 
-    const nos::trent spec = nos::json::parse(read_text_file(package_path(root, rel_path)));
+    const std::filesystem::path spec_path = package_path(root, rel_path);
+    const nos::trent spec = nos::json::parse(read_text_file(spec_path));
     if (type == "shader") {
-        return load_shader_resource(root, spec, keepalive, error);
+        return load_shader_resource(root, spec_path, spec, keepalive, error);
     }
     if (type == "material") {
         return load_material_resource(spec, keepalive, error);
