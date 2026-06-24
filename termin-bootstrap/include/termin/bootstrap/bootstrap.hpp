@@ -31,6 +31,8 @@ struct SceneExtensionOptions {
 TERMIN_BOOTSTRAP_API void register_runtime_kinds(const RuntimeKindOptions& options = {});
 TERMIN_BOOTSTRAP_API void register_scene_extensions(const SceneExtensionOptions& options = {});
 TERMIN_BOOTSTRAP_API void init_inspect_adapters();
+TERMIN_BOOTSTRAP_API void init_python_inspect_adapters();
+TERMIN_BOOTSTRAP_API void init_python_render_passes();
 TERMIN_BOOTSTRAP_API void init_python_kind_handlers(const RuntimeKindOptions& options = {});
 TERMIN_BOOTSTRAP_API void init_pointer_extractors();
 TERMIN_BOOTSTRAP_API void init_python_component_callbacks();

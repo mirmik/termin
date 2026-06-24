@@ -1,5 +1,7 @@
 #pragma once
 
+#if defined(__ANDROID__)
+
 #include "tc_inspect_cpp.hpp"
 #include "termin/render/frame_pass.hpp"
 #include "termin/render_passes/export.h"
@@ -36,3 +38,5 @@ public:
 };
 
 } // namespace termin
+
+#endif // defined(__ANDROID__)

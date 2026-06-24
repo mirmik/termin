@@ -1,3 +1,7 @@
+from termin.bootstrap import bootstrap_player
+
+bootstrap_player()
+
 from termin.engine import RenderingManager
 from termin.render_passes import ResolvePass, UIWidgetPass
 

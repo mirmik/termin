@@ -68,6 +68,8 @@ NB_MODULE(_bootstrap_native, m) {
         nb::arg("collision_world") = true);
 
     m.def("init_inspect_adapters", &termin::bootstrap::init_inspect_adapters);
+    m.def("init_python_inspect_adapters", &termin::bootstrap::init_python_inspect_adapters);
+    m.def("init_python_render_passes", &termin::bootstrap::init_python_render_passes);
     m.def("init_python_kind_handlers",
         [](bool mesh, bool material, bool skeleton, bool animation, bool voxel_grid, bool navmesh, bool entity) {
             termin::bootstrap::init_python_kind_handlers(
