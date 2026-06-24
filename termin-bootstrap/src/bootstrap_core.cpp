@@ -1,5 +1,6 @@
 #include <termin/bootstrap/bootstrap.hpp>
 
+#include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/navmesh/tc_navmesh_handle.hpp>
@@ -90,6 +91,7 @@ void init_inspect_adapters() {
     }
     tc_inspect_kind_core_init();
     tc_inspect_component_adapter_init();
+    register_component_base_inspect_fields();
     tc_inspect_pass_adapter_init();
     tc_inspect_python_adapter_init();
     initialized = true;

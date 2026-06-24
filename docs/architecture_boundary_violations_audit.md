@@ -3,7 +3,7 @@
 **Дата:** 2026-05-20  
 **Статус:** Research report — не исправлять автоматически
 
-**Актуализировано:** 2026-05-24 — Qt/PyQt frontend удалён; часть старых пунктов закрыта.
+**Актуализировано:** 2026-06-24 — Qt/PyQt frontend удалён; часть старых пунктов закрыта; legacy `termin._native` app binding target удалён.
 
 ## Исправления
 
@@ -123,11 +123,10 @@ from termin.display import _input_manager_on_mouse_button
 from termin.display import _input_manager_on_key
 ```
 
-**Статус 2026-06-19:** частично исправлено. `Viewport3D` больше не использует
-app compatibility re-export `termin._native.render` и `FBOSurface` берет из
-канонического `termin.display`. Остаточная проблема: виджет GUI-фреймворка всё
-ещё вызывает приватные underscored C-interop функции вместо публичного input
-adapter API.
+**Статус 2026-06-24:** частично исправлено. Legacy app compatibility target
+`termin._native` удалён; `Viewport3D` использует владельца символов
+`termin.display`. Остаточная проблема: виджет GUI-фреймворка всё ещё вызывает
+приватные underscored C-interop функции вместо публичного input adapter API.
 
 ---
 
@@ -433,7 +432,7 @@ target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
 
 **Где смотреть:** `termin-gui/python/tcgui/widgets/viewport3d.py`
 
-`Viewport3D` уже переключен с app compatibility `termin._native.render` на владельца символов `termin.display`. Но он всё ещё вызывает `_display_get_surface_ptr`, `_render_surface_get_input_manager`, `_input_manager_on_mouse_move`, `_input_manager_on_scroll`, `_input_manager_on_mouse_button`, `_input_manager_on_key` как приватные underscored functions.
+`Viewport3D` уже использует владельца символов `termin.display`. Но он всё ещё вызывает `_display_get_surface_ptr`, `_render_surface_get_input_manager`, `_input_manager_on_mouse_move`, `_input_manager_on_scroll`, `_input_manager_on_mouse_button`, `_input_manager_on_key` как приватные underscored functions.
 
 Status 2026-06-20: display/player routing helpers moved to `termin.display.input_manager`; the old app path `termin.visualization.platform.input_manager` was removed. The remaining `Viewport3D` work is a smaller public event-forwarding adapter in `termin.display`, so `Viewport3D` no longer calls native underscored functions directly.
 

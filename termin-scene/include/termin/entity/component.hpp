@@ -208,6 +208,8 @@ private:
 // Alias for backward compatibility during migration
 using Component = CxxComponent;
 
+ENTITY_API void register_component_base_inspect_fields();
+
 // Template definition for Entity::get_component<T>()
 template<typename T>
 T* Entity::get_component() {

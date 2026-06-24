@@ -3,16 +3,6 @@
 
 find_package(nanobind CONFIG REQUIRED)
 
-# ============== Main unified module ==============
-
-set(TERMIN_APP_NATIVE_SOURCES
-    # Python bindings entry point and remaining app-private startup glue.
-    termin/bindings.cpp
-
-    # Remaining Component inspect registration and shutdown cleanup.
-    termin/bindings/entity/entity_native_to_native.cpp
-)
-
 set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/bindings/editor/editor_native_module.cpp
     termin/bindings/editor/gizmo_bindings.cpp
@@ -35,24 +25,6 @@ if(TERMIN_HAS_RECAST)
 endif()
 
 # SDL platform bindings moved to termin-display/_platform_native
-
-nanobind_add_module(_native NB_SHARED ${TERMIN_APP_NATIVE_SOURCES})
-target_link_libraries(_native PRIVATE
-    tcbase::termin_base
-    termin_core
-    termin_inspect::termin_inspect
-    termin_inspect::termin_inspect_python
-    termin_scene::termin_scene
-)
-if(UNIX AND NOT APPLE)
-    target_link_libraries(_native PRIVATE ${CMAKE_DL_LIBS})
-endif()
-target_compile_definitions(_native PRIVATE TERMIN_HAS_NANOBIND)
-target_compile_options(_native PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-set_target_properties(_native PROPERTIES
-    INSTALL_RPATH "$ORIGIN"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 
 nanobind_add_module(_editor_native NB_SHARED ${TERMIN_APP_EDITOR_NATIVE_SOURCES})
 target_link_libraries(_editor_native PRIVATE
@@ -111,10 +83,6 @@ endif()
 # by walking up from package subdirs.
 set(TERMIN_PY_RPATH "$ORIGIN;$ORIGIN/..;$ORIGIN/../..;$ORIGIN/../../..;${CMAKE_INSTALL_PREFIX}/lib")
 
-set_target_properties(_native PROPERTIES
-    INSTALL_RPATH "${TERMIN_PY_RPATH}"
-    BUILD_WITH_INSTALL_RPATH TRUE
-)
 set_target_properties(_editor_native PROPERTIES
     INSTALL_RPATH "${TERMIN_PY_RPATH}"
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -122,5 +90,4 @@ set_target_properties(_editor_native PROPERTIES
 
 # ============== Install targets ==============
 
-install(TARGETS _native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR})
 install(TARGETS _editor_native DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}/editor)

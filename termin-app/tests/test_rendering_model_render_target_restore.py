@@ -226,11 +226,6 @@ def _install_native_stubs(monkeypatch, pool):
     camera_module.CameraComponent = _CameraComponent
     monkeypatch.setitem(sys.modules, "termin.render_components.camera", camera_module)
 
-    log = types.SimpleNamespace(error=lambda message: None)
-    native_log_module = types.ModuleType("termin._native")
-    native_log_module.log = log
-    monkeypatch.setitem(sys.modules, "termin._native", native_log_module)
-
     render_module = types.ModuleType("termin.render")
     render_module.RenderTargetConfig = _RenderTargetConfig
     render_module.ViewportConfig = _ViewportConfig
