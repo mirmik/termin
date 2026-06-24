@@ -17,6 +17,15 @@ from termin.inspect import InspectField
 from tcbase import log
 
 
+def _ensure_python_component_inspect_type(registry, record_inspect_type) -> None:
+    if registry.has_type("PythonComponent"):
+        return
+
+    registry.register_python_fields("PythonComponent", PythonComponent.inspect_fields)
+    if record_inspect_type is not None:
+        record_inspect_type("PythonComponent")
+
+
 class PythonComponent:
     """
     Base class for pure Python components.
@@ -73,12 +82,14 @@ class PythonComponent:
             record_component = None
             record_inspect_type = None
 
-        # Register only own fields (not inherited)
+        _ensure_python_component_inspect_type(registry, record_inspect_type)
+
+        # Register only own fields (not inherited). Empty own fields still
+        # register the subclass as Python-backed before parent inheritance is set.
         own_fields = cls.__dict__.get('inspect_fields', {})
-        if own_fields:
-            registry.register_python_fields(cls.__name__, own_fields)
-            if record_inspect_type is not None:
-                record_inspect_type(cls.__name__)
+        registry.register_python_fields(cls.__name__, own_fields)
+        if record_inspect_type is not None:
+            record_inspect_type(cls.__name__)
 
         # Find parent component type and register inheritance
         parent_name = None

@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Callable
 
 from termin.editor_core.dialog_service import DialogService
-from termin.editor_core.project_operations import ProjectOperations
+from termin.editor_core.project_operations import ProjectOperations, _SHADER_TEMPLATE
+from termin.materials import parse_shader_text
 
 
 class FakeDialogService(DialogService):
@@ -82,3 +83,15 @@ def test_rename_file_rejects_existing_target_meta(tmp_path: Path) -> None:
     assert target_meta.read_text(encoding="utf-8") == "target-meta"
     assert refreshed == []
     assert dialog.errors == [("Error", "Meta file 'GrenadeRenamed.png.meta' already exists.")]
+
+
+def test_new_shader_template_is_current_slang_shader() -> None:
+    assert "@language slang" in _SHADER_TEMPLATE
+    assert "#version" not in _SHADER_TEMPLATE
+
+    parsed = parse_shader_text(_SHADER_TEMPLATE)
+
+    assert parsed.language == "slang"
+    assert parsed.program == "NewShader"
+    assert parsed.phases[0].stages["vertex"].source
+    assert parsed.phases[0].stages["fragment"].source

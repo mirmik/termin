@@ -781,14 +781,6 @@ class MatrixAssembler:
                     RuntimeWarning,
                     stacklevel=2,
                 )
-            elif check_conditioning and rank < len(b):
-                import warnings
-                warnings.warn(
-                    f"Матрица вырожденная или близка к вырожденной: "
-                    f"rank(A) = {rank}, expected {len(b)}",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
 
         else:
             # Прямое решение - быстрее, но менее робастное
