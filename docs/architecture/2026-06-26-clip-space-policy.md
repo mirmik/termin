@@ -132,8 +132,13 @@ Fullscreen triangles/quads and postprocess passes должны выбрать о
 - допустимое исключение: pass явно документирован как backend-native и не
   использует общие fullscreen helpers.
 
-Backend-specific fullscreen vertex arrays являются временным compatibility
-path и не должны множиться.
+Общие fullscreen helpers уже используют canonical `TerminClip` vertices.
+Backend-specific fullscreen vertex arrays в public renderer helpers не должны
+возвращаться.
+
+Текущее backend-native исключение: internal D3D11 texture copy/blit shader в
+`D3D11RenderDevice::ensure_blit_resources()`. Он не проходит через общий
+engine shader catalog и работает внутри backend-а.
 
 ### CPU tools
 
@@ -163,9 +168,10 @@ test utilities must not consume backend-native matrices. Они работают
   - `termin_clip_to_pixel(float4, float2)`;
   - `termin_pixel_to_clip(float2, float, float, float2)`.
 - Добавить shader compile tests для Vulkan/OpenGL/D3D11 target defines.
-- Добавить grep/lint check для builtin Slang vertex shaders: final assignment
-  to `SV_Position` должен проходить через `termin_to_native_clip`, кроме
-  явно помеченных backend-native exceptions.
+- `termin-graphics/tests/python/test_clip_space_policy.py` проверяет builtin
+  Slang/.shader vertex stages: final assignment to `SV_Position` должен
+  проходить через `termin_to_native_clip`, кроме явно помеченных
+  backend-native exceptions.
 
 ### Phase 1: migrate builtin world-space shaders
 
@@ -201,16 +207,18 @@ test utilities must not consume backend-native matrices. Они работают
 - `tcplot` не держит backend-specific MVP state.
 - `clip_space.hpp/cpp` adapter helpers удалены.
 
-После этой фазы `TerminClip -> NativeClip` для scene и 2D pixel paths
-существует только в shader prelude или в явно задокументированных
-backend-native exceptions. Fullscreen/postprocess paths мигрируются отдельной
-фазой и не должны возвращать CPU-side projection adaptation.
+После этой фазы `TerminClip -> NativeClip` для scene, 2D pixel and common
+fullscreen/postprocess paths существует только в shader prelude или в явно
+задокументированных backend-native exceptions. Эти paths не должны возвращать
+CPU-side projection adaptation.
 
 ### Phase 4: fullscreen/postprocess cleanup
 
-- Перевести fullscreen helpers на canonical `TerminClip` vertices.
-- Убрать backend-specific fullscreen vertex arrays, если они больше не нужны.
-- Проверить present/blit/postprocess passes на отсутствие второго Y-flip.
+- Fullscreen helpers переведены на canonical `TerminClip` vertices.
+- Backend-specific fullscreen vertex arrays из common `RenderContext2` удалены.
+- `termin-engine-fsq` and `termin-engine-present-blit` проходят через
+  `termin_to_native_clip` at final vertex output.
+- Internal D3D11 texture copy/blit shader остаётся backend-native exception.
 
 ### Phase 5: tests and examples
 
