@@ -85,6 +85,21 @@ class _PythonRuntimeCopyResult:
     site_packages: Path
 
 
+@dataclass(frozen=True)
+class _PendingPythonRequirement:
+    requirement: Requirement
+    source_text: str
+    marker_contexts: frozenset[str]
+
+    @property
+    def distribution_name(self) -> str:
+        return self.requirement.name
+
+    @property
+    def requested_extras(self) -> frozenset[str]:
+        return frozenset(_normalize_extra_name(extra) for extra in self.requirement.extras)
+
+
 def package_desktop_runtime(
     dist_dir: str | Path,
     requirements: list[str],
@@ -487,30 +502,82 @@ def _copy_distributions(
     missing_files_is_error: bool,
     allow_environment: bool,
 ) -> list[PythonBundledDistribution]:
-    pending = sorted(set(requirements))
-    copied: set[str] = set()
+    pending: list[_PendingPythonRequirement] = []
+    for requirement in sorted(set(requirements)):
+        parsed = _parse_pending_requirement(requirement, diagnostics)
+        if parsed is not None:
+            pending.append(parsed)
+
+    copied: dict[str, importlib.metadata.Distribution] = {}
+    processed_dependency_contexts: dict[str, set[str]] = {}
     bundled: list[PythonBundledDistribution] = []
 
     while pending:
-        requirement = pending.pop(0)
-        package_name = _requirement_distribution_name(requirement, diagnostics)
-        if package_name is None:
+        pending_requirement = pending.pop(0)
+        if not _requirement_marker_is_active(
+            pending_requirement.requirement,
+            pending_requirement.marker_contexts,
+        ):
             continue
 
+        package_name = pending_requirement.distribution_name
         normalized = _normalize_distribution_name(package_name)
-        if normalized in copied:
+        distribution = copied.get(normalized)
+        if distribution is not None:
+            if not _distribution_satisfies_requirement(
+                distribution,
+                pending_requirement.requirement,
+            ):
+                _append_incompatible_requirement_diagnostic(
+                    pending_requirement,
+                    [distribution],
+                    diagnostics,
+                )
+                continue
+            if include_transitive:
+                _enqueue_unprocessed_dependencies(
+                    distribution,
+                    pending_requirement,
+                    processed_dependency_contexts,
+                    pending,
+                    diagnostics,
+                )
             continue
-        copied.add(normalized)
 
-        distribution = _find_distribution(package_name, search_paths, allow_environment)
+        distribution = _find_distribution_for_requirement(
+            pending_requirement.requirement,
+            search_paths,
+            allow_environment,
+        )
         if distribution is None:
+            candidates = _find_distribution_candidates(
+                package_name,
+                search_paths,
+                allow_environment,
+            )
+            compatible_candidates = [
+                candidate
+                for candidate in candidates
+                if _distribution_satisfies_requirement(
+                    candidate,
+                    pending_requirement.requirement,
+                )
+            ]
+            if candidates and not compatible_candidates:
+                _append_incompatible_requirement_diagnostic(
+                    pending_requirement,
+                    candidates,
+                    diagnostics,
+                )
+                continue
             if missing_is_error:
                 diagnostics.append(
                     RuntimePackageExportDiagnostic(
                         "error",
                         "python/requirements",
                         "Python requirement is not installed in the build environment "
-                        f"or project requirement paths: {requirement}",
+                        "or project requirement paths: "
+                        f"{pending_requirement.source_text}",
                     )
                 )
             continue
@@ -522,7 +589,8 @@ def _copy_distributions(
                     RuntimePackageExportDiagnostic(
                         "error",
                         "python/requirements",
-                        f"Python requirement has no file list and cannot be copied: {requirement}",
+                        "Python requirement has no file list and cannot be copied: "
+                        f"{pending_requirement.source_text}",
                     )
                 )
             continue
@@ -542,25 +610,26 @@ def _copy_distributions(
                 source=source,
             )
         )
+        copied[normalized] = distribution
 
         if include_transitive:
-            for required in distribution.requires or []:
-                required_name = _active_dependency_distribution_name(required, diagnostics)
-                if required_name is not None and _normalize_distribution_name(required_name) not in copied:
-                    pending.append(required_name)
+            _enqueue_unprocessed_dependencies(
+                distribution,
+                pending_requirement,
+                processed_dependency_contexts,
+                pending,
+                diagnostics,
+            )
 
     return bundled
 
 
-def _requirement_distribution_name(
+def _parse_pending_requirement(
     requirement: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
-) -> str | None:
+) -> _PendingPythonRequirement | None:
     try:
         parsed = Requirement(requirement)
-        if parsed.marker is not None and not parsed.marker.evaluate({"extra": ""}):
-            return None
-        return parsed.name
     except InvalidRequirement:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
@@ -570,14 +639,19 @@ def _requirement_distribution_name(
             )
         )
         return None
+    return _PendingPythonRequirement(
+        requirement=parsed,
+        source_text=requirement,
+        marker_contexts=frozenset({""}),
+    )
 
 
-def _active_dependency_distribution_name(
+def _parse_dependency_requirement(
     requirement: str,
     diagnostics: list[RuntimePackageExportDiagnostic],
-) -> str | None:
+) -> Requirement | None:
     try:
-        parsed = Requirement(requirement)
+        return Requirement(requirement)
     except InvalidRequirement:
         diagnostics.append(
             RuntimePackageExportDiagnostic(
@@ -588,9 +662,84 @@ def _active_dependency_distribution_name(
         )
         return None
 
-    if parsed.marker is not None and not parsed.marker.evaluate({"extra": ""}):
-        return None
-    return parsed.name
+
+def _enqueue_unprocessed_dependencies(
+    distribution: importlib.metadata.Distribution,
+    pending_requirement: _PendingPythonRequirement,
+    processed_dependency_contexts: dict[str, set[str]],
+    pending: list[_PendingPythonRequirement],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    normalized = _normalize_distribution_name(pending_requirement.distribution_name)
+    requested_contexts = {""}
+    requested_contexts.update(pending_requirement.requested_extras)
+    processed_contexts = processed_dependency_contexts.setdefault(normalized, set())
+    new_contexts = requested_contexts - processed_contexts
+    if not new_contexts:
+        return
+    processed_contexts.update(new_contexts)
+
+    marker_contexts = frozenset(new_contexts)
+    for required in distribution.requires or []:
+        parsed = _parse_dependency_requirement(required, diagnostics)
+        if parsed is None:
+            continue
+        if not _requirement_marker_is_active(parsed, marker_contexts):
+            continue
+        pending.append(
+            _PendingPythonRequirement(
+                requirement=parsed,
+                source_text=required,
+                marker_contexts=marker_contexts,
+            )
+        )
+
+
+def _requirement_marker_is_active(
+    requirement: Requirement,
+    marker_contexts: frozenset[str],
+) -> bool:
+    if requirement.marker is None:
+        return True
+    contexts = marker_contexts or frozenset({""})
+    return any(requirement.marker.evaluate({"extra": context}) for context in contexts)
+
+
+def _distribution_satisfies_requirement(
+    distribution: importlib.metadata.Distribution,
+    requirement: Requirement,
+) -> bool:
+    if not requirement.specifier:
+        return True
+    try:
+        version = Version(distribution.version)
+    except InvalidVersion:
+        return False
+    return requirement.specifier.contains(version, prereleases=True)
+
+
+def _append_incompatible_requirement_diagnostic(
+    pending_requirement: _PendingPythonRequirement,
+    distributions: list[importlib.metadata.Distribution],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    found_versions = ", ".join(
+        f"{distribution.metadata.get('Name', pending_requirement.distribution_name)} "
+        f"{distribution.version}"
+        for distribution in distributions
+    )
+    diagnostics.append(
+        RuntimePackageExportDiagnostic(
+            "error",
+            "python/requirements",
+            "Installed Python requirement version does not satisfy "
+            f"{pending_requirement.source_text}: found {found_versions}",
+        )
+    )
+
+
+def _normalize_extra_name(name: str) -> str:
+    return str(canonicalize_name(name))
 
 
 def _normalize_distribution_name(name: str) -> str:
@@ -629,26 +778,60 @@ def _sdk_site_packages(sdk_root: Path) -> list[Path]:
     return [path for path in candidates if path.is_dir()]
 
 
-def _find_distribution(
-    package_name: str,
+def _find_distribution_for_requirement(
+    requirement: Requirement,
     search_paths: list[Path],
     allow_environment: bool = True,
 ) -> importlib.metadata.Distribution | None:
-    normalized = _normalize_distribution_name(package_name)
+    normalized = _normalize_distribution_name(requirement.name)
     for search_path in search_paths:
-        matches: list[importlib.metadata.Distribution] = []
-        for distribution in importlib.metadata.distributions(path=[str(search_path)]):
-            metadata_name = distribution.metadata.get("Name", "")
-            if _normalize_distribution_name(metadata_name) == normalized:
-                matches.append(distribution)
-        if matches:
-            return _select_best_distribution(matches)
+        matches = _find_distribution_candidates_in_path(normalized, search_path)
+        compatible = [
+            distribution
+            for distribution in matches
+            if _distribution_satisfies_requirement(distribution, requirement)
+        ]
+        if compatible:
+            return _select_best_distribution(compatible)
     if not allow_environment:
         return None
     try:
-        return importlib.metadata.distribution(package_name)
+        distribution = importlib.metadata.distribution(requirement.name)
     except importlib.metadata.PackageNotFoundError:
         return None
+    if _distribution_satisfies_requirement(distribution, requirement):
+        return distribution
+    return None
+
+
+def _find_distribution_candidates(
+    package_name: str,
+    search_paths: list[Path],
+    allow_environment: bool = True,
+) -> list[importlib.metadata.Distribution]:
+    normalized = _normalize_distribution_name(package_name)
+    candidates: list[importlib.metadata.Distribution] = []
+    for search_path in search_paths:
+        candidates.extend(_find_distribution_candidates_in_path(normalized, search_path))
+    if not allow_environment:
+        return candidates
+    try:
+        candidates.append(importlib.metadata.distribution(package_name))
+    except importlib.metadata.PackageNotFoundError:
+        pass
+    return candidates
+
+
+def _find_distribution_candidates_in_path(
+    normalized_name: str,
+    search_path: Path,
+) -> list[importlib.metadata.Distribution]:
+    matches: list[importlib.metadata.Distribution] = []
+    for distribution in importlib.metadata.distributions(path=[str(search_path)]):
+        metadata_name = distribution.metadata.get("Name", "")
+        if _normalize_distribution_name(metadata_name) == normalized_name:
+            matches.append(distribution)
+    return matches
 
 
 def _select_best_distribution(

@@ -896,6 +896,149 @@ def test_desktop_runtime_packager_copies_requirements_from_project_venv(
     )
 
 
+def test_desktop_runtime_packager_rejects_requirement_version_mismatch(
+    tmp_path: Path,
+) -> None:
+    source_site_packages = tmp_path / "project" / ".venv" / "Lib" / "site-packages"
+    source_site_packages.mkdir(parents=True)
+    _write_fake_distribution(
+        source_site_packages,
+        "python-chess",
+        {
+            "chess/__init__.py": "VALUE = 'too old'\n",
+        },
+        version="1.0",
+    )
+    dist_dir = tmp_path / "dist" / "RequirementVersionGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=["python-chess>=2"],
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
+        requirement_search_paths=[source_site_packages],
+    )
+
+    target_site_packages = dist_dir.resolve() / "lib" / "python3.10" / "site-packages"
+    diagnostic_messages = [diagnostic.message for diagnostic in result.diagnostics]
+    assert any(
+        message.startswith(
+            "Installed Python requirement version does not satisfy python-chess>=2:"
+        )
+        and "python-chess 1.0" in message
+        for message in diagnostic_messages
+    )
+    assert not (target_site_packages / "python_chess-1.0.dist-info" / "METADATA").exists()
+    assert not (target_site_packages / "chess" / "__init__.py").exists()
+
+
+def test_desktop_runtime_packager_uses_later_compatible_requirement_distribution(
+    tmp_path: Path,
+) -> None:
+    sdk_root = _write_fake_desktop_sdk(tmp_path)
+    sdk_site_packages = sdk_root / "lib" / "python3.10" / "site-packages"
+    source_site_packages = tmp_path / "project" / ".venv" / "Lib" / "site-packages"
+    source_site_packages.mkdir(parents=True)
+    _write_fake_distribution(
+        sdk_site_packages,
+        "python-chess",
+        {
+            "chess/__init__.py": "VALUE = 'sdk old'\n",
+        },
+        version="1.0",
+    )
+    _write_fake_distribution(
+        source_site_packages,
+        "python-chess",
+        {
+            "chess/__init__.py": "VALUE = 'project compatible'\n",
+        },
+        version="2.0",
+    )
+    dist_dir = tmp_path / "dist" / "CompatibleRequirementGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=["python-chess>=2"],
+        sdk_root=sdk_root,
+        requirement_search_paths=[source_site_packages],
+    )
+
+    target_site_packages = dist_dir.resolve() / "lib" / "python3.10" / "site-packages"
+    assert result.diagnostics == []
+    assert (target_site_packages / "python_chess-2.0.dist-info" / "METADATA").exists()
+    assert not (target_site_packages / "python_chess-1.0.dist-info" / "METADATA").exists()
+    assert (target_site_packages / "chess" / "__init__.py").read_text(encoding="utf-8") == (
+        "VALUE = 'project compatible'\n"
+    )
+
+
+def test_desktop_runtime_packager_includes_requested_extra_dependencies(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist" / "ExtraRequirementGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=["termin-display[debug]"],
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
+    )
+
+    target_site_packages = dist_dir.resolve() / "lib" / "python3.10" / "site-packages"
+    assert result.diagnostics == []
+    assert (target_site_packages / "optional_extra" / "__init__.py").exists()
+
+
+def test_desktop_runtime_packager_skips_unrequested_extra_dependencies(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist" / "NoExtraRequirementGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=["termin-display"],
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
+    )
+
+    target_site_packages = dist_dir.resolve() / "lib" / "python3.10" / "site-packages"
+    assert result.diagnostics == []
+    assert not (target_site_packages / "optional_extra" / "__init__.py").exists()
+
+
+def test_desktop_runtime_packager_processes_extras_for_already_copied_distribution(
+    tmp_path: Path,
+) -> None:
+    source_site_packages = tmp_path / "project" / ".venv" / "Lib" / "site-packages"
+    source_site_packages.mkdir(parents=True)
+    _write_fake_distribution(
+        source_site_packages,
+        "toolkit",
+        {
+            "toolkit/__init__.py": "VALUE = 'toolkit'\n",
+        },
+        requires=["render-dep; extra == 'render'"],
+    )
+    _write_fake_distribution(
+        source_site_packages,
+        "render-dep",
+        {
+            "render_dep/__init__.py": "VALUE = 'render dep'\n",
+        },
+    )
+    dist_dir = tmp_path / "dist" / "RepeatedExtraRequirementGame"
+
+    result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=["toolkit", "toolkit[render]"],
+        sdk_root=_write_fake_desktop_sdk(tmp_path),
+        requirement_search_paths=[source_site_packages],
+    )
+
+    target_site_packages = dist_dir.resolve() / "lib" / "python3.10" / "site-packages"
+    assert result.diagnostics == []
+    assert (target_site_packages / "toolkit" / "__init__.py").exists()
+    assert (target_site_packages / "render_dep" / "__init__.py").exists()
+
+
 def test_desktop_runtime_packager_prefers_newest_duplicate_distribution_metadata(
     tmp_path: Path,
 ) -> None:
