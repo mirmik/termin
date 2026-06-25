@@ -36,6 +36,7 @@ add_library(termin_components_skeleton SHARED
 )
 add_library(termin_components_skeleton::termin_components_skeleton ALIAS termin_components_skeleton)
 target_compile_definitions(termin_components_skeleton PRIVATE TERMIN_SCENE_EXPORTS TC_EXPORTS)
+termin_set_rpath_lib(termin_components_skeleton)
 
 if(MSVC)
     target_compile_options(termin_components_skeleton PRIVATE /wd4251 /wd4275)
