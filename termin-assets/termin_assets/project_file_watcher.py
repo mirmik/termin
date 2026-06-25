@@ -449,9 +449,13 @@ class ProjectFileWatcher:
     def _on_file_removed(self, path: str) -> None:
         ext = os.path.splitext(path)[1].lower()
         processor = self._processors.get(ext)
-        if processor is not None:
-            processor.on_file_removed(path)
-        self._watched_files.discard(path)
+        try:
+            if processor is not None:
+                processor.on_file_removed(path)
+        except Exception:
+            log.exception(f"[ProjectFileWatcher] Error removing {path}")
+        finally:
+            self._watched_files.discard(path)
 
     def _on_file_changed(self, path: str) -> None:
         ext = os.path.splitext(path)[1].lower()
