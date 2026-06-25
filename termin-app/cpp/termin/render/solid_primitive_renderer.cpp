@@ -2,7 +2,6 @@
 #include <tcbase/tc_log.hpp>
 
 #include <tgfx2/render_context.hpp>
-#include <tgfx2/clip_space.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/enums.hpp>
@@ -401,10 +400,7 @@ void SolidPrimitiveRenderer::begin(
         return;
     }
 
-    const Mat44f backend_proj = tgfx::adapt_projection_for_backend(
-        ctx2->device().backend_type(),
-        proj);
-    _vp = backend_proj * view;
+    _vp = proj * view;
 
     // ctx2 state. Caller owns the render pass boundary; we just set
     // pipeline state and shader binding.

@@ -6,7 +6,6 @@
 #include "termin/render/render_camera.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
-#include "tgfx2/clip_space.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -238,9 +237,7 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     tc_scene_get_skybox_bottom_color(scene, &bot_rgb[0],   &bot_rgb[1],   &bot_rgb[2]);
 
     Mat44 view64 = ctx.camera->get_view_matrix();
-    Mat44 proj64 = tgfx::adapt_projection_for_backend(
-        ctx.ctx2->device().backend_type(),
-        ctx.camera->get_projection_matrix());
+    Mat44 proj64 = ctx.camera->get_projection_matrix();
 
     std::vector<double> view_data(view64.data, view64.data + 16);
     std::vector<double> proj_data(proj64.data, proj64.data + 16);

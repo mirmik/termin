@@ -4,7 +4,6 @@
 #include "termin/camera/camera_component.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
-#include "tgfx2/clip_space.hpp"
 #include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
@@ -438,12 +437,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             // without a slot-per-cascade pool (the shared ring buffer and
             // dynamic descriptor offsets do what per_frame_ubo_pool_ used
             // to do on the per-UBO path).
-            const Mat44f backend_proj_matrix = tgfx::adapt_projection_for_backend(
-                device.backend_type(),
-                proj_matrix);
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
-            std::memcpy(per_frame.u_projection, backend_proj_matrix.data, sizeof(float) * 16);
+            std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
             std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
                 {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
             }};
@@ -521,7 +517,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                     RenderContext direct_context;
                     direct_context.view = view_matrix;
-                    direct_context.projection = backend_proj_matrix;
+                    direct_context.projection = proj_matrix;
                     direct_context.model = drawable->get_model_matrix(dc.entity);
                     direct_context.phase = "shadow";
                     direct_context.current_tc_shader = TcShader(dc.final_shader);

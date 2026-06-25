@@ -8,7 +8,6 @@
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
-#include "tgfx2/clip_space.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/enums.hpp"
@@ -115,9 +114,6 @@ void IdPass::execute_with_data_tgfx2(
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
     auto& device = ctx.ctx2->device();
-    const Mat44f backend_projection = tgfx::adapt_projection_for_backend(
-        device.backend_type(),
-        projection);
 
     ensure_tgfx2_resources(device);
 
@@ -152,7 +148,7 @@ void IdPass::execute_with_data_tgfx2(
     // PerFrame UBO: view + projection, one write per pass via the ring.
     IdPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
-    std::memcpy(per_frame.u_projection, backend_projection.data, sizeof(float) * 16);
+    std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
         {"u_per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
     }};
@@ -229,7 +225,7 @@ void IdPass::execute_with_data_tgfx2(
 
             RenderContext direct_context;
             direct_context.view = view;
-            direct_context.projection = backend_projection;
+            direct_context.projection = projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
             direct_context.phase = phase_name();
             direct_context.current_tc_shader = TcShader(dc.final_shader);
