@@ -190,6 +190,37 @@ endif()
             VERBATIM
         )
     endforeach()
+
+    set(_termin_csharp_share_dir "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/share/termin")
+    set(_termin_csharp_builtin_shader_dir "${CMAKE_CURRENT_SOURCE_DIR}/../termin-graphics/resources/builtin_shaders")
+    set(_termin_csharp_shader_artifact_dir "${_termin_csharp_share_dir}/shaders/opengl")
+    set(_termin_csharp_compile_shaders_py "${CMAKE_CURRENT_SOURCE_DIR}/cmake/compile_builtin_opengl_shaders.py")
+
+    if(NOT Python_EXECUTABLE)
+        find_package(Python 3.10 COMPONENTS Interpreter REQUIRED)
+    endif()
+
+    if(TARGET termin_shaderc)
+        set(_termin_csharp_shaderc "$<TARGET_FILE:termin_shaderc>")
+    else()
+        find_program(_termin_csharp_shaderc termin_shaderc)
+        if(NOT _termin_csharp_shaderc)
+            message(FATAL_ERROR "termin-csharp: termin_shaderc is required to build OpenGL Slang shader artifacts")
+        endif()
+    endif()
+
+    add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_termin_csharp_share_dir}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_termin_csharp_builtin_shader_dir}"
+            "${_termin_csharp_share_dir}/builtin_shaders"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_termin_csharp_shader_artifact_dir}"
+        COMMAND "${Python_EXECUTABLE}" "${_termin_csharp_compile_shaders_py}"
+            --shaderc "${_termin_csharp_shaderc}"
+            --source-dir "${_termin_csharp_builtin_shader_dir}"
+            --output-dir "${_termin_csharp_shader_artifact_dir}"
+        VERBATIM
+    )
 endif()
 
 if(TERMIN_CSHARP_BUILD_MANAGED)

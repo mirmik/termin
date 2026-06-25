@@ -26,6 +26,8 @@ namespace Termin.Native
             {
                 if (_host == null)
                 {
+                    ShaderRuntime.ConfigureFromAssemblyDirectory();
+
                     if (!File.Exists(ttfPath))
                     {
                         throw new FileNotFoundException(

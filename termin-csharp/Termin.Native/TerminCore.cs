@@ -21,7 +21,13 @@ public static class TerminCore
     // ========================================================================
 
     [DllImport(DLL, EntryPoint = "tc_init")]
-    public static extern void Init();
+    private static extern void InitNative();
+
+    public static void Init()
+    {
+        ShaderRuntime.ConfigureFromAssemblyDirectory();
+        InitNative();
+    }
 
     /// <summary>
     /// Full initialization: core registries + inspect system + kind handlers.
@@ -29,7 +35,13 @@ public static class TerminCore
     /// Exported from termin_inspect.dll.
     /// </summary>
     [DllImport("termin_inspect", EntryPoint = "tc_init_full")]
-    public static extern void InitFull();
+    private static extern void InitFullNative();
+
+    public static void InitFull()
+    {
+        ShaderRuntime.ConfigureFromAssemblyDirectory();
+        InitFullNative();
+    }
 
     [DllImport(DLL, EntryPoint = "tc_shutdown")]
     public static extern void Shutdown();
