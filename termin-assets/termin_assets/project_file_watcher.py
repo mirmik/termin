@@ -48,6 +48,10 @@ class FilePreLoader(ABC):
         self._on_resource_reloaded = on_resource_reloaded
         # file_path -> set of resource names created from this file
         self._file_to_resources: Dict[str, Set[str]] = {}
+        self._project_root: str | None = None
+
+    def set_project_root(self, project_root: str | None) -> None:
+        self._project_root = project_root
 
     @property
     def priority(self) -> int:
@@ -247,6 +251,7 @@ class ProjectFileWatcher:
             if ext in self._processors:
                 raise ValueError(f"Extension {ext} already registered")
             self._processors[ext] = processor
+        processor.set_project_root(self._project_path)
 
     def set_external_asset_catalog(self, catalog: "AssetCatalog") -> None:
         self._external_asset_catalog = catalog
@@ -270,6 +275,8 @@ class ProjectFileWatcher:
             self._observer = None
 
         self._project_path = None
+        for processor in self.get_all_processors():
+            processor.set_project_root(None)
         self._watched_dirs.clear()
         self._watched_files.clear()
         self._all_files_by_ext.clear()
@@ -297,6 +304,8 @@ class ProjectFileWatcher:
     def watch_directory(self, path: str) -> None:
         """Scan directory for resources and start live watching."""
         self._project_path = path
+        for processor in self.get_all_processors():
+            processor.set_project_root(path)
         if self._external_asset_catalog is not None:
             self._external_asset_catalog.set_project_root(path)
 

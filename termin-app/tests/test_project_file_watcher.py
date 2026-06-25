@@ -71,9 +71,17 @@ class FailingComponentResourceManager:
 class RecordingComponentResourceManager:
     def __init__(self) -> None:
         self.scanned_paths: list[list[str]] = []
+        self.scan_options: list[tuple[str | None, str | None]] = []
 
-    def scan_components(self, paths: list[str]) -> list[str]:
+    def scan_components(
+        self,
+        paths: list[str],
+        *,
+        project_root: str | None = None,
+        namespace: str | None = None,
+    ) -> list[str]:
         self.scanned_paths.append(paths)
+        self.scan_options.append((project_root, namespace))
         return [Path(paths[0]).stem]
 
 
@@ -199,6 +207,50 @@ def test_component_processor_registers_real_loose_python_component(tmp_path: Pat
         ComponentRegistry.instance().unregister_python(component_name)
 
 
+def test_component_processor_loads_loose_python_in_project_namespace(tmp_path: Path) -> None:
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.scene import ComponentRegistry
+
+    component_name = "BrowserLooseNamespacedComponent"
+    scripts_dir = tmp_path / "Scripts"
+    shared_dir = tmp_path / "Shared"
+    scripts_dir.mkdir()
+    shared_dir.mkdir()
+    (scripts_dir / "helpers.py").write_text("SAME_DIR_VALUE = 2\n", encoding="utf-8")
+    (shared_dir / "values.py").write_text("SHARED_VALUE = 5\n", encoding="utf-8")
+    script_path = scripts_dir / f"{component_name}.py"
+    script_path.write_text(
+        "\n".join(
+            [
+                "from termin.scene import PythonComponent",
+                "from .helpers import SAME_DIR_VALUE",
+                "from termin_project.Shared.values import SHARED_VALUE",
+                "",
+                "",
+                f"class {component_name}(PythonComponent):",
+                "    value = SAME_DIR_VALUE + SHARED_VALUE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    resource_manager = DefaultResourceManager()
+    processor = ComponentFileProcessor(resource_manager)
+    processor.set_project_root(str(tmp_path))
+
+    try:
+        processor.on_file_added(str(script_path))
+
+        cls = resource_manager.get_component(component_name)
+        assert cls is not None
+        assert cls.__module__ == f"termin_project.Scripts.{component_name}"
+        assert cls.value == 7
+        assert ComponentRegistry.instance().has(component_name)
+    finally:
+        ComponentRegistry.instance().unregister_python(component_name)
+
+
 def test_component_processor_reloads_real_loose_python_component_class(tmp_path: Path) -> None:
     from termin.default_assets.resource_manager import DefaultResourceManager
     from termin.scene import ComponentRegistry
@@ -266,6 +318,7 @@ def test_project_file_watcher_created_event_loads_loose_python_components(tmp_pa
     watcher.poll()
 
     assert resource_manager.scanned_paths == [[str(script_path)]]
+    assert resource_manager.scan_options == [(None, None)]
     assert watcher.watched_files == {str(script_path)}
     assert processor.get_tracked_files() == {str(script_path): {"EnemyComponent"}}
 
@@ -288,6 +341,7 @@ def test_project_file_watcher_modified_event_reloads_loose_python_components(tmp
     watcher.poll()
 
     assert resource_manager.scanned_paths == [[str(script_path)]]
+    assert resource_manager.scan_options == [(None, None)]
     assert processor.get_tracked_files() == {str(script_path): {"InputComponent"}}
     assert reloaded == [("component", "InputComponent")]
 

@@ -10,6 +10,9 @@ from tcbase import log
 from termin.assets.project_file_watcher import FilePreLoader
 
 
+LOOSE_PYTHON_NAMESPACE = "termin_project"
+
+
 def _is_inside_package(path: str) -> bool:
     """Check if file is inside a Python package (directory with __init__.py).
 
@@ -60,7 +63,7 @@ class ComponentFileProcessor(FilePreLoader):
             return
 
         try:
-            loaded = self._resource_manager.scan_components([path])
+            loaded = self._scan_loose_components(path)
 
             if loaded:
                 if path not in self._file_to_resources:
@@ -86,7 +89,7 @@ class ComponentFileProcessor(FilePreLoader):
 
         try:
             # Reload the file
-            loaded = self._resource_manager.scan_components([path])
+            loaded = self._scan_loose_components(path)
 
             # Update tracking
             if path not in self._file_to_resources:
@@ -121,3 +124,10 @@ class ComponentFileProcessor(FilePreLoader):
         from termin.modules import get_project_modules_runtime
 
         return get_project_modules_runtime()
+
+    def _scan_loose_components(self, path: str) -> list[str]:
+        return self._resource_manager.scan_components(
+            [path],
+            project_root=self._project_root,
+            namespace=LOOSE_PYTHON_NAMESPACE if self._project_root is not None else None,
+        )
