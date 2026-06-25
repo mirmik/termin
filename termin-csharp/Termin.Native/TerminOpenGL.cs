@@ -8,6 +8,11 @@ namespace Termin.Native;
 /// </summary>
 public static class TerminOpenGL
 {
+    static TerminOpenGL()
+    {
+        ShaderRuntime.ConfigureFromAssemblyDirectory();
+    }
+
     const string DLL = "termin";
 
     /// <summary>
