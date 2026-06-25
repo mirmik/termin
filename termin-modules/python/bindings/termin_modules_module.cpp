@@ -152,5 +152,9 @@ NB_MODULE(_termin_modules_native, m) {
                 nb::gil_scoped_acquire gil;
                 callback(module_id, line);
             });
-        }, nb::arg("callback"));
+        }, nb::arg("callback"))
+        .def("clear_callbacks", [](ModuleRuntime& self) {
+            self.set_event_callback(ModuleRuntime::ModuleEventCallback{});
+            self.set_build_output_callback(BuildOutputCallback{});
+        });
 }

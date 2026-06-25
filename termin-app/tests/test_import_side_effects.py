@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -9,6 +10,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AUDIT_TOOL = REPO_ROOT / "tools" / "import_side_effects_audit.py"
+
+
+def _subprocess_env() -> dict[str, str]:
+    return {
+        **os.environ,
+        "TERMIN_SDK": str(REPO_ROOT / "sdk"),
+    }
 
 
 def _load_audit_tool():
@@ -130,6 +138,7 @@ print(json.dumps({
     result = subprocess.run(
         [sys.executable, "-c", script],
         cwd=REPO_ROOT,
+        env=_subprocess_env(),
         check=True,
         capture_output=True,
         text=True,
@@ -144,6 +153,50 @@ print(json.dumps({
         "resource_manager_instance": False,
         "pass_instances": [],
     }
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_project_modules_runtime_does_not_leave_nanobind_callback_refcycle() -> None:
+    script = """
+from termin.modules.runtime import ProjectModulesRuntime
+
+runtime = ProjectModulesRuntime()
+runtime.close()
+print("closed")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "closed\n"
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_module_runtime_clear_callbacks_releases_python_callable_refcycle() -> None:
+    script = """
+from termin_modules import ModuleRuntime
+
+runtime = ModuleRuntime()
+runtime.set_event_callback(lambda event: None)
+runtime.set_build_output_callback(lambda module_id, line: None)
+runtime.clear_callbacks()
+print("cleared")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "cleared\n"
     assert "nanobind: leaked" not in result.stderr
 
 
