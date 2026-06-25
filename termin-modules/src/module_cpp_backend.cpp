@@ -27,6 +27,162 @@ namespace {
 
 using InitFn = void (*)();
 
+std::string shell_quote(const std::filesystem::path& path) {
+    const std::string text = path.string();
+#ifdef _WIN32
+    std::string result = "\"";
+    for (char ch : text) {
+        if (ch == '"') {
+            result += "\\\"";
+        } else {
+            result += ch;
+        }
+    }
+    result += "\"";
+    return result;
+#else
+    std::string result = "'";
+    for (char ch : text) {
+        if (ch == '\'') {
+            result += "'\\''";
+        } else {
+            result += ch;
+        }
+    }
+    result += "'";
+    return result;
+#endif
+}
+
+std::filesystem::path native_validator_path(const ModuleEnvironment& environment) {
+    if (environment.sdk_prefix.empty()) {
+        return {};
+    }
+
+#ifdef _WIN32
+    return environment.sdk_prefix / "bin" / "termin_module_native_validator.exe";
+#else
+    return environment.sdk_prefix / "bin" / "termin_module_native_validator";
+#endif
+}
+
+bool run_shell_command_capture(
+    const std::string& command,
+    const std::filesystem::path& working_dir,
+    std::string& output,
+    std::string& error
+) {
+    output.clear();
+    error.clear();
+
+    const std::filesystem::path previous_dir = std::filesystem::current_path();
+    try {
+        if (!working_dir.empty()) {
+            std::filesystem::current_path(working_dir);
+        }
+    } catch (const std::exception& e) {
+        error = "Failed to change working directory: ";
+        error += e.what();
+        return false;
+    }
+
+    FILE* pipe = popen(command.c_str(), "r");
+    if (pipe == nullptr) {
+        std::filesystem::current_path(previous_dir);
+        error = "Failed to start command";
+        return false;
+    }
+
+    char buffer[512];
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        output += sanitize_external_text(buffer);
+    }
+
+    const int result = pclose(pipe);
+    std::filesystem::current_path(previous_dir);
+
+    if (result != 0) {
+        std::ostringstream ss;
+        ss << "Command failed with exit code " << result;
+        error = ss.str();
+        return false;
+    }
+
+    return true;
+}
+
+std::string relocation_diagnostics_for_linux(const std::filesystem::path& artifact_path) {
+#ifdef _WIN32
+    (void)artifact_path;
+    return {};
+#else
+    std::string output;
+    std::string error;
+    const std::string command = "ldd -r " + shell_quote(artifact_path) + " 2>&1 | c++filt";
+    if (!run_shell_command_capture(command, artifact_path.parent_path(), output, error)) {
+        if (output.empty()) {
+            return "ldd -r diagnostics unavailable: " + error + "\n";
+        }
+    }
+
+    std::istringstream lines(output);
+    std::ostringstream filtered;
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (line.find("undefined symbol:") != std::string::npos ||
+            line.find("symbol lookup error:") != std::string::npos ||
+            line.find("not found") != std::string::npos) {
+            filtered << line << '\n';
+        }
+    }
+
+    std::string result = filtered.str();
+    if (result.empty() && !output.empty()) {
+        result = output;
+    }
+    return result;
+#endif
+}
+
+bool validate_native_artifact(
+    ModuleRecord& record,
+    const ModuleEnvironment& environment,
+    const std::filesystem::path& artifact_path
+) {
+    const std::filesystem::path validator = native_validator_path(environment);
+    if (validator.empty()) {
+        return true;
+    }
+
+    if (!std::filesystem::exists(validator)) {
+        record.error_message = "Native module validator not found: " + validator.string();
+        return false;
+    }
+
+    std::string output;
+    std::string error;
+    const std::string command = shell_quote(validator) + " " + shell_quote(artifact_path) + " 2>&1";
+    if (run_shell_command_capture(command, artifact_path.parent_path(), output, error)) {
+        return true;
+    }
+
+    std::ostringstream message;
+    message << "Native artifact validation failed for " << artifact_path.string();
+    if (!output.empty()) {
+        message << ": " << output;
+    } else if (!error.empty()) {
+        message << ": " << error;
+    }
+    record.error_message = message.str();
+
+    const std::string relocation_diagnostics = relocation_diagnostics_for_linux(artifact_path);
+    if (!relocation_diagnostics.empty()) {
+        record.diagnostics += "\n[Native artifact relocation diagnostics]\n";
+        record.diagnostics += relocation_diagnostics;
+    }
+    return false;
+}
+
 void* load_shared_library(const std::filesystem::path& path, std::string& error) {
 #ifdef _WIN32
     HMODULE handle = LoadLibraryA(path.string().c_str());
@@ -176,6 +332,10 @@ bool CppModuleBackend::load(
 
     if (!std::filesystem::exists(config->artifact_path)) {
         record.error_message = "Artifact not found: " + config->artifact_path.string();
+        return false;
+    }
+
+    if (!validate_native_artifact(record, environment, config->artifact_path)) {
         return false;
     }
 

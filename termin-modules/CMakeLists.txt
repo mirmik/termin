@@ -58,6 +58,14 @@ target_link_libraries(termin_modules
         ${CMAKE_DL_LIBS}
 )
 
+add_executable(termin_module_native_validator
+    tools/native_validator.cpp
+)
+target_link_libraries(termin_module_native_validator PRIVATE ${CMAKE_DL_LIBS})
+set_target_properties(termin_module_native_validator PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
 # ── Python backend + nanobind bindings ──
 if(TERMIN_BUILD_PYTHON)
     if(NOT Python_EXECUTABLE)
@@ -130,6 +138,10 @@ install(TARGETS termin_modules
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+install(TARGETS termin_module_native_validator
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
@@ -171,6 +183,11 @@ if(TERMIN_MODULES_BUILD_TESTS)
     )
 
     target_link_libraries(termin_modules_runtime_test PRIVATE termin_modules)
+    add_dependencies(termin_modules_runtime_test termin_module_native_validator)
+    target_compile_definitions(termin_modules_runtime_test PRIVATE
+        TERMIN_MODULES_TEST_BUILD_ROOT="${CMAKE_BINARY_DIR}"
+        TERMIN_MODULES_TEST_CXX_COMPILER="${CMAKE_CXX_COMPILER}"
+    )
     set_target_properties(termin_modules_runtime_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     )

@@ -55,10 +55,17 @@
 1. читает `CppModuleConfig`
 2. если указан `build.command`, запускает сборку в директории дескриптора
 3. проверяет наличие `build.output`
-4. загружает shared library через `dlopen` или `LoadLibrary`
-5. ищет символ `module_init`
-6. если символ найден, вызывает его
-7. сохраняет native handle в `CppModuleHandle`
+4. если в `ModuleEnvironment.sdk_prefix` доступен
+   `bin/termin_module_native_validator`, запускает отдельный helper-процесс,
+   который делает clean-process `dlopen(..., RTLD_NOW | RTLD_LOCAL)` /
+   `LoadLibrary` для artifact
+5. на Linux при провале validation добавляет отфильтрованный `ldd -r | c++filt`
+   вывод в diagnostics
+6. копирует artifact во временный `.loaded.N` путь, чтобы обойти cache `dlopen`
+7. загружает shared library через `dlopen` или `LoadLibrary`
+8. ищет символ `module_init`
+9. если символ найден, вызывает его
+10. сохраняет native handle в `CppModuleHandle`
 
 Важно:
 
@@ -67,6 +74,9 @@
 - integration layer включает owner scope регистрации на время `dlopen`/`LoadLibrary`
   и `module_init`; C++ component/inspect registrations, сделанные в этот момент,
   помечаются `module_id`
+- project C++ artifact должен быть самодостаточным на уровне DT_NEEDED/RUNPATH;
+  уже загруженные editor/SDK библиотеки и Python-side preload не должны быть
+  обязательным условием для успешного native load
 
 ## 5. load для Python модуля
 

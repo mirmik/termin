@@ -1,3 +1,4 @@
+#include "termin_modules/module_cpp_backend.hpp"
 #include "termin_modules/module_runtime.hpp"
 #include "termin_modules/text_encoding.hpp"
 
@@ -407,6 +408,53 @@ void test_missing_dependency() {
     expect(backend->load_calls.empty(), "backend must not be called");
 }
 
+void test_cpp_backend_clean_process_validation_reports_unresolved_symbol() {
+#ifdef _WIN32
+    return;
+#else
+    TempDir tmp;
+
+    write_text_file(
+        tmp.path / "broken_native.cpp",
+        "extern \"C\" void missing_termin_module_symbol();\n"
+        "extern \"C\" void module_init() { missing_termin_module_symbol(); }\n"
+    );
+
+    const std::string compiler = TERMIN_MODULES_TEST_CXX_COMPILER;
+    write_text_file(
+        tmp.path / "broken_native.module",
+        "name: broken_native\n"
+        "build:\n"
+        "  command:\n"
+        "    linux: mkdir -p build && " + compiler + " -shared -fPIC broken_native.cpp -o build/libbroken_native.so\n"
+        "  output:\n"
+        "    linux: build/libbroken_native.so\n"
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    runtime.discover(tmp.path);
+
+    expect(!runtime.load_module("broken_native"), "native validation must reject unresolved symbols");
+    const ModuleRecord* record = runtime.find("broken_native");
+    expect(record != nullptr, "broken_native record should exist");
+    expect(record->state == ModuleState::Failed, "broken_native should be marked failed");
+    expect(
+        record->error_message.find("Native artifact validation failed") != std::string::npos,
+        "validation failure should be reported"
+    );
+    expect(
+        record->error_message.find("missing_termin_module_symbol") != std::string::npos ||
+            record->diagnostics.find("missing_termin_module_symbol") != std::string::npos,
+        "missing symbol should be present in diagnostics"
+    );
+#endif
+}
+
 void test_discovery_ignores_dist_directory() {
     TempDir tmp;
 
@@ -589,6 +637,10 @@ TEST_CASE("module runtime rejects dependency cycles") {
 
 TEST_CASE("module runtime reports missing dependencies") {
     test_missing_dependency();
+}
+
+TEST_CASE("cpp backend validates native artifact in clean process") {
+    test_cpp_backend_clean_process_validation_reports_unresolved_symbol();
 }
 
 TEST_CASE("module runtime ignores dist build output") {
