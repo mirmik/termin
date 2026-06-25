@@ -35,7 +35,13 @@ class ComponentsMixin:
 
         return self.component_registry.register_builtins(get_builtin_component_specs())
 
-    def scan_components(self, paths: list[str]) -> list[str]:
+    def scan_components(
+        self,
+        paths: list[str],
+        *,
+        project_root: str | None = None,
+        namespace: str | None = None,
+    ) -> list[str]:
         """
         Сканирует директории/модули/файлы и загружает все Component подклассы.
 
@@ -45,7 +51,11 @@ class ComponentsMixin:
         Returns:
             Список имён загруженных компонентов.
         """
-        return self.component_registry.scan(paths)
+        return self.component_registry.scan(
+            paths,
+            project_root=project_root,
+            namespace=namespace,
+        )
 
     # --------- FramePass'ы ---------
     def register_frame_pass(self, name: str, cls: type):

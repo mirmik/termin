@@ -26,8 +26,18 @@ class DefaultComponentsMixin:
 
         return self.component_registry.register_builtins(get_default_builtin_component_specs())
 
-    def scan_components(self, paths: list[str]) -> list[str]:
-        return self.component_registry.scan(paths)
+    def scan_components(
+        self,
+        paths: list[str],
+        *,
+        project_root: str | None = None,
+        namespace: str | None = None,
+    ) -> list[str]:
+        return self.component_registry.scan(
+            paths,
+            project_root=project_root,
+            namespace=namespace,
+        )
 
     def register_frame_pass(self, name: str, cls: type):
         self.frame_pass_registry.register(name, cls)

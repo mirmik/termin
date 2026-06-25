@@ -5,9 +5,11 @@ from __future__ import annotations
 import gc
 import importlib
 import importlib.util
+import keyword
 import os
 import pkgutil
 import sys
+import types
 
 from tcbase import log
 
@@ -26,10 +28,106 @@ def _file_module_name(filepath: str, module_prefix: str) -> str:
     return f"{module_prefix}_{stem}_{hash(real_path) & 0xFFFFFFFF:08x}"
 
 
-def _load_source_file_module(module_name: str, filepath: str):
+def _is_valid_module_part(name: str) -> bool:
+    return name.isidentifier() and not keyword.iskeyword(name)
+
+
+def _project_namespace_module_name(
+    filepath: str,
+    project_root: str | None,
+    namespace: str | None,
+) -> str | None:
+    if project_root is None or namespace is None:
+        return None
+    if not _is_valid_module_part(namespace):
+        log.warning(f"Invalid project Python namespace: {namespace}")
+        return None
+
+    try:
+        relative_path = os.path.relpath(os.path.realpath(filepath), os.path.realpath(project_root))
+    except ValueError:
+        return None
+    if relative_path.startswith(".." + os.sep) or relative_path == "..":
+        return None
+
+    stem_path = os.path.splitext(relative_path)[0]
+    parts = stem_path.split(os.sep)
+    if not all(_is_valid_module_part(part) for part in parts):
+        log.warning(
+            f"Cannot place Python file in project namespace {namespace}: "
+            f"path contains non-module identifier parts: {relative_path}"
+        )
+        return None
+    return ".".join((namespace, *parts))
+
+
+def _module_name_for_file(
+    filepath: str,
+    module_prefix: str,
+    project_root: str | None,
+    namespace: str | None,
+) -> str:
+    namespaced = _project_namespace_module_name(filepath, project_root, namespace)
+    if namespaced is not None:
+        return namespaced
+    return _file_module_name(filepath, module_prefix)
+
+
+def _ensure_project_namespace_packages(
+    module_name: str,
+    filepath: str,
+    project_root: str | None,
+    namespace: str | None,
+) -> bool:
+    if project_root is None or namespace is None or not module_name.startswith(namespace + "."):
+        return True
+
+    package_names = module_name.split(".")[:-1]
+    if not package_names:
+        return True
+
+    root = os.path.realpath(project_root)
+    for index, package_name in enumerate(package_names):
+        if index == 0:
+            package_path = root
+            package_package = ""
+        else:
+            package_path = os.path.join(root, *package_names[1:index + 1])
+            package_package = ".".join(package_names[:index])
+
+        existing = sys.modules.get(package_name)
+        if existing is not None:
+            package_paths = vars(existing).get("__path__")
+            if package_paths is None:
+                log.warning(
+                    f"Cannot use project Python namespace {namespace}: "
+                    f"{package_name} is already loaded as a non-package module"
+                )
+                return False
+            if package_path not in package_paths:
+                existing.__path__ = [*package_paths, package_path]
+            continue
+
+        package = types.ModuleType(package_name)
+        package.__file__ = None
+        package.__package__ = package_package
+        package.__path__ = [package_path]
+        sys.modules[package_name] = package
+
+    return True
+
+
+def _load_source_file_module(
+    module_name: str,
+    filepath: str,
+    project_root: str | None = None,
+    namespace: str | None = None,
+):
     spec = importlib.util.spec_from_file_location(module_name, filepath)
     if spec is None:
         log.debug(f"Cannot create module spec for {filepath}")
+        return None
+    if not _ensure_project_namespace_packages(module_name, filepath, project_root, namespace):
         return None
 
     module = importlib.util.module_from_spec(spec)
@@ -65,14 +163,35 @@ def scan_for_subclasses(
     base_class: type,
     registry: dict[str, type],
     module_prefix: str = "_dynamic_",
+    *,
+    project_root: str | None = None,
+    namespace: str | None = None,
 ) -> list[str]:
     """Load modules from paths and register subclasses of base_class."""
     loaded: list[str] = []
     for path in paths:
         if os.path.isfile(path) and path.endswith(".py"):
-            loaded.extend(_scan_file_for_subclasses(path, base_class, registry, module_prefix))
+            loaded.extend(
+                _scan_file_for_subclasses(
+                    path,
+                    base_class,
+                    registry,
+                    module_prefix,
+                    project_root=project_root,
+                    namespace=namespace,
+                )
+            )
         elif os.path.isdir(path):
-            loaded.extend(_scan_directory_for_subclasses(path, base_class, registry, module_prefix))
+            loaded.extend(
+                _scan_directory_for_subclasses(
+                    path,
+                    base_class,
+                    registry,
+                    module_prefix,
+                    project_root=project_root,
+                    namespace=namespace,
+                )
+            )
         else:
             loaded.extend(_scan_module_for_subclasses(path, base_class, registry))
     return loaded
@@ -186,11 +305,14 @@ def _scan_file_for_subclasses(
     base_class: type,
     registry: dict[str, type],
     module_prefix: str,
+    *,
+    project_root: str | None = None,
+    namespace: str | None = None,
 ) -> list[str]:
     cache_key = _file_module_cache_key(filepath, module_prefix)
     module_name = _filepath_to_module.get(cache_key)
     if module_name is None:
-        module_name = _file_module_name(filepath, module_prefix)
+        module_name = _module_name_for_file(filepath, module_prefix, project_root, namespace)
 
     old_classes = {
         name: cls
@@ -198,7 +320,7 @@ def _scan_file_for_subclasses(
         if cls.__module__ == module_name
     }
     try:
-        module = _load_source_file_module(module_name, filepath)
+        module = _load_source_file_module(module_name, filepath, project_root, namespace)
         if module is None:
             return []
 
@@ -222,6 +344,9 @@ def _scan_directory_for_subclasses(
     base_class: type,
     registry: dict[str, type],
     module_prefix: str,
+    *,
+    project_root: str | None = None,
+    namespace: str | None = None,
 ) -> list[str]:
     loaded: list[str] = []
     for root, dirs, files in os.walk(directory):
@@ -235,6 +360,8 @@ def _scan_directory_for_subclasses(
                     base_class,
                     registry,
                     module_prefix,
+                    project_root=project_root,
+                    namespace=namespace,
                 )
             )
     return loaded

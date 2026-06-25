@@ -173,14 +173,21 @@ Dependents, которые не были загружены к моменту re
 watcher передаёт их в `ResourceManager.scan_components()`, а
 `ComponentClassRegistry.scan()` регистрирует найденные `PythonComponent`
 subclasses.
-Каждый loose `.py` загружается как отдельный private generated module с именем,
-стабильным для пути файла. Такие файлы не образуют общий Python package:
-relative imports между соседними loose-файлами не являются поддержанным
-контрактом, а plain `import sibling` зависит только от внешнего `sys.path`.
-Если проектному Python-коду нужны нормальные package namespaces и imports,
-его нужно оформить как пакет и подключить через `.pymodule`.
+В editor watcher path loose `.py` файлы живут в synthetic namespace
+`termin_project`: `Scripts/player.py` загружается как
+`termin_project.Scripts.player`. Это позволяет использовать relative imports
+между соседними loose-файлами (`from .helpers import X`) и absolute imports от
+проектного корня (`from termin_project.Shared.values import X`) без добавления
+project root в глобальный `sys.path`. Части пути должны быть валидными Python
+module identifiers; файлы с невалидным import path продолжают грузиться через
+private generated module name.
+Если проектному Python-коду нужен явный стабильный package ownership,
+requirements или module lifecycle, его нужно оформить как пакет и подключить
+через `.pymodule`.
 Повторная загрузка loose-файла читает source напрямую, без `.pyc` cache, и
 заменяет классы, найденные в том же generated module.
+Изменение helper-файла само по себе пока не запускает dependency cascade reload
+всех loose-компонентов, которые его импортировали.
 
 ## 8. Smoke-проверки
 
