@@ -11,7 +11,6 @@
 #include <tcbase/tc_log.hpp>
 #include "termin/lighting/lighting_upload.hpp"
 #include "tgfx2/render_context.hpp"
-#include "tgfx2/clip_space.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 #include <termin/render/frame_graph_debugger_core.hpp>
@@ -478,9 +477,6 @@ void ColorPass::execute_with_data(
     }
 
     auto& device = ctx2->device();
-    const Mat44f backend_projection = tgfx::adapt_projection_for_backend(
-        device.backend_type(),
-        projection);
 
     // Resolve output textures from ctx.tex2_* — persistent FBOPool
     // wrappers, no per-frame wrap/destroy churn.
@@ -498,7 +494,7 @@ void ColorPass::execute_with_data(
 
     EnginePerFrameStd140 pf = make_engine_per_frame_uniforms(
         view,
-        backend_projection,
+        projection,
         camera_position,
         static_cast<float>(rect.width),
         static_cast<float>(rect.height),
@@ -788,7 +784,7 @@ void ColorPass::execute_with_data(
 
             RenderContext direct_context;
             direct_context.view = view;
-            direct_context.projection = backend_projection;
+            direct_context.projection = projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
             direct_context.phase = phase_mark;
             direct_context.current_tc_shader = TcShader(final_shader);
