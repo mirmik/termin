@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import atexit
 import os
 import sys
+import weakref
 from pathlib import Path
 from typing import Callable
 
@@ -49,8 +51,13 @@ class ProjectModulesRuntime:
         self._auto_reload_enabled = False
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
+        self._closed = False
         self._configure_environment()
         self._configure_runtime()
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
 
     @property
     def project_root(self) -> Path | None:
@@ -104,6 +111,7 @@ class ProjectModulesRuntime:
             self._build_output_listeners.remove(listener)
 
     def load_project(self, project_root: str | Path | None = None) -> bool:
+        self._ensure_open()
         if project_root is not None:
             self._project_root = Path(project_root).resolve()
 
@@ -121,6 +129,7 @@ class ProjectModulesRuntime:
         return self._runtime.load_all()
 
     def discover_project(self, project_root: str | Path | None = None) -> bool:
+        self._ensure_open()
         if project_root is not None:
             self._project_root = Path(project_root).resolve()
 
@@ -136,6 +145,7 @@ class ProjectModulesRuntime:
         return not self._runtime.last_error
 
     def reload_module(self, module_id: str) -> bool:
+        self._ensure_open()
         return self._runtime.reload_module_with_dependents(module_id)
 
     def reload_descriptor(self, descriptor_path: str | Path) -> str | None:
@@ -200,21 +210,27 @@ class ProjectModulesRuntime:
         return success
 
     def build_module(self, module_id: str) -> bool:
+        self._ensure_open()
         return self._runtime.build_module(module_id)
 
     def clean_module(self, module_id: str) -> bool:
+        self._ensure_open()
         return self._runtime.clean_module(module_id)
 
     def rebuild_module(self, module_id: str) -> bool:
+        self._ensure_open()
         return self._runtime.rebuild_module(module_id)
 
     def unload_module(self, module_id: str) -> bool:
+        self._ensure_open()
         return self._runtime.unload_module(module_id)
 
     def load_module(self, module_id: str) -> bool:
+        self._ensure_open()
         return self._runtime.load_module(module_id)
 
     def load_descriptor(self, descriptor_path: str | Path) -> bool:
+        self._ensure_open()
         descriptor = Path(descriptor_path).resolve()
 
         if self._project_root is None:
@@ -228,6 +244,25 @@ class ProjectModulesRuntime:
             log.error(f"[ProjectModulesRuntime] descriptor is not part of discovered project: {descriptor}")
             return False
         return self._runtime.load_module(record.id)
+
+    def close(self) -> None:
+        if self._closed:
+            return
+
+        try:
+            self._shutdown_runtime()
+        finally:
+            self._detach_runtime_callbacks()
+            self._listeners.clear()
+            self._build_output_listeners.clear()
+            self._closed = True
+
+    def __enter__(self) -> ProjectModulesRuntime:
+        self._ensure_open()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
 
     def find_by_descriptor(self, descriptor_path: str | Path) -> ModuleRecord | None:
         target = Path(descriptor_path).resolve()
@@ -323,8 +358,20 @@ class ProjectModulesRuntime:
         self._runtime.register_cpp_backend(CppModuleBackend())
         self._runtime.register_python_backend(PythonModuleBackend())
         self._integration.configure_runtime(self._runtime)
-        self._runtime.set_event_callback(self._dispatch_event)
-        self._runtime.set_build_output_callback(self._on_build_output)
+        self_ref = weakref.ref(self)
+
+        def dispatch_event(event: ModuleEvent) -> None:
+            runtime = self_ref()
+            if runtime is not None:
+                runtime._dispatch_event(event)
+
+        def dispatch_build_output(module_id: str, line: str) -> None:
+            runtime = self_ref()
+            if runtime is not None:
+                runtime._on_build_output(module_id, line)
+
+        self._runtime.set_event_callback(dispatch_event)
+        self._runtime.set_build_output_callback(dispatch_build_output)
 
     def _on_build_output(self, module_id: str, line: str) -> None:
         log.info(f"[{module_id}] {line}")
@@ -335,6 +382,7 @@ class ProjectModulesRuntime:
                 log.error(f"[ProjectModulesRuntime] build output listener failed: {e}")
 
     def _recreate_runtime(self) -> None:
+        self._detach_runtime_callbacks()
         self._runtime = ModuleRuntime()
         self._runtime.set_environment(self._integration.environment)
         self._configure_runtime()
@@ -378,15 +426,33 @@ class ProjectModulesRuntime:
         for record in list(records_by_id.values()):
             unload_recursive(record.id)
 
+    def _detach_runtime_callbacks(self) -> None:
+        self._runtime.clear_callbacks()
+
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise RuntimeError("ProjectModulesRuntime is closed")
+
 
 _instance: ProjectModulesRuntime | None = None
 
 
 def get_project_modules_runtime() -> ProjectModulesRuntime:
     global _instance
-    if _instance is None:
+    if _instance is None or _instance.closed:
         _instance = ProjectModulesRuntime()
     return _instance
+
+
+def _close_project_modules_runtime() -> None:
+    global _instance
+    if _instance is None:
+        return
+    _instance.close()
+    _instance = None
+
+
+atexit.register(_close_project_modules_runtime)
 
 
 def upgrade_scene_unknown_components(scene) -> int:
