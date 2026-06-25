@@ -12,7 +12,35 @@ import sys
 from tcbase import log
 
 
-_filepath_to_module: dict[str, str] = {}
+_filepath_to_module: dict[tuple[str, str], str] = {}
+
+
+def _file_module_cache_key(filepath: str, module_prefix: str) -> tuple[str, str]:
+    return (module_prefix, os.path.realpath(filepath))
+
+
+def _file_module_name(filepath: str, module_prefix: str) -> str:
+    filename = os.path.basename(filepath)
+    stem = os.path.splitext(filename)[0]
+    real_path = os.path.realpath(filepath)
+    return f"{module_prefix}_{stem}_{hash(real_path) & 0xFFFFFFFF:08x}"
+
+
+def _load_source_file_module(module_name: str, filepath: str):
+    spec = importlib.util.spec_from_file_location(module_name, filepath)
+    if spec is None:
+        log.debug(f"Cannot create module spec for {filepath}")
+        return None
+
+    module = importlib.util.module_from_spec(spec)
+    module.__file__ = filepath
+    module.__package__ = module_name.rpartition(".")[0]
+    sys.modules[module_name] = module
+
+    with open(filepath, "r", encoding="utf-8") as source_file:
+        source = source_file.read()
+    exec(compile(source, filepath, "exec"), module.__dict__)
+    return module
 
 
 def scan_paths(
@@ -52,22 +80,19 @@ def scan_for_subclasses(
 
 def _scan_file(filepath: str, registry: dict[str, type], module_prefix: str) -> list[str]:
     before = set(registry.keys())
-    real_path = os.path.realpath(filepath)
-    existing_module_name = _filepath_to_module.get(real_path)
+    cache_key = _file_module_cache_key(filepath, module_prefix)
+    existing_module_name = _filepath_to_module.get(cache_key)
 
     if existing_module_name and existing_module_name in sys.modules:
-        old_module = sys.modules[existing_module_name]
         old_classes = {
             name: cls
             for name, cls in registry.items()
             if cls.__module__ == existing_module_name
         }
         try:
-            spec = importlib.util.spec_from_file_location(existing_module_name, filepath)
-            if spec is None or spec.loader is None:
-                log.debug(f"Cannot create module spec for reload of {filepath}")
+            module = _load_source_file_module(existing_module_name, filepath)
+            if module is None:
                 return []
-            spec.loader.exec_module(old_module)
         except Exception as e:
             log.warning(f"Failed to reload {filepath}: {e}")
             return []
@@ -79,19 +104,13 @@ def _scan_file(filepath: str, registry: dict[str, type], module_prefix: str) -> 
         }
         _update_living_instances(old_classes, new_classes)
     else:
-        filename = os.path.basename(filepath)
-        module_name = f"{module_prefix}_{os.path.splitext(filename)[0]}_{hash(real_path) & 0xFFFFFFFF:08x}"
+        module_name = _file_module_name(filepath, module_prefix)
 
         try:
-            spec = importlib.util.spec_from_file_location(module_name, filepath)
-            if spec is None or spec.loader is None:
-                log.debug(f"Cannot create module spec for {filepath}")
+            module = _load_source_file_module(module_name, filepath)
+            if module is None:
                 return []
-
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[module_name] = module
-            spec.loader.exec_module(module)
-            _filepath_to_module[real_path] = module_name
+            _filepath_to_module[cache_key] = module_name
         except Exception as e:
             log.warning(f"Failed to load {filepath}: {e}")
             return []
@@ -168,25 +187,34 @@ def _scan_file_for_subclasses(
     registry: dict[str, type],
     module_prefix: str,
 ) -> list[str]:
-    before = set(registry.keys())
-    filename = os.path.basename(filepath)
-    module_name = f"{module_prefix}.{os.path.splitext(filename)[0]}_{id(filepath)}"
+    cache_key = _file_module_cache_key(filepath, module_prefix)
+    module_name = _filepath_to_module.get(cache_key)
+    if module_name is None:
+        module_name = _file_module_name(filepath, module_prefix)
 
+    old_classes = {
+        name: cls
+        for name, cls in registry.items()
+        if cls.__module__ == module_name
+    }
     try:
-        spec = importlib.util.spec_from_file_location(module_name, filepath)
-        if spec is None or spec.loader is None:
+        module = _load_source_file_module(module_name, filepath)
+        if module is None:
             return []
 
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-        _register_module_subclasses(module, base_class, registry)
+        _filepath_to_module[cache_key] = module_name
+        changed = _register_module_subclasses(module, base_class, registry)
+        new_classes = {
+            name: cls
+            for name, cls in registry.items()
+            if cls.__module__ == module_name
+        }
+        _update_living_instances(old_classes, new_classes)
     except Exception as e:
         log.warning(f"Failed to load {filepath}: {e}")
         return []
 
-    after = set(registry.keys())
-    return list(after - before)
+    return changed
 
 
 def _scan_directory_for_subclasses(
@@ -241,13 +269,21 @@ def _scan_module_for_subclasses(
     return list(after - before)
 
 
-def _register_module_subclasses(module, base_class: type, registry: dict[str, type]) -> None:
-    for attr_name in dir(module):
-        attr = getattr(module, attr_name)
+def _register_module_subclasses(module, base_class: type, registry: dict[str, type]) -> list[str]:
+    changed: list[str] = []
+    for attr_name, attr in vars(module).items():
         if (
             isinstance(attr, type)
             and issubclass(attr, base_class)
             and attr is not base_class
-            and attr_name not in registry
         ):
+            existing = registry.get(attr_name)
+            if existing is not None and existing.__module__ != attr.__module__:
+                log.warning(
+                    f"Skipping duplicate dynamic class {attr_name}: "
+                    f"{existing.__module__} already registered"
+                )
+                continue
             registry[attr_name] = attr
+            changed.append(attr_name)
+    return changed
