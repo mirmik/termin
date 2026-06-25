@@ -33,6 +33,7 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-glb",
     "termin-tween",
     "termin-components-tween",
+    "termin-components-kinematic",
     "termin-audio",
     "termin-voxels",
     "termin-components-voxels",
