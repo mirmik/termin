@@ -46,6 +46,7 @@ add_library(termin_components_animation SHARED
 )
 add_library(termin_components_animation::termin_components_animation ALIAS termin_components_animation)
 target_compile_definitions(termin_components_animation PRIVATE TERMIN_COMPONENTS_ANIMATION_EXPORTS)
+termin_set_rpath_lib(termin_components_animation)
 
 set_target_properties(termin_components_animation PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS OFF
