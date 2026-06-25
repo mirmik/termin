@@ -180,15 +180,18 @@ test utilities must not consume backend-native matrices. Они работают
 проходит через `termin_to_native_clip`, а CPU-side D3D11 projection adaptation
 не должна возвращаться в эти renderer-ы.
 
-### Phase 2: migrate screen-space expansion shaders
+### Phase 2: migrate screen-space and 2D pixel shaders
 
 - screen-space line renderer;
-- tcplot 2D styled line shader;
+- tcplot 2D line and styled line shaders;
+- canvas2d solid/texture shaders;
+- text2d bitmap/SDF shaders;
 - glyph/text placement shaders, если они делают clip/pixel roundtrip;
 - any billboard shaders with viewport-size uniforms.
 
-Критерий: вся промежуточная pixel math остаётся в `TerminClip`, helper
-вызывается только на final output.
+Эта фаза внедрена для текущих builtin 2D pixel paths. CPU projection builders
+создают canonical TerminClip matrices, вся промежуточная pixel math остаётся
+в `TerminClip`, helper вызывается только на final output.
 
 ### Phase 3: remove CPU-side clip adaptation
 
@@ -198,10 +201,10 @@ test utilities must not consume backend-native matrices. Они работают
 - `tcplot` не держит backend-specific MVP state.
 - `clip_space.hpp/cpp` adapter helpers удалены.
 
-После этой фазы `TerminClip -> NativeClip` для 3D/scene paths существует
-только в shader prelude или в явно задокументированных backend-native
-exceptions. 2D/fullscreen paths мигрируются отдельной фазой и не должны
-возвращать CPU-side projection adaptation.
+После этой фазы `TerminClip -> NativeClip` для scene и 2D pixel paths
+существует только в shader prelude или в явно задокументированных
+backend-native exceptions. Fullscreen/postprocess paths мигрируются отдельной
+фазой и не должны возвращать CPU-side projection adaptation.
 
 ### Phase 4: fullscreen/postprocess cleanup
 
@@ -227,6 +230,6 @@ exceptions. 2D/fullscreen paths мигрируются отдельной фаз
 - builtin Slang vertex shaders используют `termin_to_native_clip` для final
   position;
 - production renderers не вызывают D3D11 projection adapters на CPU;
-- D3D11, Vulkan and OpenGL проходят одинаковые orientation tests для 3D,
+- D3D11, Vulkan and OpenGL проходят одинаковые orientation tests для 3D/2D,
   billboard lines and screen-space expansion;
 - examples не содержат backend-specific coordinate branches.
