@@ -68,6 +68,15 @@ class FailingComponentResourceManager:
         raise AssertionError(f"package component files must not be scanned directly: {paths}")
 
 
+class RecordingComponentResourceManager:
+    def __init__(self) -> None:
+        self.scanned_paths: list[list[str]] = []
+
+    def scan_components(self, paths: list[str]) -> list[str]:
+        self.scanned_paths.append(paths)
+        return [Path(paths[0]).stem]
+
+
 def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> None:
     shader_path = tmp_path / "HotReload.shader"
     shader_path.write_text("@program HotReload\n@language slang\n", encoding="utf-8")
@@ -131,6 +140,156 @@ def test_component_processor_routes_package_python_files_to_module_reload(tmp_pa
     processor.on_file_changed(str(component))
 
     assert runtime.reloaded_paths == [component]
+
+
+def test_project_file_watcher_initial_scan_loads_loose_python_components(tmp_path: Path) -> None:
+    script_path = tmp_path / "Scripts" / "PlayerComponent.py"
+    script_path.parent.mkdir()
+    script_path.write_text("class PlayerComponent: pass\n", encoding="utf-8")
+
+    resource_manager = RecordingComponentResourceManager()
+    reloaded: list[tuple[str, str]] = []
+    processor = ComponentFileProcessor(
+        resource_manager,
+        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+    )
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._project_path = str(tmp_path)
+
+    watcher._scan_directory(str(tmp_path))
+
+    assert resource_manager.scanned_paths == [[str(script_path)]]
+    assert watcher.watched_files == {str(script_path)}
+    assert processor.get_tracked_files() == {str(script_path): {"PlayerComponent"}}
+    assert reloaded == [("component", "PlayerComponent")]
+
+
+def test_component_processor_registers_real_loose_python_component(tmp_path: Path) -> None:
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.scene import ComponentRegistry
+
+    component_name = "BrowserLooseProbeComponent"
+    script_path = tmp_path / "Scripts" / f"{component_name}.py"
+    script_path.parent.mkdir()
+    script_path.write_text(
+        "\n".join(
+            [
+                "from termin.scene import PythonComponent",
+                "",
+                "",
+                f"class {component_name}(PythonComponent):",
+                "    pass",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    resource_manager = DefaultResourceManager()
+    processor = ComponentFileProcessor(resource_manager)
+
+    try:
+        processor.on_file_added(str(script_path))
+
+        assert resource_manager.get_component(component_name) is not None
+        assert ComponentRegistry.instance().has(component_name)
+        assert processor.get_tracked_files() == {str(script_path): {component_name}}
+    finally:
+        ComponentRegistry.instance().unregister_python(component_name)
+
+
+def test_component_processor_reloads_real_loose_python_component_class(tmp_path: Path) -> None:
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.scene import ComponentRegistry
+
+    component_name = "BrowserLooseReloadProbeComponent"
+    script_path = tmp_path / "Scripts" / f"{component_name}.py"
+    script_path.parent.mkdir()
+
+    def write_component(version: int) -> None:
+        script_path.write_text(
+            "\n".join(
+                [
+                    "from termin.scene import PythonComponent",
+                    "",
+                    "",
+                    f"class {component_name}(PythonComponent):",
+                    f"    version = {version}",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    write_component(1)
+    resource_manager = DefaultResourceManager()
+    reloaded: list[tuple[str, str]] = []
+    processor = ComponentFileProcessor(
+        resource_manager,
+        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+    )
+
+    try:
+        processor.on_file_added(str(script_path))
+        old_cls = resource_manager.get_component(component_name)
+        assert old_cls is not None
+        instance = old_cls()
+
+        write_component(2)
+        processor.on_file_changed(str(script_path))
+
+        new_cls = resource_manager.get_component(component_name)
+        assert new_cls is not None
+        assert new_cls is not old_cls
+        assert new_cls.version == 2
+        assert type(instance) is new_cls
+        assert reloaded == [
+            ("component", component_name),
+            ("component", component_name),
+        ]
+    finally:
+        ComponentRegistry.instance().unregister_python(component_name)
+
+
+def test_project_file_watcher_created_event_loads_loose_python_components(tmp_path: Path) -> None:
+    script_path = tmp_path / "Scripts" / "EnemyComponent.py"
+    script_path.parent.mkdir()
+    script_path.write_text("class EnemyComponent: pass\n", encoding="utf-8")
+
+    resource_manager = RecordingComponentResourceManager()
+    processor = ComponentFileProcessor(resource_manager)
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+
+    _queue_change(watcher, script_path, "created")
+    watcher.poll()
+
+    assert resource_manager.scanned_paths == [[str(script_path)]]
+    assert watcher.watched_files == {str(script_path)}
+    assert processor.get_tracked_files() == {str(script_path): {"EnemyComponent"}}
+
+
+def test_project_file_watcher_modified_event_reloads_loose_python_components(tmp_path: Path) -> None:
+    script_path = tmp_path / "Scripts" / "InputComponent.py"
+    script_path.parent.mkdir()
+    script_path.write_text("class InputComponent: pass\n", encoding="utf-8")
+
+    resource_manager = RecordingComponentResourceManager()
+    reloaded: list[tuple[str, str]] = []
+    processor = ComponentFileProcessor(
+        resource_manager,
+        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+    )
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+
+    _queue_change(watcher, script_path, "modified")
+    watcher.poll()
+
+    assert resource_manager.scanned_paths == [[str(script_path)]]
+    assert processor.get_tracked_files() == {str(script_path): {"InputComponent"}}
+    assert reloaded == [("component", "InputComponent")]
 
 
 def test_project_file_watcher_ignores_service_termin_directory_events(tmp_path: Path) -> None:

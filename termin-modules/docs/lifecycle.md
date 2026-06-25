@@ -169,7 +169,18 @@ Dependents, которые не были загружены к моменту re
 В editor auto-reload сейчас подключен для Python `.pymodule`: изменение
 дескриптора вызывает load/reload descriptor, а изменение `.py` файла внутри
 пакета из `packages` перезагружает владеющий Python-модуль. Loose `.py` файлы
-вне `.pymodule` продолжают обрабатываться legacy component scanner-ом.
+вне `.pymodule` продолжают обрабатываться legacy `ComponentFileProcessor`:
+watcher передаёт их в `ResourceManager.scan_components()`, а
+`ComponentClassRegistry.scan()` регистрирует найденные `PythonComponent`
+subclasses.
+Каждый loose `.py` загружается как отдельный private generated module с именем,
+стабильным для пути файла. Такие файлы не образуют общий Python package:
+relative imports между соседними loose-файлами не являются поддержанным
+контрактом, а plain `import sibling` зависит только от внешнего `sys.path`.
+Если проектному Python-коду нужны нормальные package namespaces и imports,
+его нужно оформить как пакет и подключить через `.pymodule`.
+Повторная загрузка loose-файла читает source напрямую, без `.pyc` cache, и
+заменяет классы, найденные в том же generated module.
 
 ## 8. Smoke-проверки
 
