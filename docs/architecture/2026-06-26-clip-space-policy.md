@@ -17,7 +17,7 @@ OpenGL приводится к этой модели через `glClipControl(G
 GL_ZERO_TO_ONE)`. Vulkan уже совпадает с ней. Direct3D 11 отличается по
 native clip-to-viewport mapping для Y: `clip_y = +1` попадает в верх viewport.
 
-Текущий частичный workaround - адаптировать projection/view-projection на CPU
+Исторический частичный workaround - адаптировать projection/view-projection на CPU
 перед записью в GPU uniforms для D3D11. Он работает только для путей, которые
 проходят через конкретный uniform builder, и ломает общую модель:
 
@@ -94,8 +94,8 @@ let termin_clip = mul(u_view_projection, float4(world_pos, 1.0));
 output.position = termin_to_native_clip(termin_clip);
 ```
 
-CPU-side matrix adaptation для таких renderer-ов является legacy/migration
-code и не должна появляться в новых местах.
+CPU-side matrix adaptation для таких renderer-ов является legacy pattern и
+не должна появляться в новых местах.
 
 ### Screen-space expansion shaders
 
@@ -176,9 +176,9 @@ test utilities must not consume backend-native matrices. Они работают
 - world tube line renderer.
 - debug/gizmo/solid primitive/immediate renderer shaders.
 
-На этом этапе CPU-side D3D11 projection adaptation ещё нельзя удалять
-частично: иначе разные render paths окажутся в разных политиках. Нужен
-один controlled switch для каждого pipeline family.
+Эта фаза внедрена для основных builtin world-space paths: final vertex output
+проходит через `termin_to_native_clip`, а CPU-side D3D11 projection adaptation
+не должна возвращаться в эти renderer-ы.
 
 ### Phase 2: migrate screen-space expansion shaders
 
@@ -192,15 +192,16 @@ test utilities must not consume backend-native matrices. Они работают
 
 ### Phase 3: remove CPU-side clip adaptation
 
-- `termin-render` frame uniforms должны снова загружать canonical projection
-  and view-projection.
-- `tgfx2` immediate/primitive/line renderers не должны адаптировать VP на CPU.
-- `tcplot` не должен держать backend-specific MVP state.
-- `clip_space.hpp/cpp` adapter helpers либо удаляются, либо остаются только
-  как legacy utilities с явным запретом на использование в новых renderer-ах.
+- `termin-render` frame uniforms загружают canonical projection and
+  view-projection.
+- `tgfx2` immediate/primitive/line renderers не адаптируют VP на CPU.
+- `tcplot` не держит backend-specific MVP state.
+- `clip_space.hpp/cpp` adapter helpers удалены.
 
-После этой фазы `TerminClip -> NativeClip` существует только в shader prelude
-или в явно задокументированных backend-native exceptions.
+После этой фазы `TerminClip -> NativeClip` для 3D/scene paths существует
+только в shader prelude или в явно задокументированных backend-native
+exceptions. 2D/fullscreen paths мигрируются отдельной фазой и не должны
+возвращать CPU-side projection adaptation.
 
 ### Phase 4: fullscreen/postprocess cleanup
 
