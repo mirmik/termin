@@ -56,12 +56,12 @@ API слое быть не должно — только внутри backend-а
   `TerminClip -> NativeClip` через `termin_to_native_clip(...)` ровно перед
   записью final `SV_Position`.
 
-Текущая политика для 3D/scene render paths описана в
+Текущая политика для scene и 2D pixel render paths описана в
 [Clip space policy](architecture/2026-06-26-clip-space-policy.md): матрицы и
 shader intermediate math остаются в Termin clip convention, а conversion в
 native backend clip выполняется один раз на границе final vertex output.
-Оставшиеся 2D/fullscreen paths мигрируются отдельно и не должны расширять
-CPU-side projection adaptation.
+Оставшиеся fullscreen/postprocess paths мигрируются отдельно и не должны
+расширять CPU-side projection adaptation.
 
 ## 3. Window-coordinate parameters (viewport / scissor)
 
