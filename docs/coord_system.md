@@ -56,6 +56,11 @@ API слое быть не должно — только внутри backend-а
   используется `tgfx::adapt_projection_for_backend(BackendType::D3D11, ...)`,
   который переводит projection в native D3D11 clip convention.
 
+Целевая политика для миграции 3D render paths описана в
+[Clip space policy](architecture/2026-06-26-clip-space-policy.md): матрицы и
+shader intermediate math остаются в Termin clip convention, а conversion в
+native backend clip выполняется один раз на границе final vertex output.
+
 ## 3. Window-coordinate parameters (viewport / scissor)
 
 Оба API (`set_viewport`, `set_scissor`) принимают **top-left origin**
