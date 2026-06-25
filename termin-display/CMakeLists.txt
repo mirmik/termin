@@ -89,6 +89,15 @@ else()
     message(STATUS "termin-display: SDL2 not found, SDL support disabled")
 endif()
 
+set(TERMIN_DISPLAY_REQUIRES_SDL2_PACKAGE OFF)
+if(TERMIN_DISPLAY_HAS_SDL)
+    foreach(_termin_display_sdl_link_item IN LISTS SDL2_LIBRARIES)
+        if(_termin_display_sdl_link_item MATCHES "^SDL2::")
+            set(TERMIN_DISPLAY_REQUIRES_SDL2_PACKAGE ON)
+        endif()
+    endforeach()
+endif()
+
 set(TERMIN_DISPLAY_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_viewport.c
     ${CMAKE_CURRENT_LIST_DIR}/src/tc_display.c
