@@ -55,7 +55,7 @@ if(USE_SYSTEM_SDL2)
         )
         find_library(SDL2_LIBRARY
             NAMES SDL2
-            PATH_SUFFIXES lib
+            PATH_SUFFIXES lib/x64 lib
             PATHS ${SDL2_SEARCH_PATHS}
         )
         if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARY)
@@ -167,7 +167,8 @@ target_include_directories(termin_display
 )
 
 if(TERMIN_DISPLAY_HAS_SDL)
-    target_include_directories(termin_display PRIVATE ${SDL2_INCLUDE_DIRS})
+    target_compile_definitions(termin_display PUBLIC TERMIN_DISPLAY_HAS_SDL)
+    target_include_directories(termin_display PUBLIC ${SDL2_INCLUDE_DIRS})
 endif()
 
 target_link_libraries(termin_display
@@ -181,8 +182,12 @@ target_link_libraries(termin_display
 )
 
 if(TERMIN_DISPLAY_HAS_SDL)
-    target_link_libraries(termin_display PRIVATE ${SDL2_LIBRARIES})
+    target_link_libraries(termin_display PUBLIC ${SDL2_LIBRARIES})
 endif()
+
+set_property(TARGET termin_display PROPERTY
+    TERMIN_DISPLAY_HAS_SDL ${TERMIN_DISPLAY_HAS_SDL}
+)
 
 if(TGFX2_ENABLE_VULKAN)
     target_compile_definitions(termin_display PRIVATE TGFX2_HAS_VULKAN)
