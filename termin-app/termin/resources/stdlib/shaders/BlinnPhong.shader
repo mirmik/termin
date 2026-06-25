@@ -24,6 +24,8 @@
 @property Texture2D u_diffuse_texture = "white"
 
 @stage vertex
+import termin_prelude;
+
 struct VertexInput {
     float3 position : POSITION;
     float3 normal : NORMAL;
@@ -46,7 +48,7 @@ VertexOutput main(VertexInput input) {
     output.world_pos = world.xyz;
     output.normal_world = normalize(mul(normal_matrix, input.normal));
     output.uv = input.uv;
-    output.position = mul(u_projection, mul(u_view, world));
+    output.position = termin_to_native_clip(mul(u_projection, mul(u_view, world)));
     return output;
 }
 @endstage
@@ -144,6 +146,8 @@ FragmentOutput main(FragmentInput input) {
 @glCull true
 
 @stage vertex
+import termin_prelude;
+
 struct ShadowVertexInput {
     float3 position : POSITION;
 };
@@ -156,7 +160,7 @@ struct ShadowVertexOutput {
 ShadowVertexOutput main(ShadowVertexInput input) {
     ShadowVertexOutput output;
     float4 world = mul(u_model, float4(input.position, 1.0));
-    output.position = mul(u_projection, mul(u_view, world));
+    output.position = termin_to_native_clip(mul(u_projection, mul(u_view, world)));
     return output;
 }
 @endstage
