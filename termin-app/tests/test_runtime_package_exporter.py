@@ -48,6 +48,14 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-glb": ({"termin/glb/__init__.py": "VALUE = 'glb seed'\n"}, ["termin-skeleton", "termin-animation"]),
         "termin-tween": ({"termin/tween/__init__.py": "VALUE = 'tween seed'\n"}, []),
         "termin-components-tween": ({"termin/tween_components/__init__.py": "VALUE = 'tween components seed'\n"}, []),
+        "termin-components-kinematic": (
+            {
+                "termin/kinematic/__init__.py": "VALUE = 'kinematic seed'\n",
+                "termin/kinematic/kinematic_components.py": "VALUE = 'kinematic components seed'\n",
+                "termin_kinematic_component_specs/__init__.py": "COMPONENT_SPECS = ()\n",
+            },
+            [],
+        ),
         "termin-audio": ({"termin/audio/__init__.py": "VALUE = 'audio seed'\n"}, []),
         "termin-voxels": ({"termin/voxels/__init__.py": "VALUE = 'voxels seed'\n"}, []),
         "termin-components-voxels": ({"termin/voxel_components/__init__.py": "VALUE = 'voxel components seed'\n"}, []),
@@ -684,6 +692,15 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "display" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "kinematic" / "__init__.py").exists()
+    assert (
+        result.dist_dir
+        / "lib"
+        / "python3.10"
+        / "site-packages"
+        / "termin_kinematic_component_specs"
+        / "__init__.py"
+    ).exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "PIL" / "__init__.py").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin_build").exists()
@@ -823,6 +840,15 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "display" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "viewport" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "skeleton" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "kinematic" / "__init__.py").exists()
+    assert (
+        dist_dir
+        / "python"
+        / "Lib"
+        / "site-packages"
+        / "termin_kinematic_component_specs"
+        / "__init__.py"
+    ).exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "tcbase" / "__init__.py").exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "PIL" / "__init__.py").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin_build").exists()
