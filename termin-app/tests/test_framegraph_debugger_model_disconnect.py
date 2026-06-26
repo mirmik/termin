@@ -26,7 +26,34 @@ class _Pipeline:
 
 
 class _Pass:
-    pass_name = "FrameDebugger"
+    def __init__(self, pass_name="FrameDebugger", symbols=None, type_name="TestPass"):
+        self.pass_name = pass_name
+        self.type_name = type_name
+        self.symbols = list(symbols or [])
+        self.debug_internal_point = None
+        self.debug_capture = None
+        self.cleared = False
+
+    def get_internal_symbols(self):
+        return list(self.symbols)
+
+    def get_internal_symbols_with_timing(self):
+        return []
+
+    def set_debug_internal_point(self, symbol):
+        self.debug_internal_point = symbol
+
+    def set_debug_capture(self, capture):
+        self.debug_capture = capture
+
+    def clear_debug_capture(self):
+        self.cleared = True
+
+    def serialize(self):
+        return {
+            "pass_name": self.pass_name,
+            "symbols": list(self.symbols),
+        }
 
 
 class _Capture:
@@ -157,3 +184,30 @@ def test_format_fbo_info_reports_missing_capture():
     text = model.format_fbo_info()
 
     assert text == "Ресурс 'DepthToColorPass_5_output_res': capture ещё не получен"
+
+
+def test_duplicate_pass_selection_uses_pipeline_index():
+    first = _Pass("Color", ["first_symbol"])
+    second = _Pass("Color", ["second_symbol"])
+    pipeline = _Pipeline("debug")
+    pipeline.passes = [first, second]
+
+    model = FramegraphDebuggerModel(None, _Core())
+    model._current_target = FramegraphDebugTarget(
+        source=object(),
+        label="RenderTarget",
+        get_pipeline=lambda: pipeline,
+    )
+
+    passes = model.get_passes()
+    assert [(item.index, item.name) for item in passes] == [(0, "Color"), (1, "Color")]
+
+    model.set_selected_pass_by_index(1)
+
+    assert model.selected_pass == "Color"
+    assert model.selected_pass_index == 1
+    assert model.selected_symbol == "second_symbol"
+    assert first.debug_internal_point == ""
+    assert second.debug_internal_point == "second_symbol"
+    assert second.debug_capture is model.core.capture
+    assert '"second_symbol"' in model.format_pass_json()
