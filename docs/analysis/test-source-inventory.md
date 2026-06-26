@@ -51,7 +51,7 @@ Status values:
 | needs-work | python | `termin-app/tests/pose_test.py` | Removed unused import/variable and same-API expected calculation; looking_at and several roundtrip checks still need stronger independent oracles. |
 | reviewed | python | `termin-app/tests/shader_parser_test.py` | String-heavy but active Slang/material parsing contract rather than debug-only coverage. |
 | needs-work | python | `termin-app/tests/test_asset_default_plugins.py` | Default asset/plugin/resource type expectations overlap asset plugin and player manifest tests. |
-| needs-work | python | `termin-app/tests/test_canonical_animation_imports.py` | Legacy/source/existence checks look like migration residue; should become one import-boundary contract or be removed after migration. |
+| reviewed | python | `termin-app/tests/test_canonical_animation_imports.py` | Removed legacy/source/existence migration checks for deleted facade trees; remaining tests keep the canonical animation import boundary. |
 | reviewed | python | `termin-app/tests/test_default_pipeline_specs.py` | Removed self-evident import assert; remaining tests cover default pipeline render-target formats/MSAA and ResolvePass defaults/order. |
 | needs-work | python | `termin-app/tests/test_edge_flipping.py` | Removed oracle-free circumcircle boundary test, cocircular len-only flip test, debug prints, and manual runner; several optimized/refined cases still check mostly counts. |
 | needs-work | python | `termin-app/tests/test_editor_mcp_server.py` | Useful MCP coverage, but repeats thread/deadline/process_pending loop helpers across several tests. |
