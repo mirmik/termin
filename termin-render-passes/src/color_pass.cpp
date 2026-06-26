@@ -738,8 +738,6 @@ void ColorPass::execute_with_data(
 
             ctx2->clear_resource_bindings();
 
-            tc_shader* direct_shader = tc_shader_get(final_shader);
-            ctx2->use_shader_resource_layout(direct_shader);
 
             ctx2->set_depth_test(state.depth_test);
             ctx2->set_depth_write(state.depth_write);
@@ -762,24 +760,6 @@ void ColorPass::execute_with_data(
                 sd.compare_enable = true;
                 sd.compare_op = tgfx::CompareOp::LessEqual;
                 shadow_sampler_ = device.create_sampler(sd);
-            }
-
-            MaterialPipelineResourceContext direct_resources = material_resources;
-            direct_resources.shadow_sampler = shadow_sampler_;
-            if (!(drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id) ||
-                  (direct_shader &&
-                   tc_shader_has_feature(direct_shader, TC_SHADER_FEATURE_LIGHTING_UBO)))) {
-                direct_resources.lighting_ubo = {};
-            }
-            prepare_material_pipeline_resources(
-                *ctx2,
-                device,
-                direct_shader,
-                phase,
-                direct_resources);
-
-            if (!extra_textures.empty()) {
-                bind_extra_textures(ctx.tex2_reads, ctx2, direct_shader);
             }
 
             RenderContext direct_context;
