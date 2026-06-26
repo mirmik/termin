@@ -1,13 +1,16 @@
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Set
 
 from termin.default_assets.render.texture_plugin import TextureImportPlugin
 from termin.assets.project_file_watcher import ProjectFileWatcher
-from termin.editor_core.file_processors import ComponentFileProcessor, ModuleFileProcessor
+from termin.editor_core.file_processors import ComponentFileProcessor, ModuleFileProcessor, ModuleInputFileProcessor
+from termin.modules.runtime import ProjectModulesRuntime
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
 from termin_assets import PreLoadResult
+from termin_modules import ModuleKind
 
 
 class RecordingPreLoader(FilePreLoader):
@@ -53,6 +56,7 @@ class RecordingModulesRuntime:
         self.last_error = ""
         self.reloaded_descriptors: list[Path] = []
         self.reloaded_paths: list[Path] = []
+        self.dirty_paths: list[Path] = []
 
     def reload_descriptor(self, path: Path) -> str | None:
         self.reloaded_descriptors.append(Path(path))
@@ -61,6 +65,19 @@ class RecordingModulesRuntime:
     def reload_modules_for_path(self, path: str) -> list[str]:
         self.reloaded_paths.append(Path(path))
         return ["gameplay"]
+
+    def mark_modules_dirty_for_path(self, path: str) -> list[str]:
+        self.dirty_paths.append(Path(path))
+        return ["native_core"]
+
+
+class RuntimeUnderTest(ProjectModulesRuntime):
+    def __init__(self, records: list[object]) -> None:
+        self._records = records
+        self._dirty_module_reasons: dict[str, set[str]] = {}
+
+    def records(self) -> list[object]:
+        return list(self._records)
 
 
 class FailingComponentResourceManager:
@@ -118,6 +135,13 @@ def test_module_file_processor_reloads_pymodule_when_auto_reload_enabled(tmp_pat
     assert reloaded == [("module", "gameplay")]
 
 
+def test_module_file_processor_leaves_cpp_descriptors_to_policy_neutral_input_tracking() -> None:
+    processor = ModuleFileProcessor(resource_manager=None)
+
+    assert ".pymodule" in processor.extensions
+    assert ".module" not in processor.extensions
+
+
 def test_module_file_processor_ignores_changes_when_auto_reload_disabled(tmp_path: Path) -> None:
     descriptor = tmp_path / "gameplay.pymodule"
     descriptor.write_text("name: gameplay\n", encoding="utf-8")
@@ -131,6 +155,168 @@ def test_module_file_processor_ignores_changes_when_auto_reload_disabled(tmp_pat
     processor.on_file_changed(str(descriptor))
 
     assert runtime.reloaded_descriptors == []
+
+
+def test_module_input_processor_marks_cpp_descriptor_dirty_without_reload(tmp_path: Path) -> None:
+    descriptor = tmp_path / "native_core.module"
+    descriptor.write_text("name: native_core\ntype: cpp\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_changed(str(descriptor))
+
+    assert runtime.dirty_paths == [descriptor]
+    assert runtime.reloaded_descriptors == []
+
+
+def test_module_input_processor_marks_cpp_source_dirty_without_reload(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_changed(str(source))
+
+    assert runtime.dirty_paths == [source]
+    assert runtime.reloaded_descriptors == []
+
+
+def test_module_input_processor_initial_scan_does_not_mark_existing_sources_dirty(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_initial_file_added(str(source))
+
+    assert runtime.dirty_paths == []
+    assert processor.get_tracked_files() == {str(source): set()}
+
+
+def test_module_input_processor_live_created_source_marks_module_dirty(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_added(str(source))
+
+    assert runtime.dirty_paths == [source]
+
+
+def test_project_file_watcher_initial_scan_uses_initial_add_hook_for_module_inputs(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._project_path = str(tmp_path)
+
+    watcher._scan_directory(str(tmp_path))
+
+    assert runtime.dirty_paths == []
+    assert watcher.watched_files == {str(source)}
+
+
+def test_project_file_watcher_live_created_module_input_marks_module_dirty(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+
+    with watcher._lock:
+        watcher._pending_changes[str(source)] = "created"
+
+    watcher.poll()
+
+    assert runtime.dirty_paths == [source]
+    assert watcher.watched_files == {str(source)}
+
+
+def test_project_modules_runtime_marks_cpp_module_dirty_for_native_input(tmp_path: Path) -> None:
+    descriptor = tmp_path / "native_core.module"
+    source = tmp_path / "src" / "native_core.cpp"
+    source.parent.mkdir()
+    descriptor.write_text("name: native_core\ntype: cpp\n", encoding="utf-8")
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RuntimeUnderTest(
+        [
+            SimpleNamespace(
+                id="native_core",
+                kind=ModuleKind.Cpp,
+                descriptor_path=str(descriptor),
+            )
+        ]
+    )
+
+    assert runtime.mark_modules_dirty_for_path(source) == ["native_core"]
+
+    dirty = runtime.dirty_modules()
+    assert list(dirty) == ["native_core"]
+    assert str(source) in dirty["native_core"][0]
+
+
+def test_project_modules_runtime_ignores_cpp_build_directory_inputs(tmp_path: Path) -> None:
+    descriptor = tmp_path / "native_core.module"
+    generated = tmp_path / "build" / "generated.cpp"
+    generated.parent.mkdir()
+    descriptor.write_text("name: native_core\ntype: cpp\n", encoding="utf-8")
+    generated.write_text("// generated\n", encoding="utf-8")
+    runtime = RuntimeUnderTest(
+        [
+            SimpleNamespace(
+                id="native_core",
+                kind=ModuleKind.Cpp,
+                descriptor_path=str(descriptor),
+            )
+        ]
+    )
+
+    assert runtime.mark_modules_dirty_for_path(generated) == []
+    assert runtime.dirty_modules() == {}
+
+
+def test_project_modules_runtime_keeps_python_path_lookup_reload_only(tmp_path: Path) -> None:
+    descriptor = tmp_path / "gameplay.pymodule"
+    package_file = tmp_path / "gameplay" / "components.py"
+    package_file.parent.mkdir()
+    descriptor.write_text("name: gameplay\ntype: python\n", encoding="utf-8")
+    package_file.write_text("class Probe: pass\n", encoding="utf-8")
+    runtime = RuntimeUnderTest(
+        [
+            SimpleNamespace(
+                id="gameplay",
+                kind=ModuleKind.Python,
+                descriptor_path=str(descriptor),
+                python_root=str(tmp_path),
+                python_packages=["gameplay"],
+            )
+        ]
+    )
+
+    assert runtime.module_ids_for_path(package_file) == ["gameplay"]
+    assert runtime.mark_modules_dirty_for_path(package_file) == []
 
 
 def test_component_processor_routes_package_python_files_to_module_reload(tmp_path: Path) -> None:
@@ -304,6 +490,118 @@ def test_component_processor_reloads_real_loose_python_component_class(tmp_path:
         ComponentRegistry.instance().unregister_python(component_name)
 
 
+def test_component_processor_reloads_dependents_after_loose_helper_change(tmp_path: Path) -> None:
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.scene import ComponentRegistry
+
+    component_name = "BrowserLooseHelperCascadeComponent"
+    scripts_dir = tmp_path / "Scripts"
+    scripts_dir.mkdir()
+    helper_path = scripts_dir / "helper_values.py"
+    script_path = scripts_dir / f"{component_name}.py"
+
+    def write_helper(value: int) -> None:
+        helper_path.write_text(f"HELPER_VALUE = {value}\n", encoding="utf-8")
+
+    write_helper(1)
+    script_path.write_text(
+        "\n".join(
+            [
+                "from termin.scene import PythonComponent",
+                "from .helper_values import HELPER_VALUE",
+                "",
+                "",
+                f"class {component_name}(PythonComponent):",
+                "    value = HELPER_VALUE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    resource_manager = DefaultResourceManager()
+    reloaded: list[tuple[str, str]] = []
+    processor = ComponentFileProcessor(
+        resource_manager,
+        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+    )
+    processor.set_project_root(str(tmp_path))
+
+    try:
+        processor.on_file_added(str(helper_path))
+        processor.on_file_added(str(script_path))
+        old_cls = resource_manager.get_component(component_name)
+        assert old_cls is not None
+        assert old_cls.value == 1
+
+        write_helper(5)
+        processor.on_file_changed(str(helper_path))
+
+        new_cls = resource_manager.get_component(component_name)
+        assert new_cls is not None
+        assert new_cls is not old_cls
+        assert new_cls.value == 5
+        assert reloaded == [
+            ("component", component_name),
+            ("component", component_name),
+        ]
+    finally:
+        ComponentRegistry.instance().unregister_python(component_name)
+
+
+def test_component_processor_reloads_cross_dir_termin_project_dependents(tmp_path: Path) -> None:
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.scene import ComponentRegistry
+
+    component_name = "BrowserLooseCrossDirHelperCascadeComponent"
+    scripts_dir = tmp_path / "Scripts"
+    shared_dir = tmp_path / "Shared"
+    scripts_dir.mkdir()
+    shared_dir.mkdir()
+    helper_path = shared_dir / "values.py"
+    script_path = scripts_dir / f"{component_name}.py"
+
+    def write_helper(value: int) -> None:
+        helper_path.write_text(f"SHARED_VALUE = {value}\n", encoding="utf-8")
+
+    write_helper(3)
+    script_path.write_text(
+        "\n".join(
+            [
+                "from termin.scene import PythonComponent",
+                "from termin_project.Shared.values import SHARED_VALUE",
+                "",
+                "",
+                f"class {component_name}(PythonComponent):",
+                "    value = SHARED_VALUE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    resource_manager = DefaultResourceManager()
+    processor = ComponentFileProcessor(resource_manager)
+    processor.set_project_root(str(tmp_path))
+
+    try:
+        processor.on_file_added(str(helper_path))
+        processor.on_file_added(str(script_path))
+        old_cls = resource_manager.get_component(component_name)
+        assert old_cls is not None
+        assert old_cls.value == 3
+
+        write_helper(8)
+        processor.on_file_changed(str(helper_path))
+
+        new_cls = resource_manager.get_component(component_name)
+        assert new_cls is not None
+        assert new_cls is not old_cls
+        assert new_cls.value == 8
+    finally:
+        ComponentRegistry.instance().unregister_python(component_name)
+
+
 def test_project_file_watcher_created_event_loads_loose_python_components(tmp_path: Path) -> None:
     script_path = tmp_path / "Scripts" / "EnemyComponent.py"
     script_path.parent.mkdir()
@@ -390,12 +688,16 @@ class RecordingResourceManager:
         self.external_assets = RecordingAssetCatalog()
         self.registered: list[PreLoadResult] = []
         self.reloaded: list[PreLoadResult] = []
+        self.unregistered: list[PreLoadResult] = []
 
     def register_file(self, result: PreLoadResult) -> None:
         self.registered.append(result)
 
     def reload_file(self, result: PreLoadResult) -> None:
         self.reloaded.append(result)
+
+    def unregister_file(self, result: PreLoadResult) -> None:
+        self.unregistered.append(result)
 
 
 def _queue_change(watcher: ProjectFileWatcher, path: Path, kind: str) -> None:
@@ -523,6 +825,7 @@ def test_project_file_watcher_rescan_removes_newly_ignored_plugin_asset(tmp_path
 
     assert str(texture_path) not in watcher.watched_files
     assert preloader.get_tracked_files() == {}
+    assert [result.path for result in rm.unregistered] == [str(texture_path)]
     assert rm.external_assets.removed_paths == [str(texture_path)]
 
 
@@ -602,3 +905,4 @@ def test_project_file_watcher_deleted_file_clears_plugin_tracking(tmp_path: Path
     watcher.poll()
 
     assert preloader.get_tracked_files() == {}
+    assert [result.path for result in rm.unregistered] == [str(texture_path)]

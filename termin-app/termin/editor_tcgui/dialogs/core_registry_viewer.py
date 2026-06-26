@@ -1,4 +1,4 @@
-"""Core Registry Viewer — shows internal core_c registry state."""
+"""Core Registry Viewer - shows internal core registry state."""
 
 from __future__ import annotations
 

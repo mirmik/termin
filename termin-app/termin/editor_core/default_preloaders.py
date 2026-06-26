@@ -11,6 +11,7 @@ from termin.default_assets.default_preloaders import (
 )
 from termin.editor_core.file_processors import ComponentFileProcessor
 from termin.editor_core.file_processors import ModuleFileProcessor
+from termin.editor_core.file_processors import ModuleInputFileProcessor
 
 
 def create_default_preloaders(
@@ -19,6 +20,7 @@ def create_default_preloaders(
 ) -> list[FilePreLoader]:
     return [
         ModuleFileProcessor(resource_manager, on_resource_reloaded=on_resource_reloaded),
+        ModuleInputFileProcessor(resource_manager, on_resource_reloaded=on_resource_reloaded),
         *create_default_asset_preloaders(resource_manager, on_resource_reloaded),
         ComponentFileProcessor(resource_manager, on_resource_reloaded=on_resource_reloaded),
     ]

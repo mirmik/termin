@@ -200,6 +200,78 @@ print("cleared")
     assert "nanobind: leaked" not in result.stderr
 
 
+def test_voxelize_source_import_is_enum_only_and_clean() -> None:
+    script = """
+import sys
+
+from termin.voxels import VoxelizeSource
+
+print(VoxelizeSource.CURRENT_MESH.name)
+assert "termin_voxel_components.voxelizer_component" not in sys.modules
+assert "termin.render" not in sys.modules
+assert "termin.materials" not in sys.modules
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "CURRENT_MESH\n"
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_python_component_import_registries_cleanup_before_nanobind_shutdown() -> None:
+    script = """
+from termin.navmesh.builder_component import NavMeshBuilderComponent
+
+print(NavMeshBuilderComponent.__name__)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "NavMeshBuilderComponent\n"
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_default_pipeline_python_pass_factory_releases_owned_pass() -> None:
+    script = """
+from termin.bootstrap import bootstrap_player
+from termin.engine import EngineCore, RenderingManager, register_default_scene_extensions
+from termin.render_framework import tc_pipeline_destroy, tc_pipeline_registry_get_all_info
+
+bootstrap_player()
+register_default_scene_extensions()
+engine = EngineCore()
+pipeline = RenderingManager.instance().create_pipeline("Default")
+print(pipeline.pass_count)
+for info in list(tc_pipeline_registry_get_all_info()):
+    tc_pipeline_destroy(info["handle"])
+del pipeline
+del engine
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "8\n"
+    assert "nanobind: leaked" not in result.stderr
+
+
 def test_collecting_builtin_specs_does_not_import_runtime_packages() -> None:
     script = """
 import json

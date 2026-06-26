@@ -127,6 +127,9 @@ if(TERMIN_COLLISION_BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
     )
     target_link_libraries(termin_collision_tests PRIVATE termin_collision)
+    if(TARGET termin_lighting::termin_lighting)
+        target_link_libraries(termin_collision_tests PRIVATE termin_lighting::termin_lighting)
+    endif()
     add_test(NAME termin_collision_tests COMMAND termin_collision_tests)
 endif()
 

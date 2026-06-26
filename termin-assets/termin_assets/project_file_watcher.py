@@ -18,7 +18,7 @@ import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Callable, Dict, Set
+from typing import TYPE_CHECKING, Callable, Dict, Protocol, Set, runtime_checkable
 
 from tcbase import log
 from termin_assets.preload import PreLoadResult
@@ -29,6 +29,12 @@ if TYPE_CHECKING:
 
 # Debounce delay in seconds
 DEBOUNCE_DELAY_S = 0.3
+
+
+@runtime_checkable
+class _ResourceFileUnregisterer(Protocol):
+    def unregister_file(self, result: PreLoadResult) -> None:
+        ...
 
 
 class FilePreLoader(ABC):
@@ -48,6 +54,7 @@ class FilePreLoader(ABC):
         self._on_resource_reloaded = on_resource_reloaded
         # file_path -> set of resource names created from this file
         self._file_to_resources: Dict[str, Set[str]] = {}
+        self._file_to_preload_result: Dict[str, PreLoadResult] = {}
         self._project_root: str | None = None
 
     def set_project_root(self, project_root: str | None) -> None:
@@ -136,8 +143,19 @@ class FilePreLoader(ABC):
         if path not in self._file_to_resources:
             self._file_to_resources[path] = set()
         self._file_to_resources[path].add(name)
+        self._file_to_preload_result[path] = result
 
         self._notify_reloaded(name)
+
+    def on_initial_file_added(self, path: str) -> None:
+        """
+        Called while an existing project tree is scanned.
+
+        Most processors should treat initial scan the same as a created file.
+        Processors that keep dirty state can override this to avoid marking all
+        existing project files as changed when the watcher starts.
+        """
+        self.on_file_added(path)
 
     def on_file_changed(self, path: str) -> None:
         """
@@ -153,6 +171,7 @@ class FilePreLoader(ABC):
 
         # ResourceManager handles reload logic
         self._resource_manager.reload_file(result)
+        self._file_to_preload_result[path] = result
 
         self._notify_reloaded(name)
 
@@ -161,8 +180,16 @@ class FilePreLoader(ABC):
         Called when a file is deleted.
         Cleans up tracking.
         """
-        if path in self._file_to_resources:
-            del self._file_to_resources[path]
+        result = self._file_to_preload_result.pop(path, None)
+        if result is not None:
+            if isinstance(self._resource_manager, _ResourceFileUnregisterer):
+                self._resource_manager.unregister_file(result)
+            else:
+                log.error(
+                    f"[FilePreLoader] Resource manager does not support unregister_file for {path}"
+                )
+
+        self._file_to_resources.pop(path, None)
 
     def on_spec_changed(self, spec_path: str, resource_path: str) -> None:
         """
@@ -289,8 +316,6 @@ class ProjectFileWatcher:
             return
 
         previously_watched_files = set(self._watched_files)
-        for processor in self.get_all_processors():
-            processor._file_to_resources.clear()
 
         self._watched_files.clear()
         self._all_files_by_ext.clear()
@@ -358,7 +383,7 @@ class ProjectFileWatcher:
         pending_files.sort(key=lambda x: (x[0], x[1]))
 
         for _priority, file_path, _ext in pending_files:
-            self._add_file(file_path)
+            self._add_file(file_path, initial_scan=True)
 
     def _start_observer(self, path: str) -> None:
         """Start watchdog observer for live file change detection."""
@@ -418,7 +443,7 @@ class ProjectFileWatcher:
             return os.path.splitext(base_path)[1].lower() or None
         return None
 
-    def _add_file(self, path: str) -> None:
+    def _add_file(self, path: str, *, initial_scan: bool = False) -> None:
         """Register a file with its processor."""
         self._watched_files.add(path)
 
@@ -439,7 +464,10 @@ class ProjectFileWatcher:
         processor = self._processors.get(ext)
         if processor is not None:
             try:
-                processor.on_file_added(path)
+                if initial_scan:
+                    processor.on_initial_file_added(path)
+                else:
+                    processor.on_file_added(path)
             except Exception:
                 log.exception(f"[ProjectFileWatcher] Error processing {path}")
 

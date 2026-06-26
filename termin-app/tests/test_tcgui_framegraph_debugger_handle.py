@@ -2,6 +2,7 @@ from termin.editor_tcgui.dialogs.framegraph_debugger import (
     _FramegraphDebuggerHandle,
     CapturePreviewWidget,
 )
+from termin.editor_core.framegraph_debugger_model import FramegraphPassListItem
 
 
 class _Signal:
@@ -18,6 +19,9 @@ class _Signal:
 class _Model:
     def __init__(self):
         self.disconnect_count = 0
+        self.selected_pass = None
+        self.selected_pass_index = None
+        self.selected_indices = []
         self.lists_changed = _Signal()
         self.selection_changed = _Signal()
         self.info_changed = _Signal()
@@ -27,6 +31,13 @@ class _Model:
 
     def disconnect(self):
         self.disconnect_count += 1
+
+    def get_passes(self):
+        return []
+
+    def set_selected_pass_by_index(self, index):
+        self.selected_indices.append(index)
+        self.selected_pass_index = index
 
 
 class _WindowUI:
@@ -63,6 +74,26 @@ class _Renderer:
 
     def draw_texture(self, *_args, **kwargs):
         self.texture_kwargs = kwargs
+
+
+class _ComboBox:
+    def __init__(self):
+        self.items = []
+        self.selected_index = -1
+
+    @property
+    def item_count(self):
+        return len(self.items)
+
+    def clear(self):
+        self.items.clear()
+        self.selected_index = -1
+
+    def add_item(self, text):
+        self.items.append(text)
+
+    def item_text(self, index):
+        return self.items[index]
 
 
 def test_window_destroy_tears_down_without_native_close_recursion():
@@ -130,3 +161,36 @@ def test_capture_preview_forces_depth_to_red_channel_without_hdr():
 
     assert renderer.texture_kwargs["channel_mode"] == 5
     assert renderer.texture_kwargs["highlight_hdr"] is False
+
+
+def test_pass_combo_tracks_stable_pipeline_indices_for_duplicate_names():
+    class Model(_Model):
+        def __init__(self):
+            super().__init__()
+            self.selected_pass = "Color"
+            self.selected_pass_index = 4
+
+        def get_passes(self):
+            return [
+                FramegraphPassListItem(2, "Color", True),
+                FramegraphPassListItem(4, "Color", True),
+            ]
+
+    handle = _FramegraphDebuggerHandle(Model())
+    handle._pass_combo = _ComboBox()
+
+    handle._refresh_pass_combo()
+
+    assert handle._pass_combo.items == ["Color *", "Color *"]
+    assert handle._pass_combo_indices == [2, 4]
+    assert handle._pass_combo.selected_index == 1
+
+
+def test_pass_combo_event_selects_pass_by_pipeline_index():
+    model = _Model()
+    handle = _FramegraphDebuggerHandle(model)
+    handle._pass_combo_indices = [2, 4]
+
+    handle._select_pass_combo_row(1)
+
+    assert model.selected_indices == [4]

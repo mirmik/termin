@@ -11,7 +11,7 @@ using termin::collision::ContactManifold;
 // Static storage for collision results (valid until next detect_contacts call)
 static std::vector<tc_contact_manifold> s_manifold_storage;
 
-// Local allocator functions (registered with termin_core)
+// Local allocator functions registered with the scene component registry.
 static tc_collision_world* collision_world_alloc() {
     return new CollisionWorld();
 }

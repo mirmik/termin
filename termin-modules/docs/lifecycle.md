@@ -168,7 +168,17 @@ Dependents, которые не были загружены к моменту re
 
 В editor auto-reload сейчас подключен для Python `.pymodule`: изменение
 дескриптора вызывает load/reload descriptor, а изменение `.py` файла внутри
-пакета из `packages` перезагружает владеющий Python-модуль. Loose `.py` файлы
+пакета из `packages` перезагружает владеющий Python-модуль.
+
+C++ `.module` и native input-файлы отслеживаются отдельно как policy-neutral
+dirty-сигнал: watcher может отметить владеющий модуль изменённым, но сам по себе
+не запускает build/reload. Initial scan не пачкает уже существующие native inputs;
+live create/change/remove события помечают владеющий C++ модуль dirty. Это
+оставляет место для явной editor policy (`manual`, `prompt`,
+`auto-after-successful-build`) вместо безусловного unload / build / dlopen на
+каждое filesystem-событие.
+
+Loose `.py` файлы
 вне `.pymodule` продолжают обрабатываться legacy `ComponentFileProcessor`:
 watcher передаёт их в `ResourceManager.scan_components()`, а
 `ComponentClassRegistry.scan()` регистрирует найденные `PythonComponent`

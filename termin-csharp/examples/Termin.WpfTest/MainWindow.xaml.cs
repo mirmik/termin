@@ -15,8 +15,10 @@ namespace Termin.WpfTest;
 static class NativeLoader
 {
     private static IntPtr _terminHandle = IntPtr.Zero;
-    private static IntPtr _terminCoreHandle = IntPtr.Zero;
+    private static IntPtr _terminBootstrapHandle = IntPtr.Zero;
+    private static IntPtr _terminGraphicsHandle = IntPtr.Zero;
     private static IntPtr _terminMeshHandle = IntPtr.Zero;
+    private static IntPtr _terminRenderHandle = IntPtr.Zero;
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr LoadLibrary(string lpFileName);
@@ -95,16 +97,30 @@ static class NativeLoader
             throw new Exception($"Failed to load termin_mesh.dll from {meshPath}. Error: {error}");
         }
 
-        // Load termin_core.dll first (dependency)
-        var corePath = Path.Combine(baseDir, "termin_core.dll");
-        _terminCoreHandle = LoadLibrary(corePath);
-        if (_terminCoreHandle == IntPtr.Zero)
+        var graphicsPath = Path.Combine(baseDir, "termin_graphics.dll");
+        _terminGraphicsHandle = LoadLibrary(graphicsPath);
+        if (_terminGraphicsHandle == IntPtr.Zero)
         {
             int error = Marshal.GetLastWin32Error();
-            throw new Exception($"Failed to load termin_core.dll from {corePath}. Error: {error}");
+            throw new Exception($"Failed to load termin_graphics.dll from {graphicsPath}. Error: {error}");
         }
 
-        // Then load termin.dll
+        var renderPath = Path.Combine(baseDir, "termin_render.dll");
+        _terminRenderHandle = LoadLibrary(renderPath);
+        if (_terminRenderHandle == IntPtr.Zero)
+        {
+            int error = Marshal.GetLastWin32Error();
+            throw new Exception($"Failed to load termin_render.dll from {renderPath}. Error: {error}");
+        }
+
+        var bootstrapPath = Path.Combine(baseDir, "termin_bootstrap.dll");
+        _terminBootstrapHandle = LoadLibrary(bootstrapPath);
+        if (_terminBootstrapHandle == IntPtr.Zero)
+        {
+            int error = Marshal.GetLastWin32Error();
+            throw new Exception($"Failed to load termin_bootstrap.dll from {bootstrapPath}. Error: {error}");
+        }
+
         var terminPath = Path.Combine(baseDir, "termin.dll");
         _terminHandle = LoadLibrary(terminPath);
         if (_terminHandle == IntPtr.Zero)
@@ -113,64 +129,62 @@ static class NativeLoader
             throw new Exception($"Failed to load termin.dll from {terminPath}. Error: {error}");
         }
 
-        // Get function pointers
-        var initPtr = GetProcAddress(_terminHandle, "tc_opengl_init");
+        var initPtr = GetProcAddress(_terminGraphicsHandle, "tc_opengl_init");
         if (initPtr == IntPtr.Zero)
         {
-            throw new Exception("tc_opengl_init not found in termin.dll");
+            throw new Exception("tc_opengl_init not found in termin_graphics.dll");
         }
         _openglInit = Marshal.GetDelegateForFunctionPointer<OpenGLInitDelegate>(initPtr);
 
-        var shutdownPtr = GetProcAddress(_terminHandle, "tc_opengl_shutdown");
+        var shutdownPtr = GetProcAddress(_terminGraphicsHandle, "tc_opengl_shutdown");
         if (shutdownPtr != IntPtr.Zero)
         {
             _openglShutdown = Marshal.GetDelegateForFunctionPointer<OpenGLShutdownDelegate>(shutdownPtr);
         }
 
-        // Get pass registry function pointers from termin_core.dll (where tc_pass functions are)
-        var hasPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_has");
+        var hasPtr = GetProcAddress(_terminRenderHandle, "tc_pass_registry_has");
         if (hasPtr != IntPtr.Zero)
             _passRegistryHas = Marshal.GetDelegateForFunctionPointer<PassRegistryHasDelegate>(hasPtr);
 
-        var createPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_create");
+        var createPtr = GetProcAddress(_terminRenderHandle, "tc_pass_registry_create");
         if (createPtr != IntPtr.Zero)
             _passRegistryCreate = Marshal.GetDelegateForFunctionPointer<PassRegistryCreateDelegate>(createPtr);
 
-        var countPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_type_count");
+        var countPtr = GetProcAddress(_terminRenderHandle, "tc_pass_registry_type_count");
         if (countPtr != IntPtr.Zero)
             _passRegistryTypeCount = Marshal.GetDelegateForFunctionPointer<PassRegistryTypeCountDelegate>(countPtr);
 
-        var typeAtPtr = GetProcAddress(_terminCoreHandle, "tc_pass_registry_type_at");
+        var typeAtPtr = GetProcAddress(_terminRenderHandle, "tc_pass_registry_type_at");
         if (typeAtPtr != IntPtr.Zero)
             _passRegistryTypeAt = Marshal.GetDelegateForFunctionPointer<PassRegistryTypeAtDelegate>(typeAtPtr);
 
         // Pipeline functions
-        var pipelineCreatePtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_create");
+        var pipelineCreatePtr = GetProcAddress(_terminRenderHandle, "tc_pipeline_create");
         if (pipelineCreatePtr != IntPtr.Zero)
             _pipelineCreate = Marshal.GetDelegateForFunctionPointer<PipelineCreateDelegate>(pipelineCreatePtr);
 
-        var pipelineDestroyPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_destroy");
+        var pipelineDestroyPtr = GetProcAddress(_terminRenderHandle, "tc_pipeline_destroy");
         if (pipelineDestroyPtr != IntPtr.Zero)
             _pipelineDestroy = Marshal.GetDelegateForFunctionPointer<PipelineDestroyDelegate>(pipelineDestroyPtr);
 
-        var pipelineAddPassPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_add_pass");
+        var pipelineAddPassPtr = GetProcAddress(_terminRenderHandle, "tc_pipeline_add_pass");
         if (pipelineAddPassPtr != IntPtr.Zero)
             _pipelineAddPass = Marshal.GetDelegateForFunctionPointer<PipelineAddPassDelegate>(pipelineAddPassPtr);
 
-        var pipelinePassCountPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_pass_count");
+        var pipelinePassCountPtr = GetProcAddress(_terminRenderHandle, "tc_pipeline_pass_count");
         if (pipelinePassCountPtr != IntPtr.Zero)
             _pipelinePassCount = Marshal.GetDelegateForFunctionPointer<PipelinePassCountDelegate>(pipelinePassCountPtr);
 
-        var pipelinePassAtPtr = GetProcAddress(_terminCoreHandle, "tc_pipeline_get_pass_at");
+        var pipelinePassAtPtr = GetProcAddress(_terminRenderHandle, "tc_pipeline_get_pass_at");
         if (pipelinePassAtPtr != IntPtr.Zero)
             _pipelinePassAt = Marshal.GetDelegateForFunctionPointer<PipelinePassAtDelegate>(pipelinePassAtPtr);
 
         // Pass property functions
-        var passSetNamePtr = GetProcAddress(_terminCoreHandle, "tc_pass_set_name");
+        var passSetNamePtr = GetProcAddress(_terminRenderHandle, "tc_pass_set_name");
         if (passSetNamePtr != IntPtr.Zero)
             _passSetName = Marshal.GetDelegateForFunctionPointer<PassSetNameDelegate>(passSetNamePtr);
 
-        var passSetEnabledPtr = GetProcAddress(_terminCoreHandle, "tc_pass_set_enabled");
+        var passSetEnabledPtr = GetProcAddress(_terminRenderHandle, "tc_pass_set_enabled");
         if (passSetEnabledPtr != IntPtr.Zero)
             _passSetEnabled = Marshal.GetDelegateForFunctionPointer<PassSetEnabledDelegate>(passSetEnabledPtr);
 
@@ -180,9 +194,17 @@ static class NativeLoader
 
     private static IntPtr ResolveDll(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
-        if (libraryName == "termin_core")
+        if (libraryName == "termin_bootstrap")
         {
-            return _terminCoreHandle;
+            return _terminBootstrapHandle;
+        }
+        if (libraryName == "termin_graphics")
+        {
+            return _terminGraphicsHandle;
+        }
+        if (libraryName == "termin_render")
+        {
+            return _terminRenderHandle;
         }
         if (libraryName == "termin_mesh")
         {

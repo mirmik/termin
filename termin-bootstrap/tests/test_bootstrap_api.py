@@ -210,3 +210,62 @@ def test_player_bootstrap_imports_default_python_render_passes():
         assert "termin.render_passes" in sys.modules
         """
     )
+
+
+def test_player_shutdown_cleans_python_and_render_globals():
+    _run_python(
+        """
+        import termin.bootstrap
+
+        termin.bootstrap.bootstrap_player()
+
+        from termin.render_framework import (
+            PythonFramePass,
+            tc_pass_registry_has,
+            tc_pipeline_create,
+            tc_pipeline_registry_count,
+        )
+        from termin.scene import ComponentRegistry, PythonComponent
+
+        class BootstrapShutdownPass(PythonFramePass):
+            def execute(self, ctx):
+                pass
+
+        class BootstrapShutdownComponent(PythonComponent):
+            pass
+
+        tc_pipeline_create("bootstrap-shutdown-test")
+
+        assert tc_pass_registry_has("BootstrapShutdownPass")
+        assert ComponentRegistry.instance().has("BootstrapShutdownComponent")
+        assert tc_pipeline_registry_count() == 1
+
+        termin.bootstrap.shutdown_player()
+
+        assert not tc_pass_registry_has("BootstrapShutdownPass")
+        assert not ComponentRegistry.instance().has("BootstrapShutdownComponent")
+        assert tc_pipeline_registry_count() == 0
+
+        termin.bootstrap.shutdown_player()
+        """
+    )
+
+
+def test_runtime_shutdown_allows_later_rebootstrap():
+    _run_python(
+        """
+        import termin.bootstrap
+        from termin.inspect import KindRegistry
+
+        termin.bootstrap.bootstrap_player()
+        assert "tc_mesh" in set(KindRegistry.instance().kinds())
+
+        termin.bootstrap.shutdown_player()
+        assert "tc_mesh" not in set(KindRegistry.instance().kinds())
+
+        termin.bootstrap.bootstrap_player()
+        assert "tc_mesh" in set(KindRegistry.instance().kinds())
+
+        termin.bootstrap.shutdown_player()
+        """
+    )
