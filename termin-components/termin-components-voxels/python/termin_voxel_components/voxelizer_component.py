@@ -367,24 +367,7 @@ class VoxelizerComponent(DrawableComponent):
 
     def draw_geometry(self, context: "RenderContext", geometry_id: int = 0) -> None:
         """Рисует отладочную геометрию."""
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_REGIONS:
-            if self.show_region_voxels and self._debug_region_voxels_mesh is not None and self._debug_region_voxels_mesh.is_valid:
-                self._debug_region_voxels_mesh.draw_gpu()
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_SPARSE_BOUNDARY:
-            if self.show_sparse_boundary and self._debug_sparse_boundary_mesh is not None and self._debug_sparse_boundary_mesh.is_valid:
-                self._debug_sparse_boundary_mesh.draw_gpu()
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_INNER_CONTOUR:
-            if self.show_sparse_boundary and self._debug_inner_contour_mesh is not None and self._debug_inner_contour_mesh.is_valid:
-                self._debug_inner_contour_mesh.draw_gpu()
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_SIMPLIFIED_CONTOURS:
-            if self.show_simplified_contours and self._debug_simplified_contours_mesh is not None and self._debug_simplified_contours_mesh.is_valid:
-                self._debug_simplified_contours_mesh.draw_gpu()
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_BRIDGED_CONTOURS:
-            if self.show_bridged_contours and self._debug_bridged_contours_mesh is not None and self._debug_bridged_contours_mesh.is_valid:
-                self._debug_bridged_contours_mesh.draw_gpu()
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_TRIANGULATED:
-            if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
-                self._debug_triangulated_mesh.draw_gpu()
+        pass
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""

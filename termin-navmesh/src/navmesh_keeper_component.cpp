@@ -62,9 +62,7 @@ std::set<std::string> NavMeshKeeperComponent::get_phase_marks() const {
 void NavMeshKeeperComponent::draw_geometry(const RenderContext& context, int geometry_id) {
     (void)context;
     (void)geometry_id;
-    if (ensure_debug_mesh_loaded() && _navmesh_debug_mesh.is_valid()) {
-        tc_mesh_draw_gpu(_navmesh_debug_mesh.get());
-    }
+    ensure_debug_mesh_loaded();
 }
 
 std::vector<GeometryDrawCall> NavMeshKeeperComponent::get_geometry_draws(const std::string* phase_mark) {
