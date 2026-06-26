@@ -495,3 +495,34 @@ def test_build_project_can_compile_slang_shader_usages_for_d3d11(tmp_path: Path)
         "opengl",
         "d3d11",
     }
+
+
+def test_build_project_writes_player_window_settings(tmp_path: Path) -> None:
+    project = tmp_path / "WindowGame"
+    project.mkdir()
+    _write_json(project / "window.terminproj", {"version": 1, "name": "WindowGame"})
+    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
+    _write_json(
+        project / "project_settings" / "project.json",
+        {
+            "player_window": {
+                "width": 1024,
+                "height": 768,
+                "fullscreen": False,
+            },
+        },
+    )
+
+    result = build_project(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "WindowGame",
+        copy_files=False,
+    )
+
+    build_data = json.loads(result.build_json_path.read_text(encoding="utf-8"))
+    assert build_data["runtime"]["window"] == {
+        "width": 1024,
+        "height": 768,
+        "fullscreen": False,
+    }

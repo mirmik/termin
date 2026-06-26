@@ -21,6 +21,7 @@ from termin.player.project_runtime_support import (
 
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
+    from termin.project.settings import ProjectPlayerWindowSettings
     from termin.scene import TcScene as Scene
 
 
@@ -48,6 +49,85 @@ def request_quit(exit_code: int = 0) -> bool:
     runtime.request_quit(exit_code)
     return True
 
+
+
+
+def _resolve_player_window_settings(
+    project_path: Path,
+    *,
+    configured: "ProjectPlayerWindowSettings | None",
+    width: int | None,
+    height: int | None,
+    fullscreen: bool | None,
+):
+    from termin.project.settings import ProjectPlayerWindowSettings
+
+    base = configured if configured is not None else _load_project_player_window_settings(project_path)
+    return ProjectPlayerWindowSettings(
+        width=_resolve_positive_window_int(width, base.width, "width"),
+        height=_resolve_positive_window_int(height, base.height, "height"),
+        fullscreen=_resolve_window_bool(fullscreen, base.fullscreen, "fullscreen"),
+    )
+
+
+def _load_project_player_window_settings(project_path: Path):
+    from tcbase import log
+    from termin.project.settings import ProjectSettings
+
+    settings_path = project_path / "project_settings" / "project.json"
+    if not settings_path.exists():
+        return ProjectSettings().player_window
+
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as exc:
+        log.error(f"[PlayerRuntime] Failed to read project settings: {exc}")
+        return ProjectSettings().player_window
+
+    if not isinstance(data, dict):
+        log.error("[PlayerRuntime] Project settings root must be an object")
+        return ProjectSettings().player_window
+    return ProjectSettings.from_dict(data).player_window
+
+
+def _player_window_from_manifest(data: dict, manifest_path: Path):
+    from tcbase import log
+    from termin.project.settings import ProjectPlayerWindowSettings
+
+    runtime = data.get("runtime")
+    if runtime is None:
+        return None
+    if not isinstance(runtime, dict):
+        log.error(f"[PlayerRuntime] Manifest runtime field must be an object: {manifest_path}")
+        return None
+
+    window = runtime.get("window")
+    if window is None:
+        return None
+    return ProjectPlayerWindowSettings.from_dict(window)
+
+
+def _resolve_positive_window_int(value: object, default: int, field_name: str) -> int:
+    from tcbase import log
+
+    if value is None:
+        return default
+    if type(value) is not int or value <= 0:
+        log.error(f"[PlayerRuntime] Window {field_name} must be a positive integer, using {default}")
+        return default
+    return value
+
+
+def _resolve_window_bool(value: object, default: bool, field_name: str) -> bool:
+    from tcbase import log
+
+    if value is None:
+        return default
+    if type(value) is not bool:
+        log.error(f"[PlayerRuntime] Window {field_name} must be a boolean, using {default}")
+        return default
+    return value
 
 def load_manifest_assets_with_import_plugins(
     project_path: Path,
@@ -116,21 +196,29 @@ class PlayerRuntime:
         self,
         project_path: str | Path,
         scene_name: str,
-        width: int = 1280,
-        height: int = 720,
+        width: int | None = None,
+        height: int | None = None,
         title: str = "Termin Player",
-        fullscreen: bool = True,
+        fullscreen: bool | None = None,
         asset_manifest_path: str | Path | None = None,
         build_json_path: str | Path | None = None,
         mcp_enabled: bool = False,
         mcp_options: dict | None = None,
+        player_window: "ProjectPlayerWindowSettings | None" = None,
     ):
         self.project_path = Path(project_path)
         self.scene_name = scene_name
-        self.width = width
-        self.height = height
+        window_settings = _resolve_player_window_settings(
+            self.project_path,
+            configured=player_window,
+            width=width,
+            height=height,
+            fullscreen=fullscreen,
+        )
+        self.width = window_settings.width
+        self.height = window_settings.height
         self.title = title
-        self.fullscreen = bool(fullscreen)
+        self.fullscreen = window_settings.fullscreen
         self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
         self.build_json_path = Path(build_json_path) if build_json_path is not None else None
         self.mcp_enabled = bool(mcp_enabled)
@@ -904,10 +992,10 @@ class PlayerRuntime:
 def run_project(
     project_path: str | Path,
     scene_name: str,
-    width: int = 1280,
-    height: int = 720,
+    width: int | None = None,
+    height: int | None = None,
     title: str = "Termin Player",
-    fullscreen: bool = True,
+    fullscreen: bool | None = None,
     mcp_enabled: bool = False,
     mcp_options: dict | None = None,
 ):
@@ -937,10 +1025,10 @@ def run_project(
 
 def run_build(
     build_json_path: str | Path,
-    width: int = 1280,
-    height: int = 720,
+    width: int | None = None,
+    height: int | None = None,
     title: str = "Termin Player",
-    fullscreen: bool = True,
+    fullscreen: bool | None = None,
     mcp_enabled: bool = False,
     mcp_options: dict | None = None,
 ):
@@ -974,6 +1062,7 @@ def run_build(
         fullscreen=fullscreen,
         asset_manifest_path=asset_manifest,
         build_json_path=build_path,
+        player_window=_player_window_from_manifest(build_data, build_path),
         mcp_enabled=mcp_enabled,
         mcp_options=mcp_options,
     )
@@ -982,10 +1071,10 @@ def run_build(
 
 def run_bundle(
     app_manifest_path: str | Path,
-    width: int = 1280,
-    height: int = 720,
+    width: int | None = None,
+    height: int | None = None,
     title: str = "Termin Player",
-    fullscreen: bool = True,
+    fullscreen: bool | None = None,
     mcp_enabled: bool = False,
     mcp_options: dict | None = None,
 ):
@@ -1035,6 +1124,7 @@ def run_bundle(
         fullscreen=fullscreen,
         asset_manifest_path=manifest_path,
         build_json_path=app_path,
+        player_window=_player_window_from_manifest(app_data, app_path),
         mcp_enabled=mcp_enabled,
         mcp_options=manifest_mcp_options,
     )

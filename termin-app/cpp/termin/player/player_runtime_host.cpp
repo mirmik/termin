@@ -281,10 +281,10 @@ void set_python_argv(int argc, char** argv) {
 struct CliOptions {
     fs::path app_manifest_override;
     std::string backend;
-    int width = 1280;
-    int height = 720;
+    int width = 0;
+    int height = 0;
     int exit_after_frames = 0;
-    bool fullscreen = true;
+    std::optional<bool> fullscreen;
     bool mcp_enabled = false;
     std::vector<std::string> python_argv;
 };
@@ -400,6 +400,82 @@ void apply_smoke_env(CliOptions& options) {
     options.exit_after_frames = parse_int_arg(value, "TERMIN_PLAYER_EXIT_AFTER_FRAMES");
 }
 
+struct PlayerWindowSettings {
+    int width = 1280;
+    int height = 720;
+    bool fullscreen = true;
+};
+
+int positive_window_int_field(
+    const nos::trent& t,
+    const char* key,
+    int def,
+    const char* context
+) {
+    const nos::trent* value = dict_get(t, key);
+    if (!value) {
+        return def;
+    }
+    if (!value->is_numer()) {
+        tc_log_warn("termin_player: %s.%s must be a positive integer, using %d", context, key, def);
+        return def;
+    }
+    const double numeric = value->as_numer_default(def);
+    const int64_t parsed = value->as_integer_default(def);
+    if (static_cast<double>(parsed) != numeric || parsed <= 0 || parsed > INT32_MAX) {
+        tc_log_warn("termin_player: %s.%s must be a positive integer, using %d", context, key, def);
+        return def;
+    }
+    return static_cast<int>(parsed);
+}
+
+bool window_bool_field(
+    const nos::trent& t,
+    const char* key,
+    bool def,
+    const char* context
+) {
+    const nos::trent* value = dict_get(t, key);
+    if (!value) {
+        return def;
+    }
+    if (!value->is_bool()) {
+        tc_log_warn(
+            "termin_player: %s.%s must be a boolean, using %s",
+            context,
+            key,
+            def ? "true" : "false"
+        );
+        return def;
+    }
+    return value->as_bool();
+}
+
+PlayerWindowSettings player_window_settings_from_manifest(const nos::trent& root) {
+    PlayerWindowSettings settings;
+    const nos::trent* runtime = dict_get(root, "runtime");
+    if (!runtime) {
+        return settings;
+    }
+    if (!runtime->is_dict()) {
+        tc_log_warn("termin_player: app manifest runtime field must be an object; using default window settings");
+        return settings;
+    }
+    const nos::trent* window = dict_get(*runtime, "window");
+    if (!window) {
+        return settings;
+    }
+    if (!window->is_dict()) {
+        tc_log_warn("termin_player: app manifest runtime.window field must be an object; using default window settings");
+        return settings;
+    }
+
+    settings.width = positive_window_int_field(*window, "width", settings.width, "runtime.window");
+    settings.height = positive_window_int_field(*window, "height", settings.height, "runtime.window");
+    settings.fullscreen = window_bool_field(*window, "fullscreen", settings.fullscreen, "runtime.window");
+    return settings;
+}
+
 struct AppManifest {
     fs::path bundle_root;
     fs::path app_manifest_path;
@@ -408,6 +484,7 @@ struct AppManifest {
     fs::path project_python_root;
     fs::path module_manifest_path;
     std::string project_name = "Termin Player";
+    PlayerWindowSettings window;
     bool python_enabled = false;
 };
 
@@ -426,6 +503,7 @@ AppManifest load_app_manifest(const fs::path& app_manifest_path) {
     }
 
     manifest.project_name = string_field(root, "project_name", "Termin Player");
+    manifest.window = player_window_settings_from_manifest(root);
 
     const nos::trent* package = dict_get(root, "package");
     if (!package || !package->is_dict()) {
@@ -844,15 +922,19 @@ struct PlayerRuntimeHost::Impl {
     }
 
     void initialize_window_and_rendering() {
-        window = std::make_unique<SDLBackendWindow>(manifest.project_name, cli.width, cli.height);
-        if (cli.fullscreen) {
+        const int window_width = cli.width > 0 ? cli.width : manifest.window.width;
+        const int window_height = cli.height > 0 ? cli.height : manifest.window.height;
+        const bool fullscreen = cli.fullscreen.value_or(manifest.window.fullscreen);
+
+        window = std::make_unique<SDLBackendWindow>(manifest.project_name, window_width, window_height);
+        if (fullscreen) {
             window->set_fullscreen(true);
         }
 
         auto [width, height] = window->framebuffer_size();
         if (width <= 0 || height <= 0) {
-            width = cli.width;
-            height = cli.height;
+            width = window_width;
+            height = window_height;
         }
         surface_handle = offscreen_render_surface_create(window->device(), width, height);
         surface = offscreen_render_surface_get(surface_handle);

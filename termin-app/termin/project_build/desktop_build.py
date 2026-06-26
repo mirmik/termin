@@ -8,6 +8,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from termin.project.settings import ProjectSettings
 from termin.project_build.build_context import BuildContext, create_build_context
 from termin.project_build.diagnostics import DiagnosticLike
 from termin.project_build.desktop_runtime_packager import (
@@ -138,6 +139,8 @@ def _package_desktop_target(
         f"package/python/{module.descriptor}"
         for module in python_result.modules
     ]
+    project_settings = _load_project_settings(context.project_root)
+
     _write_app_manifest(
         app_manifest_path,
         {
@@ -165,6 +168,7 @@ def _package_desktop_target(
                     "descriptors": python_descriptors,
                 },
                 "native_library_dirs": _runtime_native_library_dirs(context.dist_dir, runtime_result),
+                "window": project_settings.player_window.to_dict(),
                 "mcp": {
                     "enabled": False,
                     "host": "127.0.0.1",
@@ -278,3 +282,25 @@ def _write_app_manifest(path: Path, data: dict) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
+
+
+def _load_project_settings(project_root: Path) -> ProjectSettings:
+    settings_path = project_root / "project_settings" / "project.json"
+    if not settings_path.exists():
+        return ProjectSettings()
+
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as exc:
+        from tcbase import log
+
+        log.error(f"[DesktopBuild] Failed to read project settings: {exc}")
+        return ProjectSettings()
+
+    if not isinstance(data, dict):
+        from tcbase import log
+
+        log.error("[DesktopBuild] Project settings root must be an object")
+        return ProjectSettings()
+    return ProjectSettings.from_dict(data)

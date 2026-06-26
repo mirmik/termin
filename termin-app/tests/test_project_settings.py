@@ -1,4 +1,4 @@
-from termin.project.settings import ProjectSettings, RenderSyncMode
+from termin.project.settings import ProjectPlayerWindowSettings, ProjectSettings, RenderSyncMode
 from termin.render import (
     RenderSyncMode as CRenderSyncMode,
     get_render_sync_mode,
@@ -41,3 +41,35 @@ def test_render_sync_mode_runtime_binding_belongs_to_render_package() -> None:
         assert RenderSyncMode.FLUSH.to_c() == CRenderSyncMode.FLUSH
     finally:
         set_render_sync_mode(CRenderSyncMode.NONE)
+
+
+def test_project_settings_normalizes_player_window() -> None:
+    settings = ProjectSettings.from_dict(
+        {
+            "player_window": {
+                "width": 1600,
+                "height": 900,
+                "fullscreen": False,
+            }
+        }
+    )
+
+    assert settings.player_window == ProjectPlayerWindowSettings(
+        width=1600,
+        height=900,
+        fullscreen=False,
+    )
+
+
+def test_project_settings_invalid_player_window_fields_use_defaults() -> None:
+    settings = ProjectSettings.from_dict(
+        {
+            "player_window": {
+                "width": 0,
+                "height": True,
+                "fullscreen": "no",
+            }
+        }
+    )
+
+    assert settings.player_window == ProjectPlayerWindowSettings()

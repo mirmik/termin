@@ -6,6 +6,8 @@ import json
 import shutil
 from pathlib import Path
 
+from tcbase import log
+from termin.project.settings import ProjectSettings
 from termin.project_builder.manifest import BuildDescription, ProjectBuildManifest
 
 
@@ -33,6 +35,7 @@ class ProjectBuildWriter:
             project_name=project_name,
             entry_scene=manifest.entry_scene_build_path,
             asset_manifest="assets/manifest.json",
+            runtime={"window": _load_project_settings(self.project_root).player_window.to_dict()},
         )
         build_json_path = self.output_dir / "build.json"
         self._write_json(build_json_path, description.to_dict())
@@ -62,3 +65,21 @@ class ProjectBuildWriter:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
             f.write("\n")
+
+
+def _load_project_settings(project_root: Path) -> ProjectSettings:
+    settings_path = project_root / "project_settings" / "project.json"
+    if not settings_path.exists():
+        return ProjectSettings()
+
+    try:
+        with open(settings_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as exc:
+        log.error(f"[ProjectBuildWriter] Failed to read project settings: {exc}")
+        return ProjectSettings()
+
+    if not isinstance(data, dict):
+        log.error("[ProjectBuildWriter] Project settings root must be an object")
+        return ProjectSettings()
+    return ProjectSettings.from_dict(data)

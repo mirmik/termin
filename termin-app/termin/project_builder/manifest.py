@@ -74,6 +74,7 @@ class BuildDescription:
     project_name: str
     entry_scene: str
     asset_manifest: str
+    runtime: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -81,6 +82,7 @@ class BuildDescription:
             "project_name": self.project_name,
             "entry_scene": self.entry_scene,
             "asset_manifest": self.asset_manifest,
+            "runtime": self.runtime,
         }
 
 

@@ -121,3 +121,58 @@ def test_player_backend_default_keeps_explicit_backend(monkeypatch, tmp_path: Pa
 
     assert os.environ["TERMIN_BACKEND"] == "opengl"
     assert logs == ["[PlayerRuntime] Using TERMIN_BACKEND=opengl"]
+
+
+def test_player_runtime_uses_project_window_settings(tmp_path: Path):
+    settings_path = tmp_path / "project_settings" / "project.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        '{"player_window": {"width": 1440, "height": 810, "fullscreen": false}}',
+        encoding="utf-8",
+    )
+
+    runtime = PlayerRuntime(project_path=tmp_path, scene_name="scene.scene")
+
+    assert runtime.width == 1440
+    assert runtime.height == 810
+    assert runtime.fullscreen is False
+
+
+def test_player_runtime_explicit_window_args_override_project_settings(tmp_path: Path):
+    settings_path = tmp_path / "project_settings" / "project.json"
+    settings_path.parent.mkdir()
+    settings_path.write_text(
+        '{"player_window": {"width": 1440, "height": 810, "fullscreen": false}}',
+        encoding="utf-8",
+    )
+
+    runtime = PlayerRuntime(
+        project_path=tmp_path,
+        scene_name="scene.scene",
+        width=800,
+        height=600,
+        fullscreen=True,
+    )
+
+    assert runtime.width == 800
+    assert runtime.height == 600
+    assert runtime.fullscreen is True
+
+
+def test_run_build_uses_manifest_window_settings(monkeypatch, tmp_path: Path):
+    build_path = tmp_path / "build.json"
+    build_path.write_text(
+        '{"entry_scene": "scene.json", "asset_manifest": "assets/manifest.json", '
+        '"runtime": {"window": {"width": 960, "height": 540, "fullscreen": false}}}',
+        encoding="utf-8",
+    )
+    captured: list[tuple[int, int, bool]] = []
+
+    def fake_run(self):
+        captured.append((self.width, self.height, self.fullscreen))
+
+    monkeypatch.setattr(PlayerRuntime, "run", fake_run)
+
+    player_runtime.run_build(build_path)
+
+    assert captured == [(960, 540, False)]

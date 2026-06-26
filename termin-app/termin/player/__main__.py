@@ -46,14 +46,14 @@ def main():
     parser.add_argument(
         "--width", "-W",
         type=int,
-        default=1280,
-        help="Window width (default: 1280)",
+        default=None,
+        help="Window width override (default: project/build setting)",
     )
     parser.add_argument(
         "--height", "-H",
         type=int,
-        default=720,
-        help="Window height (default: 720)",
+        default=None,
+        help="Window height override (default: project/build setting)",
     )
     parser.add_argument(
         "--title", "-t",
@@ -61,10 +61,22 @@ def main():
         default="Termin Player",
         help="Window title",
     )
-    parser.add_argument(
+    window_mode = parser.add_mutually_exclusive_group()
+    window_mode.add_argument(
+        "--fullscreen",
+        action="store_const",
+        const=True,
+        default=None,
+        dest="fullscreen",
+        help="Start in fullscreen desktop mode, overriding project/build settings",
+    )
+    window_mode.add_argument(
         "--windowed",
-        action="store_true",
-        help="Start in a normal window instead of fullscreen desktop mode",
+        action="store_const",
+        const=False,
+        default=None,
+        dest="fullscreen",
+        help="Start in a normal window, overriding project/build settings",
     )
     parser.add_argument(
         "--headless",
@@ -148,7 +160,7 @@ def main():
             width=args.width,
             height=args.height,
             title=args.title,
-            fullscreen=not args.windowed,
+            fullscreen=args.fullscreen,
             mcp_enabled=args.mcp,
             mcp_options=mcp_options,
         )
@@ -183,7 +195,7 @@ def main():
             width=args.width,
             height=args.height,
             title=args.title,
-            fullscreen=not args.windowed,
+            fullscreen=args.fullscreen,
             mcp_enabled=args.mcp,
             mcp_options=mcp_options,
         )
@@ -232,7 +244,7 @@ def main():
         width=args.width,
         height=args.height,
         title=args.title,
-        fullscreen=not args.windowed,
+        fullscreen=args.fullscreen,
         mcp_enabled=args.mcp,
         mcp_options=mcp_options,
     )
