@@ -135,6 +135,7 @@ struct AndroidBootstrapState {
     uint32_t smoke_frame = 0;
     bool smoke_create_failed = false;
     std::unique_ptr<termin::EngineCore> player_engine;
+    termin::runtime::RuntimePackageLoadResult player_package;
     termin::TcSceneRef player_scene;
     termin::RenderPipeline player_pipeline;
     termin::CameraComponent* player_camera = nullptr;
@@ -525,7 +526,9 @@ void destroy_player_scene_locked() {
     }
     if (g_state.player_scene.valid()) {
         g_state.player_scene.destroy();
+        g_state.player_scene = termin::TcSceneRef();
     }
+    g_state.player_package = termin::runtime::RuntimePackageLoadResult();
     g_state.player_camera = nullptr;
     g_state.player_engine.reset();
     g_state.player_frame = 0;
@@ -890,26 +893,28 @@ bool ensure_player_scene_locked() {
     }
 
     termin::runtime::RuntimePackageLoader loader;
-    termin::runtime::RuntimePackageLoadResult package =
-        loader.load(g_state.asset_root);
-    if (!package.ok || !package.scene.valid()) {
-        android_log_error("player: runtime package load failed: %s", package.message.c_str());
-        tc_log_error("termin_android_player: runtime package load failed: %s", package.message.c_str());
+    g_state.player_package = loader.load(g_state.asset_root);
+    if (!g_state.player_package.ok || !g_state.player_package.scene.valid()) {
+        android_log_error("player: runtime package load failed: %s", g_state.player_package.message.c_str());
+        tc_log_error("termin_android_player: runtime package load failed: %s", g_state.player_package.message.c_str());
+        g_state.player_package = termin::runtime::RuntimePackageLoadResult();
         return false;
     }
 
-    termin::CameraComponent* camera = find_player_camera(package.scene);
+    termin::CameraComponent* camera = find_player_camera(g_state.player_package.scene);
     if (!camera) {
         android_log_error("player: runtime package loaded but has no CameraComponent");
         tc_log_error("termin_android_player: runtime package loaded but has no CameraComponent");
-        package.scene.destroy();
+        g_state.player_package.scene.destroy();
+        g_state.player_package = termin::runtime::RuntimePackageLoadResult();
         return false;
     }
     if (!ensure_android_scene_pipeline_locked()) {
-        package.scene.destroy();
+        g_state.player_package.scene.destroy();
+        g_state.player_package = termin::runtime::RuntimePackageLoadResult();
         return false;
     }
-    g_state.player_scene = package.scene;
+    g_state.player_scene = g_state.player_package.scene;
     g_state.player_camera = camera;
     android_log_info(
         "player: runtime package loaded entities=%zu pipeline_passes=%zu",

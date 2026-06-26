@@ -356,6 +356,7 @@ struct OpenXRRuntimeScene {
     };
 
     std::unique_ptr<termin::EngineCore> engine;
+    termin::runtime::RuntimePackageLoadResult package;
     termin::TcSceneRef scene;
     termin::RenderPipeline pipeline;
     tc_render_target_handle xr_render_target = TC_RENDER_TARGET_HANDLE_INVALID;
@@ -546,10 +547,11 @@ struct OpenXRRuntimeScene {
 
         engine = std::make_unique<termin::EngineCore>();
         termin::runtime::RuntimePackageLoader loader;
-        termin::runtime::RuntimePackageLoadResult package = loader.load(asset_root);
+        package = loader.load(asset_root);
         if (!package.ok || !package.scene.valid()) {
             log_error("OpenXR scene", (std::string("runtime package load failed: ") + package.message).c_str());
             tc_log_error("[OpenXR scene] runtime package load failed: %s", package.message.c_str());
+            package = termin::runtime::RuntimePackageLoadResult();
             engine.reset();
             return false;
         }
@@ -561,6 +563,7 @@ struct OpenXRRuntimeScene {
             log_error("OpenXR scene", "runtime package loaded but has no XR camera origin");
             tc_log_error("[OpenXR scene] runtime package loaded but has no XR camera origin");
             package.scene.destroy();
+            package = termin::runtime::RuntimePackageLoadResult();
             engine.reset();
             return false;
         }
@@ -571,6 +574,7 @@ struct OpenXRRuntimeScene {
             log_error("OpenXR scene", "failed to create render pipeline");
             tc_log_error("[OpenXR scene] failed to create render pipeline");
             package.scene.destroy();
+            package = termin::runtime::RuntimePackageLoadResult();
             engine.reset();
             return false;
         }
@@ -814,8 +818,8 @@ struct OpenXRRuntimeScene {
             scene.destroy();
         }
         scene = {};
+        package = termin::runtime::RuntimePackageLoadResult();
         engine.reset();
         ready = false;
     }
 };
-

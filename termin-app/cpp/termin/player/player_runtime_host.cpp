@@ -606,6 +606,7 @@ struct PlayerRuntimeHost::Impl {
     OffscreenRenderSurfaceHandle surface_handle{};
     OffscreenRenderSurface* surface = nullptr;
     std::optional<TcDisplay> display;
+    termin::runtime::RuntimePackageLoadResult package;
     TcSceneRef scene;
     std::string scene_name = "runtime-scene";
     bool scene_registered = false;
@@ -787,11 +788,11 @@ struct PlayerRuntimeHost::Impl {
 
     void load_package() {
         termin::runtime::RuntimePackageLoader loader;
-        termin::runtime::RuntimePackageLoadResult result = loader.load(manifest.package_root.string());
-        if (!result.ok) {
-            throw std::runtime_error("failed to load runtime package: " + result.message);
+        package = loader.load(manifest.package_root.string());
+        if (!package.ok) {
+            throw std::runtime_error("failed to load runtime package: " + package.message);
         }
-        scene = result.scene;
+        scene = package.scene;
         if (!scene.valid()) {
             throw std::runtime_error("runtime package returned invalid scene");
         }
@@ -1163,6 +1164,7 @@ struct PlayerRuntimeHost::Impl {
             scene.destroy();
             scene = TcSceneRef();
         }
+        package = termin::runtime::RuntimePackageLoadResult();
 
         if (engine) {
             engine->scene_manager.set_on_after_render(nullptr);
