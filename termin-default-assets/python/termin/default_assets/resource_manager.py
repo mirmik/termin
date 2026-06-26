@@ -171,10 +171,8 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         if cls._instance is None:
             cls._instance = cls()
             from termin_assets import set_resource_manager_factory
-            from termin.default_assets.builtin_resources import register_all_builtins
 
             set_resource_manager_factory(cls.instance)
-            register_all_builtins(cls._instance)
         return cls._instance
 
     def clear_runtime_state(self) -> None:
