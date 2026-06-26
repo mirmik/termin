@@ -239,7 +239,7 @@ def show_scene_manager_viewer(
                 is_editing = True
 
         # Get attached extensions
-        from termin.scene_rendering import scene_ext_attached_names
+        from termin.engine import scene_ext_attached_names
         try:
             ext_names = scene_ext_attached_names(scene)
         except Exception as e:

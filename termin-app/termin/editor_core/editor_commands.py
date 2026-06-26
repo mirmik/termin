@@ -12,7 +12,7 @@ from termin.kinematic.general_transform import GeneralTransform3
 from termin.scene import Entity, Component
 from termin.scene import TcComponentRef
 from termin.inspect import InspectField
-from termin.scene_rendering import scene_render_state
+from termin.render import scene_render_state
 
 
 _logger = logging.getLogger(__name__)
