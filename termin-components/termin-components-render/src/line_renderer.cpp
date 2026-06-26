@@ -685,11 +685,6 @@ void LineRenderer::collect_shader_usages(
 void LineRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
     (void)context;
     (void)geometry_id;
-    tc_mesh* mesh = current_mesh_ptr();
-    if (!mesh) {
-        return;
-    }
-    tc_mesh_draw_gpu(mesh);
 }
 
 bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,

@@ -243,9 +243,6 @@ class VoxelDisplayComponent(DrawableComponent):
         # Проверяем hot-reload перед отрисовкой
         self._check_hot_reload()
 
-        if self._voxel_mesh is not None and self._voxel_mesh.is_valid:
-            self._voxel_mesh.draw_gpu()
-
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
         current_version = self.voxel_grid.version

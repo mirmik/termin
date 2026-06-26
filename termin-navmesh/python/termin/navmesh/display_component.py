@@ -309,14 +309,6 @@ void main() {
         """Рисует геометрию NavMesh."""
         self._check_hot_reload()
 
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_MESH:
-            if self._mesh is not None and self._mesh.is_valid:
-                self._mesh.draw_gpu()
-
-        if geometry_id == 0 or geometry_id == self.GEOMETRY_CONTOURS:
-            if self._contour_mesh is not None and self._contour_mesh.is_valid:
-                self._contour_mesh.draw_gpu()
-
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
         current_version = self.navmesh.version

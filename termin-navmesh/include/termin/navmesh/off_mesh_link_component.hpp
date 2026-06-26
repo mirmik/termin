@@ -92,9 +92,7 @@ public:
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override {
         (void)context;
         (void)geometry_id;
-        if (ensure_debug_resources() && _debug_mesh.is_valid()) {
-            tc_mesh_draw_gpu(_debug_mesh.get());
-        }
+        ensure_debug_resources();
     }
 
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override {

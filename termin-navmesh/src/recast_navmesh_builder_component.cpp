@@ -652,54 +652,8 @@ std::set<std::string> RecastNavMeshBuilderComponent::get_phase_marks() const {
 }
 
 void RecastNavMeshBuilderComponent::draw_geometry(const RenderContext& context, int geometry_id) {
-    auto draw_mesh = [](TcMesh& mesh) {
-        tc_mesh* m = mesh.get();
-        if (m) {
-            tc_mesh_draw_gpu(m);
-        }
-    };
-
-    if (geometry_id == GEOMETRY_INPUT_MESH) {
-        if (show_input_mesh && _input_mesh.is_valid()) {
-            draw_mesh(_input_mesh);
-        }
-    }
-
-    if (geometry_id == 0 || geometry_id == GEOMETRY_HEIGHTFIELD) {
-        if (show_heightfield && _heightfield_mesh.is_valid()) {
-            draw_mesh(_heightfield_mesh);
-        }
-    }
-
-    if (geometry_id == 0 || geometry_id == GEOMETRY_REGIONS) {
-        if (show_regions && _regions_mesh.is_valid()) {
-            draw_mesh(_regions_mesh);
-        }
-    }
-
-    if (geometry_id == 0 || geometry_id == GEOMETRY_DISTANCE_FIELD) {
-        if (show_distance_field && _distance_field_mesh.is_valid()) {
-            draw_mesh(_distance_field_mesh);
-        }
-    }
-
-    if (geometry_id == 0 || geometry_id == GEOMETRY_CONTOURS) {
-        if (show_contours && _contours_mesh.is_valid()) {
-            draw_mesh(_contours_mesh);
-        }
-    }
-
-    if (geometry_id == 0 || geometry_id == GEOMETRY_POLY_MESH) {
-        if (show_poly_mesh && _poly_mesh_debug.is_valid()) {
-            draw_mesh(_poly_mesh_debug);
-        }
-    }
-
-    if (geometry_id == 0 || geometry_id == GEOMETRY_DETAIL_MESH) {
-        if (show_detail_mesh && _detail_mesh_debug.is_valid()) {
-            draw_mesh(_detail_mesh_debug);
-        }
-    }
+    (void)context;
+    (void)geometry_id;
 }
 
 std::vector<GeometryDrawCall> RecastNavMeshBuilderComponent::get_geometry_draws(const std::string* phase_mark) {

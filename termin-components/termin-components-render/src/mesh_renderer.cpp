@@ -392,11 +392,6 @@ Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
 void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
     (void)context;
     (void)geometry_id;
-    tc_mesh* m = current_mesh_ptr();
-    if (!m) {
-        return;
-    }
-    tc_mesh_draw_gpu(m);
 }
 
 std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {

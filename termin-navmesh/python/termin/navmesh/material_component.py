@@ -103,9 +103,6 @@ class NavMeshMaterialComponent(DrawableComponent):
         """Draw NavMesh geometry."""
         self._check_hot_reload()
 
-        if self._mesh is not None and self._mesh.is_valid:
-            self._mesh.draw_gpu()
-
     def _check_hot_reload(self) -> None:
         """Check if navmesh changed (hot-reload)."""
         current_version = self.navmesh.version
