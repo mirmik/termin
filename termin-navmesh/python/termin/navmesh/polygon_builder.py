@@ -12,11 +12,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from tcbase import log
 from termin.navmesh.types import NavPolygon, NavMesh, NavMeshConfig
-from termin.voxels.grid import VoxelGrid
 
 from termin.navmesh.region_growing import (
     NEIGHBORS_26,
@@ -50,6 +51,9 @@ from termin.navmesh.contour_extraction import (
     compute_distance_field_for_region,
     watershed_split_region,
 )
+
+if TYPE_CHECKING:
+    from termin.voxels.grid import VoxelGrid
 
 
 def merge_duplicate_vertices(
