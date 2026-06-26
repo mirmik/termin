@@ -304,6 +304,118 @@ def test_component_processor_reloads_real_loose_python_component_class(tmp_path:
         ComponentRegistry.instance().unregister_python(component_name)
 
 
+def test_component_processor_reloads_dependents_after_loose_helper_change(tmp_path: Path) -> None:
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.scene import ComponentRegistry
+
+    component_name = "BrowserLooseHelperCascadeComponent"
+    scripts_dir = tmp_path / "Scripts"
+    scripts_dir.mkdir()
+    helper_path = scripts_dir / "helper_values.py"
+    script_path = scripts_dir / f"{component_name}.py"
+
+    def write_helper(value: int) -> None:
+        helper_path.write_text(f"HELPER_VALUE = {value}\n", encoding="utf-8")
+
+    write_helper(1)
+    script_path.write_text(
+        "\n".join(
+            [
+                "from termin.scene import PythonComponent",
+                "from .helper_values import HELPER_VALUE",
+                "",
+                "",
+                f"class {component_name}(PythonComponent):",
+                "    value = HELPER_VALUE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    resource_manager = DefaultResourceManager()
+    reloaded: list[tuple[str, str]] = []
+    processor = ComponentFileProcessor(
+        resource_manager,
+        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+    )
+    processor.set_project_root(str(tmp_path))
+
+    try:
+        processor.on_file_added(str(helper_path))
+        processor.on_file_added(str(script_path))
+        old_cls = resource_manager.get_component(component_name)
+        assert old_cls is not None
+        assert old_cls.value == 1
+
+        write_helper(5)
+        processor.on_file_changed(str(helper_path))
+
+        new_cls = resource_manager.get_component(component_name)
+        assert new_cls is not None
+        assert new_cls is not old_cls
+        assert new_cls.value == 5
+        assert reloaded == [
+            ("component", component_name),
+            ("component", component_name),
+        ]
+    finally:
+        ComponentRegistry.instance().unregister_python(component_name)
+
+
+def test_component_processor_reloads_cross_dir_termin_project_dependents(tmp_path: Path) -> None:
+    from termin.default_assets.resource_manager import DefaultResourceManager
+    from termin.scene import ComponentRegistry
+
+    component_name = "BrowserLooseCrossDirHelperCascadeComponent"
+    scripts_dir = tmp_path / "Scripts"
+    shared_dir = tmp_path / "Shared"
+    scripts_dir.mkdir()
+    shared_dir.mkdir()
+    helper_path = shared_dir / "values.py"
+    script_path = scripts_dir / f"{component_name}.py"
+
+    def write_helper(value: int) -> None:
+        helper_path.write_text(f"SHARED_VALUE = {value}\n", encoding="utf-8")
+
+    write_helper(3)
+    script_path.write_text(
+        "\n".join(
+            [
+                "from termin.scene import PythonComponent",
+                "from termin_project.Shared.values import SHARED_VALUE",
+                "",
+                "",
+                f"class {component_name}(PythonComponent):",
+                "    value = SHARED_VALUE",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    resource_manager = DefaultResourceManager()
+    processor = ComponentFileProcessor(resource_manager)
+    processor.set_project_root(str(tmp_path))
+
+    try:
+        processor.on_file_added(str(helper_path))
+        processor.on_file_added(str(script_path))
+        old_cls = resource_manager.get_component(component_name)
+        assert old_cls is not None
+        assert old_cls.value == 3
+
+        write_helper(8)
+        processor.on_file_changed(str(helper_path))
+
+        new_cls = resource_manager.get_component(component_name)
+        assert new_cls is not None
+        assert new_cls is not old_cls
+        assert new_cls.value == 8
+    finally:
+        ComponentRegistry.instance().unregister_python(component_name)
+
+
 def test_project_file_watcher_created_event_loads_loose_python_components(tmp_path: Path) -> None:
     script_path = tmp_path / "Scripts" / "EnemyComponent.py"
     script_path.parent.mkdir()

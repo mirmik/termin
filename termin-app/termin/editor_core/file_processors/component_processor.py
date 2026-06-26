@@ -99,6 +99,8 @@ class ComponentFileProcessor(FilePreLoader):
             # Notify about reloaded components
             for name in loaded:
                 self._notify_reloaded(name)
+            if not loaded:
+                self._reload_tracked_loose_components(trigger_path=path)
 
         except Exception:
             log.error(f"[ComponentProcessor] Failed to reload {path}", exc_info=True)
@@ -124,6 +126,24 @@ class ComponentFileProcessor(FilePreLoader):
         from termin.modules import get_project_modules_runtime
 
         return get_project_modules_runtime()
+
+    def _reload_tracked_loose_components(self, *, trigger_path: str) -> None:
+        """Conservatively refresh loose components after helper-only changes."""
+        for component_path in sorted(self._file_to_resources):
+            if component_path == trigger_path or not os.path.exists(component_path):
+                continue
+            try:
+                loaded = self._scan_loose_components(component_path)
+            except Exception:
+                log.error(
+                    f"[ComponentProcessor] Failed to reload dependent loose component {component_path}",
+                    exc_info=True,
+                )
+                continue
+
+            self._file_to_resources[component_path].update(loaded)
+            for name in loaded:
+                self._notify_reloaded(name)
 
     def _scan_loose_components(self, path: str) -> list[str]:
         return self._resource_manager.scan_components(
