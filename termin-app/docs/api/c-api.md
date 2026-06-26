@@ -1,10 +1,10 @@
 # C API Reference
 
-Низкоуровневый C API библиотеки Termin.
+Низкоуровневый C API библиотеки Termin теперь живёт в SDK-модулях-владельцах, а не в `termin-app/core_c`.
 
 ## Логирование (tc_log.h)
 
-Заголовочный файл: `core_c/include/tc_log.h`
+Заголовочный файл: `termin-base/include/tcbase/tc_log.h`
 
 ```c
 // Уровни логирования
@@ -19,6 +19,6 @@ void tc_log(int level, const char* fmt, ...);
 
 ## 3D Вектор (tc_vec3.h)
 
-Заголовочный файл: `core_c/include/geom/tc_vec3.h`
+Заголовочный файл: `termin-base/include/geom/tc_vec3.h`
 
-Полная документация C API находится в заголовочных файлах `core_c/include/`.
+Полная документация C API находится в публичных заголовках соответствующих SDK-модулей.

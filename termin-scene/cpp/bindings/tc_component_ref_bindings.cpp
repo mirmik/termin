@@ -229,7 +229,7 @@ public:
         }
     }
 
-    // Set field value by name (inlines tc_component_inspect_set to avoid core_c dependency)
+    // Set field value by name through the inspect adapters without a legacy aggregate dependency.
     void set_field(const std::string& field_name, nb::object value, TcSceneRef scene = TcSceneRef()) {
         if (!_c || value.is_none()) return;
 

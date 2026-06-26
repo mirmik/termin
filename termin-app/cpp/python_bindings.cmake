@@ -29,7 +29,6 @@ endif()
 nanobind_add_module(_editor_native NB_SHARED ${TERMIN_APP_EDITOR_NATIVE_SOURCES})
 target_link_libraries(_editor_native PRIVATE
     tcbase::termin_base
-    termin_core
     termin_scene::termin_scene
     termin_input::termin_input
     termin_collision::termin_collision
@@ -70,7 +69,6 @@ if(BUILD_TESTS)
     )
     target_link_libraries(_cpp_tests PRIVATE
         tcbase::termin_base
-        termin_core
         termin_scene::termin_scene
     )
     target_compile_options(_cpp_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)

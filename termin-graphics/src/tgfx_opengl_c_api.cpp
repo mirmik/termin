@@ -1,20 +1,18 @@
-// tc_opengl.cpp - OpenGL backend initialization C API implementation
-#include "tc_opengl.h"
+#include <tgfx/opengl/tc_opengl.h>
 
 #include <glad/glad.h>
 
-#include "tgfx/opengl/opengl_backend.hpp"  // init_opengl()
+#include <tgfx/opengl/opengl_backend.hpp>
 
 static bool g_opengl_initialized = false;
 
 extern "C" {
 
-TC_API bool tc_opengl_init(void) {
+bool tc_opengl_init(void) {
     if (g_opengl_initialized) {
         return true;
     }
 
-    // Initialize GLAD - loads OpenGL function pointers
     if (!termin::init_opengl()) {
         return false;
     }
@@ -28,11 +26,11 @@ TC_API bool tc_opengl_init(void) {
     return true;
 }
 
-TC_API bool tc_opengl_is_initialized(void) {
+bool tc_opengl_is_initialized(void) {
     return g_opengl_initialized;
 }
 
-TC_API void tc_opengl_shutdown(void) {
+void tc_opengl_shutdown(void) {
     g_opengl_initialized = false;
 }
 
