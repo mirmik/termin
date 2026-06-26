@@ -8,6 +8,7 @@ GUARD_TEST_MAIN();
 #include <sstream>
 #include <string>
 
+#include <termin/entity/entity.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/runtime/runtime_package.hpp>
@@ -17,6 +18,7 @@ extern "C" {
 #include <core/tc_light_capability.h>
 #include <core/tc_scene.h>
 #include <tgfx/resources/tc_material_registry.h>
+#include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_texture_registry.h>
 }
 
@@ -24,6 +26,8 @@ namespace {
 
 constexpr const char* kShaderUuid = "runtime-loader-test-shader";
 constexpr const char* kMaterialUuid = "runtime-loader-test-material";
+constexpr const char* kMeshUuid = "runtime-loader-test-mesh";
+constexpr const char* kMeshName = "RuntimeLoaderTestMesh";
 
 std::filesystem::path make_package_root() {
     std::filesystem::path root = std::filesystem::temp_directory_path()
@@ -31,6 +35,7 @@ std::filesystem::path make_package_root() {
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "shaders");
     std::filesystem::create_directories(root / "materials");
+    std::filesystem::create_directories(root / "meshes");
     return root;
 }
 
@@ -51,6 +56,24 @@ std::string shader_spec() {
         << "  \"features\": 1\n"
         << "}\n";
     return out.str();
+}
+
+std::string mesh_spec() {
+    return R"({
+  "uuid": "runtime-loader-test-mesh",
+  "name": "RuntimeLoaderTestMesh",
+  "draw_mode": "triangles",
+  "layout": [
+    {"name": "position", "type": "float32", "components": 3, "location": 0}
+  ],
+  "vertices": [
+    0.0, 0.0, 0.0,
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0
+  ],
+  "indices": [0, 1, 2]
+}
+)";
 }
 
 std::string material_spec() {
@@ -82,7 +105,8 @@ std::string manifest() {
   "shader_artifact_root": ".",
   "resources": [
     {"type": "shader", "uuid": "runtime-loader-test-shader", "path": "shaders/test.shader.json"},
-    {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"}
+    {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"},
+    {"type": "mesh", "uuid": "runtime-loader-test-mesh", "path": "meshes/test.tmesh.json"}
   ],
   "scene": "scene.json"
 }
@@ -104,6 +128,21 @@ std::string scene_json() {
       },
       "scale": [1.0, 1.0, 1.0],
       "components": [
+        {
+          "type": "MeshComponent",
+          "data": {
+            "enabled": true,
+            "mesh": {
+              "uuid": "runtime-loader-test-mesh",
+              "name": "RuntimeLoaderTestMesh",
+              "type": "uuid"
+            },
+            "mesh_offset_enabled": false,
+            "mesh_offset_position": [0.0, 0.0, 0.0],
+            "mesh_offset_euler": [0.0, 0.0, 0.0],
+            "mesh_offset_scale": [1.0, 1.0, 1.0]
+          }
+        },
         {
           "type": "MeshRenderer",
           "data": {
@@ -191,6 +230,7 @@ void main() {
 }
 )");
     write_text(root / "materials" / "test.tmat.json", material_spec());
+    write_text(root / "meshes" / "test.tmesh.json", mesh_spec());
 }
 
 tc_uniform_value* require_uniform(tc_material_phase* phase, const char* name, tc_uniform_type type) {
@@ -296,4 +336,23 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     CHECK(std::fabs(lighting->ambient_color[1] - 0.8f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_color[2] - 0.9f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_intensity - 0.33f) < 0.0001f);
+}
+TEST_CASE("RuntimePackageLoader keeps package meshes alive after scene entity removal") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
+    REQUIRE(result.ok);
+    REQUIRE(result.scene.valid());
+    REQUIRE(result.resources != nullptr);
+
+    tc_mesh_handle loaded = tc_mesh_find_by_name(kMeshName);
+    REQUIRE(tc_mesh_is_valid(loaded));
+
+    termin::Entity entity = result.scene.find_entity_by_name("RuntimeLoaderTestEntity");
+    REQUIRE(entity.valid());
+    result.scene.remove_entity(entity);
+
+    tc_mesh_handle still_loaded = tc_mesh_find_by_name(kMeshName);
+    CHECK(tc_mesh_is_valid(still_loaded));
 }
