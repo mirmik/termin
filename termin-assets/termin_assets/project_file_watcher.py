@@ -320,7 +320,10 @@ class ProjectFileWatcher:
         self._watched_files.clear()
         self._all_files_by_ext.clear()
 
-        self._scan_directory(project_path)
+        self._scan_directory(
+            project_path,
+            previously_watched_files=previously_watched_files,
+        )
 
         removed_files = previously_watched_files - self._watched_files
         for path in sorted(removed_files):
@@ -344,7 +347,12 @@ class ProjectFileWatcher:
         self._start_observer(path)
 
 
-    def _scan_directory(self, path: str) -> None:
+    def _scan_directory(
+        self,
+        path: str,
+        *,
+        previously_watched_files: Set[str] | None = None,
+    ) -> None:
         """Recursively scan directory and process resource files."""
         pending_files: list[tuple[int, str, str]] = []
 
@@ -383,6 +391,9 @@ class ProjectFileWatcher:
         pending_files.sort(key=lambda x: (x[0], x[1]))
 
         for _priority, file_path, _ext in pending_files:
+            if previously_watched_files is not None and file_path in previously_watched_files:
+                self._watched_files.add(file_path)
+                continue
             self._add_file(file_path, initial_scan=True)
 
     def _start_observer(self, path: str) -> None:

@@ -883,6 +883,34 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
     assert (dist_dir / "share" / "termin" / "builtin_shaders" / "termin_prelude.slang").exists()
 
 
+def test_desktop_runtime_packager_refreshes_existing_windows_root_dlls(tmp_path: Path) -> None:
+    sdk = _write_fake_windows_desktop_sdk(tmp_path)
+    runtime_dll = sdk / "bin" / "termin_render_passes.dll"
+    runtime_dll.write_bytes(b"old runtime")
+    dist_dir = tmp_path / "dist" / "WindowsGame"
+
+    first_result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[],
+        sdk_root=sdk,
+    )
+    assert first_result.diagnostics == []
+    assert (dist_dir / "termin_render_passes.dll").read_bytes() == b"old runtime"
+
+    (dist_dir / "removed_runtime.dll").write_bytes(b"stale runtime")
+    runtime_dll.write_bytes(b"new runtime")
+
+    second_result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[],
+        sdk_root=sdk,
+    )
+
+    assert second_result.diagnostics == []
+    assert (dist_dir / "termin_render_passes.dll").read_bytes() == b"new runtime"
+    assert not (dist_dir / "removed_runtime.dll").exists()
+
+
 def test_desktop_runtime_packager_legacy_policy_copies_sdk_site_packages(tmp_path: Path) -> None:
     dist_dir = tmp_path / "dist" / "LegacyGame"
 

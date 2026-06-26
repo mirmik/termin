@@ -829,6 +829,40 @@ def test_project_file_watcher_rescan_removes_newly_ignored_plugin_asset(tmp_path
     assert rm.external_assets.removed_paths == [str(texture_path)]
 
 
+def test_project_file_watcher_rescan_preserves_existing_plugin_asset(tmp_path: Path, monkeypatch) -> None:
+    _set_project_settings(monkeypatch, ProjectSettings())
+
+    texture_path = tmp_path / "Textures" / "Stable.png"
+    texture_path.parent.mkdir()
+    texture_path.write_bytes(b"png")
+    texture_path.with_name(texture_path.name + ".meta").write_text(
+        '{"uuid": "texture-stable-uuid"}',
+        encoding="utf-8",
+    )
+
+    rm = RecordingResourceManager()
+    preloader = PluginPreLoader(TextureImportPlugin(), rm)
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(preloader)
+    watcher._project_path = str(tmp_path)
+    watcher._scan_directory(str(tmp_path))
+
+    registered_before = list(rm.registered)
+    reloaded_before = list(rm.reloaded)
+
+    watcher.rescan()
+
+    assert watcher.watched_files == {
+        str(texture_path),
+        str(texture_path.with_name(texture_path.name + ".meta")),
+    }
+    assert preloader.get_tracked_files() == {str(texture_path): {"Stable"}}
+    assert rm.registered == registered_before
+    assert rm.reloaded == reloaded_before
+    assert rm.unregistered == []
+    assert rm.external_assets.removed_paths == []
+
+
 def test_project_file_watcher_created_file_registers_plugin_asset(tmp_path: Path) -> None:
     texture_path = tmp_path / "Albedo.png"
     texture_path.write_bytes(b"png")

@@ -1,4 +1,4 @@
-"""Project settings dialog — configure render sync mode."""
+"""Project settings dialog - configure project-level editor and player settings."""
 
 from __future__ import annotations
 
@@ -18,7 +18,8 @@ from tcgui.widgets.units import px
 
 def show_project_settings_dialog(
     ui,
-    on_changed: Callable[[], None] | None = None,
+    on_resource_settings_changed: Callable[[], None] | None = None,
+    on_render_settings_changed: Callable[[], None] | None = None,
 ) -> None:
     """Show project settings dialog. Changes apply immediately."""
     from termin.project.settings import ProjectSettingsManager, RenderSyncMode
@@ -26,12 +27,22 @@ def show_project_settings_dialog(
     manager = ProjectSettingsManager.instance()
     if manager is None or manager.project_path is None:
         from tcbase import log
-        log.warn("No project open — cannot show project settings")
+        log.warn("No project open - cannot show project settings")
         return
 
     sync_modes = list(RenderSyncMode)
     mode_labels = [m.value.capitalize() for m in sync_modes]
     current_idx = sync_modes.index(manager.settings.render_sync_mode)
+
+    def _resource_settings_snapshot() -> tuple[str, tuple[str, ...]]:
+        return (
+            manager.settings.build_output_dir,
+            tuple(manager.settings.ignored_resource_paths),
+        )
+
+    def _notify_resource_settings_changed(before: tuple[str, tuple[str, ...]]) -> None:
+        if _resource_settings_snapshot() != before and on_resource_settings_changed is not None:
+            on_resource_settings_changed()
 
     content = VStack()
     content.spacing = 8
@@ -46,12 +57,15 @@ def show_project_settings_dialog(
     combo.items = mode_labels
     combo.selected_index = current_idx
 
-    def _on_changed(idx: int):
-        manager.set_render_sync_mode(sync_modes[idx])
-        if on_changed:
-            on_changed()
+    def _on_render_sync_changed(idx: int) -> None:
+        mode = sync_modes[idx]
+        if manager.settings.render_sync_mode == mode:
+            return
+        manager.set_render_sync_mode(mode)
+        if on_render_settings_changed is not None:
+            on_render_settings_changed()
 
-    combo.on_changed = lambda idx, _text: _on_changed(idx)
+    combo.on_changed = lambda idx, _text: _on_render_sync_changed(idx)
     row.add_child(combo)
     content.add_child(row)
 
@@ -66,15 +80,14 @@ def show_project_settings_dialog(
     build_dir_input.text = manager.settings.build_output_dir
     build_dir_input.preferred_width = px(180)
 
-    def _on_build_dir_changed(text: str):
+    def _on_build_dir_changed(text: str) -> None:
+        before = _resource_settings_snapshot()
         manager.set_build_output_dir(text)
-        if on_changed:
-            on_changed()
+        _notify_resource_settings_changed(before)
 
     build_dir_input.on_submit = _on_build_dir_changed
     build_row.add_child(build_dir_input)
     content.add_child(build_row)
-
 
     player_window_label = Label()
     player_window_label.text = "Player Window:"
@@ -122,12 +135,11 @@ def show_project_settings_dialog(
             int(height_spin.value),
             fullscreen_check.checked,
         )
-        if on_changed:
-            on_changed()
 
     width_spin.on_changed = lambda _value: _apply_player_window()
     height_spin.on_changed = lambda _value: _apply_player_window()
     fullscreen_check.on_changed = lambda _checked: _apply_player_window()
+
     ignored_label = Label()
     ignored_label.text = "Ignored Resource Paths:"
     ignored_label.tooltip = "Project-relative files or directories excluded from resource scan, file watching, and build manifests."
@@ -145,6 +157,7 @@ def show_project_settings_dialog(
         return [line.strip() for line in text.splitlines() if line.strip()]
 
     def _apply_settings(_button: str) -> None:
+        before = _resource_settings_snapshot()
         manager.set_build_output_dir(build_dir_input.text)
         manager.set_player_window(
             int(width_spin.value),
@@ -152,8 +165,7 @@ def show_project_settings_dialog(
             fullscreen_check.checked,
         )
         manager.set_ignored_resource_paths(_ignored_paths_from_text(ignored_paths_input.text))
-        if on_changed:
-            on_changed()
+        _notify_resource_settings_changed(before)
 
     dlg = Dialog()
     dlg.title = "Project Settings"

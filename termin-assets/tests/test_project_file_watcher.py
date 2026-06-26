@@ -27,6 +27,20 @@ class RecordingRemovalPreLoader(FilePreLoader):
             raise RuntimeError(f"failed to remove {path}")
 
 
+class RecordingLifecyclePreLoader(RecordingRemovalPreLoader):
+    def __init__(self) -> None:
+        super().__init__()
+        self.initial_added: list[str] = []
+        self.added: list[str] = []
+
+    def on_file_added(self, path: str) -> None:
+        self.added.append(path)
+
+    def on_initial_file_added(self, path: str) -> None:
+        self.initial_added.append(path)
+        super().on_initial_file_added(path)
+
+
 def _queue_change(watcher: ProjectFileWatcher, path: Path, kind: str) -> None:
     with watcher._lock:
         watcher._pending_changes[str(path)] = kind
@@ -130,3 +144,45 @@ def test_rescan_logs_failed_remove_and_processes_later_removed_files(tmp_path: P
     assert processor.removed == [str(first_path), str(second_path)]
     assert watcher.watched_files == set()
     assert log_messages == [f"[ProjectFileWatcher] Error removing {first_path}"]
+
+
+def test_rescan_keeps_existing_files_without_readding_them(tmp_path: Path) -> None:
+    asset_path = tmp_path / "stable.asset"
+    asset_path.write_text("stable", encoding="utf-8")
+
+    processor = RecordingLifecyclePreLoader()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._project_path = str(tmp_path)
+
+    watcher._scan_directory(str(tmp_path))
+    assert processor.initial_added == [str(asset_path)]
+    assert processor.added == [str(asset_path)]
+
+    watcher.rescan()
+
+    assert watcher.watched_files == {str(asset_path)}
+    assert processor.initial_added == [str(asset_path)]
+    assert processor.added == [str(asset_path)]
+    assert processor.removed == []
+
+
+def test_rescan_adds_new_files_discovered_since_previous_scan(tmp_path: Path) -> None:
+    first_path = tmp_path / "first.asset"
+    first_path.write_text("first", encoding="utf-8")
+
+    processor = RecordingLifecyclePreLoader()
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._project_path = str(tmp_path)
+
+    watcher._scan_directory(str(tmp_path))
+
+    second_path = tmp_path / "second.asset"
+    second_path.write_text("second", encoding="utf-8")
+    watcher.rescan()
+
+    assert watcher.watched_files == {str(first_path), str(second_path)}
+    assert processor.initial_added == [str(first_path), str(second_path)]
+    assert processor.added == [str(first_path), str(second_path)]
+    assert processor.removed == []
