@@ -7,10 +7,14 @@ Region Growing алгоритмы для построения NavMesh.
 from __future__ import annotations
 
 from collections import deque
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from tcbase import log
-from termin.voxels.grid import VoxelGrid
+
+if TYPE_CHECKING:
+    from termin.voxels.grid import VoxelGrid
 
 
 # 6-связность для 3D (только по осям)
