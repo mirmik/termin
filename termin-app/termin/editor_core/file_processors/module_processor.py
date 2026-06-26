@@ -106,8 +106,9 @@ class ModuleInputFileProcessor(FilePreLoader):
         return "module_input"
 
     def on_file_added(self, path: str) -> None:
-        # Initial project scans also arrive here. Do not mark every existing
-        # native source dirty before the user actually changes it.
+        self._mark_changed(path)
+
+    def on_initial_file_added(self, path: str) -> None:
         self._file_to_resources.setdefault(path, set())
 
     def on_file_changed(self, path: str) -> None:

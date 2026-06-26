@@ -196,10 +196,62 @@ def test_module_input_processor_initial_scan_does_not_mark_existing_sources_dirt
         modules_runtime_provider=lambda: runtime,
     )
 
-    processor.on_file_added(str(source))
+    processor.on_initial_file_added(str(source))
 
     assert runtime.dirty_paths == []
     assert processor.get_tracked_files() == {str(source): set()}
+
+
+def test_module_input_processor_live_created_source_marks_module_dirty(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_added(str(source))
+
+    assert runtime.dirty_paths == [source]
+
+
+def test_project_file_watcher_initial_scan_uses_initial_add_hook_for_module_inputs(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+    watcher._project_path = str(tmp_path)
+
+    watcher._scan_directory(str(tmp_path))
+
+    assert runtime.dirty_paths == []
+    assert watcher.watched_files == {str(source)}
+
+
+def test_project_file_watcher_live_created_module_input_marks_module_dirty(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(processor)
+
+    with watcher._lock:
+        watcher._pending_changes[str(source)] = "created"
+
+    watcher.poll()
+
+    assert runtime.dirty_paths == [source]
+    assert watcher.watched_files == {str(source)}
 
 
 def test_project_modules_runtime_marks_cpp_module_dirty_for_native_input(tmp_path: Path) -> None:
