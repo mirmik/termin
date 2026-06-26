@@ -147,7 +147,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
     This ensures proper registration and avoids duplicates.
 
     Stores ShaderMultyPhaseProgramm (parsed shader with phases, uniforms).
-    GPU compilation is handled by TcShader inside MaterialPhase.
+    Runtime shader materialization is handled by TcShader inside MaterialPhase.
     """
 
     _uses_binary = False  # Shader text format

@@ -86,7 +86,6 @@ class TextureRuntimePlugin:
 
         asset.parse_spec(result.spec_data)
         asset.reload()
-        asset.delete_gpu()
 
 
 class TextureAssetPlugin(TextureImportPlugin, TextureRuntimePlugin):

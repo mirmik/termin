@@ -19,8 +19,8 @@ class TextureAsset(DataAsset[TcTexture]):
     IMPORTANT: Create through ResourceManager, not directly.
     This ensures proper registration and avoids duplicates.
 
-    Stores TcTexture (handle to tc_texture in C registry).
-    GPU resources are managed directly by TcTexture.
+    Stores TcTexture (handle to tc_texture in C registry). Renderer/device-specific
+    upload and cache invalidation are handled outside the asset layer.
     """
 
     _uses_binary = True  # PNG/JPG binary format
@@ -35,7 +35,7 @@ class TextureAsset(DataAsset[TcTexture]):
         super().__init__(data=texture_data, name=name, source_path=source_path, uuid=uuid)
         # Spec settings (parsed from spec file)
         self._flip_x: bool = False
-        self._flip_y: bool = True  # Default: flip Y for OpenGL
+        self._flip_y: bool = True  # Default import convention: texture origin at bottom-left.
         self._transpose: bool = False
 
     # --- Convenience property ---
@@ -82,12 +82,6 @@ class TextureAsset(DataAsset[TcTexture]):
     def transpose(self) -> bool:
         """Texture transpose import flag."""
         return self._transpose
-
-    # --- GPU resources ---
-
-    def delete_gpu(self) -> None:
-        """Legacy compatibility hook. tgfx2 owns GPU texture lifetimes."""
-        return None
 
     # --- Spec parsing ---
 
