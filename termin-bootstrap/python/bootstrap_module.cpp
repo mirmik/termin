@@ -88,4 +88,5 @@ NB_MODULE(_bootstrap_native, m) {
     m.def("bootstrap_runtime", &termin::bootstrap::bootstrap_runtime);
     m.def("bootstrap_player", &termin::bootstrap::bootstrap_player);
     m.def("bootstrap_editor", &termin::bootstrap::bootstrap_editor);
+    m.def("shutdown_runtime", &termin::bootstrap::shutdown_runtime);
 }

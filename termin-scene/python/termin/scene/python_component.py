@@ -27,7 +27,8 @@ def _remember_registered_type(names: list[str], type_name: str) -> None:
         names.append(type_name)
 
 
-def _cleanup_python_component_registrations() -> None:
+def shutdown_python_components() -> None:
+    """Unregister Python-backed component and inspect types."""
     component_names = list(reversed(_registered_python_component_types))
     inspect_names = list(reversed(_registered_python_inspect_types))
 
@@ -56,7 +57,7 @@ def _cleanup_python_component_registrations() -> None:
     _registered_python_inspect_types.clear()
 
 
-atexit.register(_cleanup_python_component_registrations)
+atexit.register(shutdown_python_components)
 
 
 def _ensure_python_component_inspect_type(registry, record_inspect_type) -> None:

@@ -1024,6 +1024,8 @@ struct PlayerRuntimeHost::Impl {
             window.reset();
         }
 
+        termin::bootstrap::shutdown_runtime();
+
         // Deliberately do not call Py_FinalizeEx() here. The editor follows the
         // same rule: native destructors and callbacks can still touch Python, and
         // finalization was the old player shutdown crash boundary.

@@ -31,10 +31,15 @@ def configure_glsl_preprocessor_fallback() -> None:
 
 def unregister_glsl_preprocessor_fallback() -> None:
     """Release Python callbacks held by the process-wide GLSL preprocessor."""
+    global _GLSL_PREPROCESSOR_CLEANUP_REGISTERED
+
     try:
         from termin.materials import unregister_glsl_preprocessor
 
         unregister_glsl_preprocessor()
+        if _GLSL_PREPROCESSOR_CLEANUP_REGISTERED:
+            atexit.unregister(unregister_glsl_preprocessor_fallback)
+        _GLSL_PREPROCESSOR_CLEANUP_REGISTERED = False
     except Exception as exc:
         log.error(f"[GlslPreprocessor] cleanup failed: {exc}")
 

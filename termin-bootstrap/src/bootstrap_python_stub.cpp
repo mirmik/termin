@@ -24,4 +24,6 @@ void init_python_component_callbacks() {
     tc::Log::warn("[termin-bootstrap] Python component callbacks requested in a non-Python build");
 }
 
+void reset_python_bootstrap_state() {}
+
 } // namespace termin::bootstrap
