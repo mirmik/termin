@@ -4,6 +4,7 @@ import atexit
 import os
 import sys
 import weakref
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
@@ -18,6 +19,14 @@ from termin_modules import (
     ModuleRuntime,
     PythonModuleBackend,
 )
+
+
+@dataclass(frozen=True)
+class ModuleFileChange:
+    module_id: str
+    kind: str
+    path: Path
+    reason: str
 
 
 def _is_python_executable(path: Path) -> bool:
@@ -51,6 +60,7 @@ class ProjectModulesRuntime:
         self._auto_reload_enabled = False
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
+        self._dirty_module_reasons: dict[str, set[str]] = {}
         self._closed = False
         self._configure_environment()
         self._configure_runtime()
@@ -126,7 +136,10 @@ class ProjectModulesRuntime:
         self._runtime.discover(self._project_root)
         if self._runtime.last_error:
             log.error(f"[ProjectModulesRuntime] discover failed: {self._runtime.last_error}")
-        return self._runtime.load_all()
+        success = self._runtime.load_all()
+        if success:
+            self._dirty_module_reasons.clear()
+        return success
 
     def discover_project(self, project_root: str | Path | None = None) -> bool:
         self._ensure_open()
@@ -146,7 +159,10 @@ class ProjectModulesRuntime:
 
     def reload_module(self, module_id: str) -> bool:
         self._ensure_open()
-        return self._runtime.reload_module_with_dependents(module_id)
+        success = self._runtime.reload_module_with_dependents(module_id)
+        if success:
+            self._dirty_module_reasons.pop(module_id, None)
+        return success
 
     def reload_descriptor(self, descriptor_path: str | Path) -> str | None:
         descriptor = Path(descriptor_path).resolve()
@@ -159,6 +175,7 @@ class ProjectModulesRuntime:
 
         if not self.reload_module(record.id):
             return None
+        self._dirty_module_reasons.pop(record.id, None)
         return record.id
 
     def reload_modules_for_path(self, path: str | Path) -> list[str]:
@@ -176,14 +193,52 @@ class ProjectModulesRuntime:
         return reloaded
 
     def module_ids_for_path(self, path: str | Path) -> list[str]:
+        return [
+            change.module_id
+            for change in self.module_file_changes_for_path(path)
+            if change.kind == "python_package"
+        ]
+
+    def module_file_changes_for_path(self, path: str | Path) -> list[ModuleFileChange]:
         target = Path(path).resolve()
-        result: list[str] = []
+        result: list[ModuleFileChange] = []
         for record in self.records():
-            if record.kind != ModuleKind.Python:
+            descriptor = Path(record.descriptor_path).resolve()
+            if target == descriptor:
+                if record.kind == ModuleKind.Cpp:
+                    result.append(ModuleFileChange(record.id, "cpp_descriptor", target, "descriptor"))
+                else:
+                    result.append(ModuleFileChange(record.id, "python_descriptor", target, "descriptor"))
                 continue
-            if self._python_record_owns_path(record, target):
-                result.append(record.id)
+
+            if record.kind == ModuleKind.Python:
+                if self._python_record_owns_path(record, target):
+                    result.append(ModuleFileChange(record.id, "python_package", target, "package_file"))
+                continue
+
+            if record.kind == ModuleKind.Cpp and self._cpp_record_owns_path(record, target):
+                result.append(ModuleFileChange(record.id, "cpp_input", target, "module_directory_input"))
         return result
+
+    def mark_modules_dirty_for_path(self, path: str | Path) -> list[str]:
+        module_ids: list[str] = []
+        for change in self.module_file_changes_for_path(path):
+            if change.kind not in {"cpp_descriptor", "cpp_input"}:
+                continue
+            reasons = self._dirty_module_reasons.setdefault(change.module_id, set())
+            reasons.add(f"{change.reason}: {change.path}")
+            if change.module_id not in module_ids:
+                module_ids.append(change.module_id)
+        return module_ids
+
+    def dirty_modules(self) -> dict[str, tuple[str, ...]]:
+        return {
+            module_id: tuple(sorted(reasons))
+            for module_id, reasons in sorted(self._dirty_module_reasons.items())
+        }
+
+    def clear_dirty_module(self, module_id: str) -> None:
+        self._dirty_module_reasons.pop(module_id, None)
 
     def needs_rebuild(self, module_id: str) -> bool:
         return self._runtime.needs_rebuild(module_id)
@@ -243,7 +298,10 @@ class ProjectModulesRuntime:
         if record is None:
             log.error(f"[ProjectModulesRuntime] descriptor is not part of discovered project: {descriptor}")
             return False
-        return self._runtime.load_module(record.id)
+        success = self._runtime.load_module(record.id)
+        if success:
+            self._dirty_module_reasons.pop(record.id, None)
+        return success
 
     def close(self) -> None:
         if self._closed:
@@ -291,6 +349,28 @@ class ProjectModulesRuntime:
             if target == package_module:
                 return True
             if target == package_dir or package_dir in target.parents:
+                return True
+        return False
+
+    def _cpp_record_owns_path(self, record: ModuleRecord, target: Path) -> bool:
+        descriptor = Path(record.descriptor_path).resolve()
+        module_dir = descriptor.parent
+        if target == descriptor:
+            return True
+        if target != module_dir and module_dir not in target.parents:
+            return False
+        return not self._is_module_input_ignored(target, module_dir)
+
+    def _is_module_input_ignored(self, target: Path, module_dir: Path) -> bool:
+        try:
+            relative_parts = target.relative_to(module_dir).parts
+        except ValueError:
+            return True
+
+        for part in relative_parts[:-1]:
+            if part in {"build", "__pycache__"}:
+                return True
+            if part.startswith("."):
                 return True
         return False
 
