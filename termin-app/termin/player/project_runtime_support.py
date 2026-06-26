@@ -21,9 +21,11 @@ def register_project_runtime_resources(*, include_render_resources: bool) -> Non
     if not include_render_resources:
         return
 
+    rm.register_builtin_shaders()
     rm.register_builtin_textures()
     rm.register_builtin_materials()
     rm.register_builtin_meshes()
+    rm.register_builtin_pipelines()
     rm.register_builtin_frame_passes()
 
 
