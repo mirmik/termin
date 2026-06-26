@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include <inspect/tc_inspect_python.hpp>
+#include <inspect/tc_kind_python.hpp>
 #include <tcbase/tc_log.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/input/input_events.hpp>
@@ -343,6 +344,34 @@ void init_python_component_callbacks() {
     tc_component_set_python_input_callbacks(&input_callbacks);
 
     g_callbacks_initialized = true;
+}
+
+void reset_python_bootstrap_state() {
+    if (Py_IsInitialized()) {
+        PyGILState_STATE gil = PyGILState_Ensure();
+        tc::reset_kind_registry_python();
+        PyGILState_Release(gil);
+    }
+
+    g_pointer_extractors_initialized = false;
+    g_callbacks_initialized = false;
+    g_python_inspect_adapters_initialized = false;
+    g_python_render_passes_initialized = false;
+
+    g_mesh_python_kind_initialized = false;
+    g_material_python_kind_initialized = false;
+    g_skeleton_python_kind_initialized = false;
+    g_animation_python_kind_initialized = false;
+    g_voxel_grid_python_kind_initialized = false;
+    g_navmesh_python_kind_initialized = false;
+
+    g_py_geometry_draw_cache.clear();
+
+    tc_python_drawable_callbacks drawable_callbacks = {};
+    tc_component_set_python_drawable_callbacks(&drawable_callbacks);
+
+    tc_python_input_callbacks input_callbacks = {};
+    tc_component_set_python_input_callbacks(&input_callbacks);
 }
 
 } // namespace termin::bootstrap

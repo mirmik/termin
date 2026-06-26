@@ -40,5 +40,6 @@ TERMIN_BOOTSTRAP_API void init_python_component_callbacks();
 TERMIN_BOOTSTRAP_API void bootstrap_runtime();
 TERMIN_BOOTSTRAP_API void bootstrap_player();
 TERMIN_BOOTSTRAP_API void bootstrap_editor();
+TERMIN_BOOTSTRAP_API void shutdown_runtime();
 
 } // namespace termin::bootstrap
