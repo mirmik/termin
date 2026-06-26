@@ -1,5 +1,6 @@
 #include "guard_main.h"
 #include "termin/colliders/colliders.hpp"
+#include "termin/lighting/light.hpp"
 #include <cmath>
 
 using guard::Approx;
@@ -19,6 +20,19 @@ TEST_CASE("Ray3 point_at")
     CHECK_EQ(p.x, Approx(5.0).epsilon(1e-12));
     CHECK_EQ(p.y, Approx(0.0).epsilon(1e-12));
     CHECK_EQ(p.z, Approx(0.0).epsilon(1e-12));
+}
+
+TEST_CASE("Infinity sentinels remain observable")
+{
+    UnionCollider empty_union;
+    Ray3 ray(Vec3(0, 0, 0), Vec3(1, 0, 0));
+    RayHit empty_hit = empty_union.closest_to_ray(ray);
+    CHECK(std::isinf(empty_hit.distance));
+
+    termin::Light directional;
+    directional.type = termin::LightType::Directional;
+    termin::LightSample sample = directional.sample(Vec3(0, 0, 0));
+    CHECK(std::isinf(sample.distance));
 }
 
 // ==================== BoxCollider tests ====================

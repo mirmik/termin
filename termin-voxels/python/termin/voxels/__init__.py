@@ -63,17 +63,21 @@ def __getattr__(name: str):
         from termin_voxel_components.visualization import VoxelVisualizer
         return VoxelVisualizer
 
-    if name in ("VoxelizerComponent", "VoxelizeMode", "VoxelizeSource"):
-        from termin_voxel_components.voxelizer_component import (
-            VoxelizerComponent,
+    if name in ("VoxelizeMode", "VoxelizeSource"):
+        from termin_voxel_components.voxelize_enums import (
             VoxelizeMode,
             VoxelizeSource,
         )
         return {
-            "VoxelizerComponent": VoxelizerComponent,
             "VoxelizeMode": VoxelizeMode,
             "VoxelizeSource": VoxelizeSource,
         }[name]
+
+    if name == "VoxelizerComponent":
+        from termin_voxel_components.voxelizer_component import (
+            VoxelizerComponent,
+        )
+        return VoxelizerComponent
 
     if name == "VoxelDisplayComponent":
         from termin_voxel_components.display_component import VoxelDisplayComponent

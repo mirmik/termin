@@ -7,6 +7,7 @@ without inheriting from C++ Component class.
 
 from __future__ import annotations
 
+import atexit
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
@@ -17,11 +18,53 @@ from termin.inspect import InspectField
 from tcbase import log
 
 
+_registered_python_component_types: list[str] = []
+_registered_python_inspect_types: list[str] = []
+
+
+def _remember_registered_type(names: list[str], type_name: str) -> None:
+    if type_name not in names:
+        names.append(type_name)
+
+
+def _cleanup_python_component_registrations() -> None:
+    component_names = list(reversed(_registered_python_component_types))
+    inspect_names = list(reversed(_registered_python_inspect_types))
+
+    try:
+        component_registry = ComponentRegistry.instance()
+        for type_name in component_names:
+            try:
+                component_registry.unregister_python(type_name)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    try:
+        from termin.inspect import InspectRegistry
+        inspect_registry = InspectRegistry.instance()
+        for type_name in inspect_names:
+            try:
+                inspect_registry.unregister_type(type_name)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    _registered_python_component_types.clear()
+    _registered_python_inspect_types.clear()
+
+
+atexit.register(_cleanup_python_component_registrations)
+
+
 def _ensure_python_component_inspect_type(registry, record_inspect_type) -> None:
     if registry.has_type("PythonComponent"):
         return
 
     registry.register_python_fields("PythonComponent", PythonComponent.inspect_fields)
+    _remember_registered_type(_registered_python_inspect_types, "PythonComponent")
     if record_inspect_type is not None:
         record_inspect_type("PythonComponent")
 
@@ -88,6 +131,7 @@ class PythonComponent:
         # register the subclass as Python-backed before parent inheritance is set.
         own_fields = cls.__dict__.get('inspect_fields', {})
         registry.register_python_fields(cls.__name__, own_fields)
+        _remember_registered_type(_registered_python_inspect_types, cls.__name__)
         if record_inspect_type is not None:
             record_inspect_type(cls.__name__)
 
@@ -108,6 +152,7 @@ class PythonComponent:
 
         # Register factory in C++ ComponentRegistry
         ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
+        _remember_registered_type(_registered_python_component_types, cls.__name__)
         if record_component is not None:
             record_component(cls.__name__)
         if record_inspect_type is not None:
