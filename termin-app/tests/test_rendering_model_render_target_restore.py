@@ -218,15 +218,12 @@ def _install_native_stubs(monkeypatch, pool):
     native_module.render_target_new = render_target_new
     monkeypatch.setitem(sys.modules, "termin.render_framework._render_framework_native", native_module)
 
-    scene_module = types.ModuleType("termin.scene_rendering")
-    scene_module.scene_render_mount = lambda scene: scene._mount
-    monkeypatch.setitem(sys.modules, "termin.scene_rendering", scene_module)
-
     camera_module = types.ModuleType("termin.render_components.camera")
     camera_module.CameraComponent = _CameraComponent
     monkeypatch.setitem(sys.modules, "termin.render_components.camera", camera_module)
 
     render_module = types.ModuleType("termin.render")
+    render_module.scene_render_mount = lambda scene: scene._mount
     render_module.RenderTargetConfig = _RenderTargetConfig
     render_module.ViewportConfig = _ViewportConfig
     monkeypatch.setitem(sys.modules, "termin.render", render_module)

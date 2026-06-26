@@ -261,7 +261,7 @@ class TexturePickerWidget(HStack):
         """Collect RT textures from scene render mounts."""
         entries: list[tuple[str, str, str]] = []
         try:
-            from termin.scene_rendering import scene_render_mount
+            from termin.render import scene_render_mount
 
             scenes_value = self._scene_getter()
             if scenes_value is None:
