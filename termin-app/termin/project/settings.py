@@ -24,6 +24,9 @@ from termin.render import (
 )
 
 SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
+DEFAULT_PLAYER_WINDOW_WIDTH = 1280
+DEFAULT_PLAYER_WINDOW_HEIGHT = 720
+DEFAULT_PLAYER_WINDOW_FULLSCREEN = True
 
 
 class RenderSyncMode(Enum):
@@ -53,6 +56,47 @@ class RenderSyncMode(Enum):
 
 
 @dataclass
+class ProjectPlayerWindowSettings:
+    """Default standalone player window settings for this project."""
+
+    width: int = DEFAULT_PLAYER_WINDOW_WIDTH
+    height: int = DEFAULT_PLAYER_WINDOW_HEIGHT
+    fullscreen: bool = DEFAULT_PLAYER_WINDOW_FULLSCREEN
+
+    def to_dict(self) -> dict:
+        return {
+            "width": self.width,
+            "height": self.height,
+            "fullscreen": self.fullscreen,
+        }
+
+    @staticmethod
+    def from_dict(data: object) -> "ProjectPlayerWindowSettings":
+        if data is None:
+            return ProjectPlayerWindowSettings()
+        if not isinstance(data, dict):
+            log.warning("[ProjectSettings] player_window must be an object, using defaults")
+            return ProjectPlayerWindowSettings()
+
+        return ProjectPlayerWindowSettings(
+            width=_positive_int_field(
+                data.get("width"),
+                default=DEFAULT_PLAYER_WINDOW_WIDTH,
+                field_name="player_window.width",
+            ),
+            height=_positive_int_field(
+                data.get("height"),
+                default=DEFAULT_PLAYER_WINDOW_HEIGHT,
+                field_name="player_window.height",
+            ),
+            fullscreen=_bool_field(
+                data.get("fullscreen"),
+                default=DEFAULT_PLAYER_WINDOW_FULLSCREEN,
+                field_name="player_window.fullscreen",
+            ),
+        )
+
+@dataclass
 class ProjectSettings:
     """
     Project-level settings.
@@ -68,6 +112,7 @@ class ProjectSettings:
     # Project-relative files/directories excluded from resource discovery,
     # live file watching, and project build manifests.
     ignored_resource_paths: list[str] = field(default_factory=list)
+    player_window: ProjectPlayerWindowSettings = field(default_factory=ProjectPlayerWindowSettings)
 
     def to_dict(self) -> dict:
         """Serialize to dictionary."""
@@ -75,6 +120,7 @@ class ProjectSettings:
             "render_sync_mode": self.render_sync_mode.value,
             "build_output_dir": self.build_output_dir,
             "ignored_resource_paths": list(self.ignored_resource_paths),
+            "player_window": self.player_window.to_dict(),
         }
 
     @staticmethod
@@ -96,11 +142,13 @@ class ProjectSettings:
             data.get("ignored_resource_paths", []),
             field_name="ignored_resource_paths",
         )
+        player_window = ProjectPlayerWindowSettings.from_dict(data.get("player_window"))
 
         return ProjectSettings(
             render_sync_mode=sync_mode,
             build_output_dir=build_output_dir,
             ignored_resource_paths=ignored_resource_paths,
+            player_window=player_window,
         )
 
 
@@ -210,6 +258,27 @@ class ProjectSettingsManager:
         )
         self.save()
 
+    def set_player_window(self, width: int, height: int, fullscreen: bool) -> None:
+        """Set standalone player window defaults and save."""
+        self._settings.player_window = ProjectPlayerWindowSettings(
+            width=_positive_int_field(
+                width,
+                default=DEFAULT_PLAYER_WINDOW_WIDTH,
+                field_name="player_window.width",
+            ),
+            height=_positive_int_field(
+                height,
+                default=DEFAULT_PLAYER_WINDOW_HEIGHT,
+                field_name="player_window.height",
+            ),
+            fullscreen=_bool_field(
+                fullscreen,
+                default=DEFAULT_PLAYER_WINDOW_FULLSCREEN,
+                field_name="player_window.fullscreen",
+            ),
+        )
+        self.save()
+
     def _get_editor_state_path(self) -> Optional[Path]:
         """Get path to .editor_state.json (per-user, not committed)."""
         if self._project_path is None:
@@ -303,3 +372,21 @@ def _normalize_project_relative_path_item(value: object, *, field_name: str) -> 
         return None
 
     return rel_path.as_posix()
+
+
+def _positive_int_field(value: object, *, default: int, field_name: str) -> int:
+    if value is None:
+        return default
+    if type(value) is not int or value <= 0:
+        log.warning(f"[ProjectSettings] {field_name} must be a positive integer, using {default}")
+        return default
+    return value
+
+
+def _bool_field(value: object, *, default: bool, field_name: str) -> bool:
+    if value is None:
+        return default
+    if type(value) is not bool:
+        log.warning(f"[ProjectSettings] {field_name} must be a boolean, using {default}")
+        return default
+    return value

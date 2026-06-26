@@ -629,6 +629,10 @@ def test_export_runtime_package_reports_malformed_mesh_meta_before_dev_smoke_fal
 def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     project = tmp_path / "DesktopGame"
     project.mkdir()
+    _write_json(
+        project / "project_settings" / "project.json",
+        {"player_window": {"width": 1366, "height": 768, "fullscreen": False}},
+    )
     _write_json(project / "DesktopGame.terminproj", {"version": 1, "name": "DesktopGame"})
     _write_json(project / "Main.scene", {"uuid": "desktop-scene", "entities": []})
     _write_json(
@@ -673,6 +677,12 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     assert result.runtime_result.python_package_policy == "minimal_strict"
     assert result.runtime_result.python_runtime_manifest_path == result.dist_dir / "python-runtime.json"
     assert result.app_manifest_path.exists()
+    app_manifest = json.loads(result.app_manifest_path.read_text(encoding="utf-8"))
+    assert app_manifest["runtime"]["window"] == {
+        "width": 1366,
+        "height": 768,
+        "fullscreen": False,
+    }
     assert result.package_result.manifest_path.exists()
     assert result.python_result.manifest_path.exists()
     assert result.runtime_result.python_runtime_manifest_path.exists()
@@ -748,6 +758,11 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
             "native_library_dirs": [
                 "lib",
             ],
+            "window": {
+                "width": 1366,
+                "height": 768,
+                "fullscreen": False,
+            },
             "mcp": {
                 "enabled": False,
                 "host": "127.0.0.1",

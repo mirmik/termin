@@ -9,6 +9,8 @@ from tcgui.widgets.vstack import VStack
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.combo_box import ComboBox
+from tcgui.widgets.checkbox import Checkbox
+from tcgui.widgets.spin_box import SpinBox
 from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.units import px
@@ -73,6 +75,59 @@ def show_project_settings_dialog(
     build_row.add_child(build_dir_input)
     content.add_child(build_row)
 
+
+    player_window_label = Label()
+    player_window_label.text = "Player Window:"
+    player_window_label.tooltip = "Default standalone player window used by Run Build and packaged desktop bundles."
+    content.add_child(player_window_label)
+
+    player_window_row = HStack()
+    player_window_row.spacing = 8
+
+    width_label = Label()
+    width_label.text = "Width:"
+    player_window_row.add_child(width_label)
+
+    width_spin = SpinBox()
+    width_spin.value = manager.settings.player_window.width
+    width_spin.min_value = 1
+    width_spin.max_value = 16384
+    width_spin.step = 16
+    width_spin.decimals = 0
+    width_spin.preferred_width = px(96)
+    player_window_row.add_child(width_spin)
+
+    height_label = Label()
+    height_label.text = "Height:"
+    player_window_row.add_child(height_label)
+
+    height_spin = SpinBox()
+    height_spin.value = manager.settings.player_window.height
+    height_spin.min_value = 1
+    height_spin.max_value = 16384
+    height_spin.step = 16
+    height_spin.decimals = 0
+    height_spin.preferred_width = px(96)
+    player_window_row.add_child(height_spin)
+
+    fullscreen_check = Checkbox()
+    fullscreen_check.text = "Fullscreen"
+    fullscreen_check.checked = manager.settings.player_window.fullscreen
+    player_window_row.add_child(fullscreen_check)
+    content.add_child(player_window_row)
+
+    def _apply_player_window() -> None:
+        manager.set_player_window(
+            int(width_spin.value),
+            int(height_spin.value),
+            fullscreen_check.checked,
+        )
+        if on_changed:
+            on_changed()
+
+    width_spin.on_changed = lambda _value: _apply_player_window()
+    height_spin.on_changed = lambda _value: _apply_player_window()
+    fullscreen_check.on_changed = lambda _checked: _apply_player_window()
     ignored_label = Label()
     ignored_label.text = "Ignored Resource Paths:"
     ignored_label.tooltip = "Project-relative files or directories excluded from resource scan, file watching, and build manifests."
@@ -91,6 +146,11 @@ def show_project_settings_dialog(
 
     def _apply_settings(_button: str) -> None:
         manager.set_build_output_dir(build_dir_input.text)
+        manager.set_player_window(
+            int(width_spin.value),
+            int(height_spin.value),
+            fullscreen_check.checked,
+        )
         manager.set_ignored_resource_paths(_ignored_paths_from_text(ignored_paths_input.text))
         if on_changed:
             on_changed()
