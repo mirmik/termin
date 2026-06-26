@@ -1,11 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include <termin/runtime/termin_runtime_api.h>
 #include <termin/tc_scene.hpp>
 
 namespace termin::runtime {
+
+struct RuntimePackageResourceKeepalive;
 
 struct RuntimePackageLoadOptions {
     bool allow_fallback_scene = false;
@@ -15,6 +18,7 @@ struct RuntimePackageLoadResult {
     bool ok = false;
     std::string message;
     TcSceneRef scene;
+    std::shared_ptr<RuntimePackageResourceKeepalive> resources;
 };
 
 class TERMIN_RUNTIME_API RuntimePackageLoader {
