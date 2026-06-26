@@ -99,7 +99,7 @@ class EditorDialogLauncher:
             return
         from termin.editor_tcgui.dialogs.project_settings_dialog import show_project_settings_dialog
 
-        def _on_project_settings_changed() -> None:
+        def _on_resource_settings_changed() -> None:
             watcher = self._get_project_file_watcher()
             if watcher is not None:
                 try:
@@ -108,7 +108,11 @@ class EditorDialogLauncher:
                     log.error(f"[EditorDialogLauncher] Failed to rescan resources after project settings change: {e}")
             self._request_viewport_update()
 
-        show_project_settings_dialog(ui, on_changed=_on_project_settings_changed)
+        show_project_settings_dialog(
+            ui,
+            on_resource_settings_changed=_on_resource_settings_changed,
+            on_render_settings_changed=self._request_viewport_update,
+        )
 
     def show_scene_properties(self) -> None:
         ui = self._get_ui()
