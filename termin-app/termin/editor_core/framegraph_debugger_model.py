@@ -428,16 +428,31 @@ class FramegraphDebuggerModel:
     def format_render_stats(self) -> str:
         from termin.engine import RenderingManager
         stats = RenderingManager.instance().get_render_stats()
+        layout_hashes = stats["pipeline_cache_vertex_layout_signature_hashes"]
+        layout_hash_text = (
+            ",".join(f"{int(value):x}" for value in layout_hashes[:8])
+            if layout_hashes
+            else "-"
+        )
         parts = [
             f"Scenes: {stats['attached_scenes']}",
             f"Pipelines: {stats['scene_pipelines']}",
             f"Unmanaged: {stats['unmanaged_viewports']}",
+            (
+                "PipelineCache: "
+                f"hit={stats['pipeline_cache_hits']} "
+                f"miss={stats['pipeline_cache_misses']} "
+                f"create={stats['pipeline_cache_create_pipeline_count']} "
+                f"cached={stats['pipeline_cache_cached_pipelines']} "
+                f"layouts={stats['pipeline_cache_unique_vertex_layout_signatures']}"
+            ),
         ]
         details: list[str] = []
         if stats["scene_names"]:
             details.append(f"[{', '.join(stats['scene_names'])}]")
         if stats["pipeline_names"]:
             details.append(f"({', '.join(stats['pipeline_names'])})")
+        details.append(f"layout_hashes={layout_hash_text}")
         text = " | ".join(parts)
         if details:
             text += "  " + " ".join(details)

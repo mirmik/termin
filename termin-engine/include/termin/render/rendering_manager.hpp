@@ -89,6 +89,7 @@ public:
     // Set render engine (optional, created lazily if not set)
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
+    const RenderEngine* render_engine_if_created() const { return render_engine_; }
 
     // Set callback to activate GL context before rendering
     void set_make_current_callback(MakeCurrentCallback callback);
