@@ -71,6 +71,9 @@ class AudioClipRuntimePlugin:
 
         asset.reload()
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class AudioClipAssetPlugin(AudioClipImportPlugin, AudioClipRuntimePlugin):
     """Compatibility combined audio clip plugin."""

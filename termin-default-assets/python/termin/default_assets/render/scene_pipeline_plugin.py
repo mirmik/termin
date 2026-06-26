@@ -83,6 +83,9 @@ class ScenePipelineRuntimePlugin:
         else:
             asset.reload()
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class ScenePipelineAssetPlugin(ScenePipelineImportPlugin, ScenePipelineRuntimePlugin):
     """Compatibility combined scene pipeline plugin."""

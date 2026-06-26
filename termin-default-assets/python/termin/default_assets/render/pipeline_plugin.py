@@ -70,6 +70,9 @@ class PipelineRuntimePlugin:
         asset.parse_spec(result.spec_data)
         asset.reload()
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class PipelineAssetPlugin(PipelineImportPlugin, PipelineRuntimePlugin):
     """Compatibility combined render pipeline plugin."""

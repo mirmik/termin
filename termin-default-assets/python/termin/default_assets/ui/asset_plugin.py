@@ -73,6 +73,9 @@ class UIRuntimePlugin:
 
         asset.reload()
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class UIAssetPlugin(UIImportPlugin, UIRuntimePlugin):
     """Compatibility combined UI plugin."""

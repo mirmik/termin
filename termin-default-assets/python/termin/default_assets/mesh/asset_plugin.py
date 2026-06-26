@@ -74,6 +74,9 @@ class MeshRuntimePlugin:
         asset.parse_spec(result.spec_data)
         asset.reload()
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class MeshAssetPlugin(MeshImportPlugin, MeshRuntimePlugin):
     """Compatibility combined mesh plugin."""

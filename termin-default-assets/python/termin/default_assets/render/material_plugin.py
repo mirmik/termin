@@ -92,6 +92,9 @@ class MaterialRuntimePlugin:
         if asset.material is not None:
             rm.materials[name] = asset.material
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class MaterialAssetPlugin(MaterialImportPlugin, MaterialRuntimePlugin):
     """Compatibility combined material plugin."""
