@@ -336,7 +336,7 @@ class PlayerRuntime:
             return False
 
         import json
-        from termin.scene_rendering import create_scene
+        from termin.engine import create_scene
 
         with open(scene_path, "r", encoding="utf-8") as f:
             data = json.load(f)

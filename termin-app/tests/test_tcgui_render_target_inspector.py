@@ -182,9 +182,9 @@ def test_render_target_inspector_pipeline_params_use_texture_preview(monkeypatch
     texture_module.get_normal_texture = lambda: types.SimpleNamespace(_image_data=None)
     monkeypatch.setitem(sys.modules, "termin.render.texture", texture_module)
 
-    scene_mount_module = types.ModuleType("termin.scene_rendering")
+    scene_mount_module = types.ModuleType("termin.render")
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
-    monkeypatch.setitem(sys.modules, "termin.scene_rendering", scene_mount_module)
+    monkeypatch.setitem(sys.modules, "termin.render", scene_mount_module)
 
     scene = _Scene("Scene", 1, [])
     render_target = _RenderTarget(scene, None)
@@ -321,9 +321,9 @@ def test_render_target_inspector_uses_xr_origin_when_switching_to_xr_target(monk
 
 
 def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monkeypatch):
-    scene_mount_module = types.ModuleType("termin.scene_rendering")
+    scene_mount_module = types.ModuleType("termin.render")
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
-    monkeypatch.setitem(sys.modules, "termin.scene_rendering", scene_mount_module)
+    monkeypatch.setitem(sys.modules, "termin.render", scene_mount_module)
 
     live_rt = types.SimpleNamespace(alive=True, name="LiveRT", kind="texture_2d", index=1, generation=1)
     render_framework_module = types.ModuleType("termin.render_framework")
@@ -343,9 +343,9 @@ def test_texture_picker_with_scene_getter_includes_live_render_target_pool(monke
 
 
 def test_texture_picker_lists_render_targets_before_file_textures(monkeypatch):
-    scene_mount_module = types.ModuleType("termin.scene_rendering")
+    scene_mount_module = types.ModuleType("termin.render")
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
-    monkeypatch.setitem(sys.modules, "termin.scene_rendering", scene_mount_module)
+    monkeypatch.setitem(sys.modules, "termin.render", scene_mount_module)
 
     live_rt = types.SimpleNamespace(alive=True, name="LiveRT", kind="texture_2d", index=1, generation=1)
     render_framework_module = types.ModuleType("termin.render_framework")
@@ -369,9 +369,9 @@ def test_texture_picker_lists_render_targets_before_file_textures(monkeypatch):
 
 
 def test_texture_picker_skips_xr_render_targets(monkeypatch):
-    scene_mount_module = types.ModuleType("termin.scene_rendering")
+    scene_mount_module = types.ModuleType("termin.render")
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
-    monkeypatch.setitem(sys.modules, "termin.scene_rendering", scene_mount_module)
+    monkeypatch.setitem(sys.modules, "termin.render", scene_mount_module)
 
     xr_rt = types.SimpleNamespace(alive=True, name="XrRT", kind="xr_stereo", index=1, generation=1)
     render_framework_module = types.ModuleType("termin.render_framework")
@@ -395,9 +395,9 @@ def test_render_target_inspector_saves_file_pipeline_param_by_uuid(monkeypatch):
     texture_module.get_normal_texture = lambda: types.SimpleNamespace(_image_data=None)
     monkeypatch.setitem(sys.modules, "termin.render.texture", texture_module)
 
-    scene_mount_module = types.ModuleType("termin.scene_rendering")
+    scene_mount_module = types.ModuleType("termin.render")
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
-    monkeypatch.setitem(sys.modules, "termin.scene_rendering", scene_mount_module)
+    monkeypatch.setitem(sys.modules, "termin.render", scene_mount_module)
 
     scene = _Scene("Scene", 1, [])
     render_target = _RenderTarget(scene, None)
@@ -419,9 +419,9 @@ def test_render_target_inspector_reads_uuid_file_pipeline_param(monkeypatch):
     texture_module.get_normal_texture = lambda: types.SimpleNamespace(_image_data=None)
     monkeypatch.setitem(sys.modules, "termin.render.texture", texture_module)
 
-    scene_mount_module = types.ModuleType("termin.scene_rendering")
+    scene_mount_module = types.ModuleType("termin.render")
     scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
-    monkeypatch.setitem(sys.modules, "termin.scene_rendering", scene_mount_module)
+    monkeypatch.setitem(sys.modules, "termin.render", scene_mount_module)
 
     scene = _Scene("Scene", 1, [])
     render_target = _RenderTarget(scene, None)
