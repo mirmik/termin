@@ -12,6 +12,7 @@
 - [Python Linting](./python-linting.md) — Ruff baseline для Python-кода.
 - [Code Duplication Check](./code-duplication.md) — jscpd-прогон для поиска copy/paste-дублей.
 - [SDK Python Wheelhouse](./sdk-python-wheelhouse.md) — wheels из SDK для внешних Python-проектов.
+- [Taskboard Guidelines](./taskboard-guidelines.md) — короткие правила ведения Kanboard-карточек.
 - [Architecture Notes](./architecture/index.md) — cross-module архитектурные заметки.
 - [Plans And Migration Notes](./plans/index.md) — исторические планы и миграционные чеклисты.
 - [Главный вход Obsidian](../docs.md) — навигационная страница vault.
