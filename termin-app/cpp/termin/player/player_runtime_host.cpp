@@ -40,6 +40,7 @@
 extern "C" {
 #include <core/tc_scene.h>
 #include <render/tc_render_target.h>
+#include <render/tc_viewport_input_manager.h>
 #include <render/tc_viewport.h>
 }
 
@@ -605,11 +606,13 @@ struct PlayerRuntimeHost::Impl {
     OffscreenRenderSurfaceHandle surface_handle{};
     OffscreenRenderSurface* surface = nullptr;
     std::optional<TcDisplay> display;
+    termin::runtime::RuntimePackageLoadResult package;
     TcSceneRef scene;
     std::string scene_name = "runtime-scene";
     bool scene_registered = false;
     bool scene_attached = false;
     std::vector<tc_viewport_handle> viewports;
+    std::vector<tc_viewport_input_manager*> viewport_input_managers;
 
     termin_modules::ModuleRuntime modules_runtime;
     TermModulesIntegration modules_integration;
@@ -785,11 +788,11 @@ struct PlayerRuntimeHost::Impl {
 
     void load_package() {
         termin::runtime::RuntimePackageLoader loader;
-        termin::runtime::RuntimePackageLoadResult result = loader.load(manifest.package_root.string());
-        if (!result.ok) {
-            throw std::runtime_error("failed to load runtime package: " + result.message);
+        package = loader.load(manifest.package_root.string());
+        if (!package.ok) {
+            throw std::runtime_error("failed to load runtime package: " + package.message);
         }
-        scene = result.scene;
+        scene = package.scene;
         if (!scene.valid()) {
             throw std::runtime_error("runtime package returned invalid scene");
         }
@@ -956,6 +959,80 @@ struct PlayerRuntimeHost::Impl {
         disable_unrenderable_unused_render_targets(manager);
         scene_attached = true;
         tc_log_info("termin_player: attached scene rendering: %zu viewport(s)", viewports.size());
+        setup_input(manager);
+    }
+
+    void setup_input(RenderingManager& manager) {
+        if (!display || !display->is_valid()) {
+            tc_log_error("termin_player: cannot set up input without display");
+            return;
+        }
+
+        tc_input_manager* router = manager.ensure_display_router(display->ptr());
+        if (router == nullptr) {
+            tc_log_error("termin_player: failed to create display input router");
+            return;
+        }
+
+        if (window) {
+            window->set_input_manager(router);
+        }
+        if (surface != nullptr) {
+            surface->set_input_manager(router);
+        }
+
+        int active_viewports = 0;
+        for (tc_viewport_handle viewport : viewports) {
+            if (!tc_viewport_handle_valid(viewport)) {
+                continue;
+            }
+
+            const char* raw_mode = tc_viewport_get_input_mode(viewport);
+            std::string mode = raw_mode && raw_mode[0] != '\0' ? raw_mode : "simple";
+            if (mode == "none" || mode == "editor") {
+                continue;
+            }
+            const char* viewport_name = tc_viewport_get_name(viewport);
+            if (mode != "simple" && mode != "basic") {
+                tc_log_warn(
+                    "termin_player: unknown viewport input mode '%s' for viewport '%s'",
+                    mode.c_str(),
+                    viewport_name ? viewport_name : ""
+                );
+                continue;
+            }
+
+            if (tc_viewport_get_input_manager(viewport) != nullptr) {
+                ++active_viewports;
+                continue;
+            }
+
+            tc_viewport_input_manager* input = tc_viewport_input_manager_new(viewport);
+            if (input == nullptr) {
+                tc_log_error(
+                    "termin_player: failed to create input manager for viewport '%s'",
+                    viewport_name ? viewport_name : ""
+                );
+                continue;
+            }
+            viewport_input_managers.push_back(input);
+            ++active_viewports;
+        }
+
+        tc_log_info("termin_player: input configured for %d viewport(s)", active_viewports);
+    }
+
+    void clear_input() {
+        if (window) {
+            window->set_input_manager(nullptr);
+        }
+        if (surface != nullptr) {
+            surface->set_input_manager(nullptr);
+        }
+        for (tc_viewport_input_manager* input : viewport_input_managers) {
+            tc_viewport_input_manager_free(input);
+        }
+        viewport_input_managers.clear();
     }
 
     void disable_unrenderable_unused_render_targets(RenderingManager& manager) {
@@ -1064,6 +1141,7 @@ struct PlayerRuntimeHost::Impl {
 
         RenderingManager* manager = RenderingManager::instance_or_null();
         if (manager != nullptr) {
+            clear_input();
             manager->set_display_factory(nullptr);
             if (scene_attached && scene.valid()) {
                 manager->detach_scene_full(scene.handle());
@@ -1086,6 +1164,7 @@ struct PlayerRuntimeHost::Impl {
             scene.destroy();
             scene = TcSceneRef();
         }
+        package = termin::runtime::RuntimePackageLoadResult();
 
         if (engine) {
             engine->scene_manager.set_on_after_render(nullptr);
