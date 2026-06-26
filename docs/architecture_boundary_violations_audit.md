@@ -3,9 +3,14 @@
 **Дата:** 2026-05-20  
 **Статус:** Research report — не исправлять автоматически
 
-**Актуализировано:** 2026-06-24 — Qt/PyQt frontend удалён; часть старых пунктов закрыта; legacy `termin._native` app binding target удалён.
+**Актуализировано:** 2026-06-26 — `termin-app/core_c` и агрегирующий `termin_core` удалены; C API разнесён по модулям-владельцам.
 
 ## Исправления
+
+### 2026-06-26
+
+- **2.6 закрыто:** `termin_core` больше не является app-owned агрегатором. `tc_init`/`tc_shutdown` перенесены в `termin-bootstrap`, OpenGL C adapter — в `termin-graphics`, version/uuid/string helpers — в `termin-base`; C#/Android потребители переведены на канонические SDK targets.
+- **1.2/core_c ownership закрыто:** `termin-app/core_c` удалён, а `termin-app/cpp` больше не экспортирует compatibility C package `termin`.
 
 ### 2026-05-21
 
@@ -13,7 +18,7 @@
 - **3.7 закрыто:** `termin.engine` и `termin.inspect` теперь вызывают `preload_sdk_libs(...)` перед импортом native modules.
 - **3.6 закрыто частично по публичной поверхности:** приватные C-interop функции больше не входят в `termin.display.__all__`. Сами underscored imports оставлены для существующих внутренних call sites до появления публичного adapter API.
 - **1.3 частично:** `EditorCameraUIController` перенесён из `termin.editor_core` в `termin.editor_tcgui`, а `EditorCameraManager` добавляет его только если компонент зарегистрирован frontend-слоем. Qt-зависимость `SpaceMouseController` закрыта; остаётся более широкая проблема `termin.visualization/ui/widgets -> tcgui`.
-- **2.1 частично:** прямые include paths на `termin-render/include` удалены из `termin-display` и `termin-components-render`, где уже есть CMake target dependency. Широкий `termin-app/cpp/termin` include в `termin-components-render` заменён точечным include path на `entity_helpers.hpp`. Прямые пути на `termin-app/core_c` оставлены как часть отдельной проблемы 1.2/ownership `core_c`.
+- **2.1 частично:** прямые include paths на `termin-render/include` удалены из `termin-display` и `termin-components-render`, где уже есть CMake target dependency. Широкий `termin-app/cpp/termin` include в `termin-components-render` заменён точечным include path на `entity_helpers.hpp`. Прямые пути на `termin-app/core_c` закрыты отдельной миграцией 2026-06-26.
 - **4.1 закрыто:** дублирующийся `tc_registry_utils.h` вынесен в `termin-base/include/tcbase/tc_registry_utils.h`; копии из `termin-graphics` и `termin-mesh` удалены.
 - **3.3 закрыто:** `tc_registry_utils.h`, `tc_resource.h` и generic handle include вынесены на `termin-base`; `termin-skeleton` больше не зависит от `termin_graphics`, старые resource includes в `termin-render` переведены на `tcbase`.
 - **3.4 частично:** `install_requires` приведены к фактическим импортам для `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh`; `termin-navmesh` оставлен как отдельная задача разделения core/editor/visual слоёв.
@@ -84,7 +89,7 @@
 
 **Статус 2026-05-21:** engine-часть исправлена. Singleton storage принадлежит `termin-engine`, а `termin-engine` больше не добавляет include path на `termin-app/core_c/include`.
 
-Остаток проблемы: `termin-app/cpp` всё ещё экспортирует `core_c/include` как app compatibility surface (`termin_core.h`, `tc_opengl.h`, editor/render leftovers). После cleanup 2026-05-21 независимые SDK-модули `termin-engine`, `termin-display`, `termin-skeleton`, `termin-animation`, `termin-components-render` больше не добавляют `termin-app/core_c/include`, а `tc_picking.h` принадлежит `termin-render-passes`.
+Остаток проблемы был закрыт 2026-06-26: `termin-app/cpp` больше не экспортирует `core_c/include`, а `termin-app/core_c` удалён.
 
 ---
 
@@ -229,24 +234,14 @@ virtual tc_mesh* get_mesh_for_phase(
 
 ---
 
-### 2.6 termin_core (C) дублирует termin-engine (C++)
+### 2.6 termin_core (C) дублирует termin-engine (C++) — закрыто 2026-06-26
 
 **Где смотреть:**
-- `termin-app/core_c/CMakeLists.txt`
+- `termin-bootstrap/include/termin/bootstrap/bootstrap_c.h`
+- `termin-graphics/include/tgfx/opengl/tc_opengl.h`
+- `termin-base/include/tcbase/tc_version.h`, `tc_uuid.h`, `tc_string.h`
 
-`termin_core` зависит от 9 модулей:
-```cmake
-target_link_libraries(termin_core PUBLIC tgfx::termin_graphics tcbase::termin_base)
-target_link_libraries(termin_core PUBLIC termin_scene::termin_scene)
-target_link_libraries(termin_core PUBLIC termin_input::termin_input)
-target_link_libraries(termin_core PUBLIC termin_inspect::termin_inspect)
-target_link_libraries(termin_core PUBLIC termin_render::termin_render)
-target_link_libraries(termin_core PUBLIC termin_display::termin_display)
-target_link_libraries(termin_core PUBLIC termin_skeleton::termin_skeleton)
-target_link_libraries(termin_core PUBLIC termin_animation::termin_animation)
-```
-
-**Проблема:** По сути дублирует termin-engine, но в C. Оба агрегируют один и тот же набор модулей. Смысл разделения неочевиден.
+**Статус:** старый app-owned слой `termin-app/core_c` удалён. Оставшиеся функции распределены по каноническим владельцам: lifecycle в `termin-bootstrap`, OpenGL backend adapter в `termin-graphics`, низкоуровневые helpers в `termin-base`.
 
 ---
 
@@ -506,9 +501,9 @@ termin_android       → termin_base, termin_graphics, termin_scene, termin_mesh
                        termin_render, termin_display, termin_engine,
                        termin_collision, termin_runtime, termin_materials,
                        termin_components_mesh, termin_components_render
-termin_core (app)    → termin_base, termin_graphics, termin_scene, termin_input,
-                       termin_inspect, termin_render, termin_display,
-                       termin_skeleton, termin_animation
+termin_bootstrap     → termin_base, termin_graphics, termin_scene, termin_render,
+                       termin_inspect, termin_collision, termin_mesh,
+                       termin_skeleton, termin_voxels, termin_navmesh
 ```
 
 ### 6.2 Нарушения направления зависимостей
@@ -548,7 +543,7 @@ termin/editor_tcgui/ (tcgui)
 | 2.3 | Бизнес-логика в биндингах + hasattr/setattr | termin-* python bindings | tc_pass_bindings.cpp и др. | 🟠 Высокая |
 | 2.4 | Дублирование/расхождение биндингов | termin-base, termin-app | geom/ | 🟠 Частично исправлено |
 | 2.5 | Экспозиция внутренних типов через биндинги | termin-* python bindings | uintptr_t handles, tc_* типы | 🟠 Высокая |
-| 2.6 | termin_core дублирует termin-engine | termin-app/core_c | CMakeLists.txt | 🟠 Высокая |
+| 2.6 | termin_core дублирует termin-engine | termin-app/core_c | CMakeLists.txt | ✅ Исправлено |
 | 3.1 | Внутренние include из нижних уровней | termin-engine | rendering_manager.cpp | 🟡 Средняя |
 | 3.2 | EngineCore жёстко знает о extensions | termin-engine | engine_core.cpp | 🟠 Частично исправлено |
 | 3.3 | termin-skeleton → termin_graphics для 2 хедеров | termin-skeleton | CMakeLists.txt | ✅ Исправлено |

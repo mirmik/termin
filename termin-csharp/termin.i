@@ -28,7 +28,7 @@
 #include "termin/tc_scene.hpp"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
-#include "tc_opengl.h"
+#include "tgfx/opengl/tc_opengl.h"
 #include "core/tc_component.h"
 %}
 
@@ -1009,7 +1009,7 @@ public:
 // ============================================================================
 
 %{
-#include "tc_opengl.h"
+#include "tgfx/opengl/tc_opengl.h"
 %}
 
 // OpenGL init functions

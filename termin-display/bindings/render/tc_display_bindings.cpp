@@ -108,7 +108,7 @@ void bind_tc_display(nb::module_& m) {
     // TcDisplay class binding
     nb::class_<TcDisplay>(m, "Display",
         "Display - render target with viewports.\n\n"
-        "Wraps tc_display from core_c. Contains surface and viewport list.")
+        "Wraps tc_display. Contains surface and viewport list.")
 
         // Constructor with surface pointer
         .def("__init__", [](TcDisplay* self, uintptr_t surface_ptr, const std::string& name,

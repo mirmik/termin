@@ -100,6 +100,7 @@ endif()
 add_library(termin_bootstrap SHARED
     ${TERMIN_BOOTSTRAP_SOURCES}
     include/termin/bootstrap/bootstrap.hpp
+    include/termin/bootstrap/bootstrap_c.h
 )
 add_library(termin_bootstrap::termin_bootstrap ALIAS termin_bootstrap)
 

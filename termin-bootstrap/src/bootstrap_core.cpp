@@ -1,4 +1,5 @@
 #include <termin/bootstrap/bootstrap.hpp>
+#include <termin/bootstrap/bootstrap_c.h>
 
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
@@ -6,6 +7,7 @@
 #include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/voxels/tc_voxel_grid_handle.hpp>
+#include <tcbase/tgfx_intern_string.h>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
@@ -14,13 +16,79 @@
 #endif
 
 extern "C" {
+#include <core/tc_component.h>
+#include <core/tc_scene_extension.h>
+#include <core/tc_scene_pool.h>
 #include <core/tc_scene_render_mount.h>
 #include <core/tc_scene_render_state.h>
 #include <inspect/tc_inspect_component_adapter.h>
+#include <inspect/tc_inspect.h>
 #include <inspect/tc_inspect_init.h>
+#include <inspect/tc_kind.h>
 #include <inspect/tc_inspect_pass_adapter.h>
+#include <render/tc_pass.h>
+#include <resources/tc_skeleton_registry.h>
 #include <termin_collision/termin_collision.h>
+#include <tgfx/resources/tc_material_registry.h>
+#include <tgfx/resources/tc_mesh_registry.h>
+#include <tgfx/resources/tc_shader_registry.h>
+#include <tgfx/resources/tc_texture_registry.h>
+#ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
+#include <resources/tc_animation_registry.h>
+#endif
 }
+
+namespace {
+
+bool g_c_runtime_initialized = false;
+
+} // namespace
+
+extern "C" {
+
+void tc_init(void) {
+    if (g_c_runtime_initialized) {
+        return;
+    }
+
+    tc_mesh_init();
+    tc_texture_init();
+    tc_shader_init();
+    tc_skeleton_init();
+#ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
+    tc_animation_init();
+#endif
+    tc_material_init();
+    tc_scene_pool_init();
+    tc_scene_ext_registry_init();
+    g_c_runtime_initialized = true;
+}
+
+void tc_shutdown(void) {
+    if (!g_c_runtime_initialized) {
+        return;
+    }
+
+    tc_scene_pool_shutdown();
+    tc_material_shutdown();
+#ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
+    tc_animation_shutdown();
+#endif
+    tc_skeleton_shutdown();
+    tc_shader_shutdown();
+    tc_texture_shutdown();
+    tc_mesh_shutdown();
+    tc_component_registry_cleanup();
+    tc_pass_registry_cleanup();
+    tc_inspect_cleanup();
+    tc_kind_cleanup();
+    tc_scene_ext_registry_shutdown();
+    tgfx_intern_cleanup();
+
+    g_c_runtime_initialized = false;
+}
+
+} // extern "C"
 
 namespace termin::bootstrap {
 namespace {

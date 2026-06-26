@@ -4,16 +4,19 @@ using System.Runtime.InteropServices;
 namespace Termin.Native;
 
 /// <summary>
-/// P/Invoke declarations for termin_core.dll (C API).
+/// P/Invoke declarations for native runtime lifecycle APIs.
 /// </summary>
 public static class TerminCore
 {
-    const string DLL = "termin_core";
+    const string DLL = "termin_bootstrap";
     const string BASE_DLL = "termin_base";
     const string SCENE_DLL = "termin_scene";
     const string MESH_DLL = "termin_mesh";
     const string GRAPHICS_DLL = "termin_graphics";
     const string TGFX2_DLL = "termin_graphics2";
+    const string RENDER_DLL = "termin_render";
+    const string DISPLAY_DLL = "termin_display";
+    const string INSPECT_DLL = "termin_inspect";
     const string COLLISION_DLL = "termin_collision";
 
     // ========================================================================
@@ -72,172 +75,172 @@ public static class TerminCore
     // Scene (handle-based API)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_scene_new")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_new")]
     public static extern TcSceneHandle SceneNew();
 
-    [DllImport(DLL, EntryPoint = "tc_scene_new_named", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_new_named", CharSet = CharSet.Ansi)]
     public static extern TcSceneHandle SceneNewNamed(string name);
 
-    [DllImport(DLL, EntryPoint = "tc_scene_free")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_free")]
     public static extern void SceneFree(TcSceneHandle scene);
 
-    [DllImport(DLL, EntryPoint = "tc_scene_alive")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_alive")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool SceneAlive(TcSceneHandle scene);
 
-    [DllImport(DLL, EntryPoint = "tc_scene_update")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_update")]
     public static extern void SceneUpdate(TcSceneHandle scene, double dt);
 
-    [DllImport(DLL, EntryPoint = "tc_scene_editor_update")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_editor_update")]
     public static extern void SceneEditorUpdate(TcSceneHandle scene, double dt);
 
-    [DllImport(DLL, EntryPoint = "tc_scene_before_render")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_before_render")]
     public static extern void SceneBeforeRender(TcSceneHandle scene);
 
-    [DllImport(DLL, EntryPoint = "tc_scene_entity_pool")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_entity_pool")]
     public static extern IntPtr SceneEntityPool(TcSceneHandle scene);
 
-    [DllImport(DLL, EntryPoint = "tc_scene_entity_count")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_scene_entity_count")]
     public static extern nuint SceneEntityCount(TcSceneHandle scene);
 
     // EntityPool lifecycle (for standalone pools)
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_create")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_create")]
     public static extern IntPtr EntityPoolCreate(nuint initialCapacity);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_destroy")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_destroy")]
     public static extern void EntityPoolDestroy(IntPtr pool);
 
     // EntityPool registry (for C++ components to find Entity)
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_registry_register")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_registry_register")]
     public static extern TcEntityPoolHandle EntityPoolRegistryRegister(IntPtr pool);
 
     // ========================================================================
     // Entity Pool
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_alloc", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_alloc", CharSet = CharSet.Ansi)]
     public static extern TcEntityId EntityPoolAlloc(IntPtr pool, string name);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_alloc_with_uuid", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_alloc_with_uuid", CharSet = CharSet.Ansi)]
     public static extern TcEntityId EntityPoolAllocWithUuid(IntPtr pool, string name, string uuid);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_free")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_free")]
     public static extern void EntityPoolFree(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_alive")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_alive")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool EntityPoolAlive(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_count")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_count")]
     public static extern nuint EntityPoolCount(IntPtr pool);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_capacity")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_capacity")]
     public static extern nuint EntityPoolCapacity(IntPtr pool);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_id_at")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_id_at")]
     public static extern TcEntityId EntityPoolIdAt(IntPtr pool, uint index);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_name", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_name", CharSet = CharSet.Ansi)]
     public static extern IntPtr EntityPoolName(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_name", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_name", CharSet = CharSet.Ansi)]
     public static extern void EntityPoolSetName(IntPtr pool, TcEntityId id, string name);
 
     // Transform
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_get_local_position")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_get_local_position")]
     public static extern void EntityPoolGetLocalPosition(IntPtr pool, TcEntityId id, double[] xyz);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_local_position")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_local_position")]
     public static extern void EntityPoolSetLocalPosition(IntPtr pool, TcEntityId id, double[] xyz);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_get_local_rotation")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_get_local_rotation")]
     public static extern void EntityPoolGetLocalRotation(IntPtr pool, TcEntityId id, double[] xyzw);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_local_rotation")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_local_rotation")]
     public static extern void EntityPoolSetLocalRotation(IntPtr pool, TcEntityId id, double[] xyzw);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_get_local_scale")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_get_local_scale")]
     public static extern void EntityPoolGetLocalScale(IntPtr pool, TcEntityId id, double[] xyz);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_local_scale")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_local_scale")]
     public static extern void EntityPoolSetLocalScale(IntPtr pool, TcEntityId id, double[] xyz);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_get_world_matrix")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_get_world_matrix")]
     public static extern void EntityPoolGetWorldMatrix(IntPtr pool, TcEntityId id, double[] m16);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_update_transforms")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_update_transforms")]
     public static extern void EntityPoolUpdateTransforms(IntPtr pool);
 
     // Flags
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_visible")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_visible")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool EntityPoolVisible(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_visible")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_visible")]
     public static extern void EntityPoolSetVisible(IntPtr pool, TcEntityId id, [MarshalAs(UnmanagedType.U1)] bool v);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_enabled")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_enabled")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool EntityPoolEnabled(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_enabled")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_enabled")]
     public static extern void EntityPoolSetEnabled(IntPtr pool, TcEntityId id, [MarshalAs(UnmanagedType.U1)] bool v);
 
     // Hierarchy
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_parent")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_parent")]
     public static extern TcEntityId EntityPoolParent(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_parent")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_parent")]
     public static extern void EntityPoolSetParent(IntPtr pool, TcEntityId id, TcEntityId parent);
 
     // Layer
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_layer")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_layer")]
     public static extern ulong EntityPoolLayer(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_set_layer")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_set_layer")]
     public static extern void EntityPoolSetLayer(IntPtr pool, TcEntityId id, ulong layer);
 
     // Children
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_children_count")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_children_count")]
     public static extern nuint EntityPoolChildrenCount(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_child_at")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_child_at")]
     public static extern TcEntityId EntityPoolChildAt(IntPtr pool, TcEntityId id, nuint index);
 
     // Components
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_component_count")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_component_count")]
     public static extern nuint EntityPoolComponentCount(IntPtr pool, TcEntityId id);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_component_at")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_component_at")]
     public static extern IntPtr EntityPoolComponentAt(IntPtr pool, TcEntityId id, nuint index);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_remove_component")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_remove_component")]
     public static extern void EntityPoolRemoveComponent(IntPtr pool, TcEntityId id, IntPtr component);
 
     // ========================================================================
     // Pipeline
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_pipeline_create", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pipeline_create", CharSet = CharSet.Ansi)]
     public static extern IntPtr PipelineCreate(string name);
 
-    [DllImport(DLL, EntryPoint = "tc_pipeline_destroy")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pipeline_destroy")]
     public static extern void PipelineDestroy(IntPtr pipeline);
 
-    [DllImport(DLL, EntryPoint = "tc_pipeline_add_pass")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pipeline_add_pass")]
     public static extern void PipelineAddPass(IntPtr pipeline, IntPtr pass);
 
     // ========================================================================
     // Render
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_fbo_pool_create")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_fbo_pool_create")]
     public static extern IntPtr FboPoolCreate();
 
-    [DllImport(DLL, EntryPoint = "tc_fbo_pool_destroy")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_fbo_pool_destroy")]
     public static extern void FboPoolDestroy(IntPtr pool);
 
-    [DllImport(DLL, EntryPoint = "tc_render_view_to_fbo")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_view_to_fbo")]
     public static extern void RenderViewToFbo(
         IntPtr pipeline,
         IntPtr fboPool,
@@ -254,19 +257,19 @@ public static class TerminCore
     // Mesh Registry
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_init")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_init")]
     public static extern void MeshInit();
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_shutdown")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_shutdown")]
     public static extern void MeshShutdown();
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_create", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_create", CharSet = CharSet.Ansi)]
     public static extern TcMeshHandle MeshCreate(string? uuid);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get")]
     public static extern IntPtr MeshGet(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_set_data", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_set_data", CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool MeshSetData(
         IntPtr mesh,
@@ -278,57 +281,57 @@ public static class TerminCore
         string? name
     );
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_upload_gpu")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_upload_gpu")]
     public static extern uint MeshUploadGpu(IntPtr mesh);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_draw_gpu")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_draw_gpu")]
     public static extern void MeshDrawGpu(IntPtr mesh);
 
     // ========================================================================
     // Mesh data export
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_uuid_str", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_uuid_str", CharSet = CharSet.Ansi)]
     public static extern IntPtr MeshGetUuidStr(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_name_str", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_name_str", CharSet = CharSet.Ansi)]
     public static extern IntPtr MeshGetNameStr(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_vertices")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_vertices")]
     public static extern IntPtr MeshGetVertices(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_vertex_count")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_vertex_count")]
     public static extern nuint MeshGetVertexCount(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_indices")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_indices")]
     public static extern IntPtr MeshGetIndices(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_index_count")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_index_count")]
     public static extern nuint MeshGetIndexCount(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_layout")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_layout")]
     public static extern TcVertexLayout MeshGetLayout(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_draw_mode")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_draw_mode")]
     public static extern byte MeshGetDrawMode(TcMeshHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_compute_uuid", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_compute_uuid", CharSet = CharSet.Ansi)]
     public static extern void MeshComputeUuid(
         IntPtr vertices, nuint vertexSize,
         IntPtr indices, nuint indexCount,
         [MarshalAs(UnmanagedType.LPStr)] System.Text.StringBuilder uuidOut
     );
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_find", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_find", CharSet = CharSet.Ansi)]
     public static extern TcMeshHandle MeshFind(string uuid);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_find_by_name", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_find_by_name", CharSet = CharSet.Ansi)]
     public static extern TcMeshHandle MeshFindByName(string name);
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_count")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_count")]
     public static extern nuint MeshCount();
 
-    [DllImport(DLL, EntryPoint = "tc_mesh_get_all_info")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_mesh_get_all_info")]
     public static extern IntPtr MeshGetAllInfo(out nuint count);
 
     /// <summary>
@@ -361,10 +364,10 @@ public static class TerminCore
     // Vertex Layout
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_vertex_layout_init")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_init")]
     public static extern void VertexLayoutInit(ref TcVertexLayout layout);
 
-    [DllImport(DLL, EntryPoint = "tc_vertex_layout_add", CharSet = CharSet.Ansi)]
+    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_add", CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool VertexLayoutAdd(
         ref TcVertexLayout layout,
@@ -374,29 +377,29 @@ public static class TerminCore
         byte location
     );
 
-    [DllImport(DLL, EntryPoint = "tc_vertex_layout_pos")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos")]
     public static extern TcVertexLayout VertexLayoutPos();
 
-    [DllImport(DLL, EntryPoint = "tc_vertex_layout_pos_normal")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos_normal")]
     public static extern TcVertexLayout VertexLayoutPosNormal();
 
-    [DllImport(DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv")]
     public static extern TcVertexLayout VertexLayoutPosNormalUv();
 
-    [DllImport(DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv_color")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_vertex_layout_pos_normal_uv_color")]
     public static extern TcVertexLayout VertexLayoutPosNormalUvColor();
 
     // ========================================================================
     // Shader Registry
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_shader_init")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_shader_init")]
     public static extern void ShaderInit();
 
-    [DllImport(DLL, EntryPoint = "tc_shader_shutdown")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_shader_shutdown")]
     public static extern void ShaderShutdown();
 
-    [DllImport(DLL, EntryPoint = "tc_shader_from_sources", CharSet = CharSet.Ansi)]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_shader_from_sources", CharSet = CharSet.Ansi)]
     public static extern TcShaderHandle ShaderFromSources(
         string vertexSource,
         string fragmentSource,
@@ -406,23 +409,23 @@ public static class TerminCore
         string? uuid
     );
 
-    [DllImport(DLL, EntryPoint = "tc_shader_get")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_shader_get")]
     public static extern IntPtr ShaderGet(TcShaderHandle handle);
 
     // ========================================================================
     // Material Registry
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_material_init")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_init")]
     public static extern void MaterialInit();
 
-    [DllImport(DLL, EntryPoint = "tc_material_shutdown")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_shutdown")]
     public static extern void MaterialShutdown();
 
-    [DllImport(DLL, EntryPoint = "tc_material_create", CharSet = CharSet.Ansi)]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_create", CharSet = CharSet.Ansi)]
     public static extern TcMaterialHandle MaterialCreate(string? uuid, string name);
 
-    [DllImport(DLL, EntryPoint = "tc_material_get")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_get")]
     public static extern IntPtr MaterialGet(TcMaterialHandle handle);
 
     [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_get_uuid_str", CharSet = CharSet.Ansi)]
@@ -431,16 +434,16 @@ public static class TerminCore
     [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_get_name_str", CharSet = CharSet.Ansi)]
     public static extern IntPtr MaterialGetNameStr(TcMaterialHandle handle);
 
-    [DllImport(DLL, EntryPoint = "tc_material_add_phase", CharSet = CharSet.Ansi)]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_add_phase", CharSet = CharSet.Ansi)]
     public static extern IntPtr MaterialAddPhase(IntPtr material, TcShaderHandle shader, string phaseMark, int priority);
 
-    [DllImport(DLL, EntryPoint = "tc_material_set_color")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_set_color")]
     public static extern void MaterialSetColor(IntPtr material, float r, float g, float b, float a);
 
-    [DllImport(DLL, EntryPoint = "tc_material_phase_set_color")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_phase_set_color")]
     public static extern void MaterialPhaseSetColor(IntPtr phase, float r, float g, float b, float a);
 
-    [DllImport(DLL, EntryPoint = "tc_material_phase_make_transparent")]
+    [DllImport(GRAPHICS_DLL, EntryPoint = "tc_material_phase_make_transparent")]
     public static extern void MaterialPhaseMakeTransparent(IntPtr phase);
 
     // Stage 8.2: tc_material_phase_apply_gpu removed — legacy glUniform
@@ -453,49 +456,49 @@ public static class TerminCore
     // Component Registry
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_component_registry_create", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_registry_create", CharSet = CharSet.Ansi)]
     public static extern IntPtr ComponentRegistryCreate(string typeName);
 
-    [DllImport(DLL, EntryPoint = "tc_component_registry_has", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_registry_has", CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ComponentRegistryHas(string typeName);
 
-    [DllImport(DLL, EntryPoint = "tc_entity_pool_add_component")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_entity_pool_add_component")]
     public static extern void EntityPoolAddComponent(IntPtr pool, TcEntityId id, IntPtr component);
 
     // ========================================================================
     // Component Properties (for ComponentRef)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_type_name")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_type_name")]
     public static extern IntPtr ComponentGetTypeName(IntPtr component);
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_enabled")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_enabled")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ComponentGetEnabled(IntPtr component);
 
-    [DllImport(DLL, EntryPoint = "tc_component_set_enabled")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_enabled")]
     public static extern void ComponentSetEnabled(IntPtr component, [MarshalAs(UnmanagedType.U1)] bool enabled);
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_active_in_editor")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_active_in_editor")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ComponentGetActiveInEditor(IntPtr component);
 
-    [DllImport(DLL, EntryPoint = "tc_component_set_active_in_editor")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_set_active_in_editor")]
     public static extern void ComponentSetActiveInEditor(IntPtr component, [MarshalAs(UnmanagedType.U1)] bool active);
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_is_drawable")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_is_drawable")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ComponentGetIsDrawable(IntPtr component);
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_is_input_handler")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_is_input_handler")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ComponentGetIsInputHandler(IntPtr component);
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_kind")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_kind")]
     public static extern int ComponentGetKind(IntPtr component);
 
-    [DllImport(DLL, EntryPoint = "tc_component_get_owner")]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_get_owner")]
     public static extern TcEntityHandle ComponentGetOwner(IntPtr component);
 
     // ========================================================================
@@ -562,33 +565,33 @@ public static class TerminCore
     // Pass Registry
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_pass_registry_has", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_registry_has", CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool PassRegistryHas(string typeName);
 
-    [DllImport(DLL, EntryPoint = "tc_pass_registry_create", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_registry_create", CharSet = CharSet.Ansi)]
     public static extern IntPtr PassRegistryCreate(string typeName);
 
-    [DllImport(DLL, EntryPoint = "tc_pass_registry_type_count")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_registry_type_count")]
     public static extern nuint PassRegistryTypeCount();
 
-    [DllImport(DLL, EntryPoint = "tc_pass_registry_type_at")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_registry_type_at")]
     public static extern IntPtr PassRegistryTypeAt(nuint index);
 
-    [DllImport(DLL, EntryPoint = "tc_pass_set_name", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_set_name", CharSet = CharSet.Ansi)]
     public static extern void PassSetName(IntPtr pass, string name);
 
-    [DllImport(DLL, EntryPoint = "tc_pass_set_enabled")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_set_enabled")]
     public static extern void PassSetEnabled(IntPtr pass, [MarshalAs(UnmanagedType.U1)] bool enabled);
 
-    [DllImport(DLL, EntryPoint = "tc_pass_drop")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_drop")]
     public static extern void PassDrop(IntPtr pass);
 
     // ========================================================================
     // FBO Pool Extended
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_fbo_pool_ensure", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_fbo_pool_ensure", CharSet = CharSet.Ansi)]
     public static extern IntPtr FboPoolEnsure(
         IntPtr pool,
         string key,
@@ -598,13 +601,13 @@ public static class TerminCore
         string? format
     );
 
-    [DllImport(DLL, EntryPoint = "tc_fbo_pool_get", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_fbo_pool_get", CharSet = CharSet.Ansi)]
     public static extern IntPtr FboPoolGet(IntPtr pool, string key);
 
-    [DllImport(DLL, EntryPoint = "tc_fbo_pool_set", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_fbo_pool_set", CharSet = CharSet.Ansi)]
     public static extern void FboPoolSet(IntPtr pool, string key, IntPtr fbo);
 
-    [DllImport(DLL, EntryPoint = "tc_fbo_pool_clear")]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_fbo_pool_clear")]
     public static extern void FboPoolClear(IntPtr pool);
 
     // ========================================================================
@@ -648,27 +651,27 @@ public static class TerminCore
     // tc_inspect - Field inspection and access
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_inspect_has_type", CharSet = CharSet.Ansi)]
+    [DllImport(INSPECT_DLL, EntryPoint = "tc_inspect_has_type", CharSet = CharSet.Ansi)]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool InspectHasType(string typeName);
 
-    [DllImport(DLL, EntryPoint = "tc_inspect_field_count", CharSet = CharSet.Ansi)]
+    [DllImport(INSPECT_DLL, EntryPoint = "tc_inspect_field_count", CharSet = CharSet.Ansi)]
     public static extern nuint InspectFieldCount(string typeName);
 
-    [DllImport(DLL, EntryPoint = "tc_inspect_get", CharSet = CharSet.Ansi)]
+    [DllImport(INSPECT_DLL, EntryPoint = "tc_inspect_get", CharSet = CharSet.Ansi)]
     public static extern TcValue InspectGet(IntPtr obj, string typeName, string path);
 
-    [DllImport(DLL, EntryPoint = "tc_inspect_set", CharSet = CharSet.Ansi)]
+    [DllImport(INSPECT_DLL, EntryPoint = "tc_inspect_set", CharSet = CharSet.Ansi)]
     public static extern void InspectSet(IntPtr obj, string typeName, string path, TcValue value, IntPtr scene);
 
     // ========================================================================
     // Pass field inspection (via tc_pass*)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_pass_inspect_get", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_inspect_get", CharSet = CharSet.Ansi)]
     public static extern TcValue PassInspectGet(IntPtr pass, string path);
 
-    [DllImport(DLL, EntryPoint = "tc_pass_inspect_set", CharSet = CharSet.Ansi)]
+    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_inspect_set", CharSet = CharSet.Ansi)]
     public static extern void PassInspectSet(IntPtr pass, string path, TcValue value, IntPtr scene);
 
     // ========================================================================
@@ -744,136 +747,136 @@ public static class TerminCore
         public IntPtr share_group_key;
     }
 
-    [DllImport(DLL, EntryPoint = "tc_render_surface_new_external")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_render_surface_new_external")]
     public static extern IntPtr RenderSurfaceNewExternal(IntPtr body, ref RenderSurfaceVTable vtable);
 
-    [DllImport(DLL, EntryPoint = "tc_render_surface_free_external")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_render_surface_free_external")]
     public static extern void RenderSurfaceFreeExternal(IntPtr surface);
 
     // ========================================================================
     // Display (tc_display)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_display_new", CharSet = CharSet.Ansi)]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_new", CharSet = CharSet.Ansi)]
     public static extern IntPtr DisplayNew(string name, IntPtr surface);
 
-    [DllImport(DLL, EntryPoint = "tc_display_free")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_free")]
     public static extern void DisplayFree(IntPtr display);
 
-    [DllImport(DLL, EntryPoint = "tc_display_set_name", CharSet = CharSet.Ansi)]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_set_name", CharSet = CharSet.Ansi)]
     public static extern void DisplaySetName(IntPtr display, string name);
 
-    [DllImport(DLL, EntryPoint = "tc_display_get_name")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_name")]
     public static extern IntPtr DisplayGetName(IntPtr display);
 
-    [DllImport(DLL, EntryPoint = "tc_display_get_size")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_size")]
     public static extern void DisplayGetSize(IntPtr display, out int width, out int height);
 
-    [DllImport(DLL, EntryPoint = "tc_display_add_viewport")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_add_viewport")]
     public static extern void DisplayAddViewport(IntPtr display, TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_display_remove_viewport")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_remove_viewport")]
     public static extern void DisplayRemoveViewport(IntPtr display, TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_display_get_viewport_count")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_viewport_count")]
     public static extern nuint DisplayGetViewportCount(IntPtr display);
 
-    [DllImport(DLL, EntryPoint = "tc_display_get_first_viewport")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_get_first_viewport")]
     public static extern TcViewportHandle DisplayGetFirstViewport(IntPtr display);
 
-    [DllImport(DLL, EntryPoint = "tc_display_viewport_at_screen")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_viewport_at_screen")]
     public static extern TcViewportHandle DisplayViewportAtScreen(IntPtr display, float px, float py);
 
     // ========================================================================
     // Input Manager (tc_input_manager)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_input_manager_dispatch_mouse_button")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_mouse_button")]
     public static extern void InputManagerDispatchMouseButton(IntPtr manager, int button, int action, int mods);
 
-    [DllImport(DLL, EntryPoint = "tc_input_manager_dispatch_mouse_move")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_mouse_move")]
     public static extern void InputManagerDispatchMouseMove(IntPtr manager, double x, double y);
 
-    [DllImport(DLL, EntryPoint = "tc_input_manager_dispatch_scroll")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_scroll")]
     public static extern void InputManagerDispatchScroll(IntPtr manager, double x, double y, int mods);
 
-    [DllImport(DLL, EntryPoint = "tc_input_manager_dispatch_key")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_key")]
     public static extern void InputManagerDispatchKey(IntPtr manager, int key, int scancode, int action, int mods);
 
-    [DllImport(DLL, EntryPoint = "tc_input_manager_dispatch_char")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_input_manager_dispatch_char")]
     public static extern void InputManagerDispatchChar(IntPtr manager, uint codepoint);
 
     // ========================================================================
     // Display Input Router (tc_display_input_router)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_display_input_router_new")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_input_router_new")]
     public static extern IntPtr DisplayInputRouterNew(IntPtr display);
 
-    [DllImport(DLL, EntryPoint = "tc_display_input_router_free")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_input_router_free")]
     public static extern void DisplayInputRouterFree(IntPtr router);
 
-    [DllImport(DLL, EntryPoint = "tc_display_input_router_base")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_display_input_router_base")]
     public static extern IntPtr DisplayInputRouterBase(IntPtr router);
 
     // ========================================================================
     // Viewport Input Manager (tc_viewport_input_manager)
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_input_manager_new")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_input_manager_new")]
     public static extern IntPtr ViewportInputManagerNew(uint vpIndex, uint vpGeneration);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_input_manager_free")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_input_manager_free")]
     public static extern void ViewportInputManagerFree(IntPtr manager);
 
     // ========================================================================
     // Viewport (tc_viewport) - handle-based API
     // ========================================================================
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_new", CharSet = CharSet.Ansi)]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_new", CharSet = CharSet.Ansi)]
     public static extern TcViewportHandle ViewportNew(string? name, TcSceneHandle scene);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_free")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_free")]
     public static extern void ViewportFree(TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_alive")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_alive")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ViewportAlive(TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_set_scene")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_set_scene")]
     public static extern void ViewportSetScene(TcViewportHandle viewport, TcSceneHandle scene);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_get_scene")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_get_scene")]
     public static extern TcSceneHandle ViewportGetScene(TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_set_rect")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_set_rect")]
     public static extern void ViewportSetRect(TcViewportHandle viewport, float x, float y, float w, float h);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_set_enabled")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_set_enabled")]
     public static extern void ViewportSetEnabled(TcViewportHandle viewport, [MarshalAs(UnmanagedType.U1)] bool enabled);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_get_enabled")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_get_enabled")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ViewportGetEnabled(TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_set_depth")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_set_depth")]
     public static extern void ViewportSetDepth(TcViewportHandle viewport, int depth);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_get_depth")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_get_depth")]
     public static extern int ViewportGetDepth(TcViewportHandle viewport);
 
     // Internal entities (for viewport-specific components like camera controllers)
-    [DllImport(DLL, EntryPoint = "tc_viewport_set_internal_entities")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_set_internal_entities")]
     public static extern void ViewportSetInternalEntities(TcViewportHandle viewport, TcEntityHandle entityHandle);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_has_internal_entities")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_has_internal_entities")]
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool ViewportHasInternalEntities(TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_get_internal_entities_pool")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_get_internal_entities_pool")]
     public static extern IntPtr ViewportGetInternalEntitiesPool(TcViewportHandle viewport);
 
-    [DllImport(DLL, EntryPoint = "tc_viewport_get_internal_entities_id")]
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_get_internal_entities_id")]
     public static extern TcEntityId ViewportGetInternalEntitiesId(TcViewportHandle viewport);
 
     // ========================================================================
@@ -911,7 +914,7 @@ public static class TerminCore
     [DllImport(MESH_DLL, EntryPoint = "tc_primitive_unit_plane")]
     public static extern TcMeshHandle PrimitiveUnitPlane();
 
-    [DllImport(DLL, EntryPoint = "tc_primitive_cleanup")]
+    [DllImport(MESH_DLL, EntryPoint = "tc_primitive_cleanup")]
     public static extern void PrimitiveCleanup();
 
     // ========================================================================
@@ -1046,7 +1049,7 @@ public static class TerminCore
     public static extern void ComponentFreeCSharp(IntPtr component);
 
     // Component registry — register factory for a type
-    [DllImport(DLL, EntryPoint = "tc_component_registry_register", CharSet = CharSet.Ansi)]
+    [DllImport(SCENE_DLL, EntryPoint = "tc_component_registry_register", CharSet = CharSet.Ansi)]
     public static extern void ComponentRegistryRegister(string typeName, IntPtr factory, IntPtr factoryUserdata, int kind);
 
     // ========================================================================
@@ -1079,10 +1082,10 @@ public static class TerminCore
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate void TcLogCallback(TcLogLevel level, [MarshalAs(UnmanagedType.LPUTF8Str)] string message);
 
-    [DllImport(DLL, EntryPoint = "tc_log_set_callback")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_log_set_callback")]
     public static extern void LogSetCallback(TcLogCallback? callback);
 
-    [DllImport(DLL, EntryPoint = "tc_log_set_level")]
+    [DllImport(BASE_DLL, EntryPoint = "tc_log_set_level")]
     public static extern void LogSetLevel(TcLogLevel level);
 }
 

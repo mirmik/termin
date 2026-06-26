@@ -26,7 +26,16 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     include(UseSWIG)
 
     find_package(OpenGL REQUIRED)
-    find_package(termin REQUIRED)
+    if(COMMAND termin_require_package)
+        termin_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
+    else()
+        find_package(termin_graphics REQUIRED)
+    endif()
+    if(COMMAND termin_require_package)
+        termin_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
+    else()
+        find_package(termin_bootstrap REQUIRED)
+    endif()
     if(COMMAND termin_require_package)
         termin_require_package(termin_materials termin_materials::termin_materials)
     else()
@@ -112,7 +121,6 @@ endif()
             ${CMAKE_CURRENT_SOURCE_DIR}/termin.i
             ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_component_csharp.cpp
             ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_inspect_csharp.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/../termin-app/cpp/termin/render/tc_opengl.cpp
     )
 
     set_target_properties(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PROPERTIES
@@ -134,13 +142,14 @@ endif()
 
     target_include_directories(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${TERMIN_INCLUDE_DIRS}
     )
     target_compile_definitions(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE TCBASE_EXPORTS TC_EXPORTS)
 
     target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
         OpenGL::GL
         tcbase::termin_base
+        tgfx::termin_graphics
+        termin_bootstrap::termin_bootstrap
         termin_engine::termin_engine
         termin_scene::termin_scene
         termin_collision::termin_collision
@@ -158,8 +167,8 @@ endif()
     # ABI-mismatch source. To verify: dumpbin /DEPENDENTS termin.dll
     # after a build and diff against the files in runtimes/win-x64/native/.
     set(_termin_csharp_runtime_targets
-        termin::termin_core
         tcbase::termin_base
+        termin_bootstrap::termin_bootstrap
         termin_inspect::termin_inspect
         termin_scene::termin_scene
         termin_input::termin_input
