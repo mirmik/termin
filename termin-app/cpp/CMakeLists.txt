@@ -321,7 +321,15 @@ set_target_properties(termin_modules_cli PROPERTIES
 termin_set_rpath_tool(termin_modules_cli)
 install(TARGETS termin_modules_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-if(TARGET termin_modules_python)
+set(_termin_player_has_sdl OFF)
+if(TARGET termin_display)
+    get_target_property(_termin_display_public_defs termin_display INTERFACE_COMPILE_DEFINITIONS)
+    if(_termin_display_public_defs AND "TERMIN_DISPLAY_HAS_SDL" IN_LIST _termin_display_public_defs)
+        set(_termin_player_has_sdl ON)
+    endif()
+endif()
+
+if(TARGET termin_modules_python AND _termin_player_has_sdl)
     add_executable(termin_player
         app/termin_player.cpp
         termin/player/player_runtime_host.cpp
@@ -366,8 +374,10 @@ if(TARGET termin_modules_python)
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
         BUILD_WITH_INSTALL_RPATH FALSE
     )
-else()
+elseif(NOT TARGET termin_modules_python)
     message(STATUS "termin_player disabled because termin_modules_python target is unavailable")
+else()
+    message(STATUS "termin_player disabled because termin_display was built without SDL")
 endif()
 
 add_executable(termin_stdlib
