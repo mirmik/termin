@@ -272,6 +272,46 @@ del engine
     assert "nanobind: leaked" not in result.stderr
 
 
+def test_rendering_manager_stats_expose_pipeline_cache_counters() -> None:
+    script = """
+import json
+from termin.bootstrap import bootstrap_player
+from termin.engine import EngineCore, RenderingManager
+
+bootstrap_player()
+engine = EngineCore()
+stats = RenderingManager.instance().get_render_stats()
+print(json.dumps({
+    "pipeline_cache_hits": stats["pipeline_cache_hits"],
+    "pipeline_cache_misses": stats["pipeline_cache_misses"],
+    "pipeline_cache_create_pipeline_count": stats["pipeline_cache_create_pipeline_count"],
+    "pipeline_cache_cached_pipelines": stats["pipeline_cache_cached_pipelines"],
+    "pipeline_cache_unique_vertex_layout_signatures": stats["pipeline_cache_unique_vertex_layout_signatures"],
+    "pipeline_cache_vertex_layout_signature_hashes": stats["pipeline_cache_vertex_layout_signature_hashes"],
+}, sort_keys=True))
+del engine
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    stats = json.loads(result.stdout)
+    assert stats == {
+        "pipeline_cache_cached_pipelines": 0,
+        "pipeline_cache_create_pipeline_count": 0,
+        "pipeline_cache_hits": 0,
+        "pipeline_cache_misses": 0,
+        "pipeline_cache_unique_vertex_layout_signatures": 0,
+        "pipeline_cache_vertex_layout_signature_hashes": [],
+    }
+    assert "nanobind: leaked" not in result.stderr
+
+
 def test_collecting_builtin_specs_does_not_import_runtime_packages() -> None:
     script = """
 import json
