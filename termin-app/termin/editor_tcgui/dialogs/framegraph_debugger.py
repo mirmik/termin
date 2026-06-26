@@ -78,6 +78,7 @@ class _FramegraphDebuggerHandle:
         self._closed: bool = False
 
         self._updating: bool = False
+        self._pass_combo_indices: list[int] = []
 
         self._viewport_combo: ComboBox | None = None
         self._mode_combo: ComboBox | None = None
@@ -154,10 +155,11 @@ class _FramegraphDebuggerHandle:
         self._updating = True
         if self._mode_combo is not None:
             self._mode_combo.selected_index = 0 if self.model.mode == "inside" else 1
-        if self._pass_combo is not None and self.model.selected_pass is not None:
-            for i in range(self._pass_combo.item_count):
-                name = self._pass_name_from_display(self._pass_combo.item_text(i))
-                if name == self.model.selected_pass:
+        if self._pass_combo is not None and self.model.selected_pass_index is not None:
+            for i, pass_index in enumerate(self._pass_combo_indices):
+                if i >= self._pass_combo.item_count:
+                    break
+                if pass_index == self.model.selected_pass_index:
                     self._pass_combo.selected_index = i
                     break
         if self._symbol_combo is not None and self.model.selected_symbol is not None:
@@ -248,11 +250,14 @@ class _FramegraphDebuggerHandle:
         passes_info = self.model.get_passes()
         self._updating = True
         self._pass_combo.clear()
+        self._pass_combo_indices = []
         selected_index = -1
-        for i, (name, has_sym) in enumerate(passes_info):
-            display_name = f"{name} *" if has_sym else name
-            self._pass_combo.add_item(display_name)
-            if name == self.model.selected_pass:
+        for i, item in enumerate(passes_info):
+            self._pass_combo.add_item(item.display_name)
+            self._pass_combo_indices.append(item.index)
+            if item.index == self.model.selected_pass_index:
+                selected_index = i
+            elif self.model.selected_pass_index is None and item.name == self.model.selected_pass:
                 selected_index = i
         if selected_index >= 0:
             self._pass_combo.selected_index = selected_index
@@ -273,11 +278,13 @@ class _FramegraphDebuggerHandle:
             self._symbol_combo.selected_index = selected_index
         self._updating = False
 
-    @staticmethod
-    def _pass_name_from_display(display_name: str) -> str:
-        if display_name.endswith(" *"):
-            return display_name[:-2]
-        return display_name
+    def _select_pass_combo_row(self, index: int) -> None:
+        if index < 0:
+            return
+        if index >= len(self._pass_combo_indices):
+            log.warn(f"[FrameDebugger] pass combo index {index} has no pass mapping")
+            return
+        self.model.set_selected_pass_by_index(self._pass_combo_indices[index])
 
     # ------------------------------------------------------------------
     # Per-frame update — editor calls this
@@ -568,10 +575,10 @@ def show_framegraph_debugger(
             return
         model.set_mode("inside" if idx == 0 else "between")
 
-    def on_pass_changed(idx, text):
+    def on_pass_changed(idx, _text):
         if handle._updating or idx < 0:
             return
-        model.set_selected_pass(handle._pass_name_from_display(text))
+        handle._select_pass_combo_row(idx)
 
     def on_symbol_changed(idx, text):
         if handle._updating or not text:

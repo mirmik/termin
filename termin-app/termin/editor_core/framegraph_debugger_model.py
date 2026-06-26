@@ -19,6 +19,7 @@ Views re-read model state via properties on signal emit.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from tcbase import log
@@ -73,6 +74,18 @@ class FramegraphDebugTarget:
         self.source = source
         self.label = label
         self.get_pipeline = get_pipeline
+
+
+@dataclass(frozen=True)
+class FramegraphPassListItem:
+    index: int
+    name: str
+    has_internal_symbols: bool
+
+    @property
+    def display_name(self) -> str:
+        suffix = " *" if self.has_internal_symbols else ""
+        return f"{self.name}{suffix}"
 
 
 class FramegraphDebuggerModel:
@@ -268,22 +281,31 @@ class FramegraphDebuggerModel:
                     write_order.append(w)
         return read_only + write_order
 
-    def get_passes(self) -> list[tuple[str, bool]]:
-        """List of (pass_name, has_internal_symbols) from current pipeline,
-        with the debugger pass filtered out. ShadowPass is treated as having
-        no symbols."""
+    def get_passes(self) -> list[FramegraphPassListItem]:
+        """List current pipeline passes for UI selection.
+
+        ``index`` is the stable index in ``pipeline.passes``. The debugger pass
+        is filtered out of the UI list, so callers must not treat combo/list row
+        positions as pipeline pass identities.
+        """
         pipeline = self.get_current_pipeline()
         if pipeline is None:
             return []
-        result: list[tuple[str, bool]] = []
-        for p in pipeline.passes:
+        result: list[FramegraphPassListItem] = []
+        for index, p in enumerate(pipeline.passes):
             if p.pass_name == "FrameDebugger":
                 continue
             if p.type_name == "ShadowPass" or p.pass_name == "ShadowPass":
                 has_syms = False
             else:
                 has_syms = bool(p.get_internal_symbols())
-            result.append((p.pass_name, has_syms))
+            result.append(
+                FramegraphPassListItem(
+                    index=index,
+                    name=p.pass_name,
+                    has_internal_symbols=has_syms,
+                )
+            )
         return result
 
     def get_symbols(self) -> list[str]:
@@ -393,10 +415,8 @@ class FramegraphDebuggerModel:
             return f"<error: {e}>"
 
     def format_timing(self) -> str:
-        if self._selected_pass is None or self._selected_symbol is None:
-            return ""
         frame_pass = self._selected_frame_pass()
-        if frame_pass is None:
+        if frame_pass is None or self._selected_symbol is None:
             return ""
         timings = frame_pass.get_internal_symbols_with_timing()
         for t in timings:
@@ -458,9 +478,19 @@ class FramegraphDebuggerModel:
         self.info_changed.emit(self)
 
     def set_selected_pass_by_index(self, pass_index: int | None) -> None:
-        if pass_index == self._selected_pass_index:
-            return
         pipeline = self.get_current_pipeline()
+        current_pass_name = None
+        if (
+            pipeline is not None
+            and pass_index is not None
+            and 0 <= pass_index < len(pipeline.passes)
+        ):
+            current_pass_name = pipeline.passes[pass_index].pass_name
+        if (
+            pass_index == self._selected_pass_index
+            and current_pass_name == self._selected_pass
+        ):
+            return
         if pass_index is None:
             self._selected_pass_index = None
             self._selected_pass = None
@@ -633,7 +663,7 @@ class FramegraphDebuggerModel:
             return
 
         if self._mode == "inside":
-            if not self._selected_pass or not self._selected_symbol:
+            if not self._selected_symbol:
                 return
             p = self._selected_frame_pass()
             if p is not None:
@@ -641,7 +671,7 @@ class FramegraphDebuggerModel:
                 p.set_debug_capture(self._core.capture)
                 log.info(
                     f"[FrameDebugger] Connected: inside mode, "
-                    f"pass='{self._selected_pass}', "
+                    f"pass='{p.pass_name}', "
                     f"pass_index={self._selected_pass_index}, "
                     f"symbol='{self._selected_symbol}'"
                 )
