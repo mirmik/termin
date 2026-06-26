@@ -22,6 +22,14 @@ namespace termin {
 
 namespace nb = nanobind;
 
+static nb::list size_list_to_python(const std::vector<size_t>& values) {
+    nb::list out;
+    for (size_t value : values) {
+        out.append(value);
+    }
+    return out;
+}
+
 static tc_pipeline_handle pipeline_handle_from_python(nb::handle obj) {
     if (obj.is_none()) {
         return TC_PIPELINE_HANDLE_INVALID;
@@ -524,6 +532,21 @@ void bind_rendering_manager(nb::module_& m) {
                 return unmanaged;
             };
             stats["unmanaged_viewports"] = count_unmanaged(self.displays()) + count_unmanaged(self.editor_displays());
+
+            termin::RenderPipelineCacheStats cache_stats;
+            if (const RenderEngine* engine = self.render_engine_if_created()) {
+                cache_stats = engine->pipeline_cache_stats();
+            }
+            stats["pipeline_cache_hits"] = cache_stats.hit_count;
+            stats["pipeline_cache_misses"] = cache_stats.miss_count;
+            stats["pipeline_cache_create_pipeline_count"] =
+                cache_stats.create_pipeline_count;
+            stats["pipeline_cache_cached_pipelines"] =
+                cache_stats.cached_pipeline_count;
+            stats["pipeline_cache_unique_vertex_layout_signatures"] =
+                cache_stats.unique_vertex_layout_signature_count;
+            stats["pipeline_cache_vertex_layout_signature_hashes"] =
+                size_list_to_python(cache_stats.vertex_layout_signature_hashes);
 
             return stats;
         }, "Get render statistics for debugging")

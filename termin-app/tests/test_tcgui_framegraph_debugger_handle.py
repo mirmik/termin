@@ -1,8 +1,14 @@
+import sys
+import types
+
 from termin.editor_tcgui.dialogs.framegraph_debugger import (
     _FramegraphDebuggerHandle,
     CapturePreviewWidget,
 )
-from termin.editor_core.framegraph_debugger_model import FramegraphPassListItem
+from termin.editor_core.framegraph_debugger_model import (
+    FramegraphDebuggerModel,
+    FramegraphPassListItem,
+)
 
 
 class _Signal:
@@ -194,3 +200,38 @@ def test_pass_combo_event_selects_pass_by_pipeline_index():
     handle._select_pass_combo_row(1)
 
     assert model.selected_indices == [4]
+
+
+def test_framegraph_render_stats_include_pipeline_cache_counters(monkeypatch):
+    class Manager:
+        def get_render_stats(self):
+            return {
+                "attached_scenes": 1,
+                "scene_pipelines": 2,
+                "unmanaged_viewports": 3,
+                "scene_names": ["Scene"],
+                "pipeline_names": ["Default"],
+                "pipeline_cache_hits": 4,
+                "pipeline_cache_misses": 5,
+                "pipeline_cache_create_pipeline_count": 6,
+                "pipeline_cache_cached_pipelines": 7,
+                "pipeline_cache_unique_vertex_layout_signatures": 8,
+                "pipeline_cache_vertex_layout_signature_hashes": [0x1234, 0xABCD],
+            }
+
+    class RenderingManager:
+        @staticmethod
+        def instance():
+            return Manager()
+
+    engine_module = types.ModuleType("termin.engine")
+    engine_module.RenderingManager = RenderingManager
+    monkeypatch.setitem(sys.modules, "termin.engine", engine_module)
+
+    model = FramegraphDebuggerModel.__new__(FramegraphDebuggerModel)
+
+    text = model.format_render_stats()
+
+    assert "Scenes: 1" in text
+    assert "PipelineCache: hit=4 miss=5 create=6 cached=7 layouts=8" in text
+    assert "layout_hashes=1234,abcd" in text
