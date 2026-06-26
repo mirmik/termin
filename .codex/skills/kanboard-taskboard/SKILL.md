@@ -27,9 +27,10 @@ Run commands from `/home/mirmik/project/termin` unless using absolute paths. On 
 
 ```bash
 scripts/taskboard list
-scripts/taskboard list --column "On Test"
+scripts/taskboard list --tags
+scripts/taskboard list --column "On Test" --tags
 scripts/taskboard show 119
-scripts/taskboard export --comments --output /tmp/termin-board.json
+scripts/taskboard export --comments --tags --output /tmp/termin-board.json
 scripts/taskboard close 28 29 41 --dry-run
 scripts/taskboard close 28 29 41 --comment "Implemented and verified."
 scripts/taskboard move 13 "On Test" --dry-run

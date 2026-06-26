@@ -11,9 +11,10 @@ Kanboard project id `1` по умолчанию и не требует писа�
 
 ```bash
 scripts/taskboard list
-scripts/taskboard list --column "On Test"
+scripts/taskboard list --tags
+scripts/taskboard list --column "On Test" --tags
 scripts/taskboard show 119
-scripts/taskboard export --comments --output /tmp/termin-board.json
+scripts/taskboard export --comments --tags --output /tmp/termin-board.json
 ```
 
 Write-операции имеют dry-run там, где это важно:

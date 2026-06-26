@@ -65,6 +65,7 @@ def create_parser() -> argparse.ArgumentParser:
     list_parser.add_argument("--status", choices=("active", "closed", "all"), default="active")
     list_parser.add_argument("--column", help="Filter by column id or title")
     list_parser.add_argument("--swimlane", help="Filter by swimlane id or title")
+    list_parser.add_argument("--tags", action="store_true", help="Include task tags in table output")
     list_parser.add_argument("--json", action="store_true", help="Print JSON instead of a table")
     list_parser.set_defaults(func=cmd_list)
 
@@ -78,6 +79,7 @@ def create_parser() -> argparse.ArgumentParser:
     export_parser = subparsers.add_parser("export", help="Export tasks, columns, swimlanes and optional comments")
     export_parser.add_argument("--status", choices=("active", "closed", "all"), default="active")
     export_parser.add_argument("--comments", action="store_true", help="Include comments for every exported task")
+    export_parser.add_argument("--tags", action="store_true", help="Include tags for every exported task")
     export_parser.add_argument("--output", type=Path, help="Write JSON to this path instead of stdout")
     export_parser.set_defaults(func=cmd_export)
 
@@ -137,17 +139,23 @@ def cmd_list(client: KanboardClient, args: argparse.Namespace) -> int:
         print_json({"tasks": tasks, "columns": columns, "swimlanes": swimlanes})
         return 0
 
-    rows = [
-        [
+    headers = ["id", "column", "swimlane", "pos"]
+    if args.tags:
+        headers.append("tags")
+    headers.append("title")
+    rows = []
+    for task in tasks:
+        row = [
             f"#{task['id']}",
             column_title(int(task["column_id"]), columns),
             swimlane_title(int(task["swimlane_id"]), swimlanes),
             str(task.get("position", "")),
-            one_line(str(task["title"]), 72),
         ]
-        for task in tasks
-    ]
-    print_table(["id", "column", "swimlane", "pos", "title"], rows)
+        if args.tags:
+            row.append(",".join(fetch_task_tags(client, int(task["id"])).values()))
+        row.append(one_line(str(task["title"]), 72))
+        rows.append(row)
+    print_table(headers, rows)
     print(f"\n{len(tasks)} task(s)")
     return 0
 
@@ -156,16 +164,19 @@ def cmd_show(client: KanboardClient, args: argparse.Namespace) -> int:
     task = fetch_task(client, args.task_id)
     comments = fetch_comments(client, args.task_id)
     if not args.all_comments:
-        comments = comments[-args.comments :]
+        comments = [] if args.comments <= 0 else comments[-args.comments :]
     if args.json:
         print_json({"task": task, "comments": comments})
         return 0
 
     columns = fetch_columns(client, int(task["project_id"]))
     swimlanes = fetch_swimlanes(client, int(task["project_id"]))
+    tags = fetch_task_tags(client, int(task["id"]))
     active = "active" if int(task["is_active"]) else "closed"
     print(f"#{task['id']} {task['title']}")
     print(f"state: {active}, column: {column_title(int(task['column_id']), columns)}, swimlane: {swimlane_title(int(task['swimlane_id']), swimlanes)}")
+    if tags:
+        print(f"tags: {', '.join(tags.values())}")
     print("")
     description = str(task.get("description") or "").strip()
     print(description if description else "(no description)")
@@ -191,6 +202,12 @@ def cmd_export(client: KanboardClient, args: argparse.Namespace) -> int:
             task_id = int(task["id"])
             comments_by_task[str(task_id)] = fetch_comments(client, task_id)
         payload["comments_by_task"] = comments_by_task
+    if args.tags:
+        tags_by_task: dict[str, Any] = {}
+        for task in payload["tasks"]:
+            task_id = int(task["id"])
+            tags_by_task[str(task_id)] = fetch_task_tags(client, task_id)
+        payload["tags_by_task"] = tags_by_task
 
     output = json.dumps(redact(payload), ensure_ascii=False, indent=2)
     if args.output is not None:
@@ -340,6 +357,13 @@ def fetch_comments(client: KanboardClient, task_id: int) -> list[dict[str, Any]]
     return [comment for comment in result if isinstance(comment, dict)]
 
 
+def fetch_task_tags(client: KanboardClient, task_id: int) -> dict[str, str]:
+    result = client.result("getTaskTags", {"task_id": task_id})
+    if not isinstance(result, dict):
+        raise KanboardError(f"getTaskTags returned unexpected result for #{task_id}: {result!r}")
+    return {str(tag_id): str(tag_name) for tag_id, tag_name in result.items()}
+
+
 def fetch_columns(client: KanboardClient, project_id: int) -> list[dict[str, Any]]:
     result = client.result("getColumns", {"project_id": project_id})
     if not isinstance(result, list):
@@ -433,4 +457,3 @@ def print_table(headers: list[str], rows: list[list[str]]) -> None:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
-
