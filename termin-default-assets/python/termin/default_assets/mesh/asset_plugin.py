@@ -73,7 +73,6 @@ class MeshRuntimePlugin:
 
         asset.parse_spec(result.spec_data)
         asset.reload()
-        asset.delete_gpu()
 
 
 class MeshAssetPlugin(MeshImportPlugin, MeshRuntimePlugin):

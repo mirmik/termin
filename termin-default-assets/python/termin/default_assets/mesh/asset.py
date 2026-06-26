@@ -1,4 +1,4 @@
-"""MeshAsset - Asset for 3D mesh data with GPU rendering support."""
+"""MeshAsset - asset for 3D mesh data."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ class MeshAsset(DataAsset[TcMesh]):
     IMPORTANT: Create through ResourceManager.get_or_create_mesh_asset(),
     not directly. This ensures proper registration and avoids duplicates.
 
-    Stores TcMesh (handle to tc_mesh in C registry).
-    GPU upload/draw via TcMesh.draw_gpu().
+    Stores TcMesh (handle to tc_mesh in C registry). Renderer/device-specific
+    upload and cache invalidation are handled outside the asset layer.
 
     Can be loaded from:
     - STL/OBJ files (standalone)
@@ -241,7 +241,7 @@ class MeshAsset(DataAsset[TcMesh]):
         return data.triangle_count
 
     def interleaved_buffer(self):
-        """Get interleaved vertex buffer for GPU upload."""
+        """Get interleaved vertex buffer."""
         data = self.data
         if data is None or not data.is_valid:
             return None
@@ -301,15 +301,3 @@ class MeshAsset(DataAsset[TcMesh]):
         mesh3 = Mesh3(name=name, vertices=vertices, triangles=triangles)
         tc_mesh = TcMesh.from_mesh3(mesh3, name)
         return cls(mesh_data=tc_mesh, name=name)
-
-    # --- GPU access ---
-
-    def draw_gpu(self) -> None:
-        """Draw mesh (upload to GPU if needed)."""
-        tc_mesh = self.data
-        if tc_mesh is not None and tc_mesh.is_valid:
-            tc_mesh.draw_gpu()
-
-    def delete_gpu(self) -> None:
-        """Delete GPU resources (no-op, handled by tc_mesh)."""
-        pass

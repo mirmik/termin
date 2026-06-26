@@ -20,7 +20,7 @@ class TextureSpec:
 
     # Flip texture horizontally (mirror X)
     flip_x: bool = False
-    # Flip texture vertically for OpenGL (origin at bottom-left)
+    # Flip texture vertically to use the engine's bottom-left texture origin convention.
     flip_y: bool = True
     # Transpose texture (swap X and Y axes)
     transpose: bool = False
