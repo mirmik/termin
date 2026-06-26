@@ -36,3 +36,4 @@
 - [termin-app native re-export cleanup plan](2026-06-23-termin-app-native-reexport-cleanup-plan.md)
 - [termin-bootstrap startup plan](2026-06-23-termin-bootstrap-startup-plan.md)
 - [C++ termin_player migration plan](2026-06-24-cpp-termin-player-migration-plan.md)
+- [Build profiles editor window](2026-06-26-build-profiles-editor-window.md)
