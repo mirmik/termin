@@ -6,12 +6,45 @@ import numpy as np
 import warnings
 from termin.fem.assembler import (
     MatrixAssembler,
+    Contribution,
     spring_element,
     conductance_element,
     LoadContribution,
     ConstraintContribution,
     BilinearContribution
 )
+
+
+class DynamicContribution(Contribution):
+    def __init__(
+        self,
+        variable,
+        *,
+        mass: float,
+        damping: float,
+        stiffness: float,
+        load: float,
+    ):
+        self.variable = variable
+        self.mass = mass
+        self.damping = damping
+        self.stiffness = stiffness
+        self.load = load
+
+    def get_variables(self):
+        return [self.variable]
+
+    def contribute_to_mass(self, A, index_map):
+        A[index_map[self.variable][0], index_map[self.variable][0]] += self.mass
+
+    def contribute_to_damping(self, C, index_map):
+        C[index_map[self.variable][0], index_map[self.variable][0]] += self.damping
+
+    def contribute_to_stiffness(self, K, index_map):
+        K[index_map[self.variable][0], index_map[self.variable][0]] += self.stiffness
+
+    def contribute_to_load(self, b, index_map):
+        b[index_map[self.variable][0]] += self.load
 
 
 class TestSpringSystem(unittest.TestCase):
@@ -264,6 +297,35 @@ class TestMatrixAssembler(unittest.TestCase):
         # Оба узла должны быть на заданных значениях
         self.assertAlmostEqual(u1.value, 1.0, places=6)
         self.assertAlmostEqual(u2.value, 3.0, places=6)
+
+    def test_solve_dynamic_system_uses_velocity_and_position_terms(self):
+        assembler = MatrixAssembler()
+        q = assembler.add_variable("q")
+        assembler.add_contribution(
+            DynamicContribution(
+                q,
+                mass=2.0,
+                damping=3.0,
+                stiffness=5.0,
+                load=23.0,
+            )
+        )
+
+        x_ddot = assembler.solve_Adxx_Cdx_Kx_b(
+            x_dot=np.array([4.0]),
+            x=np.array([1.0]),
+            check_conditioning=False,
+        )
+
+        np.testing.assert_allclose(x_ddot, np.array([3.0]))
+        np.testing.assert_allclose(q.value, np.array([3.0]))
+
+        changed = assembler.solve_Adxx_Cdx_Kx_b(
+            x_dot=np.array([1.0]),
+            x=np.array([2.0]),
+            check_conditioning=False,
+        )
+        np.testing.assert_allclose(changed, np.array([5.0]))
 
 
 class TestMatrixConditioning(unittest.TestCase):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 from pathlib import Path
 
@@ -10,14 +11,32 @@ from tcbase import log
 from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
 
 
+_GLSL_PREPROCESSOR_CLEANUP_REGISTERED = False
+
+
 def configure_glsl_preprocessor_fallback() -> None:
     """Configure app ResourceManager fallback for GLSL ``#include`` loading."""
+    global _GLSL_PREPROCESSOR_CLEANUP_REGISTERED
+
     import tgfx  # noqa: F401
 
     from termin.materials import glsl_preprocessor, register_glsl_preprocessor
 
     glsl_preprocessor().set_fallback_loader(_glsl_fallback_loader)
     register_glsl_preprocessor()
+    if not _GLSL_PREPROCESSOR_CLEANUP_REGISTERED:
+        atexit.register(unregister_glsl_preprocessor_fallback)
+        _GLSL_PREPROCESSOR_CLEANUP_REGISTERED = True
+
+
+def unregister_glsl_preprocessor_fallback() -> None:
+    """Release Python callbacks held by the process-wide GLSL preprocessor."""
+    try:
+        from termin.materials import unregister_glsl_preprocessor
+
+        unregister_glsl_preprocessor()
+    except Exception as exc:
+        log.error(f"[GlslPreprocessor] cleanup failed: {exc}")
 
 
 def _glsl_fallback_loader(name: str) -> bool:

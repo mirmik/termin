@@ -757,6 +757,7 @@ class PlayerRuntime:
 
         if not self.initialize():
             log.error("[PlayerRuntime] Initialization failed")
+            self.shutdown()
             return
 
         log.info("[PlayerRuntime] Starting game loop")
@@ -833,7 +834,6 @@ class PlayerRuntime:
     def shutdown(self):
         """Clean up resources."""
         from tcbase import log
-        from termin.engine import RenderingManager
 
         log.info("[PlayerRuntime] Shutting down")
 
@@ -843,17 +843,31 @@ class PlayerRuntime:
         self._mcp_executor = None
 
         # Remove display from manager
-        manager = RenderingManager.instance()
-        manager.set_display_factory(lambda name: None)
-        if self.scene is not None:
-            manager.detach_scene_full(self.scene)
-            self._fallback_render_target = None
-            self._viewport = None
+        manager = None
+        if self._engine is not None or self.scene is not None or self._display is not None:
+            try:
+                from termin.engine import RenderingManager
+
+                manager = RenderingManager.instance()
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to access RenderingManager during shutdown: {e}")
+
+        if manager is not None:
+            manager.set_display_factory(lambda name: None)
+            if self.scene is not None:
+                manager.detach_scene_full(self.scene)
+                self._fallback_render_target = None
+                self._viewport = None
+
+            if self._display is not None:
+                manager.remove_display(self._display)
 
         if self._display is not None:
-            manager.remove_display(self._display)
             self._display.destroy()
             self._display = None
+
+        self._cleanup_render_pipelines()
+        self._cleanup_shader_runtime()
 
         self.scene = None
         self._engine = None
@@ -867,6 +881,43 @@ class PlayerRuntime:
             self.window = None
 
         self.running = False
+
+    def _cleanup_render_pipelines(self) -> None:
+        """Release process-global render pipelines created by source player."""
+        from tcbase import log
+
+        try:
+            from termin.render_framework import (
+                tc_pipeline_destroy,
+                tc_pipeline_registry_get_all_info,
+            )
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to import render pipeline cleanup helpers: {e}")
+            return
+
+        try:
+            pipeline_infos = list(tc_pipeline_registry_get_all_info())
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to list render pipelines during shutdown: {e}")
+            return
+
+        for info in pipeline_infos:
+            try:
+                handle = info["handle"]
+                tc_pipeline_destroy(handle)
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to destroy render pipeline during shutdown: {e}")
+
+    def _cleanup_shader_runtime(self) -> None:
+        """Release shader runtime callbacks before Python finalization."""
+        from tcbase import log
+
+        try:
+            from termin.shader_runtime import unregister_glsl_preprocessor_fallback
+
+            unregister_glsl_preprocessor_fallback()
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to cleanup shader runtime during shutdown: {e}")
 
     def request_quit(self, exit_code: int = 0) -> None:
         """Request graceful shutdown at the next game loop boundary."""

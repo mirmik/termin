@@ -822,27 +822,36 @@ class MatrixAssembler:
                             check_conditioning: bool = True,
                             use_least_squares: bool = False) -> np.ndarray:
         """
-        Решить систему Ad·x'' + C·x' + K·x = b
+        Решить систему Ad·x'' + C·x' + K·x = b относительно x''.
 
         Args:
             x_dot: Вектор скоростей состояний
             x: Вектор состояний
             check_conditioning: Проверить обусловленность матрицы
             use_least_squares: Использовать lstsq вместо solve
-            b: Вектор правой части
-            """
+        """
+        Ad, C, K, b = self.assemble_dynamic_problem()
+        x_dot = np.asarray(x_dot, dtype=float)
+        x = np.asarray(x, dtype=float)
+        expected_shape = (self.total_dofs(),)
+        if x_dot.shape != expected_shape:
+            raise ValueError(
+                f"x_dot shape {x_dot.shape} does not match system shape {expected_shape}"
+            )
+        if x.shape != expected_shape:
+            raise ValueError(
+                f"x shape {x.shape} does not match system shape {expected_shape}"
+            )
 
-        Ad, C, K, b = self.assemble_Adxx_Cdx_Kx_b()
-        v, v_dot = self.state_vectors()
-
-        # Собрать левую часть
-        A_eff = Ad
-        A_eff += C @ x_dot
-        A_eff += K @ x
-
-        return self.solve(check_conditioning=check_conditioning,
-                          use_least_squares=use_least_squares,
-                          use_constraints=False)
+        rhs = b - C @ x_dot - K @ x
+        x_ddot = self._solve_system(
+            A=Ad,
+            b=rhs,
+            check_conditioning=check_conditioning,
+            use_least_squares=use_least_squares,
+        )
+        self.set_solution_to_variables(x_ddot)
+        return x_ddot
 
     
     def set_solution_to_variables(self, x: np.ndarray):

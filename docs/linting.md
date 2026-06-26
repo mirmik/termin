@@ -68,9 +68,14 @@ The script:
   `clang-analyzer-*` baseline;
 - treats matched clang-tidy warnings as errors;
 - excludes the noisy C11 `*_s` replacement warning for ordinary
-  `memcpy` / `memset` calls, `clang-analyzer-deadcode.*` until local and
-  third-party header noise is audited, and clang's `nan-infinity-disabled`
-  diagnostic in the Release lint profile.
+  `memcpy` / `memset` calls and `clang-analyzer-deadcode.*` until local and
+  third-party header noise is audited.
+- keeps clang's `nan-infinity-disabled` diagnostic enabled. Engine math,
+  collision, lighting, plotting, and ray queries may rely on IEEE NaN/Inf
+  semantics for sentinel values, so repository-owned runtime targets must not
+  enable global fast-math flags. If a leaf numeric kernel needs fast-math, scope
+  it to that target/source and add tests showing it does not observe or produce
+  NaN/Inf sentinels.
 - in `--python-bindings` mode only, excludes
   `clang-analyzer-core.NullDereference` from the default checks because the
   analyzer repeatedly reports false positives inside nanobind's list caster;
