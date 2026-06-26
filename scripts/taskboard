@@ -1,0 +1,436 @@
+#!/usr/bin/env python3
+"""Higher-level Termin Kanboard taskboard CLI."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import textwrap
+from pathlib import Path
+from typing import Any
+
+from kanboard_client import DEFAULT_ENV_PATH, DEFAULT_PROJECT_ID, KanboardClient, KanboardError, make_client, redact
+
+
+DEFAULT_COMMENT_USER_ID = 2
+COLUMN_NAMES = {
+    1: "Backlog",
+    2: "In Progress",
+    3: "On Test",
+    4: "Done",
+}
+SWIMLANE_NAMES = {
+    1: "Common",
+    2: "Android/OpenXR",
+    3: "Chronosquad",
+}
+
+
+def main(argv: list[str]) -> int:
+    parser = create_parser()
+    args = parser.parse_args(argv)
+    if args.command is None:
+        parser.print_help()
+        return 2
+
+    try:
+        client = make_client(args.env_file)
+        return args.func(client, args)
+    except KanboardError as exc:
+        print(f"taskboard: {exc}", file=sys.stderr)
+        return 1
+
+
+def create_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Convenience CLI for the Termin Kanboard taskboard.",
+    )
+    parser.add_argument(
+        "--env-file",
+        default=os.environ.get("KANBOARD_ENV", DEFAULT_ENV_PATH),
+        help=f"Path to Kanboard env file, default: {DEFAULT_ENV_PATH}",
+    )
+    parser.add_argument(
+        "--project-id",
+        type=int,
+        default=DEFAULT_PROJECT_ID,
+        help=f"Kanboard project id, default: {DEFAULT_PROJECT_ID}",
+    )
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    list_parser = subparsers.add_parser("list", aliases=["ls"], help="List tasks")
+    list_parser.add_argument("--status", choices=("active", "closed", "all"), default="active")
+    list_parser.add_argument("--column", help="Filter by column id or title")
+    list_parser.add_argument("--swimlane", help="Filter by swimlane id or title")
+    list_parser.add_argument("--json", action="store_true", help="Print JSON instead of a table")
+    list_parser.set_defaults(func=cmd_list)
+
+    show_parser = subparsers.add_parser("show", help="Show one task with recent comments")
+    show_parser.add_argument("task_id", type=int)
+    show_parser.add_argument("--comments", type=int, default=5, help="Number of recent comments, default: 5")
+    show_parser.add_argument("--all-comments", action="store_true", help="Show all comments")
+    show_parser.add_argument("--json", action="store_true")
+    show_parser.set_defaults(func=cmd_show)
+
+    export_parser = subparsers.add_parser("export", help="Export tasks, columns, swimlanes and optional comments")
+    export_parser.add_argument("--status", choices=("active", "closed", "all"), default="active")
+    export_parser.add_argument("--comments", action="store_true", help="Include comments for every exported task")
+    export_parser.add_argument("--output", type=Path, help="Write JSON to this path instead of stdout")
+    export_parser.set_defaults(func=cmd_export)
+
+    close_parser = subparsers.add_parser("close", help="Close one or more tasks")
+    close_parser.add_argument("task_ids", type=int, nargs="+")
+    close_parser.add_argument("--comment", help="Optional comment to add before closing")
+    close_parser.add_argument("--user-id", type=int, default=DEFAULT_COMMENT_USER_ID)
+    close_parser.add_argument("--dry-run", action="store_true")
+    close_parser.set_defaults(func=cmd_close)
+
+    comment_parser = subparsers.add_parser("comment", help="Add a comment to a task")
+    comment_parser.add_argument("task_id", type=int)
+    comment_parser.add_argument("text", nargs="+")
+    comment_parser.add_argument("--user-id", type=int, default=DEFAULT_COMMENT_USER_ID)
+    comment_parser.add_argument("--dry-run", action="store_true")
+    comment_parser.set_defaults(func=cmd_comment)
+
+    move_parser = subparsers.add_parser("move", help="Move a task to a column")
+    move_parser.add_argument("task_id", type=int)
+    move_parser.add_argument("column", help="Column id or title")
+    move_parser.add_argument("--swimlane", help="Swimlane id or title, default: current task swimlane")
+    move_parser.add_argument("--position", type=int, help="Target position, default: bottom of target column")
+    move_parser.add_argument("--dry-run", action="store_true")
+    move_parser.set_defaults(func=cmd_move)
+
+    create_task_parser = subparsers.add_parser("create", help="Create a task")
+    create_task_parser.add_argument("title")
+    create_task_parser.add_argument("--description", default="")
+    create_task_parser.add_argument("--column", default="Backlog", help="Column id or title, default: Backlog")
+    create_task_parser.add_argument("--swimlane", default="Common", help="Swimlane id or title, default: Common")
+    create_task_parser.add_argument("--owner-id", type=int, default=0)
+    create_task_parser.add_argument("--dry-run", action="store_true")
+    create_task_parser.set_defaults(func=cmd_create)
+
+    columns_parser = subparsers.add_parser("columns", help="List columns")
+    columns_parser.set_defaults(func=cmd_columns)
+
+    swimlanes_parser = subparsers.add_parser("swimlanes", help="List active swimlanes")
+    swimlanes_parser.set_defaults(func=cmd_swimlanes)
+
+    return parser
+
+
+def cmd_list(client: KanboardClient, args: argparse.Namespace) -> int:
+    columns = fetch_columns(client, args.project_id)
+    swimlanes = fetch_swimlanes(client, args.project_id)
+    tasks = fetch_tasks(client, args.project_id, args.status)
+    if args.column is not None:
+        column_id = resolve_named_id(args.column, columns, "column")
+        tasks = [task for task in tasks if int(task["column_id"]) == column_id]
+    if args.swimlane is not None:
+        swimlane_id = resolve_named_id(args.swimlane, swimlanes, "swimlane")
+        tasks = [task for task in tasks if int(task["swimlane_id"]) == swimlane_id]
+
+    tasks = sorted(tasks, key=task_sort_key)
+    if args.json:
+        print_json({"tasks": tasks, "columns": columns, "swimlanes": swimlanes})
+        return 0
+
+    rows = [
+        [
+            f"#{task['id']}",
+            column_title(int(task["column_id"]), columns),
+            swimlane_title(int(task["swimlane_id"]), swimlanes),
+            str(task.get("position", "")),
+            one_line(str(task["title"]), 72),
+        ]
+        for task in tasks
+    ]
+    print_table(["id", "column", "swimlane", "pos", "title"], rows)
+    print(f"\n{len(tasks)} task(s)")
+    return 0
+
+
+def cmd_show(client: KanboardClient, args: argparse.Namespace) -> int:
+    task = fetch_task(client, args.task_id)
+    comments = fetch_comments(client, args.task_id)
+    if not args.all_comments:
+        comments = comments[-args.comments :]
+    if args.json:
+        print_json({"task": task, "comments": comments})
+        return 0
+
+    columns = fetch_columns(client, int(task["project_id"]))
+    swimlanes = fetch_swimlanes(client, int(task["project_id"]))
+    active = "active" if int(task["is_active"]) else "closed"
+    print(f"#{task['id']} {task['title']}")
+    print(f"state: {active}, column: {column_title(int(task['column_id']), columns)}, swimlane: {swimlane_title(int(task['swimlane_id']), swimlanes)}")
+    print("")
+    description = str(task.get("description") or "").strip()
+    print(description if description else "(no description)")
+    if comments:
+        print("\ncomments:")
+        for comment in comments:
+            print(f"- {comment.get('date_creation', '')}: {one_line(str(comment.get('comment') or ''), 140)}")
+    return 0
+
+
+def cmd_export(client: KanboardClient, args: argparse.Namespace) -> int:
+    tasks = fetch_tasks(client, args.project_id, args.status)
+    payload: dict[str, Any] = {
+        "project_id": args.project_id,
+        "status": args.status,
+        "columns": fetch_columns(client, args.project_id),
+        "swimlanes": fetch_swimlanes(client, args.project_id),
+        "tasks": sorted(tasks, key=task_sort_key),
+    }
+    if args.comments:
+        comments_by_task: dict[str, Any] = {}
+        for task in payload["tasks"]:
+            task_id = int(task["id"])
+            comments_by_task[str(task_id)] = fetch_comments(client, task_id)
+        payload["comments_by_task"] = comments_by_task
+
+    output = json.dumps(redact(payload), ensure_ascii=False, indent=2)
+    if args.output is not None:
+        args.output.write_text(output + "\n", encoding="utf-8")
+        print(f"wrote {args.output}")
+    else:
+        print(output)
+    return 0
+
+
+def cmd_close(client: KanboardClient, args: argparse.Namespace) -> int:
+    tasks = [fetch_task(client, task_id) for task_id in args.task_ids]
+    for task in tasks:
+        print(f"close #{task['id']} {task['title']}")
+    if args.dry_run:
+        print("dry-run: no changes")
+        return 0
+
+    for task in tasks:
+        task_id = int(task["id"])
+        if args.comment:
+            client.result(
+                "createComment",
+                {"task_id": task_id, "user_id": args.user_id, "content": args.comment},
+            )
+        result = client.result("closeTask", {"task_id": task_id})
+        if result is not True:
+            raise KanboardError(f"closeTask returned unexpected result for #{task_id}: {result!r}")
+        verified = fetch_task(client, task_id)
+        if int(verified["is_active"]) != 0:
+            raise KanboardError(f"task #{task_id} still active after closeTask")
+        print(f"closed #{task_id}")
+    return 0
+
+
+def cmd_comment(client: KanboardClient, args: argparse.Namespace) -> int:
+    text = " ".join(args.text)
+    task = fetch_task(client, args.task_id)
+    print(f"comment #{task['id']} {task['title']}")
+    if args.dry_run:
+        print(text)
+        print("dry-run: no changes")
+        return 0
+    comment_id = client.result(
+        "createComment",
+        {"task_id": args.task_id, "user_id": args.user_id, "content": text},
+    )
+    print(f"created comment {comment_id}")
+    return 0
+
+
+def cmd_move(client: KanboardClient, args: argparse.Namespace) -> int:
+    task = fetch_task(client, args.task_id)
+    columns = fetch_columns(client, int(task["project_id"]))
+    swimlanes = fetch_swimlanes(client, int(task["project_id"]))
+    column_id = resolve_named_id(args.column, columns, "column")
+    if args.swimlane is None:
+        swimlane_id = int(task["swimlane_id"])
+    else:
+        swimlane_id = resolve_named_id(args.swimlane, swimlanes, "swimlane")
+    position = args.position
+    if position is None:
+        position = next_position(client, int(task["project_id"]), column_id, swimlane_id)
+
+    print(
+        f"move #{task['id']} {task['title']} -> "
+        f"{column_title(column_id, columns)} / {swimlane_title(swimlane_id, swimlanes)} pos={position}"
+    )
+    if args.dry_run:
+        print("dry-run: no changes")
+        return 0
+
+    result = client.result(
+        "moveTaskPosition",
+        {
+            "project_id": int(task["project_id"]),
+            "task_id": int(task["id"]),
+            "column_id": column_id,
+            "position": position,
+            "swimlane_id": swimlane_id,
+        },
+    )
+    if result is not True:
+        raise KanboardError(f"moveTaskPosition returned unexpected result for #{task['id']}: {result!r}")
+    verified = fetch_task(client, int(task["id"]))
+    if int(verified["column_id"]) != column_id or int(verified["swimlane_id"]) != swimlane_id:
+        raise KanboardError(f"task #{task['id']} did not reach requested column/swimlane")
+    print(f"moved #{task['id']}")
+    return 0
+
+
+def cmd_create(client: KanboardClient, args: argparse.Namespace) -> int:
+    columns = fetch_columns(client, args.project_id)
+    swimlanes = fetch_swimlanes(client, args.project_id)
+    column_id = resolve_named_id(args.column, columns, "column")
+    swimlane_id = resolve_named_id(args.swimlane, swimlanes, "swimlane")
+    params: dict[str, Any] = {
+        "project_id": args.project_id,
+        "title": args.title,
+        "description": args.description,
+        "column_id": column_id,
+        "swimlane_id": swimlane_id,
+        "owner_id": args.owner_id,
+    }
+    print(f"create {args.title} -> {column_title(column_id, columns)} / {swimlane_title(swimlane_id, swimlanes)}")
+    if args.dry_run:
+        print_json(params)
+        print("dry-run: no changes")
+        return 0
+    task_id = client.result("createTask", params)
+    print(f"created #{task_id}")
+    return 0
+
+
+def cmd_columns(client: KanboardClient, args: argparse.Namespace) -> int:
+    rows = [[str(column["id"]), str(column["position"]), str(column["title"])] for column in fetch_columns(client, args.project_id)]
+    print_table(["id", "pos", "title"], rows)
+    return 0
+
+
+def cmd_swimlanes(client: KanboardClient, args: argparse.Namespace) -> int:
+    rows = [[str(swimlane["id"]), str(swimlane["position"]), str(swimlane["name"])] for swimlane in fetch_swimlanes(client, args.project_id)]
+    print_table(["id", "pos", "name"], rows)
+    return 0
+
+
+def fetch_tasks(client: KanboardClient, project_id: int, status: str) -> list[dict[str, Any]]:
+    if status == "all":
+        active = client.result("getAllTasks", {"project_id": project_id, "status_id": 1})
+        closed = client.result("getAllTasks", {"project_id": project_id, "status_id": 0})
+        return require_task_list(active) + require_task_list(closed)
+    status_id = 1 if status == "active" else 0
+    return require_task_list(client.result("getAllTasks", {"project_id": project_id, "status_id": status_id}))
+
+
+def fetch_task(client: KanboardClient, task_id: int) -> dict[str, Any]:
+    result = client.result("getTask", {"task_id": task_id})
+    if not isinstance(result, dict):
+        raise KanboardError(f"getTask returned unexpected result for #{task_id}: {result!r}")
+    return result
+
+
+def fetch_comments(client: KanboardClient, task_id: int) -> list[dict[str, Any]]:
+    result = client.result("getAllComments", {"task_id": task_id})
+    if not isinstance(result, list):
+        raise KanboardError(f"getAllComments returned unexpected result for #{task_id}: {result!r}")
+    return [comment for comment in result if isinstance(comment, dict)]
+
+
+def fetch_columns(client: KanboardClient, project_id: int) -> list[dict[str, Any]]:
+    result = client.result("getColumns", {"project_id": project_id})
+    if not isinstance(result, list):
+        raise KanboardError(f"getColumns returned unexpected result: {result!r}")
+    return [column for column in result if isinstance(column, dict)]
+
+
+def fetch_swimlanes(client: KanboardClient, project_id: int) -> list[dict[str, Any]]:
+    result = client.result("getActiveSwimlanes", {"project_id": project_id})
+    if not isinstance(result, list):
+        raise KanboardError(f"getActiveSwimlanes returned unexpected result: {result!r}")
+    return [swimlane for swimlane in result if isinstance(swimlane, dict)]
+
+
+def require_task_list(result: Any) -> list[dict[str, Any]]:
+    if not isinstance(result, list):
+        raise KanboardError(f"getAllTasks returned unexpected result: {result!r}")
+    return [task for task in result if isinstance(task, dict)]
+
+
+def resolve_named_id(value: str, records: list[dict[str, Any]], kind: str) -> int:
+    if value.isdigit():
+        requested_id = int(value)
+        for record in records:
+            if int(record["id"]) == requested_id:
+                return requested_id
+        raise KanboardError(f"Unknown {kind} id: {requested_id}")
+    lowered = value.casefold()
+    name_key = "title" if kind == "column" else "name"
+    matches = [record for record in records if str(record[name_key]).casefold() == lowered]
+    if len(matches) == 1:
+        return int(matches[0]["id"])
+    if len(matches) > 1:
+        raise KanboardError(f"Ambiguous {kind} name: {value}")
+    known = ", ".join(str(record[name_key]) for record in records)
+    raise KanboardError(f"Unknown {kind} name: {value}. Known: {known}")
+
+
+def next_position(client: KanboardClient, project_id: int, column_id: int, swimlane_id: int) -> int:
+    tasks = fetch_tasks(client, project_id, "active")
+    positions = [
+        int(task["position"])
+        for task in tasks
+        if int(task["column_id"]) == column_id and int(task["swimlane_id"]) == swimlane_id
+    ]
+    return max(positions, default=0) + 1
+
+
+def column_title(column_id: int, columns: list[dict[str, Any]]) -> str:
+    for column in columns:
+        if int(column["id"]) == column_id:
+            return str(column["title"])
+    return COLUMN_NAMES.get(column_id, f"column:{column_id}")
+
+
+def swimlane_title(swimlane_id: int, swimlanes: list[dict[str, Any]]) -> str:
+    for swimlane in swimlanes:
+        if int(swimlane["id"]) == swimlane_id:
+            return str(swimlane["name"])
+    return SWIMLANE_NAMES.get(swimlane_id, f"swimlane:{swimlane_id}")
+
+
+def task_sort_key(task: dict[str, Any]) -> tuple[int, int, int, int]:
+    return (
+        int(task["swimlane_id"]),
+        int(task["column_id"]),
+        int(task.get("position") or 0),
+        int(task["id"]),
+    )
+
+
+def one_line(text: str, width: int) -> str:
+    compact = " ".join(text.split())
+    return textwrap.shorten(compact, width=width, placeholder="...")
+
+
+def print_json(value: object) -> None:
+    print(json.dumps(redact(value), ensure_ascii=False, indent=2))
+
+
+def print_table(headers: list[str], rows: list[list[str]]) -> None:
+    widths = [len(header) for header in headers]
+    for row in rows:
+        for index, cell in enumerate(row):
+            widths[index] = max(widths[index], len(cell))
+    print("  ".join(header.ljust(widths[index]) for index, header in enumerate(headers)))
+    print("  ".join("-" * width for width in widths))
+    for row in rows:
+        print("  ".join(cell.ljust(widths[index]) for index, cell in enumerate(row)))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
+
