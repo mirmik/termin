@@ -1,13 +1,16 @@
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Set
 
 from termin.default_assets.render.texture_plugin import TextureImportPlugin
 from termin.assets.project_file_watcher import ProjectFileWatcher
-from termin.editor_core.file_processors import ComponentFileProcessor, ModuleFileProcessor
+from termin.editor_core.file_processors import ComponentFileProcessor, ModuleFileProcessor, ModuleInputFileProcessor
+from termin.modules.runtime import ProjectModulesRuntime
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
 from termin_assets import PreLoadResult
+from termin_modules import ModuleKind
 
 
 class RecordingPreLoader(FilePreLoader):
@@ -53,6 +56,7 @@ class RecordingModulesRuntime:
         self.last_error = ""
         self.reloaded_descriptors: list[Path] = []
         self.reloaded_paths: list[Path] = []
+        self.dirty_paths: list[Path] = []
 
     def reload_descriptor(self, path: Path) -> str | None:
         self.reloaded_descriptors.append(Path(path))
@@ -61,6 +65,19 @@ class RecordingModulesRuntime:
     def reload_modules_for_path(self, path: str) -> list[str]:
         self.reloaded_paths.append(Path(path))
         return ["gameplay"]
+
+    def mark_modules_dirty_for_path(self, path: str) -> list[str]:
+        self.dirty_paths.append(Path(path))
+        return ["native_core"]
+
+
+class RuntimeUnderTest(ProjectModulesRuntime):
+    def __init__(self, records: list[object]) -> None:
+        self._records = records
+        self._dirty_module_reasons: dict[str, set[str]] = {}
+
+    def records(self) -> list[object]:
+        return list(self._records)
 
 
 class FailingComponentResourceManager:
@@ -118,6 +135,13 @@ def test_module_file_processor_reloads_pymodule_when_auto_reload_enabled(tmp_pat
     assert reloaded == [("module", "gameplay")]
 
 
+def test_module_file_processor_leaves_cpp_descriptors_to_policy_neutral_input_tracking() -> None:
+    processor = ModuleFileProcessor(resource_manager=None)
+
+    assert ".pymodule" in processor.extensions
+    assert ".module" not in processor.extensions
+
+
 def test_module_file_processor_ignores_changes_when_auto_reload_disabled(tmp_path: Path) -> None:
     descriptor = tmp_path / "gameplay.pymodule"
     descriptor.write_text("name: gameplay\n", encoding="utf-8")
@@ -131,6 +155,116 @@ def test_module_file_processor_ignores_changes_when_auto_reload_disabled(tmp_pat
     processor.on_file_changed(str(descriptor))
 
     assert runtime.reloaded_descriptors == []
+
+
+def test_module_input_processor_marks_cpp_descriptor_dirty_without_reload(tmp_path: Path) -> None:
+    descriptor = tmp_path / "native_core.module"
+    descriptor.write_text("name: native_core\ntype: cpp\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_changed(str(descriptor))
+
+    assert runtime.dirty_paths == [descriptor]
+    assert runtime.reloaded_descriptors == []
+
+
+def test_module_input_processor_marks_cpp_source_dirty_without_reload(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_changed(str(source))
+
+    assert runtime.dirty_paths == [source]
+    assert runtime.reloaded_descriptors == []
+
+
+def test_module_input_processor_initial_scan_does_not_mark_existing_sources_dirty(tmp_path: Path) -> None:
+    source = tmp_path / "native_core.cpp"
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleInputFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_file_added(str(source))
+
+    assert runtime.dirty_paths == []
+    assert processor.get_tracked_files() == {str(source): set()}
+
+
+def test_project_modules_runtime_marks_cpp_module_dirty_for_native_input(tmp_path: Path) -> None:
+    descriptor = tmp_path / "native_core.module"
+    source = tmp_path / "src" / "native_core.cpp"
+    source.parent.mkdir()
+    descriptor.write_text("name: native_core\ntype: cpp\n", encoding="utf-8")
+    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    runtime = RuntimeUnderTest(
+        [
+            SimpleNamespace(
+                id="native_core",
+                kind=ModuleKind.Cpp,
+                descriptor_path=str(descriptor),
+            )
+        ]
+    )
+
+    assert runtime.mark_modules_dirty_for_path(source) == ["native_core"]
+
+    dirty = runtime.dirty_modules()
+    assert list(dirty) == ["native_core"]
+    assert str(source) in dirty["native_core"][0]
+
+
+def test_project_modules_runtime_ignores_cpp_build_directory_inputs(tmp_path: Path) -> None:
+    descriptor = tmp_path / "native_core.module"
+    generated = tmp_path / "build" / "generated.cpp"
+    generated.parent.mkdir()
+    descriptor.write_text("name: native_core\ntype: cpp\n", encoding="utf-8")
+    generated.write_text("// generated\n", encoding="utf-8")
+    runtime = RuntimeUnderTest(
+        [
+            SimpleNamespace(
+                id="native_core",
+                kind=ModuleKind.Cpp,
+                descriptor_path=str(descriptor),
+            )
+        ]
+    )
+
+    assert runtime.mark_modules_dirty_for_path(generated) == []
+    assert runtime.dirty_modules() == {}
+
+
+def test_project_modules_runtime_keeps_python_path_lookup_reload_only(tmp_path: Path) -> None:
+    descriptor = tmp_path / "gameplay.pymodule"
+    package_file = tmp_path / "gameplay" / "components.py"
+    package_file.parent.mkdir()
+    descriptor.write_text("name: gameplay\ntype: python\n", encoding="utf-8")
+    package_file.write_text("class Probe: pass\n", encoding="utf-8")
+    runtime = RuntimeUnderTest(
+        [
+            SimpleNamespace(
+                id="gameplay",
+                kind=ModuleKind.Python,
+                descriptor_path=str(descriptor),
+                python_root=str(tmp_path),
+                python_packages=["gameplay"],
+            )
+        ]
+    )
+
+    assert runtime.module_ids_for_path(package_file) == ["gameplay"]
+    assert runtime.mark_modules_dirty_for_path(package_file) == []
 
 
 def test_component_processor_routes_package_python_files_to_module_reload(tmp_path: Path) -> None:
