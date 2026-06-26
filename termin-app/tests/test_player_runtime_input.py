@@ -85,3 +85,22 @@ def test_player_runtime_tracks_attached_viewports():
     assert runtime._attach_scene_rendering(_Manager(), object())
     assert runtime._viewport is viewports[0]
     assert runtime._viewports == viewports
+
+
+def test_player_runtime_shutdown_runs_after_failed_initialize():
+    class _FailingRuntime(PlayerRuntime):
+        def __init__(self):
+            super().__init__(".", "scene.json")
+            self.shutdown_called = False
+
+        def initialize(self):
+            return False
+
+        def shutdown(self):
+            self.shutdown_called = True
+
+    runtime = _FailingRuntime()
+
+    runtime.run()
+
+    assert runtime.shutdown_called

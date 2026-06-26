@@ -42,6 +42,11 @@ else()
     find_package(termin_display REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
+else()
+    find_package(termin_bootstrap REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_engine termin_engine::termin_engine)
 else()
     find_package(termin_engine REQUIRED)
@@ -112,8 +117,6 @@ target_include_directories(termin_android
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
         $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/../termin-app/core_c/include
 )
 
 target_compile_features(termin_android PUBLIC cxx_std_20)
@@ -130,6 +133,7 @@ target_link_libraries(termin_android
         tmesh::termin_mesh
         termin_render::termin_render
         termin_display::termin_display
+        termin_bootstrap::termin_bootstrap
         termin_engine::termin_engine
         termin_collision::termin_collision
         termin_runtime::termin_runtime

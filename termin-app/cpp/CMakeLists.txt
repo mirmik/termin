@@ -56,14 +56,14 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od /DEBUG /FS")
     set(CMAKE_C_FLAGS_DEBUG "/Zi /Od /DEBUG /FS")
     set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG")
-    set(OPTIMIZE_FLAGS /O2 /fp:fast)
+    set(OPTIMIZE_FLAGS /O2 /fp:precise)
     add_compile_options(/wd4251 /wd4275)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 else()
     set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
     set(CMAKE_C_FLAGS_DEBUG "-g -O0 -fno-omit-frame-pointer")
     set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
-    set(OPTIMIZE_FLAGS -O3 -ffast-math)
+    set(OPTIMIZE_FLAGS -O3)
 endif()
 
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
@@ -205,14 +205,6 @@ if(TARGET termin_navmesh::termin_navmesh_components)
 else()
     set(TERMIN_HAS_RECAST OFF)
 endif()
-
-# Core C library
-if(BUILD_TESTS)
-    set(TC_BUILD_TESTS ON CACHE BOOL "" FORCE)
-else()
-    set(TC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-endif()
-add_subdirectory(${TERMIN_ROOT}/core_c ${CMAKE_CURRENT_BINARY_DIR}/core_c)
 
 # ============== SDL2 (optional) ==============
 option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
@@ -488,7 +480,6 @@ if(BUILD_TESTS)
     )
     target_link_libraries(termin_tests PRIVATE
         tcbase::termin_base
-        termin_core
         termin_inspect::termin_inspect
         termin_scene::termin_scene
         termin_input::termin_input
@@ -505,15 +496,6 @@ if(BUILD_TESTS)
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Running C++ tests")
 endif()
-
-# ============== Install shared libraries ==============
-set(TERMIN_INSTALL_TARGETS termin_core)
-install(TARGETS ${TERMIN_INSTALL_TARGETS}
-    EXPORT terminTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
 
 if(WIN32 AND SDL2_DLL)
     install(FILES ${SDL2_DLL} DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -593,39 +575,8 @@ install(DIRECTORY ${TERMIN_ROOT}/../termin-nodegraph/python/tcnodegraph
     PATTERN "tests" EXCLUDE
 )
 
-# Install headers
-install(DIRECTORY ${TERMIN_ROOT}/core_c/include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/core_c
-    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cpp
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "bindings" EXCLUDE
-)
-# ============== CMake Package Export ==============
-include(CMakePackageConfigHelpers)
-
-install(EXPORT terminTargets
-    FILE terminTargets.cmake
-    NAMESPACE termin::
-    DESTINATION lib/cmake/termin
-)
-
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/terminConfig.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
-    INSTALL_DESTINATION lib/cmake/termin
-)
-
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
-    VERSION 1.0.0
-    COMPATIBILITY SameMajorVersion
-)
-
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/terminConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/terminConfigVersion.cmake"
-    DESTINATION lib/cmake/termin
 )

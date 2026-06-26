@@ -19,17 +19,21 @@ def __getattr__(name: str):
         from termin_voxel_components.visualization import VoxelVisualizer
         return VoxelVisualizer
 
-    if name in ("VoxelizeMode", "VoxelizeSource", "VoxelizerComponent"):
-        from termin_voxel_components.voxelizer_component import (
+    if name in ("VoxelizeMode", "VoxelizeSource"):
+        from termin_voxel_components.voxelize_enums import (
             VoxelizeMode,
             VoxelizeSource,
-            VoxelizerComponent,
         )
         return {
             "VoxelizeMode": VoxelizeMode,
             "VoxelizeSource": VoxelizeSource,
-            "VoxelizerComponent": VoxelizerComponent,
         }[name]
+
+    if name == "VoxelizerComponent":
+        from termin_voxel_components.voxelizer_component import (
+            VoxelizerComponent,
+        )
+        return VoxelizerComponent
 
     raise AttributeError(f"module 'termin_voxel_components' has no attribute {name!r}")
 

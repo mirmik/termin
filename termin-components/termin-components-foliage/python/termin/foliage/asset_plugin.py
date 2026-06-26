@@ -96,6 +96,9 @@ class FoliageDataRuntimePlugin:
     def reload(self, context, result: PreLoadResult) -> None:
         self.register(context, result)
 
+    def unregister(self, context, result: PreLoadResult) -> None:
+        context.resource_manager.external_assets.remove_path(result.path)
+
 
 def _declare_native_foliage_data(uuid: str, name: str, path: str):
     from termin.foliage import TcFoliageData

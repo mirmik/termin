@@ -96,6 +96,9 @@ class ShaderRuntimePlugin:
         if material_names and interface_change.graph_inputs_changed:
             reload_pipelines_for_material_dependencies(rm, material_names)
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class ShaderAssetPlugin(ShaderImportPlugin, ShaderRuntimePlugin):
     """Compatibility combined shader plugin."""

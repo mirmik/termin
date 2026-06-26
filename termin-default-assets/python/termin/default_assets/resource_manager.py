@@ -98,6 +98,22 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
     def _register_builtin_asset_type_plugins(self) -> None:
         self.register_default_asset_type_plugins()
 
+    def unregister_runtime_asset(self, type_id: str, name: str) -> None:
+        """Remove a runtime asset and any legacy direct-data cache entry."""
+        super().unregister_runtime_asset(type_id, name)
+        if type_id == "material":
+            self.materials.pop(name, None)
+        elif type_id == "shader":
+            self.shaders.pop(name, None)
+        elif type_id == "voxel_grid":
+            self.voxel_grids.pop(name, None)
+        elif type_id == "navmesh":
+            self.navmeshes.pop(name, None)
+        elif type_id == "animation_clip":
+            self.animation_clips.pop(name, None)
+        elif type_id == "skeleton":
+            self.skeletons.pop(name, None)
+
     @property
     def _prefab_assets(self) -> dict[str, "PrefabAsset"]:
         return self._prefab_registry.assets

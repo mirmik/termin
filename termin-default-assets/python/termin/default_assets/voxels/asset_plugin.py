@@ -80,6 +80,9 @@ class VoxelGridRuntimePlugin:
 
             rm.voxel_grids[name] = TcVoxelGrid.from_uuid(asset.uuid)
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class VoxelGridAssetPlugin(VoxelGridImportPlugin, VoxelGridRuntimePlugin):
     """Compatibility combined voxel grid plugin."""

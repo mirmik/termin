@@ -757,6 +757,7 @@ class PlayerRuntime:
 
         if not self.initialize():
             log.error("[PlayerRuntime] Initialization failed")
+            self.shutdown()
             return
 
         log.info("[PlayerRuntime] Starting game loop")
@@ -833,7 +834,6 @@ class PlayerRuntime:
     def shutdown(self):
         """Clean up resources."""
         from tcbase import log
-        from termin.engine import RenderingManager
 
         log.info("[PlayerRuntime] Shutting down")
 
@@ -843,17 +843,35 @@ class PlayerRuntime:
         self._mcp_executor = None
 
         # Remove display from manager
-        manager = RenderingManager.instance()
-        manager.set_display_factory(lambda name: None)
-        if self.scene is not None:
-            manager.detach_scene_full(self.scene)
-            self._fallback_render_target = None
-            self._viewport = None
+        manager = None
+        if self._engine is not None or self.scene is not None or self._display is not None:
+            try:
+                from termin.engine import RenderingManager
+
+                manager = RenderingManager.instance()
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to access RenderingManager during shutdown: {e}")
+
+        if manager is not None:
+            manager.set_display_factory(lambda name: None)
+            if self.scene is not None:
+                manager.detach_scene_full(self.scene)
+                self._fallback_render_target = None
+                self._viewport = None
+
+            if self._display is not None:
+                manager.remove_display(self._display)
 
         if self._display is not None:
-            manager.remove_display(self._display)
             self._display.destroy()
             self._display = None
+
+        try:
+            from termin.bootstrap import shutdown_player
+
+            shutdown_player()
+        except Exception as e:
+            log.error(f"[PlayerRuntime] Failed to shutdown bootstrap runtime: {e}")
 
         self.scene = None
         self._engine = None

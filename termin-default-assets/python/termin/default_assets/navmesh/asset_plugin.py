@@ -86,6 +86,9 @@ class NavMeshRuntimePlugin:
 
             rm.navmeshes[name] = TcNavMesh.from_uuid(asset.uuid)
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class NavMeshAssetPlugin(NavMeshImportPlugin, NavMeshRuntimePlugin):
     """Compatibility combined navmesh plugin."""

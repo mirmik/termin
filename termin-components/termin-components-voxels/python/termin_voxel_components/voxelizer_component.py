@@ -6,7 +6,6 @@ VoxelizerComponent — компонент для вокселизации меш
 
 from __future__ import annotations
 
-from enum import IntEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List, Set
 
@@ -19,6 +18,7 @@ from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField
+from termin_voxel_components.voxelize_enums import VoxelizeMode, VoxelizeSource
 from tcbase import log
 
 if TYPE_CHECKING:
@@ -54,22 +54,6 @@ def _apply_voxel_display_params(
     phase.set_param("u_slice_axis_fill_percent", slice_axis_fill)
     phase.set_param("u_bounds_min", padded_bounds_min)
     phase.set_param("u_bounds_max", padded_bounds_max)
-
-
-class VoxelizeMode(IntEnum):
-    """Режимы вокселизации (стадии пайплайна)."""
-    SHELL = 0           # Только поверхность меша
-    FILLED = 1          # Поверхность + заполнение внутри
-    MARKED = 2          # Заполнение + пометка поверхности (SOLID + SURFACE)
-    SURFACE_ONLY = 3    # Только поверхность (внутренние удалены)
-    WITH_NORMALS = 4    # Поверхность + нормали
-    FULL_GRID = 5       # Заполнить всю сетку (без вокселизации меша)
-
-
-class VoxelizeSource(IntEnum):
-    """Источник мешей для вокселизации."""
-    CURRENT_MESH = 0      # Только меш текущего entity
-    ALL_DESCENDANTS = 1   # Меши всех потомков (включая текущий entity)
 
 
 def _voxelize_action(component: "VoxelizerComponent") -> None:

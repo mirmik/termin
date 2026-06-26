@@ -4,7 +4,9 @@
 #include <Python.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -55,6 +57,40 @@ namespace termin::player {
 PlayerRuntimeHost::Impl* g_active_host = nullptr;
 
 namespace {
+
+std::atomic<int> g_requested_shutdown_signal{0};
+
+int exit_code_for_signal(int signum) {
+    return 128 + signum;
+}
+
+#ifdef _WIN32
+BOOL WINAPI player_console_ctrl_handler(DWORD ctrl_type) {
+    switch (ctrl_type) {
+    case CTRL_C_EVENT:
+    case CTRL_BREAK_EVENT:
+    case CTRL_CLOSE_EVENT:
+    case CTRL_SHUTDOWN_EVENT:
+        g_requested_shutdown_signal.store(SIGINT);
+        return TRUE;
+    default:
+        return FALSE;
+    }
+}
+#else
+void player_signal_handler(int signum) {
+    g_requested_shutdown_signal.store(signum);
+}
+#endif
+
+void install_player_signal_handlers() {
+#ifdef _WIN32
+    SetConsoleCtrlHandler(player_console_ctrl_handler, TRUE);
+#else
+    std::signal(SIGINT, player_signal_handler);
+    std::signal(SIGTERM, player_signal_handler);
+#endif
+}
 
 fs::path get_executable_dir() {
 #ifdef _WIN32
@@ -524,6 +560,7 @@ struct PlayerRuntimeHost::Impl {
 
             set_env_if_missing("TERMIN_SDK", bundle_root);
             configure_bundle_runtime_paths(bundle_root, exe_dir);
+            g_requested_shutdown_signal.store(0);
 
             python_stdlib = find_python_stdlib(bundle_root);
             if (python_stdlib.empty()) {
@@ -531,6 +568,7 @@ struct PlayerRuntimeHost::Impl {
             }
 
             initialize_python(argc, argv);
+            install_player_signal_handlers();
             termin::bootstrap::bootstrap_player();
 
             engine = std::make_unique<EngineCore>();
@@ -563,6 +601,16 @@ struct PlayerRuntimeHost::Impl {
         if (engine) {
             engine->stop();
         }
+    }
+
+    bool consume_shutdown_signal() {
+        int signum = g_requested_shutdown_signal.exchange(0);
+        if (signum == 0) {
+            return false;
+        }
+        tc_log_info("termin_player: shutdown requested by signal %d", signum);
+        request_quit(exit_code_for_signal(signum));
+        return true;
     }
 
     void initialize_python(int argc, char** argv) {
@@ -884,12 +932,14 @@ struct PlayerRuntimeHost::Impl {
     void run_loop() {
         g_active_host = this;
         engine->set_poll_events_callback([this]() {
+            consume_shutdown_signal();
             if (window) {
                 window->poll_events();
             }
             sync_surface_size();
         });
         engine->set_should_continue_callback([this]() {
+            consume_shutdown_signal();
             return !quit_requested && window && !window->should_close();
         });
         engine->set_on_shutdown_callback([this]() {
@@ -973,6 +1023,8 @@ struct PlayerRuntimeHost::Impl {
             window->close();
             window.reset();
         }
+
+        termin::bootstrap::shutdown_runtime();
 
         // Deliberately do not call Py_FinalizeEx() here. The editor follows the
         // same rule: native destructors and callbacks can still touch Python, and

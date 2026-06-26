@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Termin.Native;
 
 /// <summary>
-/// P/Invoke declarations for OpenGL backend (termin.dll).
+/// P/Invoke declarations for OpenGL backend.
 /// </summary>
 public static class TerminOpenGL
 {
@@ -13,7 +13,7 @@ public static class TerminOpenGL
         ShaderRuntime.ConfigureFromAssemblyDirectory();
     }
 
-    const string DLL = "termin";
+    const string DLL = "termin_graphics";
 
     /// <summary>
     /// Initialize OpenGL backend.

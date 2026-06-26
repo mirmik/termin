@@ -6,7 +6,7 @@
 #include <stddef.h>
 
 // DLL export/import macros for Windows
-// TC_POOL_API is dllexport when building termin_core (TC_EXPORTS).
+// TC_POOL_API is dllexport for the module currently building TC_API symbols.
 #ifdef _WIN32
     #if defined(TC_EXPORTS)
         #define TC_POOL_API __declspec(dllexport)
