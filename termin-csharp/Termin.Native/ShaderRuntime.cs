@@ -2,17 +2,24 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace Termin.Native;
 
 public static class ShaderRuntime
 {
     private const string ArtifactRootEnv = "TERMIN_SHADER_ARTIFACT_ROOT";
+    private const string UcrtDll = "ucrtbase";
+
+    [DllImport(UcrtDll, EntryPoint = "_putenv_s", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    private static extern int PutEnv(string name, string value);
 
     public static void ConfigureFromAssemblyDirectory()
     {
-        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(ArtifactRootEnv)))
+        var configuredRoot = Environment.GetEnvironmentVariable(ArtifactRootEnv);
+        if (IsUsableArtifactRoot(configuredRoot))
         {
+            ApplyArtifactRoot(configuredRoot!);
             return;
         }
 
@@ -20,9 +27,25 @@ public static class ShaderRuntime
         {
             if (IsUsableArtifactRoot(root))
             {
-                Environment.SetEnvironmentVariable(ArtifactRootEnv, root);
+                ApplyArtifactRoot(root);
                 return;
             }
+        }
+    }
+
+    private static void ApplyArtifactRoot(string root)
+    {
+        Environment.SetEnvironmentVariable(ArtifactRootEnv, root);
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return;
+        }
+
+        int result = PutEnv(ArtifactRootEnv, root);
+        if (result != 0)
+        {
+            throw new InvalidOperationException(
+                $"ShaderRuntime: failed to set CRT environment {ArtifactRootEnv}='{root}' (rc={result})");
         }
     }
 
@@ -52,8 +75,13 @@ public static class ShaderRuntime
         yield return Environment.CurrentDirectory;
     }
 
-    private static bool IsUsableArtifactRoot(string root)
+    private static bool IsUsableArtifactRoot(string? root)
     {
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            return false;
+        }
+
         if (!Directory.Exists(root))
         {
             return false;
