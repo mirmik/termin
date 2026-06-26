@@ -11,6 +11,7 @@ from termin.player.headless import HeadlessRuntime, HeadlessRuntimeError
 from termin.physics_components import PhysicsWorldComponent
 from termin.scene import PythonComponent
 from termin.engine import create_scene, scene_ext_attached_names
+from termin.render_framework import tc_pipeline_registry_count
 
 
 class HeadlessCounterComponent(PythonComponent):
@@ -394,6 +395,7 @@ def test_headless_runtime_attaches_collision_world_for_physics(tmp_path: Path) -
 
     try:
         runtime.initialize()
+        assert tc_pipeline_registry_count() == 0
         attached_exts = scene_ext_attached_names(runtime.scene)
         assert attached_exts == ["collision_world"]
 
