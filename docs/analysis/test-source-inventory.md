@@ -50,7 +50,7 @@ Status values:
 | reviewed | python | `termin-app/tests/pose2_test.py` | Removed script shebang/manual runner; remaining Pose2 checks cover explicit transform, inverse, interpolation, and helper contracts. |
 | needs-work | python | `termin-app/tests/pose_test.py` | Removed unused import/variable and same-API expected calculation; looking_at and several roundtrip checks still need stronger independent oracles. |
 | reviewed | python | `termin-app/tests/shader_parser_test.py` | String-heavy but active Slang/material parsing contract rather than debug-only coverage. |
-| needs-work | python | `termin-app/tests/test_asset_default_plugins.py` | Default asset/plugin/resource type expectations overlap asset plugin and player manifest tests. |
+| reviewed | python | `termin-default-assets/tests/test_default_asset_plugin_registry.py` | Moved default asset plugin type/extension registry contract out of termin-app; canonical matrix now lives with termin-default-assets. |
 | reviewed | python | `termin-app/tests/test_canonical_animation_imports.py` | Removed legacy/source/existence migration checks for deleted facade trees; remaining tests keep the canonical animation import boundary. |
 | reviewed | python | `termin-app/tests/test_default_pipeline_specs.py` | Removed self-evident import assert; remaining tests cover default pipeline render-target formats/MSAA and ResolvePass defaults/order. |
 | needs-work | python | `termin-app/tests/test_edge_flipping.py` | Removed oracle-free circumcircle boundary test, cocircular len-only flip test, debug prints, and manual runner; several optimized/refined cases still check mostly counts. |
@@ -76,7 +76,7 @@ Status values:
 | reviewed | python | `termin-app/tests/test_mcp_base.py` | Covers owner-thread Python execution, editor/player MCP tool exposure, config merging, and screenshot response structure. |
 | reviewed | python | `termin-app/tests/test_mesh_spec_defaults.py` | Covers default axis conversion and explicit identity axis preservation. |
 | reviewed | python | `termin-app/tests/test_navmesh_package_facade.py` | Keeps public facade import boundary lightweight and skips native-dependent export only when SDK library is unavailable. |
-| needs-work | python | `termin-app/tests/test_player_manifest_assets.py` | Manifest asset type expectations overlap default plugin/resource matrices and should share canonical expected data. |
+| reviewed | python | `termin-app/tests/test_player_manifest_assets.py` | Removed duplicated default asset type matrix; remaining manifest-loader test uses a supplied fake registry and checks app-level plugin consumption/order. |
 | reviewed | python | `termin-app/tests/test_procedural_mesh_component.py` | Covers procedural mesh regeneration reusing the existing TcMesh handle. |
 | reviewed | python | `termin-app/tests/test_procedural_mesh_editor_extension.py` | Covers shared document controller wiring, panel state, and viewport drag edits for contour/path/wall operations. |
 | needs-work | python | `termin-app/tests/test_project_builder.py` | Useful builder coverage, but resource manifest and fake shader compiler fixtures duplicate runtime exporter tests. |
