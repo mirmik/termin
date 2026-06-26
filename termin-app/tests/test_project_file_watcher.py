@@ -502,12 +502,16 @@ class RecordingResourceManager:
         self.external_assets = RecordingAssetCatalog()
         self.registered: list[PreLoadResult] = []
         self.reloaded: list[PreLoadResult] = []
+        self.unregistered: list[PreLoadResult] = []
 
     def register_file(self, result: PreLoadResult) -> None:
         self.registered.append(result)
 
     def reload_file(self, result: PreLoadResult) -> None:
         self.reloaded.append(result)
+
+    def unregister_file(self, result: PreLoadResult) -> None:
+        self.unregistered.append(result)
 
 
 def _queue_change(watcher: ProjectFileWatcher, path: Path, kind: str) -> None:
@@ -635,6 +639,7 @@ def test_project_file_watcher_rescan_removes_newly_ignored_plugin_asset(tmp_path
 
     assert str(texture_path) not in watcher.watched_files
     assert preloader.get_tracked_files() == {}
+    assert [result.path for result in rm.unregistered] == [str(texture_path)]
     assert rm.external_assets.removed_paths == [str(texture_path)]
 
 
@@ -714,3 +719,4 @@ def test_project_file_watcher_deleted_file_clears_plugin_tracking(tmp_path: Path
     watcher.poll()
 
     assert preloader.get_tracked_files() == {}
+    assert [result.path for result in rm.unregistered] == [str(texture_path)]

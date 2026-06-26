@@ -10,6 +10,7 @@ from termin_assets.plugin import (
     AssetCreationPlugin,
     AssetImportPlugin,
     AssetRuntimePlugin,
+    AssetRuntimeUnregisterPlugin,
     AssetTypePlugin,
     AssetTypeRegistry,
 )
@@ -51,6 +52,7 @@ __all__ = [
     "AssetRegistry",
     "AssetRecord",
     "AssetRuntimePlugin",
+    "AssetRuntimeUnregisterPlugin",
     "AssetRuntimeManager",
     "AssetTypePlugin",
     "AssetTypeRegistry",

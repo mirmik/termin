@@ -29,6 +29,16 @@ class AssetRuntimePlugin(Protocol):
         ...
 
 
+@runtime_checkable
+class AssetRuntimeUnregisterPlugin(Protocol):
+    """Optional runtime-side plugin support for removing file-backed assets."""
+
+    type_id: str
+
+    def unregister(self, context: AssetContext, result: "PreLoadResult") -> None:
+        ...
+
+
 class AssetImportPlugin(Protocol):
     """Editor/import-side plugin for turning files into preload results."""
 

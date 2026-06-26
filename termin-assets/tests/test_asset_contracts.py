@@ -260,6 +260,9 @@ def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
             if asset is not None:
                 asset.source_path = result.path
 
+        def unregister(self, context, result: PreLoadResult) -> None:
+            context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
     manager.asset_type_plugins.register_runtime(RuntimePlugin())
 
     result = PreLoadResult(resource_type="dummy", path="/tmp/probe.dummy", uuid="dummy-uuid")
@@ -274,6 +277,12 @@ def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
     manager.reload_file(reloaded)
 
     assert asset.source_path == Path("/var/tmp/probe.dummy")
+
+    manager.unregister_file(reloaded)
+
+    assert manager.get_runtime_asset("dummy", "probe") is None
+    assert manager.get_runtime_asset_by_uuid("dummy", "dummy-uuid") is None
+    assert manager.get_asset_by_uuid("dummy-uuid") is None
 
 
 def test_spec_file_helpers_prefer_meta_and_migrate_legacy_spec(tmp_path) -> None:

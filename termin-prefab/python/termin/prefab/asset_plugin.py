@@ -91,6 +91,9 @@ class PrefabRuntimePlugin:
         new_asset = PrefabAsset.from_file(result.path, name=name)
         asset.update_from(new_asset)
 
+    def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+
 
 class PrefabAssetPlugin(PrefabImportPlugin, PrefabRuntimePlugin):
     """Compatibility combined prefab plugin."""

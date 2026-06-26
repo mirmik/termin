@@ -11,7 +11,7 @@ from termin_assets.asset import Asset
 from termin_assets.catalog import AssetCatalog
 from termin_assets.default_plugins import register_default_asset_plugins
 from termin_assets.embedded_asset import EmbeddedAssetSpec
-from termin_assets.plugin import AssetContext, AssetTypeRegistry
+from termin_assets.plugin import AssetContext, AssetRuntimeUnregisterPlugin, AssetTypeRegistry
 
 if TYPE_CHECKING:
     from termin_assets.asset_registry import AssetRegistry
@@ -93,6 +93,14 @@ class AssetRuntimeManager:
             raise KeyError(type_id)
         registry.register(name, asset, source_path, uuid)
 
+    def unregister_runtime_asset(self, type_id: str, name: str) -> None:
+        """Remove a runtime asset through its plugin type registry."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
+            raise KeyError(type_id)
+        registry.unregister(name)
+
     def get_or_create_runtime_asset(
         self,
         type_id: str,
@@ -160,6 +168,24 @@ class AssetRuntimeManager:
             return
 
         plugin.reload(AssetContext(resource_manager=self, name=name), result)
+
+    def unregister_file(self, result: "PreLoadResult") -> None:
+        """Dispatch a preloaded file removal to the registered runtime asset plugin."""
+        name = self._resource_name_from_preload_result(result)
+        plugin = self._asset_type_plugins.get_runtime(result.resource_type)
+        if plugin is None:
+            log.error(
+                f"[AssetRuntimeManager] No runtime asset plugin registered for unregister type: {result.resource_type}"
+            )
+            return
+
+        if not isinstance(plugin, AssetRuntimeUnregisterPlugin):
+            log.error(
+                f"[AssetRuntimeManager] Runtime asset plugin does not support unregister: {result.resource_type}"
+            )
+            return
+
+        plugin.unregister(AssetContext(resource_manager=self, name=name), result)
 
     def _resource_name_from_preload_result(self, result: "PreLoadResult") -> str:
         if result.resource_type == "glsl":
