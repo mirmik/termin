@@ -178,11 +178,14 @@ live create/change/remove события помечают владеющий C++
 `auto-after-successful-build`) вместо безусловного unload / build / dlopen на
 каждое filesystem-событие.
 
-Loose `.py` файлы
-вне `.pymodule` продолжают обрабатываться legacy `ComponentFileProcessor`:
-watcher передаёт их в `ResourceManager.scan_components()`, а
-`ComponentClassRegistry.scan()` регистрирует найденные `PythonComponent`
-subclasses.
+Loose `.py` файлы вне `.pymodule` являются поддерживаемой editor policy, а не
+случайным fallback: проектное Python-пространство рассматривается как единый
+package-like namespace для scripts, editor extensions и быстрых runtime
+компонентов. Watcher передаёт такие файлы в legacy `ComponentFileProcessor`,
+`ResourceManager.scan_components()` исполняет их, а `ComponentClassRegistry.scan()`
+регистрирует найденные `PythonComponent` subclasses. Файлы, которые не объявляют
+компоненты, всё равно могут быть helper/editor-extension scripts и остаются
+частью этого проектного Python-пространства.
 В editor watcher path loose `.py` файлы живут в synthetic namespace
 `termin_project`: `Scripts/player.py` загружается как
 `termin_project.Scripts.player`. Это позволяет использовать relative imports
@@ -196,8 +199,13 @@ requirements или module lifecycle, его нужно оформить как 
 через `.pymodule`.
 Повторная загрузка loose-файла читает source напрямую, без `.pyc` cache, и
 заменяет классы, найденные в том же generated module.
-Изменение helper-файла само по себе пока не запускает dependency cascade reload
-всех loose-компонентов, которые его импортировали.
+Если изменённый loose `.py` не регистрирует компонентов, processor выполняет
+conservative refresh уже отслеженных loose component scripts. Это покрывает
+типичный helper-only сценарий: `Scripts/helper.py` меняется, а ранее загруженный
+`Scripts/player.py` или `termin_project.Shared.values` dependent пересканируется
+и получает новые imports. Это не полноценный dependency graph и не заменяет
+`.pymodule` lifecycle, но сохраняет текущую удобную editor-политику свободных
+scripts.
 
 ## 8. Smoke-проверки
 
