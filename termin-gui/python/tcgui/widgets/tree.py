@@ -206,16 +206,6 @@ class TreeWidget(Widget):
                 return self._visible_nodes[idx]
         return None
 
-    def _node_y(self, node: TreeNode) -> float:
-        """Get the y position of a node (relative to widget top, before scroll)."""
-        try:
-            idx = self._visible_nodes.index(node)
-        except ValueError:
-            log.debug("TreeWidget._node_y: node not in _visible_nodes")
-            return 0.0
-        stride = self.row_height + self.row_spacing
-        return self.y + idx * stride - self._scroll_offset
-
     def _select_node(self, node: TreeNode | None):
         """Set the selected node."""
         if self.selected_node is not None:

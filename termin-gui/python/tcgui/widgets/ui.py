@@ -109,9 +109,6 @@ class UI:
         self.on_destroy: Callable[[], None] | None = None
         self.on_present_requested: Callable[[], None] | None = None
 
-    def _set_memory_clipboard_text(self, text: str) -> None:
-        self._clipboard_text = text
-
     def _request_present(self) -> None:
         if self.on_present_requested is not None:
             self.on_present_requested()

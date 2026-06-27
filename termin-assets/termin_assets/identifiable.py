@@ -30,8 +30,3 @@ class Identifiable:
     def runtime_id(self) -> int:
         """64-bit hash of UUID for fast runtime lookup."""
         return self._runtime_id
-
-    def _regenerate_uuid(self) -> None:
-        """Generate a new UUID."""
-        self._uuid = str(uuid_module.uuid4())
-        self._runtime_id = hash(self._uuid) & 0xFFFFFFFFFFFFFFFF

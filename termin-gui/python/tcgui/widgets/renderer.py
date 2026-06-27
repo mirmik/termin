@@ -579,17 +579,6 @@ class UIRenderer:
         # C-contiguous writable-ish ndarray, so copy into a fresh array.
         ctx.set_push_constants(np.asarray(bytearray(data), dtype=np.uint8))
 
-    def _bind_ui_shader_solid(
-        self, color: tuple[float, float, float, float],
-    ) -> None:
-        # Kept as a thin wrapper so the draw_rect / draw_line call sites
-        # don't have to know about push constants. The placeholder bind
-        # is there so Vulkan's validator sees a valid descriptor set
-        # even when the fragment shader's sample path is unreachable.
-        self._push_ui_state(color, 0)
-        if self._placeholder_tex is not None:
-            self._ctx.bind_sampled_texture(4, self._placeholder_tex)
-
     def _emit_quad(
         self,
         px0: float, py0: float, px1: float, py1: float,

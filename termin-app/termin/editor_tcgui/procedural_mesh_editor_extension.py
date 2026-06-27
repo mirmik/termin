@@ -161,26 +161,6 @@ class ProceduralMeshEditorExtension:
     def _refresh_mode_label(self) -> None:
         self._editor_panel.refresh_labels()
 
-    def _close_contour(self) -> None:
-        if not self._ensure_controller_document():
-            return
-        result = self._controller.close_contour()
-        if not self._apply_controller_result(result):
-            return
-        log.info(
-            "[ProceduralMeshEditor] contour closed "
-            f"contours={self._document_contour_count()}"
-        )
-
-    def _add_extrude_operation(self) -> None:
-        if not self._ensure_controller_document():
-            return
-        previous_selection = self._controller.selection
-        result = self._controller.extrude_selected()
-        if not self._apply_controller_result(result):
-            return
-        log.info(f"[ProceduralMeshEditor] extrude operation added for selection='{previous_selection}'")
-
     def _add_primitive_operation(self, kind: str) -> None:
         if not self._ensure_controller_document():
             return

@@ -723,10 +723,6 @@ class EditorWindowTcgui:
         if self._editor_display is not None:
             self.scene_manager.request_render()
 
-    def _on_fbo_resized(self, w: int, h: int) -> None:
-        """Called after FBO is recreated. FBOSurface already notified the C++ surface."""
-        self._request_viewport_update()
-
     def _setup_menu_bar(self, menu_bar: MenuBar) -> None:
         self._menu_bar_controller = MenuBarControllerTcgui(
             menu_bar=menu_bar,
@@ -911,12 +907,6 @@ class EditorWindowTcgui:
     def _on_viewport_external_drop(self, event) -> bool:
         return self._viewport_geometry.on_external_drop(event)
 
-    def _world_position_for_viewport_drop(self, x: float, y: float) -> tuple[float, float, float]:
-        return self._viewport_geometry.world_position_for_viewport_drop(x, y)
-
-    def _fallback_drop_position(self) -> tuple[float, float, float]:
-        return self._viewport_geometry.fallback_drop_position()
-
     def world_point_on_oxy_plane(self, x: float, y: float) -> tuple[float, float, float] | None:
         return self._viewport_geometry.world_point_on_oxy_plane(x, y)
 
@@ -973,9 +963,6 @@ class EditorWindowTcgui:
 
     def redo(self) -> None:
         self._interaction_coordinator.redo()
-
-    def _resync_inspector_from_selection(self) -> None:
-        self._interaction_coordinator.resync_inspector_from_selection()
 
     def _update_undo_redo_actions(self) -> None:
         self._interaction_coordinator.update_undo_redo_actions()
@@ -1051,9 +1038,6 @@ class EditorWindowTcgui:
 
     def _on_transform_end(self, old_pose, new_pose) -> None:
         self._interaction_coordinator.on_transform_end(old_pose, new_pose)
-
-    def _update_gizmo_screen_scale(self) -> None:
-        self._interaction_coordinator.update_gizmo_screen_scale()
 
     def _on_inspector_transform_changed(self) -> None:
         self._request_viewport_update()
@@ -1149,9 +1133,6 @@ class EditorWindowTcgui:
     def _new_scene(self) -> None:
         self._scene_file_controller.new_scene()
 
-    def _do_new_scene(self) -> None:
-        self._scene_file_controller.do_new_scene()
-
     def _save_scene(self) -> None:
         self._scene_file_controller.save_scene()
 
@@ -1164,14 +1145,8 @@ class EditorWindowTcgui:
     def _close_scene(self) -> None:
         self._scene_file_controller.close_scene()
 
-    def _save_scene_to_file(self, path: str) -> None:
-        self._scene_file_controller.save_scene_to_file(path)
-
     def _load_scene_from_file(self, path: str) -> None:
         self._scene_file_controller.load_scene_from_file(path)
-
-    def _validate_scene_path(self, path: str) -> bool:
-        return self._scene_file_controller.validate_scene_path(path)
 
     def _load_last_scene(self) -> None:
         self._scene_file_controller.load_last_scene()
@@ -1225,12 +1200,6 @@ class EditorWindowTcgui:
             resolve_slangc=resolve_slangc,
         )
 
-    def _load_project_modules(self, project_root: Path) -> None:
-        self._project_session_controller.load_project_modules(project_root)
-
-    def _run_project_init_script(self, project_root: Path) -> None:
-        self._project_session_controller.run_project_init_script(project_root)
-
     @property
     def ui(self) -> UI | None:
         return self._ui
@@ -1265,9 +1234,6 @@ class EditorWindowTcgui:
     # Menu action stubs / helpers
     # ------------------------------------------------------------------
 
-    def _noop(self, *args, **kwargs) -> None:
-        pass
-
     def _show_settings(self) -> None:
         self._dialog_launcher.show_settings()
 
@@ -1291,9 +1257,6 @@ class EditorWindowTcgui:
 
     def _show_spacemouse_settings(self) -> None:
         self._dialog_launcher.show_spacemouse_settings()
-
-    def _init_spacemouse(self) -> None:
-        self._dialog_launcher.init_spacemouse()
 
     def _show_resource_manager_viewer(self) -> None:
         self._dialog_launcher.show_resource_manager_viewer()
@@ -1362,9 +1325,6 @@ class EditorWindowTcgui:
         self._game_mode_ui.update_mode(is_playing)
         self._request_viewport_update()
 
-    def _update_game_mode_ui(self, is_playing: bool) -> None:
-        self._game_mode_ui.update_mode(is_playing)
-
     def _update_play_action(self, is_playing: bool) -> None:
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_play_action(is_playing)
@@ -1381,9 +1341,6 @@ class EditorWindowTcgui:
     def _show_quest_openxr_build_dialog(self) -> None:
         self._project_build_controller.show_quest_openxr_build_dialog()
 
-    def _build_project_to_default_dist(self):
-        return self._project_build_controller.build_project_to_default_dist()
-
     def _run_build(self) -> None:
         self._project_build_controller.run_build()
 
@@ -1399,9 +1356,6 @@ class EditorWindowTcgui:
 
     def _toggle_modules(self) -> None:
         self._debug_panels.toggle_modules()
-
-    def _update_debug_panel_visibility(self) -> None:
-        self._debug_panels.update_visibility()
 
     def _update_profiler_action(self) -> None:
         if self._menu_bar_controller is not None:
@@ -1620,12 +1574,3 @@ class EditorWindowTcgui:
         self._process_pending_scene_tree_rebuild()
         if has_overlay_drawers:
             self._request_viewport_update()
-
-    def _on_material_file_selected(self, path: str | None) -> None:
-        self._resource_actions.on_material_file_selected(path)
-
-    def _on_components_file_selected(self, path: str | None) -> None:
-        self._resource_actions.on_components_file_selected(path)
-
-    def _deploy_stdlib_to(self, path: str | None, stdlib_src: Path) -> None:
-        self._resource_actions.deploy_stdlib_to(path, stdlib_src)

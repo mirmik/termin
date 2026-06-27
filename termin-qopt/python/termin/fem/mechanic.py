@@ -97,36 +97,6 @@ class BarElement(Contribution):
         ])
         return K_local_1d
     
-    def _get_transformation_matrix(self) -> np.ndarray:
-        """
-        Матрица преобразования из глобальных координат в локальные
-        
-        Для 1D: T = [1, 1] (тривиальное преобразование)
-        Для 2D: T = [cos, sin, cos, sin]
-        Для 3D: T = [cx, cy, cz, cx, cy, cz]
-        
-        где c - направляющие косинусы
-        """
-        dim = self.node1.size
-        
-        if dim == 1:
-            # 1D - нет преобразования
-            return np.array([1, 1])
-        
-        elif dim == 2:
-            # 2D - cos и sin угла
-            c = self.direction[0]  # cos
-            s = self.direction[1]  # sin
-            return np.array([c, s, c, s])
-        
-        elif dim == 3:
-            # 3D - направляющие косинусы
-            cx, cy, cz = self.direction
-            return np.array([cx, cy, cz, cx, cy, cz])
-        
-        else:
-            raise ValueError(f"Неподдерживаемая размерность: {dim}")
-    
     def _get_global_stiffness(self) -> np.ndarray:
         """
         Глобальная матрица жесткости
