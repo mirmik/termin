@@ -357,6 +357,12 @@ must be explicit:
     UUID/path/stage/entry descriptors. Resource contracts and backend placement
     now come from shader compiler layout sidecars instead of catalog or typed
     descriptor resource lists.
+15. In progress: move placement policy out of ad hoc compiler code. The
+    transitional scope/kind/name placement ranges are now shared through
+    `tgfx2/backend_binding_plan.hpp`, and `termin_shaderc` uses that policy only
+    because current artifacts still need patched numeric decorations/registers.
+    The target remains: backend binding planner produces final placement from
+    shader contract/layout metadata.
 
 ## Implementation Notes
 
@@ -389,6 +395,9 @@ must be explicit:
 - Generic reflection contracts are attached only when loading compiler sidecars.
   Other contract producers attach semantic requirements explicitly; layout
   remains the sibling backend placement view.
+- D3D11 resources recovered only from emitted HLSL are kept `unscoped` unless
+  the caller provides `--default-scope`; the compiler no longer assigns semantic
+  ownership by names such as `shadow_maps`.
 
 ## Validation
 

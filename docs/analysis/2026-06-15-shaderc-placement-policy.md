@@ -24,17 +24,24 @@ Vulkan/OpenGL-подобной модели или D3D `register`.
 ## Текущая Реализация
 
 Статус 2026-06-27: `termin_shaderc` использует scope-first normalization,
-но больше не содержит таблицу конкретных resource names. Scoped resources
-получают transitional placement из `scope + resource kind + stable resource
+но больше не содержит таблицу конкретных resource names. Transitional placement
+policy опубликована в `tgfx2/backend_binding_plan.hpp`, чтобы compiler-side
+artifact patching и будущий backend binding planner не расходились в правилах.
+Scoped resources получают placement из `scope + resource kind + stable resource
 name hash`, с локальным probing при конфликте внутри одного shader layout.
 Unscoped resources сохраняют placement, пришедший из reflection/source
 metadata, пока scope не задан явно или через `--default-scope`.
+
+D3D11 HLSL fallback для ресурсов, которые появились только в emitted HLSL и не
+имеют Slang reflection metadata, больше не назначает `pass/material` по именам
+вроде `shadow_maps` или `material`. Такие ресурсы остаются `unscoped`, если
+caller не передал явный `--default-scope`.
 
 ```text
 Slang source
   -> slangc bytecode + reflection
   -> infer resource name/kind/scope
-  -> normalize scoped resources through deterministic placement policy
+  -> normalize scoped resources through shared transitional placement policy
   -> patch/write artifact and .layout.json sidecar
   -> runtime binds by resource name using sidecar placement
 ```
@@ -43,7 +50,9 @@ Generic `set/binding` ranges are transitional Vulkan/OpenGL-ish placement
 metadata. The allocator chooses a range by resource class and scope, then
 chooses a deterministic slot from the resource name. This keeps independently
 compiled variants from collapsing every draw constant buffer onto one fixed
-slot while avoiding a hand-written table of special names.
+slot while avoiding a hand-written table of special names. The policy is still
+not the final architecture: the final resolved placement should be produced by
+the backend binding planner after shader contract/layout assembly.
 
 Все ресурсы сейчас сведены в set 0. Vulkan uses generic descriptor
 `set/binding`. OpenGL consumes binding values as native binding points /
