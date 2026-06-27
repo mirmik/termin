@@ -16,6 +16,22 @@ if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
 
 
+def register_editor_builtin_resources(resource_manager: "ResourceManager") -> None:
+    """Register built-in resources required before editor scene loading."""
+    loaded_components = resource_manager.register_builtin_components()
+    if loaded_components:
+        log.info(f"Loaded components: {loaded_components}")
+
+    resource_manager.register_builtin_frame_passes()
+    resource_manager.register_builtin_shaders()
+    resource_manager.register_builtin_textures()
+    resource_manager.register_builtin_materials()
+    loaded_meshes = resource_manager.register_builtin_meshes()
+    if loaded_meshes:
+        log.info(f"Loaded builtin meshes: {loaded_meshes}")
+    resource_manager.register_builtin_pipelines()
+
+
 class ResourceLoader:
     """
     Handles resource loading operations for the editor.
@@ -45,9 +61,7 @@ class ResourceLoader:
 
     def scan_builtin_components(self) -> None:
         """Register built-in component specs."""
-        loaded = self._resource_manager.register_builtin_components()
-        if loaded:
-            log.info(f"Loaded components: {loaded}")
+        register_editor_builtin_resources(self._resource_manager)
 
     def init_resources_from_scene(self) -> None:
         """
