@@ -363,6 +363,10 @@ must be explicit:
     because current artifacts still need patched numeric decorations/registers.
     The target remains: backend binding planner produces final placement from
     shader contract/layout metadata.
+16. Done: stop treating generic `set/binding` overlap as a universal
+    `tc_shader` storage error. `tc_shader` stores backend-dependent resource
+    layout metadata; Vulkan/OpenGL/D3D11 placement conflicts are validated by
+    `build_backend_binding_plan()` for the selected backend.
 
 ## Implementation Notes
 
@@ -398,6 +402,9 @@ must be explicit:
 - D3D11 resources recovered only from emitted HLSL are kept `unscoped` unless
   the caller provides `--default-scope`; the compiler no longer assigns semantic
   ownership by names such as `shadow_maps`.
+- Built-in fullscreen/pass parameter buffers such as `u_params` declare explicit
+  `pass` scope in source instead of relying on compiler warnings or unscoped
+  sidecar entries.
 
 ## Validation
 
