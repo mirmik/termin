@@ -36,7 +36,7 @@ DEFAULT_SHADER_NAME = "TerminRuntimeDefaultColor"
 DEFAULT_SHADER_SOURCE_PATH = "termin-runtime/default-color"
 DEFAULT_SHADER_LANGUAGE = "slang"
 DEFAULT_RESOURCE_POLICY = "strict"
-SUPPORTED_RESOURCE_POLICIES = {"dev", "dev_smoke", "strict"}
+SUPPORTED_RESOURCE_POLICIES = {"dev_smoke", "strict"}
 
 _DEFAULT_SHADER_TARGETS_BY_LANGUAGE: dict[str, tuple[str, ...]] = {
     "glsl": ("vulkan",),

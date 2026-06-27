@@ -8,7 +8,7 @@ import numpy as np
 
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
-from termin.audio.handle import AudioClipHandle
+from termin.default_assets.audio.handle import AudioClipHandle
 
 if TYPE_CHECKING:
     from termin.audio.components.audio_listener import AudioListener

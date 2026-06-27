@@ -24,7 +24,7 @@ from termin.project_build.target_preflight import TargetPreflightError, prefligh
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
 BUILD_PROFILE_SCHEMA_VERSION = 1
 SUPPORTED_CONFIGURATIONS = ("dev", "debug", "release")
-SUPPORTED_RESOURCE_POLICIES = ("dev", "dev_smoke", "strict")
+SUPPORTED_RESOURCE_POLICIES = ("dev_smoke", "strict")
 SUPPORTED_SHADER_TARGETS = ("vulkan", "opengl", "d3d11")
 COMMON_PROFILE_KEYS = {
     "target",

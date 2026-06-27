@@ -309,11 +309,6 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
                             {
                                 "type": "MeshRenderer",
                                 "data": {
-                                    "mesh": {
-                                        "uuid": "mesh-uuid",
-                                        "name": "Triangle",
-                                        "type": "uuid",
-                                    },
                                     "material": {
                                         "uuid": "material-uuid",
                                         "name": "Triangle Material",
@@ -437,13 +432,18 @@ def test_export_runtime_package_reports_missing_resources_as_errors_by_default(t
                     "uuid": "entity-uuid",
                     "components": [
                         {
-                            "type": "MeshRenderer",
+                            "type": "MeshComponent",
                             "data": {
                                 "mesh": {
                                     "uuid": "missing-mesh",
                                     "name": "MissingMesh",
                                     "type": "uuid",
                                 },
+                            },
+                        },
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
                                 "material": {
                                     "uuid": "missing-material",
                                     "name": "MissingMaterial",
@@ -522,13 +522,18 @@ def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_pat
                     "uuid": "entity-uuid",
                     "components": [
                         {
-                            "type": "MeshRenderer",
+                            "type": "MeshComponent",
                             "data": {
                                 "mesh": {
                                     "uuid": mesh_uuid,
                                     "name": "Triangle",
                                     "type": "uuid",
                                 },
+                            },
+                        },
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
                                 "material": {
                                     "uuid": material_uuid,
                                     "name": "Triangle Material",
@@ -1552,13 +1557,18 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
                     "uuid": "entity-uuid",
                     "components": [
                         {
-                            "type": "MeshRenderer",
+                            "type": "MeshComponent",
                             "data": {
                                 "mesh": {
                                     "uuid": mesh_uuid,
                                     "name": "Live Triangle",
                                     "type": "uuid",
                                 },
+                            },
+                        },
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
                                 "material": {
                                     "uuid": material_uuid,
                                     "name": "Live Material",

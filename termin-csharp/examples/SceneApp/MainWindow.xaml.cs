@@ -133,9 +133,10 @@ void main() {
         var entity = _scene.Entities.CreateEntity($"Cube_{_scene.Entities.Count}");
         entity.Position = GetRandomPosition();
 
-        // Add MeshRenderer with cube and material
+        // Add MeshComponent with cube and MeshRenderer with material
+        var meshComponent = entity.AddComponentByName("MeshComponent");
         var meshRenderer = entity.AddComponentByName("MeshRenderer");
-        if (meshRenderer.IsValid)
+        if (meshComponent.IsValid && meshRenderer.IsValid)
         {
             var cubeMesh = TerminCore.PrimitiveUnitCube();
             Console.WriteLine($"[SceneApp] PrimitiveUnitCube: {cubeMesh.Index}:{cubeMesh.Generation}");
@@ -144,7 +145,7 @@ void main() {
             var meshPtr = TerminCore.MeshGet(cubeMesh);
             Console.WriteLine($"[SceneApp] Mesh ptr: 0x{meshPtr:X}");
 
-            meshRenderer.SetField("mesh", cubeMesh);
+            meshComponent.SetField("mesh", cubeMesh);
             meshRenderer.SetField("material", _defaultMaterial);
             Console.WriteLine($"[SceneApp] MeshRenderer: mesh={cubeMesh.Index}:{cubeMesh.Generation}, mat={_defaultMaterial.Index}:{_defaultMaterial.Generation}");
         }
@@ -167,13 +168,14 @@ void main() {
         var entity = _scene.Entities.CreateEntity($"Sphere_{_scene.Entities.Count}");
         entity.Position = GetRandomPosition();
 
-        // Add MeshRenderer with sphere and material
+        // Add MeshComponent with sphere and MeshRenderer with material
+        var meshComponent = entity.AddComponentByName("MeshComponent");
         var meshRenderer = entity.AddComponentByName("MeshRenderer");
-        if (meshRenderer.IsValid)
+        if (meshComponent.IsValid && meshRenderer.IsValid)
         {
             var sphereMesh = TerminCore.PrimitiveUnitSphere();
             Console.WriteLine($"[SceneApp] PrimitiveUnitSphere: {sphereMesh.Index}:{sphereMesh.Generation}");
-            meshRenderer.SetField("mesh", sphereMesh);
+            meshComponent.SetField("mesh", sphereMesh);
             meshRenderer.SetField("material", _defaultMaterial);
             Console.WriteLine($"[SceneApp] MeshRenderer created for {entity.Name}");
         }

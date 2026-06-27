@@ -449,11 +449,13 @@ public partial class MainWindow : Window
         CreateShader();
         CreateMaterial();
 
-        // Create cube entity with MeshRenderer (using inspect API)
+        // Create cube entity with MeshComponent + MeshRenderer (using inspect API)
         var cubeEntity = _scene.Entities.CreateEntity("Cube");
         cubeEntity.Position = new System.Numerics.Vector3(0, 0, 0);
 
+        var meshComponent = cubeEntity.AddComponentByName("MeshComponent");
         _meshRenderer = cubeEntity.AddComponentByName("MeshRenderer");
+        Console.WriteLine($"[Debug] MeshComponent valid: {meshComponent.IsValid}, type: {meshComponent.TypeName}");
         Console.WriteLine($"[Debug] MeshRenderer valid: {_meshRenderer.IsValid}, type: {_meshRenderer.TypeName}");
 
         // Check mesh/material uuid
@@ -461,7 +463,7 @@ public partial class MainWindow : Window
         var matPtr = TerminCore.MaterialGet(_materialHandle);
         Console.WriteLine($"[Debug] Mesh ptr: {meshPtr}, Material ptr: {matPtr}");
 
-        _meshRenderer.SetField("mesh", _meshHandle);
+        meshComponent.SetField("mesh", _meshHandle);
         _meshRenderer.SetField("material", _materialHandle);
 
         Console.WriteLine($"[Debug] MeshRenderer.Enabled: {_meshRenderer.Enabled}");

@@ -133,7 +133,7 @@ class ProjectBuildController:
             return None
 
         try:
-            from termin.project_builder import build_project
+            from termin.project_builder import export_legacy_project
             from termin.render_framework import collect_scene_shader_usages
 
             scene = self._scene_manager.get_scene(entry.scene_name)
@@ -142,7 +142,7 @@ class ProjectBuildController:
                 return None
             shader_usages = collect_scene_shader_usages(scene.scene_handle())
 
-            result = build_project(
+            result = export_legacy_project(
                 project_root=entry.project_root,
                 entry_scene=entry.scene_rel_path,
                 output_dir=entry.output_dir,

@@ -9,9 +9,9 @@
 - Создан первичный пакет `termin-materials`.
 - В `termin-materials` вынесены C++ `shader_parser`, `glsl_preprocessor` и Python binding `termin.materials._materials_native`.
 - В `termin-materials` вынесены Python bindings `TcRenderState`, `TcMaterialPhase`, `TcMaterial` и material registry helpers.
-- Построение материала из `ShaderMultyPhaseProgramm` вынесено в явный module-level API `termin.materials.create_material_from_parsed(...)`; `TcMaterial.from_parsed(...)` оставлен как legacy-forwarder.
+- Построение материала из `ShaderMultyPhaseProgramm` вынесено в явный module-level API `termin.materials.create_material_from_parsed(...)`. Legacy-forwarder `TcMaterial.from_parsed(...)` удалён 2026-06-27 после миграции downstream call sites.
 - Python shader-parser imports внутри `termin-app` переведены на canonical `termin.materials`.
-- `TcMaterial` binding больше не зависит от app-level `TextureHandle`: `set_texture` и `from_parsed(..., textures=...)` принимают `TcTexture`, а default white/normal texture lookup передается из app слоя через `default_white_texture` / `default_normal_texture`.
+- `TcMaterial` binding больше не зависит от app-level `TextureHandle`: `set_texture` и `create_material_from_parsed(..., textures=...)` принимают `TcTexture`, а default white/normal texture lookup передается из app слоя через `default_white_texture` / `default_normal_texture`.
 - `termin._native.render` пока сохраняет исторический export material/shader типов через импорт `termin.materials._materials_native`; это совместимость существующего пути, не новый owner.
 - App-level GLSL fallback loader через `ResourceManager` остается в `termin.visualization.render.glsl_preprocessor`, потому что это не core material/shader-format логика.
 
@@ -121,7 +121,6 @@ Preferred staged migration:
 
 - Should `TcShader` stay in `termin-graphics`, or should shader registry move together with materials?
 - Should material kind registration live in `termin-materials` or in an inspect integration package?
-- Should `TcMaterial.from_parsed` be removed entirely after downstream call sites migrate? It is now only a compatibility forwarder to `create_material_from_parsed`.
 - How much of existing app-level `TextureHandle` compatibility should survive after material extraction?
 - Do scene/material/depth/id/shadow passes belong in one `termin-passes` package, or should scene-dependent passes be separated from pure postprocess passes?
 

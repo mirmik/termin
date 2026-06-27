@@ -34,7 +34,8 @@ public:
     std::vector<float> _bone_matrices_flat;
     int _bone_count = 0;
 
-    // Note: mesh, material, cast_shadow are inherited from MeshRenderer
+    // Note: material and cast_shadow are inherited from MeshRenderer;
+    // mesh data lives on the required MeshComponent.
     // and already have INSPECT_FIELD registrations there
 
     SkinnedMeshRenderer();

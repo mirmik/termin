@@ -4,7 +4,7 @@
 static int g_termin_collision_runtime_refcount = 0;
 
 void termin_collision_runtime_init(void) {
-    if (g_termin_collision_runtime_refcount++ > 0) return;
+    g_termin_collision_runtime_refcount++;
     tc_collision_world_extension_init();
 }
 

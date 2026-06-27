@@ -9,7 +9,6 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/geom/mat44.hpp>
-#include <termin/geom/quat.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/render/render_context.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
@@ -30,27 +29,14 @@ public:
     bool _override_material = false;
     TcMaterial _overridden_material;
     tc_value _pending_override_data = {TC_VALUE_NIL, {}};
-    bool mesh_offset_enabled = false;
-    tc_vec3 mesh_offset_position = {0, 0, 0};
-    tc_vec3 mesh_offset_euler = {0, 0, 0};
-    tc_vec3 mesh_offset_scale = {1.0, 1.0, 1.0};
 
     INSPECT_FIELD(MeshRenderer, material, "Material", "tc_material")
     INSPECT_FIELD(MeshRenderer, cast_shadow, "Cast Shadow", "bool")
-    INSPECT_FIELD(MeshRenderer, mesh_offset_enabled,  "Mesh Offset",     "bool")
-    INSPECT_FIELD(MeshRenderer, mesh_offset_position, "Offset Position", "vec3")
-    INSPECT_FIELD(MeshRenderer, mesh_offset_euler,    "Offset Rotation", "vec3")
-    INSPECT_FIELD(MeshRenderer, mesh_offset_scale,    "Offset Scale", "vec3")
 
 private:
     MeshComponent* _mesh_component = nullptr;
-    // Temporary bridge for constructor calls and legacy scene data before
-    // MeshComponent is reachable. Cleared as soon as migration runs.
-    TcMesh _pending_mesh_for_component;
 
     void bind_mesh_component();
-    void migrate_legacy_mesh_to_component();
-    void migrate_legacy_mesh_value_to_component(const tc_value* data);
     tc_mesh* current_mesh_ptr() const;
     void ensure_override_material_ready();
     void recreate_overridden_material();
@@ -63,8 +49,6 @@ public:
     TcMesh& get_mesh();
     const TcMesh& get_mesh() const;
     MeshComponent* mesh_component() const { return _mesh_component; }
-    void set_mesh(const TcMesh& m);
-    void set_mesh_by_name(const std::string& name);
 
     TcMaterial get_material() const;
     tc_material* get_material_ptr() const;
@@ -85,7 +69,6 @@ public:
     void on_editor_start() override;
     void on_scene_active() override;
     void on_render_attach() override;
-    tc_value serialize_data() const override;
     void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
     tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override {
@@ -187,11 +170,6 @@ inline tc_value make_mesh_renderer_inspector_metadata() {
             "_overridden_material",
             "inline_material",
             "_override_material"));
-    tc_value_list_push(&layout, make_mesh_renderer_inspector_separator());
-    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_enabled"));
-    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_position"));
-    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_euler"));
-    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_scale"));
     tc_value_dict_set(&inspector, "layout", layout);
 
     return inspector;

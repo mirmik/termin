@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 import numpy as np
 
-from termin.mesh import TcMesh
+from termin.mesh import MeshComponent, TcMesh
 from termin.render_components import MeshRenderer
 from termin.materials import TcMaterial as Material
 from tcbase import log
@@ -100,6 +100,7 @@ class VoxelVisualizer:
         self._grid = grid
         self._parent = parent_entity
         self._mesh: Optional[TcMesh] = None
+        self._mesh_component: Optional[MeshComponent] = None
         self._renderer: Optional[MeshRenderer] = None
         self._material = Material(
             name="VoxelVisualizerMaterial",
@@ -162,9 +163,11 @@ class VoxelVisualizer:
             vertex_normals=normals,
             name="voxel_grid_vis",
         )
+        self._mesh_component = MeshComponent()
+        self._mesh_component.mesh = self._mesh
+        self._parent.add_component(self._mesh_component)
         self._renderer = MeshRenderer(
-            self._mesh,
-            self._material,
+            material=self._material,
             cast_shadow=False,
         )
         self._parent.add_component(self._renderer)
@@ -178,6 +181,9 @@ class VoxelVisualizer:
         if self._renderer is not None:
             self._parent.remove_component(self._renderer)
             self._renderer = None
+        if self._mesh_component is not None:
+            self._parent.remove_component(self._mesh_component)
+            self._mesh_component = None
         self._mesh = None
 
     def set_color(self, color: tuple[float, float, float, float]) -> None:

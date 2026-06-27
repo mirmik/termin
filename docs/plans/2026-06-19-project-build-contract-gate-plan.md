@@ -49,7 +49,7 @@ non-zero CLI exit; `configuration`/`resource_policy` из build profile стан
 - Парсить эти поля в `normalize_profile_build_request()`.
 - Ввести небольшой валидатор допустимых значений. Начальный набор:
   - `configuration`: `dev`, `debug`, `release`
-  - `resource_policy`: `dev`, `dev_smoke`, `strict`
+  - `resource_policy`: `dev_smoke`, `strict`
 - Не оставлять эти поля только "разрешенными ключами" profile schema без
   влияния на build behavior.
 
