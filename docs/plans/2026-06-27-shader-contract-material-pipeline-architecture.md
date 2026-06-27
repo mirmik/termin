@@ -106,6 +106,7 @@ typedef struct tc_shader_resource_requirement {
 
 typedef struct tc_shader_contract_view {
     uint32_t schema_version;
+    uint32_t source_kind;
     tc_shader_handle shader;
 
     const tc_shader_contract_vertex_input* vertex_inputs;
@@ -206,6 +207,12 @@ The pass uses the contract to:
 - choose mesh attributes by semantic name;
 - validate buffer/texture/uniform requirements;
 - validate that pass/component providers can satisfy required resources.
+
+This validation is render-owned policy. `termin-graphics` stores the generic
+contract and layout, while `termin-render` decides whether a missing contract is
+an error for the current path. Migrated paths use `validate_shader_contract()`
+to require contracts and compare semantic resource requirements against the
+resolved shader resource layout.
 
 The pass uses the resource layout to:
 
@@ -316,6 +323,9 @@ must be explicit:
     mesh, instanced, fullscreen, and compute execution policy.
 11. Done: replace render-specific producer enums with backend-agnostic contract
     source/debug metadata.
+12. Done: add a render-side shader contract validator that can require a
+    contract on migrated paths and compare semantic resource requirements
+    against resolved layout entries.
 
 ## Implementation Notes
 
@@ -343,7 +353,9 @@ must be explicit:
   refreshes its resource list from the shader layout. This keeps parser-created
   Slang shaders consistent when reflection sidecars provide layout metadata.
 - The current contract/layout coupling is transitional. Long-term code should
-  not copy backend placement into `tc_shader_contract`.
+  not copy backend placement into `tc_shader_contract`; contract producers
+  should build requirements directly and the render validator should compare
+  them against the sibling resource layout.
 
 ## Validation
 
@@ -360,6 +372,8 @@ Required tests:
 - Done: parser-created static material shaders expose shader parser contracts.
 - Done: catalog-registered built-in shaders expose engine-generated contracts.
 - Done: legacy shader without contract takes only explicit legacy fallback path.
+- Done: render-side validation rejects missing required contracts and
+  contract/layout resource mismatches.
 
 ## Non-Goals
 
