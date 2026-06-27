@@ -190,8 +190,7 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
 
     tc_shader_contract_view contract{};
     REQUIRE(tc_shader_get_contract_view(shader, &contract));
-    CHECK(contract.producer_kind == TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED);
-    CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_FULLSCREEN);
+    CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_GENERATED);
     CHECK(contract.vertex_input_count == 0);
 
     tc_shader_shutdown();
@@ -258,8 +257,7 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
 
     tc_shader_contract_view contract{};
     REQUIRE(tc_shader_get_contract_view(shader, &contract));
-    CHECK(contract.producer_kind == TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED);
-    CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_MESH);
+    CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_GENERATED);
     CHECK(contract_has_vertex_input(contract, "position"));
     CHECK(contract_has_resource(contract, "per_frame"));
 
@@ -379,18 +377,15 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
 
         tc_shader_contract_view contract{};
         REQUIRE(tc_shader_get_contract_view(shader, &contract));
-        CHECK(contract.producer_kind == TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED);
+        CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_GENERATED);
         if (!expected.has_vertex && expected.has_fragment) {
-            CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_FULLSCREEN);
             CHECK(contract.vertex_input_count == 0);
         }
         if (std::strcmp(expected.uuid, "termin-engine-shadow") == 0) {
-            CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_MESH);
             CHECK(contract_has_vertex_input(contract, "position"));
             CHECK(contract_has_resource(contract, "shadow_draw"));
         }
         if (std::strcmp(expected.uuid, "termin-engine-tonemap") == 0) {
-            CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_FULLSCREEN);
             CHECK(contract_has_resource(contract, "u_input"));
         }
     }

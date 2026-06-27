@@ -469,8 +469,8 @@ def test_slang_material_layout_sets_shader_contract_before_sidecar_reflection():
     assert shader.has_contract
 
     contract = shader.contract
-    assert contract["producer_kind"] == 5  # TC_SHADER_CONTRACT_PRODUCER_SHADER_PARSER
-    assert contract["draw_kind"] == 0  # TC_SHADER_CONTRACT_DRAW_MESH
+    assert contract["source_kind"] == 4  # TC_SHADER_CONTRACT_SOURCE_DECLARED
+    assert "draw_kind" not in contract
     assert {
         input_desc["semantic"]
         for input_desc in contract["vertex_inputs"]

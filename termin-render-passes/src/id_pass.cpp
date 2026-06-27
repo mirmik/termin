@@ -255,8 +255,8 @@ void IdPass::execute_with_data_tgfx2(
             tc_shader_handle_eq(dc.final_shader, id_shader_handle_);
 
         // Push constants (u_model + u_pickColor) are shared between the
-        // base and skinned paths. The skinned variant uses the same id
-        // draw contract plus a reflected BoneBlock resource.
+        // base and skinned paths. The skinned variant uses the same id shader
+        // interface plus a reflected BoneBlock resource.
         IdPushStd140 push{};
         std::memcpy(push.u_model, model.data, sizeof(float) * 16);
         push.u_pickColor[0] = pick_r;

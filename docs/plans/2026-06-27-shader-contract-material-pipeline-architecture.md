@@ -138,10 +138,10 @@ It must not contain:
 - material pipeline diagnostics as C++ objects;
 - pass or drawable runtime data providers.
 
-The current C ABI still contains `draw_kind` and stores
-`tc_shader_resource_binding` in the contract view. These are migration leftovers,
-not the target architecture. They should be replaced by a requirement-only
-contract plus a separate resolved resource layout.
+The previous C ABI contained `draw_kind` and stored `tc_shader_resource_binding`
+in the contract view. These were migration leftovers, not the target
+architecture. The target ABI uses requirement-only contract resources plus a
+separate resolved resource layout.
 
 ### Shader Resource Layout
 
@@ -262,9 +262,8 @@ backend placement out of the semantic resource contract.
 
 The built-in shader catalog is a transitional source loader, not a target
 contract database. Catalog-registered engine shaders currently attach a generic
-`tc_shader_contract` with producer
-`TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED` during
-`register_builtin_shader_from_catalog()`, but this must not grow
+`tc_shader_contract` with source kind `TC_SHADER_CONTRACT_SOURCE_GENERATED`
+during `register_builtin_shader_from_catalog()`, but this must not grow
 `engine-shader-catalog.json`.
 
 The temporary catalog contract is inferred from the existing loader metadata:
@@ -310,12 +309,12 @@ must be explicit:
    pipeline shader lacks a contract.
 8. Done: split material pipeline resource declarations into semantic
    requirements and resolved placement.
-9. Next: split the public C shader metadata the same way:
+9. Done: split the public C shader metadata the same way:
    `tc_shader_contract` should expose requirement-only resources, while
    `tc_shader_resource_binding` remains resolved layout metadata.
-10. Next: remove `draw_kind` from `tc_shader_contract`; pass/component code owns
+10. Done: remove `draw_kind` from `tc_shader_contract`; pass/component code owns
     mesh, instanced, fullscreen, and compute execution policy.
-11. Next: replace render-specific producer enums with backend-agnostic contract
+11. Done: replace render-specific producer enums with backend-agnostic contract
     source/debug metadata.
 
 ## Implementation Notes
@@ -335,9 +334,8 @@ must be explicit:
   `foliage_draw`.
 - Material pipeline resource merge no longer treats `set/binding` as part of the
   semantic resource requirement. Placement conflicts are diagnosed separately.
-- Parser-created material shaders attach a generic mesh contract with producer
-  `TC_SHADER_CONTRACT_PRODUCER_SHADER_PARSER`, inferred vertex inputs, material
-  UBO metadata, and current shader resources.
+- Parser-created material shaders attach a generic declared-source contract with
+  inferred vertex inputs, material UBO metadata, and current shader resources.
 - Catalog-registered built-in shaders attach a transitional engine-generated
   contract inferred from current loader metadata. Do not add new contract fields
   to `engine-shader-catalog.json`.
