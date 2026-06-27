@@ -326,6 +326,8 @@ must be explicit:
 12. Done: add a render-side shader contract validator that can require a
     contract on migrated paths and compare semantic resource requirements
     against resolved layout entries.
+13. Done: remove `tc_shader_set_resource_layout()` back-propagation into
+    `tc_shader_contract`. Layout updates no longer mutate contract resources.
 
 ## Implementation Notes
 
@@ -349,13 +351,12 @@ must be explicit:
 - Catalog-registered built-in shaders attach a transitional engine-generated
   contract inferred from current loader metadata. Do not add new contract fields
   to `engine-shader-catalog.json`.
-- When a shader resource layout is replaced, an existing `tc_shader_contract`
-  refreshes its resource list from the shader layout. This keeps parser-created
-  Slang shaders consistent when reflection sidecars provide layout metadata.
-- The current contract/layout coupling is transitional. Long-term code should
-  not copy backend placement into `tc_shader_contract`; contract producers
-  should build requirements directly and the render validator should compare
-  them against the sibling resource layout.
+- `tc_shader_set_resource_layout()` does not update `tc_shader_contract`.
+  Contract producers must attach semantic requirements explicitly. The render
+  validator compares those requirements against the sibling resource layout.
+- Some transitional producers still derive contract requirements from current
+  layout metadata at attachment time. That is allowed only as producer-local
+  migration code; it must not become core `tc_shader` behavior.
 
 ## Validation
 
@@ -374,6 +375,7 @@ Required tests:
 - Done: legacy shader without contract takes only explicit legacy fallback path.
 - Done: render-side validation rejects missing required contracts and
   contract/layout resource mismatches.
+- Done: resource layout updates do not rewrite existing contract resources.
 
 ## Non-Goals
 
