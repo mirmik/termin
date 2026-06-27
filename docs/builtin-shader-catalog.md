@@ -8,9 +8,11 @@ generation path.
 `engine-shader-catalog.json` is transitional. It exists to keep current source
 loading, packaging, and artifact staging working while built-in shader source
 identity moves toward minimal UUID/path/stage descriptors or source
-conventions. Do not expand it with semantic contract, resource, stage-IO,
-draw-kind, or backend placement policy. The target direction is to delete this
-JSON manifest, not to make it the engine shader database.
+conventions. It contains only source identity metadata: UUID, display name,
+language, source path, stage membership, entry point, and `.shader` program
+path. Do not expand it with semantic contract, resource, stage-IO, draw-kind,
+or backend placement policy. The target direction is to delete this JSON
+manifest, not to make it the engine shader database.
 
 Built-in shaders must converge on the same runtime model as material-assembled
 shaders:
@@ -154,10 +156,10 @@ Slang/HLSL semantics. Texture-using post-process shaders should use generated
 layout metadata and bind resources by logical name when they are migrated to
 Slang.
 
-Legacy material fallback shaders may stay catalog-managed GLSL with
-`legacy_uniform` resources while they still run through the old material uniform
-path. The catalog owns their source location, but they are not Slang-ready until
-the material ABI moves to named resources/constant buffers.
+Legacy material fallback shaders may stay catalog-managed GLSL while they still
+run through the old material uniform path. The catalog owns only their source
+location; any semantic resource information must come from source/reflection or
+the owning shader provider.
 
 Runtime shader variants may use catalog-managed stage templates when only one
 stage is engine-authored and the other stage still comes from a material. These
@@ -166,8 +168,9 @@ and should not be registered as complete live shaders.
 
 Built-in `.shader` program entries are allowed when the current engine path
 still needs the material shader parser to synthesize `MaterialParams` GLSL.
-Exporters parse those program sources and package generated GLSL stage
-artifacts while keeping the program source path in the layout sidecar.
+Exporters parse those program sources and package generated stage artifacts.
+The generated artifact sidecars come from `termin_shaderc`, not from catalog
+program metadata.
 
 Live engine renderers and render passes should call the built-in catalog loader
 with only the stable shader UUID. Filenames, shader names, and stage shape
