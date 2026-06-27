@@ -160,7 +160,6 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
       "uuid": "test-catalog-fragment",
       "name": "TestCatalogFragmentFS",
       "language": "glsl",
-      "contract": {"draw_kind": "fullscreen"},
       "stages": {
         "fragment": {"path": "test-catalog-fragment.frag.glsl"}
       },
@@ -216,7 +215,6 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
       "uuid": "test-catalog-vsfs",
       "name": "TestCatalogVSFS",
       "language": "glsl",
-      "contract": {"draw_kind": "mesh"},
       "stages": {
         "vertex": {
           "path": "test-catalog.vert.glsl",
