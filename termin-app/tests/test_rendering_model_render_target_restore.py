@@ -261,7 +261,7 @@ def test_attach_scene_does_not_create_render_target_for_viewport(monkeypatch):
     )
     viewport.scene = scene
     manager.display_for_viewport = display
-    manager.attach_scene = lambda attached_scene: [viewport]
+    manager.attach_scene = lambda _attached_scene: [viewport]
 
     viewports = model.attach_scene(scene)
 

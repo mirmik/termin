@@ -50,14 +50,6 @@ def _rgba255_to_float3(rgba: tuple[int, int, int, int]) -> np.ndarray:
     return np.array([rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0], dtype=np.float32)
 
 
-def _rgba255_to_float4(rgba: tuple[int, int, int, int]) -> np.ndarray:
-    """Convert (R,G,B,A) 0-255 to float32 array [r,g,b,a]."""
-    return np.array(
-        [rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, rgba[3] / 255.0],
-        dtype=np.float32,
-    )
-
-
 def _make_color_button(color_rgba255: tuple[int, int, int, int]) -> Button:
     """Create a button showing current color as text."""
     btn = Button()

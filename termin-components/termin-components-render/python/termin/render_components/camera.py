@@ -32,7 +32,7 @@ class CameraController(InputComponent):
         if self.camera_component is None:
             raise RuntimeError("CameraController requires a CameraComponent on the same entity.")
 
-    def orbit(self, d_azimuth: float, d_elevation: float):
+    def orbit(self, _d_azimuth: float, _d_elevation: float):
         return
 
     def pan(self, dx: float, dy: float):

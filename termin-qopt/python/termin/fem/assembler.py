@@ -247,7 +247,7 @@ class Constraint:
         return np.zeros((self.get_n_holonomic(), H.shape[1]))
     
     def contribute_to_nonholonomic(self, N: np.ndarray,                                    
-                                     vars_index_map: Dict[Variable, List[int]],
+                                     _vars_index_map: Dict[Variable, List[int]],
                                      lambdas_index_map: Dict[Variable, List[int]]):
         """
         Добавить вклад в матрицу связей для неограниченных связей
@@ -875,8 +875,7 @@ class MatrixAssembler:
                 var.value = x[indices[0]]
     
     def solve_stiffness_problem(self, check_conditioning: bool = True, 
-                      use_least_squares: bool = False,
-                      use_constraints: bool = True) -> np.ndarray:
+                      use_least_squares: bool = False) -> np.ndarray:
         """
         Решить систему и сохранить результат в переменные
         
@@ -885,15 +884,10 @@ class MatrixAssembler:
         Args:
             check_conditioning: Проверить обусловленность матрицы
             use_least_squares: Использовать lstsq вместо solve
-            use_constraints: Использовать множители Лагранжа для связей
         
         Returns:
             x: Вектор решения (также сохранен в переменных)
         """
-        # x = self.solve(check_conditioning=check_conditioning, 
-        #                use_least_squares=use_least_squares,
-        #                use_constraints=use_constraints)
-
         K, b = self.assemble_stiffness_problem()
 
         x = self._solve_system(A=K, b=b, check_conditioning=check_conditioning,

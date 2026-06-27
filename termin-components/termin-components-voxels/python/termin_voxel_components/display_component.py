@@ -237,7 +237,7 @@ class VoxelDisplayComponent(DrawableComponent):
         mat = self._get_or_create_material()
         return {p.phase_mark for p in mat.phases}
 
-    def draw_geometry(self, context: "RenderContext", geometry_id: int = 0) -> None:
+    def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
         """Рисует геометрию вокселей."""
         # geometry_id игнорируется — у VoxelDisplayComponent одна геометрия
         # Проверяем hot-reload перед отрисовкой

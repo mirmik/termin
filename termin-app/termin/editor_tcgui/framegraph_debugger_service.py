@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import json
 import tempfile
 import time
 from collections.abc import Callable
@@ -566,7 +565,3 @@ def _pass_resource_set(
     except Exception as exc:
         return [], f"{type(exc).__name__}: {exc}"
     return _sorted_strings(values), None
-
-
-def pretty_json(data: object) -> str:
-    return json.dumps(data, indent=2, ensure_ascii=False)
