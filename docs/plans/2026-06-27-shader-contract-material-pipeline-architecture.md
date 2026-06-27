@@ -278,8 +278,8 @@ during `register_builtin_shader_from_catalog()`, but this must not grow
 The temporary catalog contract is inferred from the existing loader metadata:
 
 - `stages.vertex.inputs` declares required vertex input semantics;
-- existing layout metadata declares runtime resources by name, kind, scope, and
-  stage;
+- declarative `resources` entries declare runtime resources by name, kind,
+  scope, and optional semantic size/stride;
 - backend placement stays in the shader resource layout.
 
 This keeps runtime passes on the same `tc_shader -> tc_shader_contract` path for
@@ -352,15 +352,15 @@ must be explicit:
   inferred vertex inputs and requirements derived from `ShaderPhase` /
   `MaterialUboLayout`, not by reading the shader's current resource layout.
 - Catalog-registered built-in shaders attach a transitional engine-generated
-  contract inferred from current loader metadata. Do not add new contract fields
-  to `engine-shader-catalog.json`.
+  contract inferred directly from current loader declarations, not by reading
+  the shader's current resource layout. Do not add new contract fields to
+  `engine-shader-catalog.json`.
 - `tc_shader_set_resource_layout()` does not update `tc_shader_contract`.
   Contract producers must attach semantic requirements explicitly. The render
   validator compares those requirements against the sibling resource layout.
-- Some transitional producers still derive contract requirements from current
-  layout metadata at attachment time. That is allowed only as producer-local
-  migration code; it must not become core `tc_shader` behavior. The material
-  parser has been moved off that path.
+- Remaining transitional producers must not derive contract requirements from
+  current layout metadata at attachment time. Contract producers attach semantic
+  requirements explicitly; layout remains the sibling backend placement view.
 
 ## Validation
 
