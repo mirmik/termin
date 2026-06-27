@@ -4,6 +4,7 @@ GUARD_TEST_MAIN();
 
 #include "termin/materials/shader_parser.hpp"
 #include "tgfx2/builtin_shader_sources.hpp"
+#include "tgfx2/tc_shader_bridge.hpp"
 
 #include <array>
 #include <cstdlib>
@@ -12,6 +13,7 @@ GUARD_TEST_MAIN();
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 extern "C" {
 #include <tgfx/resources/tc_shader_registry.h>
@@ -42,30 +44,6 @@ void write_text(const std::filesystem::path& path, const char* text) {
     out << text;
 }
 
-bool contract_has_vertex_input(
-    const tc_shader_contract_view& contract,
-    const char* semantic)
-{
-    for (uint32_t i = 0; i < contract.vertex_input_count; ++i) {
-        if (std::strcmp(contract.vertex_inputs[i].semantic, semantic) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool contract_has_resource(
-    const tc_shader_contract_view& contract,
-    const char* name)
-{
-    for (uint32_t i = 0; i < contract.resource_count; ++i) {
-        if (std::strcmp(contract.resources[i].name, name) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-
 const tc_shader_resource_requirement* contract_resource(
     const tc_shader_contract_view& contract,
     const char* name)
@@ -76,6 +54,19 @@ const tc_shader_resource_requirement* contract_resource(
         }
     }
     return nullptr;
+}
+
+void check_contract_resource(
+    const tc_shader_contract_view& contract,
+    const char* name,
+    uint32_t kind,
+    uint32_t scope)
+{
+    const tc_shader_resource_requirement* resource =
+        contract_resource(contract, name);
+    REQUIRE(resource != nullptr);
+    CHECK(resource->kind == kind);
+    CHECK(resource->scope == scope);
 }
 
 } // namespace
@@ -201,9 +192,8 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
     CHECK(std::strcmp(shader->name, "TestCatalogFragmentFS") == 0);
 
     tc_shader_contract_view contract{};
-    REQUIRE(tc_shader_get_contract_view(shader, &contract));
-    CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_GENERATED);
-    CHECK(contract.vertex_input_count == 0);
+    CHECK(!tc_shader_get_contract_view(shader, &contract));
+    CHECK(!tc_shader_has_resource_layout(shader));
 
     tc_shader_shutdown();
     clear_builtin_root();
@@ -268,28 +258,132 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
     CHECK(std::strcmp(shader->name, "TestCatalogVSFS") == 0);
 
     tc_shader_contract_view contract{};
-    REQUIRE(tc_shader_get_contract_view(shader, &contract));
-    CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_GENERATED);
-    CHECK(contract_has_vertex_input(contract, "position"));
-    const tc_shader_resource_requirement* per_frame =
-        contract_resource(contract, "per_frame");
-    REQUIRE(per_frame != nullptr);
-    CHECK(per_frame->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER);
-    CHECK(per_frame->scope == TC_SHADER_RESOURCE_SCOPE_FRAME);
-    CHECK(per_frame->stage_mask == TC_SHADER_STAGE_ALL_GRAPHICS);
-    CHECK(per_frame->size == 64);
-
-    REQUIRE(tc_shader_find_resource_binding(shader, "per_frame") != nullptr);
-    tc_shader_set_resource_layout(shader, nullptr, 0);
-    CHECK(tc_shader_find_resource_binding(shader, "per_frame") == nullptr);
-
-    tc_shader_contract_view after_layout_clear{};
-    REQUIRE(tc_shader_get_contract_view(shader, &after_layout_clear));
-    per_frame = contract_resource(after_layout_clear, "per_frame");
-    REQUIRE(per_frame != nullptr);
-    CHECK(per_frame->size == 64);
+    CHECK(!tc_shader_get_contract_view(shader, &contract));
+    CHECK(!tc_shader_has_resource_layout(shader));
 
     tc_shader_shutdown();
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}
+
+TEST_CASE("shader layout sidecar attaches reflected shader contract") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-sidecar-contract-test-" + std::to_string(unique));
+    const std::filesystem::path artifact_root = root / "artifacts";
+    std::filesystem::remove_all(root);
+
+    write_text(
+        root / "engine-shader-catalog.json",
+        R"({
+  "version": 1,
+  "shaders": [
+    {
+      "uuid": "test-sidecar-fragment",
+      "name": "TestSidecarFragmentFS",
+      "language": "slang",
+      "stages": {
+        "fragment": {
+          "path": "test-sidecar-fragment.frag.slang",
+          "entry": "fs_main"
+        }
+      }
+    }
+  ]
+})");
+    write_text(
+        root / "test-sidecar-fragment.frag.slang",
+        "// TEST_SIDECAR_FRAGMENT_MARKER\n"
+        "struct In { float2 uv : TEXCOORD0; };\n"
+        "[shader(\"fragment\")] float4 fs_main(In input) : SV_Target0 { return float4(input.uv, 0.0, 1.0); }\n");
+
+    const std::filesystem::path artifact =
+        artifact_root / "shaders" / "opengl" / "test-sidecar-fragment.frag.glsl";
+    write_text(
+        artifact,
+        "#version 450 core\n"
+        "// TEST_SIDECAR_ARTIFACT_MARKER\n");
+    write_text(
+        std::filesystem::path(artifact.string() + ".layout.json"),
+        R"({
+  "version": 1,
+  "language": "slang",
+  "target": "opengl",
+  "stage": "fragment",
+  "resources": [
+    {
+      "name": "u_params",
+      "kind": "constant_buffer",
+      "scope": "unscoped",
+      "set": 0,
+      "binding": 0,
+      "stage_mask": 2,
+      "size": 16,
+      "fields": [
+        {"name": "threshold", "type": "Float", "offset": 0, "size": 4}
+      ]
+    },
+    {
+      "name": "u_texture",
+      "kind": "texture",
+      "scope": "transient",
+      "set": 0,
+      "binding": 32,
+      "stage_mask": 2,
+      "size": 0
+    }
+  ]
+})");
+
+    set_builtin_root(root);
+    termin::tgfx2_set_shader_artifact_root(artifact_root.string().c_str());
+    termin::tgfx2_set_shader_dev_compile_enabled(false);
+    tc_shader_init();
+
+    tc_shader_handle handle =
+        tgfx::register_builtin_shader_from_catalog("test-sidecar-fragment");
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+
+    tc_shader_contract_view before{};
+    CHECK(!tc_shader_get_contract_view(shader, &before));
+    CHECK(!tc_shader_has_resource_layout(shader));
+
+    std::vector<uint8_t> artifact_bytes;
+    REQUIRE(termin::tgfx2_load_or_compile_shader_artifact_for_backend(
+        shader,
+        tgfx::BackendType::OpenGL,
+        tgfx::ShaderStage::Fragment,
+        artifact_bytes));
+    REQUIRE(!artifact_bytes.empty());
+    CHECK(tc_shader_has_resource_layout(shader));
+
+    tc_shader_contract_view contract{};
+    REQUIRE(tc_shader_get_contract_view(shader, &contract));
+    CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_REFLECTION);
+    CHECK(contract.vertex_input_count == 0);
+    check_contract_resource(
+        contract,
+        "u_params",
+        TC_SHADER_RESOURCE_CONSTANT_BUFFER,
+        TC_SHADER_RESOURCE_SCOPE_UNSCOPED);
+    const tc_shader_resource_requirement* params =
+        contract_resource(contract, "u_params");
+    REQUIRE(params != nullptr);
+    CHECK(params->size == 16);
+    REQUIRE(params->field_count == 1);
+    CHECK(std::strcmp(params->fields[0].name, "threshold") == 0);
+    check_contract_resource(
+        contract,
+        "u_texture",
+        TC_SHADER_RESOURCE_TEXTURE,
+        TC_SHADER_RESOURCE_SCOPE_TRANSIENT);
+    REQUIRE(tc_shader_find_resource_binding(shader, "u_texture") != nullptr);
+
+    tc_shader_shutdown();
+    termin::tgfx2_set_shader_artifact_root("");
     clear_builtin_root();
     std::filesystem::remove_all(root);
 }
@@ -374,11 +468,8 @@ TEST_CASE("typed engine shader descriptors register without catalog manifest") {
     REQUIRE(shadow->fragment_source != nullptr);
     CHECK(std::strstr(shadow->vertex_source, "TYPED_SHADOW_MARKER") != nullptr);
     tc_shader_contract_view shadow_contract{};
-    REQUIRE(tc_shader_get_contract_view(shadow, &shadow_contract));
-    CHECK(contract_has_vertex_input(shadow_contract, "position"));
-    CHECK(contract_resource(shadow_contract, "per_frame") != nullptr);
-    CHECK(contract_resource(shadow_contract, "shadow_draw") != nullptr);
-    REQUIRE(tc_shader_find_resource_binding(shadow, "shadow_draw") != nullptr);
+    CHECK(!tc_shader_get_contract_view(shadow, &shadow_contract));
+    CHECK(!tc_shader_has_resource_layout(shadow));
 
     tc_shader_handle tonemap_handle =
         tgfx::register_builtin_shader_from_catalog("termin-engine-tonemap");
@@ -389,14 +480,8 @@ TEST_CASE("typed engine shader descriptors register without catalog manifest") {
     REQUIRE(tonemap->fragment_source != nullptr);
     CHECK(std::strstr(tonemap->fragment_source, "TYPED_TONEMAP_MARKER") != nullptr);
     tc_shader_contract_view tonemap_contract{};
-    REQUIRE(tc_shader_get_contract_view(tonemap, &tonemap_contract));
-    CHECK(tonemap_contract.vertex_input_count == 0);
-    const tc_shader_resource_requirement* u_input =
-        contract_resource(tonemap_contract, "u_input");
-    REQUIRE(u_input != nullptr);
-    CHECK(u_input->kind == TC_SHADER_RESOURCE_TEXTURE);
-    CHECK(u_input->scope == TC_SHADER_RESOURCE_SCOPE_TRANSIENT);
-    REQUIRE(tc_shader_find_resource_binding(tonemap, "u_input") != nullptr);
+    CHECK(!tc_shader_get_contract_view(tonemap, &tonemap_contract));
+    CHECK(!tc_shader_has_resource_layout(tonemap));
 
     std::string tonemap_fragment =
         tgfx::load_builtin_shader_stage_source_from_catalog("termin-engine-tonemap", "fragment");
@@ -479,18 +564,8 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         CHECK((shader->fragment_source != nullptr) == expected.has_fragment);
 
         tc_shader_contract_view contract{};
-        REQUIRE(tc_shader_get_contract_view(shader, &contract));
-        CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_GENERATED);
-        if (!expected.has_vertex && expected.has_fragment) {
-            CHECK(contract.vertex_input_count == 0);
-        }
-        if (std::strcmp(expected.uuid, "termin-engine-shadow") == 0) {
-            CHECK(contract_has_vertex_input(contract, "position"));
-            CHECK(contract_has_resource(contract, "shadow_draw"));
-        }
-        if (std::strcmp(expected.uuid, "termin-engine-tonemap") == 0) {
-            CHECK(contract_has_resource(contract, "u_input"));
-        }
+        CHECK(!tc_shader_get_contract_view(shader, &contract));
+        CHECK(!tc_shader_has_resource_layout(shader));
     }
 
     tgfx::BuiltinShaderProgramSource skybox =

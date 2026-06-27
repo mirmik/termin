@@ -79,14 +79,15 @@ magic resource names.
 
 - `termin-graphics/tools/termin_shaderc.cpp::normalize_scope_first_binding_slots()`
   назначает binding slots по именам `per_frame`, `lighting`, `shadow_block`,
-  `material`, `bone_block`, `shadow_maps`;
-- `termin-graphics/src/tgfx2/builtin_shader_sources.cpp::binding_slot_for_catalog_resource()`
-  повторяет похожую таблицу для built-in shader catalog path.
+  `material`, `bone_block`, `shadow_maps`.
 
-Это создает два источника истины:
+Исторически похожая таблица существовала и в runtime built-in catalog path, но
+этот путь удален: built-in registry больше не хранит resources/layout/contract,
+а runtime берет layout из artifact-adjacent sidecar.
+
+Оставшийся источник истины:
 
 1. artifact/layout sidecar, сгенерированный `termin_shaderc`;
-2. runtime built-in catalog path, который сам заново назначает slots.
 
 Проблема не в самих canonical names. Имена вроде `per_frame` или `material`
 полезны как human-readable ABI. Проблема в том, что name-based inference
