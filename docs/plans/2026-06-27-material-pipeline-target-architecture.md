@@ -663,8 +663,8 @@ Tests:
 
 - no migrated Slang path depends on parser-authored fixed GLSL bindings;
 - no pass/component code hardcodes backend binding numbers for material draws;
-- shader compilation path does not infer scope from magic resource names except
-  in explicitly legacy tests.
+- shader compilation path does not infer scope or placement from magic resource
+  names for migrated Slang paths.
 
 ## Validation Gates
 
