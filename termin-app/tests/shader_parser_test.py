@@ -479,6 +479,34 @@ def test_slang_material_layout_sets_shader_contract_before_sidecar_reflection():
         resource["name"]
         for resource in contract["resources"]
     }
+    material_requirement = next(
+        resource
+        for resource in contract["resources"]
+        if resource["name"] == "material"
+    )
+    assert material_requirement["kind_name"] == "constant_buffer"
+    assert material_requirement["scope_name"] == "material"
+    assert material_requirement["size"] == 16
+    assert material_requirement["fields"] == [
+        {"name": "tint", "type": "Color", "offset": 0, "size": 16}
+    ]
+
+    shader.set_resource_layout([])
+    assert shader.find_resource_binding("material") is None
+    contract_after_layout_clear = shader.contract
+    assert {
+        resource["name"]
+        for resource in contract_after_layout_clear["resources"]
+    } == {
+        resource["name"]
+        for resource in contract["resources"]
+    }
+    material_after_layout_clear = next(
+        resource
+        for resource in contract_after_layout_clear["resources"]
+        if resource["name"] == "material"
+    )
+    assert material_after_layout_clear["fields"] == material_requirement["fields"]
 
 
 def test_parse_shader_text_rejects_explicit_glsl_shader():
