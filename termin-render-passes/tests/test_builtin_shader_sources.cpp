@@ -42,6 +42,30 @@ void write_text(const std::filesystem::path& path, const char* text) {
     out << text;
 }
 
+bool contract_has_vertex_input(
+    const tc_shader_contract_view& contract,
+    const char* semantic)
+{
+    for (uint32_t i = 0; i < contract.vertex_input_count; ++i) {
+        if (std::strcmp(contract.vertex_inputs[i].semantic, semantic) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool contract_has_resource(
+    const tc_shader_contract_view& contract,
+    const char* name)
+{
+    for (uint32_t i = 0; i < contract.resource_count; ++i) {
+        if (std::strcmp(contract.resources[i].name, name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 TEST_CASE("built-in fragment shader registration reads source file from resource root") {
@@ -136,6 +160,7 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
       "uuid": "test-catalog-fragment",
       "name": "TestCatalogFragmentFS",
       "language": "glsl",
+      "contract": {"draw_kind": "fullscreen"},
       "stages": {
         "fragment": {"path": "test-catalog-fragment.frag.glsl"}
       },
@@ -164,6 +189,12 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
     CHECK(std::strstr(shader->fragment_source, "TEST_CATALOG_FRAGMENT_MARKER") != nullptr);
     CHECK(std::strcmp(shader->name, "TestCatalogFragmentFS") == 0);
 
+    tc_shader_contract_view contract{};
+    REQUIRE(tc_shader_get_contract_view(shader, &contract));
+    CHECK(contract.producer_kind == TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED);
+    CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_FULLSCREEN);
+    CHECK(contract.vertex_input_count == 0);
+
     tc_shader_shutdown();
     clear_builtin_root();
     std::filesystem::remove_all(root);
@@ -185,11 +216,19 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
       "uuid": "test-catalog-vsfs",
       "name": "TestCatalogVSFS",
       "language": "glsl",
+      "contract": {"draw_kind": "mesh"},
       "stages": {
-        "vertex": {"path": "test-catalog.vert.glsl"},
+        "vertex": {
+          "path": "test-catalog.vert.glsl",
+          "inputs": [
+            {"name": "a_position", "semantic": "POSITION", "location": 0}
+          ]
+        },
         "fragment": {"path": "test-catalog.frag.glsl"}
       },
-      "resources": []
+      "resources": [
+        {"name": "per_frame", "kind": "constant_buffer", "scope": "frame"}
+      ]
     }
   ]
 })");
@@ -218,6 +257,13 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
     CHECK(std::strstr(shader->vertex_source, "TEST_CATALOG_VERTEX_MARKER") != nullptr);
     CHECK(std::strstr(shader->fragment_source, "TEST_CATALOG_FRAGMENT_MARKER") != nullptr);
     CHECK(std::strcmp(shader->name, "TestCatalogVSFS") == 0);
+
+    tc_shader_contract_view contract{};
+    REQUIRE(tc_shader_get_contract_view(shader, &contract));
+    CHECK(contract.producer_kind == TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED);
+    CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_MESH);
+    CHECK(contract_has_vertex_input(contract, "position"));
+    CHECK(contract_has_resource(contract, "per_frame"));
 
     tc_shader_shutdown();
     clear_builtin_root();
@@ -332,6 +378,23 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
         CHECK(std::strcmp(shader->name, expected.name) == 0);
         CHECK((shader->vertex_source != nullptr) == expected.has_vertex);
         CHECK((shader->fragment_source != nullptr) == expected.has_fragment);
+
+        tc_shader_contract_view contract{};
+        REQUIRE(tc_shader_get_contract_view(shader, &contract));
+        CHECK(contract.producer_kind == TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED);
+        if (!expected.has_vertex && expected.has_fragment) {
+            CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_FULLSCREEN);
+            CHECK(contract.vertex_input_count == 0);
+        }
+        if (std::strcmp(expected.uuid, "termin-engine-shadow") == 0) {
+            CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_MESH);
+            CHECK(contract_has_vertex_input(contract, "position"));
+            CHECK(contract_has_resource(contract, "shadow_draw"));
+        }
+        if (std::strcmp(expected.uuid, "termin-engine-tonemap") == 0) {
+            CHECK(contract.draw_kind == TC_SHADER_CONTRACT_DRAW_FULLSCREEN);
+            CHECK(contract_has_resource(contract, "u_input"));
+        }
     }
 
     tgfx::BuiltinShaderProgramSource skybox =
