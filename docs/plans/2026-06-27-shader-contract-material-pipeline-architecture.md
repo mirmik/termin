@@ -269,26 +269,48 @@ backend placement out of the semantic resource contract.
 
 ## Built-In Shader Contracts
 
-Typed engine shader descriptors are the target source of built-in shader
-identity, source-stage membership, entry points, and generic contract
-requirements. `engine-shader-catalog.json` remains a transitional fallback source
-loader for entries that have not yet moved to typed/generated descriptors. It is
-not a target contract database and must not grow new contract or placement
-policy.
+Built-in shader source registries are not target contract databases. They may
+map a stable shader UUID to source path, stage membership, language, and entry
+points. They must not describe semantic resources, stage IO requirements,
+draw-kind policy, or backend placement.
 
-Typed descriptors and the remaining temporary catalog path provide the same
-contract shape:
+`engine-shader-catalog.json` remains a transitional source loader for entries
+that have not moved to a smaller source registry. `engine_shader_catalog.cpp`
+may contain minimal direct-runtime source descriptors for shaders that must be
+available without loading the JSON manifest. Neither path is allowed to become
+a hand-written resource/contract database.
 
-- stage inputs declare required vertex input semantics;
-- declarative `resources` entries declare runtime resources by name, kind,
-  scope, and optional semantic size/stride;
-- backend placement stays in the shader resource layout.
+Built-in shader contracts are produced from the same compiled metadata as the
+runtime resource layout:
+
+- `termin_shaderc` compiles the shader and writes a `.layout.json` sidecar;
+- the sidecar declares reflected resources by name, kind, scope, stage mask,
+  size/fields, and backend placement;
+- runtime loads the sidecar into `tc_shader_resource_layout`;
+- if the shader has no stronger producer-owned contract, runtime attaches a
+  generic reflection-derived `tc_shader_contract` from that layout.
+
+Vertex input contracts are not stored in built-in source registries. Material
+pipeline shaders keep their pass/vertex-transform contracts in `termin-render`;
+plain built-ins need vertex input contract data only after shader compiler
+metadata grows a real reflected input sidecar.
 
 This keeps runtime passes on the same `tc_shader -> tc_shader_contract` path for
 material pipeline shaders and engine built-ins. Draw mode is owned by the pass
 using the shader, not by the built-in shader contract. The target direction is
-to delete the manifest once built-in shader identity/contract ownership has
-moved into typed/generated descriptors or reflection-derived sources.
+to delete the manifest once built-in shader source identity can be resolved from
+minimal source descriptors or source conventions, and contract ownership has
+moved into reflection-derived compiler sidecars.
+
+Current direct source descriptor coverage:
+
+- fullscreen quad vertex stage (`termin-engine-fsq`);
+- shadow vertex/fragment program (`termin-engine-shadow`);
+- tonemap fullscreen fragment program (`termin-engine-tonemap`).
+
+These entries are expected to register without `engine-shader-catalog.json`
+being present in the selected built-in shader root. They do not expose resource
+contracts until compiled layout sidecars are loaded.
 
 ## Legacy Policy
 
@@ -331,6 +353,10 @@ must be explicit:
     against resolved layout entries.
 13. Done: remove `tc_shader_set_resource_layout()` back-propagation into
     `tc_shader_contract`. Layout updates no longer mutate contract resources.
+14. In progress: shrink built-in shader source metadata toward minimal
+    UUID/path/stage/entry descriptors. Resource contracts and backend placement
+    now come from shader compiler layout sidecars instead of catalog or typed
+    descriptor resource lists.
 
 ## Implementation Notes
 
@@ -352,16 +378,17 @@ must be explicit:
 - Parser-created material shaders attach a generic declared-source contract with
   inferred vertex inputs and requirements derived from `ShaderPhase` /
   `MaterialUboLayout`, not by reading the shader's current resource layout.
-- Built-in shaders attach engine-generated contracts inferred directly from
-  typed descriptors where available, otherwise from transitional catalog
-  declarations. They do not read the shader's current resource layout. Do not
-  add new contract fields to `engine-shader-catalog.json`.
+- Built-in source registration does not attach resource contracts or resource
+  layouts from `engine-shader-catalog.json` or typed C++ descriptors. After
+  shader artifact/layout load, tgfx2 attaches a generic reflection-derived
+  contract from the compiler sidecar if the shader does not already have a
+  stronger producer-owned contract.
 - `tc_shader_set_resource_layout()` does not update `tc_shader_contract`.
   Contract producers must attach semantic requirements explicitly. The render
   validator compares those requirements against the sibling resource layout.
-- Remaining transitional producers must not derive contract requirements from
-  current layout metadata at attachment time. Contract producers attach semantic
-  requirements explicitly; layout remains the sibling backend placement view.
+- Generic reflection contracts are attached only when loading compiler sidecars.
+  Other contract producers attach semantic requirements explicitly; layout
+  remains the sibling backend placement view.
 
 ## Validation
 
@@ -376,7 +403,11 @@ Required tests:
   instance storage.
 - Done: shadow/depth/id contracts request compact vertex inputs.
 - Done: parser-created static material shaders expose shader parser contracts.
-- Done: catalog-registered built-in shaders expose engine-generated contracts.
+- Done: catalog-registered built-in source registration no longer manufactures
+  contracts or resource layouts from catalog data.
+- Done: direct engine source descriptors register selected built-in shaders
+  without a catalog manifest while keeping resources out of C++ descriptors.
+- Done: shader layout sidecars attach reflection-derived shader contracts.
 - Done: legacy shader without contract takes only explicit legacy fallback path.
 - Done: render-side validation rejects missing required contracts and
   contract/layout resource mismatches.
