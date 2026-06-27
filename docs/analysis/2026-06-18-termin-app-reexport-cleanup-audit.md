@@ -246,12 +246,10 @@ Resolved in this cleanup pass:
   `termin.visualization.core.render_target_config` were removed. Python
   consumers import config classes and serializers from `termin.render`.
 
-Still deferred:
-- `termin.visualization.core.scene` owns app-specific scene extension helpers
-  such as `create_scene`, `scene_render_mount`, and `default_scene_extensions`;
-  these need a canonical owner before removal.
-- Real editor/debug/framegraph/material/platform modules under
-  `termin.visualization.*` still need ownership decisions or extraction.
+Status 2026-06-27: the live `termin.visualization.*` namespace was removed from
+runtime code, examples, and dependency graph tooling. Historical references in
+this document describe the removed compatibility surface; new runtime/examples
+references are guarded by `test_removed_visualization_namespace_is_not_used_by_live_code`.
 
 ## Loader Shims
 

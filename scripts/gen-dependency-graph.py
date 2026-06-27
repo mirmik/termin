@@ -110,8 +110,6 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.physics_fem": "termin-physics-fem",
     "termin.physics": "termin-physics",
     "termin.physics_components": "termin-components-physics",
-    "termin.visualization.core": "termin-scene",
-    "termin.visualization.components": "termin-components-mesh",
     # "termin.entity" был удалён — ECS API мигрирован в termin.scene
     "termin.scene": "termin-scene",
     "termin.inspect": "termin-inspect",
