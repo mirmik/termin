@@ -332,6 +332,81 @@ TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("typed engine shader descriptors register without catalog manifest") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-typed-engine-shader-test-" + std::to_string(unique));
+    std::filesystem::remove_all(root);
+
+    write_text(
+        root / "termin-engine-fsq.vert.slang",
+        "// TYPED_FSQ_MARKER\n"
+        "struct In { float3 position : POSITION; float2 uv : TEXCOORD0; };\n"
+        "struct Out { float4 position : SV_Position; float2 uv : TEXCOORD0; };\n"
+        "[shader(\"vertex\")] Out vs_main(In input) { Out output; output.position = float4(input.position, 1.0); output.uv = input.uv; return output; }\n");
+    write_text(
+        root / "termin-engine-shadow.slang",
+        "// TYPED_SHADOW_MARKER\n"
+        "struct In { float3 position : POSITION; };\n"
+        "struct Out { float4 position : SV_Position; };\n"
+        "[shader(\"vertex\")] Out vs_main(In input) { Out output; output.position = float4(input.position, 1.0); return output; }\n"
+        "[shader(\"fragment\")] void fs_main() {}\n");
+    write_text(
+        root / "termin-engine-tonemap.frag.slang",
+        "// TYPED_TONEMAP_MARKER\n"
+        "struct In { float2 uv : TEXCOORD0; };\n"
+        "[shader(\"fragment\")] float4 fs_main(In input) : SV_Target0 { return float4(input.uv, 0.0, 1.0); }\n");
+
+    set_builtin_root(root);
+    tc_shader_init();
+
+    std::string fsq_vertex =
+        tgfx::load_builtin_shader_stage_source_from_catalog("termin-engine-fsq", "vertex");
+    CHECK(fsq_vertex.find("TYPED_FSQ_MARKER") != std::string::npos);
+
+    tc_shader_handle shadow_handle =
+        tgfx::register_builtin_shader_from_catalog("termin-engine-shadow");
+    REQUIRE(!tc_shader_handle_is_invalid(shadow_handle));
+    tc_shader* shadow = tc_shader_get(shadow_handle);
+    REQUIRE(shadow != nullptr);
+    REQUIRE(shadow->vertex_source != nullptr);
+    REQUIRE(shadow->fragment_source != nullptr);
+    CHECK(std::strstr(shadow->vertex_source, "TYPED_SHADOW_MARKER") != nullptr);
+    tc_shader_contract_view shadow_contract{};
+    REQUIRE(tc_shader_get_contract_view(shadow, &shadow_contract));
+    CHECK(contract_has_vertex_input(shadow_contract, "position"));
+    CHECK(contract_resource(shadow_contract, "per_frame") != nullptr);
+    CHECK(contract_resource(shadow_contract, "shadow_draw") != nullptr);
+    REQUIRE(tc_shader_find_resource_binding(shadow, "shadow_draw") != nullptr);
+
+    tc_shader_handle tonemap_handle =
+        tgfx::register_builtin_shader_from_catalog("termin-engine-tonemap");
+    REQUIRE(!tc_shader_handle_is_invalid(tonemap_handle));
+    tc_shader* tonemap = tc_shader_get(tonemap_handle);
+    REQUIRE(tonemap != nullptr);
+    CHECK(tonemap->vertex_source == nullptr);
+    REQUIRE(tonemap->fragment_source != nullptr);
+    CHECK(std::strstr(tonemap->fragment_source, "TYPED_TONEMAP_MARKER") != nullptr);
+    tc_shader_contract_view tonemap_contract{};
+    REQUIRE(tc_shader_get_contract_view(tonemap, &tonemap_contract));
+    CHECK(tonemap_contract.vertex_input_count == 0);
+    const tc_shader_resource_requirement* u_input =
+        contract_resource(tonemap_contract, "u_input");
+    REQUIRE(u_input != nullptr);
+    CHECK(u_input->kind == TC_SHADER_RESOURCE_TEXTURE);
+    CHECK(u_input->scope == TC_SHADER_RESOURCE_SCOPE_TRANSIENT);
+    REQUIRE(tc_shader_find_resource_binding(tonemap, "u_input") != nullptr);
+
+    std::string tonemap_fragment =
+        tgfx::load_builtin_shader_stage_source_from_catalog("termin-engine-tonemap", "fragment");
+    CHECK(tonemap_fragment.find("TYPED_TONEMAP_MARKER") != std::string::npos);
+
+    tc_shader_shutdown();
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("built-in shader catalog resolves migrated live engine shaders from canonical resources") {
     clear_builtin_root();
     tc_shader_init();
