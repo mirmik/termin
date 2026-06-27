@@ -367,6 +367,10 @@ must be explicit:
     `tc_shader` storage error. `tc_shader` stores backend-dependent resource
     layout metadata; Vulkan/OpenGL/D3D11 placement conflicts are validated by
     `build_backend_binding_plan()` for the selected backend.
+17. Done: shrink `engine-shader-catalog.json` to source identity metadata only.
+    The runtime package exporter no longer writes `shaders/layout/<uuid>`
+    metadata from catalog `resources`; packaged shader layouts come from
+    per-artifact compiler sidecars.
 
 ## Implementation Notes
 
@@ -405,6 +409,8 @@ must be explicit:
 - Built-in fullscreen/pass parameter buffers such as `u_params` declare explicit
   `pass` scope in source instead of relying on compiler warnings or unscoped
   sidecar entries.
+- `engine-shader-catalog.json` no longer contains `resources`, `inputs`, or
+  `outputs`; it is a temporary UUID-to-source index, not a contract database.
 
 ## Validation
 
@@ -430,6 +436,8 @@ Required tests:
 - Done: resource layout updates do not rewrite existing contract resources.
 - Done: parser-created material shaders build contract resources from parsed
   semantic data instead of resolved layout entries.
+- Done: runtime package default engine shader tests read compiler sidecar
+  layouts next to artifacts, not catalog-derived aggregate layouts.
 
 ## Non-Goals
 

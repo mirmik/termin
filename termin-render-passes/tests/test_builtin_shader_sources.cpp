@@ -165,8 +165,7 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
       "language": "glsl",
       "stages": {
         "fragment": {"path": "test-catalog-fragment.frag.glsl"}
-      },
-      "resources": []
+      }
     }
   ]
 })");
@@ -218,16 +217,10 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
       "language": "glsl",
       "stages": {
         "vertex": {
-          "path": "test-catalog.vert.glsl",
-          "inputs": [
-            {"name": "a_position", "semantic": "POSITION", "location": 0}
-          ]
+          "path": "test-catalog.vert.glsl"
         },
         "fragment": {"path": "test-catalog.frag.glsl"}
-      },
-      "resources": [
-        {"name": "per_frame", "kind": "constant_buffer", "scope": "frame", "size": 64}
-      ]
+      }
     }
   ]
 })");
@@ -404,8 +397,7 @@ TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
       "uuid": "test-catalog-program",
       "name": "TestCatalogProgram",
       "language": "shader",
-      "program": {"path": "test-catalog-program.shader"},
-      "resources": []
+      "program": {"path": "test-catalog-program.shader"}
     }
   ]
 })");
@@ -492,7 +484,7 @@ TEST_CASE("typed engine shader descriptors register without catalog manifest") {
     std::filesystem::remove_all(root);
 }
 
-TEST_CASE("built-in shader catalog resolves migrated live engine shaders from canonical resources") {
+TEST_CASE("built-in shader catalog resolves migrated live engine shaders from canonical sources") {
     clear_builtin_root();
     tc_shader_init();
 
