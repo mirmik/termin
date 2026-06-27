@@ -33,7 +33,7 @@ class RenderingControllerTcgui:
     def __init__(
         self,
         viewport_list_widget,
-        offscreen_context: "OffscreenContext",
+        offscreen_context: OffscreenContext,
         ctx: "Tgfx2Context",
         get_scene: Callable[[], "Scene | None"] | None = None,
         make_editor_pipeline: Callable[[], "RenderPipeline"] | None = None,
@@ -107,7 +107,7 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
 
     @property
-    def offscreen_context(self) -> "OffscreenContext":
+    def offscreen_context(self) -> OffscreenContext:
         return self._offscreen_context
 
     def backend_name(self) -> str:

@@ -305,7 +305,7 @@ void main() {
     GEOMETRY_MESH = 1
     GEOMETRY_CONTOURS = 2
 
-    def draw_geometry(self, context: "RenderContext", geometry_id: int = 0) -> None:
+    def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
         """Рисует геометрию NavMesh."""
         self._check_hot_reload()
 

@@ -99,7 +99,7 @@ class NavMeshMaterialComponent(DrawableComponent):
                 marks.add(phase.phase_mark)
         return marks
 
-    def draw_geometry(self, context: "RenderContext", geometry_id: int = 0) -> None:
+    def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
         """Draw NavMesh geometry."""
         self._check_hot_reload()
 

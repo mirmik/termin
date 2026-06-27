@@ -321,16 +321,6 @@ def _normalize_default_shader_language(language: str) -> str:
     raise ValueError(f"Unsupported default shader language: {language}")
 
 
-def _stdlib_shader_text(*relative_path: str) -> str:
-    path = (
-        Path(__file__).resolve().parents[1]
-        / "resources"
-        / "stdlib"
-        / Path(*relative_path)
-    )
-    return path.read_text(encoding="utf-8")
-
-
 def _resolve_entry_scene(project_root: Path, entry_scene: Path) -> Path:
     scene_path = entry_scene
     if not scene_path.is_absolute():

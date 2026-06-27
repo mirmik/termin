@@ -300,15 +300,15 @@ class Gizmo(ABC):
         """
         ...
 
-    def on_hover_enter(self, collider_id: Any) -> None:
+    def on_hover_enter(self, _collider_id: Any) -> None:
         """Called when mouse starts hovering over a collider."""
         return None
 
-    def on_hover_exit(self, collider_id: Any) -> None:
+    def on_hover_exit(self, _collider_id: Any) -> None:
         """Called when mouse stops hovering over a collider."""
         return None
 
-    def on_click(self, collider_id: Any, hit_position: np.ndarray | None) -> None:
+    def on_click(self, _collider_id: Any, _hit_position: np.ndarray | None) -> None:
         """
         Called when a collider is clicked (mouse down).
 
@@ -318,7 +318,7 @@ class Gizmo(ABC):
         """
         return None
 
-    def on_drag(self, collider_id: Any, position: np.ndarray, delta: np.ndarray) -> None:
+    def on_drag(self, _collider_id: Any, position: np.ndarray, delta: np.ndarray) -> None:
         """
         Called during drag with projected position.
 
@@ -329,7 +329,7 @@ class Gizmo(ABC):
         """
         return None
 
-    def on_release(self, collider_id: Any) -> None:
+    def on_release(self, _collider_id: Any) -> None:
         """Called when drag ends (mouse up)."""
         return None
 

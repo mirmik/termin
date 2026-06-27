@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from termin.default_assets.resource_api import DefaultAssetsResourceApiMixin
 
 
-def register_builtin_shaders(rm: "DefaultAssetsResourceApiMixin") -> None:
+def register_builtin_shaders(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register all built-in shaders.
 
     Material shaders are loaded from stdlib assets, not synthesized here.
@@ -18,7 +18,7 @@ def register_builtin_shaders(rm: "DefaultAssetsResourceApiMixin") -> None:
     return
 
 
-def register_builtin_textures(rm: "DefaultAssetsResourceApiMixin") -> None:
+def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register built-in placeholder textures."""
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin.render.texture import get_normal_texture, get_white_texture
@@ -46,7 +46,7 @@ def register_builtin_textures(rm: "DefaultAssetsResourceApiMixin") -> None:
             rm.register_texture_asset("__normal_1x1__", normal_asset, uuid=normal_texture.uuid)
 
 
-def register_builtin_materials(rm: "DefaultAssetsResourceApiMixin") -> None:
+def register_builtin_materials(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register dependencies for built-in materials.
 
     Built-in material registration intentionally does not synthesize material
@@ -57,7 +57,7 @@ def register_builtin_materials(rm: "DefaultAssetsResourceApiMixin") -> None:
     register_builtin_textures(rm)
 
 
-def register_builtin_meshes(rm: "DefaultAssetsResourceApiMixin") -> list[str]:
+def register_builtin_meshes(rm: DefaultAssetsResourceApiMixin) -> list[str]:
     """Register built-in primitive meshes."""
     from termin.default_assets.mesh.asset import MeshAsset
     from tmesh import CylinderMesh, PlaneMesh, TexturedCubeMesh, UVSphereMesh
@@ -97,12 +97,12 @@ def register_builtin_meshes(rm: "DefaultAssetsResourceApiMixin") -> list[str]:
     return registered
 
 
-def register_default_pipeline(rm: "DefaultAssetsResourceApiMixin") -> None:
+def register_default_pipeline(rm: DefaultAssetsResourceApiMixin) -> None:
     """Default pipeline is created by native RenderingManager on demand."""
     return
 
 
-def register_triangle_pipeline(rm: "DefaultAssetsResourceApiMixin") -> None:
+def register_triangle_pipeline(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register built-in diagnostic triangle render pipeline."""
     if rm.get_pipeline("Triangle") is not None:
         return
@@ -119,7 +119,7 @@ def register_triangle_pipeline(rm: "DefaultAssetsResourceApiMixin") -> None:
     rm.register_pipeline("Triangle", pipeline, uuid=BUILTIN_UUIDS.get("TrianglePipeline"))
 
 
-def register_all_builtins(rm: "DefaultAssetsResourceApiMixin") -> None:
+def register_all_builtins(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register all built-in resources."""
     register_builtin_shaders(rm)
     register_builtin_textures(rm)
