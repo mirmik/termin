@@ -11,6 +11,19 @@ toward generated/reflection-derived runtime metadata. Do not expand it with new
 semantic contract, draw-kind, or backend placement policy. The target direction
 is to delete this JSON manifest, not to make it the engine shader database.
 
+Built-in shaders must converge on the same runtime model as material-assembled
+shaders:
+
+```text
+tc_shader
+  +-- tc_shader_contract        // backend-agnostic interface requirements
+  +-- shader resource layout    // resolved backend/runtime placement
+```
+
+The contract declares what the shader needs. The layout declares where those
+resources are bound. The render pass that uses the shader owns draw intent
+(`mesh`, `fullscreen`, `compute`, and similar execution policy).
+
 ## Transitional manifest
 
 - Package/export metadata lives in
@@ -160,3 +173,8 @@ belong in `engine-shader-catalog.json`, not in individual pass implementations.
 Migrated Slang built-ins should consume generated artifacts plus layout
 metadata, then bind resources by logical name. Runtime GLSL fallbacks should
 not be added; missing artifacts are errors.
+
+This is a transitional rule for the current manifest. New semantic shader
+contracts, draw intent, and backend placement policy should be supplied by
+generated/reflection-derived metadata or by the owning shader provider, not by
+growing `engine-shader-catalog.json`.
