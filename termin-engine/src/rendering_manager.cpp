@@ -30,6 +30,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace termin {
 
@@ -37,22 +38,8 @@ namespace termin {
 // Global instance - set by EngineCore, accessed via C API for cross-DLL safety
 // ============================================================================
 
-RenderingManager* RenderingManager::s_instance = nullptr;
-
 RenderingManager* RenderingManager::instance_or_null() {
-    // Check global storage (cross-DLL safe)
-    RenderingManager* global = reinterpret_cast<RenderingManager*>(tc_rendering_manager_instance());
-    if (global) {
-        s_instance = global;
-        return global;
-    }
-
-    // Fallback to local static (legacy, will be removed)
-    if (s_instance) {
-        return s_instance;
-    }
-
-    return nullptr;
+    return reinterpret_cast<RenderingManager*>(tc_rendering_manager_instance());
 }
 
 RenderingManager& RenderingManager::instance() {
@@ -60,18 +47,16 @@ RenderingManager& RenderingManager::instance() {
         return *manager;
     }
 
-    tc_log(TC_LOG_ERROR, "[RenderingManager] instance() called but no instance set. Create EngineCore first.");
-    static RenderingManager fallback;
-    return fallback;
+    const char* message = "[RenderingManager] instance() called but no instance set. Create EngineCore first.";
+    tc_log(TC_LOG_ERROR, "%s", message);
+    throw std::runtime_error(message);
 }
 
 void RenderingManager::set_instance(RenderingManager* instance) {
-    s_instance = instance;
     tc_rendering_manager_set_instance(reinterpret_cast<tc_rendering_manager*>(instance));
 }
 
 void RenderingManager::reset_for_testing() {
-    s_instance = nullptr;
     tc_rendering_manager_set_instance(nullptr);
 }
 
@@ -84,7 +69,7 @@ RenderingManager::RenderingManager() {
 
 RenderingManager::~RenderingManager() {
     shutdown();
-    if (s_instance == this) {
+    if (instance_or_null() == this) {
         set_instance(nullptr);
     }
 }

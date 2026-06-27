@@ -61,14 +61,9 @@ class MeshSpec:
 
     @classmethod
     def for_mesh_file(cls, mesh_path: str | Path) -> "MeshSpec":
-        """Load spec for a mesh file (looks for mesh_path.meta or .spec)."""
-        # Try .meta first (new format)
+        """Load spec for a mesh file from mesh_path.meta."""
         meta_path = Path(str(mesh_path) + ".meta")
-        if meta_path.exists():
-            return cls.load(meta_path)
-        # Fallback to .spec (old format)
-        spec_path = Path(str(mesh_path) + ".spec")
-        return cls.load(spec_path)
+        return cls.load(meta_path)
 
     def save(self, spec_path: str | Path, preserve_existing: bool = False) -> None:
         """Save spec to file.

@@ -175,7 +175,7 @@ class ProjectScanner:
             return True
 
         path_str = str(path)
-        if path_str.endswith(".meta") or path_str.endswith(".spec"):
+        if path_str.endswith(".meta"):
             resource_path = Path(path_str[:-5]).resolve()
             return self._is_resolved_path_ignored(resource_path, ignored_roots)
 
@@ -394,9 +394,6 @@ class ProjectScanner:
         meta_path = Path(str(path) + ".meta")
         if meta_path.exists():
             return meta_path
-        spec_path = Path(str(path) + ".spec")
-        if spec_path.exists():
-            return spec_path
         return None
 
     def _read_uuid(self, path: Path, resource_type: str) -> str | None:

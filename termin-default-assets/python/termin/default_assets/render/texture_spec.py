@@ -46,14 +46,9 @@ class TextureSpec:
 
     @classmethod
     def for_texture_file(cls, texture_path: str | Path) -> "TextureSpec":
-        """Load spec for a texture file (looks for texture_path.meta or .spec)."""
-        # Try .meta first (new format)
+        """Load spec for a texture file from texture_path.meta."""
         meta_path = Path(str(texture_path) + ".meta")
-        if meta_path.exists():
-            return cls.load(meta_path)
-        # Fallback to .spec (old format)
-        spec_path = Path(str(texture_path) + ".spec")
-        return cls.load(spec_path)
+        return cls.load(meta_path)
 
     def save(self, spec_path: str | Path, preserve_existing: bool = False) -> None:
         """Save spec to file.

@@ -13,7 +13,7 @@ extern "C" {
 // Opaque pointer to RenderingManager
 typedef struct tc_rendering_manager tc_rendering_manager;
 
-// Get the global RenderingManager instance (creates if not exists)
+// Get the global RenderingManager instance, or NULL if EngineCore has not set one.
 TC_API tc_rendering_manager* tc_rendering_manager_instance(void);
 
 // Set the global RenderingManager instance (for initialization)
