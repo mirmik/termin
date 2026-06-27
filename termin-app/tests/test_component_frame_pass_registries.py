@@ -1,5 +1,7 @@
 import sys
 import types
+from pathlib import Path
+
 import pytest
 
 from termin.default_assets.resource_manager import DefaultResourceManager
@@ -234,3 +236,52 @@ def test_dead_visualization_legacy_paths_are_removed() -> None:
     for module_name in removed_modules:
         with pytest.raises(ModuleNotFoundError):
             __import__(module_name)
+
+
+def test_removed_visualization_namespace_is_not_used_by_live_code() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    skipped_dirs = {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".venv",
+        "build",
+        "build-debug",
+        "build-release",
+        "docs",
+        "sdk",
+        "termin-thirdparty",
+    }
+    scanned_suffixes = {
+        "",
+        ".cmake",
+        ".cpp",
+        ".h",
+        ".hpp",
+        ".md",
+        ".py",
+        ".txt",
+    }
+    allowed_paths = {
+        Path("termin-app/tests/test_component_frame_pass_registries.py"),
+    }
+
+    offenders: list[str] = []
+    for path in repo_root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(repo_root)
+        if any(part in skipped_dirs for part in relative.parts):
+            continue
+        if relative in allowed_paths:
+            continue
+        if path.name != "CMakeLists.txt" and path.suffix not in scanned_suffixes:
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if "termin.visualization" in content:
+            offenders.append(str(relative))
+
+    assert offenders == []

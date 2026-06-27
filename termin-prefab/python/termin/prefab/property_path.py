@@ -7,8 +7,7 @@ from typing import Any, Iterator, TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from termin.visualization.core.component import Component
-    from termin.scene import Entity
+    from termin.scene import Component, Entity
 
 
 class PropertyPath:

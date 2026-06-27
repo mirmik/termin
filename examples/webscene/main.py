@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Minimal example: termin scene → three.js web visualization.
+Minimal example: termin scene -> three.js web visualization.
 
-Builds a 3D scene using termin Scene/Entity/MeshComponent,
+Builds a 3D scene using termin TcScene/Entity/MeshComponent,
 extracts mesh data, and serves it as a web page via three.js.
 
 Usage:
@@ -14,8 +14,7 @@ import json
 from pathlib import Path
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
-from termin.visualization.core.scene import Scene
-from termin.visualization.core.entity import Entity
+from termin.scene import Entity, TcScene
 from termin.mesh import TcMesh, MeshComponent
 from termin.mesh.primitives import (
     CubeMesh,
@@ -24,7 +23,7 @@ from termin.mesh.primitives import (
     TorusMesh,
     ConeMesh,
 )
-from termin.geombase import Pose3
+from termin.geombase import GeneralPose3, Vec3
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -33,6 +32,10 @@ PORT = 8000
 
 # Per-entity colors (MeshComponent has no material, so we store separately)
 ENTITY_COLORS = {}
+
+
+def translation_pose(x: float, y: float, z: float) -> GeneralPose3:
+    return GeneralPose3(lin=Vec3(x, y, z))
 
 
 def add_mesh_entity(scene, name, mesh3, pose, color):
@@ -46,52 +49,52 @@ def add_mesh_entity(scene, name, mesh3, pose, color):
     return entity
 
 
-def build_scene() -> Scene:
+def build_scene() -> TcScene:
     """Build a termin scene with several mesh entities."""
-    scene = Scene.create(name="webscene_demo")
+    scene = TcScene.create(name="webscene_demo")
 
     # Ground plane (flat cube)
     add_mesh_entity(scene, "ground",
                     CubeMesh(size=6.0, y=0.1, z=6.0),
-                    Pose3.translation(0, -0.55, 0),
+                    translation_pose(0, -0.55, 0),
                     [0.35, 0.55, 0.35])
 
     # Blue cube
     add_mesh_entity(scene, "cube",
                     CubeMesh(size=1.0),
-                    Pose3.identity(),
+                    GeneralPose3.identity(),
                     [0.3, 0.5, 0.8])
 
     # Red sphere
     add_mesh_entity(scene, "sphere",
                     UVSphereMesh(radius=0.6, n_meridians=24, n_parallels=16),
-                    Pose3.translation(2.0, 0.1, 0.0),
+                    translation_pose(2.0, 0.1, 0.0),
                     [0.8, 0.25, 0.25])
 
     # Yellow cylinder
     add_mesh_entity(scene, "cylinder",
                     CylinderMesh(radius=0.4, height=1.2, segments=24),
-                    Pose3.translation(-2.0, 0.0, 0.0),
+                    translation_pose(-2.0, 0.0, 0.0),
                     [0.85, 0.75, 0.2])
 
     # Purple torus
     add_mesh_entity(scene, "torus",
                     TorusMesh(major_radius=0.5, minor_radius=0.15,
                               major_segments=24, minor_segments=12),
-                    Pose3.translation(0.0, 0.6, -2.0),
+                    translation_pose(0.0, 0.6, -2.0),
                     [0.6, 0.3, 0.7])
 
     # Orange cone
     add_mesh_entity(scene, "cone",
                     ConeMesh(radius=0.5, height=1.0, segments=24),
-                    Pose3.translation(-2.0, 0.0, -2.0),
+                    translation_pose(-2.0, 0.0, -2.0),
                     [0.9, 0.5, 0.15])
 
     scene.update(0)
     return scene
 
 
-def extract_scene_json(scene: Scene) -> str:
+def extract_scene_json(scene: TcScene) -> str:
     """Walk the termin scene, extract mesh+transform data as JSON."""
     objects = []
 
@@ -179,7 +182,9 @@ def main():
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
+    finally:
         server.server_close()
+        scene.destroy()
 
 
 if __name__ == "__main__":

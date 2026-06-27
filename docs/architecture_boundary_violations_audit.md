@@ -7,6 +7,10 @@
 
 ## Исправления
 
+### 2026-06-27
+
+- **`termin.visualization.*` закрыто как живой Python namespace:** оставшиеся runtime/example/type-only ссылки переведены на канонические пакеты (`termin.scene`, `termin.mesh`, `termin.display`, `termin.render*`); исторические упоминания оставлены только в audit/plan документах и тестах удаления.
+
 ### 2026-06-26
 
 - **2.6 закрыто:** `termin_core` больше не является app-owned агрегатором. `tc_init`/`tc_shutdown` перенесены в `termin-bootstrap`, OpenGL C adapter — в `termin-graphics`, version/uuid/string helpers — в `termin-base`; C#/Android потребители переведены на канонические SDK targets.
@@ -17,7 +21,7 @@
 - **standard render passes частично вынесены из `termin-app`:** создан SDK-модуль `termin-render-passes`; `PresentToScreenPass`, `DebugTrianglePass`, `GrayscalePass`, `TonemapPass`, `BloomPass`, `ColorPass`, `ShadowPass`, `SkyBoxPass`, shadow camera helpers, shader skinning injection и material UBO apply helper перенесены из `termin-app/cpp/termin/render` в новый модуль, а app Python re-export переключен на `termin.render_passes`.
 - **3.7 закрыто:** `termin.engine` и `termin.inspect` теперь вызывают `preload_sdk_libs(...)` перед импортом native modules.
 - **3.6 закрыто частично по публичной поверхности:** приватные C-interop функции больше не входят в `termin.display.__all__`. Сами underscored imports оставлены для существующих внутренних call sites до появления публичного adapter API.
-- **1.3 частично:** `EditorCameraUIController` перенесён из `termin.editor_core` в `termin.editor_tcgui`, а `EditorCameraManager` добавляет его только если компонент зарегистрирован frontend-слоем. Qt-зависимость `SpaceMouseController` закрыта; остаётся более широкая проблема `termin.visualization/ui/widgets -> tcgui`.
+- **1.3 закрыто по legacy namespace:** `EditorCameraUIController` перенесён из `termin.editor_core` в `termin.editor_tcgui`, а `EditorCameraManager` добавляет его только если компонент зарегистрирован frontend-слоем. Qt-зависимость `SpaceMouseController` закрыта; старые `termin.visualization.ui.widgets` compatibility paths удалены.
 - **2.1 частично:** прямые include paths на `termin-render/include` удалены из `termin-display` и `termin-components-render`, где уже есть CMake target dependency. Широкий `termin-app/cpp/termin` include в `termin-components-render` заменён точечным include path на `entity_helpers.hpp`. Прямые пути на `termin-app/core_c` закрыты отдельной миграцией 2026-06-26.
 - **4.1 закрыто:** дублирующийся `tc_registry_utils.h` вынесен в `termin-base/include/tcbase/tc_registry_utils.h`; копии из `termin-graphics` и `termin-mesh` удалены.
 - **3.3 закрыто:** `tc_registry_utils.h`, `tc_resource.h` и generic handle include вынесены на `termin-base`; `termin-skeleton` больше не зависит от `termin_graphics`, старые resource includes в `termin-render` переведены на `tcbase`.
@@ -306,7 +310,7 @@ virtual tc_mesh* get_mesh_for_phase(
 **Где смотреть:**
 Пакеты `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh` импортируют из других пакетов, не объявленных в `install_requires`:
 
-- Импорты `termin.visualization.*` из пакетов, не являющихся termin-app
+- Исторически: импорты `termin.visualization.*` из пакетов, не являющихся termin-app. Статус 2026-06-27: живые ссылки удалены; новые ссылки в runtime/examples/scripts запрещены тестом.
 - Импорты `termin.cache`, `termin.voxels` из high-level Python слоя `termin-navmesh`
 - high-level Python слой `termin-navmesh` всё ещё смешивает navigation utilities, visual/editor components и voxel/cache integration
 
