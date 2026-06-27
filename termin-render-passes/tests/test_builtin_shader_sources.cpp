@@ -66,6 +66,18 @@ bool contract_has_resource(
     return false;
 }
 
+const tc_shader_resource_requirement* contract_resource(
+    const tc_shader_contract_view& contract,
+    const char* name)
+{
+    for (uint32_t i = 0; i < contract.resource_count; ++i) {
+        if (std::strcmp(contract.resources[i].name, name) == 0) {
+            return &contract.resources[i];
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 TEST_CASE("built-in fragment shader registration reads source file from resource root") {
@@ -224,7 +236,7 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
         "fragment": {"path": "test-catalog.frag.glsl"}
       },
       "resources": [
-        {"name": "per_frame", "kind": "constant_buffer", "scope": "frame"}
+        {"name": "per_frame", "kind": "constant_buffer", "scope": "frame", "size": 64}
       ]
     }
   ]
@@ -259,7 +271,23 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
     REQUIRE(tc_shader_get_contract_view(shader, &contract));
     CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_GENERATED);
     CHECK(contract_has_vertex_input(contract, "position"));
-    CHECK(contract_has_resource(contract, "per_frame"));
+    const tc_shader_resource_requirement* per_frame =
+        contract_resource(contract, "per_frame");
+    REQUIRE(per_frame != nullptr);
+    CHECK(per_frame->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER);
+    CHECK(per_frame->scope == TC_SHADER_RESOURCE_SCOPE_FRAME);
+    CHECK(per_frame->stage_mask == TC_SHADER_STAGE_ALL_GRAPHICS);
+    CHECK(per_frame->size == 64);
+
+    REQUIRE(tc_shader_find_resource_binding(shader, "per_frame") != nullptr);
+    tc_shader_set_resource_layout(shader, nullptr, 0);
+    CHECK(tc_shader_find_resource_binding(shader, "per_frame") == nullptr);
+
+    tc_shader_contract_view after_layout_clear{};
+    REQUIRE(tc_shader_get_contract_view(shader, &after_layout_clear));
+    per_frame = contract_resource(after_layout_clear, "per_frame");
+    REQUIRE(per_frame != nullptr);
+    CHECK(per_frame->size == 64);
 
     tc_shader_shutdown();
     clear_builtin_root();
