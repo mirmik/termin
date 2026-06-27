@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.player.project_runtime_support import (
-    create_asset_import_plugin_map,
     create_build_import_registry,
     load_project_modules,
     register_project_runtime_resources,
@@ -602,9 +601,6 @@ class PlayerRuntime:
 
     def _create_build_import_registry(self) -> "AssetTypeRegistry":
         return create_build_import_registry()
-
-    def _create_asset_import_plugin_map(self):
-        return create_asset_import_plugin_map()
 
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
