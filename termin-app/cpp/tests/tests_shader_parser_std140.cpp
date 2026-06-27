@@ -459,7 +459,7 @@ TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection")
     tc_shader_destroy(original_handle);
 }
 
-TEST_CASE("skinned shader variants require C shader-contract assembler")
+TEST_CASE("skinned shader variants create shader-contract assembler output")
 {
     std::string vertex =
         "struct VIn { float3 position : POSITION; };\n"
@@ -512,7 +512,21 @@ TEST_CASE("skinned shader variants require C shader-contract assembler")
     {
         TcShader original(original_handle);
         TcShader skinned = get_skinned_shader("opaque", original);
-        CHECK(!skinned.is_valid());
+        CHECK(skinned.is_valid());
+        CHECK(skinned.language() == TC_SHADER_LANGUAGE_SLANG);
+        CHECK(skinned.is_variant());
+        CHECK(skinned.variant_op() == TC_SHADER_VARIANT_SKINNING);
+
+        tc_shader_contract_view contract{};
+        REQUIRE(tc_shader_get_contract_view(skinned.get(), &contract));
+        CHECK_EQ(contract.producer_kind, TC_SHADER_CONTRACT_PRODUCER_MATERIAL_PIPELINE);
+        CHECK_EQ(contract.draw_kind, TC_SHADER_CONTRACT_DRAW_MESH);
+
+        const tc_shader_resource_binding* bone =
+            tc_shader_find_resource_binding(skinned.get(), TC_SHADER_RESOURCE_BONE_BLOCK);
+        REQUIRE(bone != nullptr);
+        CHECK_EQ(bone->binding, 16u);
+        CHECK_EQ(bone->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_DRAW));
     }
 
     tc_shader_destroy(original_handle);

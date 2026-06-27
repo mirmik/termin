@@ -4,8 +4,9 @@ Date: 2026-06-27
 
 ## Status
 
-Target architecture. This document supersedes the runtime `MaterialPipelineVariant`
-model described in `2026-06-27-material-pipeline-target-architecture.md`.
+Active target architecture. This document supersedes the runtime
+`MaterialPipelineVariant` model described in
+`2026-06-27-material-pipeline-target-architecture.md`.
 
 The important correction is that runtime draw paths should not look up a
 material-pipeline-specific variant after shader override. Shader override stays
@@ -79,6 +80,7 @@ typedef enum tc_shader_contract_producer_kind {
     TC_SHADER_CONTRACT_PRODUCER_MATERIAL_PIPELINE = 2,
     TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED = 3,
     TC_SHADER_CONTRACT_PRODUCER_LEGACY = 4,
+    TC_SHADER_CONTRACT_PRODUCER_SHADER_PARSER = 5,
 } tc_shader_contract_producer_kind;
 
 typedef enum tc_shader_contract_draw_kind {
@@ -170,7 +172,8 @@ Then the pass resolves the shader contract:
 
 ```c
 tc_shader* shader = tc_shader_get(final_shader);
-const tc_shader_contract_view* contract = tc_shader_contract_view(shader);
+tc_shader_contract_view contract;
+bool has_contract = tc_shader_get_contract_view(shader, &contract);
 ```
 
 The pass uses the contract to:
@@ -221,30 +224,59 @@ must be explicit:
 
 ## Migration Plan
 
-1. Revert the transitional `MaterialPipelineCompiledVariant` runtime plumbing.
-2. Add `tc_shader_contract` C structs, registry, and `tc_shader` contract link.
-3. Make material pipeline assembly attach a shader contract directly to the
+1. Done: remove the transitional `MaterialPipelineCompiledVariant` runtime
+   plumbing and public `MaterialPipelineVariant` layer.
+2. Done: add `tc_shader_contract` C structs, ownership, deep-copy attach,
+   clear, and view accessors on `tc_shader`.
+3. Done: make material pipeline assembly attach a shader contract directly to the
    produced `tc_shader`.
-4. Replace `ResourceBindingPlan`/`VertexStreamPlan` runtime pass plumbing with
-   reads from `tc_shader_contract`.
-5. Keep material/pass/vertex-transform contracts inside `termin-render`.
-6. Remove public runtime `MaterialPipelineVariant`; keep only internal assembly
-   helpers if needed.
-7. Make passes fail clearly when migrated shaders lack a contract.
+4. Done: replace runtime draw decisions with reads from `tc_shader_contract`.
+   Compact static, skinned, and foliage mesh input selection now reads the
+   contract when present.
+5. Done: keep material/pass/vertex-transform contracts inside `termin-render`;
+   `termin-graphics` only knows the generic `tc_shader_contract`.
+6. Done: remove public runtime `MaterialPipelineVariant`; the new assembly
+   result is `MaterialPipelineShaderAssemblyResult` and immediately produces a
+   `tc_shader`.
+7. Done: migrated shader override paths fail clearly when a required material
+   pipeline shader lacks a contract.
+
+## Implementation Notes
+
+- `tc_shader` owns the contract data. Setting shader sources clears stale
+  contracts, matching resource layout lifetime.
+- `MaterialPipelineShaderAssemblyRequest` is the C++ assembly input. It is not
+  a runtime variant object.
+- `assemble_material_shader_override()` is the current drawable override helper
+  for skinned and foliage shaders. It returns a normal `TcShader` whose raw
+  `tc_shader` has a generic contract.
+- `tc_shader.variant_op` is still set for shader identity/staleness
+  compatibility while remaining draw paths migrate to contract reads.
+- Material contract extraction filters out vertex-only resources from the
+  original shader. This prevents old material vertex resources such as
+  `draw_data` from conflicting with replacement vertex transforms such as
+  `foliage_draw`.
+- Parser-created material shaders attach a generic mesh contract with producer
+  `TC_SHADER_CONTRACT_PRODUCER_SHADER_PARSER`, inferred vertex inputs, material
+  UBO metadata, and current shader resources.
+- When a shader resource layout is replaced, an existing `tc_shader_contract`
+  refreshes its resource list from the shader layout. This keeps parser-created
+  Slang shaders consistent when reflection sidecars provide layout metadata.
 
 ## Validation
 
 Required tests:
 
-- `tc_shader` can expose its attached `tc_shader_contract`.
-- C drawable override path returns `tc_shader_handle`; pass can resolve the
+- Done: `tc_shader` can expose its attached `tc_shader_contract`.
+- Done: C drawable override path returns `tc_shader_handle`; pass can resolve the
   contract from that handle.
-- material pipeline assembly creates both shader and contract.
-- skinned shader contract declares `joints`, `weights`, and `bone_block`.
-- foliage shader contract declares prototype mesh inputs and foliage instance
-  storage.
-- shadow/depth/id contracts request compact vertex inputs.
-- legacy shader without contract takes only explicit legacy fallback path.
+- Done: material pipeline assembly creates both shader and contract.
+- Done: skinned shader contract declares `joints`, `weights`, and `bone_block`.
+- Done: foliage shader contract declares prototype mesh inputs and foliage
+  instance storage.
+- Done: shadow/depth/id contracts request compact vertex inputs.
+- Done: parser-created static material shaders expose shader parser contracts.
+- Done: legacy shader without contract takes only explicit legacy fallback path.
 
 ## Non-Goals
 

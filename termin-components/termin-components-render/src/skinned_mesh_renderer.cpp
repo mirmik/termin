@@ -89,6 +89,38 @@ static const tc_shader_resource_binding* find_bone_block_resource(const tc_shade
     return nullptr;
 }
 
+static bool shader_contract_uses_skinning(const tc_shader* shader) {
+    if (!shader) {
+        return false;
+    }
+    tc_shader_contract_view contract{};
+    if (!tc_shader_get_contract_view(shader, &contract)) {
+        return false;
+    }
+
+    bool has_joints = false;
+    bool has_weights = false;
+    for (uint32_t i = 0; i < contract.vertex_input_count; ++i) {
+        if (std::strncmp(
+                contract.vertex_inputs[i].semantic,
+                "joints",
+                TC_SHADER_RESOURCE_NAME_MAX) == 0) {
+            has_joints = true;
+        }
+        if (std::strncmp(
+                contract.vertex_inputs[i].semantic,
+                "weights",
+                TC_SHADER_RESOURCE_NAME_MAX) == 0) {
+            has_weights = true;
+        }
+    }
+    return has_joints && has_weights;
+}
+
+static bool shader_uses_skinning(TcShader shader) {
+    return shader_contract_uses_skinning(shader.get());
+}
+
 SkinnedMeshRenderer::SkinnedMeshRenderer()
     : MeshRenderer("SkinnedMeshRenderer")
 {
@@ -182,7 +214,7 @@ TcShader SkinnedMeshRenderer::override_shader(
     if (!_skeleton_controller.valid() || !original_shader.is_valid()) {
         return original_shader;
     }
-    if (original_shader.variant_op() == TC_SHADER_VARIANT_SKINNING) {
+    if (shader_uses_skinning(original_shader)) {
         return original_shader;
     }
 
@@ -229,7 +261,7 @@ void SkinnedMeshRenderer::collect_shader_usages(
     if (!original_shader.is_valid()) {
         return;
     }
-    if (original_shader.variant_op() == TC_SHADER_VARIANT_SKINNING) {
+    if (shader_uses_skinning(original_shader)) {
         return;
     }
 

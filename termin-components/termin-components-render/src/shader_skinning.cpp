@@ -9,6 +9,23 @@
 namespace termin {
 namespace {
 
+MaterialPipelinePassKind pass_kind_for_phase(const std::string& phase_mark)
+{
+    if (phase_mark == "shadow") {
+        return MaterialPipelinePassKind::Shadow;
+    }
+    if (phase_mark == "depth") {
+        return MaterialPipelinePassKind::Depth;
+    }
+    if (phase_mark == "pick") {
+        return MaterialPipelinePassKind::Id;
+    }
+    if (phase_mark == "normal") {
+        return MaterialPipelinePassKind::Normal;
+    }
+    return MaterialPipelinePassKind::Color;
+}
+
 bool should_log_unsupported_skinning_shader(
     const std::string& phase_mark,
     TcShader original_shader
@@ -29,11 +46,13 @@ TcShader get_skinned_shader(const std::string& phase_mark, TcShader original_sha
         return TcShader();
     }
     if (original_shader.language() == TC_SHADER_LANGUAGE_SLANG) {
-        MaterialVertexVariantRequest request{};
+        MaterialShaderOverrideRequest request{};
         request.original_shader = original_shader;
-        request.variant_op = TC_SHADER_VARIANT_SKINNING;
+        request.vertex_transform_kind = VertexTransformKind::SkinnedMesh;
+        request.pass_kind = pass_kind_for_phase(phase_mark);
+        request.shader_variant_op = TC_SHADER_VARIANT_SKINNING;
         request.debug_context = "SkinnedMeshRenderer";
-        return get_material_vertex_variant(request);
+        return assemble_material_shader_override(request);
     }
     if (should_log_unsupported_skinning_shader(phase_mark, original_shader)) {
         tc::Log::error(
