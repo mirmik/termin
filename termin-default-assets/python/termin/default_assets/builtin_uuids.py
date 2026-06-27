@@ -14,4 +14,9 @@ BUILTIN_UUIDS = {
     "TrianglePipeline": "00000000-0000-0000-0004-000000000002",
 }
 
-__all__ = ["BUILTIN_UUIDS"]
+BUILTIN_TEXTURE_LEGACY_UUIDS = {
+    "__white_1x1__": ("5fb7972ad02ddfad",),
+    "__normal_1x1__": ("07151644d3bb92c7",),
+}
+
+__all__ = ["BUILTIN_TEXTURE_LEGACY_UUIDS", "BUILTIN_UUIDS"]

@@ -41,5 +41,32 @@ def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
     assert white_texture.uuid == "__white_1x1__"
     assert normal_texture.uuid == "__normal_1x1__"
     assert manager.get_handle_by_uuid("tc_texture", "__white_1x1__").uuid == "__white_1x1__"
+    assert TcTexture.from_uuid("5fb7972ad02ddfad").is_valid
+    assert TcTexture.from_uuid("07151644d3bb92c7").is_valid
+    assert manager.get_texture_asset_by_uuid("5fb7972ad02ddfad") is manager.get_texture_asset(
+        "__white_1x1__"
+    )
+    assert manager.get_texture_asset_by_uuid("07151644d3bb92c7") is manager.get_texture_asset(
+        "__normal_1x1__"
+    )
     assert set(registered_meshes) == {"Cube", "Sphere", "Plane", "Cylinder"}
     assert manager.get_mesh_asset("Cube") is not None
+
+
+def test_builtin_pipeline_registration_is_idempotent_without_copying_pipeline() -> None:
+    from termin.render_framework import tc_pipeline_registry_count
+
+    manager = DefaultResourceManager()
+    baseline = tc_pipeline_registry_count()
+
+    try:
+        manager.register_builtin_pipelines()
+        after_first = tc_pipeline_registry_count()
+        manager.register_builtin_pipelines()
+
+        assert manager.get_pipeline_asset("Triangle") is not None
+        assert after_first == baseline + 1
+        assert tc_pipeline_registry_count() == after_first
+    finally:
+        manager.clear_runtime_state()
+        assert tc_pipeline_registry_count() == baseline
