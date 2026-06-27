@@ -426,7 +426,7 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     assert "struct MaterialParams" not in phase.stages["vertex"].source
 
 
-def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
+def test_slang_material_layout_sets_shader_contract_before_sidecar_reflection():
     import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     shader_text = "\n".join([
@@ -435,10 +435,14 @@ def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
         "@property Color tint = Color(1, 1, 1, 1)",
         "@phase opaque",
         "@stage vertex",
+        "struct VertexInput {",
+        "    float3 position : POSITION;",
+        "    float3 normal : NORMAL;",
+        "};",
         "struct VertexOutput { float4 position : SV_Position; };",
-        "[shader(\"vertex\")] VertexOutput main() {",
+        "[shader(\"vertex\")] VertexOutput main(VertexInput input) {",
         "    VertexOutput output;",
-        "    output.position = float4(0, 0, 0, 1);",
+        "    output.position = float4(input.position, 1);",
         "    return output;",
         "}",
         "@endstage",
@@ -456,9 +460,25 @@ def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
     material = create_material_from_parsed(parse_shader_text(shader_text))
     shader = material.get_phase(0).shader
 
-    assert shader.material_ubo_entry_count == 0
-    assert shader.material_ubo_block_size == 0
-    assert shader.find_resource_binding("material") is None
+    assert shader.material_ubo_entry_count == 1
+    assert shader.material_ubo_block_size == 16
+    material_binding = shader.find_resource_binding("material")
+    assert material_binding is not None
+    assert material_binding["kind_name"] == "constant_buffer"
+    assert material_binding["scope_name"] == "material"
+    assert shader.has_contract
+
+    contract = shader.contract
+    assert contract["producer_kind"] == 5  # TC_SHADER_CONTRACT_PRODUCER_SHADER_PARSER
+    assert contract["draw_kind"] == 0  # TC_SHADER_CONTRACT_DRAW_MESH
+    assert {
+        input_desc["semantic"]
+        for input_desc in contract["vertex_inputs"]
+    } == {"position", "normal"}
+    assert "material" in {
+        resource["name"]
+        for resource in contract["resources"]
+    }
 
 
 def test_parse_shader_text_rejects_explicit_glsl_shader():

@@ -56,11 +56,26 @@ struct MeshBindingReleaseGuard {
 };
 
 TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_variant = false) {
-    MaterialVertexVariantRequest request{};
+    MaterialShaderOverrideRequest request{};
     request.original_shader = original_shader;
-    request.variant_op = shadow_variant ? TC_SHADER_VARIANT_FOLIAGE_SHADOW : TC_SHADER_VARIANT_FOLIAGE;
+    request.vertex_transform_kind = shadow_variant
+        ? VertexTransformKind::FoliageShadow
+        : VertexTransformKind::Foliage;
+    request.pass_kind = shadow_variant
+        ? MaterialPipelinePassKind::Shadow
+        : MaterialPipelinePassKind::Color;
+    request.shader_variant_op = shadow_variant
+        ? TC_SHADER_VARIANT_FOLIAGE_SHADOW
+        : TC_SHADER_VARIANT_FOLIAGE;
     request.debug_context = "FoliageLayerComponent";
-    return get_material_vertex_variant(request);
+    return assemble_material_shader_override(request);
+}
+
+bool shader_contract_is_instanced_mesh(TcShader shader)
+{
+    tc_shader_contract_view contract{};
+    return tc_shader_get_contract_view(shader.get(), &contract) &&
+           contract.draw_kind == TC_SHADER_CONTRACT_DRAW_INSTANCED_MESH;
 }
 
 bool validate_foliage_vertex_layout(
@@ -520,8 +535,7 @@ bool FoliageLayerComponent::draw_tgfx2(
     TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
         shader = get_foliage_instanced_shader(TcShader(phase->shader), shadow_variant);
-    } else if (shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE
-        && shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE_SHADOW) {
+    } else if (!shader_contract_is_instanced_mesh(shader)) {
         shader = get_foliage_instanced_shader(shader, shadow_variant);
     }
     if (!shader.is_valid()) {
