@@ -130,7 +130,7 @@ def _write_fake_desktop_sdk(tmp_path: Path) -> Path:
     return sdk
 
 
-def test_legacy_app_runtime_lists_exclude_experimental_fem_stack() -> None:
+def test_legacy_app_runtime_lists_do_not_shadow_manifest_python_packages() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     cmake_install = (repo_root / "termin-app" / "CMakeLists.txt").read_text(encoding="utf-8")
     legacy_build = (repo_root / "termin-app" / "build.sh").read_text(encoding="utf-8")
@@ -140,6 +140,10 @@ def test_legacy_app_runtime_lists_exclude_experimental_fem_stack() -> None:
     assert "foreach(pkg numpy scipy" not in cmake_install
     assert "termin-physics-fem" not in legacy_build
     assert "termin-physics-fem" not in cpp_cmake
+    assert "TERMIN_SDK_PYTHON_PACKAGE_DIRS" not in cpp_cmake
+    assert "../termin-assets/termin_assets" not in cpp_cmake
+    assert "../termin-gui/python/tcgui" not in cpp_cmake
+    assert "../termin-nodegraph/python/tcnodegraph" not in cpp_cmake
 
 
 def _write_fake_windows_desktop_sdk(tmp_path: Path) -> Path:

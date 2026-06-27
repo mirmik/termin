@@ -517,64 +517,6 @@ install(DIRECTORY ${TERMIN_ROOT}/termin/
     PATTERN "include" EXCLUDE
 )
 
-set(TERMIN_SDK_PYTHON_PACKAGE_DIRS
-    ${TERMIN_ROOT}/../termin-animation/python/termin/
-    ${TERMIN_ROOT}/../termin-collision/python/termin/
-    ${TERMIN_ROOT}/../termin-components/termin-components-collision/python/termin/
-    ${TERMIN_ROOT}/../termin-components/termin-components-kinematic/python/termin/
-    ${TERMIN_ROOT}/../termin-components/termin-components-mesh/python/termin/
-    ${TERMIN_ROOT}/../termin-components/termin-components-render/python/termin/
-    ${TERMIN_ROOT}/../termin-csg/python/termin/
-    ${TERMIN_ROOT}/../termin-display/python/termin/
-    ${TERMIN_ROOT}/../termin-engine/python/termin/
-    ${TERMIN_ROOT}/../termin-input/python/termin/
-    ${TERMIN_ROOT}/../termin-lighting/python/termin/
-    ${TERMIN_ROOT}/../termin-navmesh/python/termin/
-    ${TERMIN_ROOT}/../termin-physics/python/termin/
-    ${TERMIN_ROOT}/../termin-render-passes/python/termin/
-    ${TERMIN_ROOT}/../termin-render/python/termin/
-    ${TERMIN_ROOT}/../termin-scene/python/termin/
-    ${TERMIN_ROOT}/../termin-skeleton/python/termin/
-    ${TERMIN_ROOT}/../termin-bootstrap/python/termin/
-)
-foreach(package_dir IN LISTS TERMIN_SDK_PYTHON_PACKAGE_DIRS)
-    if(EXISTS ${package_dir})
-        install(DIRECTORY ${package_dir}
-            DESTINATION ${TERMIN_PYTHON_INSTALL_DIR}
-            PATTERN "__pycache__" EXCLUDE
-            PATTERN "*.pyc" EXCLUDE
-            PATTERN "*.pyo" EXCLUDE
-            PATTERN "*.so" EXCLUDE
-            PATTERN "*.dll" EXCLUDE
-            PATTERN "*.dylib" EXCLUDE
-            PATTERN "*.egg-info" EXCLUDE
-            PATTERN "tests" EXCLUDE
-            PATTERN "include" EXCLUDE
-        )
-    endif()
-endforeach()
-
-install(DIRECTORY ${TERMIN_ROOT}/../termin-assets/termin_assets
-    DESTINATION lib/python
-    PATTERN "__pycache__" EXCLUDE
-    PATTERN "*.pyc" EXCLUDE
-    PATTERN "*.pyo" EXCLUDE
-)
-install(DIRECTORY ${TERMIN_ROOT}/../termin-gui/python/tcgui
-    DESTINATION lib/python
-    PATTERN "__pycache__" EXCLUDE
-    PATTERN "*.pyc" EXCLUDE
-    PATTERN "*.pyo" EXCLUDE
-    PATTERN "tests" EXCLUDE
-)
-install(DIRECTORY ${TERMIN_ROOT}/../termin-nodegraph/python/tcnodegraph
-    DESTINATION lib/python
-    PATTERN "__pycache__" EXCLUDE
-    PATTERN "*.pyc" EXCLUDE
-    PATTERN "*.pyo" EXCLUDE
-    PATTERN "tests" EXCLUDE
-)
-
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cpp
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
