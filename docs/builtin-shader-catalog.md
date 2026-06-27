@@ -3,7 +3,15 @@
 Built-in engine shaders must have one canonical identity and one artifact
 generation path.
 
-## Source of truth
+## Status
+
+`engine-shader-catalog.json` is transitional. It exists to keep current source
+loading, packaging, and artifact staging working while built-in shaders move
+toward generated/reflection-derived runtime metadata. Do not expand it with new
+semantic contract, draw-kind, or backend placement policy. The target direction
+is to delete this JSON manifest, not to make it the engine shader database.
+
+## Transitional manifest
 
 - Package/export metadata lives in
   `termin-graphics/resources/builtin_shaders/engine-shader-catalog.json`.

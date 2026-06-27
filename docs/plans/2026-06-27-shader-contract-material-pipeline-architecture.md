@@ -233,15 +233,18 @@ current resolved `tc_shader_resource_binding` boundary.
 
 ## Built-In Shader Catalog Contracts
 
-The built-in shader catalog is another contract producer. Catalog-registered
-engine shaders attach a generic `tc_shader_contract` with producer
+The built-in shader catalog is a transitional source loader, not a target
+contract database. Catalog-registered engine shaders currently attach a generic
+`tc_shader_contract` with producer
 `TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED` during
-`register_builtin_shader_from_catalog()`.
+`register_builtin_shader_from_catalog()`, but this must not grow
+`engine-shader-catalog.json`.
 
-The catalog contract is built from catalog metadata:
+The temporary catalog contract is inferred from the existing loader metadata:
 
-- `contract.draw_kind` declares mesh, instanced mesh, direct, fullscreen, or
-  compute draw submission;
+- fragment-only entries map to fullscreen draw;
+- other live graphics entries map to mesh draw until their owning render pass or
+  engine shader provider supplies a real draw contract;
 - `stages.vertex.inputs` declares required vertex input semantics;
 - the already resolved `tc_shader_resource_binding` layout declares runtime
   resources by name, kind, scope, stage, and backend placement.
@@ -249,8 +252,10 @@ The catalog contract is built from catalog metadata:
 This keeps runtime passes on the same `tc_shader -> tc_shader_contract` path for
 material pipeline shaders and engine built-ins. A temporary compatibility default
 maps fragment-only catalog entries to fullscreen and other live graphics entries
-to mesh, but new or migrated catalog entries should declare `contract.draw_kind`
-explicitly.
+to mesh. New contract or placement metadata must not be added to
+`engine-shader-catalog.json`; the target direction is to delete that manifest and
+move engine shader identity/contract ownership into code-generated or
+reflection-derived sources.
 
 ## Legacy Policy
 
@@ -302,9 +307,9 @@ must be explicit:
 - Parser-created material shaders attach a generic mesh contract with producer
   `TC_SHADER_CONTRACT_PRODUCER_SHADER_PARSER`, inferred vertex inputs, material
   UBO metadata, and current shader resources.
-- Catalog-registered built-in shaders attach an engine-generated contract from
-  catalog metadata. Obvious fullscreen postprocess entries now declare
-  `contract.draw_kind = "fullscreen"` explicitly.
+- Catalog-registered built-in shaders attach a transitional engine-generated
+  contract inferred from current loader metadata. Do not add new contract fields
+  to `engine-shader-catalog.json`.
 - When a shader resource layout is replaced, an existing `tc_shader_contract`
   refreshes its resource list from the shader layout. This keeps parser-created
   Slang shaders consistent when reflection sidecars provide layout metadata.
