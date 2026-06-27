@@ -33,11 +33,6 @@ namespace termin {
 namespace {
 
 constexpr int FOLIAGE_GEOMETRY_ID = 0;
-constexpr const char* FOLIAGE_VARIANT_SHADER_UUID = "termin-engine-foliage-instanced";
-constexpr const char* FOLIAGE_SHADOW_VARIANT_SHADER_UUID = "termin-engine-foliage-shadow";
-constexpr const char* FOLIAGE_SHADOW_FRAGMENT_SOURCE =
-    "[shader(\"fragment\")]\n"
-    "void fs_main() {}\n";
 
 struct FoliageGpuInstance {
     float position[3];
@@ -64,14 +59,7 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
     MaterialVertexVariantRequest request{};
     request.original_shader = original_shader;
     request.variant_op = shadow_variant ? TC_SHADER_VARIANT_FOLIAGE_SHADOW : TC_SHADER_VARIANT_FOLIAGE;
-    request.vertex_template_uuid =
-        shadow_variant ? FOLIAGE_SHADOW_VARIANT_SHADER_UUID : FOLIAGE_VARIANT_SHADER_UUID;
-    request.variant_name_suffix = shadow_variant ? "_FoliageShadow" : "_Foliage";
     request.debug_context = "FoliageLayerComponent";
-    request.vertex_entry = "vs_main";
-    request.fragment_source_override = shadow_variant ? FOLIAGE_SHADOW_FRAGMENT_SOURCE : nullptr;
-    request.fragment_entry_override = shadow_variant ? "fs_main" : nullptr;
-    request.require_slang_original = !shadow_variant;
     return get_material_vertex_variant(request);
 }
 

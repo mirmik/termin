@@ -459,7 +459,7 @@ TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection")
     tc_shader_destroy(original_handle);
 }
 
-TEST_CASE("skinned shader variants create Slang vertex-stage variants")
+TEST_CASE("skinned shader variants require C shader-contract assembler")
 {
     std::string vertex =
         "struct VIn { float3 position : POSITION; };\n"
@@ -512,33 +512,7 @@ TEST_CASE("skinned shader variants create Slang vertex-stage variants")
     {
         TcShader original(original_handle);
         TcShader skinned = get_skinned_shader("opaque", original);
-        CHECK(skinned.is_valid());
-        CHECK(skinned.language() == TC_SHADER_LANGUAGE_SLANG);
-        CHECK(skinned.is_variant());
-        CHECK(skinned.variant_op() == TC_SHADER_VARIANT_SKINNING);
-
-        std::string out = skinned.vertex_source();
-        CHECK(out.find("import termin_vertex_transform;") != std::string::npos);
-        CHECK(out.find("ConstantBuffer<TerminBoneBlock> bone_block") != std::string::npos);
-        CHECK(out.find("termin_skinned_vertex") != std::string::npos);
-
-        const tc_shader* skinned_raw = skinned.get();
-        REQUIRE(skinned_raw != nullptr);
-        const tc_shader_resource_binding* material =
-            tc_shader_find_resource_binding(skinned_raw, TC_SHADER_RESOURCE_MATERIAL);
-        REQUIRE(material != nullptr);
-        CHECK_EQ(material->binding, 1u);
-        CHECK_EQ(material->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_MATERIAL));
-        const tc_shader_resource_binding* lighting =
-            tc_shader_find_resource_binding(skinned_raw, "lighting");
-        REQUIRE(lighting != nullptr);
-        CHECK_EQ(lighting->binding, 0u);
-        CHECK_EQ(lighting->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_PASS));
-        const tc_shader_resource_binding* bone =
-            tc_shader_find_resource_binding(skinned_raw, "bone_block");
-        REQUIRE(bone != nullptr);
-        CHECK_EQ(bone->binding, 16u);
-        CHECK_EQ(bone->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_DRAW));
+        CHECK(!skinned.is_valid());
     }
 
     tc_shader_destroy(original_handle);

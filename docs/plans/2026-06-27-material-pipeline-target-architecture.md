@@ -4,7 +4,8 @@ Date: 2026-06-27
 
 ## Status
 
-Active planning document.
+Superseded by `2026-06-27-shader-contract-material-pipeline-architecture.md`
+for the runtime contract model.
 
 This document supersedes the transitional parts of
 `2026-06-12-material-pipeline-slang-plan.md` for implementation planning. The
