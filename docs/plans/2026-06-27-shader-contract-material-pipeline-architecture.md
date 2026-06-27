@@ -212,7 +212,9 @@ This validation is render-owned policy. `termin-graphics` stores the generic
 contract and layout, while `termin-render` decides whether a missing contract is
 an error for the current path. Migrated paths use `validate_shader_contract()`
 to require contracts and compare semantic resource requirements against the
-resolved shader resource layout.
+resolved shader resource layout. The validation runs after shader artifact/layout
+ensure and before binding, so reflection sidecars can populate layout metadata
+without making `tc_shader_contract` depend on that layout.
 
 The pass uses the resource layout to:
 
@@ -347,7 +349,8 @@ must be explicit:
 - Material pipeline resource merge no longer treats `set/binding` as part of the
   semantic resource requirement. Placement conflicts are diagnosed separately.
 - Parser-created material shaders attach a generic declared-source contract with
-  inferred vertex inputs, material UBO metadata, and current shader resources.
+  inferred vertex inputs and requirements derived from `ShaderPhase` /
+  `MaterialUboLayout`, not by reading the shader's current resource layout.
 - Catalog-registered built-in shaders attach a transitional engine-generated
   contract inferred from current loader metadata. Do not add new contract fields
   to `engine-shader-catalog.json`.
@@ -356,7 +359,8 @@ must be explicit:
   validator compares those requirements against the sibling resource layout.
 - Some transitional producers still derive contract requirements from current
   layout metadata at attachment time. That is allowed only as producer-local
-  migration code; it must not become core `tc_shader` behavior.
+  migration code; it must not become core `tc_shader` behavior. The material
+  parser has been moved off that path.
 
 ## Validation
 
@@ -376,6 +380,8 @@ Required tests:
 - Done: render-side validation rejects missing required contracts and
   contract/layout resource mismatches.
 - Done: resource layout updates do not rewrite existing contract resources.
+- Done: parser-created material shaders build contract resources from parsed
+  semantic data instead of resolved layout entries.
 
 ## Non-Goals
 
