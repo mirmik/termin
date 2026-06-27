@@ -21,6 +21,13 @@ Standalone camera math types (`Camera`, `CameraProjection`) are exported from
 `termin.render_components`. The legacy `termin._native.render` compatibility
 surface has been removed.
 
+## MeshRenderer
+
+`MeshRenderer` no longer owns mesh data and does not accept `mesh`,
+`set_mesh`, or `set_mesh_by_name` through Python. Attach `MeshComponent` to the
+same entity and keep mesh offsets on that component; `MeshRenderer` is
+responsible for material, shadow participation, and material overrides.
+
 ## LineRenderer
 
 `LineRenderer` is implemented in C++ and re-exported from `termin.render_components`.

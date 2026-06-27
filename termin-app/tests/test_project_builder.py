@@ -3,7 +3,8 @@ import inspect
 from pathlib import Path
 
 from termin.project_build import profile_build
-from termin.project_builder import build_project, export_legacy_project
+from termin.project_builder import export_legacy_project
+from termin.project_builder.builder import build_project
 from termin.project_builder.__main__ import main as project_builder_main
 
 
@@ -155,29 +156,6 @@ def test_project_builder_cli_uses_explicit_legacy_dev_export_command(tmp_path: P
     assert "build.json" in captured.out
     assert captured.err == ""
     assert (output_dir / "build.json").exists()
-
-
-def test_project_builder_build_command_is_legacy_alias(tmp_path: Path, capsys) -> None:
-    project = tmp_path / "CliLegacyAliasGame"
-    project.mkdir()
-    _write_json(project / "cli.terminproj", {"version": 1, "name": "CliLegacyAliasGame"})
-    _write_json(project / "Main.scene", {"scene": {"uuid": "scene-uuid"}})
-
-    assert project_builder_main(
-        [
-            "build",
-            str(project),
-            "--scene",
-            "Main.scene",
-            "--out",
-            str(project / "dist" / "CliLegacyAliasGame"),
-            "--manifest-only",
-        ]
-    ) == 0
-
-    captured = capsys.readouterr()
-    assert "Legacy dev export:" in captured.out
-    assert "legacy-dev-export compatibility alias" in captured.err
 
 
 def test_packaged_profile_backend_does_not_import_legacy_project_builder() -> None:

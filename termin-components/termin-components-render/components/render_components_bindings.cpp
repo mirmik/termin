@@ -529,18 +529,10 @@ NB_MODULE(_components_render_native, m) {
         .def("__init__", [](nb::handle self) {
             cxx_component_init<MeshRenderer>(self);
         })
-        .def("__init__", [](nb::handle self, nb::object mesh_arg, nb::object material_arg, bool cast_shadow) {
+        .def("__init__", [](nb::handle self, nb::object material_arg, bool cast_shadow) {
             cxx_component_init<MeshRenderer>(self);
             auto* cpp = nb::inst_ptr<MeshRenderer>(self);
             cpp->cast_shadow = cast_shadow;
-
-            if (!mesh_arg.is_none()) {
-                if (nb::isinstance<TcMesh>(mesh_arg)) {
-                    cpp->set_mesh(nb::cast<TcMesh>(mesh_arg));
-                } else if (nb::isinstance<nb::str>(mesh_arg)) {
-                    cpp->set_mesh_by_name(nb::cast<std::string>(mesh_arg));
-                }
-            }
 
             if (!material_arg.is_none()) {
                 if (nb::isinstance<TcMaterial>(material_arg)) {
@@ -549,11 +541,7 @@ NB_MODULE(_components_render_native, m) {
                     cpp->set_material_by_name(nb::cast<std::string>(material_arg));
                 }
             }
-        }, nb::arg("mesh") = nb::none(), nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
-        .def_prop_rw("mesh",
-            [](MeshRenderer& self) -> TcMesh& { return self.get_mesh(); },
-            [](MeshRenderer& self, const TcMesh& v) { self.set_mesh(v); },
-            nb::rv_policy::reference_internal)
+        }, nb::arg("material") = nb::none(), nb::arg("cast_shadow") = true)
         .def_prop_rw("material",
             [](MeshRenderer& self) -> TcMaterial& { return self.material; },
             [](MeshRenderer& self, const TcMaterial& v) { self.set_material(v); },
@@ -569,9 +557,6 @@ NB_MODULE(_components_render_native, m) {
                     self._overridden_material = TcMaterial();
                 }
             })
-        .def("get_mesh", [](MeshRenderer& self) -> TcMesh& { return self.get_mesh(); }, nb::rv_policy::reference_internal)
-        .def("set_mesh", &MeshRenderer::set_mesh)
-        .def("set_mesh_by_name", &MeshRenderer::set_mesh_by_name)
         .def("get_material", &MeshRenderer::get_material)
         .def("get_base_material", &MeshRenderer::get_base_material)
         .def("set_material", &MeshRenderer::set_material)
@@ -600,21 +585,12 @@ NB_MODULE(_components_render_native, m) {
             cxx_component_init<SkinnedMeshRenderer>(self);
         })
         .def("__init__", [](nb::handle self,
-                            nb::object mesh_arg,
                             nb::object material_arg,
                             SkeletonController* skeleton_controller,
                             bool cast_shadow) {
             cxx_component_init<SkinnedMeshRenderer>(self);
             auto* cpp = nb::inst_ptr<SkinnedMeshRenderer>(self);
             cpp->cast_shadow = cast_shadow;
-
-            if (!mesh_arg.is_none()) {
-                if (nb::isinstance<TcMesh>(mesh_arg)) {
-                    cpp->set_mesh(nb::cast<TcMesh>(mesh_arg));
-                } else if (nb::isinstance<nb::str>(mesh_arg)) {
-                    cpp->set_mesh_by_name(nb::cast<std::string>(mesh_arg));
-                }
-            }
 
             if (!material_arg.is_none()) {
                 if (nb::isinstance<TcMaterial>(material_arg)) {
@@ -628,7 +604,6 @@ NB_MODULE(_components_render_native, m) {
                 cpp->set_skeleton_controller(skeleton_controller);
             }
         },
-            nb::arg("mesh") = nb::none(),
             nb::arg("material") = nb::none(),
             nb::arg("skeleton_controller") = nullptr,
             nb::arg("cast_shadow") = true)

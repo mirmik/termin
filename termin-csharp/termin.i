@@ -550,9 +550,6 @@ namespace termin {
 %ignore termin::MeshRenderer::get_override_data;
 %ignore termin::MeshRenderer::set_override_data;
 %ignore termin::MeshRenderer::try_create_override_material;
-%ignore termin::MeshRenderer::mesh_offset_position;
-%ignore termin::MeshRenderer::mesh_offset_euler;
-%ignore termin::MeshRenderer::mesh_offset_scale;
 %ignore termin::MeshRenderer::get_model_matrix;
 
 // KinematicUnitComponent - base fields hidden from SWIG (accessed via inspect system)
@@ -801,19 +798,15 @@ public:
 };
 
 // ============================================================================
-// MeshRenderer - renders a mesh with material
+// MeshRenderer - renders a MeshComponent mesh with material
 // ============================================================================
 
 class MeshRenderer {
 public:
     bool cast_shadow;
-    bool mesh_offset_enabled;
 
     MeshRenderer();
     virtual ~MeshRenderer();
-
-    // Mesh by name
-    void set_mesh_by_name(const std::string& name);
 
     // Material by name
     void set_material_by_name(const std::string& name);

@@ -64,23 +64,27 @@ the editor/project behavior through compatibility wrappers in
 shim was removed on 2026-06-18; use `termin_assets.plugin_preloader` directly.
 
 Status 2026-06-17: `VoxelGridAsset` and voxel-grid asset plugins were moved to
-`termin-voxels` as `termin.voxels.asset` and `termin.voxels.asset_plugin`.
-The app `termin.assets.voxel_grid_asset` and `termin.assets.voxel_grid_plugin`
-shims were removed; use `termin.default_assets.voxels.*` directly. Default
-registration calls the default asset registration helpers, and the package
-also exposes entry points for external plugin discovery.
+`termin-default-assets` under `termin.default_assets.voxels`. The app
+`termin.assets.voxel_grid_asset` and `termin.assets.voxel_grid_plugin` shims
+were removed. Status 2026-06-27: domain shims `termin.voxels.asset` and
+`termin.voxels.asset_plugin` were removed too; use
+`termin.default_assets.voxels.*` directly. Default registration calls the
+default asset registration helpers, and the package also exposes entry points
+for external plugin discovery.
 
 Status 2026-06-17: `NavMeshAsset` and navmesh asset plugins were moved to
-`termin-navmesh` as `termin.navmesh.asset` and
-`termin.navmesh.asset_plugin`. The app `termin.assets.navmesh_asset` and
-`termin.assets.navmesh_plugin` shims were removed; use
+`termin-default-assets` under `termin.default_assets.navmesh`. The app
+`termin.assets.navmesh_asset` and `termin.assets.navmesh_plugin` shims were
+removed. Status 2026-06-27: domain shims `termin.navmesh.asset` and
+`termin.navmesh.asset_plugin` were removed too; use
 `termin.default_assets.navmesh.*` directly. Default registration calls the
 default asset registration helpers, and the package exposes entry points for
 external plugin discovery.
 
-Status 2026-06-17: `NavMeshHandle` was moved to `termin-navmesh` as
-`termin.navmesh.handle.NavMeshHandle`. The app path
-`termin.assets.navmesh_handle` was removed on 2026-06-19, and
+Status 2026-06-17: `NavMeshHandle` was consolidated around the native
+`termin.navmesh.TcNavMesh` runtime identity. The app path
+`termin.assets.navmesh_handle` was removed on 2026-06-19, and the domain shim
+`termin.navmesh.handle.NavMeshHandle` was removed on 2026-06-27.
 `termin.assets.resources` explicitly configures the shared
 `termin_assets.ResourceHandle` resource-manager factory instead of relying on
 the old `termin.assets.resource_handle` import side effect.

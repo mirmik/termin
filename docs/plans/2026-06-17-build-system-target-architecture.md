@@ -165,7 +165,7 @@ Target schema should be explicit and versioned:
       "configuration": "dev",
       "entry_scene": "Scenes/Main.scene",
       "output_dir": "dist/dev",
-      "resource_policy": "dev",
+      "resource_policy": "dev_smoke",
       "python": {
         "enabled": true
       },

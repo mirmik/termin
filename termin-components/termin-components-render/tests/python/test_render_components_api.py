@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from termin.materials import TcMaterial
 from termin.render_components import (
     Camera,
@@ -121,6 +123,22 @@ def test_mesh_renderer_get_phases_for_mark_returns_non_owning_phase_refs():
     assert [phase.phase_mark for phase in opaque] == ["opaque"]
     assert [phase.phase_mark for phase in shadow] == ["shadow"]
     assert material.phases[0].phase_mark == "opaque"
+
+
+def test_mesh_renderer_rejects_legacy_mesh_constructor_argument():
+    with pytest.raises(TypeError):
+        MeshRenderer(mesh="Cube")
+
+
+def test_mesh_renderer_no_longer_exposes_mesh_mutators():
+    renderer = MeshRenderer()
+
+    with pytest.raises(AttributeError):
+        renderer.set_mesh
+    with pytest.raises(AttributeError):
+        renderer.set_mesh_by_name
+    with pytest.raises(AttributeError):
+        renderer.mesh
 
 
 def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():

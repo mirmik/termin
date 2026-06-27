@@ -635,7 +635,7 @@ def test_profile_build_rejects_unsupported_target_block_before_wrapper(
     ("field_name", "field_value", "message"),
     [
         ("configuration", "shipping", "Supported values: dev, debug, release"),
-        ("resource_policy", "placeholder", "Supported values: dev, dev_smoke, strict"),
+        ("resource_policy", "placeholder", "Supported values: dev_smoke, strict"),
     ],
 )
 def test_profile_build_rejects_unsupported_profile_policy_before_wrapper(

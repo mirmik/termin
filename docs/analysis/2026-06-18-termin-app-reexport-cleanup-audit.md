@@ -307,9 +307,11 @@ Current status:
 Several tests used to assert that old app paths re-export canonical classes.
 Those assertions were removed on 2026-06-19 for the app-owned
 `termin.assets.<asset/plugin/handle>` compatibility modules. Tests now import
-canonical package paths directly. Domain-level legacy paths such as
-`termin.mesh.mesh_asset` or `termin.audio.audio_clip_asset` were intentionally
-left out of this app cleanup.
+canonical package paths directly.
+
+Status 2026-06-27: audio, mesh, navmesh, and voxel domain compatibility
+modules were removed too. Use `termin.default_assets.<domain>.*` directly for
+asset types, import/runtime plugin factories, specs, and loaders.
 
 ## Suggested First Pass
 

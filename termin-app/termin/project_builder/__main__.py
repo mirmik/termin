@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import sys
 from pathlib import Path
 
 from termin.project_builder import export_legacy_project
@@ -31,28 +30,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Write build.json and manifest.json without copying resource files",
     )
 
-    compat_parser = subparsers.add_parser(
-        "build",
-        help="Compatibility alias for legacy-dev-export",
-    )
-    compat_parser.add_argument("project", type=Path, help="Path to project root")
-    compat_parser.add_argument("--scene", "-s", type=Path, required=True, help="Entry .scene path")
-    compat_parser.add_argument("--out", "-o", type=Path, required=True, help="Output directory")
-    compat_parser.add_argument(
-        "--manifest-only",
-        action="store_true",
-        help="Write build.json and manifest.json without copying resource files",
-    )
-
     args = parser.parse_args(argv)
 
-    if args.command in ("legacy-dev-export", "build"):
-        if args.command == "build":
-            print(
-                "warning: 'build' is a legacy-dev-export compatibility alias; "
-                "packaged profile builds use termin.project_build.profile_build",
-                file=sys.stderr,
-            )
+    if args.command == "legacy-dev-export":
         result = export_legacy_project(
             project_root=args.project,
             entry_scene=args.scene,
@@ -70,4 +50,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    import sys
+
     sys.exit(main())

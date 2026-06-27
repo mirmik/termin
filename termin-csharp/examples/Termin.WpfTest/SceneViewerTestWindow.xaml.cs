@@ -108,11 +108,12 @@ void main() {
             float z = (float)(rng.NextDouble() * 2);
             entity.Position = new System.Numerics.Vector3(x, y, z);
 
-            // Add MeshRenderer
+            // Add MeshComponent with mesh and MeshRenderer with material
+            var meshComponent = entity.AddComponentByName("MeshComponent");
             var meshRenderer = entity.AddComponentByName("MeshRenderer");
-            if (meshRenderer.IsValid)
+            if (meshComponent.IsValid && meshRenderer.IsValid)
             {
-                meshRenderer.SetField("mesh", _cubeMesh);
+                meshComponent.SetField("mesh", _cubeMesh);
                 meshRenderer.SetField("material", _material);
             }
         }
@@ -130,11 +131,12 @@ void main() {
             float z = (float)(rng.NextDouble() * 2);
             entity.Position = new System.Numerics.Vector3(x, y, z);
 
-            // Add MeshRenderer
+            // Add MeshComponent with mesh and MeshRenderer with material
+            var meshComponent = entity.AddComponentByName("MeshComponent");
             var meshRenderer = entity.AddComponentByName("MeshRenderer");
-            if (meshRenderer.IsValid)
+            if (meshComponent.IsValid && meshRenderer.IsValid)
             {
-                meshRenderer.SetField("mesh", _sphereMesh);
+                meshComponent.SetField("mesh", _sphereMesh);
                 meshRenderer.SetField("material", _material);
             }
         }

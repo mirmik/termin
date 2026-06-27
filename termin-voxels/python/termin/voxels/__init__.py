@@ -51,10 +51,6 @@ def __getattr__(name: str):
         globals().update(exports)
         return exports[name]
 
-    if name == "VoxelGridAsset":
-        from termin.default_assets.voxels.asset import VoxelGridAsset
-        return VoxelGridAsset
-
     if name == "VoxelGridComponent":
         from termin_voxel_components.component import VoxelGridComponent
         return VoxelGridComponent

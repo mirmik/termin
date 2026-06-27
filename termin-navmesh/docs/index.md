@@ -45,9 +45,10 @@ Navmesh asset ownership живет в `termin-default-assets`:
 imports are aliases for `TcNavMesh`, not separate wrappers.
 
 Compatibility status:
-- `termin.navmesh.asset`, `termin.navmesh.asset_plugin`,
-  `termin.navmesh.handle`, and `termin.navmesh.navmesh_asset` remain temporary
-  domain compatibility re-exports during migration.
+- Domain compatibility re-exports `termin.navmesh.asset`,
+  `termin.navmesh.asset_plugin`, `termin.navmesh.handle`, and
+  `termin.navmesh.navmesh_asset` were removed. Use
+  `termin.default_assets.navmesh.*` and `termin.navmesh.TcNavMesh` directly.
 - App compatibility modules `termin.assets.navmesh_asset`,
   `termin.assets.navmesh_handle`, and `termin.assets.navmesh_plugin` were
   removed. Use `termin.default_assets.navmesh.*` directly.
