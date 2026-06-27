@@ -267,27 +267,28 @@ and same-name or same-slot `set/binding` mismatches as placement conflicts. A
 resolved placement may satisfy a matching unplaced requirement. This keeps
 backend placement out of the semantic resource contract.
 
-## Built-In Shader Catalog Contracts
+## Built-In Shader Contracts
 
-The built-in shader catalog is a transitional source loader, not a target
-contract database. Catalog-registered engine shaders currently attach a generic
-`tc_shader_contract` with source kind `TC_SHADER_CONTRACT_SOURCE_GENERATED`
-during `register_builtin_shader_from_catalog()`, but this must not grow
-`engine-shader-catalog.json`.
+Typed engine shader descriptors are the target source of built-in shader
+identity, source-stage membership, entry points, and generic contract
+requirements. `engine-shader-catalog.json` remains a transitional fallback source
+loader for entries that have not yet moved to typed/generated descriptors. It is
+not a target contract database and must not grow new contract or placement
+policy.
 
-The temporary catalog contract is inferred from the existing loader metadata:
+Typed descriptors and the remaining temporary catalog path provide the same
+contract shape:
 
-- `stages.vertex.inputs` declares required vertex input semantics;
+- stage inputs declare required vertex input semantics;
 - declarative `resources` entries declare runtime resources by name, kind,
   scope, and optional semantic size/stride;
 - backend placement stays in the shader resource layout.
 
 This keeps runtime passes on the same `tc_shader -> tc_shader_contract` path for
 material pipeline shaders and engine built-ins. Draw mode is owned by the pass
-using the shader, not by the catalog contract. New contract or placement metadata
-must not be added to `engine-shader-catalog.json`; the target direction is to
-delete that manifest and move engine shader identity/contract ownership into
-code-generated or reflection-derived sources.
+using the shader, not by the built-in shader contract. The target direction is
+to delete the manifest once built-in shader identity/contract ownership has
+moved into typed/generated descriptors or reflection-derived sources.
 
 ## Legacy Policy
 
@@ -351,10 +352,10 @@ must be explicit:
 - Parser-created material shaders attach a generic declared-source contract with
   inferred vertex inputs and requirements derived from `ShaderPhase` /
   `MaterialUboLayout`, not by reading the shader's current resource layout.
-- Catalog-registered built-in shaders attach a transitional engine-generated
-  contract inferred directly from current loader declarations, not by reading
-  the shader's current resource layout. Do not add new contract fields to
-  `engine-shader-catalog.json`.
+- Built-in shaders attach engine-generated contracts inferred directly from
+  typed descriptors where available, otherwise from transitional catalog
+  declarations. They do not read the shader's current resource layout. Do not
+  add new contract fields to `engine-shader-catalog.json`.
 - `tc_shader_set_resource_layout()` does not update `tc_shader_contract`.
   Contract producers must attach semantic requirements explicitly. The render
   validator compares those requirements against the sibling resource layout.
