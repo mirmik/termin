@@ -382,7 +382,7 @@ class ProjectFileWatcher:
                 if ext in self._processors:
                     priority = self._processors[ext].priority
                     pending_files.append((priority, file_path, ext))
-                elif ext in (".meta", ".spec"):
+                elif ext == ".meta":
                     base_ext = self._get_spec_base_ext(file_path)
                     if base_ext and base_ext in self._processors:
                         priority = self._processors[base_ext].priority
@@ -449,7 +449,7 @@ class ProjectFileWatcher:
                     self._on_file_changed(path)
 
     def _get_spec_base_ext(self, path: str) -> str | None:
-        if path.endswith(".meta") or path.endswith(".spec"):
+        if path.endswith(".meta"):
             base_path = path[:-5]
             return os.path.splitext(base_path)[1].lower() or None
         return None
@@ -460,7 +460,7 @@ class ProjectFileWatcher:
 
         ext = os.path.splitext(path)[1].lower()
 
-        if ext in (".meta", ".spec"):
+        if ext == ".meta":
             base_ext = self._get_spec_base_ext(path)
             if base_ext:
                 processor = self._processors.get(base_ext)
@@ -489,7 +489,7 @@ class ProjectFileWatcher:
         ext = os.path.splitext(path)[1].lower()
         if ext in self._processors:
             return True
-        if ext in (".meta", ".spec"):
+        if ext == ".meta":
             base_ext = self._get_spec_base_ext(path)
             return base_ext is not None and base_ext in self._processors
         return False
@@ -508,7 +508,7 @@ class ProjectFileWatcher:
     def _on_file_changed(self, path: str) -> None:
         ext = os.path.splitext(path)[1].lower()
 
-        if ext in (".meta", ".spec"):
+        if ext == ".meta":
             base_ext = self._get_spec_base_ext(path)
             if base_ext:
                 processor = self._processors.get(base_ext)
@@ -551,7 +551,7 @@ class ProjectFileWatcher:
         if self._is_resolved_path_ignored(resolved, ignored_roots):
             return True
 
-        if path.endswith(".meta") or path.endswith(".spec"):
+        if path.endswith(".meta"):
             resource_path = Path(path[:-5]).resolve()
             return self._is_resolved_path_ignored(resource_path, ignored_roots)
 

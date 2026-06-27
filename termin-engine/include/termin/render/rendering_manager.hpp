@@ -79,8 +79,6 @@ private:
     RenderingManager(const RenderingManager&) = delete;
     RenderingManager& operator=(const RenderingManager&) = delete;
 
-    static RenderingManager* s_instance;
-
 public:
     // ========================================================================
     // Configuration
