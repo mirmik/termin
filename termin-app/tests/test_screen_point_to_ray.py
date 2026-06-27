@@ -3,17 +3,22 @@ import pytest
 
 from termin.scene import Entity
 from termin.render_components.camera import PerspectiveCameraComponent
-from termin.geombase import Pose3
+from termin.geombase import GeneralPose3, Pose3
 
 
 def build_basic_camera():
     cam_entity = Entity(
-        pose=Pose3(lin=np.array([0.0, 0.0, 0.0])),
+        pose=GeneralPose3(lin=np.array([0.0, 0.0, 0.0])),
         name="camera"
     )
     cam = PerspectiveCameraComponent()
     cam_entity.add_component(cam)
     return cam_entity, cam
+
+
+def test_entity_pose_constructor_rejects_legacy_pose3():
+    with pytest.raises(RuntimeError, match="GeneralPose3"):
+        Entity(pose=Pose3.identity(), name="legacy_pose")
 
 
 def test_center_ray_direction_forward():

@@ -17,7 +17,6 @@
 #include <termin/entity/entity.hpp>
 #include <termin/geom/general_transform3.hpp>
 #include <termin/geom/general_pose3.hpp>
-#include <termin/geom/pose3.hpp>
 #include <termin/tc_scene.hpp>
 #include "core/tc_scene.h"
 #include "inspect/tc_inspect.h"
@@ -79,39 +78,14 @@ void bind_entity_class(nb::module_& m) {
             new (self) Entity(Entity::create(get_standalone_pool(), name));
 
             if (!pose.is_none()) {
-                try {
-                    GeneralPose3 gpose = nb::cast<GeneralPose3>(pose);
-                    self->transform().set_local_pose(gpose);
-                } catch (const nb::cast_error&) {
-                    tc::Log::debug("[Entity::init] Pose is not GeneralPose3, trying Pose3 fallback");
-                    try {
-                        Pose3 p = nb::cast<Pose3>(pose);
-                        self->transform().set_local_pose(GeneralPose3(p.ang, p.lin, Vec3{1, 1, 1}));
-                    } catch (const nb::cast_error&) {
-                        tc::Log::debug("[Entity::init] Pose is not Pose3, trying attribute-based fallback");
-                        GeneralPose3 gpose;
-                        if (nb::hasattr(pose, "lin") && nb::hasattr(pose, "ang")) {
-                            try {
-                                auto lin = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(pose.attr("lin"));
-                                auto ang = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(pose.attr("ang"));
-                                gpose.lin = numpy_to_vec3(lin);
-                                gpose.ang = numpy_to_quat(ang);
-                                if (nb::hasattr(pose, "scale")) {
-                                    auto scale = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(pose.attr("scale"));
-                                    gpose.scale = numpy_to_vec3(scale);
-                                }
-                            } catch (const nb::cast_error&) {
-                                tc::Log::debug("[Entity::init] Pose attributes are not numpy arrays, trying direct Vec3/Quat cast");
-                                gpose.lin = nb::cast<Vec3>(pose.attr("lin"));
-                                gpose.ang = nb::cast<Quat>(pose.attr("ang"));
-                                if (nb::hasattr(pose, "scale")) {
-                                    gpose.scale = nb::cast<Vec3>(pose.attr("scale"));
-                                }
-                            }
-                        }
-                        self->transform().set_local_pose(gpose);
-                    }
+                if (!nb::isinstance<GeneralPose3>(pose)) {
+                    throw std::runtime_error(
+                        "Entity pose must be termin.geombase.GeneralPose3 or None; "
+                        "Pose3 compatibility fallback has been removed"
+                    );
                 }
+                GeneralPose3 gpose = nb::cast<GeneralPose3>(pose);
+                self->transform().set_local_pose(gpose);
             }
             self->set_priority(priority);
             self->set_pickable(pickable);

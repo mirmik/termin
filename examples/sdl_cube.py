@@ -15,7 +15,8 @@ from sdl2 import video
 
 from termin.scene import Entity, TcScene
 from termin.render_components import PerspectiveCameraComponent, MeshRenderer
-from termin.geombase import Pose3
+from termin.geombase import GeneralPose3
+from termin.mesh import MeshComponent
 from tgfx import TcShader
 from termin.materials import TcMaterial
 from termin.render_framework import RenderEngine, RenderPipeline
@@ -99,14 +100,20 @@ def build_scene():
     mesh3 = CubeMesh()
     tc_mesh = TcMesh.from_mesh3(mesh3, "SDLCube")
 
-    cube = Entity(pose=Pose3.identity(), name="cube")
-    cube.add_component(MeshRenderer(tc_mesh, material))
+    cube = Entity(pose=GeneralPose3.identity(), name="cube")
+    mesh_component = MeshComponent()
+    mesh_component.mesh = tc_mesh
+    cube.add_component(mesh_component)
+    cube.add_component(MeshRenderer(material=material))
 
     scene = TcScene.create(name="sdl_cube")
     scene.add(cube)
 
     cam_entity = Entity(
-        pose=Pose3.looking_at([0, -4, 0], [0, 0, 0]),
+        pose=GeneralPose3.looking_at(
+            np.array([0.0, -4.0, 0.0], dtype=np.float64),
+            np.array([0.0, 0.0, 0.0], dtype=np.float64),
+        ),
         name="camera",
     )
     camera = PerspectiveCameraComponent()
