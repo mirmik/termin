@@ -386,6 +386,7 @@ def test_headless_runtime_run_forever_stops_on_request_quit(tmp_path: Path) -> N
 
 def test_headless_runtime_attaches_collision_world_for_physics(tmp_path: Path) -> None:
     _write_scene_with_physics_world(tmp_path)
+    baseline_pipeline_count = tc_pipeline_registry_count()
     runtime = HeadlessRuntime(
         tmp_path,
         "Main.scene",
@@ -395,7 +396,7 @@ def test_headless_runtime_attaches_collision_world_for_physics(tmp_path: Path) -
 
     try:
         runtime.initialize()
-        assert tc_pipeline_registry_count() == 0
+        assert tc_pipeline_registry_count() == baseline_pipeline_count
         attached_exts = scene_ext_attached_names(runtime.scene)
         assert attached_exts == ["collision_world"]
 
@@ -403,6 +404,7 @@ def test_headless_runtime_attaches_collision_world_for_physics(tmp_path: Path) -
         assert len(components) == 1
 
         runtime.run_frames(frames=1, dt=0.01)
+        assert tc_pipeline_registry_count() == baseline_pipeline_count
 
         component = components[0]
         assert component.physics_world.collision_world() is not None
