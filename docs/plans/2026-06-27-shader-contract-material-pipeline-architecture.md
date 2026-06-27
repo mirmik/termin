@@ -213,6 +213,27 @@ The assembler flow:
 This makes `tc_shader_handle` the only runtime shader identity and
 `tc_shader_contract` the authoritative draw contract.
 
+## Built-In Shader Catalog Contracts
+
+The built-in shader catalog is another contract producer. Catalog-registered
+engine shaders attach a generic `tc_shader_contract` with producer
+`TC_SHADER_CONTRACT_PRODUCER_ENGINE_GENERATED` during
+`register_builtin_shader_from_catalog()`.
+
+The catalog contract is built from catalog metadata:
+
+- `contract.draw_kind` declares mesh, instanced mesh, direct, fullscreen, or
+  compute draw submission;
+- `stages.vertex.inputs` declares required vertex input semantics;
+- the already resolved `tc_shader_resource_binding` layout declares runtime
+  resources by name, kind, scope, stage, and backend placement.
+
+This keeps runtime passes on the same `tc_shader -> tc_shader_contract` path for
+material pipeline shaders and engine built-ins. A temporary compatibility default
+maps fragment-only catalog entries to fullscreen and other live graphics entries
+to mesh, but new or migrated catalog entries should declare `contract.draw_kind`
+explicitly.
+
 ## Legacy Policy
 
 Shaders without `tc_shader_contract` are legacy/external shaders. Their handling
@@ -259,6 +280,9 @@ must be explicit:
 - Parser-created material shaders attach a generic mesh contract with producer
   `TC_SHADER_CONTRACT_PRODUCER_SHADER_PARSER`, inferred vertex inputs, material
   UBO metadata, and current shader resources.
+- Catalog-registered built-in shaders attach an engine-generated contract from
+  catalog metadata. Obvious fullscreen postprocess entries now declare
+  `contract.draw_kind = "fullscreen"` explicitly.
 - When a shader resource layout is replaced, an existing `tc_shader_contract`
   refreshes its resource list from the shader layout. This keeps parser-created
   Slang shaders consistent when reflection sidecars provide layout metadata.
@@ -276,6 +300,7 @@ Required tests:
   instance storage.
 - Done: shadow/depth/id contracts request compact vertex inputs.
 - Done: parser-created static material shaders expose shader parser contracts.
+- Done: catalog-registered built-in shaders expose engine-generated contracts.
 - Done: legacy shader without contract takes only explicit legacy fallback path.
 
 ## Non-Goals
