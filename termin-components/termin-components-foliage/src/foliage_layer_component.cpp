@@ -71,11 +71,23 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
     return assemble_material_shader_override(request);
 }
 
-bool shader_contract_is_instanced_mesh(TcShader shader)
+bool shader_contract_requires_foliage_instances(TcShader shader)
 {
     tc_shader_contract_view contract{};
-    return tc_shader_get_contract_view(shader.get(), &contract) &&
-           contract.draw_kind == TC_SHADER_CONTRACT_DRAW_INSTANCED_MESH;
+    if (!tc_shader_get_contract_view(shader.get(), &contract)) {
+        return false;
+    }
+    for (uint32_t i = 0; i < contract.resource_count; ++i) {
+        const tc_shader_resource_requirement& resource = contract.resources[i];
+        if (std::strncmp(
+                resource.name,
+                "foliage_instances",
+                TC_SHADER_RESOURCE_NAME_MAX) == 0 &&
+            resource.kind == TC_SHADER_RESOURCE_STORAGE_BUFFER) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool validate_foliage_vertex_layout(
@@ -535,7 +547,7 @@ bool FoliageLayerComponent::draw_tgfx2(
     TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
         shader = get_foliage_instanced_shader(TcShader(phase->shader), shadow_variant);
-    } else if (!shader_contract_is_instanced_mesh(shader)) {
+    } else if (!shader_contract_requires_foliage_instances(shader)) {
         shader = get_foliage_instanced_shader(shader, shadow_variant);
     }
     if (!shader.is_valid()) {

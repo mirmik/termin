@@ -519,8 +519,7 @@ TEST_CASE("skinned shader variants create shader-contract assembler output")
 
         tc_shader_contract_view contract{};
         REQUIRE(tc_shader_get_contract_view(skinned.get(), &contract));
-        CHECK_EQ(contract.producer_kind, TC_SHADER_CONTRACT_PRODUCER_MATERIAL_PIPELINE);
-        CHECK_EQ(contract.draw_kind, TC_SHADER_CONTRACT_DRAW_MESH);
+        CHECK_EQ(contract.source_kind, TC_SHADER_CONTRACT_SOURCE_ASSEMBLED);
 
         const tc_shader_resource_binding* bone =
             tc_shader_find_resource_binding(skinned.get(), TC_SHADER_RESOURCE_BONE_BLOCK);
