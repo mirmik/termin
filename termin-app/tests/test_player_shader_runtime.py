@@ -6,6 +6,7 @@ from pathlib import Path
 from termin.player import runtime as player_runtime
 from termin.player.runtime import PlayerRuntime
 from termin import shader_runtime
+from termin_assets import set_resource_manager_factory
 
 
 def _fake_executable(path: Path) -> Path:
@@ -41,6 +42,12 @@ def test_project_shader_runtime_configures_project_cache(monkeypatch, tmp_path: 
     assert Path(os.environ["TERMIN_SLANGC"]) == slangc
     assert (project_root / ".termin" / "shader-artifacts").is_dir()
     assert (project_root / ".termin" / "shader-cache").is_dir()
+
+
+def test_glsl_fallback_loader_requires_configured_resource_manager() -> None:
+    set_resource_manager_factory(None)
+
+    assert not shader_runtime._glsl_fallback_loader("__missing_include__")
 
 
 def test_player_source_runtime_requires_project_shader_runtime(monkeypatch, tmp_path: Path):

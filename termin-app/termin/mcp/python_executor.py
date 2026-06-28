@@ -146,7 +146,7 @@ class PythonScriptExecutor:
         self._add_runtime_context(namespace)
 
     def _add_common_context(self, namespace: dict[str, object | None]) -> None:
-        from termin.assets.resources import ResourceManager
+        from termin.editor_core.resource_manager import ResourceManager
         from termin.geombase import GeneralPose3, Pose3, Quat, Vec3, Vec4
         from termin.scene import GeneralTransform3
         import termin

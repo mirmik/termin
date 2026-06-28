@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Callable
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.assets.resources import ResourceManager
+    from termin.editor_core.resource_manager import ResourceManager
     from termin.scene import TcScene as Scene
 
 

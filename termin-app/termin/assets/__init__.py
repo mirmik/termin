@@ -1,1 +1,0 @@
-"""Termin app asset package."""

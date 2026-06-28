@@ -217,7 +217,7 @@ class EntityOperations:
     # ------------------------------------------------------------------
 
     def drop_prefab(self, prefab_path: str, parent: Entity | None) -> None:
-        from termin.assets.resources import ResourceManager
+        from termin.editor_core.resource_manager import ResourceManager
 
         rm = ResourceManager.instance()
         prefab_name = Path(prefab_path).stem
@@ -241,7 +241,7 @@ class EntityOperations:
         world_position: tuple[float, float, float] | None = None,
     ) -> None:
         from termin.glb.instantiator import instantiate_glb
-        from termin.assets.resources import ResourceManager
+        from termin.editor_core.resource_manager import ResourceManager
 
         rm = ResourceManager.instance()
         glb_name = Path(glb_path).stem

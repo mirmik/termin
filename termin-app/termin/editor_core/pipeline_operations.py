@@ -159,7 +159,7 @@ class PipelineOperations:
 
     def load_from_file(self, path: str) -> "RenderPipeline | None":
         from termin.render_framework import RenderPipeline
-        from termin.assets.resources import ResourceManager
+        from termin.editor_core.resource_manager import ResourceManager
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)

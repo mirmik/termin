@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Set
 
 from tcbase import log
-from termin.assets.project_file_watcher import FilePreLoader
+from termin.editor_core.project_file_watcher import FilePreLoader
 
 
 LOOSE_PYTHON_NAMESPACE = "termin_project"

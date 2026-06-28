@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 from termin_assets import PreLoadResult
 from tgfx import TcTexture, tc_texture_ensure_loaded, tc_texture_is_loaded
 

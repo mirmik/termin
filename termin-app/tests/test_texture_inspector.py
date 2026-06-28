@@ -1,6 +1,6 @@
 from PIL import Image
 
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 from termin.editor_tcgui.texture_inspector import TextureInspectorTcgui
 from termin.default_assets.render.texture_spec import TextureSpec
 

@@ -581,3 +581,23 @@ The first useful milestone is not a full module split. It is:
 - no imports from player/build tooling into `termin.editor_core.file_processors`.
 
 This milestone gives the architectural benefit without forcing every asset class into its final package immediately.
+
+## Status 2026-06-29: termin-app asset namespace removed
+
+The final app asset footprint cleanup removed the remaining source modules
+under `termin-app/termin/assets`.
+
+- `termin.assets.resources` no longer owns or exposes an app ResourceManager.
+  Editor code imports `termin.editor_core.resource_manager.ResourceManager`,
+  which is an editor composition alias for
+  `termin.default_assets.resource_manager.DefaultResourceManager`.
+- `termin.assets.project_file_watcher` was replaced by
+  `termin.editor_core.project_file_watcher`, keeping the editor ignored-root
+  policy out of the neutral asset namespace.
+- Non-editor cleanup code in `termin-modules` uses the active
+  `termin_assets.get_resource_manager()` process factory instead of importing
+  app resources.
+
+`DefaultResourceManager` is now the canonical standard SDK resource manager.
+The remaining asset-runtime work should happen in `termin-assets`,
+`termin-default-assets`, or dedicated domain packages, not in `termin-app`.
