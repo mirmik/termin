@@ -226,9 +226,61 @@ def test_glb_register_file_creates_spec_child_assets() -> None:
     assert skeleton_asset.embedded_parent is glb_asset
     assert skeleton_asset.embedded_parent_key == "skeleton"
     assert animation_asset is not None
-    assert animation_asset.name == "Walk"
+    assert animation_asset.name == "robot_Walk"
     assert animation_asset.embedded_parent is glb_asset
     assert animation_asset.embedded_parent_key == "Walk"
+
+
+def test_glb_animation_child_asset_names_are_scoped_by_parent_glb() -> None:
+    rm = ResourceManager()
+
+    rm.register_file(
+        PreLoadResult(
+            resource_type="glb",
+            path="/tmp/robot.glb",
+            content=None,
+            uuid="glb-robot-uuid",
+            spec_data={
+                "uuid": "glb-robot-uuid",
+                "resources": {
+                    "animations": {"Walk": "glb-robot-walk-uuid"},
+                },
+            },
+        )
+    )
+    rm.register_file(
+        PreLoadResult(
+            resource_type="glb",
+            path="/tmp/guard.glb",
+            content=None,
+            uuid="glb-guard-uuid",
+            spec_data={
+                "uuid": "glb-guard-uuid",
+                "resources": {
+                    "animations": {"Walk": "glb-guard-walk-uuid"},
+                },
+            },
+        )
+    )
+
+    robot_glb = rm.get_glb_asset("robot")
+    guard_glb = rm.get_glb_asset("guard")
+    robot_walk = rm.get_animation_clip_asset_by_uuid("glb-robot-walk-uuid")
+    guard_walk = rm.get_animation_clip_asset_by_uuid("glb-guard-walk-uuid")
+
+    assert robot_glb is not None
+    assert guard_glb is not None
+    assert robot_walk is not None
+    assert guard_walk is not None
+    assert robot_walk is not guard_walk
+    assert robot_walk.name == "robot_Walk"
+    assert guard_walk.name == "guard_Walk"
+    assert robot_walk.embedded_parent is robot_glb
+    assert guard_walk.embedded_parent is guard_glb
+    assert robot_walk.embedded_parent_key == "Walk"
+    assert guard_walk.embedded_parent_key == "Walk"
+    assert rm.get_animation_clip_asset("robot_Walk") is robot_walk
+    assert rm.get_animation_clip_asset("guard_Walk") is guard_walk
 
 
 def test_default_preloaders_use_plugin_adapters_for_direct_asset_files() -> None:
