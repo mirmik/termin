@@ -33,6 +33,63 @@ bool picking_debug_enabled() {
     return value && value[0] != '\0' && value[0] != '0';
 }
 
+struct PickIdLookupScan {
+    uint32_t target_pick_id = 0;
+    size_t scanned_count = 0;
+    bool found = false;
+    tc_entity_id found_id = TC_ENTITY_ID_INVALID;
+    const char* found_name = nullptr;
+    uint32_t min_pick_id = 0;
+    uint32_t max_pick_id = 0;
+};
+
+static bool scan_pick_id_lookup(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    auto* scan = static_cast<PickIdLookupScan*>(user_data);
+    uint32_t current_pick_id = tc_entity_pool_pick_id(pool, id);
+    scan->scanned_count++;
+    if (current_pick_id != 0) {
+        if (scan->min_pick_id == 0 || current_pick_id < scan->min_pick_id) {
+            scan->min_pick_id = current_pick_id;
+        }
+        if (current_pick_id > scan->max_pick_id) {
+            scan->max_pick_id = current_pick_id;
+        }
+    }
+    if (current_pick_id == scan->target_pick_id) {
+        scan->found = true;
+        scan->found_id = id;
+        scan->found_name = tc_entity_pool_name(pool, id);
+        return false;
+    }
+    return true;
+}
+
+static void log_pick_lookup_miss_details(
+    tc_entity_pool* pool,
+    uint32_t pick_id,
+    const char* context
+) {
+    PickIdLookupScan scan;
+    scan.target_pick_id = pick_id;
+    tc_entity_pool_foreach(pool, scan_pick_id_lookup, &scan);
+
+    tc_log(
+        TC_LOG_WARN,
+        "[PickingDebug] %s: pick_id=%u lookup miss; linear_found=%d pool_count=%zu scanned=%zu "
+        "pick_range=%u..%u entity='%s' entity_id=(%u,%u)",
+        context ? context : "pick lookup",
+        pick_id,
+        scan.found ? 1 : 0,
+        tc_entity_pool_count(pool),
+        scan.scanned_count,
+        scan.min_pick_id,
+        scan.max_pick_id,
+        scan.found_name ? scan.found_name : "<none>",
+        scan.found_id.index,
+        scan.found_id.generation
+    );
+}
+
 static bool mesh_triangle_indices(const tc_mesh* mesh, uint32_t tri, uint32_t out[3]) {
     if (!mesh || !mesh->indices) {
         return false;
@@ -841,6 +898,10 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
             tc_log(TC_LOG_WARN,
                    "[PickingDebug] surface pick decoded pick_id=%d but entity lookup failed in viewport scene",
                    pick_id);
+            log_pick_lookup_miss_details(
+                pool,
+                static_cast<uint32_t>(pick_id),
+                "surface pick viewport scene");
         }
         return result;
     }
@@ -893,6 +954,10 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
             tc_log(TC_LOG_WARN,
                    "[PickingDebug] surface resolve failed: pick_id=%d not found in scene entity pool",
                    pick_id);
+            log_pick_lookup_miss_details(
+                pool,
+                static_cast<uint32_t>(pick_id),
+                "surface resolve viewport scene");
         }
         return result;
     }
