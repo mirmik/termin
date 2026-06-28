@@ -15,6 +15,10 @@ from termin.project_build.runtime_package_exporter import (
 )
 from termin.player.runtime_package_loader import _material_texture_resources_from_shader_spec
 
+full_runtime_package_exporter = pytest.mark.full(
+    reason="runtime package export/build scenarios spawn shader compiler subprocesses"
+)
+
 
 def _write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -294,6 +298,7 @@ def test_default_pipeline_exports_world_text_shader() -> None:
     assert ENGINE_TEXT3D_SHADER_UUID in shader_uuids
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     project = tmp_path / "RuntimeGame"
     project.mkdir()
@@ -400,6 +405,7 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
     )
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_includes_project_material_assets(tmp_path: Path) -> None:
     project = tmp_path / "DynamicMaterialGame"
     project.mkdir()
@@ -433,6 +439,7 @@ def test_export_runtime_package_includes_project_material_assets(tmp_path: Path)
     } in manifest["resources"]
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_reports_missing_resources_as_errors_by_default(tmp_path: Path) -> None:
     project = tmp_path / "StrictResourceGame"
     project.mkdir()
@@ -494,6 +501,7 @@ def test_export_runtime_package_reports_missing_resources_as_errors_by_default(t
     ]
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_path: Path) -> None:
     project = tmp_path / "MeshAssetGame"
     project.mkdir()
@@ -581,6 +589,7 @@ def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_pat
     assert "Runtime exporter used fallback mesh because registry entry is unavailable" not in diagnostic_messages
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_reports_malformed_mesh_meta_before_dev_smoke_fallback(tmp_path: Path) -> None:
     project = tmp_path / "MalformedMeshMetaGame"
     project.mkdir()
@@ -648,6 +657,7 @@ def test_export_runtime_package_reports_malformed_mesh_meta_before_dev_smoke_fal
     )
 
 
+@full_runtime_package_exporter
 def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     project = tmp_path / "DesktopGame"
     project.mkdir()
@@ -1168,6 +1178,7 @@ def test_desktop_runtime_packager_prefers_newest_duplicate_distribution_metadata
     ) == "VALUE = 2\n"
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path: Path) -> None:
     project = tmp_path / "BuiltinShaderCatalogGame"
     project.mkdir()
@@ -1284,6 +1295,7 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
     assert not (result.package_dir / "shaders" / "layout").exists()
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
     project = tmp_path / "RootSceneGame"
     project.mkdir()
@@ -1301,6 +1313,7 @@ def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:
     assert scene_data == {"uuid": "root-scene", "entities": []}
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_can_use_slang_default_shader(tmp_path: Path) -> None:
     project = tmp_path / "SlangDefaultGame"
     project.mkdir()
@@ -1390,6 +1403,7 @@ def test_export_runtime_package_rejects_unknown_default_shader_language(tmp_path
         )
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Path) -> None:
     project = tmp_path / "PipelineGame"
     project.mkdir()
@@ -1449,6 +1463,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
     } in manifest["resources"]
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) -> None:
     project = tmp_path / "MalformedPipelineMetaGame"
     project.mkdir()
@@ -1501,6 +1516,7 @@ def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) 
     )
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -> None:
     import tgfx
     from termin.materials import TcMaterial
@@ -1626,6 +1642,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
     assert result.diagnostics == []
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -> None:
     import tgfx
     from termin.materials import TcMaterial
@@ -1714,6 +1731,7 @@ def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -
     assert result.diagnostics == []
 
 
+@full_runtime_package_exporter
 def test_export_runtime_package_can_record_d3d11_shader_artifacts(tmp_path: Path) -> None:
     import tgfx
     from termin.materials import TcMaterial
@@ -1801,6 +1819,7 @@ def test_export_runtime_package_can_record_d3d11_shader_artifacts(tmp_path: Path
     assert result.diagnostics == []
 
 
+@full_runtime_package_exporter
 def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, monkeypatch) -> None:
     project = tmp_path / "AndroidGame"
     project.mkdir()
@@ -1876,6 +1895,7 @@ def test_build_android_project_exports_package_and_copies_apk(tmp_path: Path, mo
     assert validation_diagnostic in result.diagnostics
 
 
+@full_runtime_package_exporter
 def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Path, monkeypatch) -> None:
     project = tmp_path / "QuestGame"
     project.mkdir()
