@@ -321,65 +321,6 @@ set_target_properties(termin_modules_cli PROPERTIES
 termin_set_rpath_tool(termin_modules_cli)
 install(TARGETS termin_modules_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-set(_termin_player_has_sdl OFF)
-if(TARGET termin_display)
-    get_target_property(_termin_display_public_defs termin_display INTERFACE_COMPILE_DEFINITIONS)
-    if(_termin_display_public_defs AND "TERMIN_DISPLAY_HAS_SDL" IN_LIST _termin_display_public_defs)
-        set(_termin_player_has_sdl ON)
-    endif()
-endif()
-
-if(TARGET termin_modules_python AND _termin_player_has_sdl)
-    add_executable(termin_player
-        app/termin_player.cpp
-        termin/player/player_runtime_host.cpp
-    )
-    target_compile_features(termin_player PRIVATE cxx_std_20)
-    target_include_directories(termin_player PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${Python_INCLUDE_DIRS}
-    )
-    target_link_libraries(termin_player PRIVATE
-        Python::Python
-        termin_bootstrap::termin_bootstrap
-        termin_runtime::termin_runtime
-        termin_display::termin_display
-        termin_engine::termin_engine
-        termin_render::termin_render
-        termin_render_passes::termin_render_passes
-        termin_collision::termin_collision
-        termin_components_mesh::termin_components_mesh
-        termin_components_collision::termin_components_collision
-        termin_components_kinematic::termin_components_kinematic
-        termin_components_render::termin_components_render
-        termin_components_skeleton::termin_components_skeleton
-        termin_modules::termin_modules
-        termin_modules_python
-    )
-    if(NOT WIN32 AND NOT APPLE)
-        target_link_options(termin_player PRIVATE
-            "LINKER:--no-as-needed"
-        )
-    endif()
-    target_compile_options(termin_player PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-    set_target_properties(termin_player PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    )
-    if(WIN32)
-        set_target_properties(termin_player PROPERTIES WIN32_EXECUTABLE FALSE)
-    endif()
-    install(TARGETS termin_player RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-    set_target_properties(termin_player PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/lib;$ORIGIN"
-        BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
-        BUILD_WITH_INSTALL_RPATH FALSE
-    )
-elseif(NOT TARGET termin_modules_python)
-    message(STATUS "termin_player disabled because termin_modules_python target is unavailable")
-else()
-    message(STATUS "termin_player disabled because termin_display was built without SDL")
-endif()
-
 add_executable(termin_stdlib
     app/termin_stdlib.cpp
 )

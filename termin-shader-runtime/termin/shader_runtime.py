@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import importlib
 import os
 from pathlib import Path
 
@@ -46,10 +47,10 @@ def unregister_glsl_preprocessor_fallback() -> None:
 
 def _glsl_fallback_loader(name: str) -> bool:
     """Load GLSL include from ResourceManager if it is not already registered."""
-    from termin.assets.resources import ResourceManager
-
     try:
-        rm = ResourceManager.instance()
+        resources_module = importlib.import_module("termin.assets.resources")
+        resource_manager_type = getattr(resources_module, "ResourceManager")
+        rm = resource_manager_type.instance()
         asset = rm.glsl.get_asset(name)
         if asset is None:
             log.error(f"[GlslPreprocessor] Fallback: glsl '{name}' not found in ResourceManager")

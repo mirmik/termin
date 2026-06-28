@@ -73,10 +73,10 @@ Status values:
 | needs-work | python | `termin-app/tests/test_material_inspector_texture.py` | Default texture test checks a valid handle but does not prove the selected texture is the expected `white` default. |
 | reviewed | python | `termin-app/tests/test_material_pass_serialization.py` | Covers material pass texture resource serialization through pipeline copy and material UUID reference loading. |
 | reviewed | python | `termin-app/tests/test_material_registry_copy.py` | Covers material registry copy behavior and runtime asset lifecycle regression. |
-| reviewed | python | `termin-app/tests/test_mcp_base.py` | Covers owner-thread Python execution, editor/player MCP tool exposure, config merging, and screenshot response structure. |
+| reviewed | python | `termin-player/tests/test_mcp_base.py` | Covers owner-thread Python execution, shared/player MCP tool exposure, config merging, and screenshot response structure. |
 | reviewed | python | `termin-app/tests/test_mesh_spec_defaults.py` | Covers default axis conversion and explicit identity axis preservation. |
 | reviewed | python | `termin-app/tests/test_navmesh_package_facade.py` | Keeps public facade import boundary lightweight and skips native-dependent export only when SDK library is unavailable. |
-| reviewed | python | `termin-app/tests/test_player_manifest_assets.py` | Removed duplicated default asset type matrix; remaining manifest-loader test uses a supplied fake registry and checks app-level plugin consumption/order. |
+| reviewed | python | `termin-player/tests/test_player_manifest_assets.py` | Removed duplicated default asset type matrix; remaining manifest-loader test uses a supplied fake registry and checks player plugin consumption/order. |
 | reviewed | python | `termin-app/tests/test_procedural_mesh_component.py` | Covers procedural mesh regeneration reusing the existing TcMesh handle. |
 | reviewed | python | `termin-app/tests/test_procedural_mesh_editor_extension.py` | Covers shared document controller wiring, panel state, and viewport drag edits for contour/path/wall operations. |
 | needs-work | python | `termin-app/tests/test_project_builder.py` | Useful builder coverage, but resource manifest and fake shader compiler fixtures duplicate runtime exporter tests. |

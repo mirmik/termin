@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef _WIN32
@@ -123,9 +124,20 @@ inline std::vector<fs::path> python_module_paths(const fs::path& install_root, c
 
     for (fs::path dir = exe_dir; !dir.empty(); dir = dir.parent_path()) {
         append_python_prefix_paths(paths, dir / "sdk");
-        fs::path dev_python = dir / "termin-app";
-        if (fs::exists(dev_python / "termin" / "__init__.py", ec)) {
-            paths.push_back(dev_python);
+        const std::pair<const char*, const char*> dev_packages[] = {
+            {"termin-app", "__init__.py"},
+            {"termin-player", "player/__init__.py"},
+            {"termin-mcp", "mcp/__init__.py"},
+        };
+        bool found_dev_checkout = false;
+        for (const auto& [package_dir_name, package_probe] : dev_packages) {
+            fs::path dev_python = dir / package_dir_name;
+            if (fs::exists(dev_python / "termin" / package_probe, ec)) {
+                paths.push_back(dev_python);
+                found_dev_checkout = true;
+            }
+        }
+        if (found_dev_checkout) {
             break;
         }
         if (dir == dir.root_path()) {

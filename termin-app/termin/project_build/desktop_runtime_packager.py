@@ -24,7 +24,8 @@ SUPPORTED_PYTHON_PACKAGE_POLICIES = (
 )
 
 TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
-    "termin-app",
+    "termin-player",
+    "termin-mcp",
     "termin-nanobind",
     "tcbase",
     "termin-assets",
@@ -40,6 +41,7 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-components-physics",
     "termin-components-ui",
     "termin-materials",
+    "termin-shader-runtime",
     "termin-render-passes",
     "termin-modules",
     "termin-scene",
