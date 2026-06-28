@@ -371,6 +371,11 @@ must be explicit:
     The runtime package exporter no longer writes `shaders/layout/<uuid>`
     metadata from catalog `resources`; packaged shader layouts come from
     per-artifact compiler sidecars.
+18. Done: remove backend patching policy that depends on resource names.
+    `termin_shaderc` now legalizes Slang D3D11 comparison sampler arrays by
+    declaration shape instead of special-casing `shadow_maps`. The D3D11
+    runtime scalar-sampler-array decision now comes from compiler sidecar /
+    backend-plan metadata instead of resource-name checks.
 
 ## Implementation Notes
 
@@ -411,6 +416,13 @@ must be explicit:
   sidecar entries.
 - `engine-shader-catalog.json` no longer contains `resources`, `inputs`, or
   `outputs`; it is a temporary UUID-to-source index, not a contract database.
+- D3D11 HLSL comparison sampler array legalization is based on Slang-emitted
+  `SamplerComparisonState *_sampler_0[...]` declarations. When legalization
+  scalarizes the sampler side of a texture array, `termin_shaderc` records
+  `d3d11.scalar_sampler_for_texture_array` in the layout sidecar. tgfx2 loads
+  that into resolved shader layout metadata, propagates it into
+  `BackendBindingPlanEntry`, and D3D11 binding uses the flag instead of
+  resource names.
 
 ## Validation
 
@@ -438,6 +450,10 @@ Required tests:
   semantic data instead of resolved layout entries.
 - Done: runtime package default engine shader tests read compiler sidecar
   layouts next to artifacts, not catalog-derived aggregate layouts.
+- Done: D3D11 shaderc tests cover comparison sampler array legalization with a
+  non-`shadow_maps` resource name.
+- Done: tgfx2 D3D11 sidecar/backend-plan tests preserve
+  `scalar_sampler_for_texture_array` metadata through runtime layout loading.
 
 ## Non-Goals
 
