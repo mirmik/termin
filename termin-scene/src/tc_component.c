@@ -13,6 +13,8 @@
 // ============================================================================
 
 static tc_type_registry* g_component_registry = NULL;
+static tc_component_prepare_unload_fn g_prepare_unload_callback = NULL;
+static void* g_prepare_unload_user_data = NULL;
 
 #if defined(_MSC_VER)
     #define TC_THREAD_LOCAL __declspec(thread)
@@ -135,6 +137,33 @@ static void destroy_component_facet(void* payload) {
     free(facet);
 }
 
+static bool prepare_component_facet_unload(
+    const char* type_name,
+    void* payload,
+    void* context
+) {
+    (void)payload;
+    if (!type_name || tc_runtime_type_registry_instance_count(type_name) == 0) {
+        return true;
+    }
+
+    if (!g_prepare_unload_callback) {
+        tc_log(
+            TC_LOG_WARN,
+            "[ComponentRegistry] unloading component type '%s' with %zu live instance(s) and no prepare-unload callback",
+            type_name,
+            tc_runtime_type_registry_instance_count(type_name)
+        );
+        return true;
+    }
+
+    return g_prepare_unload_callback(
+        type_name,
+        context,
+        g_prepare_unload_user_data
+    );
+}
+
 static tc_component_facet_payload* ensure_component_facet(
     const char* type_name,
     tc_type_entry* entry
@@ -142,11 +171,12 @@ static tc_component_facet_payload* ensure_component_facet(
     tc_component_facet_payload* facet = component_facet(type_name);
     if (facet) {
         facet->entry = entry;
-        tc_runtime_type_registry_set_facet(
+        tc_runtime_type_registry_set_facet_with_lifecycle(
             type_name,
             TC_RUNTIME_TYPE_FACET_COMPONENT,
             facet,
             destroy_component_facet,
+            prepare_component_facet_unload,
             1
         );
         return facet;
@@ -161,11 +191,12 @@ static tc_component_facet_payload* ensure_component_facet(
     facet->entry = entry;
     facet->kind = TC_CXX_COMPONENT;
 
-    if (!tc_runtime_type_registry_set_facet(
+    if (!tc_runtime_type_registry_set_facet_with_lifecycle(
             type_name,
             TC_RUNTIME_TYPE_FACET_COMPONENT,
             facet,
             destroy_component_facet,
+            prepare_component_facet_unload,
             1
         )) {
         free(facet);
@@ -389,6 +420,14 @@ size_t tc_component_registry_unregister_owner(const char* owner) {
     size_t removed = ctx.count;
     free(ctx.names);
     return removed;
+}
+
+void tc_component_registry_set_prepare_unload_callback(
+    tc_component_prepare_unload_fn callback,
+    void* user_data
+) {
+    g_prepare_unload_callback = callback;
+    g_prepare_unload_user_data = user_data;
 }
 
 tc_component* tc_component_registry_create(const char* type_name) {
