@@ -50,26 +50,37 @@ class VStack(Widget):
         if not visible:
             return
 
-        # First pass: measure every child. A stretch child keeps its
-        # preferred height as a minimum and receives a share of extra space.
-        base_height = 0.0
+        # First pass: measure every child. Non-stretch children keep their
+        # natural height. Stretch children use natural height as a soft
+        # preference: it biases layout when there is room, but it must not
+        # force the container to overflow.
+        fixed_height = 0.0
+        stretch_pref_height = 0.0
         stretch_count = 0
         child_heights = []
         for child in visible:
             _, ch = child.compute_size(viewport_w, viewport_h)
-            base_height += ch
             child_heights.append(ch)
             if child.stretch:
+                stretch_pref_height += ch
                 stretch_count += 1
+            else:
+                fixed_height += ch
 
         spacing_total = self.spacing * (len(visible) - 1)
-        remaining = max(0.0, height - base_height - spacing_total)
-        stretch_extra_h = remaining / stretch_count if stretch_count > 0 else 0.0
+        available_stretch_height = max(0.0, height - fixed_height - spacing_total)
 
-        # Add extra height to stretch children.
-        for i, child in enumerate(visible):
-            if child.stretch:
-                child_heights[i] += stretch_extra_h
+        if stretch_count > 0:
+            if stretch_pref_height <= available_stretch_height:
+                stretch_extra_h = (available_stretch_height - stretch_pref_height) / stretch_count
+                for i, child in enumerate(visible):
+                    if child.stretch:
+                        child_heights[i] += stretch_extra_h
+            else:
+                stretch_h = available_stretch_height / stretch_count
+                for i, child in enumerate(visible):
+                    if child.stretch:
+                        child_heights[i] = stretch_h
 
         # Vertical justify (only meaningful without stretch children)
         total_h = sum(child_heights) + spacing_total

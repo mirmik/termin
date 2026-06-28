@@ -81,6 +81,10 @@ private:
         int fy = 0;
         uint64_t color_request = 0;
         uint64_t depth_request = 0;
+        bool color_ready = false;
+        bool depth_ready = false;
+        float color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        float depth = 1.0f;
         bool valid = false;
     };
     PendingEntityPick _async_hover_pick;
