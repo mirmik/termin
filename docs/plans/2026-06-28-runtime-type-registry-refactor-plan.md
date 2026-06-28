@@ -90,6 +90,7 @@ RuntimeTypeRecord
   parent
   version/generation
   facets: map<facet_id, opaque payload>
+  instances: intrusive list of opaque runtime instance links
 ```
 
 Domain systems publish facets into the record:
@@ -103,11 +104,13 @@ termin.app.resource_component
 ```
 
 The registry treats all facet ids as opaque strings. It can store, replace,
-remove, and destroy facets, but it cannot interpret their meaning.
+remove, and destroy facets, but it cannot interpret their meaning. It may also
+own an opaque live-instance index for each type record, because module unload
+must be able to find all live instances before removing the type's facets.
 
 ## Non-Goals
 
-- Do not move component instances into `termin-inspect`.
+- Do not move component instance semantics into `termin-inspect`.
 - Do not move scene ownership, entity pools, render execution, or pass runtime
   state into the type registry.
 - Do not make `termin-inspect` include headers from `termin-scene` or
@@ -126,6 +129,7 @@ Owns:
 - owner/module id;
 - parent relationship;
 - generation/version;
+- opaque live-instance link storage;
 - facet storage and facet lifecycle callbacks;
 - owner-scoped cleanup;
 - conflict diagnostics.
@@ -133,6 +137,7 @@ Owns:
 Does not own:
 
 - component factory semantics;
+- component-to-Unknown mutation semantics;
 - pass execution semantics;
 - inspect field rendering;
 - scene instances;
@@ -165,8 +170,9 @@ It keeps the public component-facing operations:
 - register abstract component;
 - create component instance by type;
 - query component kind/capabilities/requirements;
-- iterate live instances through the existing type-entry linkage or a migrated
-  equivalent.
+- publish component instances into the common runtime type record;
+- provide the callback that mutates component instances to `UnknownComponent`
+  before component facet removal.
 
 But type owner, parent, and lifecycle must come from the common record.
 
@@ -193,7 +199,8 @@ or, during staged reload:
 
 ```text
 snapshot module-owned type records
-remove module-owned facets
+prepare live instances for unload through facet callbacks
+remove module-owned facets after live instances are safe
 reload module
 validate required facets are restored
 restore scene instances
@@ -227,6 +234,7 @@ The common registry only promises:
 - payload pointer lifetime;
 - destroy callback invocation;
 - owner-scoped removal;
+- live-instance unload preparation before removal;
 - replacement semantics;
 - diagnostics when two owners try to write the same facet.
 
@@ -250,6 +258,56 @@ FramePassRegistry::register(...)
 C++ code may keep thin template helpers and binding facades, but it must not be
 the storage owner for runtime type records or build runtime-side mirror lists
 just to talk to the registry.
+
+## Live Instance Index
+
+The common runtime type record owns the live-instance list for the type.
+This is required for unload/reload correctness: when a module-owned type is
+unloaded, the system must find every live instance of that type before removing
+the type's component/pass/inspect facets.
+
+The index is still domain-agnostic. A runtime instance link contains only:
+
+```c
+typedef struct tc_runtime_type_instance_link {
+    tc_dlist_node node;
+    const char* type_name;
+    uint64_t generation;
+    void* instance;
+} tc_runtime_type_instance_link;
+```
+
+The common registry may:
+
+- link/unlink opaque instances to a type record;
+- count and iterate instances for a type record;
+- keep tombstoned type records alive while instance links still exist;
+- call facet lifecycle hooks before removing module-owned type facets.
+
+The common registry must not:
+
+- include component, scene, pass, or render headers;
+- know what `UnknownComponent` is;
+- serialize component state;
+- remove scene-owned objects directly;
+- call component/pass factories.
+
+Domain facets provide unload behavior. For `termin.scene.component`, the facet
+owns the logic that receives a type record and its live instance links, locates
+the scene/entity ownership, serializes the component, replaces it with
+`UnknownComponent`, and unlinks the old instance. For `termin.render.frame_pass`,
+the facet can provide a different unload policy or reject unload while pass
+instances are alive.
+
+Unregistration must therefore be two-phase:
+
+```text
+prepare_unload(type record, facet callbacks, live instances)
+  -> domain facet mutates or rejects live instances
+remove module-owned facets
+keep tombstoned type record while live links remain
+remove type record when no facets and no live links remain
+```
 
 ## Parent And Inheritance
 
@@ -386,19 +444,25 @@ It should:
   `termin.scene.component` facet.
 - Resolve `ComponentRegistry::is_a` and descendant queries through the common
   parent chain.
-- Keep live instance linkage working through either the existing type entry or
-  a migrated component facet structure.
+- Move component live instance linkage from `tc_type_entry` to common runtime
+  type instance links.
+- Provide a component facet unload hook that degrades live component instances
+  to `UnknownComponent` before the component facet is removed.
 - Remove independent component owner and parent maps.
 
 ### Phase 4: Pass Facets
 
 - Move frame/pass type ownership into common type records.
+- Move frame/pass factory/kind storage into `termin.render.frame_pass` facet.
+- Decide pass live-instance unload policy explicitly: degrade, reject unload,
+  or require owner pipeline teardown before type removal.
 - Keep pass-specific factory/spec APIs in render/app layers.
 - Remove pass-specific module owner cleanup where it duplicates common cleanup.
 
 ### Phase 5: Module Lifecycle Transaction
 
-- Replace separate component/inspect cleanup calls with common type cleanup.
+- Replace separate component/inspect cleanup calls with common type cleanup
+  that first prepares live instances through facet callbacks.
 - Add reload validation for expected facets.
 - Make failed reload leave components degraded with explicit diagnostics.
 - Remove adoption fallbacks that only exist to paper over split registries.
@@ -428,9 +492,9 @@ It should:
 
 ## Risks
 
-- Moving live component instance linkage too early may destabilize scene
-  runtime. Keep instance storage in `termin-scene` until the component facet is
-  stable.
+- Moving live component instance linkage without tombstone semantics can leave
+  dangling links during hot reload. Type records must survive facet removal
+  while any live instance links remain.
 - Existing tests may rely on unowned ad-hoc type registration. These should be
   made explicit bootstrap/test-owner registrations.
 - Python cleanup currently mixes runtime type state and app resource state.
@@ -447,9 +511,14 @@ factory/kind/requirement/capability state lives in the component facet.
 
 Next migration steps:
 
-1. Trim obsolete component-specific fields from `tc_type_entry` after auditing
-   remaining pass/type-registry users.
-2. Move frame/pass ownership into runtime type facets.
-3. Convert project modules away from static registration macros and toward
+1. Add common C live-instance links to runtime type records, with tombstone
+   semantics.
+2. Move component instance linkage from `tc_type_entry` to runtime type records.
+3. Add component facet unload hooks that degrade live instances to
+   `UnknownComponent` before facet removal.
+4. Move frame/pass ownership and semantic storage into runtime type facets.
+5. Trim obsolete component/pass-specific fields from `tc_type_entry`, then
+   remove the legacy registry shell.
+6. Convert project modules away from static registration macros and toward
    explicit `module_init`/bootstrap registrations.
-4. Remove adoption fallbacks that only existed to survive split registry state.
+7. Remove adoption fallbacks that only existed to survive split registry state.
