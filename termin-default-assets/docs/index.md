@@ -11,7 +11,9 @@ Runtime manager boundary:
 - `termin_assets.AssetRuntimeManager` owns only neutral plugin dispatch,
   UUID lookup, runtime registry attachment and external asset catalog mechanics.
 - `termin.default_assets.resource_manager.DefaultResourceManager` is the
-  canonical runtime manager for the standard Termin SDK asset set.
+  canonical runtime manager for the standard Termin SDK asset set. Missing
+  material lookups return the `termin.materials.UnknownMaterial` fallback
+  through the `termin.materials.material_or_unknown` policy helper.
 - `termin.default_assets.resource_accessors.DefaultResourceAccessorsMixin` and
   `termin.default_assets.handle_accessors.HandleAccessors` own default handle
   selector access for standard kinds such as `tc_mesh`, `tc_texture`,
@@ -19,8 +21,9 @@ Runtime manager boundary:
 - `termin.materials.UnknownMaterial` owns the standard missing-material visual
   fallback used by editor and runtime resource managers.
 - `termin.assets.resources.AppResourceManager` in `termin-app` is an
-  editor/app extension over `DefaultResourceManagerBase`. Runtime/player code
-  should use `DefaultResourceManager` or the `termin_assets.get_resource_manager()`
+  editor/app extension over `DefaultResourceManagerBase` for legacy app imports
+  and app builtin-extension points. Runtime/player code should use
+  `DefaultResourceManager` or the `termin_assets.get_resource_manager()`
   process factory instead of importing this app namespace.
 - Default component/frame-pass catalogs live below the app layer:
   `CameraController`, render component/pass types and `MaterialPass` are owned

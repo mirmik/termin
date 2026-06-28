@@ -1,5 +1,6 @@
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.handle_accessors import HandleAccessors
+from termin.materials import TcMaterial
 from tgfx import TcTexture
 
 
@@ -11,7 +12,14 @@ def test_default_resource_manager_owns_default_runtime_registries() -> None:
     assert "animation_clip" in manager._runtime_asset_registries
     assert "skeleton" in manager._runtime_asset_registries
     assert "pipeline" in manager._runtime_asset_registries
-    assert manager.get_material("__missing__") is None
+    missing_material = manager.get_material("__missing__")
+    assert isinstance(missing_material, TcMaterial)
+    assert missing_material.is_valid
+    assert "Missing material: __missing__" in missing_material.name
+    missing_uuid_material = manager.get_material_by_uuid("__missing_uuid__")
+    assert isinstance(missing_uuid_material, TcMaterial)
+    assert missing_uuid_material.is_valid
+    assert "Missing material: uuid:__missing_uuid__" in missing_uuid_material.name
     assert isinstance(manager.get_handle_accessors("tc_material"), HandleAccessors)
 
 
