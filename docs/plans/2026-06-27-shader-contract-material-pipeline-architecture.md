@@ -269,15 +269,25 @@ backend placement out of the semantic resource contract.
 
 ## Built-In Shader Contracts
 
-Built-in shader source registries are not target contract databases. They may
-map a stable shader UUID to source path, stage membership, language, and entry
-points. They must not describe semantic resources, stage IO requirements,
-draw-kind policy, or backend placement.
+Built-in shader source registries are not target contract databases. The target
+source identity is a stable shader UUID plus a conventional file name under
+`builtin_shaders/`:
 
-`engine-shader-catalog.json` remains a transitional source loader for entries
-that have not moved to a smaller source registry. `engine_shader_catalog.cpp`
-may contain minimal direct-runtime source descriptors for shaders that must be
-available without loading the JSON manifest. Neither path is allowed to become
+- `<uuid>.slang`: vertex + fragment, entries `vs_main` / `fs_main`;
+- `<uuid>.vert.slang`: vertex-only stage template, entry `vs_main`;
+- `<uuid>.frag.slang`: fragment-only stage, entry `fs_main`;
+- `<uuid>.shader`: material shader program source.
+
+Registries may temporarily map a stable shader UUID to source path, stage
+membership, language, and entry points only for exceptions that cannot follow
+the convention yet. They must not describe semantic resources, stage IO
+requirements, draw-kind policy, or backend placement.
+
+`engine-shader-catalog.json` remains a transitional source loader for exception
+entries such as shared source files with non-standard entry points.
+`engine_shader_catalog.cpp` may contain minimal direct-runtime source
+descriptors for shaders that must be available without loading the JSON
+manifest, but it must shrink rather than grow. Neither path is allowed to become
 a hand-written resource/contract database.
 
 Built-in shader contracts are produced from the same compiled metadata as the
@@ -298,15 +308,16 @@ metadata grows a real reflected input sidecar.
 This keeps runtime passes on the same `tc_shader -> tc_shader_contract` path for
 material pipeline shaders and engine built-ins. Draw mode is owned by the pass
 using the shader, not by the built-in shader contract. The target direction is
-to delete the manifest once built-in shader source identity can be resolved from
-minimal source descriptors or source conventions, and contract ownership has
-moved into reflection-derived compiler sidecars.
+to delete the manifest once the remaining exceptions are renamed or represented
+by generated compiler metadata, and contract ownership has moved into
+reflection-derived compiler sidecars.
 
-Current direct source descriptor coverage:
+Current no-manifest coverage:
 
 - fullscreen quad vertex stage (`termin-engine-fsq`);
 - shadow vertex/fragment program (`termin-engine-shadow`);
 - tonemap fullscreen fragment program (`termin-engine-tonemap`).
+- any built-in source that follows the UUID file convention above.
 
 These entries are expected to register without `engine-shader-catalog.json`
 being present in the selected built-in shader root. They do not expose resource
@@ -353,10 +364,12 @@ must be explicit:
     against resolved layout entries.
 13. Done: remove `tc_shader_set_resource_layout()` back-propagation into
     `tc_shader_contract`. Layout updates no longer mutate contract resources.
-14. In progress: shrink built-in shader source metadata toward minimal
-    UUID/path/stage/entry descriptors. Resource contracts and backend placement
-    now come from shader compiler layout sidecars instead of catalog or typed
-    descriptor resource lists.
+14. In progress: shrink built-in shader source metadata toward UUID file
+    conventions. Standard Slang live shaders, stage templates, fragment-only
+    shaders, and `.shader` programs can now load without
+    `engine-shader-catalog.json`; the manifest remains only for exceptions.
+    Resource contracts and backend placement now come from shader compiler
+    layout sidecars instead of catalog or typed descriptor resource lists.
 15. In progress: move placement policy out of ad hoc compiler code. The
     transitional scope/kind/name placement ranges are now shared through
     `tgfx2/backend_binding_plan.hpp`, and `termin_shaderc` uses that policy only
