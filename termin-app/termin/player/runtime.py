@@ -352,6 +352,9 @@ class PlayerRuntime:
         if scene_data is None and ("entities" in data or "uuid" in data):
             scene_data = data
         if scene_data:
+            from termin.scene_animation_repair import repair_glb_animation_player_clip_refs
+
+            repair_glb_animation_player_clip_refs(scene_data)
             self.scene.load_from_data(scene_data, context=None, update_settings=True)
             from termin.modules import upgrade_scene_unknown_components
             upgraded = upgrade_scene_unknown_components(self.scene)
