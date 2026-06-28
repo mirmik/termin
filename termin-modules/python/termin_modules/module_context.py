@@ -200,12 +200,13 @@ def unregister_module_owner(module_id: str) -> None:
         return
 
     _unregister_app_resource_classes(registrations)
-    _unregister_inspect_types(registrations)
+    _unregister_python_component_classes(registrations)
+    _unregister_python_frame_pass_classes(module_id)
+    _unregister_runtime_type_records(module_id)
     _unregister_python_kinds(registrations)
-    _unregister_components(registrations)
 
 
-def _unregister_components(registrations: ModuleOwnedRegistrations) -> None:
+def _unregister_python_component_classes(registrations: ModuleOwnedRegistrations) -> None:
     if not registrations.components:
         return
 
@@ -215,37 +216,58 @@ def _unregister_components(registrations: ModuleOwnedRegistrations) -> None:
         registry = ComponentRegistry.instance()
         for name in sorted(registrations.components):
             try:
-                try:
-                    registry.unregister_python(name)
-                except AttributeError:
-                    registry.unregister(name)
+                registry.unregister_python(name)
             except Exception:
                 log.error(
-                    f"[termin_modules] failed to unregister Python component '{name}'",
+                    f"[termin_modules] failed to unregister Python component class '{name}'",
                     exc_info=True,
                 )
     except Exception:
-        log.error("[termin_modules] failed to access ComponentRegistry during module cleanup", exc_info=True)
+        log.error(
+            "[termin_modules] failed to clean Python component classes",
+            exc_info=True,
+        )
 
 
-def _unregister_inspect_types(registrations: ModuleOwnedRegistrations) -> None:
-    if not registrations.inspect_types:
-        return
-
+def _unregister_python_frame_pass_classes(module_id: str) -> None:
     try:
-        from termin.inspect import InspectRegistry
+        from termin.inspect import _inspect_native
+        from termin.render_framework import tc_pass_registry_unregister_python
 
-        registry = InspectRegistry.instance()
-        for name in sorted(registrations.inspect_types):
+        records = _inspect_native.runtime_type_registry_snapshot()
+        for record in records:
+            if record["owner"] != module_id:
+                continue
+            if "termin.render.frame_pass" not in record["facets"]:
+                continue
             try:
-                registry.unregister_type(name)
+                tc_pass_registry_unregister_python(record["name"])
             except Exception:
                 log.error(
-                    f"[termin_modules] failed to unregister inspect type '{name}'",
+                    f"[termin_modules] failed to unregister Python frame pass '{record['name']}'",
                     exc_info=True,
                 )
     except Exception:
-        log.error("[termin_modules] failed to access InspectRegistry during module cleanup", exc_info=True)
+        log.error(
+            f"[termin_modules] failed to clean Python frame pass classes for '{module_id}'",
+            exc_info=True,
+        )
+
+
+def _unregister_runtime_type_records(module_id: str) -> None:
+    try:
+        from termin.inspect import _inspect_native
+
+        removed = _inspect_native.unregister_runtime_type_owner(module_id)
+        if removed:
+            log.info(
+                f"[termin_modules] removed {removed} runtime type record(s) for module '{module_id}'"
+            )
+    except Exception:
+        log.error(
+            f"[termin_modules] failed to unregister runtime type records for '{module_id}'",
+            exc_info=True,
+        )
 
 
 def _unregister_python_kinds(registrations: ModuleOwnedRegistrations) -> None:

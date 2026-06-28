@@ -104,6 +104,14 @@ static bool can_register_component_type(
     return true;
 }
 
+static void destroy_component_facet(void* payload) {
+    tc_type_entry* entry = (tc_type_entry*)payload;
+    if (!entry || !entry->type_name || !g_component_registry) {
+        return;
+    }
+    tc_type_registry_unregister(g_component_registry, entry->type_name);
+}
+
 // ============================================================================
 // Registry Implementation
 // ============================================================================
@@ -157,7 +165,7 @@ void tc_component_registry_register_with_parent(
             type_name,
             TC_RUNTIME_TYPE_FACET_COMPONENT,
             entry,
-            NULL,
+            destroy_component_facet,
             1
         );
     }
@@ -202,7 +210,7 @@ void tc_component_registry_register_abstract(
             type_name,
             TC_RUNTIME_TYPE_FACET_COMPONENT,
             entry,
-            NULL,
+            destroy_component_facet,
             1
         );
     }

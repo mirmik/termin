@@ -115,10 +115,11 @@ def test_module_owner_context_unregisters_python_component_registrations() -> No
 def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
     from termin.inspect import InspectRegistry, _inspect_native
     from termin.render_framework import (
+        tc_pass_registry_has,
         tc_pass_registry_register_python,
         tc_pass_registry_unregister_python,
     )
-    from termin_modules.module_context import module_import_context
+    from termin_modules.module_context import module_import_context, unregister_module_owner
 
     module_id = "owner_context_pass_probe"
     pass_name = "OwnerContextProbeFramePass"
@@ -144,9 +145,18 @@ def test_module_owner_context_marks_python_frame_pass_runtime_type() -> None:
         record = records[pass_name]
         assert record["owner"] == module_id
         assert "termin.render.frame_pass" in record["facets"]
+
+        unregister_module_owner(module_id)
+        records = {
+            record["name"]: record
+            for record in _inspect_native.runtime_type_registry_snapshot()
+        }
+        assert pass_name not in records
+        assert not tc_pass_registry_has(pass_name)
     finally:
         tc_pass_registry_unregister_python(pass_name)
         inspect_registry.unregister_type(pass_name)
+        unregister_module_owner(module_id)
 
 
 def test_default_builtin_specs_live_below_app_layer() -> None:
