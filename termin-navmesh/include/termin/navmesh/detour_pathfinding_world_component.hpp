@@ -54,6 +54,8 @@ public:
     DetourPathfindingWorldComponent();
     ~DetourPathfindingWorldComponent() override;
 
+    static void register_type();
+
     bool rebuild();
     void clear();
     bool is_ready() const;

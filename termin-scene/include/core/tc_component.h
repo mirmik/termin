@@ -7,6 +7,7 @@
 #include "core/tc_component_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
+#include "inspect/tc_runtime_type_registry.h"
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -128,6 +129,7 @@ struct tc_component {
     // Type registry link (for global instance tracking and hot reload)
     tc_type_entry* type_entry;
     uint32_t type_version;
+    tc_runtime_type_instance_link runtime_type_link;
 
     // Generic component capabilities (slot-based fast path)
     uint64_t capability_mask;
@@ -137,6 +139,7 @@ struct tc_component {
 
     // Intrusive list for global type registry instance tracking
     // Uses tc_dlist_node for safe multiple-unlink
+    // TODO: remove after old tc_type_entry instance tracking is fully retired.
     tc_dlist_node registry_node;
 };
 
@@ -164,6 +167,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->type_next = NULL;
     c->type_entry = NULL;
     c->type_version = 0;
+    tc_runtime_type_instance_link_init(&c->runtime_type_link);
     c->capability_mask = 0;
     memset(c->capability_ptrs, 0, sizeof(c->capability_ptrs));
     memset(c->capability_prev, 0, sizeof(c->capability_prev));
@@ -276,6 +280,9 @@ static inline void tc_component_release(tc_component* c) {
 }
 
 static inline const char* tc_component_type_name(const tc_component* c) {
+    if (c && c->runtime_type_link.type_name) {
+        return c->runtime_type_link.type_name;
+    }
     if (c && c->type_entry && c->type_entry->type_name) {
         return c->type_entry->type_name;
     }
@@ -288,6 +295,11 @@ static inline const char* tc_component_type_name(const tc_component* c) {
 
 // Component factory: takes userdata, returns tc_component*
 typedef tc_component* (*tc_component_factory)(void* userdata);
+typedef bool (*tc_component_prepare_unload_fn)(
+    const char* type_name,
+    void* context,
+    void* user_data
+);
 
 TC_API void tc_component_registry_register(
     const char* type_name,
@@ -320,6 +332,10 @@ TC_API void tc_component_registry_set_registration_owner(const char* owner);
 TC_API const char* tc_component_registry_get_registration_owner(void);
 TC_API const char* tc_component_registry_get_owner(const char* type_name);
 TC_API size_t tc_component_registry_unregister_owner(const char* owner);
+TC_API void tc_component_registry_set_prepare_unload_callback(
+    tc_component_prepare_unload_fn callback,
+    void* user_data
+);
 
 TC_API size_t tc_component_registry_type_count(void);
 TC_API const char* tc_component_registry_type_at(size_t index);
@@ -384,8 +400,8 @@ TC_API size_t tc_component_registry_instance_count(const char* type_name);
 
 // Check if component's type version is current (for hot reload detection)
 static inline bool tc_component_type_is_current(const tc_component* c) {
-    if (!c || !c->type_entry) return true;
-    return tc_type_version_is_current(c->type_entry, c->type_version);
+    if (!c || (!c->type_entry && !c->runtime_type_link.type_name)) return true;
+    return tc_runtime_type_registry_instance_is_current(&c->runtime_type_link);
 }
 
 // Unlink component from type registry (called when component is destroyed)

@@ -114,6 +114,7 @@ endif()
 
 if(TERMIN_HAS_RECAST)
     add_library(termin_navmesh_components SHARED
+        src/components_bootstrap.cpp
         src/detour_navmesh_asset_utils.cpp
         src/detour_pathfinding_world_component.cpp
         src/navmesh_keeper_component.cpp

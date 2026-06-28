@@ -25,10 +25,23 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
     compiler = tmp_path / "fake_termin_shaderc.py"
     compiler.write_text(
         "#!/usr/bin/env python3\n"
-        "import pathlib, sys\n"
+        "import json, pathlib, sys\n"
+        "inp = pathlib.Path(sys.argv[sys.argv.index('--input') + 1])\n"
         "out = pathlib.Path(sys.argv[sys.argv.index('--output') + 1])\n"
         "out.parent.mkdir(parents=True, exist_ok=True)\n"
-        "out.write_bytes(b'SPIRV')\n",
+        "out.write_bytes(b'SPIRV')\n"
+        "source = inp.read_text(encoding='utf-8') if inp.exists() else ''\n"
+        "resources = []\n"
+        "if 'ConstantBuffer<PerFrame> per_frame' in source:\n"
+        "    resources.append({'name': 'per_frame', 'kind': 'constant_buffer', 'scope': 'frame'})\n"
+        "if 'ConstantBuffer<ShadowPushData> shadow_draw' in source:\n"
+        "    resources.append({'name': 'shadow_draw', 'kind': 'constant_buffer', 'scope': 'draw'})\n"
+        "if 'ConstantBuffer<MaterialParams> material' in source:\n"
+        "    resources.append({'name': 'material', 'kind': 'constant_buffer', 'scope': 'material'})\n"
+        "if 'Sampler2D u_input' in source:\n"
+        "    resources.append({'name': 'u_input', 'kind': 'texture', 'scope': 'transient'})\n"
+        "layout = {'version': 1, 'resources': resources}\n"
+        "pathlib.Path(str(out) + '.layout.json').write_text(json.dumps(layout, indent=2), encoding='utf-8')\n",
         encoding="utf-8",
     )
     compiler.chmod(0o755)
@@ -1212,50 +1225,45 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         (
             result.package_dir
             / "shaders"
-            / "layout"
-            / "termin-engine-tonemap.shader-layout.json"
+            / "vulkan"
+            / "termin-engine-tonemap.frag.spv.layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert tonemap_layout["binding_model"] == "resource_layout"
     assert {
         "name": "u_input",
-        "logical_name": "input_texture",
-        "kind": "combined_sampler2d",
+        "kind": "texture",
+        "scope": "transient",
     } in tonemap_layout["resources"]
 
     grayscale_layout = json.loads(
         (
             result.package_dir
             / "shaders"
-            / "layout"
-            / "termin-engine-grayscale.shader-layout.json"
+            / "vulkan"
+            / "termin-engine-grayscale.frag.spv.layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert grayscale_layout["binding_model"] == "resource_layout"
     assert {
         "name": "u_input",
-        "logical_name": "input_texture",
-        "kind": "combined_sampler2d",
+        "kind": "texture",
+        "scope": "transient",
     } in grayscale_layout["resources"]
 
     shadow_layout = json.loads(
         (
             result.package_dir
             / "shaders"
-            / "layout"
-            / "termin-engine-shadow.shader-layout.json"
+            / "vulkan"
+            / "termin-engine-shadow.vert.spv.layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert shadow_layout["binding_model"] == "resource_layout"
     assert {
         "name": "per_frame",
-        "logical_name": "per_frame",
         "kind": "constant_buffer",
         "scope": "frame",
     } in shadow_layout["resources"]
     assert {
         "name": "shadow_draw",
-        "logical_name": "draw",
         "kind": "constant_buffer",
         "scope": "draw",
     } in shadow_layout["resources"]
@@ -1264,19 +1272,16 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         (
             result.package_dir
             / "shaders"
-            / "layout"
-            / "termin-engine-skybox.shader-layout.json"
+            / "vulkan"
+            / "termin-engine-skybox.frag.spv.layout.json"
         ).read_text(encoding="utf-8")
     )
-    assert skybox_layout["language"] == "slang"
-    assert skybox_layout["source_language"] == "shader"
-    assert skybox_layout["program"] == {"path": "termin-engine-skybox.shader"}
     assert {
         "name": "material",
-        "logical_name": "material",
         "kind": "constant_buffer",
         "scope": "material",
     } in skybox_layout["resources"]
+    assert not (result.package_dir / "shaders" / "layout").exists()
 
 
 def test_export_runtime_package_accepts_root_scene_json(tmp_path: Path) -> None:

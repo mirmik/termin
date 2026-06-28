@@ -63,6 +63,8 @@ public:
     explicit WorldTextComponent(const char* type_name = "WorldTextComponent");
     ~WorldTextComponent() override;
 
+    static void register_type();
+
     void set_text(const std::string& value);
     void set_font_path(const std::string& value);
     void set_phase_mark(const std::string& value);
@@ -109,86 +111,5 @@ public:
     tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
 };
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, std::string, text, "Text", "string",
-    [](WorldTextComponent* self) -> std::string& { return self->text; },
-    [](WorldTextComponent* self, const std::string& value) { self->set_text(value); })
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, std::string, font_path, "Font Path", "string",
-    [](WorldTextComponent* self) -> std::string& { return self->font_path; },
-    [](WorldTextComponent* self, const std::string& value) { self->set_font_path(value); })
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, std::string, phase_mark, "Phase Mark", "string",
-    [](WorldTextComponent* self) -> std::string& { return self->phase_mark; },
-    [](WorldTextComponent* self, const std::string& value) { self->set_phase_mark(value); })
-
-INSPECT_FIELD_ACCESSORS(WorldTextComponent, tc_vec3, local_offset, "Local Offset", "vec3",
-    [](WorldTextComponent* self) {
-        return tc_vec3{self->local_offset.x, self->local_offset.y, self->local_offset.z};
-    },
-    [](WorldTextComponent* self, tc_vec3 value) {
-        self->set_local_offset(Vec3{value.x, value.y, value.z});
-    })
-
-INSPECT_FIELD_ACCESSORS(WorldTextComponent, tc_vec3, plane_normal, "Plane Normal", "vec3",
-    [](WorldTextComponent* self) {
-        return tc_vec3{self->plane_normal.x, self->plane_normal.y, self->plane_normal.z};
-    },
-    [](WorldTextComponent* self, tc_vec3 value) {
-        self->set_plane_normal(Vec3{value.x, value.y, value.z});
-    })
-
-INSPECT_FIELD_ACCESSORS(WorldTextComponent, tc_vec3, text_up, "Text Up", "vec3",
-    [](WorldTextComponent* self) {
-        return tc_vec3{self->text_up.x, self->text_up.y, self->text_up.z};
-    },
-    [](WorldTextComponent* self, tc_vec3 value) {
-        self->set_text_up(Vec3{value.x, value.y, value.z});
-    })
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, Vec4, color, "Color", "color",
-    [](WorldTextComponent* self) -> Vec4& { return self->color; },
-    [](WorldTextComponent* self, const Vec4& value) { self->set_color(value); })
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, float, size, "Size", "float",
-    [](WorldTextComponent* self) -> float& { return self->size; },
-    [](WorldTextComponent* self, const float& value) { self->set_size(value); },
-    0.001, 10.0, 0.01)
-
-INSPECT_FIELD_ACCESSORS_CHOICES(WorldTextComponent, int, anchor, "Anchor", "enum",
-    [](WorldTextComponent* self) -> int { return static_cast<int>(self->anchor); },
-    [](WorldTextComponent* self, int value) { self->set_anchor(static_cast<WorldTextAnchor>(value)); },
-    {"0", "Left"},
-    {"1", "Center"},
-    {"2", "Right"})
-
-INSPECT_FIELD_ACCESSORS_CHOICES(WorldTextComponent, int, orientation, "Orientation", "enum",
-    [](WorldTextComponent* self) -> int { return static_cast<int>(self->orientation); },
-    [](WorldTextComponent* self, int value) { self->set_orientation(static_cast<WorldTextOrientation>(value)); },
-    {"0", "Billboard"},
-    {"1", "Fixed"})
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, int, priority, "Priority", "int",
-    [](WorldTextComponent* self) -> int& { return self->priority; },
-    [](WorldTextComponent* self, const int& value) { self->set_priority(value); },
-    -32768, 32767, 1)
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, bool, depth_test, "Depth Test", "bool",
-    [](WorldTextComponent* self) -> bool& { return self->depth_test; },
-    [](WorldTextComponent* self, const bool& value) { self->set_depth_test(value); })
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, bool, depth_write, "Depth Write", "bool",
-    [](WorldTextComponent* self) -> bool& { return self->depth_write; },
-    [](WorldTextComponent* self, const bool& value) { self->set_depth_write(value); })
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, bool, blend, "Blend", "bool",
-    [](WorldTextComponent* self) -> bool& { return self->blend; },
-    [](WorldTextComponent* self, const bool& value) { self->set_blend(value); })
-
-INSPECT_FIELD_CALLBACK(WorldTextComponent, bool, cull, "Cull", "bool",
-    [](WorldTextComponent* self) -> bool& { return self->cull; },
-    [](WorldTextComponent* self, const bool& value) { self->set_cull(value); })
-
-REGISTER_COMPONENT(WorldTextComponent, Component);
 
 } // namespace termin

@@ -3,24 +3,21 @@
 #include "tc_inspect_cpp.hpp"
 #include <tcbase/tc_log.hpp>
 #include <cmath>
+#include <cstdlib>
 
 namespace termin {
+
+namespace {
+
+void register_actuator_axis_scale_field();
+
+} // namespace
 
 void ActuatorComponent::register_type() {
     KinematicUnitComponent::register_type();
 
-    auto& component_registry = ComponentRegistry::instance();
-    if (!component_registry.has("ActuatorComponent")) {
-        component_registry.register_native(
-            "ActuatorComponent",
-            &CxxComponentFactoryData<ActuatorComponent>::create,
-            nullptr,
-            "KinematicUnitComponent"
-        );
-    }
-
-    tc::InspectRegistry::instance().set_type_parent(
-        "ActuatorComponent", "KinematicUnitComponent");
+    register_component_type<ActuatorComponent>("ActuatorComponent", "KinematicUnitComponent");
+    register_actuator_axis_scale_field();
 }
 
 ActuatorComponent::ActuatorComponent()
@@ -78,9 +75,9 @@ void ActuatorComponent::capture_base() {
     base_position = {pos[0] - rotated.x, pos[1] - rotated.y, pos[2] - rotated.z};
 }
 
-// axis_scale preset (enum, not serialized)
-static struct _ActuatorAxisScaleRegistrar {
-    _ActuatorAxisScaleRegistrar() {
+namespace {
+
+void register_actuator_axis_scale_field() {
         tc::InspectFieldInfo info;
         info.type_name = "ActuatorComponent";
         info.path = "axis_scale";
@@ -117,7 +114,8 @@ static struct _ActuatorAxisScaleRegistrar {
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("ActuatorComponent", std::move(info));
-    }
-} _actuator_axis_scale_registrar;
+}
+
+} // namespace
 
 } // namespace termin

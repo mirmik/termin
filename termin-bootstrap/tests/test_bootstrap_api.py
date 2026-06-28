@@ -24,6 +24,23 @@ def test_importing_bootstrap_has_no_kind_registration_side_effects():
     )
 
 
+def test_importing_bootstrap_has_no_component_registration_side_effects():
+    _run_python(
+        """
+        from termin.scene import ComponentRegistry
+
+        registry = ComponentRegistry.instance()
+        before = set(registry.list_native())
+        import termin.bootstrap  # noqa: F401
+        after = set(registry.list_native())
+
+        assert after == before
+        assert "MeshComponent" not in after
+        assert "CameraComponent" not in after
+        """
+    )
+
+
 def test_importing_domain_native_modules_has_no_kind_registration_side_effects():
     _run_python(
         """
@@ -208,6 +225,42 @@ def test_player_bootstrap_imports_default_python_render_passes():
         termin.bootstrap.bootstrap_player()
 
         assert "termin.render_passes" in sys.modules
+        """
+    )
+
+
+def test_player_bootstrap_registers_builtin_component_types():
+    _run_python(
+        """
+        import termin.bootstrap
+        from termin.inspect import InspectRegistry, KindRegistry
+        from termin.scene import ComponentRegistry
+
+        components = ComponentRegistry.instance()
+        assert not components.has("MeshComponent")
+        assert not components.has("CameraComponent")
+
+        termin.bootstrap.bootstrap_player()
+
+        required = {
+            "UnknownComponent",
+            "MeshComponent",
+            "ColliderComponent",
+            "KinematicUnitComponent",
+            "CameraComponent",
+            "MeshRenderer",
+            "FoliageLayerComponent",
+            "SkeletonController",
+        }
+        missing = {name for name in required if not components.has(name)}
+        assert not missing
+
+        inspect = InspectRegistry.instance()
+        assert "mesh" in {field.path for field in inspect.fields("MeshComponent")}
+        assert "fov_x_degrees" in {field.path for field in inspect.fields("CameraComponent")}
+        assert "material" in {field.path for field in inspect.fields("MeshRenderer")}
+        assert "foliage" in {field.path for field in inspect.fields("FoliageLayerComponent")}
+        assert "foliage_data_handle" in set(KindRegistry.instance().kinds())
         """
     )
 

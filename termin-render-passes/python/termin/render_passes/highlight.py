@@ -16,6 +16,11 @@ from termin.render_passes._render_passes_native import tc_picking_id_to_rgb
 _HIGHLIGHT_SHADER_UUID = "termin-engine-highlight"
 
 
+def _pick_id_to_rgb_float(pick_id: int) -> tuple[float, float, float]:
+    r, g, b = tc_picking_id_to_rgb(pick_id)
+    return float(r) / 255.0, float(g) / 255.0, float(b) / 255.0
+
+
 def _pack_uniform_fields(layout: dict[str, Any], values: dict[str, Any]) -> bytes:
     """Pack values into a byte buffer using the shader's field layout."""
     total_size = layout.get("size", 0)
@@ -139,7 +144,7 @@ class HighlightPass(PythonFramePass):
         enabled = tex_id2 is not None and selected_id > 0
 
         if enabled:
-            sel_r, sel_g, sel_b = (float(x) for x in tc_picking_id_to_rgb(selected_id))
+            sel_r, sel_g, sel_b = _pick_id_to_rgb_float(selected_id)
         else:
             sel_r = sel_g = sel_b = 0.0
 

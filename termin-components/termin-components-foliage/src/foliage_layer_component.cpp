@@ -33,11 +33,6 @@ namespace termin {
 namespace {
 
 constexpr int FOLIAGE_GEOMETRY_ID = 0;
-constexpr const char* FOLIAGE_VARIANT_SHADER_UUID = "termin-engine-foliage-instanced";
-constexpr const char* FOLIAGE_SHADOW_VARIANT_SHADER_UUID = "termin-engine-foliage-shadow";
-constexpr const char* FOLIAGE_SHADOW_FRAGMENT_SOURCE =
-    "[shader(\"fragment\")]\n"
-    "void fs_main() {}\n";
 
 struct FoliageGpuInstance {
     float position[3];
@@ -61,18 +56,38 @@ struct MeshBindingReleaseGuard {
 };
 
 TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_variant = false) {
-    MaterialVertexVariantRequest request{};
+    MaterialShaderOverrideRequest request{};
     request.original_shader = original_shader;
-    request.variant_op = shadow_variant ? TC_SHADER_VARIANT_FOLIAGE_SHADOW : TC_SHADER_VARIANT_FOLIAGE;
-    request.vertex_template_uuid =
-        shadow_variant ? FOLIAGE_SHADOW_VARIANT_SHADER_UUID : FOLIAGE_VARIANT_SHADER_UUID;
-    request.variant_name_suffix = shadow_variant ? "_FoliageShadow" : "_Foliage";
+    request.vertex_transform_kind = shadow_variant
+        ? VertexTransformKind::FoliageShadow
+        : VertexTransformKind::Foliage;
+    request.pass_kind = shadow_variant
+        ? MaterialPipelinePassKind::Shadow
+        : MaterialPipelinePassKind::Color;
+    request.shader_variant_op = shadow_variant
+        ? TC_SHADER_VARIANT_FOLIAGE_SHADOW
+        : TC_SHADER_VARIANT_FOLIAGE;
     request.debug_context = "FoliageLayerComponent";
-    request.vertex_entry = "vs_main";
-    request.fragment_source_override = shadow_variant ? FOLIAGE_SHADOW_FRAGMENT_SOURCE : nullptr;
-    request.fragment_entry_override = shadow_variant ? "fs_main" : nullptr;
-    request.require_slang_original = !shadow_variant;
-    return get_material_vertex_variant(request);
+    return assemble_material_shader_override(request);
+}
+
+bool shader_contract_requires_foliage_instances(TcShader shader)
+{
+    tc_shader_contract_view contract{};
+    if (!tc_shader_get_contract_view(shader.get(), &contract)) {
+        return false;
+    }
+    for (uint32_t i = 0; i < contract.resource_count; ++i) {
+        const tc_shader_resource_requirement& resource = contract.resources[i];
+        if (std::strncmp(
+                resource.name,
+                "foliage_instances",
+                TC_SHADER_RESOURCE_NAME_MAX) == 0 &&
+            resource.kind == TC_SHADER_RESOURCE_STORAGE_BUFFER) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool validate_foliage_vertex_layout(
@@ -183,38 +198,37 @@ Mat44f layer_model_with_scale(const Entity& entity) {
     return Mat44f::compose(pose.lin, pose.ang, pose.scale);
 }
 
-struct FoliageDataHandleKindRegistrar {
-    FoliageDataHandleKindRegistrar() {
-        tc::KindRegistryCpp::instance().register_kind(
-            "foliage_data_handle",
-            [](const std::any& value) -> tc_value {
-                const std::string uuid =
-                    value.type() == typeid(std::string) ? std::any_cast<std::string>(value) : std::string();
-                tc_value result = tc_value_dict_new();
-                tc_value_dict_set(&result, "uuid", tc_value_string(uuid.c_str()));
-                tc_value_dict_set(&result, "name", tc_value_string(""));
-                return result;
-            },
-            [](const tc_value* value, void*) -> std::any {
-                if (!value || value->type == TC_VALUE_NIL) {
-                    return std::string();
-                }
-                if (value->type == TC_VALUE_STRING && value->data.s) {
-                    return std::string(value->data.s);
-                }
-                if (value->type == TC_VALUE_DICT) {
-                    tc_value* uuid = tc_value_dict_get(const_cast<tc_value*>(value), "uuid");
-                    if (uuid && uuid->type == TC_VALUE_STRING && uuid->data.s) {
-                        return std::string(uuid->data.s);
-                    }
-                }
+void register_foliage_data_handle_kind() {
+    if (tc::KindRegistryCpp::instance().has("foliage_data_handle")) {
+        return;
+    }
+    tc::KindRegistryCpp::instance().register_kind(
+        "foliage_data_handle",
+        [](const std::any& value) -> tc_value {
+            const std::string uuid =
+                value.type() == typeid(std::string) ? std::any_cast<std::string>(value) : std::string();
+            tc_value result = tc_value_dict_new();
+            tc_value_dict_set(&result, "uuid", tc_value_string(uuid.c_str()));
+            tc_value_dict_set(&result, "name", tc_value_string(""));
+            return result;
+        },
+        [](const tc_value* value, void*) -> std::any {
+            if (!value || value->type == TC_VALUE_NIL) {
                 return std::string();
             }
-        );
-    }
-};
-
-FoliageDataHandleKindRegistrar foliage_data_handle_kind_registrar;
+            if (value->type == TC_VALUE_STRING && value->data.s) {
+                return std::string(value->data.s);
+            }
+            if (value->type == TC_VALUE_DICT) {
+                tc_value* uuid = tc_value_dict_get(const_cast<tc_value*>(value), "uuid");
+                if (uuid && uuid->type == TC_VALUE_STRING && uuid->data.s) {
+                    return std::string(uuid->data.s);
+                }
+            }
+            return std::string();
+        }
+    );
+}
 
 } // namespace
 
@@ -225,6 +239,8 @@ FoliageLayerComponent::FoliageLayerComponent()
 }
 
 void FoliageLayerComponent::register_type() {
+    register_foliage_data_handle_kind();
+
     auto& component_registry = ComponentRegistry::instance();
     if (!component_registry.has("FoliageLayerComponent")) {
         component_registry.register_native(
@@ -318,6 +334,14 @@ void FoliageLayerComponent::register_type() {
             "double"
         );
     }
+    tc::InspectAccessorFieldRegistrar<FoliageLayerComponent, std::string>(
+        "FoliageLayerComponent",
+        "foliage",
+        "Foliage Data",
+        "foliage_data_handle",
+        [](FoliageLayerComponent* self) { return self->foliage_uuid; },
+        [](FoliageLayerComponent* self, std::string value) { self->foliage_uuid = std::move(value); }
+    );
 }
 
 std::set<std::string> FoliageLayerComponent::get_phase_marks() const {
@@ -532,8 +556,7 @@ bool FoliageLayerComponent::draw_tgfx2(
     TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
         shader = get_foliage_instanced_shader(TcShader(phase->shader), shadow_variant);
-    } else if (shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE
-        && shader.variant_op() != TC_SHADER_VARIANT_FOLIAGE_SHADOW) {
+    } else if (!shader_contract_requires_foliage_instances(shader)) {
         shader = get_foliage_instanced_shader(shader, shadow_variant);
     }
     if (!shader.is_valid()) {
@@ -606,21 +629,5 @@ bool FoliageLayerComponent::draw_tgfx2(
     );
     return true;
 }
-
-namespace {
-
-tc::InspectAccessorFieldRegistrar<FoliageLayerComponent, std::string>
-    foliage_layer_asset_field_reg{
-        "FoliageLayerComponent",
-        "foliage",
-        "Foliage Data",
-        "foliage_data_handle",
-        [](FoliageLayerComponent* self) { return self->foliage_uuid; },
-        [](FoliageLayerComponent* self, std::string value) { self->foliage_uuid = std::move(value); }
-    };
-
-} // namespace
-
-REGISTER_COMPONENT(FoliageLayerComponent, Component);
 
 } // namespace termin

@@ -43,10 +43,9 @@ void UnknownComponent::deserialize_data(const tc_value* data, tc_scene_handle sc
     }
 }
 
-REGISTER_COMPONENT(UnknownComponent, CxxComponent);
+namespace {
 
-static struct UnknownComponentFieldRegistrar {
-    UnknownComponentFieldRegistrar() {
+void register_unknown_component_inspect_fields() {
         {
             tc::InspectFieldInfo info;
             info.type_name = "UnknownComponent";
@@ -93,7 +92,17 @@ static struct UnknownComponentFieldRegistrar {
 
             tc::InspectRegistry::instance().add_field_with_choices("UnknownComponent", std::move(info));
         }
-    }
-} unknown_component_field_registrar;
+}
+
+} // namespace
+
+void UnknownComponent::register_type() {
+    register_component_type<UnknownComponent>("UnknownComponent", "CxxComponent");
+    register_unknown_component_inspect_fields();
+}
+
+void register_builtin_scene_component_types() {
+    UnknownComponent::register_type();
+}
 
 } // namespace termin

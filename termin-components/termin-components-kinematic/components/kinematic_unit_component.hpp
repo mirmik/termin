@@ -76,6 +76,4 @@ protected:
     void write_base_transform(Entity& ent) const;
 };
 
-REGISTER_ABSTRACT_COMPONENT(KinematicUnitComponent, Component);
-
 } // namespace termin

@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include <inspect/tc_runtime_type_registry.h>
 #include <tc_inspect_cpp.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
@@ -138,6 +139,31 @@ void reregister_reloadable_component() {
     );
 }
 
+struct PrepareUnloadTestContext {
+    std::vector<termin::TcSceneRef> scenes;
+};
+
+bool prepare_component_unload_for_test(
+    const char* type_name,
+    void* context,
+    void*
+) {
+    auto* unload_context = static_cast<PrepareUnloadTestContext*>(context);
+    if (!type_name || !unload_context) {
+        return false;
+    }
+
+    for (const termin::TcSceneRef& scene : unload_context->scenes) {
+        termin::UnknownComponentStats stats =
+            termin::degrade_components_to_unknown(scene, {type_name});
+        if (stats.failed > 0) {
+            return false;
+        }
+    }
+
+    return tc_component_registry_instance_count(type_name) == 0;
+}
+
 int test_module_owner_registration_cleanup() {
     std::cout << "Testing module-owned component and inspect cleanup...\n";
 
@@ -175,13 +201,13 @@ int test_module_owner_registration_cleanup() {
     components.set_registration_owner("");
     inspect.set_registration_owner("");
 
-    TEST_ASSERT(inspect.unregister_owner(module_id) == 1, "inspect owner cleanup count");
-    TEST_ASSERT(components.unregister_owner(module_id) == 1, "component owner cleanup count");
+    TEST_ASSERT(tc_runtime_type_registry_unregister_owner(module_id) == 1,
+                "runtime owner cleanup count");
     TEST_ASSERT(!components.has("OwnerScopedComponent"), "owned component unregistered");
     TEST_ASSERT(inspect.find_field("OwnerScopedComponent", "value") == nullptr,
                 "owned inspect field removed");
-    TEST_ASSERT(inspect.unregister_owner(module_id) == 0, "inspect owner cleanup idempotent");
-    TEST_ASSERT(components.unregister_owner(module_id) == 0, "component owner cleanup idempotent");
+    TEST_ASSERT(tc_runtime_type_registry_unregister_owner(module_id) == 0,
+                "runtime owner cleanup idempotent");
 
     components.register_native(
         "OwnerScopedComponent",
@@ -198,6 +224,83 @@ int test_module_owner_registration_cleanup() {
     components.unregister("OwnerScopedComponent");
 
     std::cout << "  Module owner cleanup: PASS\n";
+    return 0;
+}
+
+int test_module_owner_cleanup_prepares_live_components() {
+    std::cout << "Testing module owner cleanup prepares live components...\n";
+
+    constexpr const char* module_id = "owner_prepare_unload_test";
+    auto& components = termin::ComponentRegistry::instance();
+    auto& inspect = tc::InspectRegistry::instance();
+
+    components.unregister("OwnerScopedComponent");
+    inspect.unregister_type("OwnerScopedComponent");
+    components.set_registration_owner(module_id);
+    inspect.set_registration_owner(module_id);
+
+    components.register_native(
+        "OwnerScopedComponent",
+        &termin::CxxComponentFactoryData<OwnerScopedComponent>::create,
+        nullptr,
+        "CxxComponent"
+    );
+    inspect.add<OwnerScopedComponent, int>(
+        "OwnerScopedComponent",
+        &OwnerScopedComponent::value,
+        "value",
+        "Value",
+        "int"
+    );
+
+    components.set_registration_owner("");
+    inspect.set_registration_owner("");
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("owner_prepare_unload");
+    termin::Entity entity = scene.create_entity("entity");
+    tc_component* component = tc_component_registry_create("OwnerScopedComponent");
+    TEST_ASSERT(component != nullptr, "owned component instance created");
+    auto* owner_scoped =
+        dynamic_cast<OwnerScopedComponent*>(termin::CxxComponent::from_tc(component));
+    TEST_ASSERT(owner_scoped != nullptr, "owned component instance cast succeeds");
+    owner_scoped->value = 77;
+    entity.add_component_ptr(component);
+    TEST_ASSERT(tc_component_registry_instance_count("OwnerScopedComponent") == 1,
+                "owned component live instance linked");
+
+    PrepareUnloadTestContext context{{scene}};
+    tc_component_registry_set_prepare_unload_callback(
+        prepare_component_unload_for_test,
+        nullptr
+    );
+    const size_t removed =
+        tc_runtime_type_registry_unregister_owner_with_context(module_id, &context);
+    tc_component_registry_set_prepare_unload_callback(nullptr, nullptr);
+
+    TEST_ASSERT(removed == 1, "runtime owner cleanup removed prepared type");
+    TEST_ASSERT(!components.has("OwnerScopedComponent"),
+                "owned component registration removed after prepare");
+    TEST_ASSERT(inspect.find_field("OwnerScopedComponent", "value") == nullptr,
+                "owned inspect field removed after prepare");
+    TEST_ASSERT(tc_component_registry_instance_count("OwnerScopedComponent") == 0,
+                "owned component live instance unlinked by prepare");
+    TEST_ASSERT(entity.get_component_by_type_name("OwnerScopedComponent") == nullptr,
+                "original component removed from entity");
+
+    tc_component* unknown_tc = entity.get_component_by_type_name("UnknownComponent");
+    TEST_ASSERT(unknown_tc != nullptr, "UnknownComponent created by prepare");
+    auto* unknown =
+        static_cast<termin::UnknownComponent*>(termin::CxxComponent::from_tc(unknown_tc));
+    TEST_ASSERT(unknown != nullptr, "UnknownComponent cast succeeds");
+    TEST_ASSERT(unknown->original_type == "OwnerScopedComponent",
+                "UnknownComponent preserves original type");
+    tc_value* stored_value = tc_value_dict_get(&unknown->original_data, "value");
+    TEST_ASSERT(stored_value != nullptr, "UnknownComponent stores owned value");
+    TEST_ASSERT(stored_value->type == TC_VALUE_INT, "UnknownComponent value is int");
+    TEST_ASSERT(stored_value->data.i == 77, "UnknownComponent value preserved");
+
+    scene.destroy();
+    std::cout << "  Module owner cleanup prepare: PASS\n";
     return 0;
 }
 
@@ -615,6 +718,7 @@ int test_custom_upgrade_from_unregistered_source_type() {
 int main() {
     tc::init_cpp_inspect_vtable();
     tc::register_builtin_cpp_kinds();
+    termin::register_builtin_scene_component_types();
 
     int result = 0;
     result |= test_cpp_inspect_registry_roundtrip();
@@ -628,6 +732,7 @@ int main() {
     result |= test_custom_upgrade_strategy();
     result |= test_custom_upgrade_from_unregistered_source_type();
     result |= test_module_owner_registration_cleanup();
+    result |= test_module_owner_cleanup_prepares_live_components();
 
     if (result == 0) {
         std::cout << "\nAll UnknownComponent tests passed.\n";

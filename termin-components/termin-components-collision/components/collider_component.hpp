@@ -57,12 +57,14 @@ private:
     tc_scene_handle _scene_handle = TC_SCENE_HANDLE_INVALID;
 
 public:
-    // INSPECT_FIELD registrations
-    // Note: collider_type is registered manually in .cpp with choices.
+    // Inspect fields are registered from register_type().
+    // Note: collider_type is registered manually with choices.
     // Sphere and Capsule sizes are determined by entity scale (no separate fields)
 
     ColliderComponent();
     ~ColliderComponent() override;
+
+    static void register_type();
 
     // Lifecycle
     void on_added() override;
@@ -100,40 +102,5 @@ private:
     // Add attached collider to collision world
     void _add_to_collision_world();
 };
-
-// Field registrations (outside class - callbacks trigger rebuild_collider)
-INSPECT_FIELD_CALLBACK(ColliderComponent, tc_vec3, box_size, "Size", "vec3",
-    [](ColliderComponent* c) -> tc_vec3& { return c->box_size; },
-    [](ColliderComponent* c, const tc_vec3& value) { c->set_box_size(value); },
-    0.001, 1000.0, 0.1)
-
-INSPECT_FIELD_CALLBACK(ColliderComponent, TcMesh, convex_hull_mesh, "Convex Hull Mesh", "tc_mesh",
-    [](ColliderComponent* c) -> TcMesh& { return c->convex_hull_mesh; },
-    [](ColliderComponent* c, const TcMesh& value) { c->set_convex_hull_mesh(value); })
-
-INSPECT_FIELD_CALLBACK(ColliderComponent, bool, collider_offset_enabled, "Collider Offset", "bool",
-    [](ColliderComponent* c) -> bool& { return c->collider_offset_enabled; },
-    [](ColliderComponent* c, const bool& value) {
-        if (c->collider_offset_enabled != value) {
-            c->collider_offset_enabled = value;
-            c->rebuild_collider();
-        }
-    })
-
-INSPECT_FIELD_CALLBACK(ColliderComponent, tc_vec3, collider_offset_position, "Offset Position", "vec3",
-    [](ColliderComponent* c) -> tc_vec3& { return c->collider_offset_position; },
-    [](ColliderComponent* c, const tc_vec3& value) {
-        c->collider_offset_position = value;
-        c->rebuild_collider();
-    })
-
-INSPECT_FIELD_CALLBACK(ColliderComponent, tc_vec3, collider_offset_euler, "Offset Rotation", "vec3",
-    [](ColliderComponent* c) -> tc_vec3& { return c->collider_offset_euler; },
-    [](ColliderComponent* c, const tc_vec3& value) {
-        c->collider_offset_euler = value;
-        c->rebuild_collider();
-    })
-
-REGISTER_COMPONENT(ColliderComponent, Component);
 
 } // namespace termin

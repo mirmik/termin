@@ -8,23 +8,22 @@
 
 namespace termin {
 
+namespace {
+
+void register_xr_origin_reference_space_field();
+void register_xr_origin_reference_alignment_field();
+void register_xr_origin_layer_mask_field();
+
+} // namespace
+
 XrOriginComponent::XrOriginComponent()
     : CxxComponent("XrOriginComponent")
 {}
 
 void XrOriginComponent::register_type() {
-    auto& component_registry = ComponentRegistry::instance();
-    if (!component_registry.has("XrOriginComponent")) {
-        component_registry.register_native(
-            "XrOriginComponent",
-            &CxxComponentFactoryData<XrOriginComponent>::create,
-            nullptr,
-            "Component"
-        );
-    }
+    register_component_type<XrOriginComponent>("XrOriginComponent", "CxxComponent");
 
     auto& inspect = tc::InspectRegistry::instance();
-    inspect.set_type_parent("XrOriginComponent", "Component");
     if (!inspect.find_field("XrOriginComponent", "near_clip")) {
         inspect.add<XrOriginComponent, double>(
             "XrOriginComponent",
@@ -43,6 +42,9 @@ void XrOriginComponent::register_type() {
             "double"
         );
     }
+    register_xr_origin_reference_space_field();
+    register_xr_origin_reference_alignment_field();
+    register_xr_origin_layer_mask_field();
 }
 
 std::string XrOriginComponent::get_reference_space_str() const {
@@ -77,10 +79,9 @@ void XrOriginComponent::set_reference_alignment_str(const std::string& value) {
     reference_alignment = XrReferenceAlignment::InitialHeadYaw;
 }
 
-REGISTER_COMPONENT(XrOriginComponent, CxxComponent);
+namespace {
 
-static struct _XrOriginReferenceSpaceFieldRegistrar {
-    _XrOriginReferenceSpaceFieldRegistrar() {
+void register_xr_origin_reference_space_field() {
         tc::InspectFieldInfo info;
         info.type_name = "XrOriginComponent";
         info.path = "reference_space";
@@ -99,11 +100,9 @@ static struct _XrOriginReferenceSpaceFieldRegistrar {
             }
         };
         tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
-    }
-} _xr_origin_reference_space_registrar;
+}
 
-static struct _XrOriginReferenceAlignmentFieldRegistrar {
-    _XrOriginReferenceAlignmentFieldRegistrar() {
+void register_xr_origin_reference_alignment_field() {
         tc::InspectFieldInfo info;
         info.type_name = "XrOriginComponent";
         info.path = "reference_alignment";
@@ -122,11 +121,9 @@ static struct _XrOriginReferenceAlignmentFieldRegistrar {
             }
         };
         tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
-    }
-} _xr_origin_reference_alignment_registrar;
+}
 
-static struct _XrOriginLayerMaskFieldRegistrar {
-    _XrOriginLayerMaskFieldRegistrar() {
+void register_xr_origin_layer_mask_field() {
         tc::InspectFieldInfo info;
         info.type_name = "XrOriginComponent";
         info.path = "layer_mask";
@@ -149,7 +146,8 @@ static struct _XrOriginLayerMaskFieldRegistrar {
             }
         };
         tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
-    }
-} _xr_origin_layer_mask_registrar;
+}
+
+} // namespace
 
 } // namespace termin

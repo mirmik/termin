@@ -42,6 +42,12 @@ class DefaultAssetResourceMixin:
     """Public ResourceManager methods for asset types owned by default-assets."""
 
     # --------- Built-ins ---------
+    def register_builtin_shaders(self) -> None:
+        """Register built-in shader dependencies."""
+        from termin.default_assets.builtin_resources import register_builtin_shaders
+
+        register_builtin_shaders(self)
+
     def register_builtin_materials(self) -> None:
         """Register built-in material dependencies."""
         from termin.default_assets.builtin_resources import register_builtin_materials
@@ -59,6 +65,16 @@ class DefaultAssetResourceMixin:
         from termin.default_assets.builtin_resources import register_builtin_meshes
 
         return register_builtin_meshes(self)
+
+    def register_builtin_pipelines(self) -> None:
+        """Register built-in render pipelines."""
+        from termin.default_assets.builtin_resources import (
+            register_default_pipeline,
+            register_triangle_pipeline,
+        )
+
+        register_default_pipeline(self)
+        register_triangle_pipeline(self)
 
     # --------- Prefabs ---------
     def get_prefab_asset(self, name: str) -> Optional["PrefabAsset"]:

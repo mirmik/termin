@@ -36,10 +36,12 @@ public:
 
     // Note: material and cast_shadow are inherited from MeshRenderer;
     // mesh data lives on the required MeshComponent.
-    // and already have INSPECT_FIELD registrations there
+    // MeshRenderer::register_type() owns their inspect serialization.
 
     SkinnedMeshRenderer();
     ~SkinnedMeshRenderer() override;
+
+    static void register_type();
 
     /**
      * Get skeleton controller (nullptr if entity is dead).
@@ -104,8 +106,5 @@ public:
         start();
     }
 };
-
-REGISTER_COMPONENT(SkinnedMeshRenderer, MeshRenderer);
-REQUIRE_COMPONENT(SkinnedMeshRenderer, MeshComponent);
 
 } // namespace termin

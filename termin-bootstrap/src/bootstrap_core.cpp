@@ -1,6 +1,13 @@
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/bootstrap/bootstrap_c.h>
 
+#include <components/components_collision_bootstrap.hpp>
+#include <components/components_kinematic_bootstrap.hpp>
+#include <components/components_mesh_bootstrap.hpp>
+#include <termin/entity/unknown_component.hpp>
+#include <termin/foliage/components_bootstrap.hpp>
+#include <termin/render/components_bootstrap.hpp>
+#include <termin/render/skeleton_components_bootstrap.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
@@ -13,6 +20,12 @@
 
 #ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
 #include <termin/animation/tc_animation_handle.hpp>
+#endif
+#ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION_COMPONENTS
+#include <termin/animation/components_bootstrap.hpp>
+#endif
+#ifdef TERMIN_BOOTSTRAP_HAS_NAVMESH_COMPONENTS
+#include <termin/navmesh/components_bootstrap.hpp>
 #endif
 
 extern "C" {
@@ -59,6 +72,7 @@ struct BootstrapState {
     bool navmesh_registered = false;
     bool entity_registered = false;
     bool inspect_initialized = false;
+    bool builtin_components_registered = false;
 };
 
 BootstrapState g_bootstrap_state;
@@ -183,10 +197,32 @@ void init_inspect_adapters() {
     g_bootstrap_state.inspect_initialized = true;
 }
 
+void register_builtin_component_types() {
+    if (g_bootstrap_state.builtin_components_registered) {
+        return;
+    }
+
+    register_builtin_scene_component_types();
+    register_builtin_mesh_component_types();
+    register_builtin_collision_component_types();
+    register_builtin_kinematic_component_types();
+    register_builtin_skeleton_component_types();
+    register_builtin_render_component_types();
+    register_builtin_foliage_component_types();
+#ifdef TERMIN_BOOTSTRAP_HAS_NAVMESH_COMPONENTS
+    register_builtin_navmesh_component_types();
+#endif
+#ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION_COMPONENTS
+    termin::animation::register_builtin_animation_component_types();
+#endif
+    g_bootstrap_state.builtin_components_registered = true;
+}
+
 void bootstrap_runtime() {
     tc_init();
     init_inspect_adapters();
     register_runtime_kinds();
+    register_builtin_component_types();
     register_scene_extensions();
 }
 

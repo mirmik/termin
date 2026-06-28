@@ -32,6 +32,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 
 add_library(termin_components_skeleton SHARED
+    src/skeleton_components_bootstrap.cpp
     src/skeleton_controller.cpp
 )
 add_library(termin_components_skeleton::termin_components_skeleton ALIAS termin_components_skeleton)

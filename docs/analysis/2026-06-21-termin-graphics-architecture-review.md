@@ -69,29 +69,32 @@ Vulkan, D3D11, shader compiler Python tests и resource binding tests.
 
 ## Основные Архитектурные Риски
 
-### 1. Shader Placement Policy Еще Раздвоена
+### 1. Shader Placement Policy Все Еще Переходная
 
 Целевая модель говорит, что backend placement должен приходить из явной
-metadata/policy модели. Но фактически placement все еще частично выводится из
-magic resource names.
+metadata/policy модели.
 
-Примеры:
+Статус 2026-06-27:
 
-- `termin-graphics/tools/termin_shaderc.cpp::normalize_scope_first_binding_slots()`
-  назначает binding slots по именам `per_frame`, `lighting`, `shadow_block`,
-  `material`, `bone_block`, `shadow_maps`;
-- `termin-graphics/src/tgfx2/builtin_shader_sources.cpp::binding_slot_for_catalog_resource()`
-  повторяет похожую таблицу для built-in shader catalog path.
+- runtime built-in catalog path больше не хранит resources/layout/contract;
+- compiler-side name table (`per_frame`, `material`, `shadow_maps`,
+  `bone_block` и т.п.) удалена;
+- `termin_shaderc` пока назначает transitional `set/binding` через
+  deterministic allocator по `scope + resource kind + stable resource name`;
+- D3D11 placement уже живет отдельной `d3d11` metadata в sidecar.
 
-Это создает два источника истины:
+Исторически похожая таблица существовала и в runtime built-in catalog path, но
+этот путь удален: built-in registry больше не хранит resources/layout/contract,
+а runtime берет layout из artifact-adjacent sidecar.
+
+Оставшийся источник истины:
 
 1. artifact/layout sidecar, сгенерированный `termin_shaderc`;
-2. runtime built-in catalog path, который сам заново назначает slots.
 
-Проблема не в самих canonical names. Имена вроде `per_frame` или `material`
-полезны как human-readable ABI. Проблема в том, что name-based inference
-становится policy layer. При добавлении backend-а или изменении scope rules
-эти таблицы легко разъедутся.
+Проблема уже не в magic names, а в том, что generic `set/binding` в sidecar
+все еще несет backend placement до финального `backend binding plan` слоя.
+Это приемлемо как переходная форма, но не должно разрастаться обратно в
+ручные таблицы или catalog metadata.
 
 Уже заведено: Kanboard #85 `[graphics/shaders] Убрать magic names из shader compilation paths`.
 

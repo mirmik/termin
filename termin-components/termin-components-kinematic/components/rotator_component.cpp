@@ -2,14 +2,27 @@
 #include <termin/geom/quat.hpp>
 #include "tc_inspect_cpp.hpp"
 #include <cmath>
+#include <cstdlib>
 #include <numbers>
 
 namespace termin {
+
+namespace {
+
+void register_rotator_axis_scale_field();
+
+} // namespace
 
 RotatorComponent::RotatorComponent()
     : KinematicUnitComponent("RotatorComponent")
 {
     axis_z = 1.0;  // Default: Z axis
+}
+
+void RotatorComponent::register_type() {
+    KinematicUnitComponent::register_type();
+    register_component_type<RotatorComponent>("RotatorComponent", "KinematicUnitComponent");
+    register_rotator_axis_scale_field();
 }
 
 void RotatorComponent::apply() {
@@ -65,9 +78,9 @@ void RotatorComponent::capture_base() {
     base_rotation = {base.x, base.y, base.z, base.w};
 }
 
-// axis_scale preset (enum, not serialized)
-static struct _RotatorAxisScaleRegistrar {
-    _RotatorAxisScaleRegistrar() {
+namespace {
+
+void register_rotator_axis_scale_field() {
         tc::InspectFieldInfo info;
         info.type_name = "RotatorComponent";
         info.path = "axis_scale";
@@ -106,7 +119,8 @@ static struct _RotatorAxisScaleRegistrar {
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
-    }
-} _rotator_axis_scale_registrar;
+}
+
+} // namespace
 
 } // namespace termin

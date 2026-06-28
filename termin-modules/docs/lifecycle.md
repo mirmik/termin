@@ -64,16 +64,17 @@
 6. копирует artifact во временный `.loaded.N` путь, чтобы обойти cache `dlopen`
 7. загружает shared library через `dlopen` или `LoadLibrary`
 8. ищет символ `module_init`
-9. если символ найден, вызывает его
+9. если символ найден, вызывает его внутри native-init callback scope
 10. сохраняет native handle в `CppModuleHandle`
 
 Важно:
 
 - глобальные статические конструкторы shared library вызываются загрузчиком ОС при `dlopen`/`LoadLibrary`
 - `module_init` это дополнительная явная точка входа поверх static initialization
-- integration layer включает owner scope регистрации на время `dlopen`/`LoadLibrary`
-  и `module_init`; C++ component/inspect registrations, сделанные в этот момент,
-  помечаются `module_id`
+- integration layer включает owner scope регистрации только на время
+  `module_init`; C++ component/inspect registrations, сделанные в static
+  constructors при `dlopen`/`LoadLibrary`, считаются legacy side effects и не
+  получают module ownership
 - project C++ artifact должен быть самодостаточным на уровне DT_NEEDED/RUNPATH;
   уже загруженные editor/SDK библиотеки и Python-side preload не должны быть
   обязательным условием для успешного native load
@@ -178,11 +179,14 @@ live create/change/remove события помечают владеющий C++
 `auto-after-successful-build`) вместо безусловного unload / build / dlopen на
 каждое filesystem-событие.
 
-Loose `.py` файлы
-вне `.pymodule` продолжают обрабатываться legacy `ComponentFileProcessor`:
-watcher передаёт их в `ResourceManager.scan_components()`, а
-`ComponentClassRegistry.scan()` регистрирует найденные `PythonComponent`
-subclasses.
+Loose `.py` файлы вне `.pymodule` являются поддерживаемой editor policy, а не
+случайным fallback: проектное Python-пространство рассматривается как единый
+package-like namespace для scripts, editor extensions и быстрых runtime
+компонентов. Watcher передаёт такие файлы в legacy `ComponentFileProcessor`,
+`ResourceManager.scan_components()` исполняет их, а `ComponentClassRegistry.scan()`
+регистрирует найденные `PythonComponent` subclasses. Файлы, которые не объявляют
+компоненты, всё равно могут быть helper/editor-extension scripts и остаются
+частью этого проектного Python-пространства.
 В editor watcher path loose `.py` файлы живут в synthetic namespace
 `termin_project`: `Scripts/player.py` загружается как
 `termin_project.Scripts.player`. Это позволяет использовать relative imports
@@ -196,8 +200,13 @@ requirements или module lifecycle, его нужно оформить как 
 через `.pymodule`.
 Повторная загрузка loose-файла читает source напрямую, без `.pyc` cache, и
 заменяет классы, найденные в том же generated module.
-Изменение helper-файла само по себе пока не запускает dependency cascade reload
-всех loose-компонентов, которые его импортировали.
+Если изменённый loose `.py` не регистрирует компонентов, processor выполняет
+conservative refresh уже отслеженных loose component scripts. Это покрывает
+типичный helper-only сценарий: `Scripts/helper.py` меняется, а ранее загруженный
+`Scripts/player.py` или `termin_project.Shared.values` dependent пересканируется
+и получает новые imports. Это не полноценный dependency graph и не заменяет
+`.pymodule` lifecycle, но сохраняет текущую удобную editor-политику свободных
+scripts.
 
 ## 8. Smoke-проверки
 

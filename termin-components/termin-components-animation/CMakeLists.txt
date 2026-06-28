@@ -42,6 +42,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../../cmake")
 include(TerminRpath)
 
 add_library(termin_components_animation SHARED
+    src/components_bootstrap.cpp
     src/animation_player.cpp
 )
 add_library(termin_components_animation::termin_components_animation ALIAS termin_components_animation)

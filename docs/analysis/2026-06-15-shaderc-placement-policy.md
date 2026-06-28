@@ -23,35 +23,43 @@ Vulkan/OpenGL-подобной модели или D3D `register`.
 
 ## Текущая Реализация
 
-Сейчас `termin_shaderc` использует scope-first normalization:
+Статус 2026-06-27: `termin_shaderc` использует scope-first normalization,
+но больше не содержит таблицу конкретных resource names. Transitional placement
+policy опубликована в `tgfx2/backend_binding_plan.hpp`, чтобы compiler-side
+artifact patching и будущий backend binding planner не расходились в правилах.
+Scoped resources получают placement из `scope + resource kind + stable resource
+name hash`, с локальным probing при конфликте внутри одного shader layout.
+Unscoped resources сохраняют placement, пришедший из reflection/source
+metadata, пока scope не задан явно или через `--default-scope`.
+
+D3D11 HLSL fallback для ресурсов, которые появились только в emitted HLSL и не
+имеют Slang reflection metadata, больше не назначает `pass/material` по именам
+вроде `shadow_maps` или `material`. Такие ресурсы остаются `unscoped`, если
+caller не передал явный `--default-scope`.
 
 ```text
 Slang source
   -> slangc bytecode + reflection
   -> infer resource name/kind/scope
-  -> normalize scope/name to Termin backend slots
+  -> normalize scoped resources through shared transitional placement policy
   -> patch/write artifact and .layout.json sidecar
   -> runtime binds by resource name using sidecar placement
 ```
 
-Фактически текущие нормализованные слоты такие:
+Generic `set/binding` ranges are transitional Vulkan/OpenGL-ish placement
+metadata. The allocator chooses a range by resource class and scope, then
+chooses a deterministic slot from the resource name. This keeps independently
+compiled variants from collapsing every draw constant buffer onto one fixed
+slot while avoiding a hand-written table of special names. The policy is still
+not the final architecture: the final resolved placement should be produced by
+the backend binding planner after shader contract/layout assembly.
 
-| Resource | Scope | Placement |
-|---|---|---|
-| `lighting` | `pass` | binding 0 |
-| `material` | `material` | binding 1 |
-| `per_frame`, `u_per_frame` | `frame` | binding 2 |
-| `shadow_block` | `pass` | binding 3 |
-| material textures | `material` | binding 4+, skipping 8 |
-| `shadow_maps`, `u_shadow_map(s)` | `pass` | binding 8 |
-| `bone_block`, `BoneBlock` | `draw` | binding 16 |
-| draw constant buffers | `draw` | binding 24 |
-| draw storage buffers | `draw` | binding 25 |
-| transient textures/storage/samplers | `transient` | binding 32+ |
-
-Все ресурсы сейчас сведены в set 0. Vulkan использует per-pipeline descriptor
-layout. OpenGL использует те же метаданные как binding points. D3D11 пока не
-реализован, поэтому эта политика еще не проверена на HLSL register classes.
+Все ресурсы сейчас сведены в set 0. Vulkan uses generic descriptor
+`set/binding`. OpenGL consumes binding values as native binding points /
+texture units, with validation treating those classes as separate spaces.
+D3D11 no longer depends on generic binding for native placement: sidecars also
+carry explicit `d3d11.register_class/register_index` metadata assigned by a
+separate register allocator.
 
 ## Вариант A: Оставить Scope-First Canonical Placement
 
@@ -67,7 +75,8 @@ Shader source:
   ConstantBuffer<MaterialParams> material;
 
 termin_shaderc:
-  material + scope=material -> binding/register slot from Termin ABI
+  material + scope=material + kind=constant_buffer
+      -> deterministic transitional sidecar placement
 
 Runtime:
   ctx.bind_uniform_data("material", bytes)
