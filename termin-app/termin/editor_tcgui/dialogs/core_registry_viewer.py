@@ -9,6 +9,7 @@ from tcgui.widgets.label import Label
 from tcgui.widgets.tabs import TabView
 from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.table_widget import TableWidget, TableColumn
+from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
@@ -65,7 +66,6 @@ def show_core_registry_viewer(ui) -> None:
         "SoA Types": [TableColumn("Name"), TableColumn("ID", 60), TableColumn("Size", 60), TableColumn("Align", 60), TableColumn("Init", 50), TableColumn("Destroy", 60)],
         "Pipelines": [TableColumn("Name"), TableColumn("Pass Count", 80)],
         "Passes": [TableColumn("Type Name"), TableColumn("Language", 80)],
-        "Scenes": [TableColumn("Name"), TableColumn("Entities", 80)],
     }
     tab_lists: dict[str, TableWidget] = {}
     for name, cols in tab_columns.items():
@@ -74,6 +74,11 @@ def show_core_registry_viewer(ui) -> None:
         tw.stretch = True
         tab_lists[name] = tw
         tabs.add_tab(name, tw)
+
+    scene_tree = TreeWidget()
+    scene_tree.row_height = 22
+    scene_tree.stretch = True
+    tabs.add_tab("Scenes", scene_tree)
 
     left.add_child(tabs)
 
@@ -94,21 +99,6 @@ def show_core_registry_viewer(ui) -> None:
     details.stretch = True
     details.placeholder = "Select an item to view details"
     right.add_child(details)
-
-    entities_label = Label()
-    entities_label.text = "Entities"
-    entities_label.visible = False
-    right.add_child(entities_label)
-
-    entities_table = TableWidget()
-    entities_table.set_columns([
-        TableColumn("Name"),
-        TableColumn("Components", 90),
-        TableColumn("State", 90),
-    ])
-    entities_table.preferred_height = px(180)
-    entities_table.visible = False
-    right.add_child(entities_table)
 
     btn_row = HStack()
     btn_row.spacing = 4
@@ -246,13 +236,26 @@ def show_core_registry_viewer(ui) -> None:
     def _refresh_scenes():
         infos = tc_scene_registry_get_all_info()
         all_infos["Scenes"] = infos
-        rows = []
+        scene_tree.clear()
         for info in infos:
-            rows.append([
-                info["name"],
-                str(info.get("entity_count", 0)),
-            ])
-        tab_lists["Scenes"].set_rows(rows, _make_tab_data("Scenes", infos))
+            handle = info.get("handle")
+            entities = []
+            if handle:
+                try:
+                    entities = tc_scene_get_entities(handle)
+                except Exception as e:
+                    log.debug(f"[CoreRegistry] Failed to get entities for scene {info.get('name', '?')}: {e}")
+            info["entities"] = entities
+
+            scene_node = TreeNode(content=_make_scene_tree_row(info))
+            scene_node.data = ("Scenes", info)
+            scene_node.expanded = True
+            scene_tree.add_root(scene_node)
+
+            for entity in sorted(entities, key=_entity_sort_key):
+                entity_node = TreeNode(content=_make_entity_tree_row(entity))
+                entity_node.data = ("Entity", entity)
+                scene_node.add_node(entity_node)
 
     def _refresh_all():
         _refresh_meshes()
@@ -290,19 +293,23 @@ def show_core_registry_viewer(ui) -> None:
         selected.clear()
         selected["tab"] = tab
         selected["info"] = info
-        if tab != "Scenes":
-            _clear_entities()
         _show_details(tab, info)
 
-    def _on_entity_select(idx, data):
-        if data is None:
+    def _on_scene_tree_select(node):
+        if node is None or node.data is None:
             return
-        _show_entity_details(data)
-
-    entities_table.on_select = _on_entity_select
+        kind, info = node.data
+        selected.clear()
+        selected["tab"] = kind
+        selected["info"] = info
+        if kind == "Scenes":
+            _show_scene_details(info)
+        elif kind == "Entity":
+            _show_entity_details(info)
 
     for tw in tab_lists.values():
         tw.on_select = _on_select
+    scene_tree.on_select = _on_scene_tree_select
 
     # --- Detail display ---
     def _show_details(tab: str, info: dict):
@@ -456,6 +463,7 @@ def show_core_registry_viewer(ui) -> None:
     def _show_scene_details(info: dict):
         lines = [f"=== Scene: {info['name']} ===", ""]
         lines.append(f"Entity count:    {info.get('entity_count', 0)}")
+        lines.append(f"Entities loaded: {len(info.get('entities', []))}")
         lines.append(f"Pending count:   {info.get('pending_count', 0)}")
         lines.append(f"Update count:    {info.get('update_count', 0)}")
         lines.append(f"Fixed update:    {info.get('fixed_update_count', 0)}")
@@ -473,53 +481,89 @@ def show_core_registry_viewer(ui) -> None:
             except Exception as e:
                 log.debug(f"[CoreRegistry] Failed to get component types for scene {info.get('name', '?')}: {e}")
 
-            # Entities
-            try:
-                entities = tc_scene_get_entities(handle)
-                _load_entities(entities)
-            except Exception as e:
-                log.debug(f"[CoreRegistry] Failed to get entities for scene {info.get('name', '?')}: {e}")
-                _clear_entities()
-
         details.text = "\n".join(lines)
 
-    def _load_entities(entities: list[dict]) -> None:
-        rows = []
-        data = []
-        for entity in sorted(entities, key=lambda x: x.get("name") or x.get("uuid") or ""):
-            name = entity.get("name") or "(unnamed)"
-            enabled = "on" if entity.get("enabled", True) else "off"
-            visible = "vis" if entity.get("visible", True) else "hid"
-            rows.append([
-                name,
-                str(entity.get("component_count", 0)),
-                f"{enabled}/{visible}",
-            ])
-            data.append(entity)
-        entities_table.set_rows(rows, data)
-        entities_table.visible = True
-        entities_label.visible = True
-        entities_label.text = f"Entities ({len(rows)})"
+    def _entity_sort_key(entity: dict) -> tuple[int, str, int]:
+        pick_id = int(entity.get("pick_id", 0))
+        name = entity.get("name") or entity.get("uuid") or ""
+        return (pick_id, name, int(entity.get("id_index", 0)))
 
-    def _clear_entities() -> None:
-        entities_table.set_rows([], [])
-        entities_table.visible = False
-        entities_label.visible = False
+    def _entity_flags(entity: dict) -> str:
+        flags = []
+        flags.append("E" if entity.get("enabled", True) else "-")
+        flags.append("V" if entity.get("visible", True) else "-")
+        flags.append("P" if entity.get("pickable", True) else "-")
+        flags.append("S" if entity.get("selectable", True) else "-")
+        flags.append("Ser" if entity.get("serializable", True) else "---")
+        return " ".join(flags)
+
+    def _make_tree_label(text: str) -> Label:
+        lbl = Label()
+        lbl.text = text
+        lbl.font_size = 12
+        lbl.stretch = True
+        return lbl
+
+    def _make_scene_tree_row(info: dict) -> Label:
+        name = info.get("name", "<unnamed scene>")
+        entity_count = info.get("entity_count", 0)
+        loaded_count = len(info.get("entities", []))
+        return _make_tree_label(f"{name}  entities={entity_count} loaded={loaded_count}")
+
+    def _make_entity_tree_row(entity: dict) -> Label:
+        name = entity.get("name") or "(unnamed)"
+        entity_id = f"{entity.get('id_index', '?')}:{entity.get('id_generation', '?')}"
+        return _make_tree_label(
+            f"{name}  pick_id={entity.get('pick_id', 0)}  "
+            f"runtime={entity.get('runtime_id', 0)}  id={entity_id}  "
+            f"components={entity.get('component_count', 0)}  flags={_entity_flags(entity)}"
+        )
 
     def _show_entity_details(info: dict) -> None:
+        parent_index = info.get("parent_index")
+        parent_generation = info.get("parent_generation")
+        parent_text = (
+            f"{parent_index}:{parent_generation}"
+            if parent_index is not None and parent_generation is not None
+            else "(root)"
+        )
+        components = info.get("components", [])
         lines = [
             "=== ENTITY ===",
             "",
             f"Name:           {info.get('name') or '(unnamed)'}",
             f"UUID:           {info.get('uuid', '')}",
+            f"Entity ID:      {info.get('id_index', '?')}:{info.get('id_generation', '?')}",
+            f"Runtime ID:     {info.get('runtime_id', 0)}",
+            f"Pick ID:        {info.get('pick_id', 0)}",
             "",
             "--- State ---",
             f"Enabled:        {info.get('enabled', True)}",
             f"Visible:        {info.get('visible', True)}",
+            f"Pickable:       {info.get('pickable', True)}",
+            f"Selectable:     {info.get('selectable', True)}",
+            f"Serializable:   {info.get('serializable', True)}",
+            f"Priority:       {info.get('priority', 0)}",
+            f"Layer:          {info.get('layer', 0)}",
+            f"Flags:          {info.get('flags', 0)}",
+            "",
+            "--- Hierarchy ---",
+            f"Parent:         {parent_text}",
+            f"Children:       {info.get('children_count', 0)}",
             "",
             "--- Components ---",
             f"Count:          {info.get('component_count', 0)}",
         ]
+        for index, component in enumerate(components):
+            lines.append("")
+            lines.append(f"[{index}] {component.get('type_name', '<unknown>')}")
+            lines.append(f"  ptr:              0x{int(component.get('ptr', 0)):x}")
+            lines.append(f"  enabled:          {component.get('enabled', False)}")
+            lines.append(f"  active_in_editor: {component.get('active_in_editor', False)}")
+            lines.append(f"  started:          {component.get('started', False)}")
+            lines.append(f"  update:           {component.get('has_update', False)}")
+            lines.append(f"  fixed_update:     {component.get('has_fixed_update', False)}")
+            lines.append(f"  before_render:    {component.get('has_before_render', False)}")
         details.text = "\n".join(lines)
 
     _refresh_all()
