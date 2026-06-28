@@ -33,10 +33,17 @@ namespace {
 constexpr const char* kModuleId = "native_probe";
 constexpr const char* kComponentType = "HotReloadNativeProbeComponent";
 constexpr const char* kEngineOwnedProbeType = "EngineOwnedProbeType";
+constexpr const char* kEngineOwnedProbeComponent = "EngineOwnedProbeComponent";
 
 class EngineOwnedProbe {
 public:
     int value = 0;
+};
+
+class EngineOwnedProbeComponent : public termin::CxxComponent {
+public:
+    EngineOwnedProbeComponent()
+        : termin::CxxComponent(kEngineOwnedProbeComponent) {}
 };
 
 class TempDir {
@@ -132,6 +139,25 @@ void register_engine_owned_inspect_probe() {
     );
 }
 
+void create_unowned_module_inspect_shell() {
+    auto& inspect = tc::InspectRegistry::instance();
+    inspect.unregister_type(kComponentType);
+    inspect.set_registration_owner("");
+    inspect.set_type_parent(kComponentType, "Component");
+}
+
+void register_engine_owned_component_probe() {
+    auto& components = termin::ComponentRegistry::instance();
+    components.unregister(kEngineOwnedProbeComponent);
+    components.set_registration_owner("");
+    components.register_native(
+        kEngineOwnedProbeComponent,
+        &termin::CxxComponentFactoryData<EngineOwnedProbeComponent>::create,
+        nullptr,
+        "CxxComponent"
+    );
+}
+
 int engine_owned_probe_value(int field_value) {
     EngineOwnedProbe probe;
     probe.value = field_value;
@@ -166,10 +192,41 @@ bool engine_owned_probe_intact(const char* step, std::string& error) {
     return true;
 }
 
+bool engine_owned_component_probe_intact(const char* step, std::string& error) {
+    const std::string prefix = std::string("engine-owned component type survives ") + step + ": ";
+    auto& components = termin::ComponentRegistry::instance();
+    if (!components.owner_of(kEngineOwnedProbeComponent).empty()) {
+        error = prefix + "owner remains empty";
+        return false;
+    }
+    if (!components.has(kEngineOwnedProbeComponent)) {
+        error = prefix + "type remains registered";
+        return false;
+    }
+
+    tc_component* component = tc_component_registry_create(kEngineOwnedProbeComponent);
+    if (!component) {
+        error = prefix + "factory remains callable";
+        return false;
+    }
+    auto* typed = dynamic_cast<EngineOwnedProbeComponent*>(termin::CxxComponent::from_tc(component));
+    const bool factory_is_engine_factory = typed != nullptr;
+    tc_component_drop(component);
+    if (!factory_is_engine_factory) {
+        error = prefix + "factory remains the engine factory";
+        return false;
+    }
+
+    error.clear();
+    return true;
+}
+
 int run_cpp_module_hot_reload_smoke() {
     tc::init_cpp_inspect_vtable();
     tc::register_builtin_cpp_kinds();
     register_engine_owned_inspect_probe();
+    create_unowned_module_inspect_shell();
+    register_engine_owned_component_probe();
 
     TempDir tmp;
     const std::filesystem::path source_artifact = TERMIN_ENGINE_CPP_HOT_RELOAD_TEST_MODULE;
@@ -197,6 +254,9 @@ int run_cpp_module_hot_reload_smoke() {
     std::string engine_probe_error;
     TEST_ASSERT(engine_owned_probe_intact("module load", engine_probe_error),
                 engine_probe_error.c_str());
+    std::string engine_component_error;
+    TEST_ASSERT(engine_owned_component_probe_intact("module load", engine_component_error),
+                engine_component_error.c_str());
 
     tc_scene_handle scene_handle = scene_manager.create_scene("cpp-hot-reload");
     termin::TcSceneRef scene(scene_handle);
@@ -213,6 +273,8 @@ int run_cpp_module_hot_reload_smoke() {
                 "inspect field registered after reload");
     TEST_ASSERT(engine_owned_probe_intact("module reload", engine_probe_error),
                 engine_probe_error.c_str());
+    TEST_ASSERT(engine_owned_component_probe_intact("module reload", engine_component_error),
+                engine_component_error.c_str());
 
     tc_component* upgraded = entity.get_component_by_type_name(kComponentType);
     TEST_ASSERT(upgraded != nullptr, "UnknownComponent upgraded back after reload");
@@ -228,6 +290,8 @@ int run_cpp_module_hot_reload_smoke() {
                 "inspect field removed before native close");
     TEST_ASSERT(engine_owned_probe_intact("module unload", engine_probe_error),
                 engine_probe_error.c_str());
+    TEST_ASSERT(engine_owned_component_probe_intact("module unload", engine_component_error),
+                engine_component_error.c_str());
     TEST_ASSERT(entity.get_component_by_type_name(kComponentType) == nullptr,
                 "live component degraded during unload");
     TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") != nullptr,
@@ -243,6 +307,8 @@ int run_cpp_module_hot_reload_smoke() {
                 "failed load does not restore stale inspect entry");
     TEST_ASSERT(engine_owned_probe_intact("failed module load", engine_probe_error),
                 engine_probe_error.c_str());
+    TEST_ASSERT(engine_owned_component_probe_intact("failed module load", engine_component_error),
+                engine_component_error.c_str());
     std::filesystem::rename(broken_artifact, artifact);
 
     TEST_ASSERT(runtime.load_module(kModuleId), runtime.last_error());
@@ -252,9 +318,12 @@ int run_cpp_module_hot_reload_smoke() {
                 "UnknownComponent removed after artifact restore");
     TEST_ASSERT(engine_owned_probe_intact("artifact restore", engine_probe_error),
                 engine_probe_error.c_str());
+    TEST_ASSERT(engine_owned_component_probe_intact("artifact restore", engine_component_error),
+                engine_component_error.c_str());
 
     scene_manager.close_scene("cpp-hot-reload");
     runtime.unload_module(kModuleId);
+    termin::ComponentRegistry::instance().unregister(kEngineOwnedProbeComponent);
     tc::InspectRegistry::instance().unregister_type(kEngineOwnedProbeType);
     return 0;
 }
