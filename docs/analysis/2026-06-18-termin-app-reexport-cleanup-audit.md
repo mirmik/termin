@@ -81,12 +81,12 @@ Reason:
 Native anchors:
 - `termin-app/cpp/termin/assets/handles_inline.hpp`
 
-`termin-app/cpp/termin/assets/voxel_grid_handle_inline.hpp` was moved to
-`termin-voxels/termin/voxels/voxel_grid_handle_inline.hpp`; the app header is
-now only a compatibility include. Both C++ inline handle helpers still import
-`termin.assets.resources` directly. They need a stable bridge or canonical
-resource-runtime package before the old app resource-manager dependency can be
-removed.
+`termin-app/cpp/termin/assets/voxel_grid_handle.hpp` compatibility include was
+removed after the canonical header moved to
+`termin-voxels/termin/voxels/voxel_grid_handle.hpp`. Both remaining app C++
+inline handle helpers still import `termin.assets.resources` directly. They
+need a stable bridge or canonical resource-runtime package before the old app
+resource-manager dependency can be removed.
 
 C++ texture handle cleanup:
 - `termin-app/cpp/termin/assets/handles_inline.hpp` now imports
