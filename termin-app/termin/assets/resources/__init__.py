@@ -2,8 +2,7 @@
 
 The canonical standard SDK resource manager lives in
 ``termin.default_assets.resource_manager``. This package exposes the editor/app
-manager extension used by app code that wants missing materials resolved to the
-canonical ``termin.materials.UnknownMaterial`` visual fallback.
+manager extension used by legacy app/editor imports.
 
 Usage:
     from termin.assets.resources import ResourceManager
