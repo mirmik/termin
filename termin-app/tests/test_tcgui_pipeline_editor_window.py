@@ -68,7 +68,7 @@ def test_pipeline_graph_load_handles_native_pass_metadata_without_python_fields(
 
 
 def test_material_pass_loads_texture_inputs_from_material_shader():
-    from termin.assets.resources import ResourceManager
+    from termin.editor_core.resource_manager import ResourceManager
     from termin.materials import TcMaterial, ShaderMultyPhaseProgramm, parse_shader_text
 
     shader_text = """

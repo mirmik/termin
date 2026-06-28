@@ -212,32 +212,36 @@ class DefaultAssetResourceMixin:
         """Get MaterialAsset by UUID."""
         return self._material_registry.get_asset_by_uuid(uuid)
 
-    def get_material(self, name: str) -> Optional["Material"]:
-        """Get material by name, loading its asset lazily when needed."""
+    def get_material(self, name: str) -> "Material":
+        """Get material by name, loading lazily and returning UnknownMaterial on miss."""
+        from termin.materials import material_or_unknown
+
         mat = self.materials.get(name)
         if mat is not None:
             return mat
         asset = self._material_registry.get_asset(name)
         if asset is None:
-            return None
+            return material_or_unknown(None, name)
         if asset.material is None:
             if not asset.ensure_loaded():
-                return None
+                return material_or_unknown(None, name)
         if asset.material is not None:
             self.materials[name] = asset.material
-        return asset.material
+        return material_or_unknown(asset.material, name)
 
-    def get_material_by_uuid(self, uuid: str) -> Optional["Material"]:
-        """Get material by UUID, loading its asset lazily when needed."""
+    def get_material_by_uuid(self, uuid: str) -> "Material":
+        """Get material by UUID, loading lazily and returning UnknownMaterial on miss."""
+        from termin.materials import material_or_unknown
+
         asset: "MaterialAsset | None" = self._material_registry.get_asset_by_uuid(uuid)
         if asset is None:
-            return None
+            return material_or_unknown(None, f"uuid:{uuid}")
         if asset.material is None:
             if not asset.ensure_loaded():
-                return None
+                return material_or_unknown(None, asset.name or f"uuid:{uuid}")
         if asset.material is not None and asset.name:
             self.materials[asset.name] = asset.material
-        return asset.material
+        return material_or_unknown(asset.material, asset.name or f"uuid:{uuid}")
 
     # --------- Shaders ---------
     def get_shader_asset(self, name: str) -> Optional["ShaderAsset"]:

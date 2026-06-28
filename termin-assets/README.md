@@ -3,8 +3,9 @@
 Shared asset-system contracts for Termin.
 
 This package provides the neutral asset infrastructure shared by editor, player,
-build tooling, and domain asset plugins. Concrete asset implementations still
-live in `termin-app` during the migration, but the base classes no longer do.
+build tooling, and domain asset plugins. Standard SDK asset adapters live in
+`termin-default-assets` or dedicated domain packages; `termin-app` should only
+compose editor behavior.
 
 Core infrastructure:
 
@@ -31,5 +32,5 @@ being migrated, but the contracts keep the runtime surface independent from
 editor-only import tooling.
 
 `ProjectFileWatcher` is intentionally policy-neutral. Applications can inject
-their own ignored-root policy; `termin-app` keeps its project-settings behavior
-through a compatibility wrapper in `termin.assets.project_file_watcher`.
+their own ignored-root policy; the Termin editor keeps its project-settings
+behavior through `termin.editor_core.project_file_watcher`.

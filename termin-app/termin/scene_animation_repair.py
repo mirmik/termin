@@ -49,13 +49,8 @@ def repair_glb_animation_player_clip_refs(
             log.warn(f"[SceneAnimationRepair] ResourceManager factory unavailable: {exc}")
             return 0
         if resource_manager is None:
-            try:
-                from termin.assets.resources import ResourceManager
-
-                resource_manager = ResourceManager.instance()
-            except Exception as exc:
-                log.warn(f"[SceneAnimationRepair] ResourceManager unavailable: {exc}")
-                return 0
+            log.warn("[SceneAnimationRepair] ResourceManager unavailable")
+            return 0
 
     return _repair_entity_tree(scene_data.get("entities"), resource_manager)
 
