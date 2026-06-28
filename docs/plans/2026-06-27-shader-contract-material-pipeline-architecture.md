@@ -161,6 +161,13 @@ or runtime binding model:
 transitional ABI type for resolved layout. New semantic requirements must not be
 added to it as a substitute for `tc_shader_resource_requirement`.
 
+`tc_shader_set_material_ubo_layout()` is not part of resource placement. It
+stores CPU-side std140 packing metadata for material uniform upload only.
+Backend placement for the material buffer must come from compiler reflection,
+sidecar layout metadata, or an explicit `tc_shader_set_resource_layout()` call.
+The shader registry must not synthesize a default `material` binding from the
+presence of material UBO entries.
+
 ### Material Pipeline
 
 The material pipeline remains in `termin-render`.
