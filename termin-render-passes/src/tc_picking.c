@@ -1,81 +1,76 @@
 // tc_picking.c - Entity picking utilities implementation
 #include "tc_picking.h"
-#include <string.h>
+#include <stddef.h>
 
-// Hash function (same as in id_pass.cpp and picking.py)
-static uint32_t hash_int(uint32_t i) {
-    i = ((i >> 16) ^ i) * 0x45d9f3b;
-    i = ((i >> 16) ^ i) * 0x45d9f3b;
-    i = (i >> 16) ^ i;
-    return i;
+#define PICKING_COLOR_MASK 0x00FFFFFFu
+#define PICKING_HALF_MASK  0x00000FFFu
+
+static const uint32_t PICKING_ROUND_KEYS[5] = {
+    0x2C3u, 0xA51u, 0x7E9u, 0x13Bu, 0xD74u
+};
+
+static uint32_t picking_round_fn(uint32_t half, uint32_t key) {
+    uint32_t x = (half ^ key) & PICKING_HALF_MASK;
+    x ^= (x << 5) & PICKING_HALF_MASK;
+    x ^= x >> 7;
+    x = (x * 0x09E5u + 0x07F4u) & PICKING_HALF_MASK;
+    x ^= x >> 4;
+    return x & PICKING_HALF_MASK;
 }
 
-// Simple hash map for RGB -> ID cache
-// Key: (r << 16) | (g << 8) | b
-// Value: entity ID
+static uint32_t picking_permute24(uint32_t value) {
+    uint32_t left = (value >> 12) & PICKING_HALF_MASK;
+    uint32_t right = value & PICKING_HALF_MASK;
 
-#define CACHE_SIZE 4096
-#define CACHE_MASK (CACHE_SIZE - 1)
-
-typedef struct {
-    uint32_t key;
-    int value;
-    bool occupied;
-} cache_entry;
-
-static cache_entry g_cache[CACHE_SIZE];
-
-static uint32_t rgb_to_key(int r, int g, int b) {
-    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | (uint32_t)b;
-}
-
-static void cache_put(uint32_t key, int value) {
-    uint32_t idx = key & CACHE_MASK;
-    // Linear probing
-    for (int i = 0; i < CACHE_SIZE; i++) {
-        uint32_t probe = (idx + i) & CACHE_MASK;
-        if (!g_cache[probe].occupied || g_cache[probe].key == key) {
-            g_cache[probe].key = key;
-            g_cache[probe].value = value;
-            g_cache[probe].occupied = true;
-            return;
-        }
+    for (size_t i = 0; i < sizeof(PICKING_ROUND_KEYS) / sizeof(PICKING_ROUND_KEYS[0]); i++) {
+        uint32_t next_left = right;
+        uint32_t next_right = (left ^ picking_round_fn(right, PICKING_ROUND_KEYS[i])) & PICKING_HALF_MASK;
+        left = next_left;
+        right = next_right;
     }
-    // Cache full - overwrite at original index
-    g_cache[idx].key = key;
-    g_cache[idx].value = value;
-    g_cache[idx].occupied = true;
+
+    return ((left & PICKING_HALF_MASK) << 12) | (right & PICKING_HALF_MASK);
 }
 
-static int cache_get(uint32_t key) {
-    uint32_t idx = key & CACHE_MASK;
-    // Linear probing
-    for (int i = 0; i < CACHE_SIZE; i++) {
-        uint32_t probe = (idx + i) & CACHE_MASK;
-        if (!g_cache[probe].occupied) {
-            return 0;  // Not found
-        }
-        if (g_cache[probe].key == key) {
-            return g_cache[probe].value;
-        }
+static uint32_t picking_unpermute24(uint32_t value) {
+    uint32_t left = (value >> 12) & PICKING_HALF_MASK;
+    uint32_t right = value & PICKING_HALF_MASK;
+
+    for (size_t i = sizeof(PICKING_ROUND_KEYS) / sizeof(PICKING_ROUND_KEYS[0]); i > 0; i--) {
+        uint32_t previous_right = left;
+        uint32_t previous_left = (right ^ picking_round_fn(previous_right, PICKING_ROUND_KEYS[i - 1])) & PICKING_HALF_MASK;
+        left = previous_left;
+        right = previous_right;
     }
-    return 0;  // Not found
+
+    return ((left & PICKING_HALF_MASK) << 12) | (right & PICKING_HALF_MASK);
+}
+
+static uint32_t picking_encode_nonzero(uint32_t pick_id) {
+    uint32_t color = picking_permute24(pick_id);
+    while (color == 0) {
+        color = picking_permute24(color);
+    }
+    return color;
+}
+
+static uint32_t picking_decode_nonzero(uint32_t color) {
+    uint32_t pick_id = picking_unpermute24(color);
+    while (pick_id == 0) {
+        pick_id = picking_unpermute24(pick_id);
+    }
+    return pick_id;
 }
 
 void tc_picking_id_to_rgb(int id, int* r, int* g, int* b) {
-    uint32_t pid = hash_int((uint32_t)id);
+    uint32_t color = 0;
+    if (id > 0 && (uint32_t)id <= PICKING_COLOR_MASK) {
+        color = picking_encode_nonzero((uint32_t)id);
+    }
 
-    int r_int = pid & 0x000000FF;
-    int g_int = (pid & 0x0000FF00) >> 8;
-    int b_int = (pid & 0x00FF0000) >> 16;
-
-    // Cache the mapping
-    uint32_t key = rgb_to_key(r_int, g_int, b_int);
-    cache_put(key, id);
-
-    if (r) *r = r_int;
-    if (g) *g = g_int;
-    if (b) *b = b_int;
+    if (r) *r = (int)(color & 0x0000FFu);
+    if (g) *g = (int)((color >> 8) & 0x0000FFu);
+    if (b) *b = (int)((color >> 16) & 0x0000FFu);
 }
 
 void tc_picking_id_to_rgb_float(int id, float* r, float* g, float* b) {
@@ -88,10 +83,15 @@ void tc_picking_id_to_rgb_float(int id, float* r, float* g, float* b) {
 }
 
 int tc_picking_rgb_to_id(int r, int g, int b) {
-    uint32_t key = rgb_to_key(r, g, b);
-    return cache_get(key);
+    uint32_t color = ((uint32_t)(r & 0xFF))
+                   | ((uint32_t)(g & 0xFF) << 8)
+                   | ((uint32_t)(b & 0xFF) << 16);
+    if (color == 0) {
+        return 0;
+    }
+    return (int)picking_decode_nonzero(color);
 }
 
 void tc_picking_cache_clear(void) {
-    memset(g_cache, 0, sizeof(g_cache));
+    // Kept for API compatibility. Picking color decode is deterministic now.
 }
