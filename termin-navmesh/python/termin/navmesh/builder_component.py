@@ -347,7 +347,7 @@ class NavMeshBuilderComponent(DrawableComponent):
         if not self.scene.name and not self.scene.uuid:
             return False
 
-        from termin.cache import SceneCache
+        from termin.cache.scene_cache import SceneCache
         from termin.navmesh.persistence import NavMeshPersistence
         from termin.navmesh.registry import NavMeshRegistry
 
@@ -387,7 +387,7 @@ class NavMeshBuilderComponent(DrawableComponent):
             log.error("NavMeshBuilderComponent: cannot save to cache - scene has no name or uuid")
             return False
 
-        from termin.cache import SceneCache
+        from termin.cache.scene_cache import SceneCache
         from termin.navmesh.persistence import NavMeshPersistence
 
         cache = SceneCache.for_scene(self.scene)
