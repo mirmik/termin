@@ -513,11 +513,21 @@ TEST_CASE("skinned shader variants create shader-contract assembler output")
         REQUIRE(tc_shader_get_contract_view(skinned.get(), &contract));
         CHECK_EQ(contract.source_kind, TC_SHADER_CONTRACT_SOURCE_ASSEMBLED);
 
-        const tc_shader_resource_binding* bone =
-            tc_shader_find_resource_binding(skinned.get(), TC_SHADER_RESOURCE_BONE_BLOCK);
+        const tc_shader_resource_requirement* bone = nullptr;
+        for (uint32_t i = 0; i < contract.resource_count; ++i) {
+            if (std::strcmp(
+                    contract.resources[i].name,
+                    TC_SHADER_RESOURCE_BONE_BLOCK) == 0) {
+                bone = &contract.resources[i];
+                break;
+            }
+        }
         REQUIRE(bone != nullptr);
-        CHECK_EQ(bone->binding, 16u);
         CHECK_EQ(bone->scope, static_cast<uint32_t>(TC_SHADER_RESOURCE_SCOPE_DRAW));
+        CHECK(!tc_shader_has_resource_layout(skinned.get()));
+        CHECK(tc_shader_find_resource_binding(
+                  skinned.get(),
+                  TC_SHADER_RESOURCE_BONE_BLOCK) == nullptr);
     }
 
     tc_shader_destroy(original_handle);
