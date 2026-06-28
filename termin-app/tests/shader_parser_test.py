@@ -667,7 +667,7 @@ def test_stdlib_slang_material_creates_slang_tc_shader():
     from tgfx import ShaderLanguage
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
-    from termin.assets.resources import ResourceManager
+    from termin.editor_core.resource_manager import ResourceManager
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
@@ -709,7 +709,7 @@ def test_stdlib_slang_textured_normal_material_uses_texture_property():
     from tgfx import ShaderLanguage
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
-    from termin.assets.resources import ResourceManager
+    from termin.editor_core.resource_manager import ResourceManager
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()

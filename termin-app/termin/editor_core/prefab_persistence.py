@@ -18,7 +18,7 @@ from tcbase import log
 
 if TYPE_CHECKING:
     from termin.scene import Entity
-    from termin.assets.resources import ResourceManager
+    from termin.editor_core.resource_manager import ResourceManager
 
 
 def _numpy_encoder(obj):

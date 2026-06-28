@@ -256,11 +256,11 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     Called from C++ before EngineCore.run(). Does NOT call engine.run().
     """
     from termin.bootstrap import bootstrap_editor
-    from termin.assets.resources import configure_app_resource_manager_factory
+    from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
     from termin.engine import EngineCore
 
     bootstrap_editor()
-    configure_app_resource_manager_factory()
+    configure_editor_resource_manager_factory()
     engine = EngineCore.instance()
     if engine is None:
         raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")

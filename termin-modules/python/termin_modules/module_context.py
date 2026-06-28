@@ -295,9 +295,15 @@ def _unregister_app_resource_classes(registrations: ModuleOwnedRegistrations) ->
         return
 
     try:
-        from termin.assets.resources import ResourceManager
+        from termin_assets import get_resource_manager
 
-        resources = ResourceManager.instance()
+        resources = get_resource_manager()
+        if resources is None:
+            log.warn(
+                "[termin_modules] no ResourceManager configured; "
+                "skipping dynamic component/frame-pass cleanup"
+            )
+            return
         for name in sorted(registrations.app_components):
             try:
                 resources.component_registry.unregister(name)

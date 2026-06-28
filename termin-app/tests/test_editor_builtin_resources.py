@@ -1,4 +1,4 @@
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 from termin.editor_core.resource_loader import register_editor_builtin_resources
 from tgfx import TcTexture
 

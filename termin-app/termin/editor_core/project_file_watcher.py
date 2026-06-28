@@ -1,8 +1,4 @@
-"""Compatibility wrapper for project asset watching.
-
-New non-app code should import from termin_assets.project_file_watcher. This
-module keeps Termin app defaults such as project ignored resource paths.
-"""
+"""Editor project asset watcher policy."""
 
 from __future__ import annotations
 
@@ -16,19 +12,19 @@ from termin_assets.project_file_watcher import (
 )
 
 
-def _termin_app_ignored_roots(project_root: Path) -> tuple[Path, ...]:
+def _termin_editor_ignored_roots(project_root: Path) -> tuple[Path, ...]:
     from termin.project.ignored_paths import project_ignored_roots
 
     return project_ignored_roots(project_root)
 
 
 class ProjectFileWatcher(BaseProjectFileWatcher):
-    """Project watcher with Termin app project-settings ignore policy."""
+    """Project watcher with Termin editor project-settings ignore policy."""
 
     def __init__(self, on_resource_reloaded=None):
         super().__init__(
             on_resource_reloaded=on_resource_reloaded,
-            ignored_roots_provider=_termin_app_ignored_roots,
+            ignored_roots_provider=_termin_editor_ignored_roots,
         )
 
 

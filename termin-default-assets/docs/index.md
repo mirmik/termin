@@ -20,18 +20,16 @@ Runtime manager boundary:
   `voxel_grid_handle`, and `navmesh_handle`.
 - `termin.materials.UnknownMaterial` owns the standard missing-material visual
   fallback used by editor and runtime resource managers.
-- `termin.assets.resources.AppResourceManager` in `termin-app` is an
-  editor/app extension over `DefaultResourceManagerBase` for legacy app imports
-  and app builtin-extension points. Runtime/player code should use
-  `DefaultResourceManager` or the `termin_assets.get_resource_manager()`
-  process factory instead of importing this app namespace.
+- The Termin editor uses `termin.editor_core.resource_manager.ResourceManager`
+  as an editor composition alias for `DefaultResourceManager`. Runtime/player
+  code should use `DefaultResourceManager` or the
+  `termin_assets.get_resource_manager()` process factory directly.
 - Default component/frame-pass catalogs live below the app layer:
   `CameraController`, render component/pass types and `MaterialPass` are owned
   by `termin-components-render`, `UIComponent` is owned by
   `termin-components-ui`, `UIWidgetPass`, `ImmediateDepthPass`, and
   `UnifiedGizmoPass` are owned by `termin-render-passes`, and
-  `TeleportComponent` is owned by `termin-collision`. `termin-app` currently
-  has no component/frame-pass builtin additions.
+  `TeleportComponent` is owned by `termin-collision`.
 
 Current adapters:
 

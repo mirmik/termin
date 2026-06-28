@@ -100,7 +100,9 @@ PYTHON_IMPORT_TO_DIR = {
     "termin_assets": "termin-assets",
     "tcplot": "tcplot",
     # termin.* submodules → actual library
-    "termin.assets": "termin-app",
+    "termin.editor_core": "termin-app",
+    "termin.editor_tcgui": "termin-app",
+    "termin.mcp": "termin-app",
     "termin.csg": "termin-csg",
     "termin.geombase": "termin-base",
     "termin.collision": "termin-collision",

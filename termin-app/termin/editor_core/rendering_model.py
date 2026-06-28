@@ -520,7 +520,7 @@ class RenderingModel:
 
     def _resolve_pipeline_uuid(self, pipeline: "RenderPipeline") -> str | None:
         """Get the asset UUID of a live pipeline object, or None."""
-        from termin.assets.resources import ResourceManager
+        from termin.editor_core.resource_manager import ResourceManager
 
         if not pipeline.name:
             return None

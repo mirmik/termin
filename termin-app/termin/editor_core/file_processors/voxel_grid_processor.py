@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Set
 
-from termin.assets.project_file_watcher import FilePreLoader, PreLoadResult
+from termin.editor_core.project_file_watcher import FilePreLoader, PreLoadResult
 
 
 class VoxelGridPreLoader(FilePreLoader):

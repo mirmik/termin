@@ -380,7 +380,7 @@ def show_scene_properties_dialog(
     add_btn.padding = 6
 
     def _on_add_pipeline():
-        from termin.assets.resources import ResourceManager
+        from termin.editor_core.resource_manager import ResourceManager
 
         rm = ResourceManager.instance()
         if rm is None:

@@ -15,7 +15,7 @@ _GLSL_PREPROCESSOR_CLEANUP_REGISTERED = False
 
 
 def configure_glsl_preprocessor_fallback() -> None:
-    """Configure app ResourceManager fallback for GLSL ``#include`` loading."""
+    """Configure process ResourceManager fallback for GLSL ``#include`` loading."""
     global _GLSL_PREPROCESSOR_CLEANUP_REGISTERED
 
     import tgfx  # noqa: F401
@@ -46,10 +46,15 @@ def unregister_glsl_preprocessor_fallback() -> None:
 
 def _glsl_fallback_loader(name: str) -> bool:
     """Load GLSL include from ResourceManager if it is not already registered."""
-    from termin.assets.resources import ResourceManager
+    from termin_assets import get_resource_manager
 
     try:
-        rm = ResourceManager.instance()
+        rm = get_resource_manager()
+        if rm is None:
+            log.error(
+                f"[GlslPreprocessor] Fallback: no ResourceManager configured for GLSL '{name}'"
+            )
+            return False
         asset = rm.glsl.get_asset(name)
         if asset is None:
             log.error(f"[GlslPreprocessor] Fallback: glsl '{name}' not found in ResourceManager")
