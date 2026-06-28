@@ -64,16 +64,17 @@
 6. копирует artifact во временный `.loaded.N` путь, чтобы обойти cache `dlopen`
 7. загружает shared library через `dlopen` или `LoadLibrary`
 8. ищет символ `module_init`
-9. если символ найден, вызывает его
+9. если символ найден, вызывает его внутри native-init callback scope
 10. сохраняет native handle в `CppModuleHandle`
 
 Важно:
 
 - глобальные статические конструкторы shared library вызываются загрузчиком ОС при `dlopen`/`LoadLibrary`
 - `module_init` это дополнительная явная точка входа поверх static initialization
-- integration layer включает owner scope регистрации на время `dlopen`/`LoadLibrary`
-  и `module_init`; C++ component/inspect registrations, сделанные в этот момент,
-  помечаются `module_id`
+- integration layer включает owner scope регистрации только на время
+  `module_init`; C++ component/inspect registrations, сделанные в static
+  constructors при `dlopen`/`LoadLibrary`, считаются legacy side effects и не
+  получают module ownership
 - project C++ artifact должен быть самодостаточным на уровне DT_NEEDED/RUNPATH;
   уже загруженные editor/SDK библиотеки и Python-side preload не должны быть
   обязательным условием для успешного native load

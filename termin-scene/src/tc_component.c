@@ -88,14 +88,20 @@ static bool can_register_component_type(
     const char* type_name,
     const char* registration_kind
 ) {
-    const char* current_owner = g_component_registration_owner;
-    if (!current_owner) {
-        return true;
-    }
-
     tc_component_facet_payload* existing = component_facet(type_name);
     if (!existing || !existing->entry || !existing->entry->registered) {
         return true;
+    }
+
+    const char* current_owner = g_component_registration_owner;
+    if (!current_owner) {
+        tc_log(
+            TC_LOG_DEBUG,
+            "[ComponentRegistry] Ignoring unowned %s registration for existing type '%s'",
+            registration_kind,
+            type_name
+        );
+        return false;
     }
 
     const char* existing_owner = tc_runtime_type_registry_get_owner(type_name);

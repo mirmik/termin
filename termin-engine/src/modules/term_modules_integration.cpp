@@ -251,7 +251,7 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     };
 
     termin_modules::CppModuleCallbacks cpp_callbacks;
-    cpp_callbacks.before_load = [](const termin_modules::ModuleRecord& record) {
+    cpp_callbacks.before_native_init = [](const termin_modules::ModuleRecord& record) {
         begin_module_registration_scope(record);
     };
     cpp_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
@@ -266,8 +266,10 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
                                             std::string& error) {
         return cleanup_module_registrations(record, error, sync_live_scenes);
     };
-    cpp_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
+    cpp_callbacks.after_native_init = [](const termin_modules::ModuleRecord& record) {
         end_module_registration_scope(record);
+    };
+    cpp_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
         after_load(record);
     };
     cpp_callbacks.restore_reload_state = restore_reload_state;

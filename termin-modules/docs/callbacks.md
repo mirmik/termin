@@ -33,12 +33,23 @@
 
 - `before_load`
   - подготовить runtime к появлению нового модуля
-  - в `termin-engine` включает owner scope для C++ registrations
+  - не должен включать owner scope для C++ registrations: на этом этапе C++
+    backend ещё может выполнять `dlopen` и запускать static constructors
 
 - `after_load`
   - обработать эффекты загрузки модуля
   - при необходимости дочитать появившиеся регистрации типов и компонентов
-  - выключить owner scope
+
+- `before_native_init`
+  - вызывается C++ backend-ом непосредственно перед `module_init`
+  - в `termin-engine` включает owner scope для явных module-owned C++
+    registrations
+
+- `after_native_init`
+  - вызывается C++ backend-ом сразу после `module_init`
+  - в `termin-engine` выключает owner scope
+  - вызывается и при исключении из `module_init`, если `before_native_init`
+    уже успел начаться
 
 - `before_unload`
   - выполнить cleanup перед выгрузкой
