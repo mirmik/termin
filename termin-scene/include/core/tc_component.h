@@ -295,6 +295,11 @@ static inline const char* tc_component_type_name(const tc_component* c) {
 
 // Component factory: takes userdata, returns tc_component*
 typedef tc_component* (*tc_component_factory)(void* userdata);
+typedef bool (*tc_component_prepare_unload_fn)(
+    const char* type_name,
+    void* context,
+    void* user_data
+);
 
 TC_API void tc_component_registry_register(
     const char* type_name,
@@ -327,6 +332,10 @@ TC_API void tc_component_registry_set_registration_owner(const char* owner);
 TC_API const char* tc_component_registry_get_registration_owner(void);
 TC_API const char* tc_component_registry_get_owner(const char* type_name);
 TC_API size_t tc_component_registry_unregister_owner(const char* owner);
+TC_API void tc_component_registry_set_prepare_unload_callback(
+    tc_component_prepare_unload_fn callback,
+    void* user_data
+);
 
 TC_API size_t tc_component_registry_type_count(void);
 TC_API const char* tc_component_registry_type_at(size_t index);

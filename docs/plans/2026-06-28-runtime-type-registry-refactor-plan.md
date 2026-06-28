@@ -104,9 +104,10 @@ termin.app.resource_component
 ```
 
 The registry treats all facet ids as opaque strings. It can store, replace,
-remove, and destroy facets, but it cannot interpret their meaning. It may also
-own an opaque live-instance index for each type record, because module unload
-must be able to find all live instances before removing the type's facets.
+remove, destroy, and ask facets to prepare for unload, but it cannot interpret
+their meaning. It may also own an opaque live-instance index for each type
+record, because module unload must be able to find all live instances before
+removing the type's facets.
 
 ## Non-Goals
 
@@ -440,6 +441,9 @@ It should:
 - Keep old public APIs as wrappers where needed, but do not keep parallel
   owner/lifecycle maps.
 - Add owner-scoped cleanup on the common registry.
+- Add domain-agnostic facet `prepare_unload` callbacks. The common registry
+  calls them before removing owner/type records, but does not know what a
+  component, pass, scene, or render pipeline is.
 
 ### Phase 2: Inspect Facet
 
@@ -459,7 +463,9 @@ It should:
   `tc_type_entry/type_version` remain only as compatibility metadata until the
   legacy registry shell is removed.
 - Provide a component facet unload hook that degrades live component instances
-  to `UnknownComponent` before the component facet is removed.
+  to `UnknownComponent` before the component facet is removed. The hook is
+  installed by engine module integration with a scene context; the common
+  registry remains domain-agnostic.
 - Remove independent component owner and parent maps.
 
 ### Phase 4: Pass Facets
@@ -519,20 +525,19 @@ It should:
 
 ## Immediate Next Step
 
-Phase 1, Phase 2, and the semantic storage part of Phase 3 are now in place:
-the common record is C-owned, inspect fields are facet-backed, component
-factory/kind/requirement/capability state lives in the component facet, and
-component/pass live instance counts come from common runtime type links.
+Phase 1, Phase 2, and most of Phase 3 are now in place: the common record is
+C-owned, inspect fields are facet-backed, component factory/kind/requirement/
+capability state lives in the component facet, component/pass live instance
+counts come from common runtime type links, and component owner cleanup prepares
+live instances through a facet unload hook.
 
 Next migration steps:
 
-1. Add component facet unload hooks that degrade live instances to
-   `UnknownComponent` before facet removal.
-2. Implement `UnknownPass` or an explicit pass unload rejection policy so module
+1. Implement `UnknownPass` or an explicit pass unload rejection policy so module
    reload can preserve pipeline slots without executing unloaded code.
-3. Move frame/pass ownership and semantic storage into runtime type facets.
-4. Trim obsolete component/pass-specific fields from `tc_type_entry`, then
+2. Move frame/pass ownership and semantic storage into runtime type facets.
+3. Trim obsolete component/pass-specific fields from `tc_type_entry`, then
    remove the legacy registry shell.
-5. Convert project modules away from static registration macros and toward
+4. Convert project modules away from static registration macros and toward
    explicit `module_init`/bootstrap registrations.
-6. Remove adoption fallbacks that only existed to survive split registry state.
+5. Remove adoption fallbacks that only existed to survive split registry state.
