@@ -1,6 +1,7 @@
 #include <termin/navmesh/navmesh_keeper_component.hpp>
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <utility>
 #include <tcbase/tc_log.hpp>
@@ -105,14 +106,19 @@ tc_mesh* NavMeshKeeperComponent::get_mesh_for_phase(const std::string& phase_mar
 
 namespace {
 
-tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, std::string>
+tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, TcNavMesh>
     navmesh_keeper_navmesh_field_reg{
         "NavMeshKeeperComponent",
         "navmesh",
         "NavMesh",
         "navmesh_handle",
-        [](NavMeshKeeperComponent* self) { return self->navmesh_uuid; },
-        [](NavMeshKeeperComponent* self, std::string value) { self->navmesh_uuid = std::move(value); }
+        [](NavMeshKeeperComponent* self) {
+            return TcNavMesh::from_uuid(self->navmesh_uuid);
+        },
+        [](NavMeshKeeperComponent* self, TcNavMesh value) {
+            const char* uuid = value.uuid();
+            self->navmesh_uuid = uuid ? uuid : "";
+        }
     };
 
 
