@@ -250,29 +250,27 @@ The assembler flow:
 3. Select PassContract.
 4. Validate fragment interface compatibility.
 5. Merge resource requirements with owner-aware rules.
-6. Validate that every merged resource has resolved backend placement.
-7. Generate/choose vertex and fragment sources.
-8. Create or fetch tc_shader.
-9. Attach semantic requirements to `tc_shader_contract`.
-10. Attach resolved placement to shader resource layout.
-11. Return tc_shader_handle.
+6. Generate/choose vertex and fragment sources.
+7. Create or fetch tc_shader.
+8. Attach semantic requirements to `tc_shader_contract`.
+9. Let compiler/reflection/backend-plan paths own resolved resource layout.
+10. Return tc_shader_handle.
 ```
 
 This makes `tc_shader_handle` the only runtime shader identity and
 `tc_shader_contract` the authoritative shader interface contract.
 
-Material pipeline resource declarations are deliberately split:
+Material pipeline resource declarations are deliberately placement-free:
 
 - `MaterialPipelineResourceRequirement`: shader-facing semantic requirement
   (`name`, `kind`, `scope`, `stage_mask`, `size`);
-- `MaterialPipelineResourcePlacement`: resolved backend/runtime location
-  (`set`, `binding`, resolved flag);
-- `MaterialPipelineResourceDecl`: requirement + placement + ownership metadata.
+- `MaterialPipelineResourceDecl`: requirement + ownership metadata.
 
-Resource merge treats same-name `kind/scope` mismatches as contract conflicts
-and same-name or same-slot `set/binding` mismatches as placement conflicts. A
-resolved placement may satisfy a matching unplaced requirement. This keeps
-backend placement out of the semantic resource contract.
+Resource merge treats same-name `kind/scope` mismatches as contract conflicts.
+It does not compare `set/binding`, D3D registers, OpenGL binding points, or any
+other backend placement. Those conflicts are validated later by resource layout
+and backend binding-plan code after the shader artifact has concrete backend
+metadata.
 
 ## Built-In Shader Contracts
 
@@ -357,8 +355,8 @@ must be explicit:
    `tc_shader`.
 7. Done: migrated shader override paths fail clearly when a required material
    pipeline shader lacks a contract.
-8. Done: split material pipeline resource declarations into semantic
-   requirements and resolved placement.
+8. Done: remove backend placement from material pipeline resource declarations.
+   They now carry semantic requirements and owner diagnostics only.
 9. Done: split the public C shader metadata the same way:
    `tc_shader_contract` should expose requirement-only resources, while
    `tc_shader_resource_binding` remains resolved layout metadata.
