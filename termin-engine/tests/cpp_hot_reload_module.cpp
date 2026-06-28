@@ -24,24 +24,8 @@ public:
         : termin::CxxComponent("EngineOwnedProbeComponent") {}
 };
 
-static termin::ComponentRegistrar<HotReloadNativeProbeComponent>
-    hot_reload_native_probe_registrar("HotReloadNativeProbeComponent", "CxxComponent");
 static termin::ComponentRegistrar<EngineHeaderSideEffectComponentProbe>
     engine_header_side_effect_component_registrar("EngineOwnedProbeComponent", "CxxComponent");
-
-struct HotReloadNativeProbeInspectRegistration {
-    HotReloadNativeProbeInspectRegistration() {
-        tc::InspectRegistry::instance().add<HotReloadNativeProbeComponent, int>(
-            "HotReloadNativeProbeComponent",
-            &HotReloadNativeProbeComponent::value,
-            "value",
-            "Value",
-            "int"
-        );
-    }
-};
-
-static HotReloadNativeProbeInspectRegistration hot_reload_native_probe_inspect_registration;
 
 struct EngineHeaderSideEffectInspectRegistration {
     EngineHeaderSideEffectInspectRegistration() {
@@ -65,7 +49,15 @@ static EngineHeaderSideEffectInspectRegistration engine_header_side_effect_inspe
     #define TERMIN_TEST_MODULE_API __attribute__((visibility("default")))
 #endif
 
-extern "C" TERMIN_TEST_MODULE_API void module_init() {}
+extern "C" TERMIN_TEST_MODULE_API void module_init() {
+    TC_MODULE_REGISTER_COMPONENT(HotReloadNativeProbeComponent, CxxComponent);
+    TC_MODULE_INSPECT_FIELD(
+        HotReloadNativeProbeComponent,
+        value,
+        "Value",
+        "int"
+    );
+}
 
 extern "C" TERMIN_TEST_MODULE_API void module_shutdown() {
     // Intentionally do not unregister anything here. The integration test

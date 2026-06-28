@@ -97,31 +97,47 @@ template<typename T> bool CxxComponentFactoryData<T>::has_update = false;
 template<typename T> bool CxxComponentFactoryData<T>::has_fixed_update = false;
 template<typename T> bool CxxComponentFactoryData<T>::initialized = false;
 
+template<typename T>
+void register_component_type(const char* name, const char* parent = nullptr) {
+    if (!name || !name[0]) {
+        return;
+    }
+
+    if (!CxxComponentFactoryData<T>::initialized) {
+        CxxComponentFactoryData<T>::has_update = component_overrides_update<T>();
+        CxxComponentFactoryData<T>::has_fixed_update = component_overrides_fixed_update<T>();
+        CxxComponentFactoryData<T>::initialized = true;
+    }
+
+    ComponentRegistry::instance().register_native(
+        name,
+        &CxxComponentFactoryData<T>::create,
+        nullptr,
+        parent
+    );
+
+    if (parent && parent[0]) {
+        tc::InspectRegistry::instance().set_type_parent(name, parent);
+    }
+
+    mark_drawable_if_base<T>(name);
+}
+
+inline void register_component_requirement(
+    const char* name,
+    const char* required_name
+) {
+    if (!name || !name[0] || !required_name || !required_name[0]) {
+        return;
+    }
+    ComponentRegistry::instance().register_requirement(name, required_name);
+}
+
 // Helper for static registration of C++ components.
 template<typename T>
 struct ComponentRegistrar {
     ComponentRegistrar(const char* name, const char* parent = nullptr) {
-        // Initialize factory data once
-        if (!CxxComponentFactoryData<T>::initialized) {
-            CxxComponentFactoryData<T>::has_update = component_overrides_update<T>();
-            CxxComponentFactoryData<T>::has_fixed_update = component_overrides_fixed_update<T>();
-            CxxComponentFactoryData<T>::initialized = true;
-        }
-
-        // Register in C registry with static factory function
-        ComponentRegistry::instance().register_native(
-            name,
-            &CxxComponentFactoryData<T>::create,
-            nullptr,
-            parent
-        );
-
-        // Register type parent for field inheritance
-        if (parent) {
-            tc::InspectRegistry::instance().set_type_parent(name, parent);
-        }
-
-        mark_drawable_if_base<T>(name);
+        register_component_type<T>(name, parent);
     }
 };
 
@@ -141,7 +157,7 @@ struct AbstractComponentRegistrar {
 
 struct ComponentRequirementRegistrar {
     ComponentRequirementRegistrar(const char* name, const char* required_name) {
-        ComponentRegistry::instance().register_requirement(name, required_name);
+        register_component_requirement(name, required_name);
     }
 };
 
@@ -153,5 +169,11 @@ struct ComponentRequirementRegistrar {
     static ::termin::ComponentRequirementRegistrar \
         _component_requirement_registrar_##ClassName##_##RequiredClassName( \
             #ClassName, #RequiredClassName)
+
+#define TC_MODULE_REGISTER_COMPONENT(ClassName, Parent) \
+    ::termin::register_component_type<ClassName>(#ClassName, #Parent)
+
+#define TC_MODULE_REQUIRE_COMPONENT(ClassName, RequiredClassName) \
+    ::termin::register_component_requirement(#ClassName, #RequiredClassName)
 
 } // namespace termin
