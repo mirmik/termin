@@ -16,13 +16,7 @@ static tc_type_registry* g_component_registry = NULL;
 static tc_component_prepare_unload_fn g_prepare_unload_callback = NULL;
 static void* g_prepare_unload_user_data = NULL;
 
-#if defined(_MSC_VER)
-    #define TC_THREAD_LOCAL __declspec(thread)
-#else
-    #define TC_THREAD_LOCAL _Thread_local
-#endif
-
-static TC_THREAD_LOCAL const char* g_component_registration_owner = NULL;
+static const char* g_component_registration_owner = NULL;
 
 #define TC_RUNTIME_TYPE_FACET_COMPONENT "termin.scene.component"
 

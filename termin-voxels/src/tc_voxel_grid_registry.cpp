@@ -3,6 +3,7 @@
 
 #include <tcbase/tc_log.h>
 #include <tcbase/tc_pool.h>
+#include <tcbase/tc_resource.h>
 #include <tcbase/tc_resource_map.h>
 #include <tcbase/tgfx_intern_string.h>
 
@@ -38,10 +39,7 @@ static void voxel_grid_free_payload(tc_voxel_grid* grid) {
 
 static void voxel_grid_init_slot(tc_voxel_grid* grid, tc_handle h, const char* uuid, bool loaded) {
     std::memset(grid, 0, sizeof(tc_voxel_grid));
-    if (uuid && uuid[0] != '\0') {
-        std::strncpy(grid->uuid, uuid, sizeof(grid->uuid) - 1);
-        grid->uuid[sizeof(grid->uuid) - 1] = '\0';
-    }
+    tc_resource_copy_uuid(grid->uuid, sizeof(grid->uuid), uuid, "tc_voxel_grid_init_slot");
     grid->version = loaded ? 1 : 0;
     grid->pool_index = h.index;
     grid->is_loaded = loaded ? 1 : 0;
