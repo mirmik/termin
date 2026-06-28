@@ -164,13 +164,13 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
       "name": "TestCatalogFragmentFS",
       "language": "glsl",
       "stages": {
-        "fragment": {"path": "test-catalog-fragment.frag.glsl"}
+        "fragment": {"path": "catalog-fragment-source.frag.glsl"}
       }
     }
   ]
 })");
     write_text(
-        root / "test-catalog-fragment.frag.glsl",
+        root / "catalog-fragment-source.frag.glsl",
         "#version 450 core\n"
         "// TEST_CATALOG_FRAGMENT_MARKER\n"
         "layout(location = 0) out vec4 FragColor;\n"
@@ -278,7 +278,7 @@ TEST_CASE("shader layout sidecar attaches reflected shader contract") {
       "language": "slang",
       "stages": {
         "fragment": {
-          "path": "test-sidecar-fragment.frag.slang",
+          "path": "sidecar-fragment-source.frag.slang",
           "entry": "fs_main"
         }
       }
@@ -286,7 +286,7 @@ TEST_CASE("shader layout sidecar attaches reflected shader contract") {
   ]
 })");
     write_text(
-        root / "test-sidecar-fragment.frag.slang",
+        root / "sidecar-fragment-source.frag.slang",
         "// TEST_SIDECAR_FRAGMENT_MARKER\n"
         "struct In { float2 uv : TEXCOORD0; };\n"
         "[shader(\"fragment\")] float4 fs_main(In input) : SV_Target0 { return float4(input.uv, 0.0, 1.0); }\n");
@@ -397,12 +397,12 @@ TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
       "uuid": "test-catalog-program",
       "name": "TestCatalogProgram",
       "language": "shader",
-      "program": {"path": "test-catalog-program.shader"}
+      "program": {"path": "catalog-program-source.shader"}
     }
   ]
 })");
     write_text(
-        root / "test-catalog-program.shader",
+        root / "catalog-program-source.shader",
         "@program TestCatalogProgram\n"
         "// TEST_CATALOG_PROGRAM_MARKER\n");
 
@@ -414,6 +414,67 @@ TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
     REQUIRE(!program.source.empty());
     CHECK(program.source.find("TEST_CATALOG_PROGRAM_MARKER") != std::string::npos);
 
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}
+
+TEST_CASE("built-in shader convention resolves canonical files without catalog manifest") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-convention-shader-test-" + std::to_string(unique));
+    std::filesystem::remove_all(root);
+
+    write_text(
+        root / "test-convention-vsfs.slang",
+        "// TEST_CONVENTION_VSFS_MARKER\n"
+        "struct In { float3 position : POSITION; };\n"
+        "struct Out { float4 position : SV_Position; };\n"
+        "[shader(\"vertex\")] Out vs_main(In input) { Out output; output.position = float4(input.position, 1.0); return output; }\n"
+        "[shader(\"fragment\")] float4 fs_main() : SV_Target0 { return float4(1.0); }\n");
+    write_text(
+        root / "test-convention-stage.frag.slang",
+        "// TEST_CONVENTION_FRAGMENT_STAGE_MARKER\n"
+        "[shader(\"fragment\")] float4 fs_main() : SV_Target0 { return float4(1.0); }\n");
+    write_text(
+        root / "test-convention-program.shader",
+        "@program TestConventionProgram\n"
+        "// TEST_CONVENTION_PROGRAM_MARKER\n");
+
+    set_builtin_root(root);
+    tc_shader_init();
+
+    tc_shader_handle handle =
+        tgfx::register_builtin_shader_from_catalog("test-convention-vsfs");
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+    REQUIRE(shader->uuid != nullptr);
+    CHECK(std::strcmp(shader->uuid, "test-convention-vsfs") == 0);
+    REQUIRE(shader->name != nullptr);
+    CHECK(std::strcmp(shader->name, "test-convention-vsfs") == 0);
+    REQUIRE(shader->vertex_source != nullptr);
+    REQUIRE(shader->fragment_source != nullptr);
+    CHECK(std::strstr(shader->vertex_source, "TEST_CONVENTION_VSFS_MARKER") != nullptr);
+    CHECK(std::strstr(shader->fragment_source, "TEST_CONVENTION_VSFS_MARKER") != nullptr);
+    REQUIRE(shader->vertex_entry != nullptr);
+    REQUIRE(shader->fragment_entry != nullptr);
+    CHECK(std::strcmp(shader->vertex_entry, "vs_main") == 0);
+    CHECK(std::strcmp(shader->fragment_entry, "fs_main") == 0);
+
+    std::string fragment_stage =
+        tgfx::load_builtin_shader_stage_source_from_catalog(
+            "test-convention-stage", "fragment");
+    CHECK(fragment_stage.find("TEST_CONVENTION_FRAGMENT_STAGE_MARKER") != std::string::npos);
+
+    tgfx::BuiltinShaderProgramSource program =
+        tgfx::load_builtin_shader_program_from_catalog("test-convention-program");
+    CHECK(program.name == "test-convention-program");
+    REQUIRE(!program.source.empty());
+    CHECK(program.source.find("TEST_CONVENTION_PROGRAM_MARKER") != std::string::npos);
+
+    tc_shader_shutdown();
     clear_builtin_root();
     std::filesystem::remove_all(root);
 }
@@ -550,8 +611,9 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
 
         tc_shader* shader = tc_shader_get(handle);
         REQUIRE(shader != nullptr);
+        REQUIRE(shader->uuid != nullptr);
+        CHECK(std::strcmp(shader->uuid, expected.uuid) == 0);
         REQUIRE(shader->name != nullptr);
-        CHECK(std::strcmp(shader->name, expected.name) == 0);
         CHECK((shader->vertex_source != nullptr) == expected.has_vertex);
         CHECK((shader->fragment_source != nullptr) == expected.has_fragment);
 
@@ -562,7 +624,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
 
     tgfx::BuiltinShaderProgramSource skybox =
         tgfx::load_builtin_shader_program_from_catalog("termin-engine-skybox");
-    CHECK(skybox.name == "SkyboxEngineVSFS");
+    CHECK(skybox.name == "termin-engine-skybox");
     REQUIRE(!skybox.source.empty());
     CHECK(skybox.source.find("@program Skybox") != std::string::npos);
 

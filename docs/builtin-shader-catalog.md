@@ -5,14 +5,13 @@ generation path.
 
 ## Status
 
-`engine-shader-catalog.json` is transitional. It exists to keep current source
-loading, packaging, and artifact staging working while built-in shader source
-identity moves toward minimal UUID/path/stage descriptors or source
-conventions. It contains only source identity metadata: UUID, display name,
-language, source path, stage membership, entry point, and `.shader` program
-path. Do not expand it with semantic contract, resource, stage-IO, draw-kind,
-or backend placement policy. The target direction is to delete this JSON
-manifest, not to make it the engine shader database.
+`engine-shader-catalog.json` is transitional. It exists to keep exceptional
+source loading, packaging, and artifact staging working while built-in shader
+source identity moves to file conventions. It contains only source identity
+metadata: UUID, display name, language, source path, stage membership, entry
+point, and `.shader` program path. Do not expand it with semantic contract,
+resource, stage-IO, draw-kind, or backend placement policy. The target direction
+is to delete this JSON manifest, not to make it the engine shader database.
 
 Built-in shaders must converge on the same runtime model as material-assembled
 shaders:
@@ -27,14 +26,35 @@ The contract declares what the shader needs. The layout declares where those
 resources are bound. The render pass that uses the shader owns draw intent
 (`mesh`, `fullscreen`, `compute`, and similar execution policy).
 
+## Source Resolution
+
+The preferred built-in source identity is the shader UUID plus a canonical file
+name under `builtin_shaders/`:
+
+- `<uuid>.slang`: Slang vertex + fragment shader with `vs_main` / `fs_main`;
+- `<uuid>.vert.slang`: Slang vertex-only stage template with `vs_main`;
+- `<uuid>.frag.slang`: Slang fragment-only stage with `fs_main`;
+- `<uuid>.shader`: material shader program source.
+
+The runtime loader tries these conventions before reading the transitional JSON
+manifest. Conventional live shaders use the UUID as the runtime shader name;
+legacy display names are not part of the binding or shader contract.
+
+`engine-shader-catalog.json` remains only for exceptions: aliases that share one
+source file but use non-standard entry points, old source layouts that have not
+yet been renamed to the convention, or temporary migration records. The C++
+`engine_shader_catalog.cpp` descriptors are also transitional and should not be
+expanded into another built-in shader database.
+
 ## Transitional manifest
 
 - Package/export metadata lives in
   `termin-graphics/resources/builtin_shaders/engine-shader-catalog.json`.
-- Minimal source descriptors for built-ins that must be consumed directly by
-  tgfx2 without loading the JSON manifest live in
+- Minimal source descriptors for exceptional built-ins that must be consumed
+  directly by tgfx2 without loading the JSON manifest live in
   `termin-graphics/include/tgfx2/engine_shader_catalog.hpp`. Those descriptors
-  may contain UUID, source path, stage, language, and entry point only.
+  may contain UUID, source path, stage, language, and entry point only, and
+  should shrink as file conventions cover more sources.
 - Built-in source files live in `termin-graphics/resources/builtin_shaders/`.
 - SDK installs those source files to `share/termin/builtin_shaders/`.
 - The live C++ catalog/source loader is owned by `termin_graphics2` and exposed
@@ -172,9 +192,9 @@ Exporters parse those program sources and package generated stage artifacts.
 The generated artifact sidecars come from `termin_shaderc`, not from catalog
 program metadata.
 
-Live engine renderers and render passes should call the built-in catalog loader
-with only the stable shader UUID. Filenames, shader names, and stage shape
-belong in a minimal source registry or, temporarily, `engine-shader-catalog.json`,
+Live engine renderers and render passes should call the built-in source loader
+with only the stable shader UUID. Filenames and standard entry points belong to
+the file convention; exceptions belong temporarily in `engine-shader-catalog.json`,
 not in individual pass implementations. Migrated Slang built-ins should consume
 generated artifacts plus layout sidecars, then bind resources by logical name.
 Runtime GLSL fallbacks should not be added; missing artifacts are errors.
