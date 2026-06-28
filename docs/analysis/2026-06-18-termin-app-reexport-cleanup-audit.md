@@ -298,9 +298,8 @@ Removed after internal consumers were redirected:
 
 Current status:
 - App imports now use canonical paths directly.
-- Package-level `from termin.core import Identifiable` still works through
-  `termin.core.__init__`, but the removed `termin.core.identifiable` submodule
-  no longer exists.
+- Package-level `from termin.core import Identifiable` was removed on
+  2026-06-28. Use `termin_assets.identifiable` directly.
 
 ## Test-Only Compatibility Contracts
 

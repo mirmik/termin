@@ -53,8 +53,8 @@ Status 2026-05-27: `Identifiable`, `Asset`, `DataAsset`, `AssetRegistry`, and
 and `termin.assets.resource_handle` were removed on 2026-06-19; import from
 `termin_assets` directly. The
 `termin.core.identifiable` submodule shim was removed on 2026-06-18; use
-`termin_assets.identifiable` directly. `from termin.core import Identifiable`
-still works through the package facade.
+`termin_assets.identifiable` directly. The package-level
+`from termin.core import Identifiable` facade was removed on 2026-06-28.
 
 Status 2026-06-17: `FilePreLoader`, `ProjectFileWatcher`, and `PluginPreLoader`
 were moved into `termin-assets`. The generic watcher now accepts an injected

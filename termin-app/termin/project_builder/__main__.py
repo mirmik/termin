@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from termin.project_builder import export_legacy_project
+from termin.project_builder.legacy_project_export import export_legacy_project
 
 
 def main(argv: list[str] | None = None) -> int:
