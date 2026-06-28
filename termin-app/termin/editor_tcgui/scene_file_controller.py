@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Callable
@@ -178,7 +179,25 @@ class SceneFileController:
 
             self._set_editor_scene_name(scene_name)
 
-            self._scene_manager.load_scene(scene_name, path)
+            with open(path, "r", encoding="utf-8") as f:
+                file_data = json.load(f)
+
+            from termin.scene_animation_repair import (
+                extract_scene_data,
+                repair_glb_animation_player_clip_refs,
+            )
+
+            scene_data = extract_scene_data(file_data)
+            self._scene_manager.create_scene(scene_name, default_scene_extensions())
+            scene = self._scene_manager.get_scene(scene_name)
+            if scene is None:
+                raise RuntimeError(f"Failed to create scene '{scene_name}'")
+            if scene_data is not None:
+                repair_glb_animation_player_clip_refs(scene_data)
+                scene.load_from_data(scene_data, context=None, update_settings=True)
+            self._scene_manager.set_scene_path(scene_name, path)
+            scene.notify_editor_start()
+
             from termin.modules import upgrade_scene_unknown_components
 
             upgrade_scene_unknown_components(self._scene_manager.get_scene(scene_name))
