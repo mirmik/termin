@@ -3,9 +3,9 @@ import inspect
 from pathlib import Path
 
 from termin.project_build import profile_build
-from termin.project_builder import export_legacy_project
 from termin.project_builder.builder import build_project
 from termin.project_builder.__main__ import main as project_builder_main
+from termin.project_builder.legacy_project_export import export_legacy_project
 
 
 def _write_json(path: Path, data: dict) -> None:
