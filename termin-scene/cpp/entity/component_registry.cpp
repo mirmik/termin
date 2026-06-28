@@ -1,6 +1,7 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/component.hpp>
 #include "core/tc_component.h"
+#include "inspect/tc_runtime_type_registry.h"
 #include <stdexcept>
 #include <algorithm>
 #include <memory>
@@ -8,6 +9,12 @@
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
+
+namespace {
+
+constexpr const char* kComponentFacet = "termin.scene.component";
+
+}
 
 // ============================================================================
 // ComponentRegistry implementation
@@ -40,7 +47,7 @@ std::string ComponentRegistry::registration_owner() const {
 }
 
 std::string ComponentRegistry::owner_of(const std::string& name) const {
-    const char* owner = tc_component_registry_get_owner(name.c_str());
+    const char* owner = tc_runtime_type_registry_get_owner(name.c_str());
     return owner ? std::string(owner) : std::string();
 }
 
@@ -50,13 +57,13 @@ std::vector<std::string> ComponentRegistry::list_owned(const std::string& owner)
         return result;
     }
 
-    size_t count = tc_component_registry_type_count();
+    size_t count = tc_runtime_type_registry_types_with_facet_count(kComponentFacet);
     for (size_t i = 0; i < count; i++) {
-        const char* name = tc_component_registry_type_at(i);
+        const char* name = tc_runtime_type_registry_type_with_facet_at(kComponentFacet, i);
         if (!name) {
             continue;
         }
-        const char* current_owner = tc_component_registry_get_owner(name);
+        const char* current_owner = tc_runtime_type_registry_get_owner(name);
         if (current_owner && owner == current_owner) {
             result.emplace_back(name);
         }
@@ -66,7 +73,11 @@ std::vector<std::string> ComponentRegistry::list_owned(const std::string& owner)
 }
 
 size_t ComponentRegistry::unregister_owner(const std::string& owner) {
-    return tc_component_registry_unregister_owner(owner.c_str());
+    std::vector<std::string> pending = list_owned(owner);
+    for (const std::string& name : pending) {
+        unregister(name);
+    }
+    return pending.size();
 }
 
 bool ComponentRegistry::has(const std::string& name) const {
@@ -83,10 +94,10 @@ bool ComponentRegistry::is_a(const std::string& name, const std::string& base_na
 
 std::vector<std::string> ComponentRegistry::list_all() const {
     std::vector<std::string> result;
-    size_t count = tc_component_registry_type_count();
+    size_t count = tc_runtime_type_registry_types_with_facet_count(kComponentFacet);
     result.reserve(count);
     for (size_t i = 0; i < count; i++) {
-        const char* name = tc_component_registry_type_at(i);
+        const char* name = tc_runtime_type_registry_type_with_facet_at(kComponentFacet, i);
         if (name) {
             result.push_back(name);
         }

@@ -9,6 +9,7 @@
 #include <termin/scene/scene_manager.hpp>
 
 #include <tc_inspect_cpp.hpp>
+#include <inspect/tc_runtime_type_registry.hpp>
 
 namespace termin {
 namespace {
@@ -67,13 +68,12 @@ bool cleanup_module_registrations(const termin_modules::ModuleRecord& record, st
     error.clear();
 
     try {
-        const size_t inspect_count = tc::InspectRegistry::instance().unregister_owner(record.spec.id);
-        const size_t component_count = ComponentRegistry::instance().unregister_owner(record.spec.id);
-        if (inspect_count > 0 || component_count > 0) {
+        const size_t type_count =
+            tc::RuntimeTypeRegistry::instance().unregister_owner(record.spec.id);
+        if (type_count > 0) {
             tc::Log::info(
-                "TermModulesIntegration: cleaned %zu inspect and %zu component registrations for module '%s'",
-                inspect_count,
-                component_count,
+                "TermModulesIntegration: cleaned %zu runtime type registrations for module '%s'",
+                type_count,
                 record.spec.id.c_str()
             );
         }

@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include <inspect/tc_runtime_type_registry.hpp>
 #include <tc_inspect_cpp.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
@@ -175,13 +176,13 @@ int test_module_owner_registration_cleanup() {
     components.set_registration_owner("");
     inspect.set_registration_owner("");
 
-    TEST_ASSERT(inspect.unregister_owner(module_id) == 1, "inspect owner cleanup count");
-    TEST_ASSERT(components.unregister_owner(module_id) == 1, "component owner cleanup count");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().unregister_owner(module_id) == 1,
+                "runtime owner cleanup count");
     TEST_ASSERT(!components.has("OwnerScopedComponent"), "owned component unregistered");
     TEST_ASSERT(inspect.find_field("OwnerScopedComponent", "value") == nullptr,
                 "owned inspect field removed");
-    TEST_ASSERT(inspect.unregister_owner(module_id) == 0, "inspect owner cleanup idempotent");
-    TEST_ASSERT(components.unregister_owner(module_id) == 0, "component owner cleanup idempotent");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().unregister_owner(module_id) == 0,
+                "runtime owner cleanup idempotent");
 
     components.register_native(
         "OwnerScopedComponent",

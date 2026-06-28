@@ -6,6 +6,25 @@ Date: 2026-06-28
 
 Active target architecture and migration plan.
 
+Implementation progress:
+
+- common `RuntimeTypeRegistry` skeleton exists in `termin-inspect`;
+- inspect/component/pass registries publish runtime type facets;
+- owner, parent, facet ids, and debug snapshots are available through the
+  common registry;
+- module unload now removes module-owned runtime type records through the
+  common registry and relies on facet cleanup callbacks for domain registries;
+- Python module cleanup still handles Python-only class/kind side storage
+  separately, then delegates runtime type cleanup to the common registry.
+
+Remaining migration pressure:
+
+- move inspect field storage fully into the inspect facet instead of keeping
+  compatibility maps;
+- move component factory/capability/requirement storage fully into the
+  component facet;
+- migrate project modules away from static registration macros.
+
 This document captures the direction after the Play-mode module reload
 regression where C++ component instances remained alive but their concrete
 inspect fields disappeared from the editor inspector.
