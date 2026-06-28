@@ -51,26 +51,37 @@ class HStack(Widget):
         if not visible:
             return
 
-        # First pass: measure every child. A stretch child keeps its
-        # preferred width as a minimum and receives a share of extra space.
-        base_width = 0.0
+        # First pass: measure every child. Non-stretch children keep their
+        # natural width. Stretch children use natural width as a soft
+        # preference: it biases layout when there is room, but it must not
+        # force the container to overflow.
+        fixed_width = 0.0
+        stretch_pref_width = 0.0
         stretch_count = 0
         child_widths = []
         for child in visible:
             cw, _ = child.compute_size(viewport_w, viewport_h)
-            base_width += cw
             child_widths.append(cw)
             if child.stretch:
+                stretch_pref_width += cw
                 stretch_count += 1
+            else:
+                fixed_width += cw
 
         spacing_total = self.spacing * (len(visible) - 1)
-        remaining = max(0.0, width - base_width - spacing_total)
-        stretch_extra_w = remaining / stretch_count if stretch_count > 0 else 0.0
+        available_stretch_width = max(0.0, width - fixed_width - spacing_total)
 
-        # Add extra width to stretch children.
-        for i, child in enumerate(visible):
-            if child.stretch:
-                child_widths[i] += stretch_extra_w
+        if stretch_count > 0:
+            if stretch_pref_width <= available_stretch_width:
+                stretch_extra_w = (available_stretch_width - stretch_pref_width) / stretch_count
+                for i, child in enumerate(visible):
+                    if child.stretch:
+                        child_widths[i] += stretch_extra_w
+            else:
+                stretch_w = available_stretch_width / stretch_count
+                for i, child in enumerate(visible):
+                    if child.stretch:
+                        child_widths[i] = stretch_w
 
         # Horizontal justify (only meaningful without stretch children)
         total_w = sum(child_widths) + spacing_total

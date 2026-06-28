@@ -81,10 +81,24 @@ def test_stretch_with_spacing():
     assert_rect(stretch, 0, 60, W, 540)
 
 
-def test_stretch_keeps_preferred_height_as_minimum():
+def test_stretch_uses_preferred_height_when_it_fits():
+    c = make_widget(100, 400, stretch=True)
+    _make_vstack(c)
+    assert_rect(c, 0, 0, W, H)
+
+
+def test_stretch_shrinks_preferred_height_that_exceeds_container():
     c = make_widget(100, 999, stretch=True)
     _make_vstack(c)
-    assert_rect(c, 0, 0, W, 999)
+    assert_rect(c, 0, 0, W, H)
+
+
+def test_stretch_shrinks_after_fixed_children():
+    fixed = make_widget(100, 50)
+    stretch = make_widget(100, 999, stretch=True)
+    _make_vstack(fixed, stretch, spacing=10)
+    assert_rect(fixed, 0, 0, W, 50)
+    assert_rect(stretch, 0, 60, W, 540)
 
 
 def test_compute_size_includes_stretch_preferred_height():
