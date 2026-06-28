@@ -61,6 +61,46 @@ static bool type_entry_has_requirement(
     return false;
 }
 
+static bool can_register_component_type(
+    const char* type_name,
+    const char* registration_kind
+) {
+    const char* current_owner = g_component_registration_owner;
+    if (!current_owner) {
+        return true;
+    }
+
+    tc_type_entry* existing = tc_type_registry_get(g_component_registry, type_name);
+    if (!existing || !existing->registered) {
+        return true;
+    }
+
+    if (!existing->owner) {
+        tc_log(
+            TC_LOG_WARN,
+            "[ComponentRegistry] Ignoring %s registration for existing unowned type '%s' from owner '%s'",
+            registration_kind,
+            type_name,
+            current_owner
+        );
+        return false;
+    }
+
+    if (strcmp(existing->owner, current_owner) != 0) {
+        tc_log(
+            TC_LOG_WARN,
+            "[ComponentRegistry] Ignoring %s registration for existing type '%s' owned by '%s' from owner '%s'",
+            registration_kind,
+            type_name,
+            existing->owner,
+            current_owner
+        );
+        return false;
+    }
+
+    return true;
+}
+
 // ============================================================================
 // Registry Implementation
 // ============================================================================
@@ -85,6 +125,10 @@ void tc_component_registry_register_with_parent(
 
     ensure_registry_initialized();
 
+    if (!can_register_component_type(type_name, "component")) {
+        return;
+    }
+
     tc_type_entry* entry = tc_type_registry_register_with_parent(
         g_component_registry,
         type_name,
@@ -106,6 +150,10 @@ void tc_component_registry_register_abstract(
     if (!type_name) return;
 
     ensure_registry_initialized();
+
+    if (!can_register_component_type(type_name, "abstract component")) {
+        return;
+    }
 
     tc_type_entry* entry = tc_type_registry_register_with_parent(
         g_component_registry,

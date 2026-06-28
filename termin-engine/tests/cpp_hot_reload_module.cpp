@@ -18,8 +18,16 @@ public:
     int value = 0;
 };
 
+class EngineHeaderSideEffectComponentProbe : public termin::CxxComponent {
+public:
+    EngineHeaderSideEffectComponentProbe()
+        : termin::CxxComponent("EngineOwnedProbeComponent") {}
+};
+
 static termin::ComponentRegistrar<HotReloadNativeProbeComponent>
     hot_reload_native_probe_registrar("HotReloadNativeProbeComponent", "CxxComponent");
+static termin::ComponentRegistrar<EngineHeaderSideEffectComponentProbe>
+    engine_header_side_effect_component_registrar("EngineOwnedProbeComponent", "CxxComponent");
 
 struct HotReloadNativeProbeInspectRegistration {
     HotReloadNativeProbeInspectRegistration() {
