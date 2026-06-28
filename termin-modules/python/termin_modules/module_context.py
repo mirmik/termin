@@ -10,7 +10,15 @@ from tcbase import log
 
 
 _owner_stack: list[str] = []
-_native_component_owner_stack: list[str | None] = []
+
+
+@dataclass
+class NativeTypeOwnerScope:
+    component_owner: str | None = None
+    inspect_owner: str | None = None
+
+
+_native_type_owner_stack: list[NativeTypeOwnerScope] = []
 
 
 @dataclass
@@ -35,7 +43,7 @@ def begin_module_import(module_id: str) -> None:
     if not module_id:
         return
     _owner_stack.append(module_id)
-    _native_component_owner_stack.append(_begin_native_component_owner_scope(module_id))
+    _native_type_owner_stack.append(_begin_native_type_owner_scope(module_id))
     _registrations_by_owner[module_id] = ModuleOwnedRegistrations()
 
 
@@ -46,16 +54,16 @@ def end_module_import(module_id: str) -> None:
         log.error(f"[termin_modules] module owner context underflow for {module_id}")
         return
     popped = _owner_stack.pop()
-    previous_native_owner = None
-    if _native_component_owner_stack:
-        previous_native_owner = _native_component_owner_stack.pop()
+    previous_native_scope = NativeTypeOwnerScope()
+    if _native_type_owner_stack:
+        previous_native_scope = _native_type_owner_stack.pop()
     else:
-        log.error(f"[termin_modules] native component owner context underflow for {module_id}")
+        log.error(f"[termin_modules] native type owner context underflow for {module_id}")
     if popped != module_id:
         log.error(
             f"[termin_modules] module owner context mismatch: expected {module_id}, got {popped}"
         )
-    _end_native_component_owner_scope(module_id, previous_native_owner)
+    _end_native_type_owner_scope(module_id, previous_native_scope)
 
 
 @contextmanager
@@ -119,26 +127,36 @@ def registrations_for_owner(module_id: str) -> ModuleOwnedRegistrations:
     )
 
 
-def _begin_native_component_owner_scope(module_id: str) -> str | None:
+def _begin_native_type_owner_scope(module_id: str) -> NativeTypeOwnerScope:
+    scope = NativeTypeOwnerScope()
     try:
         from termin.scene import ComponentRegistry
 
         registry = ComponentRegistry.instance()
-        previous_owner = registry.registration_owner()
+        scope.component_owner = registry.registration_owner()
         registry.set_registration_owner(module_id)
-        return previous_owner
     except Exception:
         log.error(
             f"[termin_modules] failed to begin native component owner scope for '{module_id}'",
             exc_info=True,
         )
-        return None
+
+    try:
+        from termin.inspect import InspectRegistry
+
+        registry = InspectRegistry.instance()
+        scope.inspect_owner = registry.registration_owner()
+        registry.set_registration_owner(module_id)
+    except Exception:
+        log.error(
+            f"[termin_modules] failed to begin native inspect owner scope for '{module_id}'",
+            exc_info=True,
+        )
+
+    return scope
 
 
-def _end_native_component_owner_scope(module_id: str, previous_owner: str | None) -> None:
-    if previous_owner is None:
-        return
-
+def _end_native_type_owner_scope(module_id: str, scope: NativeTypeOwnerScope) -> None:
     try:
         from termin.scene import ComponentRegistry
 
@@ -149,10 +167,29 @@ def _end_native_component_owner_scope(module_id: str, previous_owner: str | None
                 f"[termin_modules] native component owner context mismatch: "
                 f"expected {module_id}, got {current_owner}"
             )
-        registry.set_registration_owner(previous_owner)
+        if scope.component_owner is not None:
+            registry.set_registration_owner(scope.component_owner)
     except Exception:
         log.error(
             f"[termin_modules] failed to end native component owner scope for '{module_id}'",
+            exc_info=True,
+        )
+
+    try:
+        from termin.inspect import InspectRegistry
+
+        registry = InspectRegistry.instance()
+        current_owner = registry.registration_owner()
+        if current_owner and current_owner != module_id:
+            log.error(
+                f"[termin_modules] native inspect owner context mismatch: "
+                f"expected {module_id}, got {current_owner}"
+            )
+        if scope.inspect_owner is not None:
+            registry.set_registration_owner(scope.inspect_owner)
+    except Exception:
+        log.error(
+            f"[termin_modules] failed to end native inspect owner scope for '{module_id}'",
             exc_info=True,
         )
 

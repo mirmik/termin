@@ -34,6 +34,7 @@ constexpr const char* kModuleId = "native_probe";
 constexpr const char* kComponentType = "HotReloadNativeProbeComponent";
 constexpr const char* kEngineOwnedProbeType = "EngineOwnedProbeType";
 constexpr const char* kEngineOwnedProbeComponent = "EngineOwnedProbeComponent";
+constexpr const char* kComponentFacet = "termin.scene.component";
 
 class EngineOwnedProbe {
 public:
@@ -249,6 +250,16 @@ int run_cpp_module_hot_reload_smoke() {
                 "native component owner captured");
     TEST_ASSERT(tc::InspectRegistry::instance().owner_of(kComponentType) == kModuleId,
                 "inspect owner captured");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().owner_of(kComponentType) == kModuleId,
+                "runtime type owner captured");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().parent_of(kComponentType) == "CxxComponent",
+                "runtime type parent captured");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().has_facet(kComponentType, kComponentFacet),
+                "runtime type component facet registered after load");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().has_facet(
+                    kComponentType,
+                    tc::TC_RUNTIME_TYPE_FACET_INSPECT_FIELDS),
+                "runtime type inspect facet registered after load");
     TEST_ASSERT(tc::InspectRegistry::instance().find_field(kComponentType, "value") != nullptr,
                 "inspect field registered after load");
     std::string engine_probe_error;
@@ -269,6 +280,12 @@ int run_cpp_module_hot_reload_smoke() {
     TEST_ASSERT(runtime.reload_module(kModuleId), runtime.last_error());
     TEST_ASSERT(termin::ComponentRegistry::instance().has(kComponentType),
                 "native component registered after reload");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().has_facet(kComponentType, kComponentFacet),
+                "runtime type component facet registered after reload");
+    TEST_ASSERT(tc::RuntimeTypeRegistry::instance().has_facet(
+                    kComponentType,
+                    tc::TC_RUNTIME_TYPE_FACET_INSPECT_FIELDS),
+                "runtime type inspect facet registered after reload");
     TEST_ASSERT(tc::InspectRegistry::instance().find_field(kComponentType, "value") != nullptr,
                 "inspect field registered after reload");
     TEST_ASSERT(engine_owned_probe_intact("module reload", engine_probe_error),
@@ -288,6 +305,8 @@ int run_cpp_module_hot_reload_smoke() {
                 "native component unregistered before native close");
     TEST_ASSERT(tc::InspectRegistry::instance().find_field(kComponentType, "value") == nullptr,
                 "inspect field removed before native close");
+    TEST_ASSERT(!tc::RuntimeTypeRegistry::instance().has_type(kComponentType),
+                "runtime type record removed on module unload");
     TEST_ASSERT(engine_owned_probe_intact("module unload", engine_probe_error),
                 engine_probe_error.c_str());
     TEST_ASSERT(engine_owned_component_probe_intact("module unload", engine_component_error),
