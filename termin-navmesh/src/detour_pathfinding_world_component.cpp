@@ -1,6 +1,7 @@
 #include <termin/navmesh/detour_pathfinding_world_component.hpp>
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <DetourNavMesh.h>
 #include <DetourNavMeshQuery.h>
@@ -541,59 +542,62 @@ DetourRaycastResult DetourPathfindingWorldComponent::raycast(
 
 namespace {
 
-tc::InspectAccessorFieldRegistrar<DetourPathfindingWorldComponent, std::string>
-    detour_pathfinding_world_navmesh_field_reg{
+void register_detour_pathfinding_world_inspect_fields() {
+    tc::InspectAccessorFieldRegistrar<DetourPathfindingWorldComponent, TcNavMesh>(
         "DetourPathfindingWorldComponent",
         "navmesh",
         "NavMesh",
         "navmesh_handle",
-        [](DetourPathfindingWorldComponent* self) { return self->navmesh_uuid; },
-        [](DetourPathfindingWorldComponent* self, std::string value) {
-            if (self->navmesh_uuid != value) {
-                self->navmesh_uuid = std::move(value);
+        [](DetourPathfindingWorldComponent* self) {
+            return TcNavMesh::from_uuid(self->navmesh_uuid);
+        },
+        [](DetourPathfindingWorldComponent* self, TcNavMesh value) {
+            const char* uuid = value.uuid();
+            std::string next_uuid = uuid ? uuid : "";
+            if (self->navmesh_uuid != next_uuid) {
+                self->navmesh_uuid = std::move(next_uuid);
                 self->clear();
             }
         }
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, float>
-    detour_pathfinding_extent_x_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::query_extent_x,
         "DetourPathfindingWorldComponent",
         "query_extent_x",
         "Query Extent X",
         "float"
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, float>
-    detour_pathfinding_extent_y_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::query_extent_y,
         "DetourPathfindingWorldComponent",
         "query_extent_y",
         "Query Extent Y",
         "float"
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, float>
-    detour_pathfinding_extent_z_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::query_extent_z,
         "DetourPathfindingWorldComponent",
         "query_extent_z",
         "Query Extent Z",
         "float"
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, int>
-    detour_pathfinding_max_polys_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::max_polys,
         "DetourPathfindingWorldComponent",
         "max_polys",
         "Max Polys",
         "int"
-    };
+    );
+}
 
 }
 
-REGISTER_COMPONENT(DetourPathfindingWorldComponent, Component);
+void DetourPathfindingWorldComponent::register_type() {
+    register_component_type<DetourPathfindingWorldComponent>(
+        "DetourPathfindingWorldComponent",
+        "Component"
+    );
+    register_detour_pathfinding_world_inspect_fields();
+}
 
 } // namespace termin

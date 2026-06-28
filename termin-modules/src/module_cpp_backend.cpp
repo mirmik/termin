@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <sstream>
 
@@ -363,7 +364,33 @@ bool CppModuleBackend::load(
 
     InitFn init_fn = reinterpret_cast<InitFn>(resolve_symbol(native_handle, "module_init"));
     if (init_fn != nullptr) {
-        init_fn();
+        bool init_scope_started = false;
+        auto end_init_scope = [&]() {
+            if (init_scope_started && environment.after_cpp_module_init) {
+                environment.after_cpp_module_init(record);
+            }
+            init_scope_started = false;
+        };
+
+        try {
+            if (environment.before_cpp_module_init) {
+                init_scope_started = true;
+                environment.before_cpp_module_init(record);
+            }
+            init_fn();
+            end_init_scope();
+        } catch (const std::exception& e) {
+            end_init_scope();
+            unload_shared_library(native_handle);
+            record.error_message = "module_init failed: ";
+            record.error_message += e.what();
+            return false;
+        } catch (...) {
+            end_init_scope();
+            unload_shared_library(native_handle);
+            record.error_message = "module_init failed with unknown exception";
+            return false;
+        }
     }
 
     auto handle = std::make_shared<CppModuleHandle>();

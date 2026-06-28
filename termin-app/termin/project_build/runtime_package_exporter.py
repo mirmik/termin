@@ -653,7 +653,6 @@ class _EngineShaderArtifact:
     fragment_source: str = ""
     vertex_entry: str = "main"
     fragment_entry: str = "main"
-    layout: dict[str, Any] = field(default_factory=dict)
 
 
 def _write_default_pipeline_shader_artifacts(
@@ -705,7 +704,6 @@ def _builtin_engine_shader_artifact(uuid_value: str) -> _EngineShaderArtifact:
             language=program_language,
             vertex_source=vertex_source,
             fragment_source=fragment_source,
-            layout=_builtin_engine_shader_layout(entry, artifact_language=program_language),
         )
 
     stages = entry.get("stages")
@@ -722,7 +720,6 @@ def _builtin_engine_shader_artifact(uuid_value: str) -> _EngineShaderArtifact:
         fragment_source=fragment_source,
         vertex_entry=_builtin_engine_stage_entry(stages, "vertex"),
         fragment_entry=_builtin_engine_stage_entry(stages, "fragment"),
-        layout=_builtin_engine_shader_layout(entry),
     )
 
 
@@ -753,29 +750,6 @@ def _builtin_engine_stage_entry(stages: dict[str, Any], stage_name: str) -> str:
         if isinstance(entry, str) and entry != "":
             return entry
     return "main"
-
-
-def _builtin_engine_shader_layout(
-    entry: dict[str, Any],
-    *,
-    artifact_language: str | None = None,
-) -> dict[str, Any]:
-    source_language = entry.get("language", "glsl")
-    layout = {
-        "version": 1,
-        "uuid": entry["uuid"],
-        "name": entry.get("name", entry["uuid"]),
-        "language": artifact_language or source_language,
-        "resources": entry.get("resources", []),
-        "binding_model": "resource_layout",
-    }
-    if artifact_language is not None and artifact_language != source_language:
-        layout["source_language"] = source_language
-    if "stages" in entry:
-        layout["stages"] = entry.get("stages", {})
-    if "program" in entry:
-        layout["program"] = entry.get("program", {})
-    return layout
 
 
 def _builtin_engine_shader_program_stages(
@@ -817,16 +791,9 @@ def _write_engine_shader_artifact(
     )
 
     vulkan_dir = package_dir / "shaders" / "vulkan"
-    layout_dir = package_dir / "shaders" / "layout"
     vulkan_dir.mkdir(parents=True, exist_ok=True)
     for target in targets:
         (package_dir / "shaders" / target).mkdir(parents=True, exist_ok=True)
-    if shader.layout:
-        layout_dir.mkdir(parents=True, exist_ok=True)
-        (layout_dir / f"{shader.uuid}.shader-layout.json").write_text(
-            json.dumps(shader.layout, indent=2),
-            encoding="utf-8",
-        )
 
     source_ext = _source_extension_for_language(shader.language)
     shared_stage_source = (

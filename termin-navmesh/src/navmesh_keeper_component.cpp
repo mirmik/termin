@@ -1,6 +1,7 @@
 #include <termin/navmesh/navmesh_keeper_component.hpp>
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <utility>
 #include <tcbase/tc_log.hpp>
@@ -11,6 +12,23 @@ NavMeshKeeperComponent::NavMeshKeeperComponent()
     : CxxComponent("NavMeshKeeperComponent")
 {
     install_drawable_vtable(&_c);
+}
+
+void NavMeshKeeperComponent::register_type() {
+    register_component_type<NavMeshKeeperComponent>("NavMeshKeeperComponent", "Component");
+    tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, TcNavMesh>(
+        "NavMeshKeeperComponent",
+        "navmesh",
+        "NavMesh",
+        "navmesh_handle",
+        [](NavMeshKeeperComponent* self) {
+            return TcNavMesh::from_uuid(self->navmesh_uuid);
+        },
+        [](NavMeshKeeperComponent* self, TcNavMesh value) {
+            const char* uuid = value.uuid();
+            self->navmesh_uuid = uuid ? uuid : "";
+        }
+    );
 }
 
 void NavMeshKeeperComponent::invalidate_debug_mesh() const {
@@ -101,23 +119,5 @@ tc_mesh* NavMeshKeeperComponent::get_mesh_for_phase(const std::string& phase_mar
     }
     return ensure_debug_mesh_loaded() && _navmesh_debug_mesh.is_valid() ? _navmesh_debug_mesh.get() : nullptr;
 }
-
-
-namespace {
-
-tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, std::string>
-    navmesh_keeper_navmesh_field_reg{
-        "NavMeshKeeperComponent",
-        "navmesh",
-        "NavMesh",
-        "navmesh_handle",
-        [](NavMeshKeeperComponent* self) { return self->navmesh_uuid; },
-        [](NavMeshKeeperComponent* self, std::string value) { self->navmesh_uuid = std::move(value); }
-    };
-
-
-}
-
-REGISTER_COMPONENT(NavMeshKeeperComponent, Component);
 
 } // namespace termin

@@ -37,3 +37,6 @@
 - [termin-bootstrap startup plan](2026-06-23-termin-bootstrap-startup-plan.md)
 - [C++ termin_player migration plan](2026-06-24-cpp-termin-player-migration-plan.md)
 - [Build profiles editor window](2026-06-26-build-profiles-editor-window.md)
+- [Material Pipeline target architecture](2026-06-27-material-pipeline-target-architecture.md)
+- [Runtime Type Registry refactor plan](2026-06-28-runtime-type-registry-refactor-plan.md)
+- [Built-in Component Bootstrap migration](2026-06-28-builtin-component-bootstrap-migration-plan.md)

@@ -62,6 +62,8 @@ public:
     explicit LineRenderer(const char* type_name = "LineRenderer");
     ~LineRenderer() override;
 
+    static void register_type();
+
     const std::vector<tc_vec3>& points() const { return points_; }
     void set_points(const std::vector<tc_vec3>& points);
     void set_points(std::vector<tc_vec3>&& points);
@@ -110,46 +112,5 @@ public:
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
     TcMesh get_mesh();
 };
-
-INSPECT_FIELD_CALLBACK(LineRenderer, TcMaterial, material, "Material", "tc_material",
-    [](LineRenderer* self) -> TcMaterial& { return self->material; },
-    [](LineRenderer* self, const TcMaterial& value) { self->set_material(value); })
-
-INSPECT_FIELD_CALLBACK(LineRenderer, float, width, "Width", "float",
-    [](LineRenderer* self) -> float& { return self->width; },
-    [](LineRenderer* self, const float& value) { self->set_width(value); },
-    0.001, 10.0, 0.01)
-
-INSPECT_FIELD_ACCESSORS_CHOICES(LineRenderer, int, render_mode, "Render Mode", "enum",
-    [](LineRenderer* self) -> int { return static_cast<int>(self->render_mode); },
-    [](LineRenderer* self, int value) { self->set_render_mode(static_cast<LineRenderMode>(value)); },
-    {"0", "World Billboard"},
-    {"1", "Screen Space"},
-    {"2", "World Mesh"},
-    {"3", "Raw Lines"},
-    {"4", "World Tube"})
-
-INSPECT_FIELD_CALLBACK(LineRenderer, bool, raw_lines, "Raw Lines", "bool",
-    [](LineRenderer* self) -> bool& { return self->raw_lines; },
-    [](LineRenderer* self, const bool& value) { self->set_raw_lines(value); })
-
-INSPECT_FIELD_CALLBACK(LineRenderer, bool, cast_shadow, "Cast Shadow", "bool",
-    [](LineRenderer* self) -> bool& { return self->cast_shadow; },
-    [](LineRenderer* self, const bool& value) { self->set_cast_shadow(value); })
-
-INSPECT_FIELD_CALLBACK(LineRenderer, tc_vec3, up_hint, "Up Hint", "vec3",
-    [](LineRenderer* self) -> tc_vec3& { return self->up_hint; },
-    [](LineRenderer* self, const tc_vec3& value) { self->set_up_hint(value); })
-
-INSPECT_FIELD_CALLBACK(LineRenderer, int, tube_sides, "Tube Sides", "int",
-    [](LineRenderer* self) -> int& { return self->tube_sides; },
-    [](LineRenderer* self, const int& value) { self->set_tube_sides(value); },
-    3, 32, 1)
-
-INSPECT_FIELD_ACCESSORS(LineRenderer, std::vector<tc_vec3>, points, "Positions", "list[vec3]",
-    [](LineRenderer* self) { return self->points(); },
-    [](LineRenderer* self, std::vector<tc_vec3> value) { self->set_points(std::move(value)); })
-
-REGISTER_COMPONENT(LineRenderer, Component);
 
 } // namespace termin

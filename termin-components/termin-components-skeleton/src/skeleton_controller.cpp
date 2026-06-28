@@ -1,5 +1,7 @@
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/entity/entity.hpp>
+#include <termin/entity/component_registry.hpp>
+#include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
@@ -8,6 +10,24 @@ SkeletonController::SkeletonController()
     : CxxComponent("SkeletonController")
 {
     _c.has_before_render = true;
+}
+
+void SkeletonController::register_type() {
+    register_component_type<SkeletonController>("SkeletonController", "Component");
+    tc::register_inspect_field(
+        &SkeletonController::skeleton,
+        "SkeletonController",
+        "skeleton",
+        "Skeleton",
+        "tc_skeleton"
+    );
+    tc::register_inspect_field(
+        &SkeletonController::bone_entities,
+        "SkeletonController",
+        "bone_entities",
+        "Bone Entities",
+        "list[entity]"
+    );
 }
 
 void SkeletonController::start() {

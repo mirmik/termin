@@ -426,7 +426,7 @@ def test_slang_shader_synthesizes_material_params_for_scalar_properties():
     assert "struct MaterialParams" not in phase.stages["vertex"].source
 
 
-def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
+def test_slang_material_layout_sets_shader_contract_before_sidecar_reflection():
     import tgfx  # noqa: F401  # Registers TcShader before TcMaterialPhase.shader casts it.
 
     shader_text = "\n".join([
@@ -435,10 +435,14 @@ def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
         "@property Color tint = Color(1, 1, 1, 1)",
         "@phase opaque",
         "@stage vertex",
+        "struct VertexInput {",
+        "    float3 position : POSITION;",
+        "    float3 normal : NORMAL;",
+        "};",
         "struct VertexOutput { float4 position : SV_Position; };",
-        "[shader(\"vertex\")] VertexOutput main() {",
+        "[shader(\"vertex\")] VertexOutput main(VertexInput input) {",
         "    VertexOutput output;",
-        "    output.position = float4(0, 0, 0, 1);",
+        "    output.position = float4(input.position, 1);",
         "    return output;",
         "}",
         "@endstage",
@@ -456,9 +460,50 @@ def test_slang_material_layout_waits_for_sidecar_reflection_on_tc_shader():
     material = create_material_from_parsed(parse_shader_text(shader_text))
     shader = material.get_phase(0).shader
 
-    assert shader.material_ubo_entry_count == 0
-    assert shader.material_ubo_block_size == 0
+    assert shader.material_ubo_entry_count == 1
+    assert shader.material_ubo_block_size == 16
     assert shader.find_resource_binding("material") is None
+    assert shader.has_contract
+
+    contract = shader.contract
+    assert contract["source_kind"] == 4  # TC_SHADER_CONTRACT_SOURCE_DECLARED
+    assert "draw_kind" not in contract
+    assert {
+        input_desc["semantic"]
+        for input_desc in contract["vertex_inputs"]
+    } == {"position", "normal"}
+    assert "material" in {
+        resource["name"]
+        for resource in contract["resources"]
+    }
+    material_requirement = next(
+        resource
+        for resource in contract["resources"]
+        if resource["name"] == "material"
+    )
+    assert material_requirement["kind_name"] == "constant_buffer"
+    assert material_requirement["scope_name"] == "material"
+    assert material_requirement["size"] == 16
+    assert material_requirement["fields"] == [
+        {"name": "tint", "type": "Color", "offset": 0, "size": 16}
+    ]
+
+    shader.set_resource_layout([])
+    assert shader.find_resource_binding("material") is None
+    contract_after_layout_clear = shader.contract
+    assert {
+        resource["name"]
+        for resource in contract_after_layout_clear["resources"]
+    } == {
+        resource["name"]
+        for resource in contract["resources"]
+    }
+    material_after_layout_clear = next(
+        resource
+        for resource in contract_after_layout_clear["resources"]
+        if resource["name"] == "material"
+    )
+    assert material_after_layout_clear["fields"] == material_requirement["fields"]
 
 
 def test_parse_shader_text_rejects_explicit_glsl_shader():

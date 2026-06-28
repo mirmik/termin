@@ -21,7 +21,7 @@ from tcgui.widgets.text_area import TextArea
 
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
 from termin.engine import SceneManager, default_scene_extensions, scene as engine_scene
-from termin.editor_core.resource_loader import ResourceLoader
+from termin.editor_core.resource_loader import ResourceLoader, register_editor_builtin_resources
 from termin.assets.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.default_preloaders import register_default_preloaders
 from termin.editor_core.prefab_edit_controller import PrefabEditController
@@ -100,8 +100,7 @@ class EditorWindowTcgui:
 
         # Resource manager
         self.resource_manager = ResourceManager.instance()
-        self.resource_manager.register_builtin_components()
-        self.resource_manager.register_builtin_frame_passes()
+        register_editor_builtin_resources(self.resource_manager)
         self.resource_manager.register_component(
             "EditorCameraUIController",
             EditorCameraUIController,
@@ -269,7 +268,6 @@ class EditorWindowTcgui:
             on_resource_reloaded=self._on_resource_reloaded,
             log_message=self._log_to_console,
         )
-        self._resource_loader.scan_builtin_components()
         self._resource_actions = ResourceActionsController(
             get_ui=lambda: self._ui,
             get_project_path=self._get_project_path,

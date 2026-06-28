@@ -16,6 +16,7 @@ public:
 
 public:
     LightComponent();
+    static void register_type();
 
     std::string get_light_type_str() const;
     void set_light_type_str(const std::string& type);

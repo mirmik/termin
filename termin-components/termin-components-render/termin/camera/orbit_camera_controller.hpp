@@ -38,17 +38,12 @@ namespace termin {
  */
 class ENTITY_API OrbitCameraController : public CxxComponent, public InputHandler {
 public:
-    // === Public parameters (serializable via INSPECT_FIELD) ===
+    // === Public parameters (registered for inspect serialization in register_type()) ===
 
     double radius = 5.0;
     double min_radius = 1.0;
     double max_radius = 100.0;
     bool horizon_lock = true;  // Z always up, clamp roll
-
-    // INSPECT_FIELD registrations
-    INSPECT_FIELD(OrbitCameraController, radius, "Radius", "double", 0.1, 100.0, 0.1)
-    INSPECT_FIELD(OrbitCameraController, min_radius, "Min Radius", "double", 0.1, 100.0, 0.1)
-    INSPECT_FIELD(OrbitCameraController, max_radius, "Max Radius", "double", 1.0, 1000.0, 1.0)
 
     // === Constructor ===
 
@@ -58,6 +53,8 @@ public:
         double max_radius = 100.0,
         bool prevent_moving = false
     );
+
+    static void register_type();
 
     // === Camera operations ===
 

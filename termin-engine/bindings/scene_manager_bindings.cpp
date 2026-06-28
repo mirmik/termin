@@ -330,11 +330,48 @@ void bind_scene_manager(nb::module_& m) {
             nb::dict d;
             const char* name = tc_entity_pool_name(c->pool, id);
             const char* uuid = tc_entity_pool_uuid(c->pool, id);
+            tc_entity_id parent = tc_entity_pool_parent(c->pool, id);
+            size_t component_count = tc_entity_pool_component_count(c->pool, id);
+            nb::list components;
+            for (size_t i = 0; i < component_count; ++i) {
+                tc_component* component = tc_entity_pool_component_at(c->pool, id, i);
+                nb::dict component_info;
+                const char* type_name = tc_component_type_name(component);
+                component_info["type_name"] = type_name ? nb::str(type_name) : nb::str("<unknown>");
+                component_info["enabled"] = component ? component->enabled : false;
+                component_info["active_in_editor"] = component ? component->active_in_editor : false;
+                component_info["started"] = component ? component->_started : false;
+                component_info["has_update"] = component ? component->has_update : false;
+                component_info["has_fixed_update"] = component ? component->has_fixed_update : false;
+                component_info["has_before_render"] = component ? component->has_before_render : false;
+                component_info["ptr"] = reinterpret_cast<uintptr_t>(component);
+                components.append(component_info);
+            }
+
             d["name"] = name ? nb::str(name) : nb::none();
             d["uuid"] = uuid ? nb::str(uuid) : nb::str("");
+            d["id_index"] = id.index;
+            d["id_generation"] = id.generation;
+            d["runtime_id"] = tc_entity_pool_runtime_id(c->pool, id);
+            d["pick_id"] = tc_entity_pool_pick_id(c->pool, id);
             d["enabled"] = tc_entity_pool_enabled(c->pool, id);
             d["visible"] = tc_entity_pool_visible(c->pool, id);
-            d["component_count"] = tc_entity_pool_component_count(c->pool, id);
+            d["pickable"] = tc_entity_pool_pickable(c->pool, id);
+            d["selectable"] = tc_entity_pool_selectable(c->pool, id);
+            d["serializable"] = tc_entity_pool_serializable(c->pool, id);
+            d["priority"] = tc_entity_pool_priority(c->pool, id);
+            d["layer"] = tc_entity_pool_layer(c->pool, id);
+            d["flags"] = tc_entity_pool_flags(c->pool, id);
+            if (tc_entity_id_valid(parent)) {
+                d["parent_index"] = parent.index;
+                d["parent_generation"] = parent.generation;
+            } else {
+                d["parent_index"] = nb::none();
+                d["parent_generation"] = nb::none();
+            }
+            d["children_count"] = tc_entity_pool_children_count(c->pool, id);
+            d["component_count"] = component_count;
+            d["components"] = components;
             c->result.append(d);
             return true;
         }, &ctx);

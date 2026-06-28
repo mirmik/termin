@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -80,6 +81,8 @@ struct ModuleEnvironment {
     bool use_project_venv = false;
     bool allow_python_package_install = false;
     bool sync_live_scenes = true;
+    std::function<void(const ModuleRecord&)> before_cpp_module_init;
+    std::function<void(const ModuleRecord&)> after_cpp_module_init;
 };
 
 enum class ModuleEventKind {

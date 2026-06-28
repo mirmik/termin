@@ -280,7 +280,13 @@ bool ModuleRuntime::load_module(const std::string& module_id) {
         }
     }
 
-    if (!backend->load(*target, _environment)) {
+    ModuleEnvironment load_environment = _environment;
+    if (target->spec.kind == ModuleKind::Cpp) {
+        load_environment.before_cpp_module_init = _cpp_callbacks.before_native_init;
+        load_environment.after_cpp_module_init = _cpp_callbacks.after_native_init;
+    }
+
+    if (!backend->load(*target, load_environment)) {
         target->state = ModuleState::Failed;
         if (target->error_message.empty()) {
             target->error_message = "Backend load failed";

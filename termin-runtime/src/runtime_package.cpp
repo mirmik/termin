@@ -25,6 +25,14 @@
 #include <termin/foliage/foliage_data_registry.hpp>
 
 namespace termin::runtime {
+
+struct RuntimePackageResourceKeepalive {
+    std::vector<TcShader> shaders;
+    std::vector<TcMaterial> materials;
+    std::vector<TcMesh> meshes;
+    std::vector<TcFoliageData> foliage_data;
+};
+
 namespace {
 
 std::string read_text_file(const std::filesystem::path& path) {
@@ -308,12 +316,6 @@ std::filesystem::path package_path(const std::filesystem::path& root, const std:
     return root / p;
 }
 
-struct RuntimeResourceKeepalive {
-    std::vector<TcShader> shaders;
-    std::vector<TcMaterial> materials;
-    std::vector<TcMesh> meshes;
-    std::vector<TcFoliageData> foliage_data;
-};
 
 std::vector<TcTexture>& runtime_builtin_texture_keepalive() {
     static std::vector<TcTexture> textures;
@@ -558,7 +560,7 @@ bool load_shader_resource(
     const std::filesystem::path& root,
     const std::filesystem::path& spec_path,
     const nos::trent& spec,
-    RuntimeResourceKeepalive& keepalive,
+    RuntimePackageResourceKeepalive& keepalive,
     std::string& error
 ) {
     const std::string uuid = string_field(spec, "uuid");
@@ -627,7 +629,7 @@ bool load_shader_resource(
 
 bool load_material_resource(
     const nos::trent& spec,
-    RuntimeResourceKeepalive& keepalive,
+    RuntimePackageResourceKeepalive& keepalive,
     std::string& error
 ) {
     const std::string uuid = string_field(spec, "uuid");
@@ -691,7 +693,7 @@ tc_draw_mode parse_draw_mode(const std::string& value) {
 
 bool load_mesh_resource(
     const nos::trent& spec,
-    RuntimeResourceKeepalive& keepalive,
+    RuntimePackageResourceKeepalive& keepalive,
     std::string& error
 ) {
     const std::string uuid = string_field(spec, "uuid");
@@ -790,7 +792,7 @@ bool load_mesh_resource(
 bool load_foliage_data_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
-    RuntimeResourceKeepalive& keepalive,
+    RuntimePackageResourceKeepalive& keepalive,
     std::string& error
 ) {
     const std::string uuid = string_field(entry, "uuid");
@@ -821,7 +823,7 @@ bool load_foliage_data_resource(
 bool load_resource(
     const std::filesystem::path& root,
     const nos::trent& entry,
-    RuntimeResourceKeepalive& keepalive,
+    RuntimePackageResourceKeepalive& keepalive,
     std::string& error
 ) {
     const std::string type = string_field(entry, "type");
@@ -902,11 +904,11 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
             return result;
         }
-        RuntimeResourceKeepalive keepalive;
+        auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
         ensure_runtime_builtin_textures();
         for (const nos::trent& resource : resources->as_list()) {
             std::string resource_error;
-            if (!load_resource(root, resource, keepalive, resource_error)) {
+            if (!load_resource(root, resource, *keepalive, resource_error)) {
                 result.message = "failed to load resource " + resource_label(resource);
                 if (!resource_error.empty()) {
                     result.message += ": " + resource_error;
@@ -927,6 +929,7 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         result.ok = result.scene.valid();
         result.message = result.ok ? "ok" : "scene is invalid";
         if (result.ok) {
+            result.resources = std::move(keepalive);
             tc_log_info(
                 "RuntimePackageLoader: loaded package '%s' entities=%zu",
                 root.string().c_str(),

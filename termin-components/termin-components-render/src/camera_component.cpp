@@ -17,6 +17,12 @@ extern "C" {
 
 namespace termin {
 
+namespace {
+
+void register_camera_component_inspect_fields();
+
+} // namespace
+
 // Camera capability vtable callback
 static bool camera_cap_get_data(tc_component* self, double aspect_override, tc_camera_data* out) {
     if (!self || !out) return false;
@@ -230,10 +236,9 @@ std::pair<Vec3, Vec3> CameraComponent::screen_point_to_ray(double x, double y, i
     return {p_near, direction};
 }
 
-REGISTER_COMPONENT(CameraComponent, CxxComponent);
+namespace {
 
-static struct _FovModeFieldRegistrar {
-    _FovModeFieldRegistrar() {
+void register_fov_mode_field() {
         tc::InspectFieldInfo info;
         info.type_name = "CameraComponent";
         info.path = "fov_mode";
@@ -253,11 +258,9 @@ static struct _FovModeFieldRegistrar {
             }
         };
         tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
-    }
-} _fov_mode_registrar;
+}
 
-static struct _CameraLayerMaskFieldRegistrar {
-    _CameraLayerMaskFieldRegistrar() {
+void register_camera_layer_mask_field() {
         tc::InspectFieldInfo info;
         info.type_name = "CameraComponent";
         info.path = "layer_mask";
@@ -278,7 +281,78 @@ static struct _CameraLayerMaskFieldRegistrar {
             }
         };
         tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
-    }
-} _camera_layer_mask_registrar;
+}
+
+void register_camera_component_inspect_fields() {
+    tc::register_inspect_field(
+        &CameraComponent::near_clip,
+        "CameraComponent",
+        "near_clip",
+        "Near Clip",
+        "double",
+        0.001,
+        10000.0,
+        0.01
+    );
+    tc::register_inspect_field(
+        &CameraComponent::far_clip,
+        "CameraComponent",
+        "far_clip",
+        "Far Clip",
+        "double",
+        0.01,
+        100000.0,
+        1.0
+    );
+    tc::register_inspect_field(
+        &CameraComponent::ortho_size,
+        "CameraComponent",
+        "ortho_size",
+        "Ortho Size",
+        "double",
+        0.1,
+        1000.0,
+        0.5
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<CameraComponent, double>(
+        "CameraComponent",
+        "fov_x_degrees",
+        "Horizontal FOV",
+        "double",
+        [](CameraComponent* c) -> double& {
+            static double deg;
+            deg = c->get_fov_x_degrees();
+            return deg;
+        },
+        [](CameraComponent* c, const double& val) { c->set_fov_x_degrees(val); },
+        1.0,
+        360.0,
+        1.0
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<CameraComponent, double>(
+        "CameraComponent",
+        "fov_y_degrees",
+        "Vertical FOV",
+        "double",
+        [](CameraComponent* c) -> double& {
+            static double deg;
+            deg = c->get_fov_y_degrees();
+            return deg;
+        },
+        [](CameraComponent* c, const double& val) { c->set_fov_y_degrees(val); },
+        1.0,
+        360.0,
+        1.0
+    );
+    register_fov_mode_field();
+    register_camera_layer_mask_field();
+}
+
+} // namespace
+
+void CameraComponent::register_type() {
+    register_component_type<CameraComponent>("CameraComponent", "CxxComponent");
+    register_camera_component_inspect_fields();
+}
 
 } // namespace termin
