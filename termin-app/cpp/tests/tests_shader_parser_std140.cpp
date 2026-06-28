@@ -221,7 +221,7 @@ TEST_CASE("synthesize: empty layout yields empty string")
     CHECK_EQ(synthesize_material_ubo_slang(layout), std::string{});
 }
 
-TEST_CASE("tc_shader: material UBO layout registers material resource binding")
+TEST_CASE("tc_shader: material UBO layout stores pack metadata without resource binding")
 {
     tc_shader_handle handle = tc_shader_from_sources_ex(
         "#version 450 core\nvoid main() { gl_Position = vec4(0.0); }\n",
@@ -244,18 +244,10 @@ TEST_CASE("tc_shader: material UBO layout registers material resource binding")
     entry.size = 16;
     tc_shader_set_material_ubo_layout(shader, &entry, 1, 16);
 
-    CHECK_EQ(tc_shader_resource_binding_count(shader), 1u);
-    const tc_shader_resource_binding* binding =
-        tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL);
-    CHECK(binding != nullptr);
-    if (binding) {
-        CHECK_EQ(std::string(binding->name), std::string(TC_SHADER_RESOURCE_MATERIAL));
-        CHECK_EQ(binding->kind, static_cast<uint32_t>(TC_SHADER_RESOURCE_CONSTANT_BUFFER));
-        CHECK_EQ(binding->set, TC_SHADER_RESOURCE_SET_DEFAULT);
-        CHECK_EQ(binding->binding, 1u);
-        CHECK_EQ(binding->stage_mask, static_cast<uint32_t>(TC_SHADER_STAGE_ALL_GRAPHICS));
-        CHECK_EQ(binding->size, 16u);
-    }
+    CHECK_EQ(tc_shader_material_ubo_entry_count(shader), 1u);
+    CHECK_EQ(tc_shader_material_ubo_block_size(shader), 16u);
+    CHECK_EQ(tc_shader_resource_binding_count(shader), 0u);
+    CHECK(tc_shader_find_resource_binding(shader, TC_SHADER_RESOURCE_MATERIAL) == nullptr);
 
     tc_shader_set_material_ubo_layout(shader, nullptr, 0, 0);
     CHECK_EQ(tc_shader_resource_binding_count(shader), 0u);
