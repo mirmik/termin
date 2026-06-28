@@ -9,7 +9,7 @@
 #include <termin/scene/scene_manager.hpp>
 
 #include <tc_inspect_cpp.hpp>
-#include <inspect/tc_runtime_type_registry.hpp>
+#include <inspect/tc_runtime_type_registry.h>
 
 namespace termin {
 namespace {
@@ -69,7 +69,7 @@ bool cleanup_module_registrations(const termin_modules::ModuleRecord& record, st
 
     try {
         const size_t type_count =
-            tc::RuntimeTypeRegistry::instance().unregister_owner(record.spec.id);
+            tc_runtime_type_registry_unregister_owner(record.spec.id.c_str());
         if (type_count > 0) {
             tc::Log::info(
                 "TermModulesIntegration: cleaned %zu runtime type registrations for module '%s'",
