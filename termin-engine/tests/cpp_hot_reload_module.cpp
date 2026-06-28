@@ -13,6 +13,11 @@ public:
     int value = 0;
 };
 
+class EngineHeaderSideEffectProbe {
+public:
+    int value = 0;
+};
+
 static termin::ComponentRegistrar<HotReloadNativeProbeComponent>
     hot_reload_native_probe_registrar("HotReloadNativeProbeComponent", "CxxComponent");
 
@@ -29,6 +34,20 @@ struct HotReloadNativeProbeInspectRegistration {
 };
 
 static HotReloadNativeProbeInspectRegistration hot_reload_native_probe_inspect_registration;
+
+struct EngineHeaderSideEffectInspectRegistration {
+    EngineHeaderSideEffectInspectRegistration() {
+        tc::InspectRegistry::instance().add<EngineHeaderSideEffectProbe, int>(
+            "EngineOwnedProbeType",
+            &EngineHeaderSideEffectProbe::value,
+            "value",
+            "Value From Module Header Side Effect",
+            "int"
+        );
+    }
+};
+
+static EngineHeaderSideEffectInspectRegistration engine_header_side_effect_inspect_registration;
 
 } // namespace
 
