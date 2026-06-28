@@ -1,6 +1,7 @@
 // tc_navmesh_registry.c - Navmesh registry with pool + hash table
 #include "termin/navmesh/tc_navmesh_registry.h"
 #include <tcbase/tc_pool.h>
+#include <tcbase/tc_resource.h>
 #include <tcbase/tc_resource_map.h>
 #include <tcbase/tc_log.h>
 #include <tcbase/tgfx_intern_string.h>
@@ -45,10 +46,7 @@ static void navmesh_bump_version(tc_navmesh* navmesh) {
 
 static void navmesh_init_slot(tc_navmesh* navmesh, tc_handle h, const char* uuid, bool loaded) {
     memset(navmesh, 0, sizeof(tc_navmesh));
-    if (uuid && uuid[0] != '\0') {
-        strncpy(navmesh->uuid, uuid, sizeof(navmesh->uuid) - 1);
-        navmesh->uuid[sizeof(navmesh->uuid) - 1] = '\0';
-    }
+    tc_resource_copy_uuid(navmesh->uuid, sizeof(navmesh->uuid), uuid, "tc_navmesh_init_slot");
     navmesh->version = loaded ? 1 : 0;
     navmesh->pool_index = h.index;
     navmesh->is_loaded = loaded ? 1 : 0;
