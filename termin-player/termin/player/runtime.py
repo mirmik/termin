@@ -17,10 +17,13 @@ from termin.player.project_runtime_support import (
     register_project_runtime_resources,
     scan_project_assets,
 )
+from termin.player.project_settings import (
+    ProjectPlayerWindowSettings,
+    load_project_runtime_settings,
+)
 
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
-    from termin.project.settings import ProjectPlayerWindowSettings
     from termin.scene import TcScene as Scene
 
 
@@ -54,13 +57,11 @@ def request_quit(exit_code: int = 0) -> bool:
 def _resolve_player_window_settings(
     project_path: Path,
     *,
-    configured: "ProjectPlayerWindowSettings | None",
+    configured: ProjectPlayerWindowSettings | None,
     width: int | None,
     height: int | None,
     fullscreen: bool | None,
 ):
-    from termin.project.settings import ProjectPlayerWindowSettings
-
     base = configured if configured is not None else _load_project_player_window_settings(project_path)
     return ProjectPlayerWindowSettings(
         width=_resolve_positive_window_int(width, base.width, "width"),
@@ -70,29 +71,11 @@ def _resolve_player_window_settings(
 
 
 def _load_project_player_window_settings(project_path: Path):
-    from tcbase import log
-    from termin.project.settings import ProjectSettings
-
-    settings_path = project_path / "project_settings" / "project.json"
-    if not settings_path.exists():
-        return ProjectSettings().player_window
-
-    try:
-        with open(settings_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as exc:
-        log.error(f"[PlayerRuntime] Failed to read project settings: {exc}")
-        return ProjectSettings().player_window
-
-    if not isinstance(data, dict):
-        log.error("[PlayerRuntime] Project settings root must be an object")
-        return ProjectSettings().player_window
-    return ProjectSettings.from_dict(data).player_window
+    return load_project_runtime_settings(project_path).player_window
 
 
 def _player_window_from_manifest(data: dict, manifest_path: Path):
     from tcbase import log
-    from termin.project.settings import ProjectPlayerWindowSettings
 
     runtime = data.get("runtime")
     if runtime is None:

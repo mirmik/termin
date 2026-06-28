@@ -60,6 +60,9 @@ PYTHON_PKG_TO_DIR = {
     "tcplot": "tcplot",
     "termin": "termin",
     "termin-app": "termin-app",
+    "termin-player": "termin-player",
+    "termin-mcp": "termin-mcp",
+    "termin-shader-runtime": "termin-shader-runtime",
     "termin-base": "termin-base",
     "termin-assets": "termin-assets",
     "termin-tween": "termin-tween",
@@ -101,6 +104,10 @@ PYTHON_IMPORT_TO_DIR = {
     "tcplot": "tcplot",
     # termin.* submodules → actual library
     "termin.assets": "termin-app",
+    "termin.player": "termin-player",
+    "termin.mcp": "termin-mcp",
+    "termin.shader_runtime": "termin-shader-runtime",
+    "termin.shader_tools": "termin-shader-runtime",
     "termin.csg": "termin-csg",
     "termin.geombase": "termin-base",
     "termin.collision": "termin-collision",
@@ -166,13 +173,19 @@ if os.path.exists(termin_native_cmake):
     CMAKE_DIRS.append(("termin-app", termin_native_cmake))
 
 # Pure-Python packages (no CMakeLists.txt) — will be scanned via import analysis.
-PYTHON_ONLY_DIRS = {}
+PYTHON_ONLY_DIRS = {
+    "termin-mcp": os.path.join(ROOT, "termin-mcp", "termin"),
+    "termin-shader-runtime": os.path.join(ROOT, "termin-shader-runtime", "termin"),
+}
 
 # Dependencies that are structural but not reliably visible from setup.py or
 # CMake parsing. `termin` is the namespace root; packages extending termin.*
 # conceptually sit on top of it, but it does not depend on engine libraries.
 MANUAL_DEPS = {
     "termin-app": {"termin"},
+    "termin-player": {"termin"},
+    "termin-mcp": {"termin"},
+    "termin-shader-runtime": {"termin"},
     # "termin-entity": {"termin"},  # удалён, мигрирован в termin-app
     "termin-navmesh": {"termin"},
     "termin-tween": {"termin"},

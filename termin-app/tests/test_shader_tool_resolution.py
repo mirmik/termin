@@ -25,7 +25,7 @@ def _load_shader_tools_module():
     termin_module = sys.modules.setdefault("termin", types.ModuleType("termin"))
     module = _load_module(
         "termin.shader_tools",
-        _repo_root() / "termin-app" / "termin" / "shader_tools.py",
+        _repo_root() / "termin-shader-runtime" / "termin" / "shader_tools.py",
     )
     termin_module.shader_tools = module
     return module

@@ -69,6 +69,10 @@ if __name__ == "__main__":
                 "termin.robot", "termin.robot.*",               # termin-qopt
                 "termin.ga201", "termin.ga201.*",               # termin-pga
                 "termin.geomalgo", "termin.geomalgo.*",         # termin-pga
+                "termin.mcp", "termin.mcp.*",                   # termin-mcp
+                "termin.player", "termin.player.*",             # termin-player
+                "termin.shader_runtime",                        # termin-shader-runtime
+                "termin.shader_tools",                          # termin-shader-runtime
             ],
         ),
         python_requires='>3.10.0',
@@ -107,6 +111,9 @@ if __name__ == "__main__":
             "termin-assets",
             "termin-default-assets",
             "termin-bootstrap",
+            "termin-mcp",
+            "termin-player",
+            "termin-shader-runtime",
             "termin-prefab",
             "termin-glb",
             "termin-tween",

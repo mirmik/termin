@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import os
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from termin_assets import AssetTypeRegistry
-    from termin.project.settings import ProjectSettings
 
 from termin.default_assets.resource_manager import DefaultResourceManager
+from termin.player.project_settings import (
+    SERVICE_RESOURCE_IGNORE_PATHS,
+    ProjectRuntimeSettings,
+    load_project_runtime_settings,
+)
 
 
 def register_project_runtime_resources(*, include_render_resources: bool) -> None:
@@ -133,8 +136,6 @@ def scan_project_assets(project_path: str | Path, *, log_prefix: str) -> int:
 
 
 def _project_asset_ignored_roots(project_path: Path) -> tuple[str, ...]:
-    from termin.project.settings import SERVICE_RESOURCE_IGNORE_PATHS
-
     settings = _load_project_settings(project_path)
     ignored_roots = [
         project_path / ignored_path
@@ -148,22 +149,5 @@ def _project_asset_ignored_roots(project_path: Path) -> tuple[str, ...]:
     return tuple(os.path.abspath(path) for path in ignored_roots)
 
 
-def _load_project_settings(project_path: Path) -> ProjectSettings:
-    from tcbase import log
-    from termin.project.settings import ProjectSettings
-
-    settings_path = project_path / "project_settings" / "project.json"
-    if not settings_path.exists():
-        return ProjectSettings()
-
-    try:
-        data = json.loads(settings_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        log.error(f"[PlayerRuntime] Failed to read project settings: {exc}")
-        return ProjectSettings()
-
-    if not isinstance(data, dict):
-        log.error("[PlayerRuntime] Project settings root must be an object")
-        return ProjectSettings()
-
-    return ProjectSettings.from_dict(data)
+def _load_project_settings(project_path: Path) -> ProjectRuntimeSettings:
+    return load_project_runtime_settings(project_path)

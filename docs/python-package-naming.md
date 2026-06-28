@@ -43,6 +43,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-build-tools` | `termin-build-tools` | `termin_build` | Build-time helpers. |
 | `termin-nanobind-sdk` | `termin-nanobind` | `termin_nanobind` | Distribution keeps historical short SDK name. |
 | `termin-base` | `tcbase` | `tcbase`, `termin.geombase` | Legacy short distribution/import name. |
+| `termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
 | `termin-assets` | `termin-assets` | `termin_assets` | Asset runtime contracts. |
 | `termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
 | `termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
@@ -50,6 +51,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-graphics` | `tgfx` | `tgfx` | Legacy short distribution/import name. |
 | `termin-voxels` | `termin-voxels` | `termin.voxels` | Voxel core API. |
 | `termin-materials` | `termin-materials` | `termin.materials` | Material runtime API. |
+| `termin-shader-runtime` | `termin-shader-runtime` | `termin.shader_tools`, `termin.shader_runtime` | Shared shader tool resolution and source-project shader runtime helpers. |
 | `termin-gui` | `tcgui` | `tcgui` | Legacy short distribution/import name. |
 | `termin-inspect` | `termin-inspect` | `termin.inspect` | Inspection metadata API. |
 | `termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
@@ -81,6 +83,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-animation` | `termin-animation` | `termin.animation`, `termin.animation_components`, `termin_animation_component_specs` | Animation runtime and components. |
 | `termin-bootstrap` | `termin-bootstrap` | `termin.bootstrap` | Bootstrap/runtime startup helpers. |
 | `termin-glb` | `termin-glb` | `termin.glb` | GLB importer. |
+| `termin-player` | `termin-player` | `termin.player` | Standalone/source/headless player runtime. |
 | `termin-nodegraph` | `termin-nodegraph` | `tcnodegraph` | Public import keeps historical short namespace. |
 | `termin-app` | `termin-app` | `termin`, `termin.*` excluding extracted packages | Editor/application umbrella package. |
 | `tcplot` | `tcplot` | `tcplot` | Legacy short distribution/import name. |

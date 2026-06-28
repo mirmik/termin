@@ -272,6 +272,24 @@ C# bindings/runtime packaging for Termin native libraries.
 
 ## Application Layer
 
+### termin-shader-runtime
+
+Source of truth: `termin-shader-runtime/`.
+
+Shared shader tool resolution and source-project shader runtime helpers consumed by build tooling, editor and player.
+
+### termin-mcp
+
+Source of truth: `termin-mcp/`.
+
+Shared MCP transport/executor helpers consumed by editor and player. Process-specific MCP tools live in their owning application packages.
+
+### termin-player
+
+Source of truth: `termin-player/`.
+
+Standalone/source/headless player runtime and native `termin_player` executable. `termin-app` may consume player commands/APIs, but player code must not depend on `termin-app`.
+
 ### termin-app
 
 Source of truth: [termin-app docs](../termin-app/docs/index.md), [editor architecture](../termin-app/docs/editor-architecture.md), [flat viewport target model](../termin-app/docs/rendering-flat-viewport-target-model.md).

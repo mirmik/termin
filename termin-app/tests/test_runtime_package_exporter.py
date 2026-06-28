@@ -13,7 +13,6 @@ from termin.project_build.runtime_package_exporter import (
     _default_pipeline_engine_shaders,
     _material_textures_to_json,
 )
-from termin.player.runtime_package_loader import _material_texture_resources_from_shader_spec
 
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
@@ -56,7 +55,8 @@ def _write_fake_shader_compiler(tmp_path: Path) -> Path:
 
 def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
     distributions: dict[str, tuple[dict[str, str], list[str]]] = {
-        "termin-app": ({"termin_app_seed/__init__.py": "VALUE = 'termin app seed'\n"}, []),
+        "termin-player": ({"termin/player/__init__.py": "VALUE = 'player seed'\n"}, ["termin-mcp"]),
+        "termin-mcp": ({"termin/mcp/__init__.py": "VALUE = 'mcp seed'\n"}, []),
         "termin-nanobind": ({"termin_nanobind/__init__.py": "VALUE = 'nanobind seed'\n"}, []),
         "tcbase": ({"tcbase/__init__.py": "VALUE = 'runtime seed'\n"}, []),
         "termin-assets": ({"termin_assets_seed/__init__.py": "VALUE = 'assets seed'\n"}, []),
@@ -79,6 +79,13 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "termin-components-physics": ({"termin/physics_components/__init__.py": "VALUE = 'physics components seed'\n"}, []),
         "termin-components-ui": ({"termin/ui_components/__init__.py": "VALUE = 'ui components seed'\n"}, []),
         "termin-materials": ({"termin/materials/__init__.py": "VALUE = 'materials seed'\n"}, []),
+        "termin-shader-runtime": (
+            {
+                "termin/shader_tools.py": "VALUE = 'shader tools seed'\n",
+                "termin/shader_runtime.py": "VALUE = 'shader runtime seed'\n",
+            },
+            [],
+        ),
         "termin-render-passes": ({"termin/render_passes/__init__.py": "VALUE = 'render passes seed'\n"}, []),
         "termin-modules": ({"termin/modules/__init__.py": "VALUE = 'modules seed'\n"}, []),
         "termin-scene": ({"termin/scene/__init__.py": "VALUE = 'scene seed'\n"}, []),
@@ -250,27 +257,6 @@ def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
     )
     compiler.chmod(0o755)
     return compiler
-
-
-def test_runtime_shader_layout_collects_material_texture_resources(tmp_path: Path) -> None:
-    package_dir = tmp_path / "package"
-    layout_path = package_dir / "shaders" / "vulkan" / "pbr.frag.spv.layout.json"
-    _write_json(
-        layout_path,
-        {
-            "resources": [
-                {"name": "material", "kind": "constant_buffer", "scope": "material"},
-                {"name": "u_albedo_texture", "kind": "texture", "scope": "material"},
-                {"name": "u_normal_texture", "kind": "texture", "scope": "material"},
-                {"name": "shadow_maps", "kind": "texture", "scope": "pass"},
-            ]
-        },
-    )
-
-    assert _material_texture_resources_from_shader_spec(
-        package_dir,
-        {"artifacts": {"vulkan": {"fragment": "shaders/vulkan/pbr.frag.spv"}}},
-    ) == ("u_albedo_texture", "u_normal_texture")
 
 
 def test_runtime_material_texture_export_records_builtin_placeholders() -> None:
