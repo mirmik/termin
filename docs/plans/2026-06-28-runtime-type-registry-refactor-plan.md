@@ -14,13 +14,13 @@ Implementation progress:
   common registry;
 - module unload now removes module-owned runtime type records through the
   common registry and relies on facet cleanup callbacks for domain registries;
+- inspect field, backend, and metadata storage now lives in the
+  `termin.inspect.fields` facet payload instead of parallel compatibility maps;
 - Python module cleanup still handles Python-only class/kind side storage
   separately, then delegates runtime type cleanup to the common registry.
 
 Remaining migration pressure:
 
-- move inspect field storage fully into the inspect facet instead of keeping
-  compatibility maps;
 - move component factory/capability/requirement storage fully into the
   component facet;
 - migrate project modules away from static registration macros.
