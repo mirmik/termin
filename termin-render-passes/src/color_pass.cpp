@@ -308,9 +308,7 @@ ResolvedDrawPhase resolve_draw_phase(
     const std::string& phase_mark,
     int geometry_id,
     tc_material_handle expected_material,
-    size_t expected_phase_index,
-    tc_shader_handle expected_final_shader,
-    int expected_priority
+    size_t expected_phase_index
 ) {
     ResolvedDrawPhase resolved;
     if (!component || !drawable) {
@@ -334,10 +332,6 @@ ResolvedDrawPhase resolve_draw_phase(
             phase_mark.c_str(),
             geometry_id,
             phase->shader);
-        if (!same_shader_handle(final_shader, expected_final_shader) ||
-            phase->priority != expected_priority) {
-            continue;
-        }
 
         resolved.phase = phase;
         resolved.final_shader = final_shader;
@@ -563,32 +557,12 @@ void ColorPass::execute_with_data(
             });
     }
 
-    // Decide whether any shader in this batch needs the lighting UBO.
-    bool any_shader_needs_ubo = false;
-    for (const auto& dc : cached_draw_calls_) {
-        tc_shader* shader = tc_shader_get(dc.final_shader);
-        if (shader && tc_shader_has_feature(shader, TC_SHADER_FEATURE_LIGHTING_UBO)) {
-            any_shader_needs_ubo = true;
-            break;
-        }
-        if (dc.component &&
-            tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
-            Drawable* drawable = static_cast<Drawable*>(
-                tc_component_get_drawable_userdata(dc.component));
-            if (drawable &&
-                !drawable->get_mesh_for_phase(phase_mark, dc.geometry_id) &&
-                drawable->needs_lighting_ubo_tgfx2(phase_mark, dc.geometry_id)) {
-                any_shader_needs_ubo = true;
-                break;
-            }
-        }
-    }
-
-    // Allocate lighting UBO directly on the tgfx2 device and upload
-    // this frame's data. The buffer is persistent — only the contents
-    // change per frame.
+    // Allocate lighting UBO directly on the tgfx2 device and upload this
+    // frame's data for the color batch. Whether a shader consumes it is now
+    // decided by reflected resources during binding, not by legacy feature
+    // flags that material-pipeline variants may not own at collection time.
     tgfx::BufferHandle lighting_ubo_tgfx2{};
-    if (any_shader_needs_ubo) {
+    if (!cached_draw_calls_.empty()) {
         lighting_ubo_.create(device);
         lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
                                          camera_position, shadow_settings);
@@ -701,9 +675,7 @@ void ColorPass::execute_with_data(
                 phase_mark,
                 dc.geometry_id,
                 dc.material,
-                dc.phase_index,
-                dc.final_shader,
-                dc.priority);
+                dc.phase_index);
             if (!resolved.phase) {
                 tc::Log::error(
                     "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' geometry=%d could not resolve live material phase",
@@ -791,11 +763,6 @@ void ColorPass::execute_with_data(
 
                     MaterialPipelineResourceContext direct_resources = material_resources;
                     direct_resources.shadow_sampler = shadow_sampler_;
-                    if (!(drawable->needs_lighting_ubo_tgfx2(phase_mark, geometry_id) ||
-                          tc_shader_has_feature(shader, TC_SHADER_FEATURE_LIGHTING_UBO))) {
-                        direct_resources.lighting_ubo = {};
-                    }
-
                     prepare_material_pipeline_resources(
                         draw_ctx,
                         device,

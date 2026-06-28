@@ -150,7 +150,7 @@ void IdPass::execute_with_data_tgfx2(
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
-        {"u_per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
     }};
     MaterialPipelineResourceContext id_resources{};
     id_resources.uniforms = per_frame_uniforms;
@@ -265,8 +265,8 @@ void IdPass::execute_with_data_tgfx2(
         push.u_pickColor[3] = 1.0f;
 
         std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
-            {"u_per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
-            {"u_push", &push, static_cast<uint32_t>(sizeof(push))},
+            {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            {"id_draw", &push, static_cast<uint32_t>(sizeof(push))},
         }};
         MaterialPipelineResourceContext draw_resources{};
         draw_resources.uniforms = draw_uniforms;
