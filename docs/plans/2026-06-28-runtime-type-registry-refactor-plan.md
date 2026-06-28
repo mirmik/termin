@@ -8,7 +8,11 @@ Active target architecture and migration plan.
 
 Implementation progress:
 
-- common `RuntimeTypeRegistry` skeleton exists in `termin-inspect`;
+- common runtime type registry storage lives in C in `termin-inspect`
+  (`tc_runtime_type_registry.c`);
+- public registry access is exposed through the C ABI
+  (`tc_runtime_type_registry_*`);
+- the former C++ `RuntimeTypeRegistry` storage/wrapper layer has been removed;
 - inspect/component/pass registries publish runtime type facets;
 - owner, parent, facet ids, and debug snapshots are available through the
   common registry;
@@ -16,13 +20,15 @@ Implementation progress:
   common registry and relies on facet cleanup callbacks for domain registries;
 - inspect field, backend, and metadata storage now lives in the
   `termin.inspect.fields` facet payload instead of parallel compatibility maps;
+- component factory, kind, abstract flag, requirements, and type-level
+  capability storage now live in the `termin.scene.component` facet payload;
 - Python module cleanup still handles Python-only class/kind side storage
   separately, then delegates runtime type cleanup to the common registry.
 
 Remaining migration pressure:
 
-- move component factory/capability/requirement storage fully into the
-  component facet;
+- trim now-obsolete component-specific fields from the low-level
+  `tc_type_entry` once pass-registry users are audited;
 - migrate project modules away from static registration macros.
 
 This document captures the direction after the Play-mode module reload
@@ -81,11 +87,9 @@ It owns only generic type state:
 RuntimeTypeRecord
   name
   owner/module_id
-  backend/runtime
   parent
   version/generation
   facets: map<facet_id, opaque payload>
-  metadata: generic key/value data
 ```
 
 Domain systems publish facets into the record:
@@ -121,7 +125,6 @@ Owns:
 - type name identity;
 - owner/module id;
 - parent relationship;
-- backend/runtime tag;
 - generation/version;
 - facet storage and facet lifecycle callbacks;
 - owner-scoped cleanup;
@@ -198,17 +201,25 @@ restore scene instances
 
 ## Facet Model
 
-Initial C ABI shape:
+Current C ABI shape:
 
 ```c
-typedef void (*tc_type_facet_destroy_fn)(void* payload);
+typedef void (*tc_runtime_type_facet_destroy_fn)(void* payload);
+typedef bool (*tc_runtime_type_iter_fn)(const char* type_name, void* user_data);
+typedef bool (*tc_runtime_type_facet_iter_fn)(const char* facet_id, void* user_data);
 
-typedef struct tc_runtime_type_facet {
-    const char* facet_id;
-    void* payload;
-    tc_type_facet_destroy_fn destroy;
-    uint32_t abi_version;
-} tc_runtime_type_facet;
+bool tc_runtime_type_registry_ensure_type(const char* type_name);
+bool tc_runtime_type_registry_set_facet(
+    const char* type_name,
+    const char* facet_id,
+    void* payload,
+    tc_runtime_type_facet_destroy_fn destroy,
+    uint32_t abi_version);
+void* tc_runtime_type_registry_get_facet(const char* type_name, const char* facet_id);
+void tc_runtime_type_registry_foreach_type_with_facet(
+    const char* facet_id,
+    tc_runtime_type_iter_fn callback,
+    void* user_data);
 ```
 
 The common registry only promises:
@@ -219,21 +230,26 @@ The common registry only promises:
 - replacement semantics;
 - diagnostics when two owners try to write the same facet.
 
-Typed wrappers live in domain modules:
+Typed domain APIs own their payloads and publish them into the C registry:
 
-```cpp
-ComponentRegistry::register_native(...)
-  -> RuntimeTypeRegistry::upsert_type(...)
-  -> RuntimeTypeRegistry::set_facet("termin.scene.component", payload)
+```text
+tc_component_registry_register_with_parent(...)
+  -> tc_runtime_type_registry_ensure_type(...)
+  -> tc_runtime_type_registry_set_facet("termin.scene.component", payload)
 
 InspectRegistry::add_field(...)
-  -> RuntimeTypeRegistry::upsert_type(...)
-  -> RuntimeTypeRegistry::get_or_create_facet("termin.inspect.fields")
+  -> tc_runtime_type_registry_ensure_type(...)
+  -> tc_runtime_type_registry_get_facet("termin.inspect.fields")
+  -> tc_runtime_type_registry_set_facet("termin.inspect.fields", payload)
 
 FramePassRegistry::register(...)
-  -> RuntimeTypeRegistry::upsert_type(...)
-  -> RuntimeTypeRegistry::set_facet("termin.render.frame_pass", payload)
+  -> tc_runtime_type_registry_ensure_type(...)
+  -> tc_runtime_type_registry_set_facet("termin.render.frame_pass", payload)
 ```
+
+C++ code may keep thin template helpers and binding facades, but it must not be
+the storage owner for runtime type records or build runtime-side mirror lists
+just to talk to the registry.
 
 ## Parent And Inheritance
 
@@ -350,8 +366,11 @@ It should:
 ### Phase 1: Common Type Record Skeleton
 
 - Introduce the common record type and registry storage below domain modules.
-- Move owner, parent, backend, generation, and metadata into the common record.
-- Keep old registries as wrappers backed by compatibility maps where needed.
+- Move owner, parent, generation, and facet storage into the common C record.
+- Keep backend/runtime tags and metadata inside domain-owned facets unless a
+  truly generic use case appears.
+- Keep old public APIs as wrappers where needed, but do not keep parallel
+  owner/lifecycle maps.
 - Add owner-scoped cleanup on the common registry.
 
 ### Phase 2: Inspect Facet
@@ -422,14 +441,15 @@ It should:
 
 ## Immediate Next Step
 
-Start with Phase 0 and Phase 1 in engine tests, not ChronoSquad first:
+Phase 1, Phase 2, and the semantic storage part of Phase 3 are now in place:
+the common record is C-owned, inspect fields are facet-backed, and component
+factory/kind/requirement/capability state lives in the component facet.
 
-1. add runtime type debug dumps;
-2. add a regression for C++ component inspect fields after module reload;
-3. introduce the common record skeleton with owner/parent/facet ids;
-4. adapt `InspectRegistry` and `ComponentRegistry` only enough to read/write
-   shared owner/parent state.
+Next migration steps:
 
-Only after that should ChronoSquad controller registration be converted to
-explicit `module_init`, because otherwise the project module will keep exposing
-timing bugs from static registration.
+1. Trim obsolete component-specific fields from `tc_type_entry` after auditing
+   remaining pass/type-registry users.
+2. Move frame/pass ownership into runtime type facets.
+3. Convert project modules away from static registration macros and toward
+   explicit `module_init`/bootstrap registrations.
+4. Remove adoption fallbacks that only existed to survive split registry state.
