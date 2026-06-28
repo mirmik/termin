@@ -211,6 +211,23 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
         NAME termin_render_passes_builtin_shader_sources_test
         COMMAND termin_render_passes_builtin_shader_sources_test
     )
+
+    add_executable(termin_render_passes_picking_test
+        tests/test_picking.c
+    )
+    target_include_directories(termin_render_passes_picking_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_render_passes_picking_test PRIVATE
+        termin_render_passes
+    )
+    set_target_properties(termin_render_passes_picking_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_picking_test
+        COMMAND termin_render_passes_picking_test
+    )
 endif()
 
 install(TARGETS termin_render_passes
