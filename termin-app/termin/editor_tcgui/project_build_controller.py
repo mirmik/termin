@@ -12,10 +12,14 @@ from tcbase import log
 
 
 @dataclass(frozen=True)
-class ProjectBuildEntry:
+class ProjectSceneEntry:
     project_root: Path
     scene_name: str
     scene_rel_path: Path
+
+
+@dataclass(frozen=True)
+class ProjectBuildEntry(ProjectSceneEntry):
     output_dir: Path
 
 
@@ -38,25 +42,21 @@ class ProjectBuildController:
         self._log_to_console = log_to_console
 
     def run_standalone(self) -> None:
-        project_path = self._get_current_project_path()
-        if project_path is None:
-            self._log_to_console("No project open - cannot run standalone.")
+        entry = self._prepare_scene_entry(
+            action_name="run standalone",
+            relative_error="Standalone entry scene must be inside the current project.",
+        )
+        if entry is None:
             return
 
-        self._save_scene()
-
-        cmd = [sys.executable, "-m", "termin.main", "--project", project_path]
-        scene_name = self._get_editor_scene_name()
-        scene_path = self._scene_manager.get_scene_path(scene_name) if scene_name else None
-        if scene_path is not None:
-            project_root = Path(project_path).resolve()
-            scene_path_obj = Path(scene_path).resolve()
-            try:
-                scene_rel_path = scene_path_obj.relative_to(project_root)
-            except ValueError:
-                self._log_to_console("Standalone entry scene must be inside the current project.")
-                return
-            cmd.extend(["--scene", str(scene_rel_path)])
+        cmd = [
+            sys.executable,
+            "-m",
+            "termin.player",
+            str(entry.project_root),
+            "--scene",
+            str(entry.scene_rel_path),
+        ]
         self._log_to_console(f"Launching standalone: {' '.join(cmd)}")
         try:
             subprocess.Popen(cmd)
@@ -190,6 +190,34 @@ class ProjectBuildController:
         relative_error: str,
         output_subdir: str | None = None,
     ) -> ProjectBuildEntry | None:
+        scene_entry = self._prepare_scene_entry(
+            action_name=action_name,
+            relative_error=relative_error,
+        )
+        if scene_entry is None:
+            return None
+
+        from termin.project.settings import ProjectSettingsManager
+
+        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
+        output_dir = scene_entry.project_root / build_output_dir
+        if output_subdir is not None:
+            output_dir = output_dir / output_subdir
+        output_dir = output_dir / scene_entry.project_root.name
+
+        return ProjectBuildEntry(
+            project_root=scene_entry.project_root,
+            scene_name=scene_entry.scene_name,
+            scene_rel_path=scene_entry.scene_rel_path,
+            output_dir=output_dir,
+        )
+
+    def _prepare_scene_entry(
+        self,
+        *,
+        action_name: str,
+        relative_error: str,
+    ) -> ProjectSceneEntry | None:
         project_path = self._get_current_project_path()
         if project_path is None:
             self._log_to_console(f"No project open - cannot {action_name}.")
@@ -211,17 +239,8 @@ class ProjectBuildController:
             self._log_to_console(relative_error)
             return None
 
-        from termin.project.settings import ProjectSettingsManager
-
-        build_output_dir = ProjectSettingsManager.instance().settings.build_output_dir
-        output_dir = project_root / build_output_dir
-        if output_subdir is not None:
-            output_dir = output_dir / output_subdir
-        output_dir = output_dir / project_root.name
-
-        return ProjectBuildEntry(
+        return ProjectSceneEntry(
             project_root=project_root,
             scene_name=scene_name,
             scene_rel_path=scene_rel_path,
-            output_dir=output_dir,
         )
