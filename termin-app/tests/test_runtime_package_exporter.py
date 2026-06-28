@@ -929,6 +929,40 @@ def test_desktop_runtime_packager_refreshes_existing_windows_root_dlls(tmp_path:
     assert not (dist_dir / "removed_runtime.dll").exists()
 
 
+def test_desktop_runtime_packager_removes_stale_linux_root_libraries(tmp_path: Path) -> None:
+    sdk = _write_fake_desktop_sdk(tmp_path)
+    runtime_so = sdk / "lib" / "libtermin_render_passes.so"
+    runtime_so.write_bytes(b"old runtime")
+    dist_dir = tmp_path / "dist" / "LinuxGame"
+
+    first_result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[],
+        sdk_root=sdk,
+    )
+    assert first_result.diagnostics == []
+    assert (dist_dir / "lib" / "libtermin_render_passes.so").read_bytes() == b"old runtime"
+
+    (dist_dir / "libremoved_runtime.so").write_bytes(b"stale root runtime")
+    (dist_dir / "libremoved_runtime.so.1").write_bytes(b"stale root runtime")
+    (dist_dir / "bin" / "removed_runtime.dll").write_bytes(b"stale bin runtime")
+    (dist_dir / "lib" / "removed_runtime.so").write_bytes(b"stale lib runtime")
+    runtime_so.write_bytes(b"new runtime")
+
+    second_result = package_desktop_runtime(
+        dist_dir=dist_dir,
+        requirements=[],
+        sdk_root=sdk,
+    )
+
+    assert second_result.diagnostics == []
+    assert (dist_dir / "lib" / "libtermin_render_passes.so").read_bytes() == b"new runtime"
+    assert not (dist_dir / "libremoved_runtime.so").exists()
+    assert not (dist_dir / "libremoved_runtime.so.1").exists()
+    assert not (dist_dir / "bin" / "removed_runtime.dll").exists()
+    assert not (dist_dir / "lib" / "removed_runtime.so").exists()
+
+
 def test_desktop_runtime_packager_legacy_policy_copies_sdk_site_packages(tmp_path: Path) -> None:
     dist_dir = tmp_path / "dist" / "LegacyGame"
 

@@ -156,8 +156,7 @@ def package_desktop_runtime(
 
     _replace_dir(bin_dir)
     _replace_dir(lib_dir)
-    if _is_windows_desktop_sdk_layout(resolved_sdk_root):
-        _clean_root_native_libraries(dist_dir_path)
+    _clean_root_native_libraries(dist_dir_path)
 
     launcher_path = _copy_player_executable(
         resolved_sdk_root,
@@ -327,8 +326,18 @@ def _clean_root_native_libraries(dist_dir: Path) -> None:
     if not dist_dir.is_dir():
         return
     for child in dist_dir.iterdir():
-        if child.is_file() and child.suffix.lower() == ".dll":
+        if child.is_file() and _is_native_library_filename(child.name):
             child.unlink()
+
+
+def _is_native_library_filename(name: str) -> bool:
+    lower = name.lower()
+    return (
+        lower.endswith(".dll")
+        or lower.endswith(".dylib")
+        or lower.endswith(".pyd")
+        or ".so" in lower
+    )
 
 
 def _is_windows_desktop_sdk_layout(sdk_root: Path) -> bool:
