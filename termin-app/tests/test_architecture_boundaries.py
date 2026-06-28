@@ -76,3 +76,35 @@ def test_platform_cmake_does_not_include_app_private_sources() -> None:
                 offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
 
     assert offenders == []
+
+
+def test_voxels_own_voxel_grid_native_headers() -> None:
+    canonical_header = REPO_ROOT / "termin-voxels/termin/voxels/voxel_grid_handle.hpp"
+    app_compat_header = REPO_ROOT / "termin-app/cpp/termin/assets/voxel_grid_handle.hpp"
+    forbidden_includes = (
+        '#include "termin/assets/voxel_grid_handle.hpp"',
+        "#include <termin/assets/voxel_grid_handle.hpp>",
+    )
+    source_roots = [
+        REPO_ROOT / "termin-app/cpp",
+        REPO_ROOT / "termin-voxels",
+        *sorted(REPO_ROOT.glob("termin-components/*")),
+        REPO_ROOT / "termin-bootstrap",
+    ]
+
+    assert canonical_header.is_file()
+    assert not app_compat_header.exists()
+
+    offenders: list[str] = []
+    for root in source_roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if path.suffix not in {".h", ".hpp", ".cpp", ".cc", ".cxx"}:
+                continue
+            text = _read_text(path)
+            for include in forbidden_includes:
+                if include in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {include}")
+
+    assert offenders == []
