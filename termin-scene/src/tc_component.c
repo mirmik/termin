@@ -24,9 +24,6 @@ static TC_THREAD_LOCAL const char* g_component_registration_owner = NULL;
 
 #define TC_RUNTIME_TYPE_FACET_COMPONENT "termin.scene.component"
 
-// Offset macro for intrusive list node
-#define COMPONENT_REGISTRY_NODE_OFFSET offsetof(tc_component, registry_node)
-
 typedef struct tc_component_facet_payload {
     const char* type_name;
     tc_type_entry* entry;
@@ -175,6 +172,33 @@ static tc_component_facet_payload* ensure_component_facet(
         return NULL;
     }
     return facet;
+}
+
+static bool tc_component_link_runtime_type(
+    tc_component* c,
+    tc_type_entry* entry,
+    const char* type_name
+) {
+    if (!c || !type_name) {
+        return false;
+    }
+
+    if (!tc_runtime_type_registry_link_instance(
+            type_name,
+            &c->runtime_type_link,
+            c
+        )) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[ComponentRegistry] failed to link component instance to runtime type '%s'",
+            type_name
+        );
+        return false;
+    }
+
+    c->type_entry = entry;
+    c->type_version = entry ? entry->version : 0;
+    return true;
 }
 
 // ============================================================================
@@ -408,10 +432,13 @@ tc_component* tc_component_registry_create(const char* type_name) {
 
     c->kind = facet->kind;
 
-    // Link to type registry for instance tracking
-    c->type_entry = entry;
-    c->type_version = entry->version;
-    tc_type_entry_link_instance(entry, c, COMPONENT_REGISTRY_NODE_OFFSET);
+    if (!tc_component_link_runtime_type(c, entry, type_name)) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[tc_component_registry_create] failed to link instance for type '%s'",
+            type_name
+        );
+    }
 
     return c;
 }
@@ -614,23 +641,19 @@ void tc_component_set_declared_type_name(tc_component* c, const char* type_name)
 
 void tc_component_try_link_declared_type(tc_component* c) {
     if (!c || !c->declared_type_name || !g_component_registry) return;
-    if (tc_dlist_is_linked(&c->registry_node)) return;
+    if (c->runtime_type_link.type_name) return;
 
     tc_type_entry* entry = c->type_entry
         ? c->type_entry
         : tc_type_registry_get(g_component_registry, c->declared_type_name);
     if (!entry || !entry->registered) return;
 
-    c->type_entry = entry;
-    c->type_version = entry->version;
-    tc_type_entry_link_instance(entry, c, COMPONENT_REGISTRY_NODE_OFFSET);
+    tc_component_link_runtime_type(c, entry, c->declared_type_name);
 }
 
 size_t tc_component_registry_instance_count(const char* type_name) {
-    if (!type_name || !g_component_registry) return 0;
-
-    tc_type_entry* entry = tc_type_registry_get(g_component_registry, type_name);
-    return tc_type_entry_instance_count(entry);
+    if (!type_name) return 0;
+    return tc_runtime_type_registry_instance_count(type_name);
 }
 
 // ============================================================================
@@ -638,10 +661,9 @@ size_t tc_component_registry_instance_count(const char* type_name) {
 // ============================================================================
 
 void tc_component_unlink_from_registry(tc_component* c) {
-    if (!c || !c->type_entry) return;
+    if (!c) return;
 
-    tc_type_entry_unlink_instance(c->type_entry, c, COMPONENT_REGISTRY_NODE_OFFSET);
-
+    tc_runtime_type_registry_unlink_instance(&c->runtime_type_link);
     c->type_entry = NULL;
     c->type_version = 0;
 }

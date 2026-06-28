@@ -227,6 +227,16 @@ void tc_runtime_type_registry_foreach_type_with_facet(
     const char* facet_id,
     tc_runtime_type_iter_fn callback,
     void* user_data);
+bool tc_runtime_type_registry_link_instance(
+    const char* type_name,
+    tc_runtime_type_instance_link* link,
+    void* instance);
+void tc_runtime_type_registry_unlink_instance(tc_runtime_type_instance_link* link);
+size_t tc_runtime_type_registry_instance_count(const char* type_name);
+void tc_runtime_type_registry_foreach_instance(
+    const char* type_name,
+    tc_runtime_type_instance_iter_fn callback,
+    void* user_data);
 ```
 
 The common registry only promises:
@@ -445,7 +455,9 @@ It should:
 - Resolve `ComponentRegistry::is_a` and descendant queries through the common
   parent chain.
 - Move component live instance linkage from `tc_type_entry` to common runtime
-  type instance links.
+  type instance links. This is now the active component `instance_count` source;
+  `tc_type_entry/type_version` remain only as compatibility metadata until the
+  legacy registry shell is removed.
 - Provide a component facet unload hook that degrades live component instances
   to `UnknownComponent` before the component facet is removed.
 - Remove independent component owner and parent maps.
@@ -454,6 +466,8 @@ It should:
 
 - Move frame/pass type ownership into common type records.
 - Move frame/pass factory/kind storage into `termin.render.frame_pass` facet.
+- Move frame/pass live instance linkage from `tc_type_entry` to common runtime
+  type instance links. This is now the active pass `instance_count` source.
 - Decide pass live-instance unload policy explicitly: degrade, reject unload,
   or require owner pipeline teardown before type removal.
 - Keep pass-specific factory/spec APIs in render/app layers.
@@ -506,19 +520,19 @@ It should:
 ## Immediate Next Step
 
 Phase 1, Phase 2, and the semantic storage part of Phase 3 are now in place:
-the common record is C-owned, inspect fields are facet-backed, and component
-factory/kind/requirement/capability state lives in the component facet.
+the common record is C-owned, inspect fields are facet-backed, component
+factory/kind/requirement/capability state lives in the component facet, and
+component/pass live instance counts come from common runtime type links.
 
 Next migration steps:
 
-1. Add common C live-instance links to runtime type records, with tombstone
-   semantics.
-2. Move component instance linkage from `tc_type_entry` to runtime type records.
-3. Add component facet unload hooks that degrade live instances to
+1. Add component facet unload hooks that degrade live instances to
    `UnknownComponent` before facet removal.
-4. Move frame/pass ownership and semantic storage into runtime type facets.
-5. Trim obsolete component/pass-specific fields from `tc_type_entry`, then
+2. Implement `UnknownPass` or an explicit pass unload rejection policy so module
+   reload can preserve pipeline slots without executing unloaded code.
+3. Move frame/pass ownership and semantic storage into runtime type facets.
+4. Trim obsolete component/pass-specific fields from `tc_type_entry`, then
    remove the legacy registry shell.
-6. Convert project modules away from static registration macros and toward
+5. Convert project modules away from static registration macros and toward
    explicit `module_init`/bootstrap registrations.
-7. Remove adoption fallbacks that only existed to survive split registry state.
+6. Remove adoption fallbacks that only existed to survive split registry state.
