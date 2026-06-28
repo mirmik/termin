@@ -350,5 +350,6 @@ int run_cpp_module_hot_reload_smoke() {
 } // namespace
 
 int main() {
+    termin::register_builtin_scene_component_types();
     return run_cpp_module_hot_reload_smoke();
 }

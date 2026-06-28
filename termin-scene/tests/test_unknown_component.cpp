@@ -718,6 +718,7 @@ int test_custom_upgrade_from_unregistered_source_type() {
 int main() {
     tc::init_cpp_inspect_vtable();
     tc::register_builtin_cpp_kinds();
+    termin::register_builtin_scene_component_types();
 
     int result = 0;
     result |= test_cpp_inspect_registry_roundtrip();

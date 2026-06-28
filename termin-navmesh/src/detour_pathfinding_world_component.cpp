@@ -542,8 +542,8 @@ DetourRaycastResult DetourPathfindingWorldComponent::raycast(
 
 namespace {
 
-tc::InspectAccessorFieldRegistrar<DetourPathfindingWorldComponent, TcNavMesh>
-    detour_pathfinding_world_navmesh_field_reg{
+void register_detour_pathfinding_world_inspect_fields() {
+    tc::InspectAccessorFieldRegistrar<DetourPathfindingWorldComponent, TcNavMesh>(
         "DetourPathfindingWorldComponent",
         "navmesh",
         "NavMesh",
@@ -559,46 +559,45 @@ tc::InspectAccessorFieldRegistrar<DetourPathfindingWorldComponent, TcNavMesh>
                 self->clear();
             }
         }
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, float>
-    detour_pathfinding_extent_x_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::query_extent_x,
         "DetourPathfindingWorldComponent",
         "query_extent_x",
         "Query Extent X",
         "float"
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, float>
-    detour_pathfinding_extent_y_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::query_extent_y,
         "DetourPathfindingWorldComponent",
         "query_extent_y",
         "Query Extent Y",
         "float"
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, float>
-    detour_pathfinding_extent_z_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::query_extent_z,
         "DetourPathfindingWorldComponent",
         "query_extent_z",
         "Query Extent Z",
         "float"
-    };
-
-tc::InspectFieldRegistrar<DetourPathfindingWorldComponent, int>
-    detour_pathfinding_max_polys_field_reg{
+    );
+    tc::register_inspect_field(
         &DetourPathfindingWorldComponent::max_polys,
         "DetourPathfindingWorldComponent",
         "max_polys",
         "Max Polys",
         "int"
-    };
+    );
+}
 
 }
 
-REGISTER_COMPONENT(DetourPathfindingWorldComponent, Component);
+void DetourPathfindingWorldComponent::register_type() {
+    register_component_type<DetourPathfindingWorldComponent>(
+        "DetourPathfindingWorldComponent",
+        "Component"
+    );
+    register_detour_pathfinding_world_inspect_fields();
+}
 
 } // namespace termin

@@ -43,22 +43,13 @@ public:
 
     void center_entity();
 
-    INSPECT_FIELD(OffMeshLinkComponent, enabled, "Enabled", "bool")
-    INSPECT_FIELD_CHOICES(OffMeshLinkComponent, link_type, "Type", "enum",
-        {"0", "Generic"}, {"1", "JumpDown"}, {"2", "Jump"}, {"3", "Climb"})
-    INSPECT_FIELD(OffMeshLinkComponent, agent_type, "Agent Type", "string")
-    INSPECT_FIELD(OffMeshLinkComponent, area_id, "Area", "navmesh_area")
-    INSPECT_FIELD(OffMeshLinkComponent, start_local, "Start Local", "vec3")
-    INSPECT_FIELD(OffMeshLinkComponent, end_local, "End Local", "vec3")
-    INSPECT_FIELD(OffMeshLinkComponent, radius, "Radius", "double", 0.01, 10.0, 0.01)
-    INSPECT_FIELD(OffMeshLinkComponent, bidirectional, "Bidirectional", "bool")
-    INSPECT_BUTTON(OffMeshLinkComponent, center_btn, "Center Entity", &OffMeshLinkComponent::center_entity)
-
     OffMeshLinkComponent()
         : CxxComponent("OffMeshLinkComponent")
     {
         install_drawable_vtable(&_c);
     }
+
+    static void register_type();
 
     OffMeshLinkType type() const {
         if (link_type == static_cast<int>(OffMeshLinkType::Generic)) {
@@ -343,7 +334,5 @@ inline void OffMeshLinkComponent::center_entity() {
            "[OffMeshLinkComponent] centered entity '%s' at (%.3f, %.3f, %.3f)",
            ent.name(), center.x, center.y, center.z);
 }
-
-REGISTER_COMPONENT(OffMeshLinkComponent, Component);
 
 } // namespace termin

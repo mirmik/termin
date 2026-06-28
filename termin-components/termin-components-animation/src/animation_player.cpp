@@ -1,6 +1,8 @@
 #include <termin/animation/animation_player.hpp>
 #include <termin/entity/entity.hpp>
+#include <termin/entity/component_registry.hpp>
 #include <termin/render/skeleton_controller.hpp>
+#include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
@@ -9,6 +11,32 @@ AnimationPlayer::AnimationPlayer()
     : CxxComponent("AnimationPlayer")
 {
     _c.has_update = true;
+}
+
+void AnimationPlayer::register_type() {
+    SkeletonController::register_type();
+    register_component_type<AnimationPlayer>("AnimationPlayer", "Component");
+    tc::register_inspect_field(
+        &AnimationPlayer::clips,
+        "AnimationPlayer",
+        "clips",
+        "Animation Clips",
+        "list[tc_animation_clip]"
+    );
+    tc::register_inspect_field(
+        &AnimationPlayer::_current_clip_name,
+        "AnimationPlayer",
+        "_current_clip_name",
+        "Current Clip",
+        "clip_selector"
+    );
+    tc::register_inspect_field(
+        &AnimationPlayer::playing,
+        "AnimationPlayer",
+        "playing",
+        "Playing",
+        "bool"
+    );
 }
 
 void AnimationPlayer::start() {

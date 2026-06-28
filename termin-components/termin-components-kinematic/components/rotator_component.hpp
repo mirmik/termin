@@ -18,10 +18,10 @@ public:
     RotatorComponent();
     ~RotatorComponent() override = default;
 
+    static void register_type();
+
     void apply() override;
     void capture_base() override;
 };
-
-REGISTER_COMPONENT(RotatorComponent, KinematicUnitComponent);
 
 } // namespace termin

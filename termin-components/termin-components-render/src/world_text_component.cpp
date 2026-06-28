@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <tcbase/tc_log.hpp>
+#include <tc_inspect_cpp.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/font_atlas.hpp>
 #include <tgfx2/render_context.hpp>
@@ -142,6 +143,158 @@ WorldTextComponent::WorldTextComponent(const char* type_name)
     : Component(type_name)
 {
     install_drawable_vtable(&_c);
+}
+
+void WorldTextComponent::register_type() {
+    register_component_type<WorldTextComponent>("WorldTextComponent", "Component");
+    auto& inspect = tc::InspectRegistry::instance();
+    inspect.add_with_callbacks<WorldTextComponent, std::string>(
+        "WorldTextComponent",
+        "text",
+        "Text",
+        "string",
+        [](WorldTextComponent* self) -> std::string& { return self->text; },
+        [](WorldTextComponent* self, const std::string& value) { self->set_text(value); }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, std::string>(
+        "WorldTextComponent",
+        "font_path",
+        "Font Path",
+        "string",
+        [](WorldTextComponent* self) -> std::string& { return self->font_path; },
+        [](WorldTextComponent* self, const std::string& value) { self->set_font_path(value); }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, std::string>(
+        "WorldTextComponent",
+        "phase_mark",
+        "Phase Mark",
+        "string",
+        [](WorldTextComponent* self) -> std::string& { return self->phase_mark; },
+        [](WorldTextComponent* self, const std::string& value) { self->set_phase_mark(value); }
+    );
+    tc::InspectAccessorFieldRegistrar<WorldTextComponent, tc_vec3>(
+        "WorldTextComponent",
+        "local_offset",
+        "Local Offset",
+        "vec3",
+        [](WorldTextComponent* self) {
+            return tc_vec3{self->local_offset.x, self->local_offset.y, self->local_offset.z};
+        },
+        [](WorldTextComponent* self, tc_vec3 value) {
+            self->set_local_offset(Vec3{value.x, value.y, value.z});
+        }
+    );
+    tc::InspectAccessorFieldRegistrar<WorldTextComponent, tc_vec3>(
+        "WorldTextComponent",
+        "plane_normal",
+        "Plane Normal",
+        "vec3",
+        [](WorldTextComponent* self) {
+            return tc_vec3{self->plane_normal.x, self->plane_normal.y, self->plane_normal.z};
+        },
+        [](WorldTextComponent* self, tc_vec3 value) {
+            self->set_plane_normal(Vec3{value.x, value.y, value.z});
+        }
+    );
+    tc::InspectAccessorFieldRegistrar<WorldTextComponent, tc_vec3>(
+        "WorldTextComponent",
+        "text_up",
+        "Text Up",
+        "vec3",
+        [](WorldTextComponent* self) {
+            return tc_vec3{self->text_up.x, self->text_up.y, self->text_up.z};
+        },
+        [](WorldTextComponent* self, tc_vec3 value) {
+            self->set_text_up(Vec3{value.x, value.y, value.z});
+        }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, Vec4>(
+        "WorldTextComponent",
+        "color",
+        "Color",
+        "color",
+        [](WorldTextComponent* self) -> Vec4& { return self->color; },
+        [](WorldTextComponent* self, const Vec4& value) { self->set_color(value); }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, float>(
+        "WorldTextComponent",
+        "size",
+        "Size",
+        "float",
+        [](WorldTextComponent* self) -> float& { return self->size; },
+        [](WorldTextComponent* self, const float& value) { self->set_size(value); },
+        0.001,
+        10.0,
+        0.01
+    );
+    tc::InspectAccessorFieldChoicesRegistrar<WorldTextComponent, int>(
+        "WorldTextComponent",
+        "anchor",
+        "Anchor",
+        "enum",
+        [](WorldTextComponent* self) -> int { return static_cast<int>(self->anchor); },
+        [](WorldTextComponent* self, int value) { self->set_anchor(static_cast<WorldTextAnchor>(value)); },
+        {
+            {"0", "Left"},
+            {"1", "Center"},
+            {"2", "Right"},
+        }
+    );
+    tc::InspectAccessorFieldChoicesRegistrar<WorldTextComponent, int>(
+        "WorldTextComponent",
+        "orientation",
+        "Orientation",
+        "enum",
+        [](WorldTextComponent* self) -> int { return static_cast<int>(self->orientation); },
+        [](WorldTextComponent* self, int value) { self->set_orientation(static_cast<WorldTextOrientation>(value)); },
+        {
+            {"0", "Billboard"},
+            {"1", "Fixed"},
+        }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, int>(
+        "WorldTextComponent",
+        "priority",
+        "Priority",
+        "int",
+        [](WorldTextComponent* self) -> int& { return self->priority; },
+        [](WorldTextComponent* self, const int& value) { self->set_priority(value); },
+        -32768,
+        32767,
+        1
+    );
+    inspect.add_with_callbacks<WorldTextComponent, bool>(
+        "WorldTextComponent",
+        "depth_test",
+        "Depth Test",
+        "bool",
+        [](WorldTextComponent* self) -> bool& { return self->depth_test; },
+        [](WorldTextComponent* self, const bool& value) { self->set_depth_test(value); }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, bool>(
+        "WorldTextComponent",
+        "depth_write",
+        "Depth Write",
+        "bool",
+        [](WorldTextComponent* self) -> bool& { return self->depth_write; },
+        [](WorldTextComponent* self, const bool& value) { self->set_depth_write(value); }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, bool>(
+        "WorldTextComponent",
+        "blend",
+        "Blend",
+        "bool",
+        [](WorldTextComponent* self) -> bool& { return self->blend; },
+        [](WorldTextComponent* self, const bool& value) { self->set_blend(value); }
+    );
+    inspect.add_with_callbacks<WorldTextComponent, bool>(
+        "WorldTextComponent",
+        "cull",
+        "Cull",
+        "bool",
+        [](WorldTextComponent* self) -> bool& { return self->cull; },
+        [](WorldTextComponent* self, const bool& value) { self->set_cull(value); }
+    );
 }
 
 WorldTextComponent::~WorldTextComponent() = default;

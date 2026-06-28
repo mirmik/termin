@@ -69,7 +69,13 @@ static std::unordered_map<
     SkinnedShaderCacheKey,
     TcShader,
     SkinnedShaderCacheKeyHash,
-    SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
+SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
+
+void SkinnedMeshRenderer::register_type() {
+    MeshRenderer::register_type();
+    register_component_type<SkinnedMeshRenderer>("SkinnedMeshRenderer", "MeshRenderer");
+    register_component_requirement("SkinnedMeshRenderer", "MeshComponent");
+}
 
 static const tc_shader_resource_binding* find_bone_block_resource(const tc_shader* shader) {
     if (!shader) {

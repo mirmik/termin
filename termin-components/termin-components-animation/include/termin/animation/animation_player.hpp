@@ -49,13 +49,10 @@ private:
     std::vector<tc_channel_sample> _samples_buffer;
 
 public:
-    INSPECT_FIELD(AnimationPlayer, clips, "Animation Clips", "list[tc_animation_clip]")
-    INSPECT_FIELD(AnimationPlayer, _current_clip_name, "Current Clip", "clip_selector")
-    INSPECT_FIELD(AnimationPlayer, playing, "Playing", "bool")
-
-public:
     AnimationPlayer();
     ~AnimationPlayer() override = default;
+
+    static void register_type();
 
     // Accessors
     animation::TcAnimationClip* current() {
@@ -104,7 +101,5 @@ private:
     // Apply animation sample to skeleton
     void _apply_sample(const tc_channel_sample* samples, size_t count);
 };
-
-REGISTER_COMPONENT(AnimationPlayer, Component);
 
 } // namespace termin

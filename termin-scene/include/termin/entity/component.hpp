@@ -15,7 +15,8 @@
 namespace termin {
 
 // Base class for all C++ components.
-// C++ components use REGISTER_COMPONENT macro for auto-registration.
+// Built-in C++ components are registered from explicit bootstrap code.
+// Module-owned C++ components register from module_init/module bootstrap code.
 //
 // tc_component is embedded as first member, allowing container_of to work.
 // Lifetime is managed via reference counting (_ref_count).
@@ -136,7 +137,7 @@ public:
     virtual void on_render_attach() {}
     virtual void on_render_detach() {}
 
-    // Serialization - uses C API tc_inspect for INSPECT_FIELD properties.
+    // Serialization uses C API tc_inspect fields registered during bootstrap.
     virtual tc_value serialize_data() const {
         tc_value data = tc_inspect_serialize(
             const_cast<void*>(static_cast<const void*>(this)),

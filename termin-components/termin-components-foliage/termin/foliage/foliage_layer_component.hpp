@@ -28,16 +28,6 @@ public:
     double scale_max = 1.0;
     double slope_limit_degrees = 50.0;
 
-    INSPECT_FIELD(FoliageLayerComponent, enabled, "Enabled", "bool")
-    INSPECT_FIELD(FoliageLayerComponent, prototype_mesh, "Prototype Mesh", "tc_mesh")
-    INSPECT_FIELD(FoliageLayerComponent, material, "Material", "tc_material")
-    INSPECT_FIELD(FoliageLayerComponent, layer_name, "Layer Name", "string")
-    INSPECT_FIELD(FoliageLayerComponent, density, "Density", "double")
-    INSPECT_FIELD(FoliageLayerComponent, min_spacing, "Min Spacing", "double")
-    INSPECT_FIELD(FoliageLayerComponent, scale_min, "Scale Min", "double")
-    INSPECT_FIELD(FoliageLayerComponent, scale_max, "Scale Max", "double")
-    INSPECT_FIELD(FoliageLayerComponent, slope_limit_degrees, "Slope Limit", "double")
-
     FoliageLayerComponent();
 
     static void register_type();

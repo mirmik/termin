@@ -58,6 +58,36 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_navmesh REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+else()
+    find_package(termin_components_mesh REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_collision termin_components_collision::termin_components_collision)
+else()
+    find_package(termin_components_collision REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
+else()
+    find_package(termin_components_kinematic REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_skeleton termin_components_skeleton::termin_components_skeleton)
+else()
+    find_package(termin_components_skeleton REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_render termin_components_render::termin_components_render)
+else()
+    find_package(termin_components_render REQUIRED)
+endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_components_foliage termin_components_foliage::termin_components_foliage)
+else()
+    find_package(termin_components_foliage REQUIRED)
+endif()
 
 set(TERMIN_BOOTSTRAP_HAS_ANIMATION OFF)
 if(TARGET termin_animation::termin_animation)
@@ -108,6 +138,12 @@ target_compile_definitions(termin_bootstrap PRIVATE TERMIN_BOOTSTRAP_EXPORTS)
 if(TERMIN_BOOTSTRAP_HAS_ANIMATION)
     target_compile_definitions(termin_bootstrap PUBLIC TERMIN_BOOTSTRAP_HAS_ANIMATION)
 endif()
+if(TARGET termin_navmesh::termin_navmesh_components)
+    target_compile_definitions(termin_bootstrap PUBLIC TERMIN_BOOTSTRAP_HAS_NAVMESH_COMPONENTS)
+endif()
+if(TARGET termin_components_animation::termin_components_animation)
+    target_compile_definitions(termin_bootstrap PUBLIC TERMIN_BOOTSTRAP_HAS_ANIMATION_COMPONENTS)
+endif()
 
 target_include_directories(termin_bootstrap
     PUBLIC
@@ -128,10 +164,22 @@ target_link_libraries(termin_bootstrap
         termin_skeleton::termin_skeleton
         termin_voxels::termin_voxels
         termin_navmesh::termin_navmesh
+        termin_components_mesh::termin_components_mesh
+        termin_components_collision::termin_components_collision
+        termin_components_kinematic::termin_components_kinematic
+        termin_components_skeleton::termin_components_skeleton
+        termin_components_render::termin_components_render
+        termin_components_foliage::termin_components_foliage
 )
 
 if(TERMIN_BOOTSTRAP_HAS_ANIMATION)
     target_link_libraries(termin_bootstrap PUBLIC termin_animation::termin_animation)
+endif()
+if(TARGET termin_navmesh::termin_navmesh_components)
+    target_link_libraries(termin_bootstrap PUBLIC termin_navmesh::termin_navmesh_components)
+endif()
+if(TARGET termin_components_animation::termin_components_animation)
+    target_link_libraries(termin_bootstrap PUBLIC termin_components_animation::termin_components_animation)
 endif()
 
 if(TERMIN_BUILD_PYTHON)
@@ -201,6 +249,10 @@ include(CMakePackageConfigHelpers)
 set(TERMIN_BOOTSTRAP_CONFIG_FIND_ANIMATION "")
 if(TERMIN_BOOTSTRAP_HAS_ANIMATION)
     set(TERMIN_BOOTSTRAP_CONFIG_FIND_ANIMATION "find_dependency(termin_animation REQUIRED)")
+endif()
+set(TERMIN_BOOTSTRAP_CONFIG_FIND_ANIMATION_COMPONENTS "")
+if(TARGET termin_components_animation::termin_components_animation)
+    set(TERMIN_BOOTSTRAP_CONFIG_FIND_ANIMATION_COMPONENTS "find_dependency(termin_components_animation REQUIRED)")
 endif()
 set(TERMIN_BOOTSTRAP_CONFIG_FIND_PYTHON_DEPS "")
 if(TERMIN_BUILD_PYTHON)

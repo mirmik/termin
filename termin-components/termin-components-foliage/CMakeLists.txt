@@ -43,6 +43,7 @@ termin_add_module(
     NAME termin_components_foliage
     NAMESPACE termin_components_foliage::
     SOURCES
+        src/components_bootstrap.cpp
         src/foliage_data.cpp
         src/foliage_data_registry.cpp
         src/foliage_file.cpp
