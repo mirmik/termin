@@ -226,7 +226,11 @@ class DefaultAssetRegistryFactoryMixin:
         from termin_assets import AssetRegistry
 
         def data_from_asset(asset):
-            return asset.clip
+            clip = asset.clip
+            if clip is None:
+                asset.ensure_loaded()
+                clip = asset.clip
+            return clip
 
         def data_to_asset(data):
             for asset in self._animation_clip_registry.assets.values():
