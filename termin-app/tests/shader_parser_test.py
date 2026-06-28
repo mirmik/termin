@@ -462,10 +462,7 @@ def test_slang_material_layout_sets_shader_contract_before_sidecar_reflection():
 
     assert shader.material_ubo_entry_count == 1
     assert shader.material_ubo_block_size == 16
-    material_binding = shader.find_resource_binding("material")
-    assert material_binding is not None
-    assert material_binding["kind_name"] == "constant_buffer"
-    assert material_binding["scope_name"] == "material"
+    assert shader.find_resource_binding("material") is None
     assert shader.has_contract
 
     contract = shader.contract

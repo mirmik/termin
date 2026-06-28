@@ -19,6 +19,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <cstdlib>
 #include <cstdint>
 
 namespace termin {
@@ -26,6 +27,68 @@ namespace termin {
 namespace {
 
 EditorInteractionSystem* g_editor_interaction_instance = nullptr;
+
+bool picking_debug_enabled() {
+    const char* value = std::getenv("TERMIN_PICKING_DEBUG");
+    return value && value[0] != '\0' && value[0] != '0';
+}
+
+struct PickIdLookupScan {
+    uint32_t target_pick_id = 0;
+    size_t scanned_count = 0;
+    bool found = false;
+    tc_entity_id found_id = TC_ENTITY_ID_INVALID;
+    const char* found_name = nullptr;
+    uint32_t min_pick_id = 0;
+    uint32_t max_pick_id = 0;
+};
+
+static bool scan_pick_id_lookup(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
+    auto* scan = static_cast<PickIdLookupScan*>(user_data);
+    uint32_t current_pick_id = tc_entity_pool_pick_id(pool, id);
+    scan->scanned_count++;
+    if (current_pick_id != 0) {
+        if (scan->min_pick_id == 0 || current_pick_id < scan->min_pick_id) {
+            scan->min_pick_id = current_pick_id;
+        }
+        if (current_pick_id > scan->max_pick_id) {
+            scan->max_pick_id = current_pick_id;
+        }
+    }
+    if (current_pick_id == scan->target_pick_id) {
+        scan->found = true;
+        scan->found_id = id;
+        scan->found_name = tc_entity_pool_name(pool, id);
+        return false;
+    }
+    return true;
+}
+
+static void log_pick_lookup_miss_details(
+    tc_entity_pool* pool,
+    uint32_t pick_id,
+    const char* context
+) {
+    PickIdLookupScan scan;
+    scan.target_pick_id = pick_id;
+    tc_entity_pool_foreach(pool, scan_pick_id_lookup, &scan);
+
+    tc_log(
+        TC_LOG_WARN,
+        "[PickingDebug] %s: pick_id=%u lookup miss; linear_found=%d pool_count=%zu scanned=%zu "
+        "pick_range=%u..%u entity='%s' entity_id=(%u,%u)",
+        context ? context : "pick lookup",
+        pick_id,
+        scan.found ? 1 : 0,
+        tc_entity_pool_count(pool),
+        scan.scanned_count,
+        scan.min_pick_id,
+        scan.max_pick_id,
+        scan.found_name ? scan.found_name : "<none>",
+        scan.found_id.index,
+        scan.found_id.generation
+    );
+}
 
 static bool mesh_triangle_indices(const tc_mesh* mesh, uint32_t tri, uint32_t out[3]) {
     if (!mesh || !mesh->indices) {
@@ -441,6 +504,7 @@ bool EditorInteractionSystem::_start_async_entity_pick(
 bool EditorInteractionSystem::_start_async_surface_pick(
     float x, float y, tc_viewport_handle vp, tc_display* display)
 {
+    const bool debug_pick = picking_debug_enabled();
     if (_async_release_pick.valid || !tc_viewport_handle_valid(vp)) return false;
 
     tc_render_target_handle rt = tc_viewport_get_render_target(vp);
@@ -456,17 +520,61 @@ bool EditorInteractionSystem::_start_async_surface_pick(
 
     int fx = 0;
     int fy = 0;
-    if (!_window_to_fbo_coords(x, y, vp, display, fx, fy)) return false;
+    if (!_window_to_fbo_coords(x, y, vp, display, fx, fy)) {
+        if (debug_pick) {
+            int vp_x = 0;
+            int vp_y = 0;
+            int vp_w = 0;
+            int vp_h = 0;
+            tc_viewport_get_pixel_rect(vp, &vp_x, &vp_y, &vp_w, &vp_h);
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] async release coords outside viewport: cursor=(%.1f,%.1f) viewport_rect=(%d,%d %dx%d)",
+                   x, y, vp_x, vp_y, vp_w, vp_h);
+        }
+        return false;
+    }
 
     uint64_t color_request = dev->request_pixel_rgba8(id_tex, fx, fy);
     uint64_t depth_request = dev->request_pixel_depth_float(depth_tex, fx, fy);
-    if (color_request == 0 || depth_request == 0) return false;
+    if (color_request == 0 || depth_request == 0) {
+        if (debug_pick) {
+            const tgfx::TextureDesc color_desc = dev->texture_desc(id_tex);
+            const tgfx::TextureDesc depth_desc = dev->texture_desc(depth_tex);
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] async release request failed: fbo=(%d,%d) color_req=%llu depth_req=%llu id_tex=%u size=%ux%u format=%d depth_tex=%u size=%ux%u format=%d",
+                   fx, fy,
+                   static_cast<unsigned long long>(color_request),
+                   static_cast<unsigned long long>(depth_request),
+                   id_tex.id, color_desc.width, color_desc.height,
+                   static_cast<int>(color_desc.format),
+                   depth_tex.id, depth_desc.width, depth_desc.height,
+                   static_cast<int>(depth_desc.format));
+        }
+        return false;
+    }
+    if (debug_pick) {
+        const tgfx::TextureDesc color_desc = dev->texture_desc(id_tex);
+        tc_log(TC_LOG_INFO,
+               "[PickingDebug] async release requested: cursor=(%.1f,%.1f) fbo=(%d,%d) color_req=%llu depth_req=%llu id_tex=%u size=%ux%u format=%d",
+               x, y, fx, fy,
+               static_cast<unsigned long long>(color_request),
+               static_cast<unsigned long long>(depth_request),
+               id_tex.id, color_desc.width, color_desc.height,
+               static_cast<int>(color_desc.format));
+    }
 
     _async_release_pick.event = {x, y, vp, display, true};
     _async_release_pick.fx = fx;
     _async_release_pick.fy = fy;
     _async_release_pick.color_request = color_request;
     _async_release_pick.depth_request = depth_request;
+    _async_release_pick.color_ready = false;
+    _async_release_pick.depth_ready = false;
+    _async_release_pick.color[0] = 0.0f;
+    _async_release_pick.color[1] = 0.0f;
+    _async_release_pick.color[2] = 0.0f;
+    _async_release_pick.color[3] = 0.0f;
+    _async_release_pick.depth = 1.0f;
     _async_release_pick.valid = true;
     return true;
 }
@@ -496,8 +604,7 @@ void EditorInteractionSystem::_poll_async_hover_pick() {
 }
 
 void EditorInteractionSystem::_poll_async_release_pick() {
-    float color[4] = {0, 0, 0, 0};
-    float depth = 1.0f;
+    const bool debug_pick = picking_debug_enabled();
     tc_render_target_handle rt = tc_viewport_get_render_target(_async_release_pick.event.vp);
     tc_pipeline_handle pipeline_h = tc_render_target_get_pipeline(rt);
     if (!tc_pipeline_pool_alive(pipeline_h)) {
@@ -510,18 +617,64 @@ void EditorInteractionSystem::_poll_async_release_pick() {
         _async_release_pick.valid = false;
         return;
     }
-    if (!dev->poll_pixel_rgba8(_async_release_pick.color_request, color) ||
-        !dev->poll_pixel_depth_float(_async_release_pick.depth_request, &depth)) {
+    if (!_async_release_pick.color_ready) {
+        _async_release_pick.color_ready =
+            dev->poll_pixel_rgba8(_async_release_pick.color_request, _async_release_pick.color);
+    }
+    if (!_async_release_pick.depth_ready) {
+        _async_release_pick.depth_ready =
+            dev->poll_pixel_depth_float(_async_release_pick.depth_request, &_async_release_pick.depth);
+    }
+    if (!_async_release_pick.color_ready || !_async_release_pick.depth_ready) {
+        if (debug_pick) {
+            tc_log(TC_LOG_INFO,
+                   "[PickingDebug] async release pending: color_req=%llu ready=%d depth_req=%llu ready=%d",
+                   static_cast<unsigned long long>(_async_release_pick.color_request),
+                   _async_release_pick.color_ready ? 1 : 0,
+                   static_cast<unsigned long long>(_async_release_pick.depth_request),
+                   _async_release_pick.depth_ready ? 1 : 0);
+        }
         _request_update();
         return;
     }
 
     const PendingEvent event = _async_release_pick.event;
+    if (debug_pick) {
+        const int r = (int)std::round(_async_release_pick.color[0] * 255.0f);
+        const int g = (int)std::round(_async_release_pick.color[1] * 255.0f);
+        const int b = (int)std::round(_async_release_pick.color[2] * 255.0f);
+        const int pick_id = tc_picking_rgb_to_id(r, g, b);
+        tc_scene_handle viewport_scene = tc_viewport_get_scene(event.vp);
+        tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
+        tc_log(TC_LOG_INFO,
+               "[PickingDebug] async release read: fbo=(%d,%d) rgb=(%d,%d,%d) pick_id=%d depth=%.6f viewport_scene=(%u,%u) rt_scene=(%u,%u)",
+               _async_release_pick.fx, _async_release_pick.fy,
+               r, g, b, pick_id, _async_release_pick.depth,
+               viewport_scene.index, viewport_scene.generation,
+               rt_scene.index, rt_scene.generation);
+    }
     SurfacePickResult pick = _surface_from_pick_color_depth(
-        color, depth, _async_release_pick.fx, _async_release_pick.fy, event.vp);
+        _async_release_pick.color,
+        _async_release_pick.depth,
+        _async_release_pick.fx,
+        _async_release_pick.fy,
+        event.vp);
     _async_release_pick.valid = false;
 
-    if (on_entity_click && on_entity_click(
+    if (debug_pick) {
+        tc_log(TC_LOG_INFO,
+               "[PickingDebug] async release resolved: entity_valid=%d entity='%s' entity_pick_id=%u selectable=%d has_world=%d has_mesh=%d",
+               pick.entity.valid() ? 1 : 0,
+               pick.entity.valid() ? pick.entity.name() : "<none>",
+               pick.entity.valid() ? pick.entity.pick_id() : 0,
+               (pick.entity.valid() && pick.entity.selectable()) ? 1 : 0,
+               pick.has_world_point ? 1 : 0,
+               pick.has_mesh_hit ? 1 : 0);
+    }
+
+    bool click_handled = false;
+    if (on_entity_click) {
+        click_handled = on_entity_click(
             pick.entity, event.x, event.y, pick.has_world_point,
             pick.world_point[0], pick.world_point[1], pick.world_point[2],
             pick.depth, pick.view_depth,
@@ -530,12 +683,26 @@ void EditorInteractionSystem::_poll_async_release_pick() {
             pick.mesh_point[0], pick.mesh_point[1], pick.mesh_point[2],
             pick.mesh_normal[0], pick.mesh_normal[1], pick.mesh_normal[2],
             pick.mesh_triangle_index,
-            pick.mesh_indices[0], pick.mesh_indices[1], pick.mesh_indices[2])) {
+            pick.mesh_indices[0], pick.mesh_indices[1], pick.mesh_indices[2]);
+        if (debug_pick) {
+            tc_log(TC_LOG_INFO,
+                   "[PickingDebug] async release callback: handled=%d",
+                   click_handled ? 1 : 0);
+        }
+    }
+    if (click_handled) {
         _request_update();
         return;
     }
 
+    uint32_t previous_selected_pick_id = selection.selected_pick_id;
     selection.select(pick.entity);
+    if (debug_pick) {
+        tc_log(TC_LOG_INFO,
+               "[PickingDebug] async release selection: before_pick_id=%u after_pick_id=%u",
+               previous_selected_pick_id,
+               selection.selected_pick_id);
+    }
     _request_update();
 }
 
@@ -626,6 +793,7 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
     float x, float y, tc_viewport_handle viewport, tc_display* display)
 {
     SurfacePickResult result;
+    const bool debug_pick = picking_debug_enabled();
 
     if (!tc_viewport_handle_valid(viewport)) {
         tc_log(TC_LOG_INFO, "[DBG pick_surface] viewport invalid");
@@ -641,31 +809,102 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
     RenderPipeline pipeline(pipeline_h);
 
     tgfx::TextureHandle id_tex = pipeline.get_color_tex2("id");
-    if (!id_tex) return result;
+    if (!id_tex) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface pick has no id texture for viewport=(%u,%u)",
+                   viewport.index, viewport.generation);
+        }
+        return result;
+    }
 
     auto* dev = pipeline.tex2_device();
-    if (!dev) return result;
+    if (!dev) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface pick has no tgfx2 device for viewport=(%u,%u)",
+                   viewport.index, viewport.generation);
+        }
+        return result;
+    }
 
     int fx, fy;
-    if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) return result;
+    if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) {
+        if (debug_pick) {
+            int vp_x = 0;
+            int vp_y = 0;
+            int vp_w = 0;
+            int vp_h = 0;
+            tc_viewport_get_pixel_rect(viewport, &vp_x, &vp_y, &vp_w, &vp_h);
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface pick coords outside viewport: cursor=(%.1f,%.1f) viewport_rect=(%d,%d %dx%d)",
+                   x, y, vp_x, vp_y, vp_w, vp_h);
+        }
+        return result;
+    }
 
     float color[4] = {0, 0, 0, 0};
-    if (!dev->read_pixel_rgba8(id_tex, fx, fy, color)) return result;
+    if (!dev->read_pixel_rgba8(id_tex, fx, fy, color)) {
+        if (debug_pick) {
+            const tgfx::TextureDesc desc = dev->texture_desc(id_tex);
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface pick color read failed: fbo=(%d,%d) id_tex=%u size=%ux%u format=%d",
+                   fx, fy, id_tex.id, desc.width, desc.height,
+                   static_cast<int>(desc.format));
+        }
+        return result;
+    }
 
     int r = (int)std::round(color[0] * 255.0f);
     int g = (int)std::round(color[1] * 255.0f);
     int b = (int)std::round(color[2] * 255.0f);
     int pick_id = tc_picking_rgb_to_id(r, g, b);
+    if (debug_pick) {
+        const tgfx::TextureDesc desc = dev->texture_desc(id_tex);
+        tc_scene_handle viewport_scene = tc_viewport_get_scene(viewport);
+        tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
+        tc_log(TC_LOG_INFO,
+               "[PickingDebug] surface pick read: cursor=(%.1f,%.1f) fbo=(%d,%d) id_tex=%u size=%ux%u format=%d rgb=(%d,%d,%d) pick_id=%d viewport_scene=(%u,%u) rt_scene=(%u,%u)",
+               x, y, fx, fy, id_tex.id, desc.width, desc.height,
+               static_cast<int>(desc.format), r, g, b, pick_id,
+               viewport_scene.index, viewport_scene.generation,
+               rt_scene.index, rt_scene.generation);
+    }
     if (pick_id == 0) return result;
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    if (!tc_scene_handle_valid(scene)) return result;
+    if (!tc_scene_handle_valid(scene)) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface pick decoded pick_id=%d but viewport scene is invalid",
+                   pick_id);
+        }
+        return result;
+    }
 
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    if (!pool) return result;
+    if (!pool) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface pick decoded pick_id=%d but scene has no entity pool",
+                   pick_id);
+        }
+        return result;
+    }
 
     tc_entity_id eid = tc_entity_pool_find_by_pick_id(pool, pick_id);
-    if (!tc_entity_id_valid(eid)) return result;
+    if (!tc_entity_id_valid(eid)) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface pick decoded pick_id=%d but entity lookup failed in viewport scene",
+                   pick_id);
+            log_pick_lookup_miss_details(
+                pool,
+                static_cast<uint32_t>(pick_id),
+                "surface pick viewport scene");
+        }
+        return result;
+    }
 
     result.entity = Entity(pool, eid);
 
@@ -686,16 +925,42 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
     int g = (int)std::round(color[1] * 255.0f);
     int b = (int)std::round(color[2] * 255.0f);
     int pick_id = tc_picking_rgb_to_id(r, g, b);
+    const bool debug_pick = picking_debug_enabled();
     if (pick_id == 0) return result;
 
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    if (!tc_scene_handle_valid(scene)) return result;
+    if (!tc_scene_handle_valid(scene)) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface resolve failed: pick_id=%d viewport scene is invalid",
+                   pick_id);
+        }
+        return result;
+    }
 
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
-    if (!pool) return result;
+    if (!pool) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface resolve failed: pick_id=%d scene has no entity pool",
+                   pick_id);
+        }
+        return result;
+    }
 
     tc_entity_id eid = tc_entity_pool_find_by_pick_id(pool, pick_id);
-    if (!tc_entity_id_valid(eid)) return result;
+    if (!tc_entity_id_valid(eid)) {
+        if (debug_pick) {
+            tc_log(TC_LOG_WARN,
+                   "[PickingDebug] surface resolve failed: pick_id=%d not found in scene entity pool",
+                   pick_id);
+            log_pick_lookup_miss_details(
+                pool,
+                static_cast<uint32_t>(pick_id),
+                "surface resolve viewport scene");
+        }
+        return result;
+    }
 
     result.entity = Entity(pool, eid);
     result.depth = depth;

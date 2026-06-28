@@ -351,6 +351,54 @@ static int test_u32_map_edge_cases(void) {
     return 0;
 }
 
+static int test_u32_map_growth(void) {
+    printf("Testing U32 Map Growth...\n");
+
+    tc_u32_map* map = tc_u32_map_new(4);
+    TEST_ASSERT(map != NULL, "map create");
+
+    for (uint32_t i = 1; i <= 64; i++) {
+        tc_u32_map_set(map, i, (uint64_t)i * 10);
+    }
+
+    TEST_ASSERT(tc_u32_map_count(map) == 64, "count is 64 after growth");
+
+    uint64_t value;
+    for (uint32_t i = 1; i <= 64; i++) {
+        TEST_ASSERT(tc_u32_map_get(map, i, &value), "key found after growth");
+        TEST_ASSERT(value == (uint64_t)i * 10, "value preserved after growth");
+    }
+
+    tc_u32_map_free(map);
+    printf("  U32 Map Growth: PASS\n");
+    return 0;
+}
+
+static int test_u64_map_growth(void) {
+    printf("Testing U64 Map Growth...\n");
+
+    tc_u64_map* map = tc_u64_map_new(4);
+    TEST_ASSERT(map != NULL, "map create");
+
+    for (uint64_t i = 1; i <= 64; i++) {
+        uint64_t key = 0x100000000ULL + i;
+        tc_u64_map_set(map, key, i * 100);
+    }
+
+    TEST_ASSERT(tc_u64_map_count(map) == 64, "count is 64 after growth");
+
+    uint64_t value;
+    for (uint64_t i = 1; i <= 64; i++) {
+        uint64_t key = 0x100000000ULL + i;
+        TEST_ASSERT(tc_u64_map_get(map, key, &value), "key found after growth");
+        TEST_ASSERT(value == i * 100, "value preserved after growth");
+    }
+
+    tc_u64_map_free(map);
+    printf("  U64 Map Growth: PASS\n");
+    return 0;
+}
+
 // ============================================================================
 // tc_dlist tests
 // ============================================================================
@@ -591,6 +639,8 @@ int main(void) {
     // U32 map tests
     result |= test_u32_map_basic();
     result |= test_u32_map_edge_cases();
+    result |= test_u32_map_growth();
+    result |= test_u64_map_growth();
 
     // DList tests
     result |= test_dlist_basic();
