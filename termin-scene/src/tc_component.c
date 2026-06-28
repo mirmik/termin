@@ -1,5 +1,6 @@
 // tc_component.c - Component registry implementation
 #include "core/tc_component.h"
+#include "inspect/tc_runtime_type_registry.h"
 #include "tc_type_registry.h"
 #include <tcbase/tc_log.h>
 #include <tcbase/tgfx_intern_string.h>
@@ -20,6 +21,8 @@ static tc_type_registry* g_component_registry = NULL;
 #endif
 
 static TC_THREAD_LOCAL const char* g_component_registration_owner = NULL;
+
+#define TC_RUNTIME_TYPE_FACET_COMPONENT "termin.scene.component"
 
 // Offset macro for intrusive list node
 #define COMPONENT_REGISTRY_NODE_OFFSET offsetof(tc_component, registry_node)
@@ -139,6 +142,24 @@ void tc_component_registry_register_with_parent(
     );
     if (entry) {
         entry->owner = g_component_registration_owner;
+        tc_runtime_type_registry_ensure_type(type_name);
+        if (g_component_registration_owner) {
+            tc_runtime_type_registry_set_owner(
+                type_name,
+                g_component_registration_owner,
+                true
+            );
+        }
+        if (parent_type_name) {
+            tc_runtime_type_registry_set_parent(type_name, parent_type_name);
+        }
+        tc_runtime_type_registry_set_facet(
+            type_name,
+            TC_RUNTIME_TYPE_FACET_COMPONENT,
+            entry,
+            NULL,
+            1
+        );
     }
 }
 
@@ -166,11 +187,30 @@ void tc_component_registry_register_abstract(
     if (entry) {
         entry->owner = g_component_registration_owner;
         tc_type_entry_set_flag(entry, TC_TYPE_FLAG_ABSTRACT, true);
+        tc_runtime_type_registry_ensure_type(type_name);
+        if (g_component_registration_owner) {
+            tc_runtime_type_registry_set_owner(
+                type_name,
+                g_component_registration_owner,
+                true
+            );
+        }
+        if (parent_type_name) {
+            tc_runtime_type_registry_set_parent(type_name, parent_type_name);
+        }
+        tc_runtime_type_registry_set_facet(
+            type_name,
+            TC_RUNTIME_TYPE_FACET_COMPONENT,
+            entry,
+            NULL,
+            1
+        );
     }
 }
 
 void tc_component_registry_unregister(const char* type_name) {
     if (!type_name || !g_component_registry) return;
+    tc_runtime_type_registry_remove_facet(type_name, TC_RUNTIME_TYPE_FACET_COMPONENT);
     tc_type_registry_unregister(g_component_registry, type_name);
 }
 
@@ -181,6 +221,7 @@ bool tc_component_registry_has(const char* type_name) {
 
 void tc_component_registry_set_registration_owner(const char* owner) {
     g_component_registration_owner = owner && owner[0] ? tgfx_intern_string(owner) : NULL;
+    tc_runtime_type_registry_set_registration_owner(g_component_registration_owner);
 }
 
 const char* tc_component_registry_get_registration_owner(void) {
