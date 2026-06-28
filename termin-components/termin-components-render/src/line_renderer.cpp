@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include <termin/render/material_pipeline.hpp>
+#include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
 #include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/line_mesh_builder.hpp>
@@ -340,6 +341,87 @@ LineRenderer::LineRenderer(const char* type_name)
     : Component(type_name)
 {
     install_drawable_vtable(&_c);
+}
+
+void LineRenderer::register_type() {
+    register_component_type<LineRenderer>("LineRenderer", "Component");
+    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, TcMaterial>(
+        "LineRenderer",
+        "material",
+        "Material",
+        "tc_material",
+        [](LineRenderer* self) -> TcMaterial& { return self->material; },
+        [](LineRenderer* self, const TcMaterial& value) { self->set_material(value); }
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, float>(
+        "LineRenderer",
+        "width",
+        "Width",
+        "float",
+        [](LineRenderer* self) -> float& { return self->width; },
+        [](LineRenderer* self, const float& value) { self->set_width(value); },
+        0.001,
+        10.0,
+        0.01
+    );
+    tc::InspectAccessorFieldChoicesRegistrar<LineRenderer, int>(
+        "LineRenderer",
+        "render_mode",
+        "Render Mode",
+        "enum",
+        [](LineRenderer* self) -> int { return static_cast<int>(self->render_mode); },
+        [](LineRenderer* self, int value) { self->set_render_mode(static_cast<LineRenderMode>(value)); },
+        {
+            {"0", "World Billboard"},
+            {"1", "Screen Space"},
+            {"2", "World Mesh"},
+            {"3", "Raw Lines"},
+            {"4", "World Tube"},
+        }
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, bool>(
+        "LineRenderer",
+        "raw_lines",
+        "Raw Lines",
+        "bool",
+        [](LineRenderer* self) -> bool& { return self->raw_lines; },
+        [](LineRenderer* self, const bool& value) { self->set_raw_lines(value); }
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, bool>(
+        "LineRenderer",
+        "cast_shadow",
+        "Cast Shadow",
+        "bool",
+        [](LineRenderer* self) -> bool& { return self->cast_shadow; },
+        [](LineRenderer* self, const bool& value) { self->set_cast_shadow(value); }
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, tc_vec3>(
+        "LineRenderer",
+        "up_hint",
+        "Up Hint",
+        "vec3",
+        [](LineRenderer* self) -> tc_vec3& { return self->up_hint; },
+        [](LineRenderer* self, const tc_vec3& value) { self->set_up_hint(value); }
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, int>(
+        "LineRenderer",
+        "tube_sides",
+        "Tube Sides",
+        "int",
+        [](LineRenderer* self) -> int& { return self->tube_sides; },
+        [](LineRenderer* self, const int& value) { self->set_tube_sides(value); },
+        3,
+        32,
+        1
+    );
+    tc::InspectAccessorFieldRegistrar<LineRenderer, std::vector<tc_vec3>>(
+        "LineRenderer",
+        "points",
+        "Positions",
+        "list[vec3]",
+        [](LineRenderer* self) { return self->points(); },
+        [](LineRenderer* self, std::vector<tc_vec3> value) { self->set_points(std::move(value)); }
+    );
 }
 
 LineRenderer::~LineRenderer() = default;

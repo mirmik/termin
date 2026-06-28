@@ -198,38 +198,37 @@ Mat44f layer_model_with_scale(const Entity& entity) {
     return Mat44f::compose(pose.lin, pose.ang, pose.scale);
 }
 
-struct FoliageDataHandleKindRegistrar {
-    FoliageDataHandleKindRegistrar() {
-        tc::KindRegistryCpp::instance().register_kind(
-            "foliage_data_handle",
-            [](const std::any& value) -> tc_value {
-                const std::string uuid =
-                    value.type() == typeid(std::string) ? std::any_cast<std::string>(value) : std::string();
-                tc_value result = tc_value_dict_new();
-                tc_value_dict_set(&result, "uuid", tc_value_string(uuid.c_str()));
-                tc_value_dict_set(&result, "name", tc_value_string(""));
-                return result;
-            },
-            [](const tc_value* value, void*) -> std::any {
-                if (!value || value->type == TC_VALUE_NIL) {
-                    return std::string();
-                }
-                if (value->type == TC_VALUE_STRING && value->data.s) {
-                    return std::string(value->data.s);
-                }
-                if (value->type == TC_VALUE_DICT) {
-                    tc_value* uuid = tc_value_dict_get(const_cast<tc_value*>(value), "uuid");
-                    if (uuid && uuid->type == TC_VALUE_STRING && uuid->data.s) {
-                        return std::string(uuid->data.s);
-                    }
-                }
+void register_foliage_data_handle_kind() {
+    if (tc::KindRegistryCpp::instance().has("foliage_data_handle")) {
+        return;
+    }
+    tc::KindRegistryCpp::instance().register_kind(
+        "foliage_data_handle",
+        [](const std::any& value) -> tc_value {
+            const std::string uuid =
+                value.type() == typeid(std::string) ? std::any_cast<std::string>(value) : std::string();
+            tc_value result = tc_value_dict_new();
+            tc_value_dict_set(&result, "uuid", tc_value_string(uuid.c_str()));
+            tc_value_dict_set(&result, "name", tc_value_string(""));
+            return result;
+        },
+        [](const tc_value* value, void*) -> std::any {
+            if (!value || value->type == TC_VALUE_NIL) {
                 return std::string();
             }
-        );
-    }
-};
-
-FoliageDataHandleKindRegistrar foliage_data_handle_kind_registrar;
+            if (value->type == TC_VALUE_STRING && value->data.s) {
+                return std::string(value->data.s);
+            }
+            if (value->type == TC_VALUE_DICT) {
+                tc_value* uuid = tc_value_dict_get(const_cast<tc_value*>(value), "uuid");
+                if (uuid && uuid->type == TC_VALUE_STRING && uuid->data.s) {
+                    return std::string(uuid->data.s);
+                }
+            }
+            return std::string();
+        }
+    );
+}
 
 } // namespace
 
@@ -240,6 +239,8 @@ FoliageLayerComponent::FoliageLayerComponent()
 }
 
 void FoliageLayerComponent::register_type() {
+    register_foliage_data_handle_kind();
+
     auto& component_registry = ComponentRegistry::instance();
     if (!component_registry.has("FoliageLayerComponent")) {
         component_registry.register_native(
@@ -333,6 +334,14 @@ void FoliageLayerComponent::register_type() {
             "double"
         );
     }
+    tc::InspectAccessorFieldRegistrar<FoliageLayerComponent, std::string>(
+        "FoliageLayerComponent",
+        "foliage",
+        "Foliage Data",
+        "foliage_data_handle",
+        [](FoliageLayerComponent* self) { return self->foliage_uuid; },
+        [](FoliageLayerComponent* self, std::string value) { self->foliage_uuid = std::move(value); }
+    );
 }
 
 std::set<std::string> FoliageLayerComponent::get_phase_marks() const {
@@ -620,21 +629,5 @@ bool FoliageLayerComponent::draw_tgfx2(
     );
     return true;
 }
-
-namespace {
-
-tc::InspectAccessorFieldRegistrar<FoliageLayerComponent, std::string>
-    foliage_layer_asset_field_reg{
-        "FoliageLayerComponent",
-        "foliage",
-        "Foliage Data",
-        "foliage_data_handle",
-        [](FoliageLayerComponent* self) { return self->foliage_uuid; },
-        [](FoliageLayerComponent* self, std::string value) { self->foliage_uuid = std::move(value); }
-    };
-
-} // namespace
-
-REGISTER_COMPONENT(FoliageLayerComponent, Component);
 
 } // namespace termin

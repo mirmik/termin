@@ -32,7 +32,9 @@ include(${CMAKE_CURRENT_LIST_DIR}/../cmake/TerminModule.cmake)
 termin_add_module(
     NAME termin_components_mesh
     NAMESPACE termin_components_mesh::
-    SOURCES components/mesh_component.cpp
+    SOURCES
+        components/components_mesh_bootstrap.cpp
+        components/mesh_component.cpp
     PUBLIC_DEPS tcbase::termin_base termin_scene::termin_scene termin_inspect::termin_inspect tmesh::termin_mesh
     FIND_DEPS termin_base termin_scene termin_inspect termin_mesh
     INSTALL_HEADERS components

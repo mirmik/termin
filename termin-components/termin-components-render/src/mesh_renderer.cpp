@@ -8,10 +8,171 @@
 
 namespace termin {
 
+namespace {
+
+tc_value make_mesh_renderer_inspector_layout_field(
+    const char* path,
+    const char* widget = nullptr,
+    const char* visible_if = nullptr
+) {
+    tc_value item = tc_value_dict_new();
+    tc_value_dict_set(&item, "kind", tc_value_string("field"));
+    tc_value_dict_set(&item, "path", tc_value_string(path));
+    if (widget && widget[0]) {
+        tc_value_dict_set(&item, "widget", tc_value_string(widget));
+    }
+    if (visible_if && visible_if[0]) {
+        tc_value_dict_set(&item, "visible_if", tc_value_string(visible_if));
+    }
+    return item;
+}
+
+tc_value make_mesh_renderer_inspector_section(const char* label) {
+    tc_value item = tc_value_dict_new();
+    tc_value_dict_set(&item, "kind", tc_value_string("section"));
+    tc_value_dict_set(&item, "label", tc_value_string(label));
+    return item;
+}
+
+tc_value make_mesh_renderer_inspector_separator() {
+    tc_value item = tc_value_dict_new();
+    tc_value_dict_set(&item, "kind", tc_value_string("separator"));
+    return item;
+}
+
+tc_value make_mesh_renderer_inspector_metadata() {
+    tc_value inspector = tc_value_dict_new();
+
+    tc_value fields = tc_value_dict_new();
+    tc_value overridden = tc_value_dict_new();
+    tc_value_dict_set(&overridden, "visible_if", tc_value_string("_override_material"));
+    tc_value_dict_set(&overridden, "widget", tc_value_string("inline_material"));
+    tc_value_dict_set(&fields, "_overridden_material", overridden);
+    tc_value_dict_set(&inspector, "fields", fields);
+
+    tc_value layout = tc_value_list_new();
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("material"));
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("cast_shadow"));
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_section("Material Override"));
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("_override_material"));
+    tc_value_list_push(
+        &layout,
+        make_mesh_renderer_inspector_layout_field(
+            "_overridden_material",
+            "inline_material",
+            "_override_material"));
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_separator());
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_enabled"));
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_position"));
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_euler"));
+    tc_value_list_push(&layout, make_mesh_renderer_inspector_layout_field("mesh_offset_scale"));
+    tc_value_dict_set(&inspector, "layout", layout);
+
+    return inspector;
+}
+
+void register_mesh_renderer_inspect_fields() {
+    tc::register_inspect_field(
+        &MeshRenderer::material,
+        "MeshRenderer",
+        "material",
+        "Material",
+        "tc_material"
+    );
+    tc::register_inspect_field(
+        &MeshRenderer::cast_shadow,
+        "MeshRenderer",
+        "cast_shadow",
+        "Cast Shadow",
+        "bool"
+    );
+    tc::register_inspect_field(
+        &MeshRenderer::mesh_offset_enabled,
+        "MeshRenderer",
+        "mesh_offset_enabled",
+        "Mesh Offset",
+        "bool"
+    );
+    tc::register_inspect_field(
+        &MeshRenderer::mesh_offset_position,
+        "MeshRenderer",
+        "mesh_offset_position",
+        "Offset Position",
+        "vec3"
+    );
+    tc::register_inspect_field(
+        &MeshRenderer::mesh_offset_euler,
+        "MeshRenderer",
+        "mesh_offset_euler",
+        "Offset Rotation",
+        "vec3"
+    );
+    tc::register_inspect_field(
+        &MeshRenderer::mesh_offset_scale,
+        "MeshRenderer",
+        "mesh_offset_scale",
+        "Offset Scale",
+        "vec3"
+    );
+    tc::InspectRegistry::instance().add_with_callbacks<MeshRenderer, bool>(
+        "MeshRenderer",
+        "_override_material",
+        "Override Material",
+        "bool",
+        [](MeshRenderer* self) -> bool& { return self->_override_material; },
+        [](MeshRenderer* self, const bool& value) {
+            if (self) {
+                self->set_override_material(value);
+            }
+        }
+    );
+    tc::InspectAccessorFieldRegistrar<MeshRenderer, TcMaterial>(
+        "MeshRenderer",
+        "_overridden_material",
+        "Overridden Material",
+        "tc_material",
+        [](MeshRenderer* self) -> TcMaterial {
+            return self ? self->_overridden_material : TcMaterial();
+        },
+        [](MeshRenderer* self, TcMaterial value) {
+            if (self) {
+                self->_overridden_material = value;
+            }
+        },
+        false,
+        true
+    );
+    tc::SerializableFieldRegistrar<MeshRenderer>(
+        "MeshRenderer",
+        "_overridden_material_data",
+        [](MeshRenderer* self) -> tc_value {
+            return self ? self->get_override_data() : tc_value_nil();
+        },
+        [](MeshRenderer* self, const tc_value* val) {
+            if (self) {
+                self->set_override_data(val);
+            }
+        }
+    );
+
+    tc_value metadata = make_mesh_renderer_inspector_metadata();
+    tc::InspectRegistry::instance().set_type_metadata_key("MeshRenderer", "inspector", &metadata);
+    tc_value_free(&metadata);
+}
+
+} // namespace
+
 MeshRenderer::MeshRenderer(const char* type_name)
     : Component(type_name)
 {
     install_drawable_vtable(&_c);
+}
+
+void MeshRenderer::register_type() {
+    MeshComponent::register_type();
+    register_component_type<MeshRenderer>("MeshRenderer", "Component");
+    register_component_requirement("MeshRenderer", "MeshComponent");
+    register_mesh_renderer_inspect_fields();
 }
 
 MeshRenderer::~MeshRenderer() {

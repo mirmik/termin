@@ -84,45 +84,11 @@ public:
     bool show_poly_mesh = false;
     bool show_detail_mesh = false;
 
-    // Inspector field declarations - Configuration
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, agent_type_name, "Agent Type", "agent_type")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, area_id, "Area", "navmesh_area")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_size, "Cell Size", "float", 0.05, 2.0, 0.05)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, cell_height, "Cell Height", "float", 0.05, 2.0, 0.05)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, min_region_area, "Min Region Area", "int", 0, 100, 1)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, merge_region_area, "Merge Region Area", "int", 0, 100, 1)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, max_edge_length, "Max Edge Length", "float", 0.0, 50.0, 0.5)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, max_simplification_error, "Max Simplification Error", "float", 0.0, 5.0, 0.1)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, max_verts_per_poly, "Max Verts Per Poly", "int", 3, 6, 1)
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, build_detail_mesh, "Build Detail Mesh", "bool")
-
-    // Mesh source selection
-    INSPECT_FIELD_CHOICES(RecastNavMeshBuilderComponent, mesh_source, "Mesh Source", "enum",
-        {"0", "Current Mesh"}, {"1", "All Descendants"})
-
-    // Inspector field declarations - Debug capture
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_heightfield, "Capture Heightfield (1)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_compact, "Capture Compact (2)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_contours, "Capture Contours (3)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_poly_mesh, "Capture Poly Mesh (4)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, capture_detail_mesh, "Capture Detail Mesh (5)", "bool")
-
-    // Inspector field declarations - Debug visualization
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_input_mesh, "Show Input Mesh (0)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_heightfield, "Show Heightfield (1)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_regions, "Show Regions (2)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_distance_field, "Show Distance Field (3)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_contours, "Show Contours (4)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_poly_mesh, "Show Poly Mesh (5)", "bool")
-    INSPECT_FIELD(RecastNavMeshBuilderComponent, show_detail_mesh, "Show Detail Mesh (6)", "bool")
-
     // Apply agent type parameters (called from Python before build)
     void apply_agent_type(float height, float radius, float max_climb, float max_slope);
 
     // Build from entity's MeshRenderer (called by inspector button)
     void build_from_entity();
-
-    INSPECT_BUTTON(RecastNavMeshBuilderComponent, build_btn, "Build NavMesh", &RecastNavMeshBuilderComponent::build_from_entity)
 
     // --- Runtime state ---
 
@@ -136,6 +102,8 @@ public:
 
     RecastNavMeshBuilderComponent();
     ~RecastNavMeshBuilderComponent() override;
+
+    static void register_type();
 
     // Build navmesh from triangle soup
     // verts: float[nverts * 3] - vertex positions (x, y, z)
@@ -199,8 +167,5 @@ private:
     void capture_detail_mesh_data(rcPolyMeshDetail* dmesh);
     bool save_detour_asset(const RecastBuildResult& result);
 };
-
-REGISTER_COMPONENT(RecastNavMeshBuilderComponent, Component);
-REQUIRE_COMPONENT(RecastNavMeshBuilderComponent, NavMeshKeeperComponent);
 
 } // namespace termin

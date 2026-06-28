@@ -14,6 +14,23 @@ NavMeshKeeperComponent::NavMeshKeeperComponent()
     install_drawable_vtable(&_c);
 }
 
+void NavMeshKeeperComponent::register_type() {
+    register_component_type<NavMeshKeeperComponent>("NavMeshKeeperComponent", "Component");
+    tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, TcNavMesh>(
+        "NavMeshKeeperComponent",
+        "navmesh",
+        "NavMesh",
+        "navmesh_handle",
+        [](NavMeshKeeperComponent* self) {
+            return TcNavMesh::from_uuid(self->navmesh_uuid);
+        },
+        [](NavMeshKeeperComponent* self, TcNavMesh value) {
+            const char* uuid = value.uuid();
+            self->navmesh_uuid = uuid ? uuid : "";
+        }
+    );
+}
+
 void NavMeshKeeperComponent::invalidate_debug_mesh() const {
     _loaded_navmesh_uuid.clear();
     _loaded_asset_path.clear();
@@ -102,28 +119,5 @@ tc_mesh* NavMeshKeeperComponent::get_mesh_for_phase(const std::string& phase_mar
     }
     return ensure_debug_mesh_loaded() && _navmesh_debug_mesh.is_valid() ? _navmesh_debug_mesh.get() : nullptr;
 }
-
-
-namespace {
-
-tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, TcNavMesh>
-    navmesh_keeper_navmesh_field_reg{
-        "NavMeshKeeperComponent",
-        "navmesh",
-        "NavMesh",
-        "navmesh_handle",
-        [](NavMeshKeeperComponent* self) {
-            return TcNavMesh::from_uuid(self->navmesh_uuid);
-        },
-        [](NavMeshKeeperComponent* self, TcNavMesh value) {
-            const char* uuid = value.uuid();
-            self->navmesh_uuid = uuid ? uuid : "";
-        }
-    };
-
-
-}
-
-REGISTER_COMPONENT(NavMeshKeeperComponent, Component);
 
 } // namespace termin

@@ -43,13 +43,11 @@ private:
     std::vector<TcViewport> viewports_;
 
 public:
-    INSPECT_FIELD(CameraComponent, near_clip, "Near Clip", "double", 0.001, 10000.0, 0.01)
-    INSPECT_FIELD(CameraComponent, far_clip, "Far Clip", "double", 0.01, 100000.0, 1.0)
-    INSPECT_FIELD(CameraComponent, ortho_size, "Ortho Size", "double", 0.1, 1000.0, 0.5)
     // layer_mask is registered manually in camera_component.cpp to use kind="layer_mask".
 
 public:
     CameraComponent();
+    static void register_type();
 
     std::string get_projection_type_str() const;
     void set_projection_type_str(const std::string& type);
@@ -77,23 +75,5 @@ public:
     void on_scene_inactive() override;
     std::pair<Vec3, Vec3> screen_point_to_ray(double x, double y, int vp_x, int vp_y, int vp_w, int vp_h) const;
 };
-
-INSPECT_FIELD_CALLBACK(CameraComponent, double, fov_x_degrees, "Horizontal FOV", "double",
-    [](CameraComponent* c) -> double& {
-        static double deg;
-        deg = c->get_fov_x_degrees();
-        return deg;
-    },
-    [](CameraComponent* c, const double& val) { c->set_fov_x_degrees(val); },
-    1.0, 360.0, 1.0)
-
-INSPECT_FIELD_CALLBACK(CameraComponent, double, fov_y_degrees, "Vertical FOV", "double",
-    [](CameraComponent* c) -> double& {
-        static double deg;
-        deg = c->get_fov_y_degrees();
-        return deg;
-    },
-    [](CameraComponent* c, const double& val) { c->set_fov_y_degrees(val); },
-    1.0, 360.0, 1.0)
 
 } // namespace termin

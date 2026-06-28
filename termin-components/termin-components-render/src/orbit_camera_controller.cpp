@@ -16,9 +16,6 @@ static inline uintptr_t viewport_key(tc_viewport_handle h) {
     return (static_cast<uintptr_t>(h.index) << 32) | h.generation;
 }
 
-// Register component type
-REGISTER_COMPONENT(OrbitCameraController, CxxComponent);
-
 OrbitCameraController::OrbitCameraController(
     double radius,
     double min_radius,
@@ -36,6 +33,40 @@ OrbitCameraController::OrbitCameraController(
 
     // Install input vtable for receiving input events
     install_input_vtable(&_c);
+}
+
+void OrbitCameraController::register_type() {
+    register_component_type<OrbitCameraController>("OrbitCameraController", "CxxComponent");
+    tc::register_inspect_field(
+        &OrbitCameraController::radius,
+        "OrbitCameraController",
+        "radius",
+        "Radius",
+        "double",
+        0.1,
+        100.0,
+        0.1
+    );
+    tc::register_inspect_field(
+        &OrbitCameraController::min_radius,
+        "OrbitCameraController",
+        "min_radius",
+        "Min Radius",
+        "double",
+        0.1,
+        100.0,
+        0.1
+    );
+    tc::register_inspect_field(
+        &OrbitCameraController::max_radius,
+        "OrbitCameraController",
+        "max_radius",
+        "Max Radius",
+        "double",
+        1.0,
+        1000.0,
+        1.0
+    );
 }
 
 void OrbitCameraController::_ensure_camera() {

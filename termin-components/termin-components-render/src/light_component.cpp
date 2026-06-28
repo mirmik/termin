@@ -9,6 +9,12 @@ extern "C" {
 
 namespace termin {
 
+namespace {
+
+void register_light_component_inspect_fields();
+
+} // namespace
+
 // Light capability vtable callback
 static bool light_cap_get_data(tc_component* self, tc_light_data* out) {
     if (!self || !out) return false;
@@ -79,10 +85,14 @@ Light LightComponent::to_light() const {
     return l;
 }
 
-REGISTER_COMPONENT(LightComponent, CxxComponent);
+void LightComponent::register_type() {
+    register_component_type<LightComponent>("LightComponent", "CxxComponent");
+    register_light_component_inspect_fields();
+}
 
-static struct _LightTypeFieldRegistrar {
-    _LightTypeFieldRegistrar() {
+namespace {
+
+void register_light_type_field() {
         tc::InspectFieldInfo info;
         info.type_name = "LightComponent";
         info.path = "light_type";
@@ -110,11 +120,9 @@ static struct _LightTypeFieldRegistrar {
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
-    }
-} _light_type_registrar;
+}
 
-static struct _LightColorFieldRegistrar {
-    _LightColorFieldRegistrar() {
+void register_light_color_field() {
         tc::InspectFieldInfo info;
         info.type_name = "LightComponent";
         info.path = "color";
@@ -148,13 +156,9 @@ static struct _LightColorFieldRegistrar {
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
-    }
-} _light_color_registrar;
+}
 
-INSPECT_FIELD(LightComponent, intensity, "Intensity", "double", 0.0, 100.0, 0.1)
-
-static struct _LightShadowFieldsRegistrar {
-    _LightShadowFieldsRegistrar() {
+void register_light_shadow_fields() {
         {
             tc::InspectFieldInfo info;
             info.type_name = "LightComponent";
@@ -332,7 +336,24 @@ static struct _LightShadowFieldsRegistrar {
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
-    }
-} _light_shadow_fields_registrar;
+}
+
+void register_light_component_inspect_fields() {
+    register_light_type_field();
+    register_light_color_field();
+    tc::register_inspect_field(
+        &LightComponent::intensity,
+        "LightComponent",
+        "intensity",
+        "Intensity",
+        "double",
+        0.0,
+        100.0,
+        0.1
+    );
+    register_light_shadow_fields();
+}
+
+} // namespace
 
 } // namespace termin

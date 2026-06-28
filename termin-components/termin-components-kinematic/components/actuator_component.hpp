@@ -24,6 +24,4 @@ public:
     void capture_base() override;
 };
 
-REGISTER_COMPONENT(ActuatorComponent, KinematicUnitComponent);
-
 } // namespace termin

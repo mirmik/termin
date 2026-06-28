@@ -28,6 +28,7 @@ termin_add_module(
     NAME termin_components_kinematic
     NAMESPACE termin_components_kinematic::
     SOURCES
+        components/components_kinematic_bootstrap.cpp
         components/kinematic_unit_component.cpp
         components/actuator_component.cpp
         components/rotator_component.cpp

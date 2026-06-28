@@ -30,12 +30,10 @@ private:
     std::unique_ptr<SkeletonInstance> _skeleton_instance;
 
 public:
-    INSPECT_FIELD(SkeletonController, skeleton, "Skeleton", "tc_skeleton")
-    INSPECT_FIELD(SkeletonController, bone_entities, "Bone Entities", "list[entity]")
-
-public:
     SkeletonController();
     ~SkeletonController() override = default;
+
+    static void register_type();
 
     /**
      * Get tc_skeleton pointer.
@@ -80,7 +78,5 @@ public:
 
     void on_removed_from_entity() override;
 };
-
-REGISTER_COMPONENT(SkeletonController, Component);
 
 } // namespace termin

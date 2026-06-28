@@ -35,10 +35,12 @@ public:
     int _bone_count = 0;
 
     // Note: mesh, material, cast_shadow are inherited from MeshRenderer
-    // and already have INSPECT_FIELD registrations there
+    // and registered for inspect serialization by MeshRenderer::register_type().
 
     SkinnedMeshRenderer();
     ~SkinnedMeshRenderer() override;
+
+    static void register_type();
 
     /**
      * Get skeleton controller (nullptr if entity is dead).
@@ -103,8 +105,5 @@ public:
         start();
     }
 };
-
-REGISTER_COMPONENT(SkinnedMeshRenderer, MeshRenderer);
-REQUIRE_COMPONENT(SkinnedMeshRenderer, MeshComponent);
 
 } // namespace termin

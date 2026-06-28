@@ -19,9 +19,13 @@ public:
     UnknownComponent();
     ~UnknownComponent() override;
 
+    static void register_type();
+
     tc_value serialize() const override;
     tc_value serialize_data() const override;
     void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
 };
+
+ENTITY_API void register_builtin_scene_component_types();
 
 } // namespace termin

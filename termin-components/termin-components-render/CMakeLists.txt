@@ -68,6 +68,7 @@ termin_add_module(
     NAME termin_components_render
     NAMESPACE termin_components_render::
     SOURCES
+        src/components_bootstrap.cpp
         src/camera_component.cpp
         src/orbit_camera_controller.cpp
         src/geometry_pass_base.cpp
