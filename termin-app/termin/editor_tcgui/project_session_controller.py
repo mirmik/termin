@@ -153,7 +153,7 @@ class ProjectSessionController:
             log.error(f"[ShaderRuntime] configure_shader_runtime failed: {e}")
 
     def load_project_modules(self, project_root: Path) -> None:
-        from termin.modules import get_project_modules_runtime
+        from termin.modules.runtime import get_project_modules_runtime
         from termin_modules import ModuleKind, ModuleState
 
         runtime = get_project_modules_runtime()

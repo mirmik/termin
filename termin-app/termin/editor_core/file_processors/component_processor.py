@@ -123,7 +123,7 @@ class ComponentFileProcessor(FilePreLoader):
         if self._modules_runtime_provider is not None:
             return self._modules_runtime_provider()
 
-        from termin.modules import get_project_modules_runtime
+        from termin.modules.runtime import get_project_modules_runtime
 
         return get_project_modules_runtime()
 

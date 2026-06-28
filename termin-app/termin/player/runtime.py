@@ -356,7 +356,7 @@ class PlayerRuntime:
 
             repair_glb_animation_player_clip_refs(scene_data)
             self.scene.load_from_data(scene_data, context=None, update_settings=True)
-            from termin.modules import upgrade_scene_unknown_components
+            from termin.modules.runtime import upgrade_scene_unknown_components
             upgraded = upgrade_scene_unknown_components(self.scene)
             if upgraded > 0:
                 log.info(f"[PlayerRuntime] Upgraded {upgraded} unknown component(s)")

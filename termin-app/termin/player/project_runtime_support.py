@@ -33,7 +33,7 @@ def load_project_modules(project_path: str | Path, *, log_prefix: str) -> None:
     """Load project modules through termin-modules runtime."""
     from tcbase import log
     from termin_modules import ModuleKind, ModuleState
-    from termin.modules import get_project_modules_runtime
+    from termin.modules.runtime import get_project_modules_runtime
 
     runtime = get_project_modules_runtime()
     success = runtime.load_project(Path(project_path))
