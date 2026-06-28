@@ -1,6 +1,6 @@
 from termin.render_components import MaterialPass
 from termin.render_framework import RenderPipeline
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 from termin.materials import TcMaterial
 
 

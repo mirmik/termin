@@ -43,7 +43,6 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-build-tools` | `termin-build-tools` | `termin_build` | Build-time helpers. |
 | `termin-nanobind-sdk` | `termin-nanobind` | `termin_nanobind` | Distribution keeps historical short SDK name. |
 | `termin-base` | `tcbase` | `tcbase`, `termin.geombase` | Legacy short distribution/import name. |
-| `termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
 | `termin-assets` | `termin-assets` | `termin_assets` | Asset runtime contracts. |
 | `termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
 | `termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |
@@ -55,6 +54,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-gui` | `tcgui` | `tcgui` | Legacy short distribution/import name. |
 | `termin-inspect` | `termin-inspect` | `termin.inspect` | Inspection metadata API. |
 | `termin-scene` | `termin-scene` | `termin.scene` | Scene/ECS API. |
+| `termin-mcp` | `termin-mcp` | `termin.mcp` | Shared MCP transport/executor helpers. |
 | `termin-prefab` | `termin-prefab` | `termin.prefab` | Namespace package. |
 | `termin-display` | `termin-display` | `termin.display`, `termin.viewport` | Display/windowing API. |
 | `termin-csg` | `termin-csg` | `termin.csg` | CSG API. |

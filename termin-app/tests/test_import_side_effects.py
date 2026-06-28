@@ -105,7 +105,7 @@ import json
 modules = [
     "tcgui.widgets.renderer",
     "tcgui.widgets.ui",
-    "termin.assets.resources",
+    "termin.editor_core.resource_manager",
     "termin.default_assets.resource_manager",
     "termin.project_build.desktop_build",
     "termin.project_build.profile_build",
@@ -153,6 +153,65 @@ print(json.dumps({
         "resource_manager_instance": False,
         "pass_instances": [],
     }
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_removed_app_asset_resource_paths_do_not_resolve() -> None:
+    script = """
+import importlib
+
+old_assets = "termin" + ".assets"
+old_resources = old_assets + ".resources"
+removed_paths = [
+    old_assets,
+    old_assets + ".project_file_watcher",
+    old_resources,
+    old_resources + "._manager",
+    old_resources + "._components",
+    old_resources + "._builtins",
+]
+
+for path in removed_paths:
+    try:
+        importlib.import_module(path)
+    except ModuleNotFoundError:
+        continue
+    raise AssertionError(f"removed app asset path still imports: {path}")
+
+print("removed")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "removed\n"
+    assert "nanobind: leaked" not in result.stderr
+
+
+def test_module_context_import_does_not_load_old_app_asset_namespace() -> None:
+    script = """
+import sys
+import termin_modules.module_context
+
+old_assets = "termin" + ".assets"
+assert old_assets not in sys.modules
+print("clean")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout == "clean\n"
     assert "nanobind: leaked" not in result.stderr
 
 

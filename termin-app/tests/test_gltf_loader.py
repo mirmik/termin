@@ -5,7 +5,7 @@ import pytest
 
 from termin.glb.asset import GLBAsset
 from termin.glb.loader import load_glb_file
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 
 
 def _write_triangle_gltf(tmp_path):

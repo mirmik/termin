@@ -1,6 +1,6 @@
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 from termin.scene_animation_repair import repair_glb_animation_player_clip_refs
-from termin_assets import PreLoadResult
+from termin_assets import PreLoadResult, set_resource_manager_factory
 
 
 def _register_glb(
@@ -99,3 +99,12 @@ def test_repair_glb_animation_player_clip_refs_uses_sibling_skeleton_owner() -> 
     assert clips[0]["uuid"] == "corpguard-idle-uuid"
     assert clips[1]["uuid"] == "corpguard-walk-uuid"
     assert clips[2]["uuid"] == "arthur-only-uuid"
+
+
+def test_repair_glb_animation_player_clip_refs_without_manager_returns_zero() -> None:
+    set_resource_manager_factory(None)
+
+    try:
+        assert repair_glb_animation_player_clip_refs({"entities": []}) == 0
+    finally:
+        set_resource_manager_factory(ResourceManager.instance)

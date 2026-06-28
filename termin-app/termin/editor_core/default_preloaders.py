@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
 from termin.default_assets.default_preloaders import (
     create_default_preloaders as create_default_asset_preloaders,

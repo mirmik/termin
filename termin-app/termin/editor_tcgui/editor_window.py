@@ -22,12 +22,12 @@ from tcgui.widgets.text_area import TextArea
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
 from termin.engine import SceneManager, default_scene_extensions, scene as engine_scene
 from termin.editor_core.resource_loader import ResourceLoader, register_editor_builtin_resources
-from termin.assets.project_file_watcher import ProjectFileWatcher
+from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.default_preloaders import register_default_preloaders
 from termin.editor_core.prefab_edit_controller import PrefabEditController
 from termin.editor_core.settings import EditorSettings
 from termin.editor_core.signal import Signal
-from termin.assets.resources import ResourceManager
+from termin.editor_core.resource_manager import ResourceManager
 from termin.display import FBOSurface
 
 from termin.editor_core.editor_state_io import EditorStateIO

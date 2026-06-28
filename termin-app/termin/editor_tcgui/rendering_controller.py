@@ -215,7 +215,7 @@ class RenderingControllerTcgui:
                 return self._make_editor_pipeline()
             return None
 
-        from termin.assets.resources import ResourceManager
+        from termin.editor_core.resource_manager import ResourceManager
         rm = ResourceManager.instance()
 
         if name and "-" in name:

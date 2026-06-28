@@ -41,3 +41,4 @@
 - [Runtime Type Registry refactor plan](2026-06-28-runtime-type-registry-refactor-plan.md)
 - [Built-in Component Bootstrap migration](2026-06-28-builtin-component-bootstrap-migration-plan.md)
 - [termin-player extraction from termin-app](2026-06-29-termin-player-extraction-plan.md)
+- [termin-app asset footprint cleanup goal plan](2026-06-29-termin-app-asset-footprint-goal-plan.md)
