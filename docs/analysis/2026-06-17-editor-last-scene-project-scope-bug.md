@@ -32,7 +32,7 @@ the scene is outside the current project.
   - `SceneFileController.load_last_scene()` first checks
     `ProjectSettingsManager.instance().get_last_scene()`, then falls back to
     `EditorSettings.instance().get_last_scene_path()`.
-- `termin-app/termin/project/settings.py`
+- `termin-project/python/termin/project/settings.py`
   - `ProjectSettingsManager.get_last_scene()` reads project-local editor state.
 - `termin-app/termin/editor_core/settings.py`
   - `EditorSettings.KEY_LAST_SCENE_PATH` is global editor state, not scoped by

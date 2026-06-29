@@ -208,7 +208,7 @@ def _status_script() -> str:
         f"""
         import json
 
-        from termin.modules import get_project_modules_runtime
+        from termin.project_modules import get_project_modules_runtime
         from termin.scene import ComponentRegistry
 
         COMPONENT_TYPE = {COMPONENT_TYPE!r}
@@ -273,7 +273,7 @@ def _reload_script() -> str:
         f"""
         import json
 
-        from termin.modules import get_project_modules_runtime
+        from termin.project_modules import get_project_modules_runtime
         from termin.scene import ComponentRegistry
 
         COMPONENT_TYPE = {COMPONENT_TYPE!r}

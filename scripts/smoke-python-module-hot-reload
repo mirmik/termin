@@ -167,7 +167,7 @@ def _write_probe(tmp_dir: Path) -> Path:
             """
             import json
 
-            from termin.modules import get_project_modules_runtime
+            from termin.project_modules import get_project_modules_runtime
 
             runtime = get_project_modules_runtime()
             runtime.auto_reload_enabled = True

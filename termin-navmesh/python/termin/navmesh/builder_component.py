@@ -4,7 +4,7 @@ NavMeshBuilderComponent — component for building NavMesh from mesh geometry.
 Voxelization is an internal step, voxels are not saved to file.
 Supports agent type selection for future NavMesh erosion.
 
-Uses SceneCache for persistent storage and NavMeshRegistry for runtime access.
+Uses ArtifactStore for generated navmesh storage and NavMeshRegistry for runtime access.
 """
 
 from __future__ import annotations
@@ -311,7 +311,7 @@ class NavMeshBuilderComponent(DrawableComponent):
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
         self._debug_bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
 
-        # Cached NavMesh (loaded from cache or built)
+        # Generated NavMesh artifact (loaded from ArtifactStore or built)
         self._navmesh: Optional["NavMesh"] = None
 
         log.warning("NavMeshBuilderComponent: " + str(self))
@@ -319,9 +319,9 @@ class NavMeshBuilderComponent(DrawableComponent):
     # --- Lifecycle ---
 
     def on_added(self) -> None:
-        """Called when added. Load from cache if available."""
+        """Called when added. Load generated artifact if available."""
         super().on_added()
-        self._try_load_from_cache()
+        self._try_load_artifact()
 
     def on_removed(self) -> None:
         """Called when removed. Unregister from NavMeshRegistry."""
@@ -331,9 +331,9 @@ class NavMeshBuilderComponent(DrawableComponent):
             registry.unregister_all(self.entity.uuid)
         super().on_removed()
 
-    def _try_load_from_cache(self) -> bool:
+    def _try_load_artifact(self) -> bool:
         """
-        Try to load NavMesh from cache.
+        Try to load NavMesh from generated artifacts.
 
         Returns:
             True if loaded successfully, False otherwise.
@@ -341,20 +341,28 @@ class NavMeshBuilderComponent(DrawableComponent):
         if self.scene is None or self.entity is None:
             return False
 
-        # Scene must have name or uuid for cache
+        # Scene must have name or uuid for artifact storage.
 
-        log.warning("NavMeshBuilderComponent::_try_load_from_cache " + "ptr:" + str(self) + " scene:" + str(self.scene))
+        log.warning("NavMeshBuilderComponent::_try_load_artifact " + "ptr:" + str(self) + " scene:" + str(self.scene))
         if not self.scene.name and not self.scene.uuid:
             return False
 
-        from termin.cache.scene_cache import SceneCache
+        from termin.artifacts import current_artifact_store
         from termin.navmesh.persistence import NavMeshPersistence
         from termin.navmesh.registry import NavMeshRegistry
 
-        cache = SceneCache.for_scene(self.scene)
-        cache_key = f"navmesh_{self.agent_type_name}"
+        store = current_artifact_store()
+        if store is None:
+            log.error("NavMeshBuilderComponent: cannot load artifact - no active ArtifactStore")
+            return False
 
-        data = cache.get(self.entity.uuid, type(self).__name__, cache_key)
+        artifact_name = f"navmesh_{self.agent_type_name}"
+        data = store.read_scene_artifact(
+            scene_name=self.scene.name or self.scene.uuid,
+            entity_uuid=self.entity.uuid,
+            component_type=type(self).__name__,
+            artifact_name=artifact_name,
+        )
         if data is None:
             return False
 
@@ -366,15 +374,15 @@ class NavMeshBuilderComponent(DrawableComponent):
             registry = NavMeshRegistry.for_scene(self.scene)
             registry.register(self.agent_type_name, navmesh, self.entity)
 
-            log.warning(f"NavMeshBuilderComponent: loaded from cache ({navmesh.polygon_count()} polygons)")
+            log.warning(f"NavMeshBuilderComponent: loaded artifact ({navmesh.polygon_count()} polygons)")
             return True
         except Exception as e:
-            log.error(f"NavMeshBuilderComponent: failed to load from cache: {e}")
+            log.error(f"NavMeshBuilderComponent: failed to load artifact: {e}")
             return False
 
-    def _save_to_cache(self, navmesh: "NavMesh") -> bool:
+    def _save_artifact(self, navmesh: "NavMesh") -> bool:
         """
-        Save NavMesh to cache.
+        Save NavMesh as a generated artifact.
 
         Returns:
             True if saved successfully, False otherwise.
@@ -382,24 +390,34 @@ class NavMeshBuilderComponent(DrawableComponent):
         if self.scene is None or self.entity is None:
             return False
 
-        # Scene must have name or uuid for cache
+        # Scene must have name or uuid for artifact storage.
         if not self.scene.name and not self.scene.uuid:
-            log.error("NavMeshBuilderComponent: cannot save to cache - scene has no name or uuid")
+            log.error("NavMeshBuilderComponent: cannot save artifact - scene has no name or uuid")
             return False
 
-        from termin.cache.scene_cache import SceneCache
+        from termin.artifacts import current_artifact_store
         from termin.navmesh.persistence import NavMeshPersistence
 
-        cache = SceneCache.for_scene(self.scene)
-        cache_key = f"navmesh_{self.agent_type_name}"
+        store = current_artifact_store()
+        if store is None:
+            log.error("NavMeshBuilderComponent: cannot save artifact - no active ArtifactStore")
+            return False
+
+        artifact_name = f"navmesh_{self.agent_type_name}"
 
         try:
             data = NavMeshPersistence.to_bytes(navmesh)
-            cache.put(self.entity.uuid, type(self).__name__, cache_key, data)
-            log.warning(f"NavMeshBuilderComponent: saved to cache ({len(data)} bytes)")
+            store.write_scene_artifact(
+                scene_name=self.scene.name or self.scene.uuid,
+                entity_uuid=self.entity.uuid,
+                component_type=type(self).__name__,
+                artifact_name=artifact_name,
+                data=data,
+            )
+            log.warning(f"NavMeshBuilderComponent: saved artifact ({len(data)} bytes)")
             return True
         except Exception as e:
-            log.error(f"NavMeshBuilderComponent: failed to save to cache: {e}")
+            log.error(f"NavMeshBuilderComponent: failed to save artifact: {e}")
             return False
 
     # --- Drawable protocol ---
@@ -839,8 +857,8 @@ void main() {
         navmesh.name = name
         self._navmesh = navmesh
 
-        # Save to cache
-        self._save_to_cache(navmesh)
+        # Save generated artifact
+        self._save_artifact(navmesh)
 
         # Register in NavMeshRegistry
         if self.scene is not None:

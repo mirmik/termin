@@ -48,7 +48,7 @@ bundle, а старый broad-copy build contract удален.
 python3 -m termin.project_build.profile_build build ...
 ```
 
-Код: `termin-app/cpp/app/termin_builder.cpp`.
+Код: `termin-cli/src/termin_builder.cpp`.
 
 Старый переходный entrypoint `termin.project_builder.profile_build` и весь
 `termin.project_builder` package удалены: profile dispatch теперь живет только
