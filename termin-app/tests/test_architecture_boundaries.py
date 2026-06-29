@@ -122,6 +122,30 @@ def test_app_default_preloaders_compat_layer_is_removed() -> None:
     assert not app_facade.exists()
 
 
+def test_app_scene_cache_is_removed() -> None:
+    assert not (REPO_ROOT / "termin-app/termin/cache").exists()
+
+    offenders: list[str] = []
+    source_roots = [
+        REPO_ROOT / "termin-app/termin",
+        REPO_ROOT / "termin-navmesh/python/termin",
+    ]
+    forbidden_fragments = (
+        "termin.cache",
+        "SceneCache",
+        "scene_cache",
+    )
+
+    for root in source_roots:
+        for path in root.rglob("*.py"):
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
 def test_legacy_project_builder_and_build_json_player_path_are_removed() -> None:
     assert not (REPO_ROOT / "termin-app/termin/project_builder").exists()
 

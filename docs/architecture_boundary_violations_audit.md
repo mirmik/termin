@@ -311,7 +311,7 @@ virtual tc_mesh* get_mesh_for_phase(
 Пакеты `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh` импортируют из других пакетов, не объявленных в `install_requires`:
 
 - Исторически: импорты `termin.visualization.*` из пакетов, не являющихся termin-app. Статус 2026-06-27: живые ссылки удалены; новые ссылки в runtime/examples/scripts запрещены тестом.
-- Импорты `termin.cache`, `termin.voxels` из high-level Python слоя `termin-navmesh`
+- Импорты `termin.voxels` из high-level Python слоя `termin-navmesh`
 - high-level Python слой `termin-navmesh` всё ещё смешивает navigation utilities, visual/editor components и voxel/cache integration
 
 **Проблема:** Работает в monorepo, но сломается при независимой установке pip-пакетов.

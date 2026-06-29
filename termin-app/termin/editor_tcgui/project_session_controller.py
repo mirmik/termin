@@ -84,6 +84,11 @@ class ProjectSessionController:
         project_dir = str(project_root)
         self._set_project_state(project_dir, Path(path).stem)
         self._log_to_console(f"Project: {project_dir}")
+
+        from termin.editor_core.project_context import set_current_project_path
+
+        set_current_project_path(project_root)
+
         self.configure_shader_runtime_for_project(
             project_root,
             resolve_termin_shaderc=self._resolve_termin_shaderc,

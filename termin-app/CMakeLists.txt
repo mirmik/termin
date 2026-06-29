@@ -210,6 +210,12 @@ if(BUNDLE_PYTHON)
         endif()
     endforeach()
 
+    install(DIRECTORY "${ENV_DIR}/termin-base/python/termin/artifacts"
+        DESTINATION "${SITEPACKAGES_INSTALL_DIR}/termin"
+        PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE
+    )
+
     if(NOT WIN32)
         # Linux: Copy standalone Python extension .so files.
         file(GLOB STANDALONE_SOS "${PYTHON_SITEPACKAGES}/*.so")
