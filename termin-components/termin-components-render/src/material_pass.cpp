@@ -1,9 +1,9 @@
 // material_pass.cpp - Post-processing pass using a Material.
 //
 // Fully migrated to tgfx2: wraps the output FBO as a tgfx2 texture,
-// opens a ctx2 render pass, binds the material's own VS/FS through the shared
-// material pipeline helpers, applies @property UBO via shader-reflected
-// resources, and draws the built-in fullscreen quad. No legacy GraphicsBackend
+// opens a ctx2 render pass, prepares the material pipeline through the shared
+// helpers, applies @property UBO via shader-reflected resources, and draws the
+// built-in fullscreen quad with an explicit FSQ VS. No legacy GraphicsBackend
 // draw calls.
 
 #include <tcbase/tc_log.hpp>
@@ -230,6 +230,13 @@ void MaterialPass::execute(ExecuteContext& ctx) {
         ctx2->end_pass();
         return;
     }
+    // MaterialPass is a fullscreen post-process pass. Bind the canonical FSQ
+    // vertex shader before resource preparation so D3D11 creates the pipeline
+    // against the exact VS/FS pair that will draw. Relying on
+    // draw_fullscreen_quad() to substitute the VS late can leave D3D11 with a
+    // stale input/signature combination and collapses UVs to the top-left texel.
+    ctx2->bind_shader(ctx2->fsq_vertex_shader(), shader_binding.fragment);
+    ctx2->use_shader_resource_layout(shader_binding.shader);
 
     EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(ctx);
     MaterialPipelineResourceContext material_resources{};
@@ -304,7 +311,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     // Built-in fullscreen quad VBO with layout (vec2 pos, vec2 uv) at
     // locations 0 and 1; shader stages must agree with the canonical
     // fullscreen varying contract.
-    ctx2->draw_fullscreen_quad();
+    ctx2->draw_fullscreen_quad_with_bound_shader();
 
     ctx2->end_pass();
 }

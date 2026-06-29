@@ -541,6 +541,18 @@ class UIRenderer:
         for x, y, w, h in self._clip_stack:
             self._canvas.begin_clip(x, y, w, h)
 
+    def _restore_ui_pass_state_after_external_draw(self) -> None:
+        if self._ctx is None:
+            return
+        self._ctx.set_viewport(0, 0, self._viewport_w, self._viewport_h)
+        self._ctx.set_cull(CULL_NONE)
+        self._ctx.set_depth_test(False)
+        self._ctx.set_blend(True)
+        from tgfx._tgfx_native import Tgfx2BlendFactor
+        self._ctx.set_blend_func(Tgfx2BlendFactor.SrcAlpha,
+                                 Tgfx2BlendFactor.OneMinusSrcAlpha)
+        self._resume_canvas_after_legacy_draw()
+
     def _push_ui_state(
         self,
         color: tuple[float, float, float, float],
@@ -794,6 +806,83 @@ class UIRenderer:
         if self._graphics is None or handle is None:
             return
         self._graphics.destroy_texture(handle)
+
+    def draw_texture_preview(
+        self, x: float, y: float, w: float, h: float,
+        handle: Tgfx2TextureHandle, tex_w: int, tex_h: int,
+        *,
+        presenter=None,
+        flip_v: bool = False,
+        channel_mode: int = 0,
+        highlight_hdr: bool = False,
+        tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    ) -> None:
+        """Draw a texture preview with optional channel/HDR inspection.
+
+        Plain RGB previews use the Canvas2D path. Channel/depth/HDR
+        previews need a shader; callers can provide a backend-native
+        presenter with ``render_in_current_pass`` so D3D11 does not fall
+        back to the legacy GLSL-only UI shader.
+        """
+        if w <= 0 or h <= 0 or handle is None or self._ctx is None:
+            return
+
+        if channel_mode == 0 and not highlight_hdr:
+            self.draw_texture(
+                x, y, w, h,
+                handle,
+                tex_w,
+                tex_h,
+                flip_v=flip_v,
+                channel_mode=0,
+                highlight_hdr=False,
+                tint=tint,
+            )
+            return
+
+        if presenter is None:
+            self.draw_texture(
+                x, y, w, h,
+                handle,
+                tex_w,
+                tex_h,
+                flip_v=flip_v,
+                channel_mode=channel_mode,
+                highlight_hdr=highlight_hdr,
+                tint=tint,
+            )
+            return
+
+        if flip_v:
+            # FrameGraphPresenter samples in the backend's canonical
+            # orientation. Preserve legacy flip_v support by falling
+            # back to the old path for callers that explicitly need it.
+            self.draw_texture(
+                x, y, w, h,
+                handle,
+                tex_w,
+                tex_h,
+                flip_v=True,
+                channel_mode=channel_mode,
+                highlight_hdr=highlight_hdr,
+                tint=tint,
+            )
+            return
+
+        self._suspend_canvas_for_legacy_draw()
+        try:
+            presenter.render_in_current_pass(
+                self._ctx,
+                handle,
+                int(round(x)),
+                int(round(y)),
+                max(1, int(round(w))),
+                max(1, int(round(h))),
+                int(channel_mode),
+                bool(highlight_hdr),
+            )
+        finally:
+            self._restore_ui_pass_state_after_external_draw()
 
     def draw_texture(
         self, x: float, y: float, w: float, h: float,

@@ -24,7 +24,7 @@ from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
 
 
 class CapturePreviewWidget(Widget):
-    """Renders captured FBO texture via C++ presenter (shared GL textures)."""
+    """Renders captured framegraph texture via the backend-native presenter."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -51,11 +51,12 @@ class CapturePreviewWidget(Widget):
         if tex_w == 0 or tex_h == 0:
             return
         is_depth = bool(capture.is_depth)
-        renderer.draw_texture(
+        renderer.draw_texture_preview(
             self.x, self.y, self.width, self.height,
             handle=capture_tex,
             tex_w=tex_w,
             tex_h=tex_h,
+            presenter=self._core.presenter,
             channel_mode=5 if is_depth else self.channel_mode,
             highlight_hdr=False if is_depth else self.highlight_hdr,
         )
