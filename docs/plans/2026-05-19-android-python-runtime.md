@@ -123,7 +123,7 @@ cmake -S . -B build/no-opengl-editor \
 cmake --build build/no-opengl-editor --parallel 8
 ```
 
-This builds `termin_editor` and keeps `libvulkan.so.1` / `libshaderc.so.1` dependencies while avoiding direct `libGL` linkage. SDK scripts also accept `--no-opengl`. As of the WPF/D3D11 C# migration, `build-sdk-csharp.sh` no longer skips this mode; it builds C# bindings with legacy OpenGL entrypoints disabled.
+This builds `termin_editor` and keeps `libvulkan.so.1` / `libshaderc.so.1` dependencies while avoiding direct `libGL` linkage. SDK scripts also accept `--no-opengl`. As of the WPF/D3D11 C# migration, `build-sdk-csharp.sh` no longer skips this mode; it builds `Termin.Native` C# bindings with legacy OpenGL entrypoints disabled. The Windows-only `Termin.Wpf` assembly is built by `build-sdk-csharp.ps1`.
 
 ## Что сейчас мешает Android
 

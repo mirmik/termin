@@ -178,6 +178,7 @@ try {
         "-DCMAKE_PREFIX_PATH=$SdkPrefix",
         "-DTERMIN_CSHARP_BUILD_NATIVE=ON",
         "-DTERMIN_CSHARP_BUILD_MANAGED=ON",
+        "-DTERMIN_CSHARP_BUILD_WPF=ON",
         "-DTERMIN_CSHARP_BUILD_TESTS=$buildTests",
         "-DTERMIN_CSHARP_SDK_SHARE_DIR=$SdkPrefix/share/termin",
         "-DTERMIN_CSHARP_PROFILE=$Profile"

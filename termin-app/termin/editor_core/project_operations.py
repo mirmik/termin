@@ -17,6 +17,7 @@ from typing import Callable
 from tcbase import log
 
 from termin.editor_core.dialog_service import DialogService
+from termin.stdlib import sync_stdlib as _sync_stdlib
 
 
 # ======================================================================
@@ -108,32 +109,13 @@ _PIPELINE_TEMPLATE = '''{
 def sync_stdlib(project_root: Path) -> None:
     """Sync the built-in stdlib (materials, shaders, glsl) into
     ``project_root / stdlib``. Called on project open by both editors."""
-    import termin
-
-    stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
-    stdlib_dst = project_root / "stdlib"
-
-    if not stdlib_src.exists():
-        return
-
-    created = not stdlib_dst.exists()
-    updated = 0
-
-    for src_file in stdlib_src.rglob("*"):
-        if src_file.is_dir():
-            continue
-        rel = src_file.relative_to(stdlib_src)
-        dst_file = stdlib_dst / rel
-        dst_file.parent.mkdir(parents=True, exist_ok=True)
-        need_update = (not dst_file.exists()) or (dst_file.stat().st_size != src_file.stat().st_size)
-        if need_update:
-            shutil.copy2(src_file, dst_file)
-            updated += 1
+    created = not (project_root / "stdlib").exists()
+    result = _sync_stdlib(project_root)
 
     if created:
-        log.info(f"[stdlib] deployed: {updated} file(s)")
-    elif updated > 0:
-        log.info(f"[stdlib] synced: {updated} file(s) updated")
+        log.info(f"[stdlib] deployed: {result.copied} file(s)")
+    elif result.copied > 0:
+        log.info(f"[stdlib] synced: {result.copied} file(s) updated")
 
 
 # ======================================================================

@@ -182,7 +182,7 @@ class SceneFileController:
             with open(path, "r", encoding="utf-8") as f:
                 file_data = json.load(f)
 
-            from termin.scene_animation_repair import (
+            from termin.glb.scene_animation_repair import (
                 extract_scene_data,
                 repair_glb_animation_player_clip_refs,
             )
@@ -198,7 +198,7 @@ class SceneFileController:
             self._scene_manager.set_scene_path(scene_name, path)
             scene.notify_editor_start()
 
-            from termin.modules.runtime import upgrade_scene_unknown_components
+            from termin.project_modules.runtime import upgrade_scene_unknown_components
 
             upgrade_scene_unknown_components(self._scene_manager.get_scene(scene_name))
             self._scene_manager.set_mode(scene_name, SceneMode.STOP)

@@ -290,6 +290,17 @@ Source of truth: `termin-player/`.
 
 Standalone/source/headless player runtime and native `termin_player` executable. `termin-app` may consume player commands/APIs, but player code must not depend on `termin-app`.
 
+### termin-cli
+
+Source of truth: `termin-cli/`.
+
+SDK command entrypoint layer. Owns native command wrappers such as `termin`,
+`termin_builder`, `termin_runner`, `termin_modules_cli`, and `termin_stdlib`.
+Domain behavior remains in the owning packages (`termin-project-build`,
+`termin-player`, `termin-project-modules`, `termin-stdlib`); `termin-cli`
+only resolves profiles, configures the SDK Python environment, and dispatches
+to the owning package entrypoints.
+
 ### termin-app
 
 Source of truth: [termin-app docs](../termin-app/docs/index.md), [editor architecture](../termin-app/docs/editor-architecture.md), [flat viewport target model](../termin-app/docs/rendering-flat-viewport-target-model.md).

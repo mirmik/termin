@@ -71,6 +71,10 @@ if __name__ == "__main__":
                 "termin.geomalgo", "termin.geomalgo.*",         # termin-pga
                 "termin.mcp", "termin.mcp.*",                   # termin-mcp
                 "termin.player", "termin.player.*",             # termin-player
+                "termin.project", "termin.project.*",           # termin-project
+                "termin.project_build", "termin.project_build.*",  # termin-project-build
+                "termin.project_modules", "termin.project_modules.*",  # termin-project-modules
+                "termin.stdlib", "termin.stdlib.*",             # termin-stdlib
                 "termin.shader_runtime",                        # termin-shader-runtime
                 "termin.shader_tools",                          # termin-shader-runtime
             ],
@@ -92,8 +96,6 @@ if __name__ == "__main__":
                 # Header files for external C++ module compilation
                 "include/**/*.h",
                 "include/**/*.hpp",
-                # Standard library (shaders, materials, icons, ui)
-                "resources/**/*",
                 # Data files used by main termin Python stack
                 "**/*.ui",
                 "**/*.uiscript",
@@ -113,6 +115,10 @@ if __name__ == "__main__":
             "termin-bootstrap",
             "termin-mcp",
             "termin-player",
+            "termin-project",
+            "termin-project-build",
+            "termin-project-modules",
+            "termin-stdlib",
             "termin-shader-runtime",
             "termin-prefab",
             "termin-glb",

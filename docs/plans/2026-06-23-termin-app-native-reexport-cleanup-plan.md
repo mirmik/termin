@@ -20,8 +20,12 @@
 - `libtermin_core.so`: маленький C init/util ABI (`tc_init`, `tc_shutdown`,
   version/uuid/runtime-id), но с широким public link surface.
 - `termin._native`: app-level Python compatibility/glue module.
-- CLI/runtime/editor executables: `termin`, `termin_builder`, `termin_runner`,
-  `termin_stdlib`, `termin_player`, `termin_editor`, `termin_launcher`.
+- CLI/runtime/editor executables: `termin_player`, `termin_editor`,
+  `termin_launcher`.
+
+Update 2026-06-29: SDK command wrappers `termin`, `termin_builder`,
+`termin_runner`, `termin_modules_cli`, and `termin_stdlib` moved from
+`termin-app/cpp/app` to `termin-cli`.
 
 `termin._native` сейчас смешивает:
 
@@ -98,8 +102,11 @@ Canonical owners:
 - inspect registry/types -> `termin.inspect`
 - low-level inspect binding, if absolutely needed -> `termin.inspect._inspect_native`
 - kind registry wrapper -> `termin.inspect.kind`
-- legacy app/domain builtin registration -> `termin.serialization.kind`, now a
-  thin wrapper over `termin.inspect.kind`.
+- domain builtin kind registrations -> explicit domain bootstrap/native
+  registration functions.
+
+Update 2026-06-29: the legacy app-side `termin.serialization.kind` facade was
+removed; use `termin.inspect.kind` for the registry API.
 
 Work:
 
