@@ -98,8 +98,11 @@ Canonical owners:
 - inspect registry/types -> `termin.inspect`
 - low-level inspect binding, if absolutely needed -> `termin.inspect._inspect_native`
 - kind registry wrapper -> `termin.inspect.kind`
-- legacy app/domain builtin registration -> `termin.serialization.kind`, now a
-  thin wrapper over `termin.inspect.kind`.
+- domain builtin kind registrations -> explicit domain bootstrap/native
+  registration functions.
+
+Update 2026-06-29: the legacy app-side `termin.serialization.kind` facade was
+removed; use `termin.inspect.kind` for the registry API.
 
 Work:
 

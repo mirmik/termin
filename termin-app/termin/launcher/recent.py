@@ -7,7 +7,6 @@ import os
 import time
 
 from tcbase import log
-from termin.default_scene import write_default_scene
 
 MAX_RECENT = 10
 CONFIG_DIR = os.path.expanduser("~/.config/termin")
@@ -133,58 +132,3 @@ def read_launch_project() -> str | None:
     except Exception as e:
         log.error(f"Failed to read launch project file: {e}")
         return None
-
-
-def create_project(name: str, location: str) -> str:
-    """Create a new project on disk.
-
-    Creates the directory structure, .terminproj manifest,
-    project settings, and a default scene with a cube and ground plane.
-
-    Returns the path to the .terminproj file.
-    Raises on failure.
-    """
-    project_dir = os.path.join(location, name)
-    proj_file = os.path.join(project_dir, f"{name}.terminproj")
-    scene_file = os.path.join(project_dir, "scene.scene")
-    settings_dir = os.path.join(project_dir, "project_settings")
-
-    # Create directories
-    os.makedirs(project_dir, exist_ok=True)
-    os.makedirs(settings_dir, exist_ok=True)
-
-    # Project manifest
-    with open(proj_file, "w", encoding="utf-8") as f:
-        json.dump({"version": 1, "name": name}, f, indent=2)
-
-    # Project settings
-    with open(os.path.join(settings_dir, "project.json"), "w", encoding="utf-8") as f:
-        json.dump({
-            "render_sync_mode": "none",
-        }, f, indent=2)
-
-    # Navigation settings
-    with open(os.path.join(settings_dir, "navigation.json"), "w", encoding="utf-8") as f:
-        navmesh_area_names = [""] * 64
-        navmesh_area_names[0] = "Walkable"
-        json.dump({
-            "agent_types": [
-                {
-                    "name": "Human",
-                    "radius": 0.5,
-                    "height": 2.0,
-                    "max_slope": 45.0,
-                    "step_height": 0.4,
-                }
-            ],
-            "navmesh_area_names": navmesh_area_names,
-        }, f, indent=2)
-
-    # Editor state — remember the default scene
-    with open(os.path.join(settings_dir, ".editor_state.json"), "w", encoding="utf-8") as f:
-        json.dump({"last_scene": scene_file}, f, indent=2)
-
-    # Default scene
-    write_default_scene(scene_file)
-
-    return proj_file

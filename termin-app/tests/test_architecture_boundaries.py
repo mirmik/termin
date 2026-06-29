@@ -203,6 +203,92 @@ def test_project_helpers_are_outside_app_package() -> None:
     assert (REPO_ROOT / "termin-project-build/python/termin/project_build").is_dir()
 
 
+def test_project_creation_and_default_scene_are_outside_app_package() -> None:
+    assert not (REPO_ROOT / "termin-app/termin/default_scene.py").exists()
+    assert (REPO_ROOT / "termin-project/python/termin/project/creation.py").is_file()
+
+    source_roots = [
+        REPO_ROOT / "termin-app/termin",
+        REPO_ROOT / "termin-app/tests",
+    ]
+    forbidden_fragments = (
+        "termin.default_scene",
+        "from termin.launcher.recent import RecentProjects, create_project",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
+def test_serialization_kind_facade_is_removed_from_app_package() -> None:
+    assert not (REPO_ROOT / "termin-app/termin/serialization/__init__.py").exists()
+    assert not (REPO_ROOT / "termin-app/termin/serialization/kind.py").exists()
+    assert (REPO_ROOT / "termin-inspect/python/termin/inspect/kind.py").is_file()
+
+    source_roots = [
+        REPO_ROOT / "termin-app/termin",
+        REPO_ROOT / "termin-app/tests",
+        REPO_ROOT / "termin-bootstrap",
+    ]
+    forbidden_fragments = (
+        "termin.serialization",
+        "from termin.serialization",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
+def test_top_level_app_utility_facades_are_removed() -> None:
+    assert not (REPO_ROOT / "termin-app/termin/util.py").exists()
+    assert not (REPO_ROOT / "termin-app/termin/core").exists()
+    assert not (REPO_ROOT / "termin-app/termin/log.py").exists()
+    assert (REPO_ROOT / "termin-base/python/termin/geombase/quaternion.py").is_file()
+
+    source_roots = [
+        REPO_ROOT / "termin-app/termin",
+        REPO_ROOT / "termin-app/tests",
+    ]
+    forbidden_fragments = (
+        "termin.util",
+        "from termin.util",
+        "termin.core",
+        "from termin.core",
+        "termin.log",
+        "from termin import log",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
 def test_glb_scene_animation_repair_is_outside_app_package() -> None:
     assert not (REPO_ROOT / "termin-app/termin/scene_animation_repair.py").exists()
     assert (REPO_ROOT / "termin-glb/python/termin/glb/scene_animation_repair.py").is_file()

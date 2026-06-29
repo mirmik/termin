@@ -1,5 +1,5 @@
 import unittest
-from termin.util import qslerp
+from termin.geombase import qslerp
 import numpy
 import math
 
