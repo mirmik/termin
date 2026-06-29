@@ -30,6 +30,7 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "tcbase",
     "termin-assets",
     "termin-default-assets",
+    "termin-stdlib",
     "termin-prefab",
     "termin-glb",
     "termin-tween",

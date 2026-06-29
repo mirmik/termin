@@ -157,6 +157,7 @@ digraph termin_dependencies {
 	"termin-render-passes";
 	"termin-runtime";
 	"termin-shader-runtime";
+	"termin-stdlib";
 
 	"tcplot" -> "termin-csharp";
 	"termin" -> "termin-app";
@@ -164,6 +165,7 @@ digraph termin_dependencies {
 	"termin" -> "termin-navmesh";
 	"termin" -> "termin-player";
 	"termin" -> "termin-shader-runtime";
+	"termin" -> "termin-stdlib";
 	"termin" -> "termin-tween";
 	"termin" -> "termin-voxels";
 	"termin-animation" -> "termin-app";
@@ -272,6 +274,8 @@ digraph termin_dependencies {
 	"termin-shader-runtime" -> "termin-project-build";
 	"termin-skeleton" -> "termin-animation";
 	"termin-skeleton" -> "termin-components-skeleton";
+	"termin-stdlib" -> "termin-player";
+	"termin-stdlib" -> "termin-project-build";
 	"termin-tween" -> "termin-components-tween";
 	"termin-voxels" -> "termin-components-voxels";
 }

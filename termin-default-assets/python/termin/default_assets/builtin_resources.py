@@ -84,7 +84,7 @@ def register_builtin_materials(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register dependencies for built-in materials.
 
     Built-in material registration intentionally does not synthesize material
-    assets. Standard materials live in ``resources/stdlib/materials`` and must
+    assets. Standard materials live in ``termin.stdlib`` resources and must
     be registered by the asset pipeline from their ``.material`` files.
     """
     register_builtin_shaders(rm)

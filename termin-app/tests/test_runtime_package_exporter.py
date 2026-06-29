@@ -59,6 +59,13 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "tcbase": ({"tcbase/__init__.py": "VALUE = 'runtime seed'\n"}, []),
         "termin-assets": ({"termin_assets_seed/__init__.py": "VALUE = 'assets seed'\n"}, []),
         "termin-default-assets": ({"termin/default_assets/__init__.py": "VALUE = 'default assets seed'\n"}, []),
+        "termin-stdlib": (
+            {
+                "termin/stdlib/__init__.py": "VALUE = 'stdlib seed'\n",
+                "termin/stdlib/resources/materials/BlinnPhong.material": "{}\n",
+            },
+            [],
+        ),
         "termin-prefab": ({"termin/prefab_seed/__init__.py": "VALUE = 'prefab seed'\n"}, []),
         "termin-glb": ({"termin/glb/__init__.py": "VALUE = 'glb seed'\n"}, ["termin-skeleton", "termin-animation"]),
         "termin-tween": ({"termin/tween/__init__.py": "VALUE = 'tween seed'\n"}, []),
