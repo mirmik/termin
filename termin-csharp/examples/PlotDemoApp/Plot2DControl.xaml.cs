@@ -1,8 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
-using OpenTK.Wpf;
+using System.Windows.Media;
 using Termin.Native;
 using Termin.Wpf;
 
@@ -11,7 +10,7 @@ namespace PlotDemoApp;
 public partial class Plot2DControl : UserControl, IDisposable
 {
     private PlotView2D? _view;
-    private Tgfx2GlWpfTexturePresenter? _presenter;
+    private bool _renderingSubscribed;
     private bool _initialized;
     private bool _disposed;
     private bool _hostLeaseHeld;
@@ -20,18 +19,16 @@ public partial class Plot2DControl : UserControl, IDisposable
     {
         InitializeComponent();
 
-        var settings = GlWpfSharedContext.CreateSettings();
-        GlControl.Start(settings);
-        GlWpfSharedContext.CaptureIfFirst(GlControl);
-        GlControl.Render += OnGlRender;
+        CompositionTarget.Rendering += OnRender;
+        _renderingSubscribed = true;
 
         Unloaded += (_, _) => Dispose();
 
-        GlControl.MouseDown  += OnMouseDownGl;
-        GlControl.MouseMove  += OnMouseMoveGl;
-        GlControl.MouseUp    += OnMouseUpGl;
-        GlControl.MouseWheel += OnMouseWheelGl;
-        GlControl.Focusable = true;
+        RenderHost.FramebufferMouseDown  += OnFramebufferMouseDown;
+        RenderHost.FramebufferMouseMove  += OnFramebufferMouseMove;
+        RenderHost.FramebufferMouseUp    += OnFramebufferMouseUp;
+        RenderHost.FramebufferMouseWheel += OnFramebufferMouseWheel;
+        RenderHost.Focusable = true;
     }
 
     public PlotView2D View
@@ -94,7 +91,6 @@ public partial class Plot2DControl : UserControl, IDisposable
         try
         {
             _view = new PlotView2D(host);
-            _presenter = new Tgfx2GlWpfTexturePresenter();
             _hostLeaseHeld = true;
         }
         catch
@@ -106,7 +102,7 @@ public partial class Plot2DControl : UserControl, IDisposable
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnGlRender(TimeSpan delta)
+    private void OnRender(object? sender, EventArgs e)
     {
         if (!_initialized)
         {
@@ -114,62 +110,53 @@ public partial class Plot2DControl : UserControl, IDisposable
         }
         if (!_initialized || _view == null) return;
 
-        var w = Math.Max(1, GlControl.FrameBufferWidth);
-        var h = Math.Max(1, GlControl.FrameBufferHeight);
-        uint colorTex = _view.render_to_texture_id(w, h);
-        _presenter?.Present(colorTex, w, h, GlControl.Framebuffer);
+        var w = Math.Max(1, RenderHost.FramebufferWidth);
+        var h = Math.Max(1, RenderHost.FramebufferHeight);
+        uint colorTex = _view.render_to_texture_handle_id(w, h);
+        _ = RenderHost.Present(colorTex, w, h);
     }
 
-    private static int ToTcbaseButton(System.Windows.Input.MouseButton b) => b switch
-    {
-        System.Windows.Input.MouseButton.Left   => 0,
-        System.Windows.Input.MouseButton.Right  => 1,
-        System.Windows.Input.MouseButton.Middle => 2,
-        _ => 0,
-    };
-
-    private void OnMouseDownGl(object sender, MouseButtonEventArgs e)
+    private void OnFramebufferMouseDown(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
     {
         if (_view == null) return;
-        GlControl.Focus();
-        var p = e.GetPosition(GlControl);
-        _view.on_mouse_down((float)p.X, (float)p.Y, ToTcbaseButton(e.ChangedButton));
+        RenderHost.FocusNativeWindow();
+        _view.on_mouse_down(e.X, e.Y, e.Button);
         e.Handled = true;
     }
 
-    private void OnMouseMoveGl(object sender, MouseEventArgs e)
+    private void OnFramebufferMouseMove(object? sender, Tgfx2D3D11MouseMoveEventArgs e)
     {
         if (_view == null) return;
-        var p = e.GetPosition(GlControl);
-        _view.on_mouse_move((float)p.X, (float)p.Y);
+        _view.on_mouse_move(e.X, e.Y);
     }
 
-    private void OnMouseUpGl(object sender, MouseButtonEventArgs e)
+    private void OnFramebufferMouseUp(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
     {
         if (_view == null) return;
-        var p = e.GetPosition(GlControl);
-        _view.on_mouse_up((float)p.X, (float)p.Y, ToTcbaseButton(e.ChangedButton));
+        _view.on_mouse_up(e.X, e.Y, e.Button);
         e.Handled = true;
     }
 
-    private void OnMouseWheelGl(object sender, MouseWheelEventArgs e)
+    private void OnFramebufferMouseWheel(object? sender, Tgfx2D3D11MouseWheelEventArgs e)
     {
         if (_view == null) return;
-        var p = e.GetPosition(GlControl);
-        _view.on_mouse_wheel((float)p.X, (float)p.Y, e.Delta > 0 ? 1f : -1f);
+        _view.on_mouse_wheel(e.X, e.Y, e.Delta > 0 ? 1f : -1f);
         e.Handled = true;
     }
-
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
+        if (_renderingSubscribed)
+        {
+            CompositionTarget.Rendering -= OnRender;
+            _renderingSubscribed = false;
+        }
+
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
-        _presenter?.Dispose();
-        _presenter = null;
         if (_hostLeaseHeld)
         {
             Tgfx2Host.Release();

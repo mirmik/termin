@@ -71,6 +71,27 @@ public static class TerminCore
         int width,
         int height);
 
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_create_d3d11_swapchain")]
+    public static extern IntPtr Tgfx2CreateD3D11Swapchain(
+        IntPtr hwnd,
+        uint width,
+        uint height);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_destroy_d3d11_swapchain")]
+    public static extern void Tgfx2DestroyD3D11Swapchain(IntPtr swapchain);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_resize_d3d11_swapchain")]
+    public static extern int Tgfx2ResizeD3D11Swapchain(
+        IntPtr swapchain,
+        uint width,
+        uint height);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_present_d3d11_swapchain")]
+    public static extern int Tgfx2PresentD3D11Swapchain(
+        IntPtr swapchain,
+        uint sourceHandleId,
+        uint syncInterval);
+
     // ========================================================================
     // Scene (handle-based API)
     // ========================================================================

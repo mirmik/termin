@@ -1102,7 +1102,7 @@ enum class BackendType {
     OpenGL,
     Vulkan,
     Metal,
-    D3D12,
+    D3D11,
     Null
 };
 }
@@ -1298,6 +1298,23 @@ public:
 
 %apply double INPUT[] { const double* x, const double* y }
 
+%extend PlotView3D {
+    unsigned int render_to_texture_handle_id(int width, int height) {
+        return $self->render_to_texture(width, height).id;
+    }
+}
+
+%extend PlotView2D {
+    unsigned int render_to_texture_handle_id(int width, int height) {
+        return $self->render_to_texture(width, height).id;
+    }
+}
+
+%extend PlotView2DMulti {
+    unsigned int render_to_texture_handle_id(int width, int height) {
+        return $self->render_to_texture(width, height).id;
+    }
+}
 class PlotView2DMulti {
 public:
     PlotView2DMulti(GpuHost& host, int panel_count);

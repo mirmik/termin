@@ -16,8 +16,5 @@
     <ProjectReference Include="..\..\Termin.Wpf\Termin.Wpf.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="OpenTK.GLWpfControl" Version="4.3.4" />
-  </ItemGroup>
 
 </Project>
