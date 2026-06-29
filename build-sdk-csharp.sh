@@ -46,6 +46,7 @@ for arg in "$@"; do
             echo "  --sdl             Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-opengl       Build C# bindings without legacy OpenGL entrypoints"
             echo "  --opengl          Build C# bindings with legacy OpenGL entrypoints"
+            echo "                    Linux builds Termin.Native only; Termin.Wpf is Windows-only"
             echo "  --help, -h        Show this help"
             exit 0
             ;;
@@ -91,6 +92,7 @@ cmake_args=(
     -DCMAKE_PREFIX_PATH="$SDK_PREFIX"
     -DTERMIN_CSHARP_BUILD_NATIVE=ON
     -DTERMIN_CSHARP_BUILD_MANAGED=ON
+    -DTERMIN_CSHARP_BUILD_WPF=OFF
     -DTERMIN_CSHARP_BUILD_TESTS=ON
     -DTERMIN_CSHARP_SDK_SHARE_DIR="$SDK_PREFIX/share/termin"
 )

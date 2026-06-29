@@ -221,10 +221,11 @@ virtual tc_mesh* get_mesh_for_phase(
 ### 2.4 Дублирование биндингов
 
 **Где смотреть:**
-- `termin-base/python/bindings/geom/` vs `termin-app/cpp/termin/bindings/geom/` — одинаковые биндинги геометрии
 - Смешанная стратегия: `Pose3` — C++ native, `Pose2` — чистый Python numpy
 
-**Обновление 2026-06-20:** app-side legacy copies of `tc_pass_bindings.cpp`, `render_pipeline_bindings.cpp`, `resource_spec.cpp` and `graphics_backend.cpp` were removed from `termin-app`; render pass/pipeline ownership now lives in `termin-render`/`termin-render-framework`. The remaining duplication item here is the geom binding split.
+**Обновление 2026-06-20:** app-side legacy copies of `tc_pass_bindings.cpp`, `render_pipeline_bindings.cpp`, `resource_spec.cpp` and `graphics_backend.cpp` were removed from `termin-app`; render pass/pipeline ownership now lives in `termin-render`/`termin-render-framework`.
+
+**Обновление 2026-06-29:** app-side geom binding duplicates and stale native helper copies were removed from `termin-app`; canonical geom bindings live under `termin-base/python/bindings/geom/`.
 
 ---
 
@@ -311,7 +312,7 @@ virtual tc_mesh* get_mesh_for_phase(
 Пакеты `termin-render`, `termin-input`, `termin-animation`, `termin-components-mesh` импортируют из других пакетов, не объявленных в `install_requires`:
 
 - Исторически: импорты `termin.visualization.*` из пакетов, не являющихся termin-app. Статус 2026-06-27: живые ссылки удалены; новые ссылки в runtime/examples/scripts запрещены тестом.
-- Импорты `termin.cache`, `termin.voxels` из high-level Python слоя `termin-navmesh`
+- Импорты `termin.voxels` из high-level Python слоя `termin-navmesh`
 - high-level Python слой `termin-navmesh` всё ещё смешивает navigation utilities, visual/editor components и voxel/cache integration
 
 **Проблема:** Работает в monorepo, но сломается при независимой установке pip-пакетов.

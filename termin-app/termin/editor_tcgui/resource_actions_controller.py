@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Callable
 
 from tcbase import log
 from tcgui.widgets.message_box import MessageBox
+from termin.stdlib import stdlib_root, sync_stdlib
 
 
 class ResourceActionsController:
@@ -60,9 +60,7 @@ class ResourceActionsController:
         ui = self._get_ui()
         if ui is None:
             return
-        import termin
-
-        stdlib_src = Path(termin.__path__[0]) / "resources" / "stdlib"
+        stdlib_src = stdlib_root()
         if not stdlib_src.exists():
             MessageBox.error(
                 ui,
@@ -77,7 +75,7 @@ class ResourceActionsController:
             ui,
             title="Select Directory for Standard Library",
             directory=self._get_project_path() or str(Path.home()),
-            on_result=lambda path: self.deploy_stdlib_to(path, stdlib_src),
+            on_result=self.deploy_stdlib_to,
             windowed=True,
         )
 
@@ -141,19 +139,18 @@ class ResourceActionsController:
             return
         self._resource_loader.load_components_from_path(path)
 
-    def deploy_stdlib_to(self, path: str | None, stdlib_src: Path) -> None:
+    def deploy_stdlib_to(self, path: str | None) -> None:
         ui = self._get_ui()
         if not path or ui is None:
             return
-        target_path = Path(path) / "stdlib"
         try:
-            shutil.copytree(stdlib_src, target_path, dirs_exist_ok=True)
+            result = sync_stdlib(path)
             MessageBox.info(
                 ui,
                 "Standard Library Deployed",
-                f"Deployed to:\n{target_path}",
+                f"Deployed to:\n{result.target_root}",
             )
-            log.info(f"[Editor] Standard library deployed to {target_path}")
+            log.info(f"[Editor] Standard library deployed to {result.target_root}")
         except Exception as e:
             MessageBox.error(
                 ui,

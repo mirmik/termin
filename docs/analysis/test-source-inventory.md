@@ -34,59 +34,59 @@ Status values:
 | reviewed | cpp | `termin-app/cpp/tests/tests_rendering_manager.cpp` | Broad rendering manager/graph compiler regression coverage with concrete resource naming, lifecycle, viewport, render target, and default pipeline assertions. |
 | needs-work | cpp | `termin-app/cpp/tests/tests_shader_parser_std140.cpp` | Useful shader/std140 regression coverage, but very large and repeats schema/value helpers and parse-error patterns; should be split or parameterized. |
 | reviewed | python-support | `termin-app/termin/tests/__init__.py` | Empty package marker only. |
-| needs-work | python | `termin-app/tests/aabb_test.py` | Child AABB coverage is still weak because the child box starts inside the parent; relocation test also asserts private version counters. |
+| needs-work | python | `termin-components/termin-components-kinematic/tests/aabb_test.py` | Child AABB coverage is still weak because the child box starts inside the parent; relocation test also asserts private version counters. |
 | pruned | python-support | `termin-app/tests/api.py` | Removed dead standalone unittest runner that imported missing `motor_test`; no repository references besides inventory. |
-| needs-work | python | `termin-app/tests/asset_plugin_test.py` | Default asset/plugin/resource type matrices duplicate other manifest/plugin tests; consolidate around one canonical expected table. |
-| reviewed | python | `termin-app/tests/collider_test.py` | Removed stale migration comments and manual runner; remaining collider/ray cases assert concrete distances and contact points. |
+| needs-work | python | `termin-default-assets/tests/asset_plugin_test.py` | Default asset/plugin/resource type matrices duplicate other manifest/plugin tests; consolidate around one canonical expected table. |
+| reviewed | python | `termin-collision/tests/collider_test.py` | Removed stale migration comments and manual runner; remaining collider/ray cases assert concrete distances and contact points. |
 | reviewed | python-support | `termin-app/tests/conftest.py` | Empty pytest support file only. |
 | reviewed | python | `termin-app/tests/editor_commands_test.py` | Covers real command execution, undo/redo, selection, and scene lifetime behavior. |
-| needs-work | python | `termin-app/tests/framegraph_test.py` | Useful framegraph scheduling coverage, but duplicates local DummyPass/build_schedule helpers with internal-points tests. |
-| needs-work | python | `termin-app/tests/kinematics/kinematic_chain_test.py` | Basis sensitivity test still has a contradictory axis comment/expectation that needs the basis contract clarified. |
-| reviewed | python | `termin-app/tests/kinematics/kinematic_test.py` | Replaced wildcard import and fixed copy-paste child-count assertion; remaining test covers Rotator3 link/parent invariants. |
-| needs-work | python | `termin-app/tests/kinematics/transform_test.py` | Removed debug print; to/from Trent tests still duplicate setup and expected trees and should be helperized. |
-| reviewed | python | `termin-app/tests/pathfinding_test.py` | Removed unused data/import and manual runner; remaining adjacency, point lookup, A*, graph, and ray-triangle tests have concrete expected results. |
-| reviewed | python | `termin-app/tests/physics/test_energy.py` | Removed debug output/manual runner and unused imports; energy drift tests remain useful integration coverage. |
-| reviewed | python | `termin-app/tests/physics/test_rigid_body.py` | Removed manual runner and unused import; remaining rigid-body tests assert concrete settling, contact, inertia, and static-body contracts. |
-| reviewed | python | `termin-app/tests/pose2_test.py` | Removed script shebang/manual runner; remaining Pose2 checks cover explicit transform, inverse, interpolation, and helper contracts. |
-| needs-work | python | `termin-app/tests/pose_test.py` | Removed unused import/variable and same-API expected calculation; looking_at and several roundtrip checks still need stronger independent oracles. |
-| reviewed | python | `termin-app/tests/shader_parser_test.py` | String-heavy but active Slang/material parsing contract rather than debug-only coverage. |
+| needs-work | python | `termin-render/tests/framegraph_test.py` | Useful framegraph scheduling coverage, but duplicates local DummyPass/build_schedule helpers with internal-points tests. |
+| needs-work | python | `termin-components/termin-components-kinematic/tests/kinematic_chain_test.py` | Basis sensitivity test still has a contradictory axis comment/expectation that needs the basis contract clarified. |
+| reviewed | python | `termin-components/termin-components-kinematic/tests/kinematic_test.py` | Replaced wildcard import and fixed copy-paste child-count assertion; remaining test covers Rotator3 link/parent invariants. |
+| needs-work | python | `termin-components/termin-components-kinematic/tests/transform_test.py` | Removed debug print; to/from Trent tests still duplicate setup and expected trees and should be helperized. |
+| reviewed | python | `termin-navmesh/tests/pathfinding_test.py` | Removed unused data/import and manual runner; remaining adjacency, point lookup, A*, graph, and ray-triangle tests have concrete expected results. |
+| reviewed | python | `termin-physics/tests/test_energy.py` | Removed debug output/manual runner and unused imports; energy drift tests remain useful integration coverage. |
+| reviewed | python | `termin-physics/tests/test_rigid_body.py` | Removed manual runner and unused import; remaining rigid-body tests assert concrete settling, contact, inertia, and static-body contracts. |
+| reviewed | python | `termin-base/tests/python/pose2_test.py` | Removed script shebang/manual runner; remaining Pose2 checks cover explicit transform, inverse, interpolation, and helper contracts. |
+| needs-work | python | `termin-base/tests/python/pose_test.py` | Removed unused import/variable and same-API expected calculation; looking_at and several roundtrip checks still need stronger independent oracles. |
+| reviewed | python | `termin-materials/tests/test_shader_parser.py` | String-heavy but active Slang/material parsing contract rather than debug-only coverage. |
 | reviewed | python | `termin-default-assets/tests/test_default_asset_plugin_registry.py` | Moved default asset plugin type/extension registry contract out of termin-app; canonical matrix now lives with termin-default-assets. |
-| reviewed | python | `termin-app/tests/test_canonical_animation_imports.py` | Removed legacy/source/existence migration checks for deleted facade trees; remaining tests keep the canonical animation import boundary. |
-| reviewed | python | `termin-app/tests/test_default_pipeline_specs.py` | Removed self-evident import assert; remaining tests cover default pipeline render-target formats/MSAA and ResolvePass defaults/order. |
-| needs-work | python | `termin-app/tests/test_edge_flipping.py` | Removed oracle-free circumcircle boundary test, cocircular len-only flip test, debug prints, and manual runner; several optimized/refined cases still check mostly counts. |
+| reviewed | python | `termin-animation/tests/test_canonical_animation_imports.py` | Removed legacy/source/existence migration checks for deleted facade trees; remaining tests keep the canonical animation import boundary. |
+| reviewed | python | `termin-engine/tests/test_default_pipeline_specs.py` | Removed self-evident import assert; remaining tests cover default pipeline render-target formats/MSAA and ResolvePass defaults/order. |
+| needs-work | python | `termin-navmesh/tests/test_edge_flipping.py` | Removed oracle-free circumcircle boundary test, cocircular len-only flip test, debug prints, and manual runner; several optimized/refined cases still check mostly counts. |
 | needs-work | python | `termin-app/tests/test_editor_mcp_server.py` | Useful MCP coverage, but repeats thread/deadline/process_pending loop helpers across several tests. |
 | reviewed | python | `termin-app/tests/test_editor_python_executor.py` | Added deadline to external-thread queue test; remaining cases cover output, context refresh, helper injection, and script errors. |
 | reviewed | python | `termin-app/tests/test_editor_shader_runtime.py` | Strengthened missing-slangc case to assert error logging and no configure call. |
 | reviewed | python | `termin-app/tests/test_framegraph_debugger_model_disconnect.py` | Replaced importlib loader with package import; remaining tests cover debugger disconnect and capture info formatting. |
-| needs-work | python | `termin-app/tests/test_framegraph_internal_points.py` | Removed test-only internal-symbol override check; remaining debug getter/window micro-tests should move toward schedule/debugger behavior. |
-| needs-work | python | `termin-app/tests/test_framegraph_presenter_bindings.py` | Source-scanning C++ strings are brittle; needs behavioral resource layout/bind-by-name contract. |
-| needs-work | python | `termin-app/tests/test_funnel_algorithm.py` | Removed debug prints, manual runner, local triarea copy test, and dead geometry assignment; non-convex funnel cases still assert only endpoints instead of no-cut geometry. |
+| needs-work | python | `termin-render/tests/test_framegraph_internal_points.py` | Removed test-only internal-symbol override check; remaining debug getter/window micro-tests should move toward schedule/debugger behavior. |
+| needs-work | python | `termin-render/tests/test_framegraph_presenter_bindings.py` | Source-scanning C++ strings are brittle; needs behavioral resource layout/bind-by-name contract. |
+| needs-work | python | `termin-navmesh/tests/test_funnel_algorithm.py` | Removed debug prints, manual runner, local triarea copy test, and dead geometry assignment; non-convex funnel cases still assert only endpoints instead of no-cut geometry. |
 | reviewed | python | `termin-app/tests/test_game_mode_model.py` | Covers real editor/runtime game mode state transitions. |
 | reviewed | python | `termin-app/tests/test_game_mode_ui_controller.py` | Covers UI controller state transitions for game mode controls. |
-| needs-work | python | `termin-app/tests/test_general_pose3.py` | Several copy/matrix/roundtrip tests check only partial value state and need fuller rotation/scale assertions. |
-| needs-work | python | `termin-app/tests/test_general_transform3.py` | Removed unused imports; direction helper tests still need the scaled-vector vs pure-direction contract made explicit. |
+| needs-work | python | `termin-base/tests/python/test_general_pose3.py` | Several copy/matrix/roundtrip tests check only partial value state and need fuller rotation/scale assertions. |
+| needs-work | python | `termin-components/termin-components-kinematic/tests/test_general_transform3.py` | Removed unused imports; direction helper tests still need the scaled-vector vs pure-direction contract made explicit. |
 | reviewed | python | `termin-app/tests/test_gltf_drag_drop.py` | Covers UI, viewport, and scene tree GLTF drag/drop routing with concrete expected operations. |
-| reviewed | python | `termin-app/tests/test_gltf_loader.py` | Exercises external-bin GLTF loading, texture/material fields, and lazy GLBAsset source loading. |
-| reviewed | python | `termin-app/tests/test_inspect_singleton_topology.py` | Checks native inspect/kind registry singleton addresses agree across module facades. |
+| reviewed | python | `termin-glb/tests/test_glb_loader.py` | Exercises external-bin GLTF loading, texture/material fields, and lazy GLBAsset source loading. |
+| reviewed | python | `termin-inspect/tests/test_inspect_singleton_topology.py` | Checks native inspect/kind registry singleton addresses agree across module facades. |
 | reviewed | python | `termin-app/tests/test_launcher_process_mode.py` | Uses monkeypatched spawn/exec calls to cover launcher process mode and LD_LIBRARY_PATH wiring. |
-| reviewed | python | `termin-app/tests/test_material_asset_texture_persistence.py` | Keeps material texture asset persistence regression coverage. |
+| reviewed | python | `termin-default-assets/tests/test_material_asset_texture_persistence.py` | Keeps material texture asset persistence regression coverage. |
 | needs-work | python | `termin-app/tests/test_material_inspector_texture.py` | Default texture test checks a valid handle but does not prove the selected texture is the expected `white` default. |
-| reviewed | python | `termin-app/tests/test_material_pass_serialization.py` | Covers material pass texture resource serialization through pipeline copy and material UUID reference loading. |
-| reviewed | python | `termin-app/tests/test_material_registry_copy.py` | Covers material registry copy behavior and runtime asset lifecycle regression. |
+| reviewed | python | `termin-components/termin-components-render/tests/python/test_material_pass_serialization.py` | Covers material pass texture resource serialization through pipeline copy and material UUID reference loading. |
+| reviewed | python | `termin-materials/tests/test_material_registry_copy.py` | Covers material registry copy behavior and runtime asset lifecycle regression. |
 | reviewed | python | `termin-player/tests/test_mcp_base.py` | Covers owner-thread Python execution, shared/player MCP tool exposure, config merging, and screenshot response structure. |
-| reviewed | python | `termin-app/tests/test_mesh_spec_defaults.py` | Covers default axis conversion and explicit identity axis preservation. |
-| reviewed | python | `termin-app/tests/test_navmesh_package_facade.py` | Keeps public facade import boundary lightweight and skips native-dependent export only when SDK library is unavailable. |
-| reviewed | python | `termin-app/tests/test_procedural_mesh_component.py` | Covers procedural mesh regeneration reusing the existing TcMesh handle. |
+| reviewed | python | `termin-default-assets/tests/test_mesh_spec_defaults.py` | Covers default axis conversion and explicit identity axis preservation. |
+| reviewed | python | `termin-navmesh/tests/test_navmesh_package_facade.py` | Keeps public facade import boundary lightweight and skips native-dependent export only when SDK library is unavailable. |
+| reviewed | python | `termin-components/termin-components-mesh/tests/test_procedural_mesh_component.py` | Covers procedural mesh regeneration reusing the existing TcMesh handle. |
 | reviewed | python | `termin-app/tests/test_procedural_mesh_editor_extension.py` | Covers shared document controller wiring, panel state, and viewport drag edits for contour/path/wall operations. |
 | reviewed | python | `termin-app/tests/test_project_file_action_controller.py` | Covers scene/prefab activation, text-editor fallback, and inspector routing by extension. |
 | reviewed | python | `termin-app/tests/test_project_file_watcher.py` | Covers project file watcher behavior with concrete filesystem events. |
 | reviewed | python | `termin-app/tests/test_project_operations.py` | Covers project operation behavior rather than import smoke. |
-| reviewed | python | `termin-app/tests/test_project_settings.py` | Compact settings contract with concrete expected values. |
+| reviewed | python | `termin-project/tests/test_project_settings.py` | Compact settings contract with concrete expected values. |
 | needs-work | python | `termin-app/tests/test_rendering_model_render_target_restore.py` | Serialization roundtrip cases are useful but repetitive and should be parameterized by restored field. |
-| reviewed | python | `termin-app/tests/test_runtime_package_exporter.py` | Covers runtime package export, desktop bundle contract, shader artifacts, and cleanup of stale broad-copy output. |
+| reviewed | python | `termin-project-build/tests/test_runtime_package_exporter.py` | Covers runtime package export, desktop bundle contract, shader artifacts, and cleanup of stale broad-copy output. |
 | reviewed | python | `termin-app/tests/test_scene_file_model.py` | Replaced dynamic import boilerplate with package import; remaining test checks scene-name stem behavior. |
 | reviewed | python | `termin-app/tests/test_scene_manager_viewer.py` | Replaced importlib loader helper with package import; remaining test checks scene handle formatting. |
-| needs-work | python | `termin-app/tests/test_screen_point_to_ray.py` | Symmetry/not-NaN smoke checks are weak; should assert full finite nonzero/normalized direction and expected vertical component. |
+| needs-work | python | `termin-components/termin-components-render/tests/python/test_screen_point_to_ray.py` | Symmetry/not-NaN smoke checks are weak; should assert full finite nonzero/normalized direction and expected vertical component. |
 | needs-work | python | `termin-app/tests/test_shader_tool_resolution.py` | Linux no-op is now an explicit skip and helper avoids setattr, but test still relies on dynamic source loading for Windows path logic. |
 | reviewed | python | `termin-app/tests/test_tcgui_framegraph_debugger_handle.py` | Replaced dynamic source load with package import; remaining tests cover teardown idempotence and capture preview texture parameters. |
 | reviewed | python | `termin-app/tests/test_tcgui_pipeline_editor_window.py` | Covers pipeline graph load/save, native/material pass metadata sockets, render-target nodes, and inline param widgets. |
@@ -94,11 +94,11 @@ Status values:
 | reviewed | python | `termin-app/tests/test_tcgui_project_browser.py` | Covers clipboard copy and STL mesh subtitle classification. |
 | reviewed | python | `termin-app/tests/test_tcgui_render_target_inspector.py` | Removed unreachable stub return; remaining inspector tests exercise scene/camera/resource selection behavior. |
 | reviewed | python | `termin-app/tests/test_texture_inspector.py` | Covers opening an unregistered texture file and loading saved TextureSpec display flags. |
-| reviewed | python | `termin-app/tests/test_texture_lazy_registration.py` | Keeps texture lazy-registration lifecycle regression coverage. |
+| reviewed | python | `termin-default-assets/tests/test_texture_lazy_registration.py` | Keeps texture lazy-registration lifecycle regression coverage. |
 | reviewed | python | `termin-app/tests/test_vec3_list_field_widget.py` | Covers Vec3 list row edits/rebuilds and factory routing for vec3 lists/enums. |
 | reviewed | python | `termin-app/tests/test_voxel_shader.py` | Added timeout to subprocess import-order smoke; remaining checks cover shader catalog/material layout contract. |
 | reviewed | python | `termin-app/tests/undo_stack_test.py` | Covers real undo/redo stack scenarios and scene lifetime behavior. |
-| reviewed | python | `termin-app/tests/util_test.py` | Replaced wildcard import; remaining qslerp test has a concrete halfway quaternion expectation. |
+| reviewed | python | `termin-base/tests/python/util_test.py` | Replaced wildcard import; remaining qslerp test has a concrete halfway quaternion expectation. |
 | needs-work | python | `termin-app/tests/voxels_test.py` | Removed unused import/manual runner; voxelizer transform and origin-reset tests still have broad or potentially questionable oracles. |
 | reviewed | python | `termin-assets/tests/test_asset_contracts.py` | Removed redundant export smoke covered by module imports; kept registry, spec migration, and entry-point discovery checks. |
 | reviewed | python | `termin-base/tests/python/test_python_package_install_order.py` | Keeps shared Python package manifest topological against setup.py/pyproject dependencies. |

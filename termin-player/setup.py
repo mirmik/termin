@@ -33,6 +33,8 @@ setup(
         "termin-shader-runtime",
         "termin-nanobind",
         "termin-modules",
+        "termin-project-modules",
+        "termin-stdlib",
         "termin-scene",
         "termin-display",
         "termin-engine",

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import termin.modules.runtime as modules_runtime
+import termin.project_modules.runtime as modules_runtime
 from termin.player.headless import HeadlessRuntime, HeadlessRuntimeError
 from termin.physics_components import PhysicsWorldComponent
 from termin.scene import PythonComponent

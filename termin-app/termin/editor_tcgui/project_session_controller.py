@@ -84,6 +84,11 @@ class ProjectSessionController:
         project_dir = str(project_root)
         self._set_project_state(project_dir, Path(path).stem)
         self._log_to_console(f"Project: {project_dir}")
+
+        from termin.editor_core.project_context import set_current_project_path
+
+        set_current_project_path(project_root)
+
         self.configure_shader_runtime_for_project(
             project_root,
             resolve_termin_shaderc=self._resolve_termin_shaderc,
@@ -153,7 +158,7 @@ class ProjectSessionController:
             log.error(f"[ShaderRuntime] configure_shader_runtime failed: {e}")
 
     def load_project_modules(self, project_root: Path) -> None:
-        from termin.modules.runtime import get_project_modules_runtime
+        from termin.project_modules.runtime import get_project_modules_runtime
         from termin_modules import ModuleKind, ModuleState
 
         runtime = get_project_modules_runtime()

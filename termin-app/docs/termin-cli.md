@@ -44,8 +44,9 @@ termin_runner run PROFILE
 termin_runner play [SCENE]
 ```
 
-Packaged build commands use `termin.project_build`. The old broad-copy
-`termin.project_builder` path and `build.json` player contract were removed.
+Packaged build commands use the standalone `termin-project-build` package
+(`termin.project_build`). The old broad-copy `termin.project_builder` path and
+`build.json` player contract were removed.
 
 `termin stdlib` currently delegates to:
 

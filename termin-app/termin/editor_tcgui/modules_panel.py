@@ -10,7 +10,7 @@ from tcgui.widgets.scroll_area import ScrollArea
 from tcgui.widgets.tree import TreeWidget, TreeNode
 from tcgui.widgets.units import px
 
-from termin.modules.runtime import get_project_modules_runtime
+from termin.project_modules.runtime import get_project_modules_runtime
 from termin_modules import ModuleEvent, ModuleState
 
 

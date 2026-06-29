@@ -15,7 +15,8 @@ from tcgui.widgets.containers import HStack, VStack, Panel
 from tcgui.widgets.units import px, pct
 from tcbase import Key, log
 from termin.editor_tcgui.shader_runtime import configure_sdk_shader_runtime
-from termin.launcher.recent import RecentProjects, create_project, write_launch_project
+from termin.launcher.recent import RecentProjects, write_launch_project
+from termin.project import create_project
 
 
 # ---------------------------------------------------------------------------
