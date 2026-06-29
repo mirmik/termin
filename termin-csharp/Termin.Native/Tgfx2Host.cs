@@ -38,6 +38,7 @@ namespace Termin.Native
                     return _host;
                 }
 
+                NativeRuntimeSearchPath.Configure();
                 ShaderRuntime.ConfigureFromAssemblyDirectory();
 
                 if (!File.Exists(ttfPath))

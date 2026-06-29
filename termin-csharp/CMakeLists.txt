@@ -25,93 +25,65 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
     find_package(SWIG REQUIRED COMPONENTS csharp)
     include(UseSWIG)
 
-    find_package(OpenGL REQUIRED)
-    if(COMMAND termin_require_package)
-        termin_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
-    else()
-        find_package(termin_graphics REQUIRED)
+    function(termin_csharp_require_package package_name)
+        if(COMMAND termin_require_package)
+            termin_require_package(${ARGV})
+        else()
+            find_package(${package_name} REQUIRED)
+        endif()
+    endfunction()
+
+    termin_csharp_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
+    termin_csharp_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
+    termin_csharp_require_package(termin_materials termin_materials::termin_materials)
+    termin_csharp_require_package(termin_scene termin_scene::termin_scene)
+    termin_csharp_require_package(termin_collision termin_collision::termin_collision)
+    termin_csharp_require_package(termin_components_collision termin_components_collision::termin_components_collision)
+    termin_csharp_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+    termin_csharp_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
+
+    # These component DLLs are pulled in transitively by the engine/render stack
+    # and can appear in termin.dll's import table, so they must be copied next to it.
+    termin_csharp_require_package(termin_components_render termin_components_render::termin_components_render)
+    termin_csharp_require_package(termin_components_skeleton termin_components_skeleton::termin_components_skeleton)
+    termin_csharp_require_package(termin_components_foliage termin_components_foliage::termin_components_foliage)
+
+    termin_csharp_require_package(termin_engine termin_engine::termin_engine)
+    termin_csharp_require_package(termin_display termin_display::termin_display)
+    termin_csharp_require_package(termin_animation termin_animation::termin_animation)
+    termin_csharp_require_package(termin_skeleton termin_skeleton::termin_skeleton)
+    termin_csharp_require_package(termin_render termin_render::termin_render)
+    termin_csharp_require_package(termin_render_passes termin_render_passes::termin_render_passes)
+    termin_csharp_require_package(tcplot tcplot::tcplot)
+
+    if(NOT DEFINED TERMIN_CSHARP_ENABLE_OPENGL)
+        if(DEFINED _termin_graphics_enable_opengl)
+            set(TERMIN_CSHARP_ENABLE_OPENGL ${_termin_graphics_enable_opengl} CACHE BOOL "Expose OpenGL APIs in C# bindings")
+        elseif(DEFINED TGFX2_ENABLE_OPENGL)
+            set(TERMIN_CSHARP_ENABLE_OPENGL ${TGFX2_ENABLE_OPENGL} CACHE BOOL "Expose OpenGL APIs in C# bindings")
+        else()
+            set(TERMIN_CSHARP_ENABLE_OPENGL ON CACHE BOOL "Expose OpenGL APIs in C# bindings")
+        endif()
     endif()
-    if(COMMAND termin_require_package)
-        termin_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
+    if(TERMIN_CSHARP_ENABLE_OPENGL)
+        message(STATUS "termin-csharp: OpenGL APIs enabled")
     else()
-        find_package(termin_bootstrap REQUIRED)
+        message(STATUS "termin-csharp: OpenGL APIs disabled")
     endif()
-    if(COMMAND termin_require_package)
-        termin_require_package(termin_materials termin_materials::termin_materials)
-    else()
-        find_package(termin_materials REQUIRED)
-    endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_scene termin_scene::termin_scene)
-else()
-    find_package(termin_scene REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_collision termin_collision::termin_collision)
-else()
-    find_package(termin_collision REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_components_collision termin_components_collision::termin_components_collision)
-else()
-    find_package(termin_components_collision REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
-else()
-    find_package(termin_components_mesh REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
-else()
-    find_package(termin_components_kinematic REQUIRED)
-endif()
-    # These libraries are pulled in transitively by the engine/render stack and
-    # end up in termin.dll's import table, so they must be copied next
-    # to it — otherwise Windows loader silently falls back to any older
-    # copy it can find on PATH (e.g. ~/AppData/Local/termin-sdk/bin/),
-    # which is almost never ABI-compatible with a fresh build.
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_components_render termin_components_render::termin_components_render)
-else()
-    find_package(termin_components_render REQUIRED)
-endif()
-    find_package(termin_engine REQUIRED)
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_display termin_display::termin_display)
-else()
-    find_package(termin_display REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_animation termin_animation::termin_animation)
-else()
-    find_package(termin_animation REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_skeleton termin_skeleton::termin_skeleton)
-else()
-    find_package(termin_skeleton REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_render termin_render::termin_render)
-else()
-    find_package(termin_render REQUIRED)
-endif()
-    if(COMMAND termin_require_package)
-    termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
-else()
-    find_package(termin_render_passes REQUIRED)
-endif()
-    find_package(tcplot REQUIRED)
 
     set(CMAKE_SWIG_OUTDIR "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Generated")
+
+    set(_termin_csharp_swig_flags "-namespace;Termin.Native")
+    if(TERMIN_CSHARP_ENABLE_OPENGL)
+        list(APPEND _termin_csharp_swig_flags "-DTERMIN_CSHARP_ENABLE_OPENGL")
+    endif()
 
     set_source_files_properties(
         ${CMAKE_CURRENT_SOURCE_DIR}/termin.i
         PROPERTIES
         CPLUSPLUS ON
         SWIG_USE_TARGET_INCLUDE_DIRECTORIES ON
-        SWIG_FLAGS "-namespace;Termin.Native"
+        SWIG_FLAGS "${_termin_csharp_swig_flags}"
     )
 
     swig_add_library(termin_csharp_native
@@ -144,9 +116,11 @@ endif()
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
     target_compile_definitions(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE TCBASE_EXPORTS TC_EXPORTS)
+    if(TERMIN_CSHARP_ENABLE_OPENGL)
+        target_compile_definitions(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE TERMIN_CSHARP_ENABLE_OPENGL)
+    endif()
 
     target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
-        OpenGL::GL
         tcbase::termin_base
         tgfx::termin_graphics
         termin_bootstrap::termin_bootstrap
@@ -176,7 +150,9 @@ endif()
         termin_components_collision::termin_components_collision
         termin_components_mesh::termin_components_mesh
         termin_components_kinematic::termin_components_kinematic
+        termin_components_skeleton::termin_components_skeleton
         termin_components_render::termin_components_render
+        termin_components_foliage::termin_components_foliage
         termin_engine::termin_engine
         termin_display::termin_display
         termin_animation::termin_animation

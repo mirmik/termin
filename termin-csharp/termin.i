@@ -28,7 +28,9 @@
 #include "termin/tc_scene.hpp"
 #include "render/tc_pass.h"
 #include "render/tc_pipeline.h"
+#ifdef TERMIN_CSHARP_ENABLE_OPENGL
 #include "tgfx/opengl/tc_opengl.h"
+#endif
 #include "core/tc_component.h"
 %}
 
@@ -1001,6 +1003,7 @@ public:
 // OpenGL Backend Initialization
 // ============================================================================
 
+#ifdef TERMIN_CSHARP_ENABLE_OPENGL
 %{
 #include "tgfx/opengl/tc_opengl.h"
 %}
@@ -1009,6 +1012,7 @@ public:
 bool tc_opengl_init(void);
 bool tc_opengl_is_initialized(void);
 void tc_opengl_shutdown(void);
+#endif
 
 // ============================================================================
 // Scene Serialization (via TcSceneRef C++ wrapper)
