@@ -350,6 +350,27 @@ def test_glb_scene_animation_repair_is_outside_app_package() -> None:
     assert offenders == []
 
 
+def test_glb_package_does_not_import_editor_core() -> None:
+    source_roots = [
+        REPO_ROOT / "termin-glb/python",
+        REPO_ROOT / "termin-glb/tests",
+    ]
+    forbidden_fragments = (
+        "termin.editor_core",
+        "from termin.editor_core",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*.py"):
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
 def test_project_modules_runtime_is_outside_app_package() -> None:
     assert not (REPO_ROOT / "termin-app/termin/modules").exists()
     assert not (REPO_ROOT / "termin-app/termin/module_warmup.py").exists()
