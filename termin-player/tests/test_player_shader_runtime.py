@@ -77,12 +77,11 @@ def test_player_packaged_runtime_uses_prebuilt_shader_artifacts(monkeypatch, tmp
         project_path=tmp_path,
         scene_name="scene.json",
         asset_manifest_path=tmp_path / "manifest.json",
-        build_json_path=tmp_path / "app.json",
+        app_manifest_path=tmp_path / "app.json",
     )
-    monkeypatch.setattr(runtime, "_configure_build_shader_runtime", lambda: calls.append(Path("build")))
 
     assert runtime._configure_shader_runtime()
-    assert calls == [Path("build")]
+    assert calls == []
 
 
 def test_player_backend_default_uses_d3d11_on_windows(monkeypatch, tmp_path: Path):
@@ -166,13 +165,16 @@ def test_player_runtime_explicit_window_args_override_project_settings(tmp_path:
     assert runtime.fullscreen is True
 
 
-def test_run_build_uses_manifest_window_settings(monkeypatch, tmp_path: Path):
-    build_path = tmp_path / "build.json"
-    build_path.write_text(
-        '{"entry_scene": "scene.json", "asset_manifest": "assets/manifest.json", '
+def test_run_bundle_uses_manifest_window_settings(monkeypatch, tmp_path: Path):
+    app_path = tmp_path / "app.json"
+    app_path.write_text(
+        '{"package": {"root": "package", "manifest": "package/manifest.json"}, '
+        '"entry": {"scene": "package/scene.json"}, '
         '"runtime": {"window": {"width": 960, "height": 540, "fullscreen": false}}}',
         encoding="utf-8",
     )
+    package_dir = tmp_path / "package"
+    package_dir.mkdir()
     captured: list[tuple[int, int, bool]] = []
 
     def fake_run(self):
@@ -180,6 +182,6 @@ def test_run_build_uses_manifest_window_settings(monkeypatch, tmp_path: Path):
 
     monkeypatch.setattr(PlayerRuntime, "run", fake_run)
 
-    player_runtime.run_build(build_path)
+    player_runtime.run_bundle(app_path)
 
     assert captured == [(960, 540, False)]

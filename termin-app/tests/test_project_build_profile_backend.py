@@ -308,7 +308,7 @@ def test_profile_build_routes_profile_shader_targets(tmp_path: Path, monkeypatch
     assert calls[0]["shader_targets"] == ("vulkan", "opengl", "d3d11")
 
 
-def test_profile_build_routes_legacy_desktop_shader_targets(tmp_path: Path, monkeypatch) -> None:
+def test_profile_build_routes_direct_desktop_shader_targets(tmp_path: Path, monkeypatch) -> None:
     project, _profiles_path = _write_project(tmp_path)
     calls: list[dict] = []
 

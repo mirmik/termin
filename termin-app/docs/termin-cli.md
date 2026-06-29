@@ -44,18 +44,8 @@ termin_runner run PROFILE
 termin_runner play [SCENE]
 ```
 
-Packaged build commands do not use the legacy broad-copy
-`termin.project_builder` path. That module remains available only as an
-explicit dev/play-mode export:
-
-```bash
-python -m termin.project_builder legacy-dev-export PROJECT \
-  --scene Main.scene \
-  --out dist/dev-legacy
-```
-
-The old `python -m termin.project_builder build ...` command is a compatibility
-alias for `legacy-dev-export` and prints a warning.
+Packaged build commands use `termin.project_build`. The old broad-copy
+`termin.project_builder` path and `build.json` player contract were removed.
 
 `termin stdlib` currently delegates to:
 
@@ -195,7 +185,7 @@ MCP transport, an `execute_python_script` tool against the running player
 thread, and a `capture_player_screenshot` tool that reads the player render
 surface into a PNG. The script namespace includes `runtime`/`player`, `scene`,
 `window`, `surface`, `display`, `viewport`, `camera`, `project_path`,
-`scene_name`, `asset_manifest_path`, `build_json_path`, `delta_time`, and
+`scene_name`, `asset_manifest_path`, `app_manifest_path`, `delta_time`, and
 `request_quit`.
 
 Desktop builds currently package the SDK CPython runtime, Termin Python
@@ -238,12 +228,6 @@ Player screenshots captured through MCP default to:
 /tmp/termin-player-screenshots/
 ```
 
-Explicit legacy dev exports resolve `output_dir` from the profile and launch:
-
-```bash
-python -m termin.player --build <output_dir>/build.json
-```
-
 Packaged desktop bundles launch through the bundle-local C++ host:
 
 ```bash
@@ -267,14 +251,7 @@ bundle. Pass `--build-if-missing` to build when packaged output is absent, or
 `--rebuild` to rebuild before every launch. Pass `--dry-run` to inspect the
 resolved player command without starting a window.
 
-Legacy `build.json` launch is intentionally explicit:
-
-```bash
-termin run dev --mode legacy-build
-```
-
-Default `--mode build` no longer falls back to `build.json` when the packaged
-bundle is missing.
+The removed `build.json` format is not a fallback for `run`.
 
 `play` is intentionally separate from build output and build profiles. It
 launches a source scene directly through `termin.player`, which keeps room for

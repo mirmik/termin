@@ -98,7 +98,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "build":
             return build_profile_from_args(args)
         if args.command == "desktop":
-            return _build_legacy_desktop(args)
+            return _build_desktop_from_args(args)
     except ProfileBuildError as exc:
         print(f"termin profile build: {exc}", file=sys.stderr)
         return exc.exit_code
@@ -378,7 +378,7 @@ def _create_parser() -> argparse.ArgumentParser:
 
     desktop_parser = subparsers.add_parser(
         "desktop",
-        help="Build desktop project artifacts using the legacy direct argument form",
+        help="Build desktop project artifacts using the direct argument form",
     )
     desktop_parser.add_argument("--project-root", type=Path, required=True)
     desktop_parser.add_argument("--entry-scene", type=Path, required=True)
@@ -392,19 +392,11 @@ def _create_parser() -> argparse.ArgumentParser:
         default=None,
         help="Add a runtime shader artifact target. Repeat for multiple targets.",
     )
-    desktop_parser.add_argument(
-        "--manifest-only",
-        action="store_true",
-        help="Write build.json and manifest.json without copying resource files",
-    )
 
     return parser
 
 
-def _build_legacy_desktop(args: argparse.Namespace) -> int:
-    if args.manifest_only:
-        print("warning: --manifest-only is ignored by the desktop runtime package backend")
-
+def _build_desktop_from_args(args: argparse.Namespace) -> int:
     project_root = args.project_root.resolve()
     result = build_desktop_project(
         project_root=project_root,

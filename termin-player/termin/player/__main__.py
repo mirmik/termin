@@ -4,12 +4,10 @@ Command-line entry point for Termin Player.
 Usage:
     python -m termin.player path/to/project --scene main.scene
     python -m termin.player path/to/project --scene main.scene --headless
-    python -m termin.player --build dist/MyGame/build.json
     python -m termin.player --bundle dist/MyGame/app.json
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -23,12 +21,6 @@ def main():
         type=str,
         nargs="?",
         help="Path to project directory",
-    )
-    parser.add_argument(
-        "--build", "-b",
-        type=str,
-        default=None,
-        help="Path to build.json produced by termin.project_builder",
     )
     parser.add_argument(
         "--bundle",
@@ -138,10 +130,8 @@ def main():
     args = parser.parse_args()
     mcp_options = _mcp_options_from_args(args)
 
-    if args.build is not None and args.bundle is not None:
-        parser.error("--build and --bundle are mutually exclusive")
-    if args.headless and (args.build is not None or args.bundle is not None):
-        parser.error("--headless runs source projects only; --build and --bundle are render runtimes")
+    if args.headless and args.bundle is not None:
+        parser.error("--headless runs source projects only; --bundle is a render runtime")
     if args.frames is not None and args.frames < 0:
         parser.error("--frames must be non-negative")
     if args.dt < 0.0:
@@ -166,43 +156,8 @@ def main():
         )
         return
 
-    if args.build is not None:
-        build_json_path = Path(args.build)
-        if not build_json_path.exists():
-            print(f"Error: Build file does not exist: {build_json_path}")
-            sys.exit(1)
-
-        try:
-            with open(build_json_path, "r", encoding="utf-8") as f:
-                build_data = json.load(f)
-        except Exception as e:
-            print(f"Error: Failed to read build file {build_json_path}: {e}")
-            sys.exit(1)
-
-        entry_scene = build_data.get("entry_scene")
-        asset_manifest = build_data.get("asset_manifest")
-        if not isinstance(entry_scene, str) or entry_scene == "":
-            print(f"Error: build.json has no entry_scene: {build_json_path}")
-            sys.exit(1)
-        if not isinstance(asset_manifest, str) or asset_manifest == "":
-            print(f"Error: build.json has no asset_manifest: {build_json_path}")
-            sys.exit(1)
-
-        from termin.player import run_build
-
-        run_build(
-            build_json_path=build_json_path,
-            width=args.width,
-            height=args.height,
-            title=args.title,
-            fullscreen=args.fullscreen,
-            mcp_enabled=args.mcp,
-            mcp_options=mcp_options,
-        )
-        return
-
     if args.project is None:
-        parser.error("project is required unless --build or --bundle is used")
+        parser.error("project is required unless --bundle is used")
 
     project_path = Path(args.project)
     if not project_path.exists():

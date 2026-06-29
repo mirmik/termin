@@ -76,16 +76,14 @@ Status values:
 | reviewed | python | `termin-player/tests/test_mcp_base.py` | Covers owner-thread Python execution, shared/player MCP tool exposure, config merging, and screenshot response structure. |
 | reviewed | python | `termin-app/tests/test_mesh_spec_defaults.py` | Covers default axis conversion and explicit identity axis preservation. |
 | reviewed | python | `termin-app/tests/test_navmesh_package_facade.py` | Keeps public facade import boundary lightweight and skips native-dependent export only when SDK library is unavailable. |
-| reviewed | python | `termin-player/tests/test_player_manifest_assets.py` | Removed duplicated default asset type matrix; remaining manifest-loader test uses a supplied fake registry and checks player plugin consumption/order. |
 | reviewed | python | `termin-app/tests/test_procedural_mesh_component.py` | Covers procedural mesh regeneration reusing the existing TcMesh handle. |
 | reviewed | python | `termin-app/tests/test_procedural_mesh_editor_extension.py` | Covers shared document controller wiring, panel state, and viewport drag edits for contour/path/wall operations. |
-| needs-work | python | `termin-app/tests/test_project_builder.py` | Useful builder coverage, but resource manifest and fake shader compiler fixtures duplicate runtime exporter tests. |
 | reviewed | python | `termin-app/tests/test_project_file_action_controller.py` | Covers scene/prefab activation, text-editor fallback, and inspector routing by extension. |
 | reviewed | python | `termin-app/tests/test_project_file_watcher.py` | Covers project file watcher behavior with concrete filesystem events. |
 | reviewed | python | `termin-app/tests/test_project_operations.py` | Covers project operation behavior rather than import smoke. |
 | reviewed | python | `termin-app/tests/test_project_settings.py` | Compact settings contract with concrete expected values. |
 | needs-work | python | `termin-app/tests/test_rendering_model_render_target_restore.py` | Serialization roundtrip cases are useful but repetitive and should be parameterized by restored field. |
-| needs-work | python | `termin-app/tests/test_runtime_package_exporter.py` | Useful exporter coverage, but wide resource manifest and fake shader compiler setup duplicates project builder tests. |
+| reviewed | python | `termin-app/tests/test_runtime_package_exporter.py` | Covers runtime package export, desktop bundle contract, shader artifacts, and cleanup of stale broad-copy output. |
 | reviewed | python | `termin-app/tests/test_scene_file_model.py` | Replaced dynamic import boilerplate with package import; remaining test checks scene-name stem behavior. |
 | reviewed | python | `termin-app/tests/test_scene_manager_viewer.py` | Replaced importlib loader helper with package import; remaining test checks scene handle formatting. |
 | needs-work | python | `termin-app/tests/test_screen_point_to_ray.py` | Symmetry/not-NaN smoke checks are weak; should assert full finite nonzero/normalized direction and expected vertical component. |

@@ -120,3 +120,31 @@ def test_app_default_preloaders_compat_layer_is_removed() -> None:
     app_facade = REPO_ROOT / "termin-app/termin/editor_core/default_preloaders.py"
 
     assert not app_facade.exists()
+
+
+def test_legacy_project_builder_and_build_json_player_path_are_removed() -> None:
+    assert not (REPO_ROOT / "termin-app/termin/project_builder").exists()
+
+    source_roots = [
+        REPO_ROOT / "termin-app/termin",
+        REPO_ROOT / "termin-player/termin",
+        REPO_ROOT / "termin-app/cpp/app",
+    ]
+    forbidden_fragments = (
+        "termin.project_builder",
+        "legacy-dev-export",
+        "legacy-build",
+        "build_json_path",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*"):
+            if path.suffix not in {".py", ".cpp", ".hpp", ".h"}:
+                continue
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []

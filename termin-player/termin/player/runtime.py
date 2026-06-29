@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from termin.player.project_runtime_support import (
-    create_build_import_registry,
     load_project_modules,
     register_project_runtime_resources,
     scan_project_assets,
@@ -23,7 +22,6 @@ from termin.player.project_settings import (
 )
 
 if TYPE_CHECKING:
-    from termin_assets import AssetTypeRegistry
     from termin.scene import TcScene as Scene
 
 
@@ -111,61 +109,6 @@ def _resolve_window_bool(value: object, default: bool, field_name: str) -> bool:
         return default
     return value
 
-def load_manifest_assets_with_import_plugins(
-    project_path: Path,
-    resources: list,
-    resource_manager: object,
-    import_registry: "AssetTypeRegistry",
-) -> int:
-    """Load plugin-backed build manifest assets without editor_core preloaders."""
-    from tcbase import log
-
-    pending = []
-    for resource in resources:
-        if not isinstance(resource, dict):
-            continue
-        if resource.get("kind") != "asset":
-            continue
-
-        resource_type = resource.get("type")
-        if not isinstance(resource_type, str) or resource_type == "":
-            log.warning("[PlayerRuntime] Build asset has no valid type")
-            continue
-
-        plugin = import_registry.get_import(resource_type)
-        if plugin is None:
-            if resource_type != "scene":
-                log.warning(f"[PlayerRuntime] Build asset type is not plugin-backed yet: {resource_type}")
-            continue
-
-        build_path = resource.get("build_path")
-        if not isinstance(build_path, str) or build_path == "":
-            log.warning(f"[PlayerRuntime] Build asset has no build_path: {resource_type}")
-            continue
-
-        path = project_path / build_path
-        pending.append((plugin.priority, str(path), plugin))
-
-    pending.sort(key=lambda item: (item[0], item[1]))
-
-    loaded_count = 0
-    for _priority, path, plugin in pending:
-        asset_path = Path(path)
-        if not asset_path.exists():
-            log.error(f"[PlayerRuntime] Build asset not found: {asset_path}")
-            continue
-        try:
-            result = plugin.preload(str(asset_path))
-            if result is not None:
-                log.info(f"[PlayerRuntime] Loading build {result.resource_type}: {asset_path.name}")
-                resource_manager.register_file(result)
-                loaded_count += 1
-        except Exception as e:
-            log.error(f"[PlayerRuntime] Failed to load build asset {asset_path}: {e}")
-
-    return loaded_count
-
-
 class PlayerRuntime:
     """
     Standalone game runtime.
@@ -183,7 +126,7 @@ class PlayerRuntime:
         title: str = "Termin Player",
         fullscreen: bool | None = None,
         asset_manifest_path: str | Path | None = None,
-        build_json_path: str | Path | None = None,
+        app_manifest_path: str | Path | None = None,
         mcp_enabled: bool = False,
         mcp_options: dict | None = None,
         player_window: "ProjectPlayerWindowSettings | None" = None,
@@ -202,7 +145,7 @@ class PlayerRuntime:
         self.title = title
         self.fullscreen = window_settings.fullscreen
         self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
-        self.build_json_path = Path(build_json_path) if build_json_path is not None else None
+        self.app_manifest_path = Path(app_manifest_path) if app_manifest_path is not None else None
         self.mcp_enabled = bool(mcp_enabled)
         self.mcp_options = mcp_options if mcp_options is not None else {}
         self._scene_file_data = None
@@ -260,8 +203,8 @@ class PlayerRuntime:
         if not self._ensure_engine_core():
             return False
 
-        if self.build_json_path is not None:
-            log.info(f"[PlayerRuntime] Initializing build: {self.build_json_path}")
+        if self.app_manifest_path is not None:
+            log.info(f"[PlayerRuntime] Initializing bundle: {self.app_manifest_path}")
         else:
             log.info(f"[PlayerRuntime] Initializing project: {self.project_path}")
 
@@ -492,50 +435,9 @@ class PlayerRuntime:
             f"[PlayerRuntime] TERMIN_BACKEND not set; using {default_backend} for standalone player"
         )
 
-    def _configure_build_shader_runtime(self) -> None:
-        """Make build.json runs consume prebuilt shader artifacts from the build."""
-        if self.build_json_path is None or self.asset_manifest_path is None:
-            return
-
-        from tcbase import log
-
-        manifest_path = self.asset_manifest_path
-        if not manifest_path.is_absolute():
-            manifest_path = self.project_path / manifest_path
-        artifact_root = manifest_path.parent
-        cache_root = self.project_path / ".build" / "shader-cache"
-        try:
-            cache_root.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:
-            log.error(f"[PlayerRuntime] Failed to create build shader cache: {exc}")
-            return
-
-        os.environ["TERMIN_SHADER_ARTIFACT_ROOT"] = str(artifact_root)
-        os.environ["TERMIN_SHADER_CACHE_ROOT"] = str(cache_root)
-        os.environ["TERMIN_SHADER_DEV_COMPILE"] = "0"
-
-        try:
-            import tgfx
-
-            tgfx.configure_shader_runtime(
-                artifact_root=str(artifact_root),
-                cache_root=str(cache_root),
-                shader_compiler=os.environ.get("TERMIN_SHADERC", ""),
-                dev_compile=False,
-            )
-        except Exception as exc:
-            log.error(f"[PlayerRuntime] Failed to configure build shader runtime: {exc}")
-            return
-
-        log.info(
-            "[PlayerRuntime] Build shader runtime configured: "
-            f"artifact_root='{artifact_root}' cache_root='{cache_root}' dev_compile=False"
-        )
-
     def _configure_shader_runtime(self) -> bool:
         """Configure shader artifacts for source-project or packaged execution."""
-        if self.build_json_path is not None or self.asset_manifest_path is not None:
-            self._configure_build_shader_runtime()
+        if self.asset_manifest_path is not None:
             return True
 
         from termin.shader_runtime import configure_project_shader_runtime
@@ -585,9 +487,6 @@ class PlayerRuntime:
         """Load all project modules through termin-modules runtime."""
         load_project_modules(self.project_path, log_prefix="[PlayerRuntime]")
 
-    def _create_build_import_registry(self) -> "AssetTypeRegistry":
-        return create_build_import_registry()
-
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
         scan_project_assets(self.project_path, log_prefix="[PlayerRuntime]")
@@ -595,10 +494,8 @@ class PlayerRuntime:
     def _load_manifest_assets(self) -> None:
         """Load build resources listed by manifest.json."""
         from tcbase import log
-        from termin.default_assets.resource_manager import DefaultResourceManager
-
         if self.asset_manifest_path is None:
-            log.error("[PlayerRuntime] No asset manifest path set")
+            log.error("[PlayerRuntime] No runtime package manifest path set")
             return
 
         manifest_path = self.asset_manifest_path
@@ -606,56 +503,12 @@ class PlayerRuntime:
             manifest_path = self.project_path / manifest_path
 
         if not manifest_path.exists():
-            log.error(f"[PlayerRuntime] Asset manifest not found: {manifest_path}")
+            log.error(f"[PlayerRuntime] Runtime package manifest not found: {manifest_path}")
             return
 
-        try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                manifest_data = json.load(f)
-        except Exception as e:
-            log.error(f"[PlayerRuntime] Failed to read asset manifest {manifest_path}: {e}")
-            return
+        from termin.player.runtime_package_loader import load_runtime_package_assets
 
-        resources = manifest_data.get("resources")
-        if not isinstance(resources, list):
-            log.error(f"[PlayerRuntime] Invalid asset manifest resources: {manifest_path}")
-            return
-
-        if self._is_runtime_package_manifest(resources):
-            from termin.player.runtime_package_loader import load_runtime_package_assets
-
-            load_runtime_package_assets(manifest_path.parent, manifest_path)
-            return
-
-        for diagnostic in manifest_data.get("diagnostics", []):
-            if not isinstance(diagnostic, dict):
-                continue
-            level = diagnostic.get("level")
-            path = diagnostic.get("path")
-            message = diagnostic.get("message")
-            log.warning(f"[PlayerRuntime] Build diagnostic {level}: {path}: {message}")
-
-        rm = DefaultResourceManager.instance()
-        import_registry = self._create_build_import_registry()
-        loaded_count = load_manifest_assets_with_import_plugins(
-            project_path=self.project_path,
-            resources=resources,
-            resource_manager=rm,
-            import_registry=import_registry,
-        )
-
-        log.info(f"[PlayerRuntime] Loaded {loaded_count} build assets from manifest")
-
-    def _is_runtime_package_manifest(self, resources: list) -> bool:
-        for resource in resources:
-            if not isinstance(resource, dict):
-                continue
-            if resource.get("kind") == "asset":
-                return False
-            resource_type = resource.get("type")
-            if resource_type in {"shader", "mesh", "material", "pipeline", "foliage_data"}:
-                return True
-        return False
+        load_runtime_package_assets(manifest_path.parent, manifest_path)
 
     def _setup_camera(self):
         """Find existing camera or create default one."""
@@ -1005,52 +858,6 @@ def run_project(
     runtime.run()
 
 
-def run_build(
-    build_json_path: str | Path,
-    width: int | None = None,
-    height: int | None = None,
-    title: str = "Termin Player",
-    fullscreen: bool | None = None,
-    mcp_enabled: bool = False,
-    mcp_options: dict | None = None,
-):
-    """
-    Run a built project from build.json.
-
-    Args:
-        build_json_path: Path to build.json produced by termin.project_builder
-        width: Window width
-        height: Window height
-        title: Window title
-        fullscreen: Enable borderless desktop fullscreen after window creation
-    """
-    build_path = Path(build_json_path).resolve()
-    with open(build_path, "r", encoding="utf-8") as f:
-        build_data = json.load(f)
-
-    entry_scene = build_data.get("entry_scene")
-    asset_manifest = build_data.get("asset_manifest")
-    if not isinstance(entry_scene, str) or entry_scene == "":
-        raise ValueError(f"build.json has no entry_scene: {build_path}")
-    if not isinstance(asset_manifest, str) or asset_manifest == "":
-        raise ValueError(f"build.json has no asset_manifest: {build_path}")
-
-    runtime = PlayerRuntime(
-        project_path=build_path.parent,
-        scene_name=entry_scene,
-        width=width,
-        height=height,
-        title=title,
-        fullscreen=fullscreen,
-        asset_manifest_path=asset_manifest,
-        build_json_path=build_path,
-        player_window=_player_window_from_manifest(build_data, build_path),
-        mcp_enabled=mcp_enabled,
-        mcp_options=mcp_options,
-    )
-    runtime.run()
-
-
 def run_bundle(
     app_manifest_path: str | Path,
     width: int | None = None,
@@ -1105,7 +912,7 @@ def run_bundle(
         title=title,
         fullscreen=fullscreen,
         asset_manifest_path=manifest_path,
-        build_json_path=app_path,
+        app_manifest_path=app_path,
         player_window=_player_window_from_manifest(app_data, app_path),
         mcp_enabled=mcp_enabled,
         mcp_options=manifest_mcp_options,

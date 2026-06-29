@@ -31,19 +31,6 @@ def _load_shader_tools_module():
     return module
 
 
-def _load_shader_build_module():
-    manifest_module = types.ModuleType("termin.project_builder.manifest")
-    manifest_module.BuildDiagnostic = object
-    manifest_module.BuildResource = object
-    manifest_module.ProjectBuildManifest = object
-    sys.modules["termin.project_builder.manifest"] = manifest_module
-    _load_shader_tools_module()
-    return _load_module(
-        "shader_build_under_test",
-        _repo_root() / "termin-app" / "termin" / "project_builder" / "shader_build.py",
-    )
-
-
 def _load_runtime_package_exporter_module():
     _load_shader_tools_module()
     return _load_module(
@@ -106,33 +93,6 @@ def test_shader_tools_resolves_sdk_windows_exe_suffix(monkeypatch, tmp_path: Pat
 
     assert shader_tools.existing_executable(sdk / "bin" / "termin_shaderc") == tool
     assert shader_tools.resolve_sdk_tool("termin_shaderc", Path(__file__)) == tool
-
-
-def test_project_builder_resolves_sdk_windows_exe_suffix(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    sdk = tmp_path / "sdk"
-    tool = sdk / "bin" / _executable_name("termin_shaderc")
-    _write_tool(tool)
-
-    monkeypatch.setenv("TERMIN_SDK", str(sdk))
-    monkeypatch.setenv("PATH", "")
-
-    shader_build = _load_shader_build_module()
-
-    assert shader_build._resolve_shader_compiler(None) == tool.resolve()
-
-
-def test_project_builder_accepts_explicit_suffixless_windows_tool_path(
-    tmp_path: Path,
-) -> None:
-    tool = tmp_path / _executable_name("termin_shaderc")
-    _write_tool(tool)
-
-    shader_build = _load_shader_build_module()
-
-    assert shader_build._resolve_shader_compiler(tmp_path / "termin_shaderc") == tool
 
 
 def test_runtime_package_exporter_resolves_sdk_windows_exe_suffix(
