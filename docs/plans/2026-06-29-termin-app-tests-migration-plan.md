@@ -1,7 +1,7 @@
 # termin-app tests migration plan
 
 Date: 2026-06-29
-Status: planned
+Status: implemented
 
 ## Goal Objective
 
@@ -60,7 +60,8 @@ After the migration:
 - domain packages own their domain tests under their own `tests` directories;
 - package tests for `termin-glb`, `termin-default-assets`, `termin-assets`,
   `termin-project-build`, `termin-project`, `termin-navmesh`, `termin-base`,
-  `termin-kinematic`, `termin-colliders`, `termin-render-framework`,
+  `termin-components/termin-components-kinematic`, `termin-collision`,
+  `termin-render`, `termin-components/termin-components-render`,
   `termin-materials`, `termin-csg`, and `termin-animation` do not import
   `termin.editor_core` or `termin.editor_tcgui`;
 - tests that need asset-runtime behavior use `termin_assets.AssetRuntimeManager`,
@@ -263,9 +264,10 @@ Run package-local tests as batches:
 ./run-tests-python.sh termin-default-assets/tests
 ./run-tests-python.sh termin-navmesh/tests
 ./run-tests-python.sh termin-base/tests
-./run-tests-python.sh termin-kinematic/tests
-./run-tests-python.sh termin-colliders/tests
-./run-tests-python.sh termin-render-framework/tests
+./run-tests-python.sh termin-components/termin-components-kinematic/tests
+./run-tests-python.sh termin-collision/tests
+./run-tests-python.sh termin-render/tests
+./run-tests-python.sh termin-components/termin-components-render/tests
 ./run-tests-python.sh termin-materials/tests
 ./run-tests-python.sh termin-csg/tests
 ./run-tests-python.sh termin-animation/tests

@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from termin.editor_core.resource_manager import ResourceManager
+from termin.default_assets.resource_manager import DefaultResourceManager
 from termin_assets import PreLoadResult
 from tgfx import TcTexture, tc_texture_ensure_loaded, tc_texture_is_loaded
 
@@ -15,7 +15,7 @@ def test_texture_file_registration_declares_lazy_core_texture(tmp_path: Path) ->
     pixels[:, :, 3] = 255
     Image.fromarray(pixels, "RGBA").save(texture_path)
 
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     try:
         result = PreLoadResult(
             resource_type="texture",

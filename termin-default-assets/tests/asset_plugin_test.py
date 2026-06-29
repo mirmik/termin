@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from termin.editor_core.resource_manager import ResourceManager
+from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.default_preloaders import create_default_preloaders
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets import PreLoadResult, get_resource_manager, set_resource_manager_factory
@@ -11,19 +11,19 @@ from termin_assets import PreLoadResult, get_resource_manager, set_resource_mana
 def test_resource_manager_reset_restores_process_factory() -> None:
     set_resource_manager_factory(None)
 
-    ResourceManager._reset_for_testing()
-    rm = ResourceManager.instance()
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
 
     try:
         assert get_resource_manager() is rm
     finally:
-        ResourceManager.shutdown_instance()
+        DefaultResourceManager.shutdown_instance()
 
 
 def test_mesh_register_file_uses_asset_plugin(tmp_path) -> None:
     mesh_path = tmp_path / "plugin_probe.obj"
     mesh_path.write_text("", encoding="utf-8")
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     result = PreLoadResult(
         resource_type="mesh",
         path=str(mesh_path),
@@ -59,7 +59,7 @@ def test_mesh_reload_updates_existing_tc_mesh_data(tmp_path) -> None:
         encoding="utf-8",
     )
 
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     result = PreLoadResult(
         resource_type="mesh",
         path=str(mesh_path),
@@ -116,7 +116,7 @@ def test_mesh_reload_updates_existing_tc_mesh_data(tmp_path) -> None:
 
 
 def test_asset_plugin_registry_can_find_default_import_plugins_by_extension() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     expected_types = {
         ".obj": "mesh",
         ".wav": "audio_clip",
@@ -135,7 +135,7 @@ def test_resource_manager_runtime_asset_api_registers_mesh(tmp_path) -> None:
 
     mesh_path = tmp_path / "runtime_api_probe.obj"
     mesh_path.write_text("", encoding="utf-8")
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     asset = MeshAsset(
         mesh_data=None,
         name="runtime_api_probe",
@@ -153,7 +153,7 @@ def test_resource_manager_runtime_asset_api_registers_mesh(tmp_path) -> None:
 def test_resource_manager_runtime_asset_api_get_or_create_glsl(tmp_path) -> None:
     glsl_path = tmp_path / "runtime_api_probe.glsl"
     glsl_path.write_text("// probe\n", encoding="utf-8")
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
 
     asset = rm.get_or_create_runtime_asset(
         "glsl",
@@ -168,7 +168,7 @@ def test_resource_manager_runtime_asset_api_get_or_create_glsl(tmp_path) -> None
 
 
 def test_audio_clip_register_file_uses_asset_plugin() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     result = PreLoadResult(
         resource_type="audio_clip",
         path="/tmp/plugin_probe.wav",
@@ -188,7 +188,7 @@ def test_audio_clip_register_file_uses_asset_plugin() -> None:
 
 
 def test_glb_register_file_creates_spec_child_assets() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     result = PreLoadResult(
         resource_type="glb",
         path="/tmp/robot.glb",
@@ -232,7 +232,7 @@ def test_glb_register_file_creates_spec_child_assets() -> None:
 
 
 def test_glb_animation_child_asset_names_are_scoped_by_parent_glb() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
 
     rm.register_file(
         PreLoadResult(
@@ -284,7 +284,7 @@ def test_glb_animation_child_asset_names_are_scoped_by_parent_glb() -> None:
 
 
 def test_default_preloaders_use_plugin_adapters_for_direct_asset_files() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     preloaders = create_default_preloaders(rm)
     expected_types = {
         ".obj": "mesh",
@@ -304,7 +304,7 @@ def test_default_preloaders_use_plugin_adapters_for_direct_asset_files() -> None
 
 
 def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
-    rm = ResourceManager()
+    rm = DefaultResourceManager()
     preloaders = create_default_preloaders(rm)
 
     migrated = {

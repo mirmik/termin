@@ -2,6 +2,10 @@ from pathlib import Path
 
 import pytest
 
+from termin.bootstrap import bootstrap_player
+
+bootstrap_player()
+
 from termin.materials import TcMaterial
 from termin.render_components import (
     Camera,

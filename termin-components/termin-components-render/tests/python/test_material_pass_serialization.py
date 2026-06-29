@@ -1,11 +1,11 @@
 from termin.render_components import MaterialPass
 from termin.render_framework import RenderPipeline
-from termin.editor_core.resource_manager import ResourceManager
+from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.materials import TcMaterial
 
 
 def test_material_pass_graph_texture_inputs_survive_pipeline_copy():
-    rm = ResourceManager.instance()
+    rm = DefaultResourceManager.instance()
     rm.register_builtin_frame_passes()
 
     material_pass = MaterialPass(output_res="out", pass_name="MaterialPass")

@@ -310,7 +310,7 @@ def test_removed_visualization_namespace_is_not_used_by_live_code() -> None:
         ".txt",
     }
     allowed_paths = {
-        Path("termin-app/tests/test_component_frame_pass_registries.py"),
+        Path("termin-default-assets/tests/test_component_frame_pass_registries.py"),
     }
 
     offenders: list[str] = []
