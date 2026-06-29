@@ -59,24 +59,31 @@ class _WindowUI:
 
 
 class _Capture:
-    capture_tex = object()
-    width = 64
-    height = 32
-    is_depth = False
+    def __init__(self, *, is_depth=False):
+        self.capture_tex = object()
+        self.width = 64
+        self.height = 32
+        self.is_depth = is_depth
 
 
 class _Core:
-    capture_tex = object()
-    capture = _Capture()
-    depth_capture = _Capture()
+    def __init__(self):
+        self.presenter = object()
+        self.capture_tex = object()
+        self.capture = _Capture()
+        self.depth_capture = _Capture(is_depth=True)
 
 
 class _Renderer:
     def __init__(self):
+        self.preview_kwargs = None
         self.texture_kwargs = None
 
     def draw_rect(self, *_args):
         pass
+
+    def draw_texture_preview(self, *_args, **kwargs):
+        self.preview_kwargs = kwargs
 
     def draw_texture(self, *_args, **kwargs):
         self.texture_kwargs = kwargs
@@ -136,7 +143,7 @@ def test_close_tears_down_and_closes_native_window_once():
     assert handle.visible is False
 
 
-def test_capture_preview_forwards_channel_mode_to_texture_draw():
+def test_capture_preview_forwards_channel_mode_to_presenter_preview():
     preview = CapturePreviewWidget()
     preview._core = _Core()
     preview._capture = preview._core.capture
@@ -148,15 +155,16 @@ def test_capture_preview_forwards_channel_mode_to_texture_draw():
     renderer = _Renderer()
     preview.render(renderer)
 
-    assert renderer.texture_kwargs["channel_mode"] == 4
-    assert renderer.texture_kwargs["highlight_hdr"] is True
+    assert renderer.texture_kwargs is None
+    assert renderer.preview_kwargs["presenter"] is preview._core.presenter
+    assert renderer.preview_kwargs["channel_mode"] == 4
+    assert renderer.preview_kwargs["highlight_hdr"] is True
 
 
-def test_capture_preview_forces_depth_to_red_channel_without_hdr():
+def test_capture_preview_forces_depth_to_presenter_depth_mode_without_hdr():
     preview = CapturePreviewWidget()
     preview._core = _Core()
-    preview._capture = preview._core.capture
-    preview._capture.is_depth = True
+    preview._capture = preview._core.depth_capture
     preview.has_content = True
     preview.channel_mode = 4
     preview.highlight_hdr = True
@@ -165,9 +173,10 @@ def test_capture_preview_forces_depth_to_red_channel_without_hdr():
     renderer = _Renderer()
     preview.render(renderer)
 
-    assert renderer.texture_kwargs["channel_mode"] == 5
-    assert renderer.texture_kwargs["highlight_hdr"] is False
-
+    assert renderer.texture_kwargs is None
+    assert renderer.preview_kwargs["presenter"] is preview._core.presenter
+    assert renderer.preview_kwargs["channel_mode"] == 5
+    assert renderer.preview_kwargs["highlight_hdr"] is False
 
 def test_pass_combo_tracks_stable_pipeline_indices_for_duplicate_names():
     class Model(_Model):
