@@ -71,7 +71,7 @@ def _setup_entry_points(setup_path: Path) -> dict[str, dict[str, str]]:
     assert isinstance(entry_points, ast.Dict)
 
     groups: dict[str, dict[str, str]] = {}
-    for key, value in zip(entry_points.keys, entry_points.values):
+    for key, value in zip(entry_points.keys, entry_points.values, strict=True):
         assert isinstance(key, ast.Constant)
         assert isinstance(key.value, str)
         assert isinstance(value, ast.List)

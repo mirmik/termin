@@ -260,7 +260,7 @@ static void u32_map_resize(tc_u32_map* map, size_t new_capacity) {
     u32_entry* old_entries = map->entries;
     size_t old_capacity = map->capacity;
 
-    map->entries = (u32_entry*)malloc(new_capacity * sizeof(u32_entry));
+    map->entries = (u32_entry*)calloc(new_capacity, sizeof(u32_entry));
     if (!map->entries) {
         map->entries = old_entries;
         return;
@@ -440,7 +440,7 @@ static void u64_map_resize(tc_u64_map* map, size_t new_capacity) {
     u64_entry* old_entries = map->entries;
     size_t old_capacity = map->capacity;
 
-    map->entries = (u64_entry*)malloc(new_capacity * sizeof(u64_entry));
+    map->entries = (u64_entry*)calloc(new_capacity, sizeof(u64_entry));
     if (!map->entries) {
         map->entries = old_entries;
         return;

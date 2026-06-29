@@ -749,9 +749,7 @@ void ColorPass::execute_with_data(
                 [this,
                  &device,
                  &material_resources,
-                 &ctx,
-                 drawable,
-                 geometry_id = dc.geometry_id](
+                 &ctx](
                     tgfx::RenderContext2& draw_ctx,
                     const tc_shader* shader,
                     tc_material_phase* live_phase) {
