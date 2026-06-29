@@ -10,6 +10,7 @@ from termin.materials import (
     parse_shader_text,
     parse_property_directive,
 )
+from termin.stdlib import stdlib_root
 
 
 def test_parse_render_state_directives():
@@ -619,14 +620,7 @@ def test_slang_texture_property_does_not_duplicate_existing_sampler2d_declaratio
 def test_stdlib_blinn_phong_uses_slang_scope_model():
     from termin.default_assets.render.shader_asset import ShaderAsset
 
-    shader_path = (
-        Path(__file__).resolve().parents[1]
-        / "termin"
-        / "resources"
-        / "stdlib"
-        / "shaders"
-        / "BlinnPhong.shader"
-    )
+    shader_path = stdlib_root() / "shaders" / "BlinnPhong.shader"
     shader_asset = ShaderAsset.from_file(shader_path, name="BlinnPhong")
     program = shader_asset.program
     assert program is not None
@@ -671,7 +665,7 @@ def test_stdlib_slang_material_creates_slang_tc_shader():
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
-    stdlib = Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
+    stdlib = stdlib_root()
 
     shader_asset = ShaderAsset.from_file(
         stdlib / "shaders" / "SlangNormalColor.shader",
@@ -713,7 +707,7 @@ def test_stdlib_slang_textured_normal_material_uses_texture_property():
 
     ResourceManager._reset_for_testing()
     rm = ResourceManager.instance()
-    stdlib = Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
+    stdlib = stdlib_root()
 
     shader_asset = ShaderAsset.from_file(
         stdlib / "shaders" / "SlangTexturedNormal.shader",
@@ -755,7 +749,7 @@ def test_stdlib_slang_textured_normal_material_uses_texture_property():
 def test_builtin_pbr_shader_uses_slang_scope_model():
     from termin.default_assets.render.shader_asset import ShaderAsset
 
-    stdlib = Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
+    stdlib = stdlib_root()
     shader_asset = ShaderAsset.from_file(
         stdlib / "shaders" / "CookTorrancePBR.shader",
         name="CookTorrancePBR",

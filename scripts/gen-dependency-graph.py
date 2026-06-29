@@ -64,6 +64,7 @@ PYTHON_PKG_TO_DIR = {
     "termin-project": "termin-project",
     "termin-project-build": "termin-project-build",
     "termin-project-modules": "termin-project-modules",
+    "termin-stdlib": "termin-stdlib",
     "termin-mcp": "termin-mcp",
     "termin-shader-runtime": "termin-shader-runtime",
     "termin-base": "termin-base",
@@ -111,6 +112,7 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.project_build": "termin-project-build",
     "termin.project_modules": "termin-project-modules",
     "termin.project": "termin-project",
+    "termin.stdlib": "termin-stdlib",
     "termin.glb": "termin-glb",
     "termin.player": "termin-player",
     "termin.mcp": "termin-mcp",
@@ -183,6 +185,7 @@ if os.path.exists(termin_native_cmake):
 PYTHON_ONLY_DIRS = {
     "termin-mcp": os.path.join(ROOT, "termin-mcp", "termin"),
     "termin-shader-runtime": os.path.join(ROOT, "termin-shader-runtime", "termin"),
+    "termin-stdlib": os.path.join(ROOT, "termin-stdlib", "python", "termin"),
 }
 
 # Dependencies that are structural but not reliably visible from setup.py or
@@ -193,6 +196,7 @@ MANUAL_DEPS = {
     "termin-player": {"termin"},
     "termin-mcp": {"termin"},
     "termin-shader-runtime": {"termin"},
+    "termin-stdlib": {"termin"},
     # "termin-entity": {"termin"},  # удалён, мигрирован в termin-app
     "termin-navmesh": {"termin"},
     "termin-tween": {"termin"},

@@ -131,7 +131,7 @@ void append_existing_python_stdlib_candidates(std::vector<fs::path>& candidates,
         }
         const std::string name = entry.path().filename().string();
         if (name.rfind("python3.", 0) == 0) {
-            candidates.push_back(entry.path() / "site-packages" / "termin" / "resources" / "stdlib");
+            candidates.push_back(entry.path() / "site-packages" / "termin" / "stdlib" / "resources");
         }
     }
 }
@@ -148,12 +148,12 @@ fs::path find_stdlib_source(const fs::path& override_source) {
     fs::path exe_dir = executable_dir();
     fs::path install_root = exe_dir.parent_path();
     std::vector<fs::path> candidates = {
-        install_root / "lib" / "python" / "termin" / "resources" / "stdlib",
+        install_root / "lib" / "python" / "termin" / "stdlib" / "resources",
     };
     append_existing_python_stdlib_candidates(candidates, install_root);
 
     for (fs::path dir = exe_dir; !dir.empty(); dir = dir.parent_path()) {
-        candidates.push_back(dir / "termin-app" / "termin" / "resources" / "stdlib");
+        candidates.push_back(dir / "termin-stdlib" / "python" / "termin" / "stdlib" / "resources");
         if (dir == dir.root_path()) {
             break;
         }

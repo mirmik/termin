@@ -197,6 +197,38 @@ def test_project_modules_runtime_is_outside_app_package() -> None:
     offenders: list[str] = []
     for root in source_roots:
         for path in root.rglob("*"):
+            if path == Path(__file__):
+                continue
+            if path.suffix not in {".py", ".cpp", ".hpp", ".h"}:
+                continue
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
+def test_stdlib_resources_are_outside_app_package() -> None:
+    assert not (REPO_ROOT / "termin-app/termin/resources/stdlib").exists()
+    assert (REPO_ROOT / "termin-stdlib/python/termin/stdlib/resources").is_dir()
+
+    source_roots = [
+        REPO_ROOT / "termin-app/termin",
+        REPO_ROOT / "termin-app/cpp/app",
+        REPO_ROOT / "termin-app/tests",
+    ]
+    forbidden_fragments = (
+        'Path(termin.__path__[0]) / "resources" / "stdlib"',
+        "termin-app/termin/resources/stdlib",
+        "termin/resources/stdlib",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*"):
+            if path == Path(__file__):
+                continue
             if path.suffix not in {".py", ".cpp", ".hpp", ".h"}:
                 continue
             text = _read_text(path)

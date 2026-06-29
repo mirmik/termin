@@ -1,6 +1,4 @@
 import json
-from pathlib import Path
-
 import numpy as np
 import pytest
 from PIL import Image
@@ -9,15 +7,12 @@ from termin.default_assets.render.material_asset import _parse_material_content,
 from termin.editor_core.resource_manager import ResourceManager
 from termin.default_assets.render.shader_asset import ShaderAsset
 from termin.default_assets.render.texture_asset import TextureAsset
+from termin.stdlib import stdlib_root
 from tgfx import TcTexture
 
 
-def _stdlib_root() -> Path:
-    return Path(__file__).resolve().parents[1] / "termin" / "resources" / "stdlib"
-
-
 def _register_stdlib_shader(rm: ResourceManager, name: str) -> None:
-    shader_path = _stdlib_root() / "shaders" / f"{name}.shader"
+    shader_path = stdlib_root() / "shaders" / f"{name}.shader"
     shader_asset = ShaderAsset.from_file(shader_path, name=name)
     assert shader_asset.program is not None
     rm.register_shader(
@@ -46,9 +41,9 @@ def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(t
     rm.register_texture_asset("SavedTexture", texture_asset, uuid=texture_uuid)
 
     material, _uuid = _parse_material_content(
-        (_stdlib_root() / "materials" / "CookTorrancePBR.material").read_text(encoding="utf-8"),
+        (stdlib_root() / "materials" / "CookTorrancePBR.material").read_text(encoding="utf-8"),
         name="CookTorrancePBR",
-        source_path=str(_stdlib_root() / "materials" / "CookTorrancePBR.material"),
+        source_path=str(stdlib_root() / "materials" / "CookTorrancePBR.material"),
     )
     material = material.copy("")
     assert material.set_texture("u_albedo_texture", texture) > 0
@@ -102,7 +97,7 @@ def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:
 
     stdlib_materials = {
         path.stem
-        for path in (_stdlib_root() / "materials").glob("*.material")
+        for path in (stdlib_root() / "materials").glob("*.material")
     }
     assert stdlib_materials.isdisjoint(rm.materials)
 
@@ -117,7 +112,7 @@ def test_builtin_registration_does_not_shadow_stdlib_shaders() -> None:
 
     stdlib_shaders = {
         path.stem
-        for path in (_stdlib_root() / "shaders").glob("*.shader")
+        for path in (stdlib_root() / "shaders").glob("*.shader")
     }
     assert stdlib_shaders.isdisjoint(rm.shaders)
     assert "DefaultShader" not in rm.shaders
@@ -130,9 +125,9 @@ def test_stdlib_normalized_pbr_applies_material_uniform_override() -> None:
     _register_stdlib_shader(rm, "CookTorrancePBR")
 
     material, _uuid = _parse_material_content(
-        (_stdlib_root() / "materials" / "NormalizedPBR.material").read_text(encoding="utf-8"),
+        (stdlib_root() / "materials" / "NormalizedPBR.material").read_text(encoding="utf-8"),
         name="NormalizedPBR",
-        source_path=str(_stdlib_root() / "materials" / "NormalizedPBR.material"),
+        source_path=str(stdlib_root() / "materials" / "NormalizedPBR.material"),
     )
 
     assert material.default_phase().uniforms["u_diffuse_mul"] == pytest.approx(3.14)

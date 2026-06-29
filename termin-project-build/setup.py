@@ -20,6 +20,7 @@ setup(
         "tcbase",
         "termin-project",
         "termin-default-assets",
+        "termin-stdlib",
         "termin-glb",
         "termin-materials",
         "termin-shader-runtime",
