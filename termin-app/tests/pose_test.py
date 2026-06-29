@@ -1,6 +1,5 @@
 import unittest
-from termin.geombase import Pose3, Vec3, Quat
-from termin.util import deg2rad
+from termin.geombase import Pose3, Vec3, Quat, deg2rad
 import numpy
 import math
 

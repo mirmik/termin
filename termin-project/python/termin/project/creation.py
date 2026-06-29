@@ -1,8 +1,9 @@
-"""Default scene template used by the launcher and editor."""
+"""Project creation helpers and default scene template."""
 
 from __future__ import annotations
 
 import json
+import os
 import uuid
 
 
@@ -227,3 +228,47 @@ def write_default_scene(path: str) -> None:
     """Write a default scene to the given file path."""
     with open(path, "w", encoding="utf-8") as f:
         json.dump(make_default_scene(), f, indent=2)
+
+
+def create_project(name: str, location: str) -> str:
+    """Create a new project directory and return the .terminproj path."""
+    project_dir = os.path.join(location, name)
+    proj_file = os.path.join(project_dir, f"{name}.terminproj")
+    scene_file = os.path.join(project_dir, "scene.scene")
+    settings_dir = os.path.join(project_dir, "project_settings")
+
+    os.makedirs(project_dir, exist_ok=True)
+    os.makedirs(settings_dir, exist_ok=True)
+
+    with open(proj_file, "w", encoding="utf-8") as f:
+        json.dump({"version": 1, "name": name}, f, indent=2)
+
+    with open(os.path.join(settings_dir, "project.json"), "w", encoding="utf-8") as f:
+        json.dump({"render_sync_mode": "none"}, f, indent=2)
+
+    with open(os.path.join(settings_dir, "navigation.json"), "w", encoding="utf-8") as f:
+        navmesh_area_names = [""] * 64
+        navmesh_area_names[0] = "Walkable"
+        json.dump(
+            {
+                "agent_types": [
+                    {
+                        "name": "Human",
+                        "radius": 0.5,
+                        "height": 2.0,
+                        "max_slope": 45.0,
+                        "step_height": 0.4,
+                    }
+                ],
+                "navmesh_area_names": navmesh_area_names,
+            },
+            f,
+            indent=2,
+        )
+
+    with open(os.path.join(settings_dir, ".editor_state.json"), "w", encoding="utf-8") as f:
+        json.dump({"last_scene": scene_file}, f, indent=2)
+
+    write_default_scene(scene_file)
+
+    return proj_file
