@@ -221,10 +221,11 @@ virtual tc_mesh* get_mesh_for_phase(
 ### 2.4 Дублирование биндингов
 
 **Где смотреть:**
-- `termin-base/python/bindings/geom/` vs `termin-app/cpp/termin/bindings/geom/` — одинаковые биндинги геометрии
 - Смешанная стратегия: `Pose3` — C++ native, `Pose2` — чистый Python numpy
 
-**Обновление 2026-06-20:** app-side legacy copies of `tc_pass_bindings.cpp`, `render_pipeline_bindings.cpp`, `resource_spec.cpp` and `graphics_backend.cpp` were removed from `termin-app`; render pass/pipeline ownership now lives in `termin-render`/`termin-render-framework`. The remaining duplication item here is the geom binding split.
+**Обновление 2026-06-20:** app-side legacy copies of `tc_pass_bindings.cpp`, `render_pipeline_bindings.cpp`, `resource_spec.cpp` and `graphics_backend.cpp` were removed from `termin-app`; render pass/pipeline ownership now lives in `termin-render`/`termin-render-framework`.
+
+**Обновление 2026-06-29:** app-side geom binding duplicates and stale native helper copies were removed from `termin-app`; canonical geom bindings live under `termin-base/python/bindings/geom/`.
 
 ---
 
