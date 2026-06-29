@@ -309,7 +309,7 @@ PYTHONPATH=termin-build-tools .venv/bin/python -m termin_build.package_manifest 
   termin-assets/tests/test_asset_contracts.py \
   termin-default-assets/tests/test_default_resource_manager.py \
   termin-app/tests/test_import_side_effects.py \
-  termin-app/tests/asset_plugin_test.py \
+  termin-default-assets/tests/asset_plugin_test.py \
   termin-app/tests/test_project_file_watcher.py \
   termin-app/tests/test_editor_builtin_resources.py \
   termin-glb/tests/test_scene_animation_repair.py

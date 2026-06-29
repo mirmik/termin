@@ -4,14 +4,14 @@ import pytest
 from PIL import Image
 
 from termin.default_assets.render.material_asset import _parse_material_content, _save_material_file
-from termin.editor_core.resource_manager import ResourceManager
+from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.render.shader_asset import ShaderAsset
 from termin.default_assets.render.texture_asset import TextureAsset
 from termin.stdlib import stdlib_root
 from tgfx import TcTexture
 
 
-def _register_stdlib_shader(rm: ResourceManager, name: str) -> None:
+def _register_stdlib_shader(rm: DefaultResourceManager, name: str) -> None:
     shader_path = stdlib_root() / "shaders" / f"{name}.shader"
     shader_asset = ShaderAsset.from_file(shader_path, name=name)
     assert shader_asset.program is not None
@@ -24,8 +24,8 @@ def _register_stdlib_shader(rm: ResourceManager, name: str) -> None:
 
 
 def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(tmp_path) -> None:
-    ResourceManager._reset_for_testing()
-    rm = ResourceManager.instance()
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
     _register_stdlib_shader(rm, "CookTorrancePBR")
 
     texture_uuid = "texture-save-uuid"
@@ -56,8 +56,8 @@ def test_material_save_matches_texture_asset_by_uuid_without_loaded_asset_data(t
 
 
 def test_material_load_resolves_texture_uuid_with_lazy_loaded_texture_asset(tmp_path) -> None:
-    ResourceManager._reset_for_testing()
-    rm = ResourceManager.instance()
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
     _register_stdlib_shader(rm, "CookTorrancePBR")
 
     texture_uuid = "texture-load-uuid"
@@ -90,8 +90,8 @@ def test_material_load_resolves_texture_uuid_with_lazy_loaded_texture_asset(tmp_
 
 
 def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:
-    ResourceManager._reset_for_testing()
-    rm = ResourceManager.instance()
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
 
     rm.register_builtin_materials()
 
@@ -105,8 +105,8 @@ def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:
 def test_builtin_registration_does_not_shadow_stdlib_shaders() -> None:
     from termin.default_assets.builtin_resources import register_builtin_shaders
 
-    ResourceManager._reset_for_testing()
-    rm = ResourceManager.instance()
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
 
     register_builtin_shaders(rm)
 
@@ -120,8 +120,8 @@ def test_builtin_registration_does_not_shadow_stdlib_shaders() -> None:
 
 
 def test_stdlib_normalized_pbr_applies_material_uniform_override() -> None:
-    ResourceManager._reset_for_testing()
-    rm = ResourceManager.instance()
+    DefaultResourceManager._reset_for_testing()
+    rm = DefaultResourceManager.instance()
     _register_stdlib_shader(rm, "CookTorrancePBR")
 
     material, _uuid = _parse_material_content(

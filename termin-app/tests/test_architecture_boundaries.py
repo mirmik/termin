@@ -371,6 +371,142 @@ def test_glb_package_does_not_import_editor_core() -> None:
     assert offenders == []
 
 
+def test_domain_package_tests_do_not_import_editor_private_modules() -> None:
+    source_roots = [
+        path
+        for path in REPO_ROOT.glob("termin-*/tests")
+        if path.relative_to(REPO_ROOT).parts[0] != "termin-app"
+    ]
+    source_roots.extend(sorted(REPO_ROOT.glob("termin-components/*/tests")))
+    forbidden_fragments = (
+        "termin.editor_core",
+        "termin.editor_tcgui",
+        "termin.launcher",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*.py"):
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
+def test_domain_python_tests_are_outside_app_tests_package() -> None:
+    moved_tests = {
+        "termin-app/tests/aabb_test.py": "termin-components/termin-components-kinematic/tests/aabb_test.py",
+        "termin-app/tests/asset_plugin_test.py": "termin-default-assets/tests/asset_plugin_test.py",
+        "termin-app/tests/collider_test.py": "termin-collision/tests/collider_test.py",
+        "termin-app/tests/framegraph_test.py": "termin-render/tests/framegraph_test.py",
+        "termin-app/tests/pathfinding_test.py": "termin-navmesh/tests/pathfinding_test.py",
+        "termin-app/tests/pose2_test.py": "termin-base/tests/python/pose2_test.py",
+        "termin-app/tests/pose_test.py": "termin-base/tests/python/pose_test.py",
+        "termin-app/tests/shader_parser_test.py": "termin-materials/tests/test_shader_parser.py",
+        "termin-app/tests/test_canonical_animation_imports.py": (
+            "termin-animation/tests/test_canonical_animation_imports.py"
+        ),
+        "termin-app/tests/test_collision_teleport_component.py": (
+            "termin-collision/tests/test_collision_teleport_component.py"
+        ),
+        "termin-app/tests/test_component_frame_pass_registries.py": (
+            "termin-default-assets/tests/test_component_frame_pass_registries.py"
+        ),
+        "termin-app/tests/test_default_pipeline_specs.py": (
+            "termin-engine/tests/test_default_pipeline_specs.py"
+        ),
+        "termin-app/tests/test_edge_flipping.py": "termin-navmesh/tests/test_edge_flipping.py",
+        "termin-app/tests/test_framegraph_internal_points.py": (
+            "termin-render/tests/test_framegraph_internal_points.py"
+        ),
+        "termin-app/tests/test_framegraph_presenter_bindings.py": (
+            "termin-render/tests/test_framegraph_presenter_bindings.py"
+        ),
+        "termin-app/tests/test_funnel_algorithm.py": "termin-navmesh/tests/test_funnel_algorithm.py",
+        "termin-app/tests/test_general_pose3.py": "termin-base/tests/python/test_general_pose3.py",
+        "termin-app/tests/test_general_transform3.py": (
+            "termin-components/termin-components-kinematic/tests/test_general_transform3.py"
+        ),
+        "termin-app/tests/test_gltf_loader.py": "termin-glb/tests/test_glb_loader.py",
+        "termin-app/tests/test_inspect_singleton_topology.py": (
+            "termin-inspect/tests/test_inspect_singleton_topology.py"
+        ),
+        "termin-app/tests/test_material_asset_texture_persistence.py": (
+            "termin-default-assets/tests/test_material_asset_texture_persistence.py"
+        ),
+        "termin-app/tests/test_material_pass_serialization.py": (
+            "termin-components/termin-components-render/tests/python/test_material_pass_serialization.py"
+        ),
+        "termin-app/tests/test_material_registry_copy.py": (
+            "termin-materials/tests/test_material_registry_copy.py"
+        ),
+        "termin-app/tests/test_mesh_spec_defaults.py": (
+            "termin-default-assets/tests/test_mesh_spec_defaults.py"
+        ),
+        "termin-app/tests/test_navmesh_package_facade.py": (
+            "termin-navmesh/tests/test_navmesh_package_facade.py"
+        ),
+        "termin-app/tests/test_procedural_mesh_component.py": (
+            "termin-components/termin-components-mesh/tests/test_procedural_mesh_component.py"
+        ),
+        "termin-app/tests/test_project_build_capabilities.py": (
+            "termin-project-build/tests/test_project_build_capabilities.py"
+        ),
+        "termin-app/tests/test_project_build_context.py": (
+            "termin-project-build/tests/test_project_build_context.py"
+        ),
+        "termin-app/tests/test_project_build_diagnostics.py": (
+            "termin-project-build/tests/test_project_build_diagnostics.py"
+        ),
+        "termin-app/tests/test_project_build_pipeline.py": (
+            "termin-project-build/tests/test_project_build_pipeline.py"
+        ),
+        "termin-app/tests/test_project_build_profile_backend.py": (
+            "termin-project-build/tests/test_project_build_profile_backend.py"
+        ),
+        "termin-app/tests/test_project_build_target_common.py": (
+            "termin-project-build/tests/test_project_build_target_common.py"
+        ),
+        "termin-app/tests/test_project_build_target_preflight.py": (
+            "termin-project-build/tests/test_project_build_target_preflight.py"
+        ),
+        "termin-app/tests/test_project_settings.py": "termin-project/tests/test_project_settings.py",
+        "termin-app/tests/test_runtime_package_exporter.py": (
+            "termin-project-build/tests/test_runtime_package_exporter.py"
+        ),
+        "termin-app/tests/test_runtime_package_exporter_android.py": (
+            "termin-project-build/tests/test_runtime_package_exporter_android.py"
+        ),
+        "termin-app/tests/test_runtime_package_validator.py": (
+            "termin-project-build/tests/test_runtime_package_validator.py"
+        ),
+        "termin-app/tests/test_scene_rendering_lifecycle.py": (
+            "termin-engine/tests/test_scene_rendering_lifecycle.py"
+        ),
+        "termin-app/tests/test_screen_point_to_ray.py": (
+            "termin-components/termin-components-render/tests/python/test_screen_point_to_ray.py"
+        ),
+        "termin-app/tests/test_texture_lazy_registration.py": (
+            "termin-default-assets/tests/test_texture_lazy_registration.py"
+        ),
+        "termin-app/tests/util_test.py": "termin-base/tests/python/util_test.py",
+    }
+
+    missing_targets = [
+        target for target in moved_tests.values()
+        if not (REPO_ROOT / target).is_file()
+    ]
+    remaining_sources = [
+        source for source in moved_tests
+        if (REPO_ROOT / source).exists()
+    ]
+
+    assert missing_targets == []
+    assert remaining_sources == []
+
+
 def test_project_modules_runtime_is_outside_app_package() -> None:
     assert not (REPO_ROOT / "termin-app/termin/modules").exists()
     assert not (REPO_ROOT / "termin-app/termin/module_warmup.py").exists()
