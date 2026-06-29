@@ -101,7 +101,8 @@ try {
         "-DCMAKE_PREFIX_PATH=$SdkPrefix",
         "-DTERMIN_CSHARP_BUILD_NATIVE=ON",
         "-DTERMIN_CSHARP_BUILD_MANAGED=ON",
-        "-DTERMIN_CSHARP_BUILD_TESTS=ON"
+        "-DTERMIN_CSHARP_BUILD_TESTS=ON",
+        "-DTERMIN_CSHARP_SDK_SHARE_DIR=$SdkPrefix/share/termin"
     )
     & cmake @cmakeArgs
     if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
@@ -129,8 +130,8 @@ Write-Host "Installing C# artifacts to $CsharpSdk..."
 
 $runtimeDir = Join-Path (Join-Path (Join-Path $CsharpSdk "runtimes") "win-x64") "native"
 $libDir = Join-Path $CsharpSdk "lib"
-$builtinShaderSource = Join-Path (Join-Path (Join-Path $SdkPrefix "share") "termin") "builtin_shaders"
-$builtinShaderDest = Join-Path (Join-Path (Join-Path $CsharpSdk "share") "termin") "builtin_shaders"
+$sdkShareSource = Join-Path (Join-Path $SdkPrefix "share") "termin"
+$csharpShareDest = Join-Path (Join-Path $CsharpSdk "share") "termin"
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 New-Item -ItemType Directory -Path $libDir -Force | Out-Null
 
@@ -151,16 +152,23 @@ if ($dllPath) {
     Write-Host "  Copied $($dllPath.Name) to $libDir"
 }
 
-# Built-in shader resources used by tgfx2 renderers and tcplot.
-if (-not (Test-Path $builtinShaderSource)) {
-    throw "Built-in shader resources missing: $builtinShaderSource. Build/install termin-graphics before build-sdk-csharp."
+# Shader sources and backend artifacts used by tgfx2 renderers and tcplot.
+$requiredShareFiles = @(
+    (Join-Path (Join-Path $sdkShareSource "builtin_shaders") "engine-shader-catalog.json"),
+    (Join-Path (Join-Path (Join-Path $sdkShareSource "shaders") "d3d11") "termin-engine-tcplot-3d.vs.cso"),
+    (Join-Path (Join-Path (Join-Path $sdkShareSource "shaders") "d3d11") "termin-engine-text3d.vs.cso")
+)
+foreach ($required in $requiredShareFiles) {
+    if (-not (Test-Path $required)) {
+        throw "SDK shader resource missing: $required. Build/install termin-graphics with D3D11 shader artifacts before build-sdk-csharp."
+    }
 }
-if (Test-Path $builtinShaderDest) {
-    Remove-Item -Recurse -Force $builtinShaderDest
+if (Test-Path $csharpShareDest) {
+    Remove-Item -Recurse -Force $csharpShareDest
 }
-New-Item -ItemType Directory -Path $builtinShaderDest -Force | Out-Null
-Copy-Item -Recurse -Force (Join-Path $builtinShaderSource "*") $builtinShaderDest
-Write-Host "  Copied built-in shaders to $builtinShaderDest"
+New-Item -ItemType Directory -Path $csharpShareDest -Force | Out-Null
+Copy-Item -Recurse -Force (Join-Path $sdkShareSource "*") $csharpShareDest
+Write-Host "  Copied Termin shader resources to $csharpShareDest"
 
 Write-Host ""
 Write-Host "========================================"

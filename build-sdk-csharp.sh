@@ -100,7 +100,8 @@ cmake -S . -B "$build_dir" \
     -DCMAKE_PREFIX_PATH="$SDK_PREFIX" \
     -DTERMIN_CSHARP_BUILD_NATIVE=ON \
     -DTERMIN_CSHARP_BUILD_MANAGED=ON \
-    -DTERMIN_CSHARP_BUILD_TESTS=ON
+    -DTERMIN_CSHARP_BUILD_TESTS=ON \
+    -DTERMIN_CSHARP_SDK_SHARE_DIR="$SDK_PREFIX/share/termin"
 
 cmake --build "$build_dir" --parallel "$BUILD_JOBS"
 
@@ -109,8 +110,8 @@ CSHARP_SDK="$SDK_PREFIX/csharp"
 echo "Installing C# artifacts to $CSHARP_SDK..."
 mkdir -p "$CSHARP_SDK/runtimes/linux-x64/native"
 mkdir -p "$CSHARP_SDK/lib"
-BUILTIN_SHADER_SOURCE="$SDK_PREFIX/share/termin/builtin_shaders"
-BUILTIN_SHADER_DEST="$CSHARP_SDK/share/termin/builtin_shaders"
+SDK_SHARE_SOURCE="$SDK_PREFIX/share/termin"
+CSHARP_SHARE_DEST="$CSHARP_SDK/share/termin"
 
 # Native bridge and runtime dependencies
 cp -P "$SCRIPT_DIR/termin-csharp/Termin.Native/runtimes/linux-x64/native/"*.so* "$CSHARP_SDK/runtimes/linux-x64/native/" 2>/dev/null || true
@@ -122,16 +123,21 @@ if [[ -n "$MANAGED_DLL" ]]; then
     echo "  Copied $(basename "$MANAGED_DLL") to $CSHARP_SDK/lib/"
 fi
 
-# Built-in shader resources used by tgfx2 renderers and tcplot.
-if [[ ! -d "$BUILTIN_SHADER_SOURCE" ]]; then
-    echo "ERROR: built-in shader resources missing: $BUILTIN_SHADER_SOURCE" >&2
-    echo "Build/install termin-graphics before build-sdk-csharp." >&2
-    exit 1
-fi
-rm -rf "$BUILTIN_SHADER_DEST"
-mkdir -p "$BUILTIN_SHADER_DEST"
-cp -R "$BUILTIN_SHADER_SOURCE"/. "$BUILTIN_SHADER_DEST/"
-echo "  Copied built-in shaders to $BUILTIN_SHADER_DEST"
+# Shader sources and backend artifacts used by tgfx2 renderers and tcplot.
+required_share_files=(
+    "$SDK_SHARE_SOURCE/builtin_shaders/engine-shader-catalog.json"
+)
+for required in "${required_share_files[@]}"; do
+    if [[ ! -e "$required" ]]; then
+        echo "ERROR: SDK shader resource missing: $required" >&2
+        echo "Build/install termin-graphics before build-sdk-csharp." >&2
+        exit 1
+    fi
+done
+rm -rf "$CSHARP_SHARE_DEST"
+mkdir -p "$CSHARP_SHARE_DEST"
+cp -R "$SDK_SHARE_SOURCE"/. "$CSHARP_SHARE_DEST/"
+echo "  Copied Termin shader resources to $CSHARP_SHARE_DEST"
 
 echo ""
 echo "========================================"
