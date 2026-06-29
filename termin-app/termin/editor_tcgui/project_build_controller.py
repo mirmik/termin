@@ -65,7 +65,7 @@ class ProjectBuildController:
             self._log_to_console(f"Error: {e}")
 
     def build_project(self) -> None:
-        self.build_project_to_default_dist()
+        self.build_desktop_bundle_to_default_dist()
 
     def build_android(self) -> None:
         entry = self._prepare_entry(
@@ -124,61 +124,60 @@ class ProjectBuildController:
             on_log=self._log_to_console,
         )
 
-    def build_project_to_default_dist(self):
+    def build_desktop_bundle_to_default_dist(self):
         entry = self._prepare_entry(
-            action_name="build",
-            relative_error="Build entry scene must be inside the current project.",
+            action_name="build desktop bundle",
+            relative_error="Desktop build entry scene must be inside the current project.",
+            output_subdir="desktop",
         )
         if entry is None:
             return None
 
         try:
-            from termin.project_builder.legacy_project_export import export_legacy_project
-            from termin.render_framework import collect_scene_shader_usages
+            from termin.project_build import build_desktop_project
 
-            scene = self._scene_manager.get_scene(entry.scene_name)
-            if scene is None:
-                self._log_to_console("No loaded scene - cannot collect shader usages.")
-                return None
-            shader_usages = collect_scene_shader_usages(scene.scene_handle())
-
-            result = export_legacy_project(
+            result = build_desktop_project(
                 project_root=entry.project_root,
                 entry_scene=entry.scene_rel_path,
                 output_dir=entry.output_dir,
-                compile_shaders=True,
-                shader_usages=shader_usages,
             )
         except Exception as e:
-            log.error(f"Build failed: {e}")
-            self._log_to_console(f"Build failed: {e}")
+            log.error(f"Desktop build failed: {e}", exc_info=True)
+            self._log_to_console(f"Desktop build failed: {e}")
             return None
 
-        resource_count = len(result.manifest.resources)
-        diagnostic_count = len(result.manifest.diagnostics)
-        self._log_to_console(f"Build complete: {result.build_json_path}")
-        self._log_to_console(
-            f"Build manifest: {resource_count} resource(s), {diagnostic_count} diagnostic(s)"
-        )
-        for diagnostic in result.manifest.diagnostics:
-            self._log_to_console(f"Build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}")
+        diagnostic_count = len(result.diagnostics)
+        self._log_to_console(f"Desktop bundle complete: {result.app_manifest_path}")
+        self._log_to_console(f"Desktop package: {result.package_result.package_dir}")
+        self._log_to_console(f"Desktop runtime: {result.runtime_result.lib_dir.parent}")
+        self._log_to_console(f"Desktop diagnostics: {diagnostic_count} diagnostic(s)")
+        for diagnostic in result.diagnostics:
+            self._log_to_console(
+                f"Desktop build {diagnostic.level}: {diagnostic.path}: {diagnostic.message}"
+            )
         return result
 
     def run_build(self) -> None:
-        result = self.build_project_to_default_dist()
+        result = self.build_desktop_bundle_to_default_dist()
         if result is None:
             return
 
-        cmd = [
-            sys.executable,
-            "-m",
-            "termin.player",
-            "--build",
-            str(result.build_json_path),
-        ]
+        launcher_path = result.runtime_result.launcher_path
+        if launcher_path is not None and launcher_path.exists():
+            cmd = [str(launcher_path)]
+            cwd = str(launcher_path.parent)
+        else:
+            cmd = [
+                sys.executable,
+                "-m",
+                "termin.player",
+                "--bundle",
+                str(result.app_manifest_path),
+            ]
+            cwd = str(result.dist_dir)
         self._log_to_console(f"Launching build: {' '.join(cmd)}")
         try:
-            subprocess.Popen(cmd, cwd=str(result.output_dir))
+            subprocess.Popen(cmd, cwd=cwd)
         except Exception as e:
             log.error(f"Failed to launch build: {e}")
             self._log_to_console(f"Run build failed: {e}")

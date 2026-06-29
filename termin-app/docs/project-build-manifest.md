@@ -1,127 +1,78 @@
 # Project Build Manifest
 
-Status 2026-06-18: this document describes the historical broad-copy
-`build.json`/`assets/manifest.json` path. That path is now explicit legacy/dev
-export under `termin.project_builder legacy-dev-export`. Canonical packaged
-desktop, Android and Quest/OpenXR builds use `termin.project_build` and produce
-runtime packages plus target-specific artifacts.
-
-## Problem
-
-Standalone player currently runs directly from a project directory. It scans files at runtime, uses editor file processors, and reconstructs resources from the source tree. This is enough for "Run Standalone" during development, but it is not a real project build:
-
-- player depends on editor-side resource scanning code;
-- project content is not collected into a dedicated build layout;
-- there is no explicit manifest of resources included in the build;
-- startup has to discover project files instead of loading a known asset set;
-- `.terminproj` does not describe build targets, entry scene, app metadata, or included resources.
-
-The build pipeline needs a resource compilation step that gathers project content into one output directory and produces a manifest that the player can load deterministically.
+Status 2026-06-29: the historical broad-copy
+`build.json`/`assets/manifest.json` project build contract was removed. Project
+builds now use `termin.project_build` and produce runtime packages plus
+target-specific artifacts.
 
 ## Ownership
 
-`ProjectBuildManifest` should be produced by a dedicated build step, not by the editor watcher and not by the player.
+- Editor: invokes desktop, Android, or Quest/OpenXR build actions.
+- CLI/build tool: resolves project profiles and delegates to
+  `termin.project_build.profile_build`.
+- Runtime package exporter: writes the shared `package/` contract.
+- Player/runtime hosts: consume `app.json` or platform-native package wiring.
 
-Recommended split:
+The removed `termin.project_builder` package must not be reintroduced as a
+compatibility path. Build code should live under `termin.project_build`.
 
-- Editor: invokes the build step from UI actions such as "Build" or "Run Build".
-- CLI/build tool: scans the project, collects resources, writes the build layout and manifest.
-- Player: reads the build manifest and loads the already-collected layout.
-- ResourceManager: remains the runtime registry and loader for resources listed by the manifest.
+## Runtime Package
 
-## Proposed Modules
-
-The historical first-stage implementation lives under `termin.project_builder`
-as legacy/dev export. New packaged build code should use
-`termin.project_build`.
-
-Suggested components:
-
-- `ProjectScanner`: reads the project root, `.terminproj`, project settings, and project modules.
-- `AssetCollector`: uses shared file preloaders that are moved out of `termin.editor.file_processors` into a runtime-safe package.
-- `DependencyCollector`: follows scene, prefab, material, shader include, pipeline, and handle references by UUID.
-- `ProjectBuildManifestWriter`: writes `assets/manifest.json` and top-level `build.json`.
-- CLI entrypoint:
-  `python -m termin.project_builder legacy-dev-export <project> --scene Scenes/Main.scene --out dist/MyGame`.
-
-## First Implementation Stage
-
-Start with a broad build. Include all supported project resource files instead of trying to minimize the graph immediately.
-
-Include:
-
-- selected entry scene and all `.scene` files, or at least all scenes under the project root;
-- all recognized assets and their `.meta` files;
-- project modules;
-- project settings;
-- `stdlib`, initially copied as a whole;
-- optional app metadata from `.terminproj` once fields are added.
-
-This creates a working build pipeline before dependency pruning exists.
-
-## Later Stages
-
-After the broad build works, add reachable-resource collection from the selected entry scene:
-
-- traverse scene components and serialized handles by UUID;
-- include referenced prefabs;
-- include material dependencies;
-- include shader and GLSL include dependencies;
-- include pipelines and scene pipelines;
-- include GLB child assets through their parent GLB source;
-- report unresolved UUIDs as build errors.
-
-At this stage the player should stop recursively scanning arbitrary project directories. It should load resources from the manifest.
-
-## Build Layout Sketch
+All supported targets start from a runtime package:
 
 ```text
-dist/MyGame/
-  build.json
-  assets/
+package/
+  manifest.json
+  scene.json
+  meshes/
+  materials/
+  shaders/
+  pipelines/
+  python/
+```
+
+`package/manifest.json` is the resource contract consumed by the Python player
+runtime package loader and the C++ runtime loader. The exporter records resource
+entries such as `shader`, `mesh`, `material`, `pipeline`, and `foliage_data`,
+plus shader artifact target requirements when a profile requests explicit
+shader targets.
+
+## Desktop Bundle
+
+Desktop builds wrap the runtime package in a relocatable bundle:
+
+```text
+dist/<app>/
+  <app>
+  app.json
+  lib/
+  package/
     manifest.json
+    scene.json
     ...
-  modules/
-    ...
-  stdlib/
-    ...
-  scenes/
-    Main.scene
+  share/
 ```
 
-`build.json` describes the app and entrypoint:
+`app.json` is the desktop bundle entry manifest. Paths are relative to the
+bundle root and point at `package/manifest.json` and `package/scene.json`.
 
-```json
-{
-  "format_version": 1,
-  "project_name": "MyGame",
-  "entry_scene": "scenes/Main.scene",
-  "asset_manifest": "assets/manifest.json"
-}
+The editor `Build` action writes this desktop bundle. The editor `Run Build`
+action launches the bundle-local player executable when present, otherwise it
+falls back to:
+
+```bash
+python -m termin.player --bundle dist/<app>/app.json
 ```
 
-`assets/manifest.json` describes the included resources:
+## Source Playback
 
-```json
-{
-  "format_version": 1,
-  "resources": [
-    {
-      "uuid": "00000000-0000-0000-0000-000000000000",
-      "type": "texture",
-      "name": "Albedo",
-      "path": "assets/Textures/Albedo.png",
-      "meta": "assets/Textures/Albedo.png.meta"
-    }
-  ]
-}
+Source-project playback remains separate from build output:
+
+```bash
+python -m termin.player <project> --scene Scenes/Main.scene
+termin play Scenes/Main.scene
 ```
 
-## Player Contract
-
-Player should support two modes during migration:
-
-- development mode: current `python -m termin.player <project> --scene ...` behavior;
-- build mode: `python -m termin.player --build dist/MyGame/build.json`.
-
-Once build mode is stable, standalone distribution should use build mode exclusively.
+Source playback may scan project assets and load project modules directly.
+Packaged builds must not depend on source tree scanning or the removed
+`build.json` format.

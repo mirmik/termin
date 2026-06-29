@@ -258,8 +258,8 @@ void print_help() {
         << "\n"
         << "Run-only options:\n"
         << "  --profiles <file>         Override project_settings/build_profiles.json.\n"
-        << "  --mode build|project|legacy-build\n"
-        << "                            Run packaged build output, source project scene, or explicit legacy build.json.\n"
+        << "  --mode build|project\n"
+        << "                            Run packaged build output or source project scene.\n"
         << "  --build-if-missing        Build the profile if build output is missing.\n"
         << "  --rebuild                 Build the profile before running.\n"
         << "\n"
@@ -410,8 +410,7 @@ ParsedArgs parse_args(int argc, char** argv) {
     }
 
     if (parsed.command == "run" &&
-        parsed.options.mode != "build" && parsed.options.mode != "project" &&
-        parsed.options.mode != "legacy-build") {
+        parsed.options.mode != "build" && parsed.options.mode != "project") {
         throw std::runtime_error("unsupported run mode: " + parsed.options.mode);
     }
     if (parsed.options.rebuild) {
@@ -882,7 +881,6 @@ int command_run(const ParsedArgs& args) {
     nos::trent root = load_profiles_file(profiles_path);
     BuildProfile profile = find_profile(profile_map(root), args.profile_name);
     fs::path output_dir = resolve_output_dir(project_root, profile);
-    fs::path build_json_path = output_dir / "build.json";
     fs::path app_manifest_path = output_dir / "app.json";
     fs::path package_manifest_path = output_dir / "package" / "manifest.json";
 
@@ -896,8 +894,7 @@ int command_run(const ParsedArgs& args) {
         << "Output dir: " << profile.output_dir << "\n"
         << std::flush;
 
-    if (profile.target != "desktop" &&
-        (args.options.mode == "build" || args.options.mode == "legacy-build")) {
+    if (profile.target != "desktop" && args.options.mode == "build") {
         std::cerr
             << "termin_runner: unsupported build run target '"
             << profile.target << "'.\n";
@@ -940,19 +937,9 @@ int command_run(const ParsedArgs& args) {
                 << app_manifest_path << "\n"
                 << "Run 'termin build " << args.profile_name
                 << " --project " << project_root.string()
-                << "' to create a packaged build. Legacy build.json output can "
-                << "only be launched with --mode legacy-build.\n";
+                << "' to create a packaged build.\n";
             return 4;
         }
-    } else if (args.options.mode == "legacy-build") {
-        if (!fs::exists(build_json_path)) {
-            std::cerr
-                << "termin_runner: explicit legacy build.json does not exist: "
-                << build_json_path << "\n";
-            return 4;
-        }
-        command.emplace_back("--build");
-        command.emplace_back(build_json_path.string());
     } else {
         command.emplace_back(project_root.string());
         command.emplace_back("--scene");

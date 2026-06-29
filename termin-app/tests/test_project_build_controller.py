@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
+import termin.project_build as project_build
 from termin.editor_tcgui import project_build_controller as project_build_module
 from termin.editor_tcgui.project_build_controller import ProjectBuildController
 
@@ -100,3 +102,96 @@ def test_run_standalone_rejects_scene_outside_project(monkeypatch, tmp_path) -> 
     assert save_calls == [True]
     assert popen_calls == []
     assert logs == ["Standalone entry scene must be inside the current project."]
+
+
+def test_build_project_writes_desktop_bundle(monkeypatch, tmp_path) -> None:
+    project_root = tmp_path / "Project"
+    scene_path = project_root / "Scenes" / "Main.scene"
+    scene_path.parent.mkdir(parents=True)
+    scene_path.write_text("{}", encoding="utf-8")
+    logs: list[str] = []
+    save_calls: list[bool] = []
+    calls: list[dict] = []
+
+    def fake_build_desktop_project(**kwargs):
+        calls.append(kwargs)
+        dist_dir = kwargs["output_dir"]
+        return SimpleNamespace(
+            dist_dir=dist_dir,
+            app_manifest_path=dist_dir / "app.json",
+            package_result=SimpleNamespace(package_dir=dist_dir / "package"),
+            runtime_result=SimpleNamespace(lib_dir=dist_dir / "lib", launcher_path=dist_dir / "Project"),
+            diagnostics=[
+                SimpleNamespace(level="warning", path="package/mesh", message="test diagnostic"),
+            ],
+        )
+
+    monkeypatch.setattr(project_build, "build_desktop_project", fake_build_desktop_project)
+    controller = _make_controller(
+        project_root=project_root,
+        scene_name="Main",
+        scene_manager=_SceneManager({"Main": scene_path}),
+        logs=logs,
+        save_calls=save_calls,
+    )
+
+    result = controller.build_desktop_bundle_to_default_dist()
+
+    assert result is not None
+    assert save_calls == [True]
+    assert calls == [
+        {
+            "project_root": project_root.resolve(),
+            "entry_scene": Path("Scenes") / "Main.scene",
+            "output_dir": project_root / "dist" / "desktop" / "Project",
+        }
+    ]
+    assert logs == [
+        f"Desktop bundle complete: {project_root / 'dist' / 'desktop' / 'Project' / 'app.json'}",
+        f"Desktop package: {project_root / 'dist' / 'desktop' / 'Project' / 'package'}",
+        f"Desktop runtime: {project_root / 'dist' / 'desktop' / 'Project'}",
+        "Desktop diagnostics: 1 diagnostic(s)",
+        "Desktop build warning: package/mesh: test diagnostic",
+    ]
+
+
+def test_run_build_launches_desktop_bundle_launcher(monkeypatch, tmp_path) -> None:
+    project_root = tmp_path / "Project"
+    scene_path = project_root / "Scenes" / "Main.scene"
+    scene_path.parent.mkdir(parents=True)
+    scene_path.write_text("{}", encoding="utf-8")
+    launcher = project_root / "dist" / "desktop" / "Project" / "Project"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("#!/bin/sh\n", encoding="utf-8")
+    logs: list[str] = []
+    save_calls: list[bool] = []
+    popen_calls: list[tuple[list[str], str | None]] = []
+
+    def fake_build_desktop_project(**kwargs):
+        dist_dir = kwargs["output_dir"]
+        return SimpleNamespace(
+            dist_dir=dist_dir,
+            app_manifest_path=dist_dir / "app.json",
+            package_result=SimpleNamespace(package_dir=dist_dir / "package"),
+            runtime_result=SimpleNamespace(lib_dir=dist_dir / "lib", launcher_path=launcher),
+            diagnostics=[],
+        )
+
+    def fake_popen(cmd: list[str], cwd: str | None = None) -> None:
+        popen_calls.append((cmd, cwd))
+
+    monkeypatch.setattr(project_build, "build_desktop_project", fake_build_desktop_project)
+    monkeypatch.setattr(project_build_module.subprocess, "Popen", fake_popen)
+    controller = _make_controller(
+        project_root=project_root,
+        scene_name="Main",
+        scene_manager=_SceneManager({"Main": scene_path}),
+        logs=logs,
+        save_calls=save_calls,
+    )
+
+    controller.run_build()
+
+    assert save_calls == [True]
+    assert popen_calls == [([str(launcher)], str(launcher.parent))]
+    assert logs[-1] == f"Launching build: {launcher}"
