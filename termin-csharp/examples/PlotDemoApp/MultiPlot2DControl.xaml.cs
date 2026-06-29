@@ -311,6 +311,8 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
             _renderingSubscribed = false;
         }
 
+        RenderHost.ReleaseNativeResources();
+
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;

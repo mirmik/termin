@@ -222,6 +222,8 @@ public partial class Plot3DControl : UserControl, IDisposable
             _renderingSubscribed = false;
         }
 
+        RenderHost.ReleaseNativeResources();
+
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
