@@ -127,7 +127,7 @@ Important call sites to update:
 - `termin-app/termin/project_build/capabilities.py`;
 - `termin-app/termin/project_build/target_preflight.py`;
 - `termin-app/termin/editor_tcgui/project_build_controller.py`;
-- `termin-app/cpp/app/termin_runner.cpp`;
+- `termin-cli/src/termin_runner.cpp` (moved out of `termin-app` on 2026-06-29);
 - `termin-app/docs/termin-cli.md`;
 - `termin-app/docs/project-build-manifest.md`;
 - `docs/build-system.md`;

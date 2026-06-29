@@ -20,8 +20,12 @@
 - `libtermin_core.so`: маленький C init/util ABI (`tc_init`, `tc_shutdown`,
   version/uuid/runtime-id), но с широким public link surface.
 - `termin._native`: app-level Python compatibility/glue module.
-- CLI/runtime/editor executables: `termin`, `termin_builder`, `termin_runner`,
-  `termin_stdlib`, `termin_player`, `termin_editor`, `termin_launcher`.
+- CLI/runtime/editor executables: `termin_player`, `termin_editor`,
+  `termin_launcher`.
+
+Update 2026-06-29: SDK command wrappers `termin`, `termin_builder`,
+`termin_runner`, `termin_modules_cli`, and `termin_stdlib` moved from
+`termin-app/cpp/app` to `termin-cli`.
 
 `termin._native` сейчас смешивает:
 

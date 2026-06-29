@@ -20,7 +20,7 @@
 #include <unistd.h>
 #endif
 
-namespace termin_app::python_backend {
+namespace termin_cli::python_backend {
 
 namespace fs = std::filesystem;
 
@@ -270,4 +270,4 @@ inline int run_process(const std::vector<std::string>& args, const char* process
 #endif
 }
 
-} // namespace termin_app::python_backend
+} // namespace termin_cli::python_backend
