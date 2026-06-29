@@ -3,19 +3,19 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using OpenTK.Wpf;
+using System.Windows.Media;
 using Termin.Native;
 using Termin.Wpf;
 
 namespace PlotDemoApp;
 
-// WPF host for tcplot's PlotView2DMulti. Owns the GL surface,
+// WPF host for tcplot's PlotView2DMulti. Owns the D3D11 host,
 // constructs the native view on first Loaded, forwards WPF mouse
 // events, and exposes thin Plot/AppendToLine helpers to the window.
 public partial class MultiPlot2DControl : UserControl, IDisposable
 {
     private PlotView2DMulti? _view;
-    private Tgfx2GlWpfTexturePresenter? _presenter;
+    private bool _renderingSubscribed;
     private bool _initialized;
     private bool _disposed;
     private bool _hostLeaseHeld;
@@ -114,18 +114,16 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
     {
         InitializeComponent();
 
-        var settings = GlWpfSharedContext.CreateSettings();
-        GlControl.Start(settings);
-        GlWpfSharedContext.CaptureIfFirst(GlControl);
-        GlControl.Render += OnGlRender;
+        CompositionTarget.Rendering += OnRender;
+        _renderingSubscribed = true;
 
         Unloaded += (_, _) => Dispose();
 
-        GlControl.MouseDown  += OnMouseDownGl;
-        GlControl.MouseMove  += OnMouseMoveGl;
-        GlControl.MouseUp    += OnMouseUpGl;
-        GlControl.MouseWheel += OnMouseWheelGl;
-        GlControl.Focusable = true;
+        RenderHost.FramebufferMouseDown  += OnFramebufferMouseDown;
+        RenderHost.FramebufferMouseMove  += OnFramebufferMouseMove;
+        RenderHost.FramebufferMouseUp    += OnFramebufferMouseUp;
+        RenderHost.FramebufferMouseWheel += OnFramebufferMouseWheel;
+        RenderHost.Focusable = true;
     }
 
     public int Plot(int panel,
@@ -179,7 +177,6 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         try
         {
             _view = new PlotView2DMulti(host, PanelCount);
-            _presenter = new Tgfx2GlWpfTexturePresenter();
             _hostLeaseHeld = true;
         }
         catch
@@ -199,7 +196,7 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         NativeInitialized?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnGlRender(TimeSpan delta)
+    private void OnRender(object? sender, EventArgs e)
     {
         if (!_initialized)
         {
@@ -207,8 +204,8 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         }
         if (!_initialized || _view == null) return;
 
-        var w = Math.Max(1, GlControl.FrameBufferWidth);
-        var h = Math.Max(1, GlControl.FrameBufferHeight);
+        var w = Math.Max(1, RenderHost.FramebufferWidth);
+        var h = Math.Max(1, RenderHost.FramebufferHeight);
 
         // Apply coalesced pan from the latest MouseMove before rendering.
         if (_hasPendingPan && _dragging)
@@ -217,19 +214,11 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
             _hasPendingPan = false;
         }
 
-        uint colorTex = _view.render_to_texture_id(w, h);
-        _presenter?.Present(colorTex, w, h, GlControl.Framebuffer);
+        uint colorTex = _view.render_to_texture_handle_id(w, h);
+        _ = RenderHost.Present(colorTex, w, h);
     }
 
-    private static int ToTcbaseButton(System.Windows.Input.MouseButton b) => b switch
-    {
-        System.Windows.Input.MouseButton.Left   => 0,
-        System.Windows.Input.MouseButton.Right  => 1,
-        System.Windows.Input.MouseButton.Middle => 2,
-        _ => 0,
-    };
-
-    // WPF MouseMove fires at the mouse's polling rate (often 500–1000 Hz
+    // WPF MouseMove fires at the mouse's polling rate (often 500-1000 Hz
     // on gaming mice). Every event that crosses into native code costs a
     // P/Invoke + SWIG marshalling round-trip on the UI thread; when
     // hovering without a drag we have nothing useful to do there, so
@@ -238,54 +227,49 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
     private bool _dragging;
 
     // Pan coalesced to render tick. Sending a native on_mouse_move per
-    // WPF MouseMove amplifies input-routing cost through the visual
-    // tree (WPF tunnels/bubbles each event through the whole parent
-    // chain even with MouseCapture). We record the latest position on
-    // each event and apply it exactly once per OnGlRender frame —
-    // this cuts frame_dt roughly in half in a deep WPF window.
+    // Win32 MouseMove amplifies input-routing cost through the visual
+    // tree. We record the latest position on each event and apply it
+    // exactly once per OnRender frame.
     private float _pendingPanX;
     private float _pendingPanY;
     private bool  _hasPendingPan;
 
-    private void OnMouseDownGl(object sender, MouseButtonEventArgs e)
+    private void OnFramebufferMouseDown(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
     {
         if (_view == null) return;
-        GlControl.Focus();
-        var p = e.GetPosition(GlControl);
-        _view.on_mouse_down((float)p.X, (float)p.Y, ToTcbaseButton(e.ChangedButton));
-        if (e.ChangedButton == System.Windows.Input.MouseButton.Middle) {
+        RenderHost.FocusNativeWindow();
+        _view.on_mouse_down(e.X, e.Y, e.Button);
+        if (e.Button == 2)
+        {
             _dragging = true;
-            GlControl.CaptureMouse();
         }
         e.Handled = true;
     }
 
-    private void OnMouseMoveGl(object sender, MouseEventArgs e)
+    private void OnFramebufferMouseMove(object? sender, Tgfx2D3D11MouseMoveEventArgs e)
     {
         if (_view == null || !_dragging) return;
-        var p = e.GetPosition(GlControl);
-        _pendingPanX = (float)p.X;
-        _pendingPanY = (float)p.Y;
+        _pendingPanX = e.X;
+        _pendingPanY = e.Y;
         _hasPendingPan = true;
     }
 
-    private void OnMouseUpGl(object sender, MouseButtonEventArgs e)
+    private void OnFramebufferMouseUp(object? sender, Tgfx2D3D11MouseButtonEventArgs e)
     {
         if (_view == null) return;
-        var p = e.GetPosition(GlControl);
-        _view.on_mouse_up((float)p.X, (float)p.Y, ToTcbaseButton(e.ChangedButton));
-        if (e.ChangedButton == System.Windows.Input.MouseButton.Middle) {
+        _view.on_mouse_up(e.X, e.Y, e.Button);
+        if (e.Button == 2)
+        {
             _dragging = false;
-            GlControl.ReleaseMouseCapture();
         }
         e.Handled = true;
     }
 
-    private void OnMouseWheelGl(object sender, MouseWheelEventArgs e)
+    private void OnFramebufferMouseWheel(object? sender, Tgfx2D3D11MouseWheelEventArgs e)
     {
         if (_view == null) return;
         // In virtualised/scrollable mode, plain wheel scrolls the list
-        // and Ctrl+wheel zooms the X axis — matches the ubiquitous
+        // and Ctrl+wheel zooms the X axis - matches the ubiquitous
         // "document vs. content" mousewheel convention. Classic (non-
         // virtualised) mode still zooms unconditionally.
         bool scrollable = PanelHeight > 0 && MaxScroll > 0;
@@ -293,21 +277,20 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
             || (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
         if (wantZoom)
         {
-            var p = e.GetPosition(GlControl);
             float dy = e.Delta > 0 ? 1f : -1f;
-            // Ctrl held → zoom X only (shared-X dashboard convention).
+            // Ctrl held -> zoom X only (shared-X dashboard convention).
             // Plain wheel in non-scrollable mode zooms both axes as before.
             bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
             if (ctrl)
-                _view.on_mouse_wheel_x((float)p.X, (float)p.Y, dy);
+                _view.on_mouse_wheel_x(e.X, e.Y, dy);
             else
-                _view.on_mouse_wheel((float)p.X, (float)p.Y, dy);
+                _view.on_mouse_wheel(e.X, e.Y, dy);
         }
         else
         {
-            // One wheel notch ≈ one third of a panel. Tuned so flicking
-            // the wheel moves the viewport at a readable pace instead
-            // of teleporting by whole panels per tick.
+            // One wheel notch is roughly one third of a panel. Tuned so
+            // flicking the wheel moves the viewport at a readable pace
+            // instead of jumping by whole panels per tick.
             double step = Math.Max(PanelHeight * 0.33, 24.0);
             double delta = -Math.Sign(e.Delta) * step;
             double next = ScrollOffset + delta;
@@ -317,17 +300,20 @@ public partial class MultiPlot2DControl : UserControl, IDisposable
         }
         e.Handled = true;
     }
-
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
+        if (_renderingSubscribed)
+        {
+            CompositionTarget.Rendering -= OnRender;
+            _renderingSubscribed = false;
+        }
+
         _view?.release_gpu();
         _view?.Dispose();
         _view = null;
-        _presenter?.Dispose();
-        _presenter = null;
         if (_hostLeaseHeld)
         {
             Tgfx2Host.Release();

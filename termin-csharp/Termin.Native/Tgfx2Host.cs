@@ -4,12 +4,13 @@ using System.IO;
 namespace Termin.Native
 {
     /// <summary>
-    /// Process-wide singleton that owns the one tcplot/tgfx2 GPU
-    /// runtime while at least one GL-hosting control is alive.
+    /// Process-wide singleton that owns the one tcplot/tgfx2 GPU runtime while
+    /// at least one WPF plot host is alive.
     /// </summary>
     public static class Tgfx2Host
     {
         private static GpuHost? _host;
+        private static BackendType? _backend;
         private static int _leaseCount;
         private static readonly object _lock = new();
 
@@ -18,24 +19,35 @@ namespace Termin.Native
         public static GpuHost Instance =>
             _host ?? throw new InvalidOperationException(
                 "Tgfx2Host.Acquire() was not called - " +
-                "no GL-hosting control has initialised yet.");
+                "no WPF plot host has initialised yet.");
 
-        public static GpuHost Acquire(string ttfPath)
+        public static GpuHost Acquire(string ttfPath, BackendType backend = BackendType.D3D11)
         {
             lock (_lock)
             {
-                if (_host == null)
+                if (_host != null)
                 {
-                    ShaderRuntime.ConfigureFromAssemblyDirectory();
-
-                    if (!File.Exists(ttfPath))
+                    if (_backend != backend)
                     {
-                        throw new FileNotFoundException(
-                            $"Tgfx2Host: font file not found: {ttfPath}");
+                        throw new InvalidOperationException(
+                            $"Tgfx2Host already owns a {_backend} runtime; " +
+                            $"cannot acquire a {backend} runtime in the same process.");
                     }
-                    _host = new GpuHost(ttfPath, BackendType.OpenGL);
+
+                    _leaseCount++;
+                    return _host;
                 }
 
+                ShaderRuntime.ConfigureFromAssemblyDirectory();
+
+                if (!File.Exists(ttfPath))
+                {
+                    throw new FileNotFoundException(
+                        $"Tgfx2Host: font file not found: {ttfPath}");
+                }
+
+                _host = new GpuHost(ttfPath, backend);
+                _backend = backend;
                 _leaseCount++;
                 return _host;
             }
@@ -55,6 +67,7 @@ namespace Termin.Native
                 {
                     _host?.Dispose();
                     _host = null;
+                    _backend = null;
                 }
             }
         }

@@ -1,8 +1,8 @@
 <UserControl x:Class="PlotDemoApp.MultiPlot2DControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:glWpf="clr-namespace:OpenTK.Wpf;assembly=GLWpfControl">
+             xmlns:terminWpf="clr-namespace:Termin.Wpf;assembly=Termin.Wpf">
     <Grid Background="Black">
-        <glWpf:GLWpfControl x:Name="GlControl"/>
+        <terminWpf:Tgfx2D3D11SwapchainHost x:Name="RenderHost"/>
     </Grid>
 </UserControl>
