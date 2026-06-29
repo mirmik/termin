@@ -1,5 +1,5 @@
 from termin.editor_core.resource_manager import ResourceManager
-from termin.scene_animation_repair import repair_glb_animation_player_clip_refs
+from termin.glb.scene_animation_repair import repair_glb_animation_player_clip_refs
 from termin_assets import PreLoadResult, set_resource_manager_factory
 
 

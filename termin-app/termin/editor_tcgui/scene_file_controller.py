@@ -182,7 +182,7 @@ class SceneFileController:
             with open(path, "r", encoding="utf-8") as f:
                 file_data = json.load(f)
 
-            from termin.scene_animation_repair import (
+            from termin.glb.scene_animation_repair import (
                 extract_scene_data,
                 repair_glb_animation_player_clip_refs,
             )

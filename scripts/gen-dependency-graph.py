@@ -61,6 +61,8 @@ PYTHON_PKG_TO_DIR = {
     "termin": "termin",
     "termin-app": "termin-app",
     "termin-player": "termin-player",
+    "termin-project": "termin-project",
+    "termin-project-build": "termin-project-build",
     "termin-mcp": "termin-mcp",
     "termin-shader-runtime": "termin-shader-runtime",
     "termin-base": "termin-base",
@@ -105,6 +107,9 @@ PYTHON_IMPORT_TO_DIR = {
     # termin.* submodules → actual library
     "termin.editor_core": "termin-app",
     "termin.editor_tcgui": "termin-app",
+    "termin.project_build": "termin-project-build",
+    "termin.project": "termin-project",
+    "termin.glb": "termin-glb",
     "termin.player": "termin-player",
     "termin.mcp": "termin-mcp",
     "termin.shader_runtime": "termin-shader-runtime",

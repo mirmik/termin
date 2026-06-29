@@ -2,7 +2,8 @@
 
 Status 2026-06-29: the historical broad-copy
 `build.json`/`assets/manifest.json` project build contract was removed. Project
-builds now use `termin.project_build` and produce runtime packages plus
+builds now use the standalone `termin-project-build` package
+(`termin.project_build`) and produce runtime packages plus
 target-specific artifacts.
 
 ## Ownership
@@ -14,7 +15,8 @@ target-specific artifacts.
 - Player/runtime hosts: consume `app.json` or platform-native package wiring.
 
 The removed `termin.project_builder` package must not be reintroduced as a
-compatibility path. Build code should live under `termin.project_build`.
+compatibility path. Build code should live under `termin.project_build`, outside
+the editor-private `termin-app` package.
 
 ## Runtime Package
 

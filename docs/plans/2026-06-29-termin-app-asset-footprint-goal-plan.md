@@ -90,7 +90,7 @@ Expected important hits before the cleanup:
 
 - `termin-modules/python/termin_modules/module_context.py`;
 - `termin-app/termin/shader_runtime.py`;
-- `termin-app/termin/scene_animation_repair.py`;
+- `termin-glb/python/termin/glb/scene_animation_repair.py`;
 - `termin-app/termin/mcp/python_executor.py`;
 - editor/editor_core/editor_tcgui imports of `termin.assets.resources`;
 - editor file processors importing `termin.assets.project_file_watcher`.
@@ -124,7 +124,7 @@ Then migrate runtime-ish app helpers:
 - `termin-app/termin/shader_runtime.py`: `_glsl_fallback_loader()` should use
   `termin_assets.get_resource_manager()` first. If no manager is configured,
   log an error and return `False`. Avoid importing `termin.assets.resources`.
-- `termin-app/termin/scene_animation_repair.py`: remove the fallback import of
+- `termin-glb/python/termin/glb/scene_animation_repair.py`: remove the fallback import of
   `termin.assets.resources.ResourceManager`. The function already accepts an
   injected manager and already tries `termin_assets.get_resource_manager()`.
   If neither exists, log and return `0`.
@@ -312,7 +312,7 @@ PYTHONPATH=termin-build-tools .venv/bin/python -m termin_build.package_manifest 
   termin-app/tests/asset_plugin_test.py \
   termin-app/tests/test_project_file_watcher.py \
   termin-app/tests/test_editor_builtin_resources.py \
-  termin-app/tests/test_scene_animation_repair.py
+  termin-glb/tests/test_scene_animation_repair.py
 ```
 
 Also run focused import audits:

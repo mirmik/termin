@@ -114,7 +114,7 @@ def export_runtime_package(
     output_dir_path = Path(output_dir).resolve()
 
     scene_data = _read_scene_data(entry_scene_path)
-    from termin.scene_animation_repair import repair_glb_animation_player_clip_refs
+    from termin.glb.scene_animation_repair import repair_glb_animation_player_clip_refs
 
     repair_glb_animation_player_clip_refs(scene_data)
     diagnostics: list[RuntimePackageExportDiagnostic] = []

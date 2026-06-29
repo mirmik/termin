@@ -151,6 +151,8 @@ digraph termin_dependencies {
 	"termin-pga";
 	"termin-player";
 	"termin-prefab";
+	"termin-project";
+	"termin-project-build";
 	"termin-render-passes";
 	"termin-runtime";
 	"termin-shader-runtime";
@@ -169,16 +171,18 @@ digraph termin_dependencies {
 	"termin-assets" -> "termin-components-foliage";
 	"termin-assets" -> "termin-components-voxels";
 	"termin-assets" -> "termin-glb";
+	"termin-assets" -> "termin-mcp";
 	"termin-assets" -> "termin-prefab";
+	"termin-assets" -> "termin-shader-runtime";
 	"termin-assets" -> "termin-skeleton";
 	"termin-base" -> "termin-assets";
 	"termin-base" -> "termin-audio";
 	"termin-base" -> "termin-inspect";
 	"termin-base" -> "termin-lighting";
-	"termin-base" -> "termin-mcp";
 	"termin-base" -> "termin-mesh";
 	"termin-base" -> "termin-modules";
 	"termin-base" -> "termin-pga";
+	"termin-base" -> "termin-project";
 	"termin-base" -> "termin-qopt";
 	"termin-collision" -> "termin-components-collision";
 	"termin-collision" -> "termin-engine";
@@ -211,6 +215,7 @@ digraph termin_dependencies {
 	"termin-engine" -> "termin-openxr";
 	"termin-engine" -> "termin-player";
 	"termin-engine" -> "termin-runtime";
+	"termin-glb" -> "termin-app";
 	"termin-graphics" -> "termin-glb";
 	"termin-graphics" -> "termin-gui";
 	"termin-graphics" -> "termin-materials";
@@ -221,6 +226,7 @@ digraph termin_dependencies {
 	"termin-gui" -> "termin-components-ui";
 	"termin-gui" -> "termin-csg";
 	"termin-gui" -> "termin-nodegraph";
+	"termin-gui" -> "termin-project-build";
 	"termin-input" -> "termin-display";
 	"termin-inspect" -> "termin-components-ui";
 	"termin-inspect" -> "termin-scene";
@@ -235,6 +241,8 @@ digraph termin_dependencies {
 	"termin-nodegraph" -> "termin-app";
 	"termin-physics" -> "termin-components-physics";
 	"termin-player" -> "termin-app";
+	"termin-project" -> "termin-project-build";
+	"termin-project-build" -> "termin-app";
 	"termin-qopt" -> "termin-physics-fem";
 	"termin-render" -> "termin-components-foliage";
 	"termin-render" -> "termin-display";
@@ -251,11 +259,13 @@ digraph termin_dependencies {
 	"termin-scene" -> "termin-components-voxels";
 	"termin-scene" -> "termin-glb";
 	"termin-scene" -> "termin-input";
+	"termin-scene" -> "termin-mcp";
 	"termin-scene" -> "termin-physics-fem";
 	"termin-scene" -> "termin-prefab";
 	"termin-scene" -> "termin-render";
 	"termin-scene" -> "termin-skeleton";
 	"termin-shader-runtime" -> "termin-player";
+	"termin-shader-runtime" -> "termin-project-build";
 	"termin-skeleton" -> "termin-animation";
 	"termin-skeleton" -> "termin-components-skeleton";
 	"termin-tween" -> "termin-components-tween";
