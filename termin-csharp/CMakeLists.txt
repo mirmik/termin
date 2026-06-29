@@ -11,11 +11,20 @@ include(GNUInstallDirs)
 option(TERMIN_CSHARP_BUILD_NATIVE "Build native SWIG bridge for C# bindings" ON)
 option(TERMIN_CSHARP_BUILD_MANAGED "Build managed C# projects with dotnet" OFF)
 option(TERMIN_CSHARP_BUILD_TESTS "Build Termin.Test project with dotnet" OFF)
+if(WIN32)
+    set(_termin_csharp_build_wpf_default ON)
+else()
+    set(_termin_csharp_build_wpf_default OFF)
+endif()
+option(TERMIN_CSHARP_BUILD_WPF "Build Windows-only Termin.Wpf managed project with dotnet" ${_termin_csharp_build_wpf_default})
 set(TERMIN_CSHARP_PROFILE "full" CACHE STRING "C# SDK profile: full or plot-d3d11")
 set_property(CACHE TERMIN_CSHARP_PROFILE PROPERTY STRINGS full plot-d3d11)
 
 if(NOT TERMIN_CSHARP_PROFILE STREQUAL "full" AND NOT TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
     message(FATAL_ERROR "Unsupported TERMIN_CSHARP_PROFILE='${TERMIN_CSHARP_PROFILE}'. Expected 'full' or 'plot-d3d11'.")
+endif()
+if(TERMIN_CSHARP_BUILD_WPF AND NOT WIN32)
+    message(FATAL_ERROR "TERMIN_CSHARP_BUILD_WPF requires Windows/.NET WindowsDesktop SDK. Disable it on non-Windows hosts.")
 endif()
 if(WIN32)
     set(TERMIN_CSHARP_RUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/runtimes/win-x64/native")
@@ -253,10 +262,20 @@ if(TERMIN_CSHARP_BUILD_MANAGED)
     # билд или не находит вообще. Пробрасываем через $<CONFIG>.
     add_custom_target(termin_csharp_managed ALL
         COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Termin.Native.csproj -c $<CONFIG> -p:TerminCsharpProfile=${TERMIN_CSHARP_PROFILE}
-        COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Wpf/Termin.Wpf.csproj -c $<CONFIG> -p:TerminCsharpProfile=${TERMIN_CSHARP_PROFILE}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         VERBATIM
     )
+
+    if(TERMIN_CSHARP_BUILD_WPF)
+        add_custom_target(termin_csharp_wpf ALL
+            COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Wpf/Termin.Wpf.csproj -c $<CONFIG> -p:TerminCsharpProfile=${TERMIN_CSHARP_PROFILE}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            VERBATIM
+        )
+        add_dependencies(termin_csharp_wpf termin_csharp_managed)
+    else()
+        message(STATUS "termin-csharp: Termin.Wpf build is disabled")
+    endif()
 
     if(TERMIN_CSHARP_BUILD_NATIVE)
         add_dependencies(termin_csharp_managed ${SWIG_MODULE_termin_csharp_native_REAL_NAME})
