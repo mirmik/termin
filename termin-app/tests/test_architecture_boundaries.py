@@ -114,3 +114,9 @@ def test_app_scene_rendering_facade_is_removed() -> None:
     app_facade = REPO_ROOT / "termin-app/termin/scene_rendering.py"
 
     assert not app_facade.exists()
+
+
+def test_app_default_preloaders_compat_layer_is_removed() -> None:
+    app_facade = REPO_ROOT / "termin-app/termin/editor_core/default_preloaders.py"
+
+    assert not app_facade.exists()

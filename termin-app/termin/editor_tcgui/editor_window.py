@@ -21,9 +21,16 @@ from tcgui.widgets.text_area import TextArea
 
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
 from termin.engine import SceneManager, default_scene_extensions, scene as engine_scene
+from termin.default_assets.default_preloaders import (
+    register_default_preloaders as register_default_asset_preloaders,
+)
 from termin.editor_core.resource_loader import ResourceLoader, register_editor_builtin_resources
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
-from termin.editor_core.default_preloaders import register_default_preloaders
+from termin.editor_core.file_processors import (
+    ComponentFileProcessor,
+    ModuleFileProcessor,
+    ModuleInputFileProcessor,
+)
 from termin.editor_core.prefab_edit_controller import PrefabEditController
 from termin.editor_core.settings import EditorSettings
 from termin.editor_core.signal import Signal
@@ -1477,10 +1484,28 @@ class EditorWindowTcgui:
 
     def _register_file_processors(self) -> None:
         try:
-            register_default_preloaders(
+            self._project_file_watcher.register_processor(
+                ModuleFileProcessor(
+                    self.resource_manager,
+                    on_resource_reloaded=self._on_resource_reloaded,
+                )
+            )
+            self._project_file_watcher.register_processor(
+                ModuleInputFileProcessor(
+                    self.resource_manager,
+                    on_resource_reloaded=self._on_resource_reloaded,
+                )
+            )
+            register_default_asset_preloaders(
                 self._project_file_watcher,
                 self.resource_manager,
                 self._on_resource_reloaded,
+            )
+            self._project_file_watcher.register_processor(
+                ComponentFileProcessor(
+                    self.resource_manager,
+                    on_resource_reloaded=self._on_resource_reloaded,
+                )
             )
         except Exception as e:
             log.error(f"Failed to register default file processors: {e}")

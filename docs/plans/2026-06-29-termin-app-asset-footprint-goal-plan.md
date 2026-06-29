@@ -182,7 +182,6 @@ Update editor imports from `termin.assets.resources` to this editor namespace:
 - `termin-app/termin/editor_tcgui/widgets/field_widgets.py`;
 - `termin-app/termin/editor_tcgui/dialogs/resource_manager_viewer.py`;
 - `termin-app/termin/editor_tcgui/dialogs/scene_inspector.py`;
-- `termin-app/termin/editor_core/default_preloaders.py`;
 - `termin-app/termin/editor_core/resource_loader.py`;
 - `termin-app/termin/editor_core/entity_operations.py`;
 - `termin-app/termin/editor_core/project_operations.py`;
@@ -194,6 +193,10 @@ Update editor imports from `termin.assets.resources` to this editor namespace:
 
 Tests that still need a full editor resource manager should import from
 `termin.editor_core.resource_manager` after this step.
+
+Status 2026-06-29: `termin-app/termin/editor_core/default_preloaders.py` was
+removed. `EditorWindow` now composes editor-only module/component processors
+with canonical `termin.default_assets.default_preloaders` registration directly.
 
 ### 4. Collapse Or Remove `termin.assets.resources`
 
