@@ -287,7 +287,7 @@ Initial feature gates:
 - `recast`: required by `termin-navmesh` and `_navmesh_native`.
 - `sdl`: controls `termin.display._platform_native`.
 - `vulkan`: controls Vulkan-dependent CMake targets and thirdparty VMA.
-- `opengl`: currently required for C# native bindings.
+- `opengl`: optional legacy graphics feature; C# WPF/D3D11 bindings can be built with `--no-opengl`.
 
 Rule: if a package is listed in the required Python package set, its required
 features must be present. Optional native extensions may be skipped only when

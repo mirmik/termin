@@ -10,7 +10,7 @@ SDK_PREFIX="${SDK_PREFIX:-$SCRIPT_DIR/sdk}"
 BUILD_TYPE="Release"
 CLEAN=0
 NO_PARALLEL=0
-OPENGL_MODE="on"
+TERMIN_CSHARP_ENABLE_OPENGL=""
 BUILD_JOBS="${BUILD_JOBS:-$(nproc)}"
 
 for arg in "$@"; do
@@ -24,8 +24,8 @@ for arg in "$@"; do
         --pch|--no-pch) ;;
         --no-vulkan|--vulkan) ;;
         --no-sdl|--sdl) ;;
-        --no-opengl) OPENGL_MODE="off" ;;
-        --opengl) OPENGL_MODE="on" ;;
+        --no-opengl) TERMIN_CSHARP_ENABLE_OPENGL="OFF" ;;
+        --opengl) TERMIN_CSHARP_ENABLE_OPENGL="ON" ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -44,8 +44,8 @@ for arg in "$@"; do
             echo "  --vulkan          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --no-sdl          Accepted for top-level SDK builds; ignored by C# stage"
             echo "  --sdl             Accepted for top-level SDK builds; ignored by C# stage"
-            echo "  --no-opengl       Skip C# native bindings; they currently require OpenGL"
-            echo "  --opengl          Build C# native bindings (default)"
+            echo "  --no-opengl       Build C# bindings without legacy OpenGL entrypoints"
+            echo "  --opengl          Build C# bindings with legacy OpenGL entrypoints"
             echo "  --help, -h        Show this help"
             exit 0
             ;;
@@ -55,17 +55,6 @@ for arg in "$@"; do
             ;;
     esac
 done
-
-if [[ "$OPENGL_MODE" == "off" ]]; then
-    echo ""
-    echo "========================================"
-    echo "  Skipping termin-csharp"
-    echo "========================================"
-    echo ""
-    echo "C# native bindings currently depend on OpenGL."
-    echo "Re-run without --no-opengl when the OpenGL-backed SDK is available."
-    exit 0
-fi
 
 if [[ $NO_PARALLEL -eq 1 ]]; then
     BUILD_JOBS=1
@@ -95,13 +84,20 @@ if [[ $CLEAN -eq 1 ]]; then
 fi
 mkdir -p "$build_dir"
 
-cmake -S . -B "$build_dir" \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DCMAKE_PREFIX_PATH="$SDK_PREFIX" \
-    -DTERMIN_CSHARP_BUILD_NATIVE=ON \
-    -DTERMIN_CSHARP_BUILD_MANAGED=ON \
-    -DTERMIN_CSHARP_BUILD_TESTS=ON \
+cmake_args=(
+    -S .
+    -B "$build_dir"
+    -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+    -DCMAKE_PREFIX_PATH="$SDK_PREFIX"
+    -DTERMIN_CSHARP_BUILD_NATIVE=ON
+    -DTERMIN_CSHARP_BUILD_MANAGED=ON
+    -DTERMIN_CSHARP_BUILD_TESTS=ON
     -DTERMIN_CSHARP_SDK_SHARE_DIR="$SDK_PREFIX/share/termin"
+)
+if [[ -n "$TERMIN_CSHARP_ENABLE_OPENGL" ]]; then
+    cmake_args+=("-DTERMIN_CSHARP_ENABLE_OPENGL=$TERMIN_CSHARP_ENABLE_OPENGL")
+fi
+cmake "${cmake_args[@]}"
 
 cmake --build "$build_dir" --parallel "$BUILD_JOBS"
 

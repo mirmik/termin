@@ -13,8 +13,8 @@ $SdkPrefix = if ($env:SDK_PREFIX) { $env:SDK_PREFIX } else { Join-Path $ScriptDi
 $BuildType = "Release"
 $Clean = $false
 $NoParallel = $false
-$OpenGlMode = "on"
 $BuildJobs = if ($env:BUILD_JOBS) { [int]$env:BUILD_JOBS } else { [Environment]::ProcessorCount }
+$TerminCsharpEnableOpenGl = $null
 
 function Get-CMakeGeneratorFromCache {
     param([string]$BuildDir)
@@ -50,24 +50,14 @@ foreach ($arg in $args) {
         "--vulkan"      { }
         "--no-sdl"      { }
         "--sdl"         { }
-        "--no-opengl"   { $OpenGlMode = "off" }
-        "--opengl"      { $OpenGlMode = "on" }
+        "--no-opengl"   { $TerminCsharpEnableOpenGl = "OFF" }
+        "--opengl"      { $TerminCsharpEnableOpenGl = "ON" }
         "--help"   { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--ninja] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl] [--no-opengl|--opengl]"; exit 0 }
         "-h"       { Write-Host "Usage: .\build-sdk-csharp.ps1 [--debug] [--clean] [--no-parallel] [--ccache|--no-ccache] [--ninja] [--unity|--no-unity] [--pch|--no-pch] [--no-vulkan|--vulkan] [--no-sdl|--sdl] [--no-opengl|--opengl]"; exit 0 }
         default    { Write-Error "Unknown option: $arg"; exit 1 }
     }
 }
 
-if ($OpenGlMode -eq "off") {
-    Write-Host ""
-    Write-Host "========================================"
-    Write-Host "  Skipping termin-csharp"
-    Write-Host "========================================"
-    Write-Host ""
-    Write-Host "C# native bindings currently depend on OpenGL."
-    Write-Host "Re-run without --no-opengl when the OpenGL-backed SDK is available."
-    exit 0
-}
 
 if (-not (Get-Command swig -ErrorAction SilentlyContinue)) {
     throw "swig not found in PATH"
@@ -104,6 +94,9 @@ try {
         "-DTERMIN_CSHARP_BUILD_TESTS=ON",
         "-DTERMIN_CSHARP_SDK_SHARE_DIR=$SdkPrefix/share/termin"
     )
+    if ($null -ne $TerminCsharpEnableOpenGl) {
+        $cmakeArgs += "-DTERMIN_CSHARP_ENABLE_OPENGL=$TerminCsharpEnableOpenGl"
+    }
     & cmake @cmakeArgs
     if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 

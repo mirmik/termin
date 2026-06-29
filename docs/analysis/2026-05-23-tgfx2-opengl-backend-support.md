@@ -25,7 +25,7 @@ tgfx2 — двухбэкендный графический слой с абст
 | tcplot | tgfx2 2D/3D engines | GPU host |
 | termin-gui (tcgui) | tgfx2 | Python виджеты |
 | diffusion-editor | tgfx2 via tgfx native | Python editor |
-| C# биндинги | **OpenGL-only** | Рекомендация: `--no-sdl --no-vulkan` |
+| C# биндинги | **historically OpenGL-only; WPF path is moving to D3D11** | Текущая рекомендация для C#: `--no-sdl --no-vulkan --no-opengl` |
 
 ## Критические проблемы
 
@@ -115,7 +115,7 @@ Vulkan имеет `request_pixel_rgba8`/`poll_pixel_rgba8` (async через sta
 - `TERMIN_ENABLE_VULKAN` / `TGFX2_ENABLE_VULKAN` — контролирует `TGFX2_HAS_VULKAN` (OFF на Android)
 - `TGFX2_ENABLE_SHADERC` — runtime GLSL→SPIR-V (OFF на Android)
 - Скрипты поддерживают `--no-opengl` и `--no-vulkan`
-- Android: Vulkan-only, C#: OpenGL-only (рекомендация)
+- Android: Vulkan-only; C# был OpenGL-only на момент анализа, текущий WPF-профиль переводится на D3D11
 
 ## Итоговая оценка
 

@@ -28,6 +28,7 @@ public static class TerminCore
 
     public static void Init()
     {
+        NativeRuntimeSearchPath.Configure();
         ShaderRuntime.ConfigureFromAssemblyDirectory();
         InitNative();
     }
@@ -42,6 +43,7 @@ public static class TerminCore
 
     public static void InitFull()
     {
+        NativeRuntimeSearchPath.Configure();
         ShaderRuntime.ConfigureFromAssemblyDirectory();
         InitFullNative();
     }
