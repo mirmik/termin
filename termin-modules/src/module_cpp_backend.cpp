@@ -87,7 +87,18 @@ bool run_shell_command_capture(
         return false;
     }
 
-    FILE* pipe = popen(command.c_str(), "r");
+    std::string popen_command = command;
+#ifdef _WIN32
+    // _popen delegates to cmd.exe /c. If the command itself starts with a
+    // quoted executable path and has quoted arguments, cmd can misparse the
+    // line before the helper process starts. The extra outer quotes produce
+    // the canonical cmd form: cmd /c ""tool.exe" "arg" 2>&1".
+    if (!popen_command.empty() && popen_command.front() == '"') {
+        popen_command = "\"" + popen_command + "\"";
+    }
+#endif
+
+    FILE* pipe = popen(popen_command.c_str(), "r");
     if (pipe == nullptr) {
         std::filesystem::current_path(previous_dir);
         error = "Failed to start command";
@@ -186,9 +197,20 @@ bool validate_native_artifact(
 
 void* load_shared_library(const std::filesystem::path& path, std::string& error) {
 #ifdef _WIN32
-    HMODULE handle = LoadLibraryA(path.string().c_str());
+    std::filesystem::path load_path = std::filesystem::absolute(path);
+    load_path.make_preferred();
+    const std::string load_path_string = load_path.string();
+    HMODULE handle = LoadLibraryExA(
+        load_path_string.c_str(),
+        nullptr,
+        LOAD_WITH_ALTERED_SEARCH_PATH
+    );
     if (handle == nullptr) {
-        error = "LoadLibrary failed";
+        const DWORD error_code = GetLastError();
+        std::ostringstream ss;
+        ss << "LoadLibraryEx failed for " << load_path_string
+           << " with error code " << error_code;
+        error = ss.str();
         return nullptr;
     }
     return reinterpret_cast<void*>(handle);
