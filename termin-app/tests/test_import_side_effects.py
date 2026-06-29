@@ -217,7 +217,7 @@ print("clean")
 
 def test_project_modules_runtime_does_not_leave_nanobind_callback_refcycle() -> None:
     script = """
-from termin.modules.runtime import ProjectModulesRuntime
+from termin.project_modules.runtime import ProjectModulesRuntime
 
 runtime = ProjectModulesRuntime()
 runtime.close()

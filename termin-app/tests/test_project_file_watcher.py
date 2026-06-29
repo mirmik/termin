@@ -5,7 +5,7 @@ from typing import Set
 from termin.default_assets.render.texture_plugin import TextureImportPlugin
 from termin.editor_core.project_file_watcher import ProjectFileWatcher
 from termin.editor_core.file_processors import ComponentFileProcessor, ModuleFileProcessor, ModuleInputFileProcessor
-from termin.modules.runtime import ProjectModulesRuntime
+from termin.project_modules.runtime import ProjectModulesRuntime
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager

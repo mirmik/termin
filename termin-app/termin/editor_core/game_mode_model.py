@@ -92,7 +92,7 @@ class GameModeModel:
 
         from termin.engine import scene as engine_scene
         SceneMode = engine_scene.SceneMode
-        from termin.modules.runtime import get_project_modules_runtime
+        from termin.project_modules.runtime import get_project_modules_runtime
         get_project_modules_runtime().rebuild_stale_modules()
 
         editor_scene = self._scene_manager.get_scene(editor_scene_name)

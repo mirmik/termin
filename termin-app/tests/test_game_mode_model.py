@@ -351,7 +351,7 @@ class _Display:
 
 
 def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(monkeypatch):
-    import termin.modules.runtime as modules_runtime
+    import termin.project_modules.runtime as modules_runtime
 
     runtime = _ProjectModulesRuntime()
     monkeypatch.setattr(
@@ -480,7 +480,7 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
 
 
 def test_game_mode_model_restores_render_counts_with_shared_render_attachment(monkeypatch):
-    import termin.modules.runtime as modules_runtime
+    import termin.project_modules.runtime as modules_runtime
 
     runtime = _ProjectModulesRuntime()
     monkeypatch.setattr(

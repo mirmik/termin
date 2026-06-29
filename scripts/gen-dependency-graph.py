@@ -61,6 +61,10 @@ PYTHON_PKG_TO_DIR = {
     "termin": "termin",
     "termin-app": "termin-app",
     "termin-player": "termin-player",
+    "termin-project": "termin-project",
+    "termin-project-build": "termin-project-build",
+    "termin-project-modules": "termin-project-modules",
+    "termin-stdlib": "termin-stdlib",
     "termin-mcp": "termin-mcp",
     "termin-shader-runtime": "termin-shader-runtime",
     "termin-base": "termin-base",
@@ -105,6 +109,11 @@ PYTHON_IMPORT_TO_DIR = {
     # termin.* submodules → actual library
     "termin.editor_core": "termin-app",
     "termin.editor_tcgui": "termin-app",
+    "termin.project_build": "termin-project-build",
+    "termin.project_modules": "termin-project-modules",
+    "termin.project": "termin-project",
+    "termin.stdlib": "termin-stdlib",
+    "termin.glb": "termin-glb",
     "termin.player": "termin-player",
     "termin.mcp": "termin-mcp",
     "termin.shader_runtime": "termin-shader-runtime",
@@ -136,7 +145,6 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.skeleton_components": "termin-components-skeleton",
     "termin.kinematic": "termin-components-kinematic",
     "termin.robot": "termin-qopt",
-    "termin.modules": "termin-modules",
     "termin.navmesh": "termin-navmesh",
     "termin.tween.component": "termin-components-tween",
     "termin.tween": "termin-tween",
@@ -177,6 +185,7 @@ if os.path.exists(termin_native_cmake):
 PYTHON_ONLY_DIRS = {
     "termin-mcp": os.path.join(ROOT, "termin-mcp", "termin"),
     "termin-shader-runtime": os.path.join(ROOT, "termin-shader-runtime", "termin"),
+    "termin-stdlib": os.path.join(ROOT, "termin-stdlib", "python", "termin"),
 }
 
 # Dependencies that are structural but not reliably visible from setup.py or
@@ -187,6 +196,7 @@ MANUAL_DEPS = {
     "termin-player": {"termin"},
     "termin-mcp": {"termin"},
     "termin-shader-runtime": {"termin"},
+    "termin-stdlib": {"termin"},
     # "termin-entity": {"termin"},  # удалён, мигрирован в termin-app
     "termin-navmesh": {"termin"},
     "termin-tween": {"termin"},
