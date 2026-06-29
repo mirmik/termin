@@ -4,10 +4,6 @@ from termin.engine import (
     scene_ext_attached_names,
 )
 from termin.render import TcSceneLighting, scene_render_state
-from termin.scene_rendering import (
-    deserialize_scene as app_deserialize_scene,
-    destroy_scene as app_destroy_scene,
-)
 
 
 def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_state():
@@ -52,8 +48,3 @@ def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_
         )
     finally:
         engine_destroy_scene(scene)
-
-
-def test_scene_rendering_facade_uses_engine_lifecycle_api():
-    assert app_deserialize_scene is engine_deserialize_scene
-    assert app_destroy_scene is engine_destroy_scene
