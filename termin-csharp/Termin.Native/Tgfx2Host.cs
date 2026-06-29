@@ -35,6 +35,7 @@ namespace Termin.Native
                     }
 
                     _leaseCount++;
+                    Trace($"acquire existing backend={backend} leases={_leaseCount}");
                     return _host;
                 }
 
@@ -47,9 +48,11 @@ namespace Termin.Native
                         $"Tgfx2Host: font file not found: {ttfPath}");
                 }
 
+                Trace($"creating host backend={backend} font={ttfPath}");
                 _host = new GpuHost(ttfPath, backend);
                 _backend = backend;
                 _leaseCount++;
+                Trace($"acquire new backend={backend} leases={_leaseCount}");
                 return _host;
             }
         }
@@ -60,17 +63,33 @@ namespace Termin.Native
             {
                 if (_leaseCount <= 0)
                 {
+                    Trace("release ignored leases=0");
                     return;
                 }
 
                 _leaseCount--;
+                Trace($"release leases={_leaseCount}");
                 if (_leaseCount == 0)
                 {
+                    Trace("disposing host");
                     _host?.Dispose();
                     _host = null;
                     _backend = null;
                 }
             }
+        }
+
+        private static bool TraceEnabled =>
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TERMIN_WPF_PLOT_TRACE"));
+
+        private static void Trace(string message)
+        {
+            if (!TraceEnabled)
+            {
+                return;
+            }
+
+            Console.Error.WriteLine($"[Termin.Native.Tgfx2Host] {message}");
         }
     }
 }

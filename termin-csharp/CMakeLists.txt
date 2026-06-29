@@ -11,7 +11,12 @@ include(GNUInstallDirs)
 option(TERMIN_CSHARP_BUILD_NATIVE "Build native SWIG bridge for C# bindings" ON)
 option(TERMIN_CSHARP_BUILD_MANAGED "Build managed C# projects with dotnet" OFF)
 option(TERMIN_CSHARP_BUILD_TESTS "Build Termin.Test project with dotnet" OFF)
+set(TERMIN_CSHARP_PROFILE "full" CACHE STRING "C# SDK profile: full or plot-d3d11")
+set_property(CACHE TERMIN_CSHARP_PROFILE PROPERTY STRINGS full plot-d3d11)
 
+if(NOT TERMIN_CSHARP_PROFILE STREQUAL "full" AND NOT TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
+    message(FATAL_ERROR "Unsupported TERMIN_CSHARP_PROFILE='${TERMIN_CSHARP_PROFILE}'. Expected 'full' or 'plot-d3d11'.")
+endif()
 if(WIN32)
     set(TERMIN_CSHARP_RUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/runtimes/win-x64/native")
 else()
@@ -33,29 +38,34 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         endif()
     endfunction()
 
+    message(STATUS "termin-csharp: profile=${TERMIN_CSHARP_PROFILE}")
+
+    termin_csharp_require_package(termin_mesh tmesh::termin_mesh)
     termin_csharp_require_package(termin_graphics tgfx::termin_graphics tgfx::termin_graphics2)
-    termin_csharp_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
-    termin_csharp_require_package(termin_materials termin_materials::termin_materials)
-    termin_csharp_require_package(termin_scene termin_scene::termin_scene)
-    termin_csharp_require_package(termin_collision termin_collision::termin_collision)
-    termin_csharp_require_package(termin_components_collision termin_components_collision::termin_components_collision)
-    termin_csharp_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
-    termin_csharp_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
-
-    # These component DLLs are pulled in transitively by the engine/render stack
-    # and can appear in termin.dll's import table, so they must be copied next to it.
-    termin_csharp_require_package(termin_components_render termin_components_render::termin_components_render)
-    termin_csharp_require_package(termin_components_skeleton termin_components_skeleton::termin_components_skeleton)
-    termin_csharp_require_package(termin_components_foliage termin_components_foliage::termin_components_foliage)
-
-    termin_csharp_require_package(termin_engine termin_engine::termin_engine)
-    termin_csharp_require_package(termin_display termin_display::termin_display)
-    termin_csharp_require_package(termin_animation termin_animation::termin_animation)
-    termin_csharp_require_package(termin_skeleton termin_skeleton::termin_skeleton)
-    termin_csharp_require_package(termin_render termin_render::termin_render)
-    termin_csharp_require_package(termin_render_passes termin_render_passes::termin_render_passes)
     termin_csharp_require_package(tcplot tcplot::tcplot)
 
+    if(TERMIN_CSHARP_PROFILE STREQUAL "full")
+        termin_csharp_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
+        termin_csharp_require_package(termin_materials termin_materials::termin_materials)
+        termin_csharp_require_package(termin_scene termin_scene::termin_scene)
+        termin_csharp_require_package(termin_collision termin_collision::termin_collision)
+        termin_csharp_require_package(termin_components_collision termin_components_collision::termin_components_collision)
+        termin_csharp_require_package(termin_components_mesh termin_components_mesh::termin_components_mesh)
+        termin_csharp_require_package(termin_components_kinematic termin_components_kinematic::termin_components_kinematic)
+
+        # These component DLLs are pulled in transitively by the engine/render stack
+        # and can appear in termin.dll's import table, so they must be copied next to it.
+        termin_csharp_require_package(termin_components_render termin_components_render::termin_components_render)
+        termin_csharp_require_package(termin_components_skeleton termin_components_skeleton::termin_components_skeleton)
+        termin_csharp_require_package(termin_components_foliage termin_components_foliage::termin_components_foliage)
+
+        termin_csharp_require_package(termin_engine termin_engine::termin_engine)
+        termin_csharp_require_package(termin_display termin_display::termin_display)
+        termin_csharp_require_package(termin_animation termin_animation::termin_animation)
+        termin_csharp_require_package(termin_skeleton termin_skeleton::termin_skeleton)
+        termin_csharp_require_package(termin_render termin_render::termin_render)
+        termin_csharp_require_package(termin_render_passes termin_render_passes::termin_render_passes)
+    endif()
     if(NOT DEFINED TERMIN_CSHARP_ENABLE_OPENGL)
         if(DEFINED _termin_graphics_enable_opengl)
             set(TERMIN_CSHARP_ENABLE_OPENGL ${_termin_graphics_enable_opengl} CACHE BOOL "Expose OpenGL APIs in C# bindings")
@@ -78,8 +88,20 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         list(APPEND _termin_csharp_swig_flags "-DTERMIN_CSHARP_ENABLE_OPENGL")
     endif()
 
+    if(TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
+        set(_termin_csharp_swig_interface "${CMAKE_CURRENT_SOURCE_DIR}/termin_plot.i")
+        list(APPEND _termin_csharp_swig_flags "-DTERMIN_CSHARP_PLOT_ONLY")
+        set(_termin_csharp_bridge_sources)
+    else()
+        set(_termin_csharp_swig_interface "${CMAKE_CURRENT_SOURCE_DIR}/termin.i")
+        set(_termin_csharp_bridge_sources
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_component_csharp.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_inspect_csharp.cpp
+        )
+    endif()
+
     set_source_files_properties(
-        ${CMAKE_CURRENT_SOURCE_DIR}/termin.i
+        ${_termin_csharp_swig_interface}
         PROPERTIES
         CPLUSPLUS ON
         SWIG_USE_TARGET_INCLUDE_DIRECTORIES ON
@@ -90,11 +112,9 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         TYPE SHARED
         LANGUAGE csharp
         SOURCES
-            ${CMAKE_CURRENT_SOURCE_DIR}/termin.i
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_component_csharp.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/src/tc_inspect_csharp.cpp
+            ${_termin_csharp_swig_interface}
+            ${_termin_csharp_bridge_sources}
     )
-
     set_target_properties(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PROPERTIES
         OUTPUT_NAME "termin"
         # Per-config overrides bypass Visual Studio's default
@@ -120,53 +140,71 @@ if(TERMIN_CSHARP_BUILD_NATIVE)
         target_compile_definitions(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE TERMIN_CSHARP_ENABLE_OPENGL)
     endif()
 
-    target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
-        tcbase::termin_base
-        tgfx::termin_graphics
-        termin_bootstrap::termin_bootstrap
-        termin_engine::termin_engine
-        termin_scene::termin_scene
-        termin_collision::termin_collision
-        termin_components_collision::termin_components_collision
-        termin_components_kinematic::termin_components_kinematic
-        termin_render::termin_render
-        termin_render_passes::termin_render_passes
-        tcplot::tcplot
-    )
-
+    if(TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
+        target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
+            tcbase::termin_base
+            tmesh::termin_mesh
+            tgfx::termin_graphics
+            tgfx::termin_graphics2
+            tcplot::tcplot
+        )
+    else()
+        target_link_libraries(${SWIG_MODULE_termin_csharp_native_REAL_NAME} PRIVATE
+            tcbase::termin_base
+            tgfx::termin_graphics
+            termin_bootstrap::termin_bootstrap
+            termin_engine::termin_engine
+            termin_scene::termin_scene
+            termin_collision::termin_collision
+            termin_components_collision::termin_components_collision
+            termin_components_kinematic::termin_components_kinematic
+            termin_render::termin_render
+            termin_render_passes::termin_render_passes
+            tcplot::tcplot
+        )
+    endif()
     # This list MUST cover every transitive DLL that ends up in
     # termin.dll's PE import table. Missing entries silently go to
     # Windows loader's default search path (PATH, System32, …) and
     # pick up whatever stale copy happens to be around — classic
     # ABI-mismatch source. To verify: dumpbin /DEPENDENTS termin.dll
     # after a build and diff against the files in runtimes/win-x64/native/.
-    set(_termin_csharp_runtime_targets
-        tcbase::termin_base
-        termin_bootstrap::termin_bootstrap
-        termin_inspect::termin_inspect
-        termin_scene::termin_scene
-        termin_input::termin_input
-        termin_collision::termin_collision
-        termin_components_collision::termin_components_collision
-        termin_components_mesh::termin_components_mesh
-        termin_components_kinematic::termin_components_kinematic
-        termin_components_skeleton::termin_components_skeleton
-        termin_components_render::termin_components_render
-        termin_components_foliage::termin_components_foliage
-        termin_engine::termin_engine
-        termin_display::termin_display
-        termin_animation::termin_animation
-        termin_skeleton::termin_skeleton
-        termin_render::termin_render
-        termin_render_passes::termin_render_passes
-        tgfx::termin_graphics
-        tgfx::termin_graphics2
-        termin_materials::termin_materials
-        termin_modules::termin_modules
-        tmesh::termin_mesh
-        tcplot::tcplot
-    )
-
+    if(TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
+        set(_termin_csharp_runtime_targets
+            tcbase::termin_base
+            tmesh::termin_mesh
+            tgfx::termin_graphics
+            tgfx::termin_graphics2
+            tcplot::tcplot
+        )
+    else()
+        set(_termin_csharp_runtime_targets
+            tcbase::termin_base
+            termin_bootstrap::termin_bootstrap
+            termin_inspect::termin_inspect
+            termin_scene::termin_scene
+            termin_input::termin_input
+            termin_collision::termin_collision
+            termin_components_collision::termin_components_collision
+            termin_components_mesh::termin_components_mesh
+            termin_components_kinematic::termin_components_kinematic
+            termin_components_skeleton::termin_components_skeleton
+            termin_components_render::termin_components_render
+            termin_components_foliage::termin_components_foliage
+            termin_engine::termin_engine
+            termin_display::termin_display
+            termin_animation::termin_animation
+            termin_skeleton::termin_skeleton
+            termin_render::termin_render
+            termin_render_passes::termin_render_passes
+            tgfx::termin_graphics
+            tgfx::termin_graphics2
+            termin_materials::termin_materials
+            termin_modules::termin_modules
+            tmesh::termin_mesh
+            tcplot::tcplot
+        )
+    endif()
     foreach(_dep IN LISTS _termin_csharp_runtime_targets)
         add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -210,11 +248,12 @@ if(TERMIN_CSHARP_BUILD_MANAGED)
 
     # `dotnet build` без `-c` собирает csproj в Debug по умолчанию,
     # даже если cmake запущен с --config Release. AppsUIMonorepo-овский
-    # update-sdk.ps1 ищет Termin.Native.dll в bin/Release/ — если мы
+    # update-sdk.ps1 ищет managed DLLs в bin/Release/ — если мы
     # не пробросим конфигурацию сюда, он молча находит старый Release-
     # билд или не находит вообще. Пробрасываем через $<CONFIG>.
     add_custom_target(termin_csharp_managed ALL
-        COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Termin.Native.csproj -c $<CONFIG>
+        COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/Termin.Native.csproj -c $<CONFIG> -p:TerminCsharpProfile=${TERMIN_CSHARP_PROFILE}
+        COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Wpf/Termin.Wpf.csproj -c $<CONFIG> -p:TerminCsharpProfile=${TERMIN_CSHARP_PROFILE}
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         VERBATIM
     )
@@ -223,7 +262,9 @@ if(TERMIN_CSHARP_BUILD_MANAGED)
         add_dependencies(termin_csharp_managed ${SWIG_MODULE_termin_csharp_native_REAL_NAME})
     endif()
 
-    if(TERMIN_CSHARP_BUILD_TESTS)
+    if(TERMIN_CSHARP_BUILD_TESTS AND TERMIN_CSHARP_PROFILE STREQUAL "plot-d3d11")
+        message(STATUS "termin-csharp: Termin.Test is skipped for plot-d3d11 profile")
+    elseif(TERMIN_CSHARP_BUILD_TESTS)
         add_custom_target(termin_csharp_tests ALL
             COMMAND ${DOTNET_EXECUTABLE} build ${CMAKE_CURRENT_SOURCE_DIR}/Termin.Test/Termin.Test.csproj -c $<CONFIG>
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

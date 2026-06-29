@@ -10,9 +10,5 @@
   <ItemGroup>
     <ProjectReference Include="..\Termin.Native\Termin.Native.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="OpenTK.GLWpfControl" Version="4.3.4" />
-  </ItemGroup>
-
 </Project>
+

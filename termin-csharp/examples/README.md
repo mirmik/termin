@@ -4,7 +4,7 @@ This directory contains C# sample applications for the `Termin.Native` SDK.
 
 Projects:
 
-- `PlotDemoApp` - WPF/OpenTK hosts for 2D, multi-panel 2D, and 3D plot demos.
+- `PlotDemoApp` - WPF/D3D11 D3DImage hosts for 2D, multi-panel 2D, and 3D plot demos.
 - `SceneApp` - small WPF scene editor/viewer sample.
 - `Termin.WpfTest` - older WPF integration smoke test kept as a manual regression app.
 
