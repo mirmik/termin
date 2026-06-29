@@ -160,6 +160,42 @@ def test_app_cxx_tree_contains_only_editor_private_native_sources() -> None:
     assert unexpected == []
 
 
+def test_sdk_cli_entrypoints_are_outside_app_cxx_package() -> None:
+    app_cpp_app = REPO_ROOT / "termin-app/cpp/app"
+    cli_root = REPO_ROOT / "termin-cli"
+    cli_sources = [
+        cli_root / "src/termin.cpp",
+        cli_root / "src/termin_builder.cpp",
+        cli_root / "src/termin_runner.cpp",
+        cli_root / "src/termin_modules_cli.cpp",
+        cli_root / "src/termin_stdlib.cpp",
+        cli_root / "src/termin_python_backend.hpp",
+    ]
+    removed_app_paths = [
+        app_cpp_app / "termin.cpp",
+        app_cpp_app / "termin_builder.cpp",
+        app_cpp_app / "termin_runner.cpp",
+        app_cpp_app / "termin_modules_cli.cpp",
+        app_cpp_app / "termin_stdlib.cpp",
+        app_cpp_app / "termin_python_backend.hpp",
+    ]
+
+    assert (cli_root / "CMakeLists.txt").is_file()
+    assert [path for path in cli_sources if not path.is_file()] == []
+    assert [path for path in removed_app_paths if path.exists()] == []
+
+    app_cmake = _read_text(REPO_ROOT / "termin-app/cpp/CMakeLists.txt")
+    forbidden_fragments = (
+        "add_executable(termin\n",
+        "add_executable(termin_builder",
+        "add_executable(termin_runner",
+        "add_executable(termin_modules_cli",
+        "add_executable(termin_stdlib",
+    )
+    offenders = [fragment for fragment in forbidden_fragments if fragment in app_cmake]
+    assert offenders == []
+
+
 def test_app_scene_rendering_facade_is_removed() -> None:
     app_facade = REPO_ROOT / "termin-app/termin/scene_rendering.py"
 

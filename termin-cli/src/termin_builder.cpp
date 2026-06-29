@@ -298,9 +298,9 @@ int command_build(const ParsedArgs& args) {
         return 0;
     }
 
-    termin_app::python_backend::configure_environment();
+    termin_cli::python_backend::configure_environment();
     std::vector<std::string> command =
-        termin_app::python_backend::python_module_command("termin.project_build.profile_build");
+        termin_cli::python_backend::python_module_command("termin.project_build.profile_build");
     command.insert(command.end(), {
         "build",
         "--project-root",
@@ -314,7 +314,7 @@ int command_build(const ParsedArgs& args) {
     });
 
     std::cout << "Executing " << profile.target << " build backend...\n" << std::flush;
-    return termin_app::python_backend::run_process(command, "build backend");
+    return termin_cli::python_backend::run_process(command, "build backend");
 }
 
 } // namespace
