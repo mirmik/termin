@@ -71,6 +71,8 @@ if __name__ == "__main__":
                 "termin.geomalgo", "termin.geomalgo.*",         # termin-pga
                 "termin.mcp", "termin.mcp.*",                   # termin-mcp
                 "termin.player", "termin.player.*",             # termin-player
+                "termin.project", "termin.project.*",           # termin-project
+                "termin.project_build", "termin.project_build.*",  # termin-project-build
                 "termin.shader_runtime",                        # termin-shader-runtime
                 "termin.shader_tools",                          # termin-shader-runtime
             ],
@@ -113,6 +115,8 @@ if __name__ == "__main__":
             "termin-bootstrap",
             "termin-mcp",
             "termin-player",
+            "termin-project",
+            "termin-project-build",
             "termin-shader-runtime",
             "termin-prefab",
             "termin-glb",

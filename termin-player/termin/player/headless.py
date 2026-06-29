@@ -180,7 +180,7 @@ class HeadlessRuntime:
         )
         scene.source_path = str(scene_path.resolve())
         if scene_data:
-            from termin.scene_animation_repair import repair_glb_animation_player_clip_refs
+            from termin.glb.scene_animation_repair import repair_glb_animation_player_clip_refs
 
             repair_glb_animation_player_clip_refs(scene_data)
             scene.load_from_data(scene_data, context=None, update_settings=True)
