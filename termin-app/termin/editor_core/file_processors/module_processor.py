@@ -64,7 +64,7 @@ class ModuleFileProcessor(FilePreLoader):
         if self._modules_runtime_provider is not None:
             return self._modules_runtime_provider()
 
-        from termin.modules.runtime import get_project_modules_runtime
+        from termin.project_modules.runtime import get_project_modules_runtime
 
         return get_project_modules_runtime()
 
@@ -132,6 +132,6 @@ class ModuleInputFileProcessor(FilePreLoader):
         if self._modules_runtime_provider is not None:
             return self._modules_runtime_provider()
 
-        from termin.modules.runtime import get_project_modules_runtime
+        from termin.project_modules.runtime import get_project_modules_runtime
 
         return get_project_modules_runtime()

@@ -184,7 +184,7 @@ class HeadlessRuntime:
 
             repair_glb_animation_player_clip_refs(scene_data)
             scene.load_from_data(scene_data, context=None, update_settings=True)
-            from termin.modules.runtime import upgrade_scene_unknown_components
+            from termin.project_modules.runtime import upgrade_scene_unknown_components
 
             upgrade_scene_unknown_components(scene)
         return scene

@@ -44,6 +44,8 @@ TERMIN_PLAYER_RUNTIME_DISTRIBUTIONS = (
     "termin-shader-runtime",
     "termin-render-passes",
     "termin-modules",
+    "termin-project",
+    "termin-project-modules",
     "termin-scene",
     "termin-display",
     "termin-engine",

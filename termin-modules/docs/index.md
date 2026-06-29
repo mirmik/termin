@@ -31,8 +31,9 @@ termin modules --project /path/to/project
 termin modules warmup --project /path/to/project --module gameplay
 ```
 
-Команда использует тот же `ProjectModulesRuntime`, что и редактор при открытии
-проекта. Для Python-модулей она создаёт/дополняет проектный `.venv`, ставит
+Команда использует `termin.project_modules.ProjectModulesRuntime` из верхнего
+пакета `termin-project-modules`, то есть тот же project-facing runtime policy
+layer, что и редактор при открытии проекта. Для Python-модулей она создаёт/дополняет проектный `.venv`, ставит
 requirements из `.pymodule` и импортирует указанные пакеты. Для C++-модулей
 проходит обычный runtime load path, включая сборку stale-модулей перед
 загрузкой. Live scene synchronization при этом отключена: команда не пытается
