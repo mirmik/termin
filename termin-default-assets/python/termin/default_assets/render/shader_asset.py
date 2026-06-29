@@ -160,6 +160,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         uuid: str | None = None,
     ):
         super().__init__(data=program, name=name, source_path=source_path, uuid=uuid)
+        self._phase_tc_shaders: dict[str, TcShader] = {}
         if program is not None:
             self._update_tc_shaders()
 
@@ -196,7 +197,10 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
             return TcShader()
 
         phase_uuid = make_phase_uuid(self._uuid, phase.phase_mark)
-        tc = TcShader.get_or_create(phase_uuid)
+        tc = self._phase_tc_shaders.get(phase_uuid)
+        if tc is None or not tc.is_valid:
+            tc = TcShader.get_or_create(phase_uuid)
+            self._phase_tc_shaders[phase_uuid] = tc
         if not tc.is_valid:
             log.error(f"[ShaderAsset] Failed to get/create phase shader: {phase_uuid}")
             return TcShader()
@@ -304,8 +308,14 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         if self._data is None or not self._uuid:
             return
 
+        active_phase_uuids: set[str] = set()
         for phase in self._data.phases:
+            active_phase_uuids.add(make_phase_uuid(self._uuid, phase.phase_mark))
             self._ensure_tc_shader_for_phase(phase)
+
+        for phase_uuid in list(self._phase_tc_shaders):
+            if phase_uuid not in active_phase_uuids:
+                del self._phase_tc_shaders[phase_uuid]
 
     def _on_loaded(self) -> None:
         """After loading/reloading, update tc_shader registry for hot-reload."""
