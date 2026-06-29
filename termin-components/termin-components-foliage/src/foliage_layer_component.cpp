@@ -141,7 +141,8 @@ bool build_foliage_vertex_layout(
 UploadedBuffer upload_storage_buffer(
     tgfx::RenderContext2& ctx2,
     const void* data,
-    uint32_t size
+    uint32_t size,
+    uint32_t structured_stride
 ) {
     if (!data || size == 0) {
         return {};
@@ -151,6 +152,7 @@ UploadedBuffer upload_storage_buffer(
     tgfx::BufferDesc desc;
     desc.size = size;
     desc.usage = tgfx::BufferUsage::Storage | tgfx::BufferUsage::CopyDst;
+    desc.structured_stride = structured_stride;
     tgfx::BufferHandle buffer = device.create_buffer(desc);
     if (!buffer) {
         tc::Log::error("[FoliageLayerComponent] failed to allocate temporary storage buffer (%u bytes)", size);
@@ -547,7 +549,8 @@ bool FoliageLayerComponent::draw_tgfx2(
     UploadedBuffer instance_buffer = upload_storage_buffer(
         ctx2,
         instances.data(),
-        static_cast<uint32_t>(instances.size() * sizeof(FoliageGpuInstance))
+        static_cast<uint32_t>(instances.size() * sizeof(FoliageGpuInstance)),
+        static_cast<uint32_t>(sizeof(FoliageGpuInstance))
     );
     if (!instance_buffer.buffer) {
         return false;
