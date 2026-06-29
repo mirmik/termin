@@ -57,6 +57,10 @@ expanded into another built-in shader database.
   should shrink as file conventions cover more sources.
 - Built-in source files live in `termin-graphics/resources/builtin_shaders/`.
 - SDK installs those source files to `share/termin/builtin_shaders/`.
+- Windows SDK builds with D3D11 enabled also generate Slang built-in shader
+  artifacts into `share/termin/shaders/d3d11/` via `termin_shaderc`; downstream
+  packages should copy this installed runtime tree instead of compiling shaders
+  in their own build steps.
 - The live C++ catalog/source loader is owned by `termin_graphics2` and exposed
   through `tgfx2/builtin_shader_sources.hpp`, so engine renderers and render
   passes resolve built-ins through the same API.

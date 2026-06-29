@@ -88,8 +88,8 @@ public static class ShaderRuntime
         }
 
         var catalog = Path.Combine(root, "builtin_shaders", "engine-shader-catalog.json");
-        var tcplot = Path.Combine(root, "shaders", "opengl", "termin-engine-tcplot-3d.vert.glsl");
-        var text3d = Path.Combine(root, "shaders", "opengl", "termin-engine-text3d.vert.glsl");
+        var tcplot = Path.Combine(root, "shaders", "d3d11", "termin-engine-tcplot-3d.vs.cso");
+        var text3d = Path.Combine(root, "shaders", "d3d11", "termin-engine-text3d.vs.cso");
         return File.Exists(catalog) && File.Exists(tcplot) && File.Exists(text3d);
     }
 }

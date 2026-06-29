@@ -201,51 +201,30 @@ endif()
     endforeach()
 
     set(_termin_csharp_share_dir "${CMAKE_CURRENT_SOURCE_DIR}/Termin.Native/share/termin")
-    set(_termin_csharp_builtin_shader_dir "${CMAKE_CURRENT_SOURCE_DIR}/../termin-graphics/resources/builtin_shaders")
-    set(_termin_csharp_shader_artifact_dir "${_termin_csharp_share_dir}/shaders/opengl")
-    set(_termin_csharp_compile_shaders_py "${CMAKE_CURRENT_SOURCE_DIR}/cmake/compile_builtin_opengl_shaders.py")
-
-    if(NOT Python_EXECUTABLE)
-        find_package(Python 3.10 COMPONENTS Interpreter REQUIRED)
-    endif()
-
-    set(_termin_csharp_slangc "")
-    if(DEFINED ENV{TERMIN_SLANGC} AND EXISTS "$ENV{TERMIN_SLANGC}")
-        set(_termin_csharp_slangc "$ENV{TERMIN_SLANGC}")
-    else()
-        find_program(_termin_csharp_slangc NAMES slangc)
-    endif()
-
-    set(_termin_csharp_shader_artifact_command
-        "${Python_EXECUTABLE}" "${_termin_csharp_compile_shaders_py}"
-            --source-dir "${_termin_csharp_builtin_shader_dir}"
-            --output-dir "${_termin_csharp_shader_artifact_dir}"
-    )
-
-    if(_termin_csharp_slangc)
-        if(TARGET termin_shaderc)
-            set(_termin_csharp_shaderc "$<TARGET_FILE:termin_shaderc>")
-        else()
-            find_program(_termin_csharp_shaderc termin_shaderc)
-            if(NOT _termin_csharp_shaderc)
-                message(FATAL_ERROR "termin-csharp: termin_shaderc is required to rebuild OpenGL Slang shader artifacts")
+    set(TERMIN_CSHARP_SDK_SHARE_DIR "" CACHE PATH
+        "Installed SDK share/termin directory copied into Termin.Native")
+    if(NOT TERMIN_CSHARP_SDK_SHARE_DIR)
+        foreach(_prefix IN LISTS CMAKE_PREFIX_PATH)
+            if(EXISTS "${_prefix}/share/termin")
+                set(TERMIN_CSHARP_SDK_SHARE_DIR "${_prefix}/share/termin")
+                break()
             endif()
-        endif()
-        list(APPEND _termin_csharp_shader_artifact_command --shaderc "${_termin_csharp_shaderc}")
-        list(APPEND _termin_csharp_shader_artifact_command --slangc "${_termin_csharp_slangc}")
-    else()
-        message(WARNING
-            "termin-csharp: slangc was not found; validating checked-in OpenGL shader artifacts instead of rebuilding them")
-        list(APPEND _termin_csharp_shader_artifact_command --validate-existing)
+        endforeach()
+    endif()
+    if(NOT TERMIN_CSHARP_SDK_SHARE_DIR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/share/termin")
+        set(TERMIN_CSHARP_SDK_SHARE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/share/termin")
+    endif()
+    if(NOT TERMIN_CSHARP_SDK_SHARE_DIR OR NOT EXISTS "${TERMIN_CSHARP_SDK_SHARE_DIR}/builtin_shaders/engine-shader-catalog.json")
+        message(FATAL_ERROR
+            "termin-csharp: SDK share/termin resources were not found. "
+            "Build/install the C++ SDK first, or set TERMIN_CSHARP_SDK_SHARE_DIR.")
     endif()
 
     add_custom_command(TARGET ${SWIG_MODULE_termin_csharp_native_REAL_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_termin_csharp_share_dir}"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${_termin_csharp_builtin_shader_dir}"
-            "${_termin_csharp_share_dir}/builtin_shaders"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${_termin_csharp_shader_artifact_dir}"
-        COMMAND ${_termin_csharp_shader_artifact_command}
+            "${TERMIN_CSHARP_SDK_SHARE_DIR}"
+            "${_termin_csharp_share_dir}"
         VERBATIM
     )
 endif()
