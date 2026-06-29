@@ -8,7 +8,7 @@
 через `Tgfx2Host.Acquire(...)`, создавать `PlotView3D(host)`, а при dispose
 вызывать `release_gpu()` и `Tgfx2Host.Release()`. Для показа результата в WPF
 потребителю SDK нужна сборка `Termin.Wpf`: в ней лежит
-`Tgfx2GlWpfTexturePresenter`.
+`Tgfx2D3D11SwapchainHost`.
 
 ---
 
@@ -35,7 +35,7 @@
 | Рельефное shading | `set_surface_shading` | enabled, strength | Shader-side hillshade для читаемости ландшафта |
 | Направление света | `set_surface_light_dir` | x, y, z | Направление нормализуется внутри |
 | MSAA | `set_msaa_samples` / `msaa_samples` | samples | Обычно 1, 2, 4, 8 |
-| Interaction | `on_mouse_down`, `on_mouse_move`, `on_mouse_up`, `on_mouse_wheel` | координаты мыши + button/dy | Для WPF/OpenTK host |
+| Interaction | `on_mouse_down`, `on_mouse_move`, `on_mouse_up`, `on_mouse_wheel` | координаты мыши + button/dy | Для WPF/D3D11 host |
 | Picking | `pick` | mx, my, out x/y/z/screen_dist | Поиск ближайшей точки/маркера |
 | GPU cleanup | `release_gpu` | - | Вызывать перед dispose/потерей GL контекста |
 
@@ -246,27 +246,24 @@ View.set_z_label("Amplitude");
 
 ---
 
-## WPF/OpenTK host
+## WPF/D3D11 host
 
 Старый вывод напрямую в GL framebuffer удален. C# view вызывает
-`render_to_texture_id(width, height)`, а показ выполняет platform helper из
-`Termin.Wpf`, который принимает tgfx2 texture handle id и композитит его через
-interop/present слой. GL plumbing не должен находиться в `PlotView*` или в
-прикладных controls.
+`render_to_texture_handle_id(width, height)`, а показ выполняет platform helper из
+`Termin.Wpf`, который принимает tgfx2 texture handle id и композитит его через D3D11 swapchain host. Native window/swapchain plumbing не должен находиться в `PlotView*` или в прикладной модели.
 
 Минимальный render tick:
 
 ```csharp
-int width = Math.Max(1, GlControl.FrameBufferWidth);
-int height = Math.Max(1, GlControl.FrameBufferHeight);
-uint colorTex = view.render_to_texture_id(width, height);
-_presenter.Present(colorTex, width, height, GlControl.Framebuffer);
+int width = Math.Max(1, RenderHost.FramebufferWidth);
+int height = Math.Max(1, RenderHost.FramebufferHeight);
+uint colorTex = view.render_to_texture_handle_id(width, height);
+RenderHost.Present(colorTex, width, height);
 ```
 
-Для `OpenTK.Wpf.GLWpfControl` нужно брать именно `FrameBufferWidth`,
-`FrameBufferHeight` и `Framebuffer`. WPF `ActualWidth` / `ActualHeight` измерены
-в DIPs, а GLWpf выводит изображение через свой FBO; blit в default framebuffer
-не попадает в отображаемую картинку.
+Для `Tgfx2D3D11SwapchainHost` нужно брать именно `FramebufferWidth` и
+`FramebufferHeight`. WPF `ActualWidth` / `ActualHeight` измерены в DIPs, а D3D11
+swapchain работает в физических пикселях.
 
 Mouse events надо пробросить в view:
 
@@ -326,3 +323,4 @@ Picking сейчас стоит рассматривать как инструм
 
 Если это понадобится в Alliance, править надо не только C# слой, но и
 `tcplot`/shader-side часть.
+
