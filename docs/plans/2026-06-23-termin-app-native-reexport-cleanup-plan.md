@@ -238,8 +238,9 @@ Canonical ownership split now starts outside app:
 - `termin.render` also owns `TcSceneLighting`, because
   `SceneRenderState.lighting()` returns the scene lighting handle and no longer
   reaches through app-native lighting bindings.
-- `termin-app/termin/scene_rendering.py` remains a transitional facade for
-  app/editor compatibility.
+- `termin-app/termin/scene_rendering.py` was removed on 2026-06-29 after
+  tests and consumers moved to canonical `termin.engine` and `termin.render`
+  imports.
 
 App-native cleanup:
 

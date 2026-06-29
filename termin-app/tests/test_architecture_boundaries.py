@@ -108,3 +108,9 @@ def test_voxels_own_voxel_grid_native_headers() -> None:
                     offenders.append(f"{path.relative_to(REPO_ROOT)}: {include}")
 
     assert offenders == []
+
+
+def test_app_scene_rendering_facade_is_removed() -> None:
+    app_facade = REPO_ROOT / "termin-app/termin/scene_rendering.py"
+
+    assert not app_facade.exists()
