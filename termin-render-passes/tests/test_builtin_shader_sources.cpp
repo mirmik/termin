@@ -381,6 +381,97 @@ TEST_CASE("shader layout sidecar attaches reflected shader contract") {
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("real built-in shader artifact sidecar exposes reflected shader contract") {
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path()
+        / ("termin-render-passes-real-builtin-contract-test-" + std::to_string(unique));
+    const std::filesystem::path artifact_root = root / "artifacts";
+    std::filesystem::remove_all(root);
+
+    const std::filesystem::path artifact =
+        artifact_root / "shaders" / "opengl" / "termin-engine-tonemap.frag.glsl";
+    write_text(
+        artifact,
+        "#version 450 core\n"
+        "// TEST_REAL_BUILTIN_TONEMAP_ARTIFACT\n");
+    write_text(
+        std::filesystem::path(artifact.string() + ".layout.json"),
+        R"({
+  "version": 1,
+  "language": "slang",
+  "target": "opengl",
+  "stage": "fragment",
+  "resources": [
+    {
+      "name": "u_params",
+      "kind": "constant_buffer",
+      "scope": "pass",
+      "set": 0,
+      "binding": 20,
+      "stage_mask": 2,
+      "size": 16
+    },
+    {
+      "name": "u_scene_color",
+      "kind": "texture",
+      "scope": "transient",
+      "set": 0,
+      "binding": 32,
+      "stage_mask": 2,
+      "size": 0
+    }
+  ]
+})");
+
+    clear_builtin_root();
+    termin::tgfx2_set_shader_artifact_root(artifact_root.string().c_str());
+    termin::tgfx2_set_shader_dev_compile_enabled(false);
+    tc_shader_init();
+
+    tc_shader_handle handle =
+        tgfx::register_builtin_shader_from_catalog("termin-engine-tonemap");
+    REQUIRE(!tc_shader_handle_is_invalid(handle));
+    tc_shader* shader = tc_shader_get(handle);
+    REQUIRE(shader != nullptr);
+    CHECK(std::strcmp(shader->uuid, "termin-engine-tonemap") == 0);
+    REQUIRE(shader->fragment_source != nullptr);
+
+    tc_shader_contract_view before{};
+    CHECK(!tc_shader_get_contract_view(shader, &before));
+    CHECK(!tc_shader_has_resource_layout(shader));
+
+    std::vector<uint8_t> artifact_bytes;
+    REQUIRE(termin::tgfx2_load_or_compile_shader_artifact_for_backend(
+        shader,
+        tgfx::BackendType::OpenGL,
+        tgfx::ShaderStage::Fragment,
+        artifact_bytes));
+    REQUIRE(!artifact_bytes.empty());
+    CHECK(tc_shader_has_resource_layout(shader));
+
+    tc_shader_contract_view contract{};
+    REQUIRE(tc_shader_get_contract_view(shader, &contract));
+    CHECK(contract.source_kind == TC_SHADER_CONTRACT_SOURCE_REFLECTION);
+    CHECK(contract.vertex_input_count == 0);
+    check_contract_resource(
+        contract,
+        "u_params",
+        TC_SHADER_RESOURCE_CONSTANT_BUFFER,
+        TC_SHADER_RESOURCE_SCOPE_PASS);
+    check_contract_resource(
+        contract,
+        "u_scene_color",
+        TC_SHADER_RESOURCE_TEXTURE,
+        TC_SHADER_RESOURCE_SCOPE_TRANSIENT);
+    REQUIRE(tc_shader_find_resource_binding(shader, "u_scene_color") != nullptr);
+
+    tc_shader_shutdown();
+    termin::tgfx2_set_shader_artifact_root("");
+    clear_builtin_root();
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path root =
