@@ -73,6 +73,7 @@ if __name__ == "__main__":
                 "termin.player", "termin.player.*",             # termin-player
                 "termin.project", "termin.project.*",           # termin-project
                 "termin.project_build", "termin.project_build.*",  # termin-project-build
+                "termin.project_modules", "termin.project_modules.*",  # termin-project-modules
                 "termin.shader_runtime",                        # termin-shader-runtime
                 "termin.shader_tools",                          # termin-shader-runtime
             ],
@@ -117,6 +118,7 @@ if __name__ == "__main__":
             "termin-player",
             "termin-project",
             "termin-project-build",
+            "termin-project-modules",
             "termin-shader-runtime",
             "termin-prefab",
             "termin-glb",

@@ -178,6 +178,35 @@ def test_glb_scene_animation_repair_is_outside_app_package() -> None:
     assert offenders == []
 
 
+def test_project_modules_runtime_is_outside_app_package() -> None:
+    assert not (REPO_ROOT / "termin-app/termin/modules").exists()
+    assert not (REPO_ROOT / "termin-app/termin/module_warmup.py").exists()
+    assert (REPO_ROOT / "termin-project-modules/python/termin/project_modules/runtime.py").is_file()
+    assert (REPO_ROOT / "termin-project-modules/python/termin/project_modules/warmup.py").is_file()
+
+    source_roots = [
+        REPO_ROOT / "termin-app/termin",
+        REPO_ROOT / "termin-player/termin",
+        REPO_ROOT / "termin-app/cpp/app",
+    ]
+    forbidden_fragments = (
+        "termin.modules.runtime",
+        "termin.module_warmup",
+    )
+
+    offenders: list[str] = []
+    for root in source_roots:
+        for path in root.rglob("*"):
+            if path.suffix not in {".py", ".cpp", ".hpp", ".h"}:
+                continue
+            text = _read_text(path)
+            for fragment in forbidden_fragments:
+                if fragment in text:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
+
+    assert offenders == []
+
+
 def test_legacy_project_builder_and_build_json_player_path_are_removed() -> None:
     assert not (REPO_ROOT / "termin-app/termin/project_builder").exists()
 

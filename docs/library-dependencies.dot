@@ -153,6 +153,7 @@ digraph termin_dependencies {
 	"termin-prefab";
 	"termin-project";
 	"termin-project-build";
+	"termin-project-modules";
 	"termin-render-passes";
 	"termin-runtime";
 	"termin-shader-runtime";
@@ -242,7 +243,9 @@ digraph termin_dependencies {
 	"termin-physics" -> "termin-components-physics";
 	"termin-player" -> "termin-app";
 	"termin-project" -> "termin-project-build";
+	"termin-project" -> "termin-project-modules";
 	"termin-project-build" -> "termin-app";
+	"termin-project-modules" -> "termin-player";
 	"termin-qopt" -> "termin-physics-fem";
 	"termin-render" -> "termin-components-foliage";
 	"termin-render" -> "termin-display";
@@ -262,6 +265,7 @@ digraph termin_dependencies {
 	"termin-scene" -> "termin-mcp";
 	"termin-scene" -> "termin-physics-fem";
 	"termin-scene" -> "termin-prefab";
+	"termin-scene" -> "termin-project-modules";
 	"termin-scene" -> "termin-render";
 	"termin-scene" -> "termin-skeleton";
 	"termin-shader-runtime" -> "termin-player";

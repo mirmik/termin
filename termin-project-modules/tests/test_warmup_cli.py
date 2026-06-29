@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import termin.module_warmup as warmup
+import termin.project_modules.warmup as warmup
 
 
 @dataclass

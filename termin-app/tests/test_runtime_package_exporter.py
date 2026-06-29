@@ -85,7 +85,12 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
             [],
         ),
         "termin-render-passes": ({"termin/render_passes/__init__.py": "VALUE = 'render passes seed'\n"}, []),
-        "termin-modules": ({"termin/modules/__init__.py": "VALUE = 'modules seed'\n"}, []),
+        "termin-modules": ({"termin_modules/__init__.py": "VALUE = 'modules seed'\n"}, []),
+        "termin-project": ({"termin/project/__init__.py": "VALUE = 'project seed'\n"}, []),
+        "termin-project-modules": (
+            {"termin/project_modules/__init__.py": "VALUE = 'project modules seed'\n"},
+            ["termin-engine", "termin-project", "termin-modules"],
+        ),
         "termin-scene": ({"termin/scene/__init__.py": "VALUE = 'scene seed'\n"}, []),
         "termin-display": (
             {

@@ -116,7 +116,7 @@ def _log_error(message: str) -> None:
 
 
 def _project_modules_runtime() -> Any:
-    from termin.modules.runtime import get_project_modules_runtime
+    from termin.project_modules.runtime import get_project_modules_runtime
 
     return get_project_modules_runtime()
 

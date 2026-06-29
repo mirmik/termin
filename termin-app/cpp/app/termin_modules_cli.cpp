@@ -21,7 +21,7 @@ int main(int argc, char** argv) {
     try {
         termin_app::python_backend::configure_environment();
         std::vector<std::string> command =
-            termin_app::python_backend::python_module_command("termin.module_warmup");
+            termin_app::python_backend::python_module_command("termin.project_modules.warmup");
         std::vector<std::string> rest = tail_args(argc, argv);
         command.insert(command.end(), rest.begin(), rest.end());
         return termin_app::python_backend::run_process(command, "modules backend");
