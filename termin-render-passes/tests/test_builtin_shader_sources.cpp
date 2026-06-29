@@ -450,7 +450,6 @@ TEST_CASE("built-in shader convention resolves canonical files without catalog m
 
     tc_shader* shader = tc_shader_get(handle);
     REQUIRE(shader != nullptr);
-    REQUIRE(shader->uuid != nullptr);
     CHECK(std::strcmp(shader->uuid, "test-convention-vsfs") == 0);
     REQUIRE(shader->name != nullptr);
     CHECK(std::strcmp(shader->name, "test-convention-vsfs") == 0);
@@ -611,7 +610,6 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
 
         tc_shader* shader = tc_shader_get(handle);
         REQUIRE(shader != nullptr);
-        REQUIRE(shader->uuid != nullptr);
         CHECK(std::strcmp(shader->uuid, expected.uuid) == 0);
         REQUIRE(shader->name != nullptr);
         CHECK((shader->vertex_source != nullptr) == expected.has_vertex);

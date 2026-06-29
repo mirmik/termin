@@ -134,11 +134,11 @@ def test_mesh_renderer_no_longer_exposes_mesh_mutators():
     renderer = MeshRenderer()
 
     with pytest.raises(AttributeError):
-        renderer.set_mesh
+        _ = renderer.set_mesh
     with pytest.raises(AttributeError):
-        renderer.set_mesh_by_name
+        _ = renderer.set_mesh_by_name
     with pytest.raises(AttributeError):
-        renderer.mesh
+        _ = renderer.mesh
 
 
 def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():

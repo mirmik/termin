@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Optional, TYPE_CHECKING
 
-from tcbase import log
-
 if TYPE_CHECKING:
     from termin_assets import Asset
     from termin.animation import TcAnimationClip
