@@ -185,9 +185,9 @@ profile/Android/Quest используют `termin.project_build`.
 
 `build_desktop_project`, `build_android_project` и `build_quest_openxr_project`
 перед export вызывают `preload_project_resources(...)`. Этот helper импортирует
-`termin.assets.resources.ResourceManager` и
-`termin.editor_core.default_preloaders.create_default_preloaders`, затем сканирует
-файлы проекта.
+`termin.default_assets.resource_manager.DefaultResourceManager` и
+`termin.default_assets.default_preloaders.create_default_preloaders`, затем
+сканирует файлы проекта.
 
 `export_runtime_package(...)` собирает refs эвристикой по serialized scene JSON,
 дополнительно включает все `.material` из проекта как workaround для dynamic
