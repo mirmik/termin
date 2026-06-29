@@ -56,6 +56,7 @@ public sealed class Tgfx2D3D11SwapchainHost : HwndHost
     private const int WS_VISIBLE = 0x10000000;
     private const int WS_CLIPSIBLINGS = 0x04000000;
     private const int WS_CLIPCHILDREN = 0x02000000;
+    private const int SS_NOTIFY = 0x00000100;
     private const int SWP_NOZORDER = 0x0004;
     private const int SWP_NOACTIVATE = 0x0010;
 
@@ -90,6 +91,11 @@ public sealed class Tgfx2D3D11SwapchainHost : HwndHost
         }
     }
 
+    public void ReleaseNativeResources()
+    {
+        ReleaseSwapchain();
+    }
+
     public bool Present(uint sourceTextureHandle, int width, int height, uint syncInterval = 1)
     {
         if (sourceTextureHandle == 0 || width <= 0 || height <= 0)
@@ -116,7 +122,7 @@ public sealed class Tgfx2D3D11SwapchainHost : HwndHost
             0,
             "Static",
             string.Empty,
-            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+            WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN | SS_NOTIFY,
             0,
             0,
             size.Width,
@@ -186,7 +192,7 @@ public sealed class Tgfx2D3D11SwapchainHost : HwndHost
                 break;
         }
 
-        return IntPtr.Zero;
+        return handled ? IntPtr.Zero : base.WndProc(hwnd, msg, wParam, lParam, ref handled);
     }
 
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
