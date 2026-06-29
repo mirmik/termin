@@ -110,6 +110,56 @@ def test_voxels_own_voxel_grid_native_headers() -> None:
     assert offenders == []
 
 
+def test_app_cxx_tree_contains_only_editor_private_native_sources() -> None:
+    app_cpp_root = REPO_ROOT / "termin-app/cpp/termin"
+    canonical_paths = [
+        REPO_ROOT / "termin-base/python/bindings/geom/geom_module.cpp",
+        REPO_ROOT / "termin-scene/include/termin/entity/cmp_ref.hpp",
+        REPO_ROOT / "termin-scene/include/termin/bindings/entity_bindings.hpp",
+        REPO_ROOT / "termin-scene/include/termin/bindings/tc_value_helpers.hpp",
+        REPO_ROOT / "termin-scene/include/termin/soa/soa_type.hpp",
+        REPO_ROOT / "termin-inspect/include/termin/inspect/tc_kind.hpp",
+        REPO_ROOT / "termin-inspect/include/termin/inspect/tc_kind_cpp_ext.hpp",
+        REPO_ROOT / "termin-graphics/include/tgfx/tgfx_material_handle.hpp",
+    ]
+    removed_app_paths = [
+        app_cpp_root / "bindings/entity/entity_bindings.hpp",
+        app_cpp_root / "bindings/geom",
+        app_cpp_root / "bindings/tc_value_helpers.hpp",
+        app_cpp_root / "bindings/trent_helpers.hpp",
+        app_cpp_root / "core/identifiable.hpp",
+        app_cpp_root / "entity/cmp_ref.hpp",
+        app_cpp_root / "entity_bindings.hpp",
+        app_cpp_root / "geom_bindings.cpp",
+        app_cpp_root / "inspect/tc_kind.hpp",
+        app_cpp_root / "inspect/tc_kind_cpp_ext.hpp",
+        app_cpp_root / "material/tc_material_handle.hpp",
+        app_cpp_root / "pch.hpp",
+        app_cpp_root / "render/render.hpp",
+        app_cpp_root / "sdl_bindings.hpp",
+        app_cpp_root / "soa",
+        app_cpp_root / "tc_viewport_bindings.hpp",
+    ]
+    allowed_first_level_dirs = {
+        "bindings",
+        "editor",
+        "navmesh",
+        "render",
+    }
+
+    assert [path for path in canonical_paths if not path.exists()] == []
+    assert [path for path in removed_app_paths if path.exists()] == []
+
+    unexpected: list[str] = []
+    for path in app_cpp_root.iterdir():
+        if path.is_dir() and path.name not in allowed_first_level_dirs:
+            unexpected.append(str(path.relative_to(REPO_ROOT)))
+        elif path.is_file():
+            unexpected.append(str(path.relative_to(REPO_ROOT)))
+
+    assert unexpected == []
+
+
 def test_app_scene_rendering_facade_is_removed() -> None:
     app_facade = REPO_ROOT / "termin-app/termin/scene_rendering.py"
 
