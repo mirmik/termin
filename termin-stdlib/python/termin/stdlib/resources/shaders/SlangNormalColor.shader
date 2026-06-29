@@ -43,7 +43,8 @@ struct VertexInput
 struct VertexOutput
 {
     float4 position : SV_Position;
-    float3 normal_world : NORMAL;
+    float3 world_pos : TEXCOORD0;
+    float3 normal_world : TEXCOORD1;
 };
 
 [shader("vertex")]
@@ -52,6 +53,7 @@ VertexOutput main(VertexInput input)
     VertexOutput output;
     float4 world = mul(draw_data.u_model, float4(input.position, 1.0));
     output.position = termin_to_native_clip(mul(per_frame.u_projection, mul(per_frame.u_view, world)));
+    output.world_pos = world.xyz;
     output.normal_world = mul((float3x3)draw_data.u_model, input.normal);
     return output;
 }
@@ -61,7 +63,8 @@ VertexOutput main(VertexInput input)
 struct FragmentInput
 {
     float4 screen_pos : SV_Position;
-    float3 normal_world : NORMAL;
+    float3 world_pos : TEXCOORD0;
+    float3 normal_world : TEXCOORD1;
 };
 
 struct FragmentOutput

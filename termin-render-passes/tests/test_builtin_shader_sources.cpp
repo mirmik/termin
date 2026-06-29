@@ -37,6 +37,17 @@ void clear_builtin_root() {
 #endif
 }
 
+std::filesystem::path repo_root_from_test_file() {
+    return std::filesystem::path(__FILE__).parent_path().parent_path().parent_path();
+}
+
+std::string read_text(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    REQUIRE(in.good());
+    return std::string(
+        std::istreambuf_iterator<char>(in),
+        std::istreambuf_iterator<char>());
+}
 void write_text(const std::filesystem::path& path, const char* text) {
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path, std::ios::binary);
@@ -745,6 +756,24 @@ TEST_CASE("built-in skybox shader is explicit Slang material shader") {
     CHECK(fragment.find("material.u_skybox_color") != std::string::npos);
     CHECK(fragment.find("material.u_skybox_top_color") != std::string::npos);
     CHECK(fragment.find("material.u_skybox_bottom_color") != std::string::npos);
+}
+
+
+TEST_CASE("stdlib normal debug material shaders use standard material fragment semantics") {
+    const std::filesystem::path shader_root =
+        repo_root_from_test_file() / "termin-stdlib" / "python" / "termin" /
+        "stdlib" / "resources" / "shaders";
+
+    const std::string normal_color = read_text(shader_root / "SlangNormalColor.shader");
+    CHECK(normal_color.find("world_pos : TEXCOORD0") != std::string::npos);
+    CHECK(normal_color.find("normal_world : TEXCOORD1") != std::string::npos);
+    CHECK(normal_color.find("normal_world : NORMAL") == std::string::npos);
+
+    const std::string textured_normal = read_text(shader_root / "SlangTexturedNormal.shader");
+    CHECK(textured_normal.find("world_pos : TEXCOORD0") != std::string::npos);
+    CHECK(textured_normal.find("normal_world : TEXCOORD1") != std::string::npos);
+    CHECK(textured_normal.find("uv : TEXCOORD2") != std::string::npos);
+    CHECK(textured_normal.find("normal_world : NORMAL") == std::string::npos);
 }
 
 TEST_CASE("built-in slang shader catalog registers explicit stage entry points") {
