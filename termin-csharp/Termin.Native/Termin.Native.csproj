@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup Condition="'$(TerminCsharpProfile)' == '' and Exists('Generated\PlotView3D.cs') and !Exists('Generated\Camera.cs')">
+    <TerminCsharpProfile>plot-d3d11</TerminCsharpProfile>
+  </PropertyGroup>
   <PropertyGroup>
     <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>10.0</LangVersion>
@@ -8,6 +11,30 @@
     <!-- Suppress CS8981 for SWIG-generated lowercase type 'termin' -->
     <NoWarn>CS8981</NoWarn>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TerminCsharpProfile)' == 'plot-d3d11'">
+    <DefineConstants>$(DefineConstants);TERMIN_CSHARP_PLOT_ONLY</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TerminCsharpProfile)' != 'plot-d3d11'">
+    <Compile Remove="TerminCore.Plot.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TerminCsharpProfile)' == 'plot-d3d11'">
+    <Compile Remove="ComponentRef.cs" />
+    <Compile Remove="CSharpComponent.cs" />
+    <Compile Remove="CSharpComponentRuntime.cs" />
+    <Compile Remove="Entity.cs" />
+    <Compile Remove="EntityPool.cs" />
+    <Compile Remove="InspectFieldAttribute.cs" />
+    <Compile Remove="Scene.cs" />
+    <Compile Remove="SwigHelper.cs" />
+    <Compile Remove="SwigHelpers.cs" />
+    <Compile Remove="TcEntityId.cs" />
+    <Compile Remove="TcValue.cs" />
+    <Compile Remove="TerminCore.cs" />
+    <Compile Remove="TerminOpenGL.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="runtimes\**\*" Pack="true" PackagePath="runtimes" CopyToOutputDirectory="PreserveNewest" />

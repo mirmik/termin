@@ -95,6 +95,32 @@ public static class TerminCore
         uint syncInterval);
 
     // ========================================================================
+    // D3D11 D3DImage presentation bridge
+    // ========================================================================
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_create_d3d11_d3dimage_bridge")]
+    public static extern IntPtr Tgfx2CreateD3D11D3DImageBridge(
+        uint width,
+        uint height);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_destroy_d3d11_d3dimage_bridge")]
+    public static extern void Tgfx2DestroyD3D11D3DImageBridge(IntPtr bridge);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_resize_d3d11_d3dimage_bridge")]
+    public static extern int Tgfx2ResizeD3D11D3DImageBridge(
+        IntPtr bridge,
+        uint width,
+        uint height);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_present_d3d11_d3dimage_bridge")]
+    public static extern int Tgfx2PresentD3D11D3DImageBridge(
+        IntPtr bridge,
+        uint sourceHandleId);
+
+    [DllImport(TGFX2_DLL, EntryPoint = "tgfx2_interop_get_d3d11_d3dimage_surface")]
+    public static extern IntPtr Tgfx2GetD3D11D3DImageSurface(IntPtr bridge);
+
+    // ========================================================================
     // Scene (handle-based API)
     // ========================================================================
 
@@ -1167,3 +1193,4 @@ public static class CSharpOwnerRef
         }
     }
 }
+

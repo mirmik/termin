@@ -8,7 +8,7 @@
 через `Tgfx2Host.Acquire(...)`, создавать `PlotView3D(host)`, а при dispose
 вызывать `release_gpu()` и `Tgfx2Host.Release()`. Для показа результата в WPF
 потребителю SDK нужна сборка `Termin.Wpf`: в ней лежит
-`Tgfx2D3D11SwapchainHost`.
+`Tgfx2D3D11ImageHost`.
 
 ---
 
@@ -261,7 +261,7 @@ uint colorTex = view.render_to_texture_handle_id(width, height);
 RenderHost.Present(colorTex, width, height);
 ```
 
-Для `Tgfx2D3D11SwapchainHost` нужно брать именно `FramebufferWidth` и
+Для `Tgfx2D3D11ImageHost` нужно брать именно `FramebufferWidth` и
 `FramebufferHeight`. WPF `ActualWidth` / `ActualHeight` измерены в DIPs, а D3D11
 swapchain работает в физических пикселях.
 
@@ -323,4 +323,5 @@ Picking сейчас стоит рассматривать как инструм
 
 Если это понадобится в Alliance, править надо не только C# слой, но и
 `tcplot`/shader-side часть.
+
 
