@@ -2,21 +2,103 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Iterator, TYPE_CHECKING
 
 import numpy as np
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.scene import Component, Entity
 
 
+class PropertyPathError(KeyError):
+    """Raised when a prefab override path cannot be resolved or applied."""
+
+
+def _entity_name(entity: "Entity") -> Any:
+    return entity.name
+
+
+def _set_entity_name(entity: "Entity", value: Any) -> None:
+    entity.name = value
+
+
+def _entity_visible(entity: "Entity") -> Any:
+    return entity.visible
+
+
+def _set_entity_visible(entity: "Entity", value: Any) -> None:
+    entity.visible = value
+
+
+def _entity_enabled(entity: "Entity") -> Any:
+    return entity.enabled
+
+
+def _set_entity_enabled(entity: "Entity", value: Any) -> None:
+    entity.enabled = value
+
+
+def _entity_pickable(entity: "Entity") -> Any:
+    return entity.pickable
+
+
+def _set_entity_pickable(entity: "Entity", value: Any) -> None:
+    entity.pickable = value
+
+
+def _entity_selectable(entity: "Entity") -> Any:
+    return entity.selectable
+
+
+def _set_entity_selectable(entity: "Entity", value: Any) -> None:
+    entity.selectable = value
+
+
+def _entity_layer(entity: "Entity") -> Any:
+    return entity.layer
+
+
+def _set_entity_layer(entity: "Entity", value: Any) -> None:
+    entity.layer = value
+
+
+def _entity_flags(entity: "Entity") -> Any:
+    return entity.flags
+
+
+def _set_entity_flags(entity: "Entity", value: Any) -> None:
+    entity.flags = value
+
+
+def _entity_priority(entity: "Entity") -> Any:
+    return entity.priority
+
+
+def _set_entity_priority(entity: "Entity", value: Any) -> None:
+    entity.priority = value
+
+
+_EntityGetter = Callable[["Entity"], Any]
+_EntitySetter = Callable[["Entity", Any], None]
+
+_ENTITY_ACCESSORS: dict[str, tuple[_EntityGetter, _EntitySetter]] = {
+    "name": (_entity_name, _set_entity_name),
+    "visible": (_entity_visible, _set_entity_visible),
+    "enabled": (_entity_enabled, _set_entity_enabled),
+    "pickable": (_entity_pickable, _set_entity_pickable),
+    "selectable": (_entity_selectable, _set_entity_selectable),
+    "layer": (_entity_layer, _set_entity_layer),
+    "flags": (_entity_flags, _set_entity_flags),
+    "priority": (_entity_priority, _set_entity_priority),
+}
+
+
 class PropertyPath:
     """Utility for addressing properties within an Entity hierarchy."""
 
-    ENTITY_PROPS = frozenset({
-        "name", "visible", "enabled", "pickable", "selectable",
-        "layer", "flags", "priority",
-    })
+    ENTITY_PROPS = frozenset(_ENTITY_ACCESSORS)
     TRANSFORM_PROPS = frozenset({"position", "rotation", "scale"})
 
     @classmethod
@@ -28,15 +110,16 @@ class PropertyPath:
     @classmethod
     def _get_recursive(cls, entity: "Entity", parts: list[str]) -> Any:
         if not parts:
-            raise KeyError("Empty path")
+            raise PropertyPathError("Empty path")
 
         part = parts[0]
         remaining = parts[1:]
 
         if part in cls.ENTITY_PROPS:
             if remaining:
-                raise KeyError(f"Entity property '{part}' has no sub-properties")
-            return getattr(entity, part)
+                raise PropertyPathError(f"Entity property '{part}' has no sub-properties")
+            getter, _ = _ENTITY_ACCESSORS[part]
+            return getter(entity)
         if part == "transform":
             return cls._get_transform(entity, remaining)
         if part == "components":
@@ -44,16 +127,16 @@ class PropertyPath:
         if part == "children":
             return cls._get_child(entity, remaining)
 
-        raise KeyError(f"Unknown path segment: '{part}'")
+        raise PropertyPathError(f"Unknown path segment: '{part}'")
 
     @classmethod
     def _get_transform(cls, entity: "Entity", parts: list[str]) -> Any:
         if not parts:
-            raise KeyError("Transform path requires sub-property")
+            raise PropertyPathError("Transform path requires sub-property")
 
         prop = parts[0]
         if parts[1:]:
-            raise KeyError(f"Transform property '{prop}' has no sub-properties")
+            raise PropertyPathError(f"Transform property '{prop}' has no sub-properties")
 
         pose = entity.transform.local_pose()
         if prop == "position":
@@ -62,19 +145,19 @@ class PropertyPath:
             return pose.ang.copy()
         if prop == "scale":
             return pose.scale.copy()
-        raise KeyError(f"Unknown transform property: '{prop}'")
+        raise PropertyPathError(f"Unknown transform property: '{prop}'")
 
     @classmethod
     def _get_component(cls, entity: "Entity", parts: list[str]) -> Any:
         if not parts:
-            raise KeyError("Component path requires component identifier")
+            raise PropertyPathError("Component path requires component identifier")
 
         comp_id = parts[0]
         remaining = parts[1:]
 
         component = cls._find_component(entity, comp_id)
         if component is None:
-            raise KeyError(f"Component not found: '{comp_id}'")
+            raise PropertyPathError(f"Component not found: '{comp_id}'")
 
         if not remaining:
             return component
@@ -84,48 +167,147 @@ class PropertyPath:
 
     @classmethod
     def _find_component(cls, entity: "Entity", comp_id: str) -> "Component | None":
+        components = list(entity.components)
         try:
             idx = int(comp_id)
-            if 0 <= idx < len(entity.components):
-                return entity.components[idx]
+            if 0 <= idx < len(components):
+                return components[idx]
             return None
         except ValueError:
             pass
 
-        for comp in entity.components:
-            if comp.__class__.__name__ == comp_id:
+        for comp in components:
+            if cls._component_type_name(comp) == comp_id:
                 return comp
 
         return None
 
     @classmethod
-    def _get_component_property(cls, component: "Component", prop_path: str) -> Any:
-        inspect_fields = {}
+    def _component_type_name(cls, component: "Component") -> str:
+        from termin.scene import Component, PythonComponent, TcComponentRef
+
+        if isinstance(component, PythonComponent):
+            return component.type_name()
+        if isinstance(component, Component):
+            return component.type_name()
+        if isinstance(component, TcComponentRef):
+            return component.type_name
+        raise PropertyPathError(
+            f"Component object does not expose a Termin component type: {type(component).__name__}"
+        )
+
+    @classmethod
+    def _inspect_fields(cls, component: "Component") -> dict[str, Any]:
+        inspect_fields: dict[str, Any] = {}
         for klass in reversed(type(component).__mro__):
-            if hasattr(klass, "inspect_fields") and klass.inspect_fields:
-                inspect_fields.update(klass.inspect_fields)
+            fields = klass.__dict__.get("inspect_fields")
+            if fields:
+                inspect_fields.update(fields)
+        inspect_fields.update(cls._registry_inspect_fields(component, inspect_fields))
+        return inspect_fields
 
-        if prop_path in inspect_fields:
-            field = inspect_fields[prop_path]
+    @classmethod
+    def _registry_inspect_fields(
+        cls,
+        component: "Component",
+        existing_fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        from termin.inspect import InspectField, InspectRegistry
+        from termin.scene import TcComponentRef
+
+        component_type = cls._component_type_name(component)
+        registry_fields: dict[str, InspectField] = {}
+        try:
+            registry = InspectRegistry.instance()
+            field_infos = registry.all_fields(component_type)
+        except Exception as exc:
+            log.debug(
+                f"[PropertyPath] Failed to query inspect fields for "
+                f"component '{component_type}': {exc}"
+            )
+            return registry_fields
+
+        for info in field_infos:
+            if info.path in existing_fields:
+                continue
+
+            def make_getter(path: str) -> Callable[[Any], Any]:
+                def getter(target: Any) -> Any:
+                    if isinstance(target, TcComponentRef):
+                        return target.get_field(path)
+                    return registry.get(target, path)
+
+                return getter
+
+            def make_setter(path: str) -> Callable[[Any, Any], None]:
+                def setter(target: Any, value: Any) -> None:
+                    if isinstance(target, TcComponentRef):
+                        entity = target.entity
+                        if entity is not None and entity.valid():
+                            target.set_field(path, value, entity.scene)
+                        else:
+                            target.set_field(path, value)
+                        return
+                    registry.set(target, path, value)
+
+                return setter
+
+            choices = (
+                [(choice.value, choice.label) for choice in info.choices]
+                if info.choices
+                else None
+            )
+            registry_fields[info.path] = InspectField(
+                path=info.path,
+                label=info.label,
+                kind=info.kind,
+                min=info.min,
+                max=info.max,
+                step=info.step,
+                choices=choices,
+                getter=make_getter(info.path),
+                setter=make_setter(info.path),
+                is_serializable=info.is_serializable,
+                is_inspectable=info.is_inspectable,
+            )
+
+        return registry_fields
+
+    @classmethod
+    def _require_component_field(cls, component: "Component", prop_path: str) -> Any:
+        inspect_fields = cls._inspect_fields(component)
+        field = inspect_fields.get(prop_path)
+        if field is not None:
+            return field
+
+        available = ", ".join(sorted(inspect_fields)) or "<none>"
+        raise PropertyPathError(
+            f"Component '{cls._component_type_name(component)}' has no inspect field "
+            f"'{prop_path}'. Available fields: {available}"
+        )
+
+    @classmethod
+    def _get_component_property(cls, component: "Component", prop_path: str) -> Any:
+        field = cls._require_component_field(component, prop_path)
+        try:
             return field.get_value(component)
-
-        parts = prop_path.split(".")
-        obj = component
-        for part in parts:
-            obj = getattr(obj, part)
-        return obj
+        except Exception as exc:
+            raise PropertyPathError(
+                f"Failed to read inspect field '{prop_path}' "
+                f"from component '{cls._component_type_name(component)}': {exc}"
+            ) from exc
 
     @classmethod
     def _get_child(cls, entity: "Entity", parts: list[str]) -> Any:
         if not parts:
-            raise KeyError("Child path requires child identifier")
+            raise PropertyPathError("Child path requires child identifier")
 
         child_id = parts[0]
         remaining = parts[1:]
 
         child = cls._find_child(entity, child_id)
         if child is None:
-            raise KeyError(f"Child not found: '{child_id}'")
+            raise PropertyPathError(f"Child not found: '{child_id}'")
 
         if not remaining:
             return child
@@ -154,24 +336,50 @@ class PropertyPath:
     def set(cls, entity: "Entity", path: str, value: Any) -> bool:
         """Set value at path."""
         try:
-            parts = path.split("/")
-            cls._set_recursive(entity, parts, value)
+            cls.set_or_raise(entity, path, value)
             return True
-        except (KeyError, AttributeError):
+        except PropertyPathError:
+            log.warning(
+                f"[PropertyPath] Failed to set '{path}' on entity "
+                f"'{cls._entity_name_for_log(entity)}'",
+                exc_info=True,
+            )
             return False
+
+    @classmethod
+    def set_or_raise(cls, entity: "Entity", path: str, value: Any) -> None:
+        """Set value at path and raise PropertyPathError on failure."""
+        parts = path.split("/")
+        try:
+            cls._set_recursive(entity, parts, value)
+        except PropertyPathError:
+            raise
+        except Exception as exc:
+            raise PropertyPathError(
+                f"Failed to set property path '{path}' on entity "
+                f"'{cls._entity_name_for_log(entity)}': {exc}"
+            ) from exc
+
+    @classmethod
+    def _entity_name_for_log(cls, entity: "Entity") -> str:
+        try:
+            return str(entity.name)
+        except Exception:
+            return "<unnamed>"
 
     @classmethod
     def _set_recursive(cls, entity: "Entity", parts: list[str], value: Any) -> None:
         if not parts:
-            raise KeyError("Empty path")
+            raise PropertyPathError("Empty path")
 
         part = parts[0]
         remaining = parts[1:]
 
         if part in cls.ENTITY_PROPS:
             if remaining:
-                raise KeyError(f"Entity property '{part}' has no sub-properties")
-            setattr(entity, part, value)
+                raise PropertyPathError(f"Entity property '{part}' has no sub-properties")
+            _, setter = _ENTITY_ACCESSORS[part]
+            setter(entity, value)
             return
         if part == "transform":
             cls._set_transform(entity, remaining, value)
@@ -183,16 +391,16 @@ class PropertyPath:
             cls._set_child(entity, remaining, value)
             return
 
-        raise KeyError(f"Unknown path segment: '{part}'")
+        raise PropertyPathError(f"Unknown path segment: '{part}'")
 
     @classmethod
     def _set_transform(cls, entity: "Entity", parts: list[str], value: Any) -> None:
         if not parts:
-            raise KeyError("Transform path requires sub-property")
+            raise PropertyPathError("Transform path requires sub-property")
 
         prop = parts[0]
         if parts[1:]:
-            raise KeyError(f"Transform property '{prop}' has no sub-properties")
+            raise PropertyPathError(f"Transform property '{prop}' has no sub-properties")
 
         pose = entity.transform.local_pose()
         value_array = np.asarray(value, dtype=np.float32)
@@ -204,24 +412,24 @@ class PropertyPath:
         elif prop == "scale":
             pose.scale[...] = value_array
         else:
-            raise KeyError(f"Unknown transform property: '{prop}'")
+            raise PropertyPathError(f"Unknown transform property: '{prop}'")
 
         entity.transform.set_local_pose(pose)
 
     @classmethod
     def _set_component(cls, entity: "Entity", parts: list[str], value: Any) -> None:
         if not parts:
-            raise KeyError("Component path requires component identifier")
+            raise PropertyPathError("Component path requires component identifier")
 
         comp_id = parts[0]
         remaining = parts[1:]
 
         component = cls._find_component(entity, comp_id)
         if component is None:
-            raise KeyError(f"Component not found: '{comp_id}'")
+            raise PropertyPathError(f"Component not found: '{comp_id}'")
 
         if not remaining:
-            raise KeyError("Cannot replace entire component via PropertyPath")
+            raise PropertyPathError("Cannot replace entire component via PropertyPath")
 
         prop_path = ".".join(remaining)
         cls._set_component_property(component, prop_path, value)
@@ -230,42 +438,29 @@ class PropertyPath:
     def _set_component_property(
         cls, component: "Component", prop_path: str, value: Any
     ) -> None:
-        inspect_fields = {}
-        for klass in reversed(type(component).__mro__):
-            if hasattr(klass, "inspect_fields") and klass.inspect_fields:
-                inspect_fields.update(klass.inspect_fields)
-
-        if prop_path in inspect_fields:
-            field = inspect_fields[prop_path]
+        field = cls._require_component_field(component, prop_path)
+        try:
             field.set_value(component, value)
-            return
-
-        parts = prop_path.split(".")
-        obj = component
-        for part in parts[:-1]:
-            obj = getattr(obj, part)
-
-        last = parts[-1]
-        current = getattr(obj, last)
-        if isinstance(current, np.ndarray):
-            current[...] = value
-        else:
-            setattr(obj, last, value)
+        except Exception as exc:
+            raise PropertyPathError(
+                f"Failed to write inspect field '{prop_path}' "
+                f"on component '{cls._component_type_name(component)}': {exc}"
+            ) from exc
 
     @classmethod
     def _set_child(cls, entity: "Entity", parts: list[str], value: Any) -> None:
         if not parts:
-            raise KeyError("Child path requires child identifier")
+            raise PropertyPathError("Child path requires child identifier")
 
         child_id = parts[0]
         remaining = parts[1:]
 
         child = cls._find_child(entity, child_id)
         if child is None:
-            raise KeyError(f"Child not found: '{child_id}'")
+            raise PropertyPathError(f"Child not found: '{child_id}'")
 
         if not remaining:
-            raise KeyError("Cannot replace entire child via PropertyPath")
+            raise PropertyPathError("Cannot replace entire child via PropertyPath")
 
         cls._set_recursive(child, remaining, value)
 
@@ -275,7 +470,7 @@ class PropertyPath:
         try:
             cls.get(entity, path)
             return True
-        except (KeyError, AttributeError):
+        except PropertyPathError:
             return False
 
     @classmethod
@@ -288,7 +483,8 @@ class PropertyPath:
         """Iterate over all properties of entity."""
         for prop in cls.ENTITY_PROPS:
             path = f"{prefix}{prop}" if prefix else prop
-            yield path, getattr(entity, prop)
+            getter, _ = _ENTITY_ACCESSORS[prop]
+            yield path, getter(entity)
 
         pose = entity.transform.local_pose()
         t_prefix = f"{prefix}transform/" if prefix else "transform/"
@@ -297,7 +493,7 @@ class PropertyPath:
         yield f"{t_prefix}scale", pose.scale.copy()
 
         for comp in entity.components:
-            comp_name = comp.__class__.__name__
+            comp_name = cls._component_type_name(comp)
             c_prefix = f"{prefix}components/{comp_name}/" if prefix else f"components/{comp_name}/"
 
             for prop_path, value in cls._iter_component_props(comp):
@@ -317,23 +513,17 @@ class PropertyPath:
     def _iter_component_props(
         cls, component: "Component"
     ) -> Iterator[tuple[str, Any]]:
-        inspect_fields = {}
-        for klass in reversed(type(component).__mro__):
-            if hasattr(klass, "inspect_fields") and klass.inspect_fields:
-                inspect_fields.update(klass.inspect_fields)
-
-        for name, field in inspect_fields.items():
+        component_type = cls._component_type_name(component)
+        for name, field in cls._inspect_fields(component).items():
             if not field.is_serializable:
                 continue
             try:
                 value = field.get_value(component)
                 yield name, cls._copy_value(value)
             except Exception as e:
-                from tcbase import log
-
                 log.debug(
                     f"[PropertyPath] Failed to read property '{name}' "
-                    f"of component '{type(component).__name__}': {e}"
+                    f"of component '{component_type}': {e}"
                 )
 
     @classmethod
