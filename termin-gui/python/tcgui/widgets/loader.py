@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Type
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+from typing import Any, Type
 import yaml
 
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.containers import HStack, VStack, Panel, ScrollArea, GroupBox
-from tcgui.widgets.basic import Label, Button, Checkbox, IconButton, Separator, ImageWidget, TextInput, ProgressBar, Slider, ComboBox, SpinBox, SliderEdit, TextArea, RichTextView
+from tcgui.widgets.basic import (
+    Button,
+    Checkbox,
+    ComboBox,
+    IconButton,
+    ImageWidget,
+    Label,
+    ProgressBar,
+    RichTextView,
+    Separator,
+    Slider,
+    SliderEdit,
+    SpinBox,
+    TextArea,
+    TextInput,
+)
 from tcgui.widgets.file_grid_widget import FileGridWidget
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.tabs import TabBar, TabView
@@ -20,6 +37,302 @@ from tcgui.widgets.message_box import MessageBox
 from tcgui.widgets.canvas import Canvas
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import Value
+
+
+AttributeConverter = Callable[["UILoader", Any], Any]
+
+
+def _identity(_loader: "UILoader", value: Any) -> Any:
+    return value
+
+
+def _as_float(_loader: "UILoader", value: Any) -> float:
+    return float(value)
+
+
+def _as_int(_loader: "UILoader", value: Any) -> int:
+    return int(value)
+
+
+def _as_bool(_loader: "UILoader", value: Any) -> bool:
+    return bool(value)
+
+
+def _as_str(_loader: "UILoader", value: Any) -> str:
+    return str(value)
+
+
+def _as_list(_loader: "UILoader", value: Any) -> list[Any]:
+    return list(value)
+
+
+def _as_color(loader: "UILoader", value: Any) -> tuple[float, float, float, float]:
+    return loader._parse_color(value)
+
+
+@dataclass(frozen=True)
+class AttributeSpec:
+    key: str
+    target: str | None = None
+    converter: AttributeConverter = _identity
+
+    def apply(self, loader: "UILoader", widget: Widget, data: dict[str, Any]) -> None:
+        if self.key in data:
+            setattr(widget, self.target or self.key, self.converter(loader, data[self.key]))
+
+
+WidgetMatcher = type[Widget] | tuple[type[Widget], ...]
+
+
+def _attrs(*keys: str, converter: AttributeConverter = _identity) -> tuple[AttributeSpec, ...]:
+    return tuple(AttributeSpec(key, converter=converter) for key in keys)
+
+
+COMMON_WIDGET_KEYS = {
+    "type",
+    "name",
+    "visible",
+    "enabled",
+    "size",
+    "width",
+    "height",
+    "anchor",
+    "offset_x",
+    "offset_y",
+    "offset",
+    "position_x",
+    "position_y",
+    "position",
+    "children",
+}
+
+
+ATTRIBUTE_SPECS: tuple[tuple[WidgetMatcher, tuple[AttributeSpec, ...]], ...] = (
+    ((HStack, VStack), (
+        *_attrs("spacing", converter=_as_float),
+        *_attrs("alignment", "justify"),
+    )),
+    (ScrollArea, (
+        *_attrs("scroll_speed", "scrollbar_width", converter=_as_float),
+        *_attrs("show_scrollbar", converter=_as_bool),
+        *_attrs("scrollbar_color", "scrollbar_hover_color", converter=_as_color),
+    )),
+    (Panel, (
+        *_attrs("padding", "border_radius", converter=_as_float),
+        *_attrs("background_color", "background_tint", converter=_as_color),
+        *_attrs("background_image", converter=_as_str),
+    )),
+    (Label, (
+        *_attrs("text", "alignment"),
+        *_attrs("color", converter=_as_color),
+        *_attrs("font_size", converter=_as_float),
+    )),
+    (Button, (
+        *_attrs("text", "icon"),
+        *_attrs("background_color", "hover_color", "pressed_color", "text_color", converter=_as_color),
+        *_attrs("border_radius", "font_size", "padding", converter=_as_float),
+    )),
+    (Checkbox, (
+        *_attrs("text"),
+        *_attrs("checked", converter=_as_bool),
+        *_attrs("box_color", "check_color", "hover_color", "text_color", converter=_as_color),
+        *_attrs("border_radius", "font_size", "box_size", "spacing", converter=_as_float),
+    )),
+    (IconButton, (
+        *_attrs("icon", "tooltip"),
+        *_attrs(
+            "background_color",
+            "hover_color",
+            "pressed_color",
+            "active_color",
+            "icon_color",
+            converter=_as_color,
+        ),
+        *_attrs("border_radius", "size", "font_size", converter=_as_float),
+        *_attrs("active", converter=_as_bool),
+    )),
+    (TextInput, (
+        *_attrs("text", "placeholder", converter=_as_str),
+        *_attrs("font_size", "padding", "border_radius", "border_width", converter=_as_float),
+        *_attrs(
+            "background_color",
+            "focused_background_color",
+            "border_color",
+            "focused_border_color",
+            "text_color",
+            "placeholder_color",
+            "cursor_color",
+            converter=_as_color,
+        ),
+    )),
+    (ProgressBar, (
+        *_attrs("value", "border_radius", "font_size", converter=_as_float),
+        *_attrs("show_text", converter=_as_bool),
+        *_attrs("background_color", "fill_color", "text_color", converter=_as_color),
+    )),
+    (Slider, (
+        *_attrs(
+            "value",
+            "min_value",
+            "max_value",
+            "step",
+            "track_height",
+            "thumb_radius",
+            "border_radius",
+            converter=_as_float,
+        ),
+        *_attrs("track_color", "fill_color", "thumb_color", "thumb_hover_color", converter=_as_color),
+    )),
+    (ComboBox, (
+        *_attrs("items", converter=_as_list),
+        *_attrs("selected_index", converter=_as_int),
+        *_attrs("placeholder", converter=_as_str),
+        *_attrs("background_color", "border_color", "text_color", converter=_as_color),
+        *_attrs("font_size", "border_radius", converter=_as_float),
+    )),
+    (ImageWidget, (
+        *_attrs("image_path", converter=_as_str),
+        *_attrs("tint", converter=_as_color),
+    )),
+    (Separator, (
+        *_attrs("orientation"),
+        *_attrs("color", converter=_as_color),
+        *_attrs("thickness", "margin", converter=_as_float),
+    )),
+    (TreeNode, (
+        *_attrs("expanded", converter=_as_bool),
+    )),
+    (TreeWidget, (
+        *_attrs("indent_size", "toggle_size", "row_height", "row_spacing", converter=_as_float),
+        *_attrs("selected_background", "hover_background", "toggle_color", converter=_as_color),
+    )),
+    (TabBar, (
+        *_attrs("tabs", converter=_as_list),
+        *_attrs("selected_index", converter=_as_int),
+        *_attrs("tab_padding", "tab_spacing", "font_size", "indicator_height", "border_radius", converter=_as_float),
+        *_attrs(
+            "tab_color",
+            "selected_tab_color",
+            "hover_tab_color",
+            "text_color",
+            "selected_text_color",
+            "indicator_color",
+            converter=_as_color,
+        ),
+    )),
+    (TabView, (
+        *_attrs("tab_position"),
+    )),
+    (Menu, (
+        *_attrs(
+            "background_color",
+            "item_hover_color",
+            "text_color",
+            "shortcut_color",
+            "icon_color",
+            "separator_color",
+            converter=_as_color,
+        ),
+        *_attrs("border_radius", "font_size", "item_height", converter=_as_float),
+    )),
+    (SpinBox, (
+        *_attrs(
+            "value",
+            "min_value",
+            "max_value",
+            "step",
+            "font_size",
+            "padding",
+            "button_width",
+            converter=_as_float,
+        ),
+        *_attrs("decimals", converter=_as_int),
+        *_attrs("border_radius", "border_width", converter=_as_float),
+    )),
+    (SliderEdit, (
+        *_attrs("value", "min_value", "max_value", "step", "spacing", "spinbox_width", converter=_as_float),
+        *_attrs("decimals", converter=_as_int),
+    )),
+    (TextArea, (
+        *_attrs("text", "placeholder", converter=_as_str),
+        *_attrs("max_lines", converter=_as_int),
+        *_attrs("read_only", "show_scrollbar", converter=_as_bool),
+        *_attrs(
+            "line_height",
+            "font_size",
+            "padding",
+            "border_radius",
+            "border_width",
+            "scrollbar_width",
+            converter=_as_float,
+        ),
+    )),
+    (RichTextView, (
+        *_attrs("text", "placeholder", converter=_as_str),
+        *_attrs("word_wrap", "show_scrollbar", converter=_as_bool),
+        *_attrs(
+            "line_height",
+            "font_size",
+            "padding",
+            "border_radius",
+            "border_width",
+            "scrollbar_width",
+            converter=_as_float,
+        ),
+    )),
+    (MenuBar, (
+        *_attrs("background_color", "text_color", "hover_color", "active_color", converter=_as_color),
+        *_attrs("font_size", "item_padding_x", "item_padding_y", converter=_as_float),
+    )),
+    (ToolBar, (
+        *_attrs(
+            "background_color",
+            "item_hover_color",
+            "icon_color",
+            "text_color",
+            "separator_color",
+            converter=_as_color,
+        ),
+        *_attrs("border_radius", "font_size", "item_size", converter=_as_float),
+    )),
+    (StatusBar, (
+        *_attrs("background_color", "text_color", "temp_text_color", converter=_as_color),
+        *_attrs("font_size", "padding_x", converter=_as_float),
+    )),
+    (Dialog, (
+        *_attrs("title", converter=_as_str),
+        *_attrs("background_color", "title_background_color", converter=_as_color),
+        *_attrs("border_radius", "padding", "min_width", converter=_as_float),
+    )),
+    (GroupBox, (
+        *_attrs("title", converter=_as_str),
+        *_attrs("expanded", converter=_as_bool),
+        *_attrs("title_height", "content_padding", "title_padding", "font_size", "border_radius", converter=_as_float),
+        *_attrs(
+            "background_color",
+            "title_background_color",
+            "title_hover_color",
+            "title_text_color",
+            "arrow_color",
+            "border_color",
+            converter=_as_color,
+        ),
+    )),
+    (Canvas, (
+        *_attrs("background_color", converter=_as_color),
+        *_attrs("min_zoom", "max_zoom", "zoom_factor", converter=_as_float),
+    )),
+)
+
+
+STRUCTURAL_ATTRIBUTE_KEYS: tuple[tuple[WidgetMatcher, set[str]], ...] = (
+    (TreeNode, {"nodes", "content"}),
+    (TreeWidget, {"nodes"}),
+    (TabView, {"tabs"}),
+    (Menu, {"items"}),
+    (RichTextView, {"html"}),
+    (StatusBar, {"text"}),
+)
 
 
 class UILoader:
@@ -170,538 +483,89 @@ class UILoader:
     def _apply_attributes(self, widget: Widget, data: dict):
         """Apply type-specific attributes to a widget."""
 
-        # Container attributes
-        if isinstance(widget, (HStack, VStack)):
-            if "spacing" in data:
-                widget.spacing = float(data["spacing"])
-            if "alignment" in data:
-                widget.alignment = data["alignment"]
-            if "justify" in data:
-                widget.justify = data["justify"]
+        specs = tuple(self._attribute_specs_for(widget))
+        for spec in specs:
+            spec.apply(self, widget, data)
 
-        # ScrollArea attributes
-        if isinstance(widget, ScrollArea):
-            if "scroll_speed" in data:
-                widget.scroll_speed = float(data["scroll_speed"])
-            if "show_scrollbar" in data:
-                widget.show_scrollbar = bool(data["show_scrollbar"])
-            if "scrollbar_width" in data:
-                widget.scrollbar_width = float(data["scrollbar_width"])
-            if "scrollbar_color" in data:
-                widget.scrollbar_color = self._parse_color(data["scrollbar_color"])
-            if "scrollbar_hover_color" in data:
-                widget.scrollbar_hover_color = self._parse_color(data["scrollbar_hover_color"])
+        self._apply_structural_attributes(widget, data)
+        self._validate_supported_attributes(widget, data, specs)
 
-        # Panel attributes
-        if isinstance(widget, Panel):
-            if "padding" in data:
-                widget.padding = float(data["padding"])
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "background_image" in data:
-                widget.background_image = str(data["background_image"])
-            if "background_tint" in data:
-                widget.background_tint = self._parse_color(data["background_tint"])
+    def _attribute_specs_for(self, widget: Widget) -> Iterable[AttributeSpec]:
+        for widget_type, specs in ATTRIBUTE_SPECS:
+            if isinstance(widget, widget_type):
+                yield from specs
 
-        # Label attributes
-        if isinstance(widget, Label):
-            if "text" in data:
-                widget.text = data["text"]
-            if "color" in data:
-                widget.color = self._parse_color(data["color"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "alignment" in data:
-                widget.alignment = data["alignment"]
+    def _structural_keys_for(self, widget: Widget) -> set[str]:
+        keys: set[str] = set()
+        for widget_type, widget_keys in STRUCTURAL_ATTRIBUTE_KEYS:
+            if isinstance(widget, widget_type):
+                keys.update(widget_keys)
+        return keys
 
-        # Button attributes
-        if isinstance(widget, Button):
-            if "text" in data:
-                widget.text = data["text"]
-            if "icon" in data:
-                widget.icon = data["icon"]
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "hover_color" in data:
-                widget.hover_color = self._parse_color(data["hover_color"])
-            if "pressed_color" in data:
-                widget.pressed_color = self._parse_color(data["pressed_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "padding" in data:
-                widget.padding = float(data["padding"])
+    def _validate_supported_attributes(
+        self,
+        widget: Widget,
+        data: dict,
+        specs: Iterable[AttributeSpec],
+    ) -> None:
+        if any(isinstance(widget, custom_type) for custom_type in self._custom_types.values()):
+            return
 
-        # Checkbox attributes
-        if isinstance(widget, Checkbox):
-            if "text" in data:
-                widget.text = data["text"]
-            if "checked" in data:
-                widget.checked = bool(data["checked"])
-            if "box_color" in data:
-                widget.box_color = self._parse_color(data["box_color"])
-            if "check_color" in data:
-                widget.check_color = self._parse_color(data["check_color"])
-            if "hover_color" in data:
-                widget.hover_color = self._parse_color(data["hover_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "box_size" in data:
-                widget.box_size = float(data["box_size"])
-            if "spacing" in data:
-                widget.spacing = float(data["spacing"])
+        supported = set(COMMON_WIDGET_KEYS)
+        supported.update(spec.key for spec in specs)
+        supported.update(self._structural_keys_for(widget))
+        unsupported = sorted(set(data) - supported)
+        if unsupported:
+            keys = ", ".join(unsupported)
+            raise ValueError(f"Unsupported attribute(s) for {type(widget).__name__}: {keys}")
 
-        # IconButton attributes
-        if isinstance(widget, IconButton):
-            if "icon" in data:
-                widget.icon = data["icon"]
-            if "tooltip" in data:
-                widget.tooltip = data["tooltip"]
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "hover_color" in data:
-                widget.hover_color = self._parse_color(data["hover_color"])
-            if "pressed_color" in data:
-                widget.pressed_color = self._parse_color(data["pressed_color"])
-            if "active_color" in data:
-                widget.active_color = self._parse_color(data["active_color"])
-            if "icon_color" in data:
-                widget.icon_color = self._parse_color(data["icon_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "size" in data:
-                widget.size = float(data["size"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "active" in data:
-                widget.active = bool(data["active"])
-
-        # TextInput attributes
-        if isinstance(widget, TextInput):
-            if "text" in data:
-                widget.text = str(data["text"])
-            if "placeholder" in data:
-                widget.placeholder = str(data["placeholder"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "padding" in data:
-                widget.padding = float(data["padding"])
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "focused_background_color" in data:
-                widget.focused_background_color = self._parse_color(data["focused_background_color"])
-            if "border_color" in data:
-                widget.border_color = self._parse_color(data["border_color"])
-            if "focused_border_color" in data:
-                widget.focused_border_color = self._parse_color(data["focused_border_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "placeholder_color" in data:
-                widget.placeholder_color = self._parse_color(data["placeholder_color"])
-            if "cursor_color" in data:
-                widget.cursor_color = self._parse_color(data["cursor_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "border_width" in data:
-                widget.border_width = float(data["border_width"])
-
-        # ProgressBar attributes
-        if isinstance(widget, ProgressBar):
-            if "value" in data:
-                widget.value = float(data["value"])
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "fill_color" in data:
-                widget.fill_color = self._parse_color(data["fill_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "show_text" in data:
-                widget.show_text = bool(data["show_text"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-
-        # Slider attributes
-        if isinstance(widget, Slider):
-            if "value" in data:
-                widget.value = float(data["value"])
-            if "min_value" in data:
-                widget.min_value = float(data["min_value"])
-            if "max_value" in data:
-                widget.max_value = float(data["max_value"])
-            if "step" in data:
-                widget.step = float(data["step"])
-            if "track_color" in data:
-                widget.track_color = self._parse_color(data["track_color"])
-            if "fill_color" in data:
-                widget.fill_color = self._parse_color(data["fill_color"])
-            if "thumb_color" in data:
-                widget.thumb_color = self._parse_color(data["thumb_color"])
-            if "thumb_hover_color" in data:
-                widget.thumb_hover_color = self._parse_color(data["thumb_hover_color"])
-            if "track_height" in data:
-                widget.track_height = float(data["track_height"])
-            if "thumb_radius" in data:
-                widget.thumb_radius = float(data["thumb_radius"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-
-        # ComboBox attributes
-        if isinstance(widget, ComboBox):
-            if "items" in data:
-                widget.items = list(data["items"])
-            if "selected_index" in data:
-                widget.selected_index = int(data["selected_index"])
-            if "placeholder" in data:
-                widget.placeholder = str(data["placeholder"])
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "border_color" in data:
-                widget.border_color = self._parse_color(data["border_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-
-        # ImageWidget attributes
-        if isinstance(widget, ImageWidget):
-            if "image_path" in data:
-                widget.image_path = str(data["image_path"])
-            if "tint" in data:
-                widget.tint = self._parse_color(data["tint"])
-
-        # Separator attributes
-        if isinstance(widget, Separator):
-            if "orientation" in data:
-                widget.orientation = data["orientation"]
-            if "color" in data:
-                widget.color = self._parse_color(data["color"])
-            if "thickness" in data:
-                widget.thickness = float(data["thickness"])
-            if "margin" in data:
-                widget.margin = float(data["margin"])
-
-        # TreeNode attributes
+    def _apply_structural_attributes(self, widget: Widget, data: dict) -> None:
         if isinstance(widget, TreeNode):
-            if "expanded" in data:
-                widget.expanded = bool(data["expanded"])
-            # TreeNode children in YAML are subnodes, not Widget.children
             if "nodes" in data:
                 for node_data in data["nodes"]:
                     child_node = self._parse_widget(node_data)
                     if isinstance(child_node, TreeNode):
                         widget.add_node(child_node)
-            # "content" key creates a content widget
             if "content" in data:
-                content_widget = self._parse_widget(data["content"])
-                widget.content = content_widget
+                widget.content = self._parse_widget(data["content"])
 
-        # TreeWidget attributes
-        if isinstance(widget, TreeWidget):
-            if "indent_size" in data:
-                widget.indent_size = float(data["indent_size"])
-            if "toggle_size" in data:
-                widget.toggle_size = float(data["toggle_size"])
-            if "row_height" in data:
-                widget.row_height = float(data["row_height"])
-            if "row_spacing" in data:
-                widget.row_spacing = float(data["row_spacing"])
-            if "selected_background" in data:
-                widget.selected_background = self._parse_color(data["selected_background"])
-            if "hover_background" in data:
-                widget.hover_background = self._parse_color(data["hover_background"])
-            if "toggle_color" in data:
-                widget.toggle_color = self._parse_color(data["toggle_color"])
-            # TreeWidget children in YAML are root_nodes
-            if "nodes" in data:
-                for node_data in data["nodes"]:
-                    child_node = self._parse_widget(node_data)
-                    if isinstance(child_node, TreeNode):
-                        widget.add_root(child_node)
+        if isinstance(widget, TreeWidget) and "nodes" in data:
+            for node_data in data["nodes"]:
+                child_node = self._parse_widget(node_data)
+                if isinstance(child_node, TreeNode):
+                    widget.add_root(child_node)
 
-        # TabBar attributes
-        if isinstance(widget, TabBar):
-            if "tabs" in data:
-                widget.tabs = list(data["tabs"])
-            if "selected_index" in data:
-                widget.selected_index = int(data["selected_index"])
-            if "tab_padding" in data:
-                widget.tab_padding = float(data["tab_padding"])
-            if "tab_spacing" in data:
-                widget.tab_spacing = float(data["tab_spacing"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "tab_color" in data:
-                widget.tab_color = self._parse_color(data["tab_color"])
-            if "selected_tab_color" in data:
-                widget.selected_tab_color = self._parse_color(data["selected_tab_color"])
-            if "hover_tab_color" in data:
-                widget.hover_tab_color = self._parse_color(data["hover_tab_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "selected_text_color" in data:
-                widget.selected_text_color = self._parse_color(data["selected_text_color"])
-            if "indicator_color" in data:
-                widget.indicator_color = self._parse_color(data["indicator_color"])
-            if "indicator_height" in data:
-                widget.indicator_height = float(data["indicator_height"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
+        if isinstance(widget, TabView) and "tabs" in data:
+            for tab_data in data["tabs"]:
+                if not isinstance(tab_data, dict):
+                    raise ValueError("TabView tabs must be objects")
+                title = tab_data.get("title", "")
+                if "content" in tab_data:
+                    content = self._parse_widget(tab_data["content"])
+                    widget.add_tab(title, content)
 
-        # TabView attributes
-        if isinstance(widget, TabView):
-            if "tab_position" in data:
-                widget.tab_position = data["tab_position"]
-            if "tabs" in data:
-                # tabs: [{title: "Tab1", content: {type: ...}}, ...]
-                for tab_data in data["tabs"]:
-                    title = tab_data.get("title", "")
-                    if "content" in tab_data:
-                        content = self._parse_widget(tab_data["content"])
-                        widget.add_tab(title, content)
+        if isinstance(widget, Menu) and "items" in data:
+            items = []
+            for item_data in data["items"]:
+                if isinstance(item_data, str) and item_data == "---":
+                    items.append(MenuItem.sep())
+                elif isinstance(item_data, dict):
+                    items.append(MenuItem(
+                        label=item_data.get("label", ""),
+                        icon=item_data.get("icon"),
+                        shortcut=item_data.get("shortcut"),
+                        enabled=item_data.get("enabled", True),
+                        separator=item_data.get("separator", False),
+                    ))
+                else:
+                    raise ValueError("Menu items must be objects or '---' separators")
+            widget.items = items
 
-        # Menu attributes
-        if isinstance(widget, Menu):
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "item_hover_color" in data:
-                widget.item_hover_color = self._parse_color(data["item_hover_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "shortcut_color" in data:
-                widget.shortcut_color = self._parse_color(data["shortcut_color"])
-            if "icon_color" in data:
-                widget.icon_color = self._parse_color(data["icon_color"])
-            if "separator_color" in data:
-                widget.separator_color = self._parse_color(data["separator_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "item_height" in data:
-                widget.item_height = float(data["item_height"])
-            if "items" in data:
-                items = []
-                for item_data in data["items"]:
-                    if isinstance(item_data, str) and item_data == "---":
-                        items.append(MenuItem.sep())
-                    elif isinstance(item_data, dict):
-                        items.append(MenuItem(
-                            label=item_data.get("label", ""),
-                            icon=item_data.get("icon"),
-                            shortcut=item_data.get("shortcut"),
-                            enabled=item_data.get("enabled", True),
-                            separator=item_data.get("separator", False),
-                        ))
-                widget.items = items
+        if isinstance(widget, RichTextView) and "html" in data:
+            widget.set_html(str(data["html"]))
 
-        # SpinBox attributes
-        if isinstance(widget, SpinBox):
-            if "value" in data:
-                widget.value = float(data["value"])
-            if "min_value" in data:
-                widget.min_value = float(data["min_value"])
-            if "max_value" in data:
-                widget.max_value = float(data["max_value"])
-            if "step" in data:
-                widget.step = float(data["step"])
-            if "decimals" in data:
-                widget.decimals = int(data["decimals"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "padding" in data:
-                widget.padding = float(data["padding"])
-            if "button_width" in data:
-                widget.button_width = float(data["button_width"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "border_width" in data:
-                widget.border_width = float(data["border_width"])
-
-        # SliderEdit attributes
-        if isinstance(widget, SliderEdit):
-            if "value" in data:
-                widget.value = float(data["value"])
-            if "min_value" in data:
-                widget.min_value = float(data["min_value"])
-            if "max_value" in data:
-                widget.max_value = float(data["max_value"])
-            if "step" in data:
-                widget.step = float(data["step"])
-            if "decimals" in data:
-                widget.decimals = int(data["decimals"])
-            if "spacing" in data:
-                widget.spacing = float(data["spacing"])
-            if "spinbox_width" in data:
-                widget.spinbox_width = float(data["spinbox_width"])
-
-        # TextArea attributes
-        if isinstance(widget, TextArea):
-            if "text" in data:
-                widget.text = str(data["text"])
-            if "placeholder" in data:
-                widget.placeholder = str(data["placeholder"])
-            if "max_lines" in data:
-                widget.max_lines = int(data["max_lines"])
-            if "read_only" in data:
-                widget.read_only = bool(data["read_only"])
-            if "line_height" in data:
-                widget.line_height = float(data["line_height"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "padding" in data:
-                widget.padding = float(data["padding"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "border_width" in data:
-                widget.border_width = float(data["border_width"])
-            if "show_scrollbar" in data:
-                widget.show_scrollbar = bool(data["show_scrollbar"])
-            if "scrollbar_width" in data:
-                widget.scrollbar_width = float(data["scrollbar_width"])
-
-        # RichTextView attributes
-        if isinstance(widget, RichTextView):
-            if "text" in data:
-                widget.text = str(data["text"])
-            if "html" in data:
-                widget.set_html(str(data["html"]))
-            if "placeholder" in data:
-                widget.placeholder = str(data["placeholder"])
-            if "word_wrap" in data:
-                widget.word_wrap = bool(data["word_wrap"])
-            if "line_height" in data:
-                widget.line_height = float(data["line_height"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "padding" in data:
-                widget.padding = float(data["padding"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "border_width" in data:
-                widget.border_width = float(data["border_width"])
-            if "show_scrollbar" in data:
-                widget.show_scrollbar = bool(data["show_scrollbar"])
-            if "scrollbar_width" in data:
-                widget.scrollbar_width = float(data["scrollbar_width"])
-
-        # MenuBar attributes
-        if isinstance(widget, MenuBar):
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "hover_color" in data:
-                widget.hover_color = self._parse_color(data["hover_color"])
-            if "active_color" in data:
-                widget.active_color = self._parse_color(data["active_color"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "item_padding_x" in data:
-                widget.item_padding_x = float(data["item_padding_x"])
-            if "item_padding_y" in data:
-                widget.item_padding_y = float(data["item_padding_y"])
-
-        # ToolBar attributes
-        if isinstance(widget, ToolBar):
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "item_hover_color" in data:
-                widget.item_hover_color = self._parse_color(data["item_hover_color"])
-            if "icon_color" in data:
-                widget.icon_color = self._parse_color(data["icon_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "separator_color" in data:
-                widget.separator_color = self._parse_color(data["separator_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "item_size" in data:
-                widget.item_size = float(data["item_size"])
-
-        # StatusBar attributes
-        if isinstance(widget, StatusBar):
-            if "text" in data:
-                widget.set_text(str(data["text"]))
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "text_color" in data:
-                widget.text_color = self._parse_color(data["text_color"])
-            if "temp_text_color" in data:
-                widget.temp_text_color = self._parse_color(data["temp_text_color"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "padding_x" in data:
-                widget.padding_x = float(data["padding_x"])
-
-        # Dialog attributes
-        if isinstance(widget, Dialog):
-            if "title" in data:
-                widget.title = str(data["title"])
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "title_background_color" in data:
-                widget.title_background_color = self._parse_color(data["title_background_color"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "padding" in data:
-                widget.padding = float(data["padding"])
-            if "min_width" in data:
-                widget.min_width = float(data["min_width"])
-
-        # GroupBox attributes
-        if isinstance(widget, GroupBox):
-            if "title" in data:
-                widget.title = str(data["title"])
-            if "expanded" in data:
-                widget.expanded = bool(data["expanded"])
-            if "title_height" in data:
-                widget.title_height = float(data["title_height"])
-            if "content_padding" in data:
-                widget.content_padding = float(data["content_padding"])
-            if "title_padding" in data:
-                widget.title_padding = float(data["title_padding"])
-            if "font_size" in data:
-                widget.font_size = float(data["font_size"])
-            if "border_radius" in data:
-                widget.border_radius = float(data["border_radius"])
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "title_background_color" in data:
-                widget.title_background_color = self._parse_color(data["title_background_color"])
-            if "title_hover_color" in data:
-                widget.title_hover_color = self._parse_color(data["title_hover_color"])
-            if "title_text_color" in data:
-                widget.title_text_color = self._parse_color(data["title_text_color"])
-            if "arrow_color" in data:
-                widget.arrow_color = self._parse_color(data["arrow_color"])
-            if "border_color" in data:
-                widget.border_color = self._parse_color(data["border_color"])
-
-        # Canvas attributes
-        if isinstance(widget, Canvas):
-            if "background_color" in data:
-                widget.background_color = self._parse_color(data["background_color"])
-            if "min_zoom" in data:
-                widget.min_zoom = float(data["min_zoom"])
-            if "max_zoom" in data:
-                widget.max_zoom = float(data["max_zoom"])
-            if "zoom_factor" in data:
-                widget.zoom_factor = float(data["zoom_factor"])
+        if isinstance(widget, StatusBar) and "text" in data:
+            widget.set_text(str(data["text"]))
 
     def _parse_color(self, value) -> tuple[float, float, float, float]:
         """Parse a color from various formats."""
