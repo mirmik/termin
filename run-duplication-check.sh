@@ -209,7 +209,7 @@ ARGS=(
     --min-tokens "$MIN_TOKENS"
     --reporters "$REPORTERS"
     --output "$OUTPUT_DIR"
-    --noTips
+    --no-tips
 )
 
 IGNORE_PATTERN="${IGNORES[0]}"
@@ -221,7 +221,7 @@ ARGS+=(--ignore "$IGNORE_PATTERN")
 if [[ -n "$THRESHOLD" ]]; then
     ARGS+=(--threshold "$THRESHOLD")
 else
-    ARGS+=(--exitCode 0)
+    ARGS+=(--exit-code 0)
 fi
 if [[ "$SILENT" -eq 1 ]]; then
     ARGS+=(--silent)

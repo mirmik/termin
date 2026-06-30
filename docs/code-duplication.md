@@ -36,6 +36,25 @@ By default the script excludes vendored code in `termin-app/third/**` and
 `termin-thirdparty/**`. Pass `--include-thirdparty` when auditing external code
 layout or pending third-party migrations.
 
+## CLI Compatibility
+
+Verified with `jscpd` 5.0.11 on 2026-06-30:
+
+```bash
+./run-duplication-check.sh --silent --reporters json --output /tmp/jscpd-termin-report-codex-156
+```
+
+The exploratory run exits with status 0 while the threshold is disabled. The
+documented default command `./run-duplication-check.sh` was also smoke-tested
+with the default `console,json,html` reporters. Result:
+
+- Sources: 1478
+- Lines: 339481
+- Clones: 445
+- Duplicated lines: 8375
+- Duplicated line percentage: 2.47%
+- Duplicated token percentage: 3.01%
+
 ## Initial Baseline
 
 The first first-party run used:
