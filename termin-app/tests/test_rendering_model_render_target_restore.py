@@ -3,6 +3,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 _MODEL_PATH = (
     Path(__file__).resolve().parents[1]
     / "termin"
@@ -402,76 +404,81 @@ def test_sync_render_target_configs_preserves_clear_settings(monkeypatch):
     assert config.clear_depth_value == 0.5
 
 
-def test_render_target_config_dict_serialization_preserves_pipeline_params(monkeypatch):
-    module = _load_render_target_config_module(monkeypatch)
-
-    config = _RenderTargetConfig()
+def _configure_pipeline_params(config):
     config.pipeline_params = {"input_texture": "FovTarget", "mask": "file:Noise"}
 
-    serialized = module.serialize_render_target_config(config)
 
+def _assert_pipeline_params_roundtrip(serialized, restored):
     assert serialized["pipeline_params"] == {
         "input_texture": "FovTarget",
         "mask": "file:Noise",
     }
-
-    restored = module.deserialize_render_target_config(serialized)
     assert restored.pipeline_params == {
         "input_texture": "FovTarget",
         "mask": "file:Noise",
     }
 
 
-def test_render_target_config_dict_serialization_preserves_formats(monkeypatch):
-    module = _load_render_target_config_module(monkeypatch)
-
-    config = _RenderTargetConfig()
+def _configure_formats(config):
     config.color_format = "rgba8"
     config.depth_format = "depth24"
 
-    serialized = module.serialize_render_target_config(config)
 
+def _assert_formats_roundtrip(serialized, restored):
     assert serialized["color_format"] == "rgba8"
     assert serialized["depth_format"] == "depth24"
-
-    restored = module.deserialize_render_target_config(serialized)
     assert restored.color_format == "rgba8"
     assert restored.depth_format == "depth24"
 
 
-def test_render_target_config_dict_serialization_preserves_clear_settings(monkeypatch):
-    module = _load_render_target_config_module(monkeypatch)
-
-    config = _RenderTargetConfig()
+def _configure_clear_settings(config):
     config.clear_color = True
     config.clear_color_value = (0.1, 0.2, 0.3, 1.0)
     config.clear_depth = True
     config.clear_depth_value = 0.5
 
-    serialized = module.serialize_render_target_config(config)
 
+def _assert_clear_settings_roundtrip(serialized, restored):
     assert serialized["clear_color"] == [0.1, 0.2, 0.3, 1.0]
     assert serialized["clear_depth"] == 0.5
-
-    restored = module.deserialize_render_target_config(serialized)
     assert restored.clear_color is True
     assert restored.clear_color_value == (0.1, 0.2, 0.3, 1.0)
     assert restored.clear_depth is True
     assert restored.clear_depth_value == 0.5
 
 
-def test_render_target_config_dict_serialization_preserves_kind(monkeypatch):
+def _configure_kind(config):
+    config.kind = "xr_stereo"
+
+
+def _assert_kind_roundtrip(serialized, restored):
+    assert serialized["kind"] == "xr_stereo"
+    assert restored.kind == "xr_stereo"
+
+
+@pytest.mark.parametrize(
+    ("configure", "assert_roundtrip"),
+    [
+        (_configure_pipeline_params, _assert_pipeline_params_roundtrip),
+        (_configure_formats, _assert_formats_roundtrip),
+        (_configure_clear_settings, _assert_clear_settings_roundtrip),
+        (_configure_kind, _assert_kind_roundtrip),
+    ],
+)
+def test_render_target_config_dict_serialization_preserves_fields(
+    monkeypatch,
+    configure,
+    assert_roundtrip,
+):
     module = _load_render_target_config_module(monkeypatch)
 
     config = _RenderTargetConfig()
-    config.kind = "xr_stereo"
+    configure(config)
 
     serialized = module.serialize_render_target_config(config)
-
-    assert serialized["kind"] == "xr_stereo"
-
     restored = module.deserialize_render_target_config(serialized)
-    assert restored.kind == "xr_stereo"
+
+    assert_roundtrip(serialized, restored)
 
 
 def test_sync_render_target_configs_only_includes_standalone_targets(monkeypatch):

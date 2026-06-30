@@ -70,7 +70,7 @@ Status values:
 | reviewed | python | `termin-inspect/tests/test_inspect_singleton_topology.py` | Checks native inspect/kind registry singleton addresses agree across module facades. |
 | reviewed | python | `termin-app/tests/test_launcher_process_mode.py` | Uses monkeypatched spawn/exec calls to cover launcher process mode and LD_LIBRARY_PATH wiring. |
 | reviewed | python | `termin-default-assets/tests/test_material_asset_texture_persistence.py` | Keeps material texture asset persistence regression coverage. |
-| needs-work | python | `termin-app/tests/test_material_inspector_texture.py` | Default texture test checks a valid handle but does not prove the selected texture is the expected `white` default. |
+| reviewed | python | `termin-app/tests/test_material_inspector_texture.py` | Default texture test now asserts the exact builtin texture UUID for both `white` and `normal` defaults instead of only checking a valid `TcTexture` handle. Verified by `./run-tests-python.sh termin-app/tests/test_material_inspector_texture.py`. |
 | reviewed | python | `termin-components/termin-components-render/tests/python/test_material_pass_serialization.py` | Covers material pass texture resource serialization through pipeline copy and material UUID reference loading. |
 | reviewed | python | `termin-materials/tests/test_material_registry_copy.py` | Covers material registry copy behavior and runtime asset lifecycle regression. |
 | reviewed | python | `termin-player/tests/test_mcp_base.py` | Covers owner-thread Python execution, shared/player MCP tool exposure, config merging, and screenshot response structure. |
@@ -82,7 +82,7 @@ Status values:
 | reviewed | python | `termin-app/tests/test_project_file_watcher.py` | Covers project file watcher behavior with concrete filesystem events. |
 | reviewed | python | `termin-app/tests/test_project_operations.py` | Covers project operation behavior rather than import smoke. |
 | reviewed | python | `termin-project/tests/test_project_settings.py` | Compact settings contract with concrete expected values. |
-| needs-work | python | `termin-app/tests/test_rendering_model_render_target_restore.py` | Serialization roundtrip cases are useful but repetitive and should be parameterized by restored field. |
+| reviewed | python | `termin-app/tests/test_rendering_model_render_target_restore.py` | Serialization roundtrip cases are now table-driven by restored-field contract while keeping explicit pipeline params, format, clear-setting, and kind assertions. Verified by `./run-tests-python.sh termin-app/tests/test_rendering_model_render_target_restore.py`. |
 | reviewed | python | `termin-project-build/tests/test_runtime_package_exporter.py` | Covers runtime package export, desktop bundle contract, shader artifacts, and cleanup of stale broad-copy output. |
 | reviewed | python | `termin-app/tests/test_scene_file_model.py` | Replaced dynamic import boilerplate with package import; remaining test checks scene-name stem behavior. |
 | reviewed | python | `termin-app/tests/test_scene_manager_viewer.py` | Replaced importlib loader helper with package import; remaining test checks scene handle formatting. |
