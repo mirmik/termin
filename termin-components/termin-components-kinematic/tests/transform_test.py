@@ -7,6 +7,57 @@ import numpy
 import math
 
 
+ROOT_POSE = Pose3(
+    ang=numpy.array([0.0, 0.0, 0.0, 1.0]),
+    lin=numpy.array([1.0, 2.0, 3.0])
+)
+CHILD_POSE = Pose3(
+    ang=numpy.array([0.0, 0.0, math.sin(math.pi/2), math.cos(math.pi/2)]),
+    lin=numpy.array([0.0, 0.0, 0.0])
+)
+
+
+def _pose_to_trent(pose):
+    return {
+        "position": pose.lin.tolist(),
+        "orientation": pose.ang.tolist(),
+    }
+
+
+def _simple_transform_tree():
+    transform = Transform3()
+    transform.relocate(ROOT_POSE)
+
+    child = Transform3(parent=transform)
+    child.relocate(CHILD_POSE)
+    return transform
+
+
+def _simple_transform_tree_trent():
+    return {
+        "type": "transform",
+        "pose": _pose_to_trent(ROOT_POSE),
+        "name": "",
+        "children": [
+            {
+                "type": "transform",
+                "pose": _pose_to_trent(CHILD_POSE),
+                "name": "",
+                "children": []
+            }
+        ]
+    }
+
+
+def _assert_trent_roundtrip(testcase, transform, expected_dct):
+    dct = transform.to_trent_with_children()
+    testcase.assertEqual(dct, expected_dct)
+
+    restored_transform = from_trent(dct)
+    restored_dct = restored_transform.to_trent_with_children()
+    testcase.assertEqual(restored_dct, expected_dct)
+
+
 class TestTransform3(unittest.TestCase):
     def test_relocate_and_global_pose(self):
         transform = Transform3()
@@ -55,85 +106,15 @@ class TestTransform3(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(transformed_point, expected_point)
 
     def test_to_trent(self):
-        transform1 = Transform3()
-        pose = Pose3(
-            ang=numpy.array([0.0, 0.0, 0.0, 1.0]),
-            lin=numpy.array([1.0, 2.0, 3.0])
-        )
-        transform1.relocate(pose)
-        
-        transform2 = Transform3(parent=transform1)
-        pose2 = Pose3(
-            ang=numpy.array([0.0, 0.0, math.sin(math.pi/2), math.cos(math.pi/2)]),
-            lin=numpy.array([0.0, 0.0, 0.0])
-        )
-        transform2.relocate(pose2)
+        transform = _simple_transform_tree()
 
-        dct = transform1.to_trent_with_children()
-
-        expected_dct = {
-            "type": "transform",
-            "pose": {
-                "position": [1.0, 2.0, 3.0],
-                "orientation": [0.0, 0.0, 0.0, 1.0]
-            },
-            "name": "",
-            "children": [
-                {
-                    "type": "transform",
-                    "pose": {
-                        "position": [0.0, 0.0, 0.0],
-                        "orientation": [0.0, 0.0, math.sin(math.pi/2), math.cos(math.pi/2)]
-                    },
-                    "name": "",
-                    "children": []
-                }
-            ]
-        }
-
-        self.assertEqual(dct, expected_dct)
+        self.assertEqual(transform.to_trent_with_children(), _simple_transform_tree_trent())
 
     def test_from_trent(self):
-        transform1 = Transform3()
-        pose = Pose3(
-            ang=numpy.array([0.0, 0.0, 0.0, 1.0]),
-            lin=numpy.array([1.0, 2.0, 3.0])
-        )
-        transform1.relocate(pose)
-        
-        transform2 = Transform3(parent=transform1)
-        pose2 = Pose3(
-            ang=numpy.array([0.0, 0.0, math.sin(math.pi/2), math.cos(math.pi/2)]),
-            lin=numpy.array([0.0, 0.0, 0.0])
-        )
-        transform2.relocate(pose2)
-
-        dct = transform1.to_trent_with_children()
-
-        expected_dct = {
-            "type": "transform",
-            "pose": {
-                "position": [1.0, 2.0, 3.0],
-                "orientation": [0.0, 0.0, 0.0, 1.0]
-            },
-            "name": "",
-            "children": [
-                {
-                    "type": "transform",
-                    "pose": {
-                        "position": [0.0, 0.0, 0.0],
-                        "orientation": [0.0, 0.0, math.sin(math.pi/2), math.cos(math.pi/2)]
-                    },
-                    "name": "",
-                    "children": []
-                }
-            ]
-        }
-
+        dct = _simple_transform_tree().to_trent_with_children()
         reconstructed_transform = from_trent(dct)
-        reconstructed_dct = reconstructed_transform.to_trent_with_children()
 
-        self.assertEqual(reconstructed_dct, expected_dct)
+        self.assertEqual(reconstructed_transform.to_trent_with_children(), _simple_transform_tree_trent())
     
     def test_trent_with_rotator_and_actuator(self):
         
@@ -187,11 +168,5 @@ class TestTransform3(unittest.TestCase):
                 }
             ]
         }
-        dct = rotator.to_trent_with_children()
         self.maxDiff = None
-        self.assertEqual(dct, expected_dct)
-
-        restored_transform = from_trent(dct)
-        restored_dct = restored_transform.to_trent_with_children()
-
-        self.assertEqual(restored_dct, expected_dct)
+        _assert_trent_roundtrip(self, rotator, expected_dct)
