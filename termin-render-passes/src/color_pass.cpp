@@ -3,6 +3,7 @@
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
+#include "termin/render/shader_abi.hpp"
 #include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
@@ -93,14 +94,11 @@ void bind_draw_data_for_shader(
     const tc_shader* shader,
     const T& payload)
 {
-    const char* names[] = {"draw_data", TC_SHADER_RESOURCE_DRAW};
-    for (const char* name : names) {
-        const tc_shader_resource_binding* rb =
-            tc_shader_find_resource_binding(shader, name);
-        if (rb && rb->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER) {
-            ctx.bind_uniform_data(name, &payload, sizeof(payload));
-            return;
-        }
+    const tc_shader_resource_binding* rb =
+        find_shader_abi_resource_binding(shader, ShaderAbiResourceId::DrawData);
+    if (rb) {
+        ctx.bind_uniform_data(rb->name, &payload, sizeof(payload));
+        return;
     }
     if (shader && tc_shader_has_resource_layout(shader)) {
         return;
