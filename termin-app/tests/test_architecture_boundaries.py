@@ -421,9 +421,6 @@ def test_domain_python_tests_are_outside_app_tests_package() -> None:
         "termin-app/tests/test_framegraph_internal_points.py": (
             "termin-render/tests/test_framegraph_internal_points.py"
         ),
-        "termin-app/tests/test_framegraph_presenter_bindings.py": (
-            "termin-render/tests/test_framegraph_presenter_bindings.py"
-        ),
         "termin-app/tests/test_funnel_algorithm.py": "termin-navmesh/tests/test_funnel_algorithm.py",
         "termin-app/tests/test_general_pose3.py": "termin-base/tests/python/test_general_pose3.py",
         "termin-app/tests/test_general_transform3.py": (
