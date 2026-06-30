@@ -77,4 +77,19 @@ TEST_CASE("GeneralPose3 transform and inverse")
     CHECK_EQ(back.x, Approx(p_local.x).epsilon(1e-12));
     CHECK_EQ(back.y, Approx(p_local.y).epsilon(1e-12));
     CHECK_EQ(back.z, Approx(p_local.z).epsilon(1e-12));
+
+    Vec3 scaled_vector = pose.transform_vector(Vec3{1.0, 0.0, 0.0});
+    CHECK_EQ(scaled_vector.x, Approx(0.0).margin(1e-12));
+    CHECK_EQ(scaled_vector.y, Approx(2.0).epsilon(1e-12));
+    CHECK_EQ(scaled_vector.z, Approx(0.0).epsilon(1e-12));
+
+    Vec3 direction = pose.transform_direction(Vec3{1.0, 0.0, 0.0});
+    CHECK_EQ(direction.x, Approx(0.0).margin(1e-12));
+    CHECK_EQ(direction.y, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(direction.z, Approx(0.0).epsilon(1e-12));
+
+    Vec3 local_direction = pose.inverse_transform_direction(direction);
+    CHECK_EQ(local_direction.x, Approx(1.0).epsilon(1e-12));
+    CHECK_EQ(local_direction.y, Approx(0.0).margin(1e-12));
+    CHECK_EQ(local_direction.z, Approx(0.0).epsilon(1e-12));
 }

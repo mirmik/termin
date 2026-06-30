@@ -285,30 +285,38 @@ struct GeneralTransform3 {
         return global_pose().inverse_transform_vector(v);
     }
 
+    Vec3 transform_direction(const Vec3& d) const {
+        return global_pose().transform_direction(d);
+    }
+
+    Vec3 transform_direction_inverse(const Vec3& d) const {
+        return global_pose().inverse_transform_direction(d);
+    }
+
     // --- Direction helpers (Y-forward convention) ---
 
     Vec3 forward(double distance = 1.0) const {
-        return transform_vector(Vec3{0.0, distance, 0.0});
+        return transform_direction(Vec3{0.0, distance, 0.0});
     }
 
     Vec3 backward(double distance = 1.0) const {
-        return transform_vector(Vec3{0.0, -distance, 0.0});
+        return transform_direction(Vec3{0.0, -distance, 0.0});
     }
 
     Vec3 up(double distance = 1.0) const {
-        return transform_vector(Vec3{0.0, 0.0, distance});
+        return transform_direction(Vec3{0.0, 0.0, distance});
     }
 
     Vec3 down(double distance = 1.0) const {
-        return transform_vector(Vec3{0.0, 0.0, -distance});
+        return transform_direction(Vec3{0.0, 0.0, -distance});
     }
 
     Vec3 right(double distance = 1.0) const {
-        return transform_vector(Vec3{distance, 0.0, 0.0});
+        return transform_direction(Vec3{distance, 0.0, 0.0});
     }
 
     Vec3 left(double distance = 1.0) const {
-        return transform_vector(Vec3{-distance, 0.0, 0.0});
+        return transform_direction(Vec3{-distance, 0.0, 0.0});
     }
 
     // --- Matrix ---
