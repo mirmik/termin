@@ -27,6 +27,11 @@ lists, and backend placement decisions that depend on special resource names.
   table. `termin_shaderc` now canonicalizes ABI aliases, assigns documented ABI
   scopes when reflection/source omits them, and rejects explicit ABI kind/scope
   mismatches before backend placement.
+- 2026-06-30: Routed `termin-materials` parser-produced `material`,
+  `per_frame`, and `draw_data` requirements/layout bindings through the
+  `termin-graphics` shader ABI C API. Material texture properties remain generic
+  material-scope texture resources, and legacy fixed GLSL binding numbers remain
+  outside this slice under #20.
 
 ## Order Of Work
 
@@ -89,6 +94,10 @@ Route parser-produced material/frame/draw requirements through the ABI
 vocabulary instead of duplicating names, scopes, and aliases in multiple places.
 
 Keep #20 separate for legacy GLSL fixed numeric binding retirement.
+
+Status: parser/native bindings now use the ABI table for fixed
+`material`/`per_frame`/`draw_data` resources; texture property resources are
+still emitted as ordinary material resources by property name.
 
 ### 5. Compiler Boundary
 
