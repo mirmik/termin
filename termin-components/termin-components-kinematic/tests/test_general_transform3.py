@@ -254,24 +254,33 @@ class TestGeneralTransform3TransformPoint:
 class TestGeneralTransform3DirectionVectors:
     """Test direction helper methods."""
 
+    def test_transform_vector_applies_scale_but_transform_direction_does_not(self):
+        t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
+
+        scaled_vector = t.transform_vector(Vec3(1, 1, 1).to_numpy())
+        direction = t.transform_direction(Vec3(1, 1, 1).to_numpy())
+
+        assert_array_approx(scaled_vector, (2.0, 3.0, 4.0))
+        assert_array_approx(direction, (1.0, 1.0, 1.0))
+
     @pytest.mark.parametrize(
         ("direction", "expected", "expected_length"),
         [
-            pytest.param(lambda t: t.forward(), (0.0, 3.0, 0.0), 3.0, id="forward"),
-            pytest.param(lambda t: t.forward(2.0), (0.0, 6.0, 0.0), 6.0, id="forward-distance"),
-            pytest.param(lambda t: t.right(), (2.0, 0.0, 0.0), 2.0, id="right"),
-            pytest.param(lambda t: t.right(2.0), (4.0, 0.0, 0.0), 4.0, id="right-distance"),
-            pytest.param(lambda t: t.up(), (0.0, 0.0, 4.0), 4.0, id="up"),
-            pytest.param(lambda t: t.up(2.0), (0.0, 0.0, 8.0), 8.0, id="up-distance"),
+            pytest.param(lambda t: t.forward(), (0.0, 1.0, 0.0), 1.0, id="forward"),
+            pytest.param(lambda t: t.forward(2.0), (0.0, 2.0, 0.0), 2.0, id="forward-distance"),
+            pytest.param(lambda t: t.right(), (1.0, 0.0, 0.0), 1.0, id="right"),
+            pytest.param(lambda t: t.right(2.0), (2.0, 0.0, 0.0), 2.0, id="right-distance"),
+            pytest.param(lambda t: t.up(), (0.0, 0.0, 1.0), 1.0, id="up"),
+            pytest.param(lambda t: t.up(2.0), (0.0, 0.0, 2.0), 2.0, id="up-distance"),
         ],
     )
-    def test_direction_helpers_return_scaled_vectors(
+    def test_direction_helpers_ignore_scale(
         self,
         direction,
         expected,
         expected_length,
     ):
-        """Direction helpers return transformed vectors, not normalized unit axes."""
+        """Direction helpers return orientation axes, not scale-distorted vectors."""
         t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
 
         result = direction(t)
