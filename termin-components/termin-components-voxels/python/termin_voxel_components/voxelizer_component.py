@@ -6,7 +6,6 @@ VoxelizerComponent — компонент для вокселизации меш
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional, List, Set
 
 import numpy as np
@@ -18,6 +17,14 @@ from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.render.drawable import GeometryDrawCall
 from termin.inspect import InspectField
+from termin.navmesh.inspect_fields import (
+    make_button_field,
+    make_navmesh_debug_fields,
+    make_navmesh_polygon_build_fields,
+    make_voxelize_source_field,
+)
+from termin_voxel_components.voxelizer_actions import VoxelizerActionService
+from termin_voxel_components.voxelizer_debug_draw import VoxelizerDebugDrawService
 from termin_voxel_components.voxelize_enums import VoxelizeMode, VoxelizeSource
 from tcbase import log
 
@@ -25,35 +32,6 @@ if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
     from termin.render_framework import RenderContext
     from termin.voxels.grid import VoxelGrid
-
-
-def _apply_voxel_display_params(
-    phase,
-    color_below: np.ndarray,
-    color_above: np.ndarray,
-    slice_axis: np.ndarray,
-    fill_percent: float,
-    bounds_min: np.ndarray,
-    bounds_max: np.ndarray,
-) -> None:
-    slice_axis_fill = np.array(
-        [slice_axis[0], slice_axis[1], slice_axis[2], fill_percent],
-        dtype=np.float32,
-    )
-    padded_bounds_min = np.array(
-        [bounds_min[0], bounds_min[1], bounds_min[2], 0.0],
-        dtype=np.float32,
-    )
-    padded_bounds_max = np.array(
-        [bounds_max[0], bounds_max[1], bounds_max[2], 0.0],
-        dtype=np.float32,
-    )
-
-    phase.set_param("u_color_below", color_below)
-    phase.set_param("u_color_above", color_above)
-    phase.set_param("u_slice_axis_fill_percent", slice_axis_fill)
-    phase.set_param("u_bounds_min", padded_bounds_min)
-    phase.set_param("u_bounds_max", padded_bounds_max)
 
 
 def _voxelize_action(component: "VoxelizerComponent") -> None:
@@ -102,142 +80,29 @@ class VoxelizerComponent(DrawableComponent):
                 (VoxelizeMode.FULL_GRID, "Full Grid (fill bounds)"),
             ],
         ),
-        "voxelize_source": InspectField(
-            path="voxelize_source",
-            label="Source",
-            kind="enum",
-            choices=[
-                (VoxelizeSource.CURRENT_MESH, "Current Mesh"),
-                (VoxelizeSource.ALL_DESCENDANTS, "All Descendants"),
-            ],
-        ),
+        "voxelize_source": make_voxelize_source_field(),
         "output_path": InspectField(
             path="output_path",
             label="Output Path",
             kind="string",
         ),
-        "voxelize_btn": InspectField(
-            label="Voxelize",
-            kind="button",
-            action=_voxelize_action,
-            is_serializable=False,
-        ),
+        "voxelize_btn": make_button_field("Voxelize", _voxelize_action),
         # --- NavMesh ---
         "navmesh_output_path": InspectField(
             path="navmesh_output_path",
             label="NavMesh Path",
             kind="string",
         ),
-        "normal_angle": InspectField(
-            path="normal_angle",
-            label="Region Merge Angle (°)",
-            kind="float",
-            min=0.0,
-            max=90.0,
-            step=1.0,
-        ),
-        "contour_simplify": InspectField(
-            path="contour_simplify",
-            label="Contour Simplify",
-            kind="float",
-            min=0.0,
-            max=10.0,
-            step=0.1,
-        ),
-        "max_edge_length": InspectField(
-            path="max_edge_length",
-            label="Max Edge Length",
-            kind="float",
-            min=0.0,
-            max=10.0,
-            step=0.1,
-        ),
-        "min_edge_length": InspectField(
-            path="min_edge_length",
-            label="Min Edge Length",
-            kind="float",
-            min=0.0,
-            max=5.0,
-            step=0.05,
-        ),
-        "min_contour_edge_length": InspectField(
-            path="min_contour_edge_length",
-            label="Min Contour Edge",
-            kind="float",
-            min=0.0,
-            max=5.0,
-            step=0.05,
-        ),
-        "max_vertex_valence": InspectField(
-            path="max_vertex_valence",
-            label="Max Vertex Valence",
-            kind="int",
-            min=0,
-            max=20,
-            step=1,
-        ),
-        "use_delaunay_flip": InspectField(
-            path="use_delaunay_flip",
-            label="Delaunay Flip",
-            kind="bool",
-        ),
-        "use_valence_flip": InspectField(
-            path="use_valence_flip",
-            label="Valence Flip",
-            kind="bool",
-        ),
-        "use_angle_flip": InspectField(
-            path="use_angle_flip",
-            label="Angle Flip",
-            kind="bool",
-        ),
-        "use_cvt_smoothing": InspectField(
-            path="use_cvt_smoothing",
-            label="CVT Smoothing",
-            kind="bool",
-        ),
-        "use_edge_collapse": InspectField(
-            path="use_edge_collapse",
-            label="Edge Collapse",
-            kind="bool",
-        ),
-        "use_second_pass": InspectField(
-            path="use_second_pass",
-            label="Second Pass",
-            kind="bool",
-        ),
-        "build_navmesh_btn": InspectField(
-            label="Build NavMesh",
-            kind="button",
-            action=_build_navmesh_action,
-            is_serializable=False,
-        ),
+        **make_navmesh_polygon_build_fields(),
+        "build_navmesh_btn": make_button_field("Build NavMesh", _build_navmesh_action),
         # --- Debug ---
-        "show_region_voxels": InspectField(
-            path="show_region_voxels",
-            label="Show Regions",
-            kind="bool",
-        ),
-        "show_sparse_boundary": InspectField(
-            path="show_sparse_boundary",
-            label="Show Sparse Boundary",
-            kind="bool",
-        ),
-        "show_simplified_contours": InspectField(
-            path="show_simplified_contours",
-            label="Show Simplified Contours",
-            kind="bool",
-        ),
-        "show_bridged_contours": InspectField(
-            path="show_bridged_contours",
-            label="Show Bridged Contours",
-            kind="bool",
-        ),
-        "show_triangulated": InspectField(
-            path="show_triangulated",
-            label="Show Triangulated",
-            kind="bool",
-        ),
+        **make_navmesh_debug_fields((
+            "show_region_voxels",
+            "show_sparse_boundary",
+            "show_simplified_contours",
+            "show_bridged_contours",
+            "show_triangulated",
+        )),
     }
 
     serializable_fields = [
@@ -314,6 +179,8 @@ class VoxelizerComponent(DrawableComponent):
         self._debug_transparent_material: Optional[Material] = None
         self._debug_bounds_min: np.ndarray = np.zeros(3, dtype=np.float32)
         self._debug_bounds_max: np.ndarray = np.zeros(3, dtype=np.float32)
+        self._actions = VoxelizerActionService()
+        self._debug_draw = VoxelizerDebugDrawService()
 
     # --- Drawable protocol ---
 
@@ -328,26 +195,7 @@ class VoxelizerComponent(DrawableComponent):
     @property
     def phase_marks(self) -> Set[str]:
         """Фазы рендеринга для отладочной визуализации."""
-        marks: Set[str] = set()
-        if self.show_region_voxels:
-            mat = self._get_or_create_debug_material()
-            marks.update(p.phase_mark for p in mat.phases)
-        if self.show_sparse_boundary:
-            mat = self._get_or_create_debug_material()
-            marks.update(p.phase_mark for p in mat.phases)
-            # Inner contours render in transparent phase
-            mat_trans = self._get_or_create_transparent_material()
-            marks.update(p.phase_mark for p in mat_trans.phases)
-        if self.show_simplified_contours:
-            mat = self._get_or_create_line_material()
-            marks.update(p.phase_mark for p in mat.phases)
-        if self.show_bridged_contours:
-            mat = self._get_or_create_line_material()
-            marks.update(p.phase_mark for p in mat.phases)
-        if self.show_triangulated:
-            mat = self._get_or_create_line_material()
-            marks.update(p.phase_mark for p in mat.phases)
-        return marks
+        return self._debug_draw.phase_marks(self)
 
     def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
         """Рисует отладочную геометрию."""
@@ -355,116 +203,7 @@ class VoxelizerComponent(DrawableComponent):
 
     def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
-        result: List[GeometryDrawCall] = []
-
-        # Region voxels (цвета по регионам в vertex colors)
-        if self.show_region_voxels and self._debug_region_voxels_mesh is not None and self._debug_region_voxels_mesh.is_valid:
-            mat = self._get_or_create_debug_material()
-            if phase_mark is None:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
-
-            # Используем vertex colors (UV.x = 2.0)
-            white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-            for phase in phases:
-                _apply_voxel_display_params(
-                    phase,
-                    white_color,
-                    white_color,
-                    z_axis,
-                    1.0,
-                    self._debug_bounds_min,
-                    self._debug_bounds_max,
-                )
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_REGIONS) for p in phases)
-
-        # Sparse boundary (воксели с < 8 соседями в регионе)
-        if self.show_sparse_boundary and self._debug_sparse_boundary_mesh is not None and self._debug_sparse_boundary_mesh.is_valid:
-            mat = self._get_or_create_debug_material()
-            if phase_mark is None:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
-
-            # Используем vertex colors
-            white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-            for phase in phases:
-                _apply_voxel_display_params(
-                    phase,
-                    white_color,
-                    white_color,
-                    z_axis,
-                    1.0,
-                    self._debug_bounds_min,
-                    self._debug_bounds_max,
-                )
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_SPARSE_BOUNDARY) for p in phases)
-
-        # Inner contours (дырки) - рендерим в transparent фазе
-        if self.show_sparse_boundary and self._debug_inner_contour_mesh is not None and self._debug_inner_contour_mesh.is_valid:
-            mat = self._get_or_create_transparent_material()
-            if phase_mark is None:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
-
-            color = np.array([1.0, 0.5, 0.0, 0.5], dtype=np.float32)
-            z_axis = np.array([0.0, 0.0, 1.0], dtype=np.float32)
-            for phase in phases:
-                _apply_voxel_display_params(
-                    phase,
-                    color,
-                    color,
-                    z_axis,
-                    1.0,
-                    self._debug_bounds_min,
-                    self._debug_bounds_max,
-                )
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_INNER_CONTOUR) for p in phases)
-
-        # Simplified contours (после Douglas-Peucker)
-        if self.show_simplified_contours and self._debug_simplified_contours_mesh is not None and self._debug_simplified_contours_mesh.is_valid:
-            mat = self._get_or_create_line_material()
-            if phase_mark is None:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_SIMPLIFIED_CONTOURS) for p in phases)
-
-        # Bridged contours (после merge_holes_with_bridges)
-        if self.show_bridged_contours and self._debug_bridged_contours_mesh is not None and self._debug_bridged_contours_mesh.is_valid:
-            mat = self._get_or_create_line_material()
-            if phase_mark is None:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_BRIDGED_CONTOURS) for p in phases)
-
-        # Triangulated mesh (триангулированные полигоны)
-        if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
-            mat = self._get_or_create_line_material()
-            if phase_mark is None:
-                phases = list(mat.phases)
-            else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
-
-            phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_TRIANGULATED) for p in phases)
-
-        return result
+        return self._debug_draw.get_geometry_draws(self, phase_mark)
 
     def _get_or_create_debug_material(self) -> Material:
         """Создаёт материал для отладочной визуализации."""
@@ -639,229 +378,12 @@ class VoxelizerComponent(DrawableComponent):
         )
 
     def voxelize(self) -> bool:
-        """
-        Вокселизировать меш entity, зарегистрировать в ResourceManager и сохранить в файл.
-
-        Returns:
-            True если успешно, False если ошибка.
-        """
-        from termin.voxels.grid import VoxelGrid
-        from termin.voxels.voxelizer import VOXEL_SOLID
-        from termin.voxels.persistence import VoxelPersistence
-        from termin.voxels.native_voxelizer import voxelize_mesh_native
-
-        log.warning("VoxelizerComponent: starting voxelization")
-        if self.entity is None:
-            log.error("VoxelizerComponent: no entity")
-            return False
-
-        # Получаем обратную матрицу корневого entity для перевода в локальные координаты
-        # model_matrix() включает position, rotation и scale
-        root_world = self.entity.model_matrix()
-        root_inv = np.linalg.inv(root_world)
-
-        # Собираем меши в зависимости от режима
-        recurse = (self.voxelize_source == VoxelizeSource.ALL_DESCENDANTS)
-        meshes = self._collect_meshes_from_entity(self.entity, root_inv, recurse=recurse)
-
-        if not meshes:
-            log.error("VoxelizerComponent: no meshes found")
-            return False
-
-        if len(meshes) > 1:
-            log.warning(f"VoxelizerComponent: found {len(meshes)} meshes")
-
-        mesh = self._create_combined_mesh(meshes)
-        if mesh is None:
-            log.error("VoxelizerComponent: failed to create mesh")
-            return False
-
-        # Определяем имя сетки
-        name = self.grid_name.strip()
-        if not name:
-            name = self.entity.name or "voxel_grid"
-
-        # Определяем путь для сохранения
-        output = self.output_path.strip()
-        if not output:
-            output = f"{name}.voxels"
-
-        if not output.endswith(".voxels"):
-            output += ".voxels"
-
-        # Создаём пустую сетку
-        grid = VoxelGrid(origin=(0, 0, 0), cell_size=self.cell_size, name=name)
-
-        mode = self.voxelize_mode
-
-        if mode == VoxelizeMode.FULL_GRID:
-            # Режим заполнения всей сетки — вычисляем bounds меша и заполняем
-            vertices = mesh.vertices
-            if vertices is None or len(vertices) == 0:
-                log.error("VoxelizerComponent: mesh has no vertices")
-                return False
-
-            mesh_min = vertices.min(axis=0)
-            mesh_max = vertices.max(axis=0)
-
-            # Преобразуем в индексы вокселей
-            voxel_min = grid.world_to_voxel(mesh_min)
-            voxel_max = grid.world_to_voxel(mesh_max)
-
-            # Заполняем все воксели в bounds
-            fill_count = 0
-            for vx in range(voxel_min[0], voxel_max[0] + 1):
-                for vy in range(voxel_min[1], voxel_max[1] + 1):
-                    for vz in range(voxel_min[2], voxel_max[2] + 1):
-                        grid.set(vx, vy, vz, VOXEL_SOLID)
-                        fill_count += 1
-            log.warning(f"VoxelizerComponent: filled {fill_count} voxels in bounds")
-        else:
-            # C++ native voxelization
-            grid = voxelize_mesh_native(
-                mesh,
-                cell_size=self.cell_size,
-                fill_interior=(mode >= VoxelizeMode.FILLED),
-                mark_surface=(mode >= VoxelizeMode.MARKED),
-                clear_interior=(mode >= VoxelizeMode.SURFACE_ONLY),
-                compute_normals=(mode >= VoxelizeMode.WITH_NORMALS),
-            )
-            grid.name = name
-
-        self._last_voxel_count = grid.voxel_count
-
-        # Сохраняем grid для отладочного отображения
-        self._debug_grid = grid
-        self._rebuild_voxel_display_mesh()
-
-        # Сохраняем в файл
-        try:
-            output_path = Path(output)
-
-            # Создаём директорию если не существует
-            if output_path.parent and not output_path.parent.exists():
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            VoxelPersistence.save(grid, output_path)
-            log.warning(f"VoxelizerComponent: saved to {output_path.absolute()}")
-
-            return True
-        except Exception as e:
-            log.error(f"VoxelizerComponent: failed to save: {e}")
-            return False
+        """Вокселизировать меш entity, зарегистрировать и сохранить grid."""
+        return self._actions.voxelize(self)
 
     def build_navmesh(self) -> bool:
-        """
-        Построить NavMesh из воксельной сетки.
-
-        Требует предварительной вокселизации с нормалями (режим WITH_NORMALS).
-
-        Returns:
-            True если успешно, False если ошибка.
-        """
-        from termin_assets import get_resource_manager
-        from termin.navmesh import PolygonBuilder, NavMeshConfig
-        from termin.navmesh.persistence import NavMeshPersistence
-
-        # Определяем имя сетки
-        name = self.grid_name.strip()
-        if not name:
-            if self.entity is not None:
-                name = self.entity.name or "voxel_grid"
-            else:
-                name = "voxel_grid"
-
-        # Получаем воксельную сетку из ResourceManager
-        rm = get_resource_manager()
-        if rm is None:
-            log.error("VoxelizerComponent: resource manager is not configured.")
-            return False
-        grid = rm.get_voxel_grid(name)
-
-        if grid is None:
-            log.error(f"VoxelizerComponent: voxel grid '{name}' not found. Run Voxelize first.")
-            return False
-
-        if not grid.surface_normals:
-            log.error("VoxelizerComponent: voxel grid has no surface normals. Use WITH_NORMALS mode.")
-            return False
-
-        # Строим NavMesh
-        # Конвертируем угол в косинус для threshold
-        import math
-        normal_threshold = math.cos(math.radians(self.normal_angle))
-
-        # Используем contour_simplify как epsilon для Douglas-Peucker
-        contour_epsilon = self.contour_simplify * grid.cell_size
-
-        config = NavMeshConfig(
-            normal_threshold=normal_threshold,
-            contour_epsilon=contour_epsilon,
-            max_edge_length=self.max_edge_length,
-            min_edge_length=self.min_edge_length,
-            min_contour_edge_length=self.min_contour_edge_length,
-            max_vertex_valence=self.max_vertex_valence,
-            use_delaunay_flip=self.use_delaunay_flip,
-            use_valence_flip=self.use_valence_flip,
-            use_angle_flip=self.use_angle_flip,
-            use_cvt_smoothing=self.use_cvt_smoothing,
-            use_edge_collapse=self.use_edge_collapse,
-            use_second_pass=self.use_second_pass,
-        )
-        builder = PolygonBuilder(config)
-
-        # Строим NavMesh
-        navmesh = builder.build(
-            grid,
-            do_expand_regions=False,
-            share_boundary=False,
-            project_contours=False,
-            stitch_contours=False,
-        )
-
-        # Сохраняем регионы и grid для отладочной визуализации
-        self._debug_regions = builder._last_regions
-        self._debug_grid = grid
-        log.warning(f"VoxelizerComponent: saved {len(self._debug_regions)} regions for debug")
-
-        # Перестраиваем отладочный меш
-        self._rebuild_debug_mesh()
-
-        # Строим отладочный меш из NavMesh
-        self._build_debug_mesh_from_navmesh(navmesh)
-
-        log.warning(f"VoxelizerComponent: built NavMesh with {navmesh.polygon_count()} polygons, {navmesh.triangle_count()} triangles")
-
-        # Определяем путь для сохранения
-        output = self.navmesh_output_path.strip()
-        if not output:
-            output = f"{name}.navmesh"
-
-        if not output.endswith(".navmesh"):
-            output += ".navmesh"
-
-        # Устанавливаем имя navmesh (такое же как у voxel grid)
-        navmesh.name = name
-
-        # Регистрируем в ResourceManager
-        rm.register_navmesh(name, navmesh)
-        log.warning(f"VoxelizerComponent: registered NavMesh '{name}'")
-
-        # Сохраняем в файл
-        try:
-            output_path = Path(output)
-
-            # Создаём директорию если не существует
-            if output_path.parent and not output_path.parent.exists():
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            NavMeshPersistence.save(navmesh, output_path)
-            log.warning(f"VoxelizerComponent: saved NavMesh to {output_path.absolute()}")
-
-            return True
-        except Exception as e:
-            log.error(f"VoxelizerComponent: failed to save NavMesh: {e}")
-            return False
+        """Построить NavMesh из воксельной сетки."""
+        return self._actions.build_navmesh(self)
 
     def _rebuild_voxel_display_mesh(self) -> None:
         """Перестроить меш для отображения вокселей (после voxelize)."""
