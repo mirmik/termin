@@ -1,5 +1,6 @@
 from termin.editor_tcgui.material_inspector import MaterialInspectorTcgui
 from tgfx import TcTexture
+import pytest
 
 
 class _Phase:
@@ -30,16 +31,27 @@ class _ResourceManager:
         return None
 
 
-def test_material_inspector_default_texture_assigns_tc_texture() -> None:
+@pytest.mark.parametrize(
+    ("default_texture_kind", "expected_uuid"),
+    [
+        ("white", "__white_1x1__"),
+        ("normal", "__normal_1x1__"),
+    ],
+)
+def test_material_inspector_default_texture_assigns_expected_builtin_texture(
+    default_texture_kind: str,
+    expected_uuid: str,
+) -> None:
     inspector = MaterialInspectorTcgui.__new__(MaterialInspectorTcgui)
     inspector._material = _Material()
     inspector._rm = _ResourceManager()
     inspector.on_changed = None
 
-    inspector._set_texture_all_phases("u_albedo_texture", "default", "", "white")
+    inspector._set_texture_all_phases("u_albedo_texture", "default", "", default_texture_kind)
 
     assigned = inspector._material.phases[0].assigned
     assert len(assigned) == 1
     assert assigned[0][0] == "u_albedo_texture"
     assert isinstance(assigned[0][1], TcTexture)
     assert assigned[0][1].is_valid
+    assert assigned[0][1].uuid == expected_uuid
