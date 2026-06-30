@@ -2,6 +2,9 @@
 
 import math
 
+import numpy
+import pytest
+
 from termin.geombase import GeneralPose3, Pose3, Vec3
 from termin.kinematic import GeneralTransform3
 
@@ -11,6 +14,10 @@ def assert_vec3_approx(v: Vec3, expected: tuple, eps: float = 1e-5):
     assert abs(v.x - expected[0]) < eps, f"x: {v.x} != {expected[0]}"
     assert abs(v.y - expected[1]) < eps, f"y: {v.y} != {expected[1]}"
     assert abs(v.z - expected[2]) < eps, f"z: {v.z} != {expected[2]}"
+
+
+def assert_array_approx(values, expected: tuple, eps: float = 1e-9):
+    numpy.testing.assert_allclose(values, numpy.array(expected), atol=eps, rtol=0)
 
 
 class TestGeneralTransform3Basics:
@@ -247,39 +254,30 @@ class TestGeneralTransform3TransformPoint:
 class TestGeneralTransform3DirectionVectors:
     """Test direction helper methods."""
 
-    def test_forward_with_scale(self):
-        """forward() returns scaled vector."""
+    @pytest.mark.parametrize(
+        ("direction", "expected", "expected_length"),
+        [
+            pytest.param(lambda t: t.forward(), (0.0, 3.0, 0.0), 3.0, id="forward"),
+            pytest.param(lambda t: t.forward(2.0), (0.0, 6.0, 0.0), 6.0, id="forward-distance"),
+            pytest.param(lambda t: t.right(), (2.0, 0.0, 0.0), 2.0, id="right"),
+            pytest.param(lambda t: t.right(2.0), (4.0, 0.0, 0.0), 4.0, id="right-distance"),
+            pytest.param(lambda t: t.up(), (0.0, 0.0, 4.0), 4.0, id="up"),
+            pytest.param(lambda t: t.up(2.0), (0.0, 0.0, 8.0), 8.0, id="up-distance"),
+        ],
+    )
+    def test_direction_helpers_return_scaled_vectors(
+        self,
+        direction,
+        expected,
+        expected_length,
+    ):
+        """Direction helpers return transformed vectors, not normalized unit axes."""
         t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
 
-        # Y-forward convention
-        result = t.forward()
+        result = direction(t)
 
-        # forward is [0, 1, 0] * scale = [0, 3, 0]
-        assert abs(result[0] - 0) < 1e-9
-        assert abs(result[1] - 3) < 1e-9
-        assert abs(result[2] - 0) < 1e-9
-
-    def test_right_with_scale(self):
-        """right() returns scaled vector."""
-        t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
-
-        result = t.right()
-
-        # right is [1, 0, 0] * scale = [2, 0, 0]
-        assert abs(result[0] - 2) < 1e-9
-        assert abs(result[1] - 0) < 1e-9
-        assert abs(result[2] - 0) < 1e-9
-
-    def test_up_with_scale(self):
-        """up() returns scaled vector."""
-        t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
-
-        result = t.up()
-
-        # up is [0, 0, 1] * scale = [0, 0, 4]
-        assert abs(result[0] - 0) < 1e-9
-        assert abs(result[1] - 0) < 1e-9
-        assert abs(result[2] - 4) < 1e-9
+        assert_array_approx(result, expected)
+        assert abs(numpy.linalg.norm(result) - expected_length) < 1e-9
 
 
 class TestGeneralTransform3WorldMatrix:

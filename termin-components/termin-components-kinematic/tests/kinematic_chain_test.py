@@ -5,14 +5,22 @@ from termin.geombase import Pose3, Screw3
 from termin.kinematic import Transform3
 import numpy
 
+
+def _build_rotator_actuator_chain(base_pose=None):
+    if base_pose is None:
+        base = Transform3()
+    else:
+        base = Transform3(base_pose)
+    rotator = Rotator3(axis=numpy.array([0, 0, 1]), parent=base)
+    actuator = Actuator3(axis=numpy.array([1, 0, 0]), parent=rotator)
+    end_effector = Transform3(parent=actuator.output)
+    chain = KinematicChain3(distal=end_effector)
+    return base, rotator, actuator, end_effector, chain
+
+
 class TestKinematicChain3(unittest.TestCase):
     def test_chain_construction(self):
-        base = Transform3()
-        rotator = Rotator3(axis=numpy.array([0, 0, 1]), parent=base)
-        actuator = Actuator3(axis=numpy.array([1, 0, 0]), parent=rotator)
-        end_effector = Transform3(parent=actuator.output)
-
-        chain = KinematicChain3(distal=end_effector)
+        base, rotator, actuator, end_effector, chain = _build_rotator_actuator_chain()
 
         self.assertIs(chain.distal, end_effector)
         self.assertIs(chain.proximal, base)
@@ -31,12 +39,7 @@ class TestKinematicChain3(unittest.TestCase):
         self.assertEqual(len(chain.units()), 6)  # base, rotator+1, actuator+1, end_effector
 
     def test_apply_coordinate_changes(self):
-        base = Transform3()
-        rotator = Rotator3(axis=numpy.array([0, 0, 1]), parent=base)
-        actuator = Actuator3(axis=numpy.array([1, 0, 0]), parent=rotator)
-        end_effector = Transform3(parent=actuator.output)
-
-        chain = KinematicChain3(distal=end_effector)
+        _base, rotator, actuator, _end_effector, chain = _build_rotator_actuator_chain()
 
         delta_coords = [1.0, numpy.pi / 2]  # Rotate 90 degrees and extend by 1.0
         chain.apply_coordinate_changes(delta_coords)
@@ -45,12 +48,7 @@ class TestKinematicChain3(unittest.TestCase):
         self.assertAlmostEqual(actuator.get_coord(), 1.0)
 
     def test_sensitivity_twists(self):
-        base = Transform3()
-        rotator = Rotator3(axis=numpy.array([0, 0, 1]), parent=base)
-        actuator = Actuator3(axis=numpy.array([1, 0, 0]), parent=rotator)
-        end_effector = Transform3(parent=actuator.output)
-
-        chain = KinematicChain3(distal=end_effector)
+        _base, _rotator, _actuator, end_effector, chain = _build_rotator_actuator_chain()
 
         local_pose = Pose3.translation(0.0, 0.0, 0.0)
         twists = chain.sensitivity_twists(topbody=end_effector, local_pose=local_pose)
@@ -68,20 +66,19 @@ class TestKinematicChain3(unittest.TestCase):
 
     def test_sensitivity_twists_with_basis(self):
         basis = Pose3.rotateZ(numpy.pi / 2)  # 90 degree rotation around Z
-        base = Transform3(basis)
-        rotator = Rotator3(axis=numpy.array([0, 0, 1]), parent=base)
-        actuator = Actuator3(axis=numpy.array([1, 0, 0]), parent=rotator)
-        end_effector = Transform3(parent=actuator.output)
-
-        chain = KinematicChain3(distal=end_effector)
+        _base, _rotator, _actuator, end_effector, chain = _build_rotator_actuator_chain(basis)
 
         local_pose = Pose3.translation(0.0, 0.0, 0.0)
+        world_twists = chain.sensitivity_twists(topbody=end_effector, local_pose=local_pose)
         twists = chain.sensitivity_twists(topbody=end_effector, local_pose=local_pose, basis=basis)
 
         self.assertEqual(len(twists), 2)  # One twist per kinematic unit
 
-        # Check that the twists are transformed correctly by the basis
-        numpy.testing.assert_array_almost_equal(twists[0].lin, numpy.array([1, 0, 0]))  # Actuator along Y in basis
+        # The base rotation turns the actuator's local +X into world +Y.
+        numpy.testing.assert_array_almost_equal(world_twists[0].lin, numpy.array([0, 1, 0]))
+
+        # With the same pose supplied as basis, that world +Y axis is expressed as basis-local +X.
+        numpy.testing.assert_array_almost_equal(twists[0].lin, numpy.array([1, 0, 0]))
         numpy.testing.assert_array_almost_equal(twists[0].ang, numpy.array([0, 0, 0]))
         numpy.testing.assert_array_almost_equal(twists[1].lin, numpy.array([0, 0, 0]))
         numpy.testing.assert_array_almost_equal(twists[1].ang, numpy.array([0, 0, 1]))
