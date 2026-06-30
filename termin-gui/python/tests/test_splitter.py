@@ -1,5 +1,7 @@
 """Splitter widget tests."""
 
+import pytest
+
 from tcgui.widgets.splitter import Splitter
 from tcgui.widgets.events import MouseEvent
 from tcbase import MouseButton
@@ -21,66 +23,62 @@ def test_compute_size():
     assert h == 0
 
 
-# --- Drag left side ---
-
-def test_drag_left_side():
+def _drag_splitter_width(
+    *,
+    side,
+    down_x,
+    move_x,
+    min_size=None,
+    max_size=None,
+):
     target = _make_target(250)
-    sp = Splitter(target=target, side="left")
+    sp = Splitter(target=target, side=side)
+    if min_size is not None:
+        sp._min_size = min_size
+    if max_size is not None:
+        sp._max_size = max_size
 
-    ev_down = MouseEvent(x=250, y=300, button=MouseButton.LEFT)
-    sp.on_mouse_down(ev_down)
+    sp.on_mouse_down(MouseEvent(x=down_x, y=300, button=MouseButton.LEFT))
     assert sp._dragging is True
+    sp.on_mouse_move(MouseEvent(x=move_x, y=300))
 
-    ev_move = MouseEvent(x=300, y=300)
-    sp.on_mouse_move(ev_move)
-
-    new_w = target.preferred_width.to_pixels(VIEWPORT_W)
-    assert abs(new_w - 200) <= 0.5
+    return target.preferred_width.to_pixels(VIEWPORT_W)
 
 
-# --- Drag right side ---
-
-def test_drag_right_side():
-    target = _make_target(250)
-    sp = Splitter(target=target, side="right")
-
-    ev_down = MouseEvent(x=1000, y=300, button=MouseButton.LEFT)
-    sp.on_mouse_down(ev_down)
-
-    ev_move = MouseEvent(x=1050, y=300)
-    sp.on_mouse_move(ev_move)
-
-    new_w = target.preferred_width.to_pixels(VIEWPORT_W)
-    assert abs(new_w - 300) <= 0.5
+@pytest.mark.parametrize(
+    ("side", "down_x", "move_x", "expected_width"),
+    [
+        ("left", 250, 300, 200),
+        ("right", 1000, 1050, 300),
+    ],
+)
+def test_drag_side_resizes_target(side, down_x, move_x, expected_width):
+    new_w = _drag_splitter_width(side=side, down_x=down_x, move_x=move_x)
+    assert abs(new_w - expected_width) <= 0.5
 
 
 # --- Constraints ---
 
-def test_min_width_constraint():
-    target = _make_target(250)
-    sp = Splitter(target=target, side="left")
-    sp._min_size = 100
-
-    ev_down = MouseEvent(x=250, y=300, button=MouseButton.LEFT)
-    sp.on_mouse_down(ev_down)
-
-    ev_move = MouseEvent(x=9999, y=300)
-    sp.on_mouse_move(ev_move)
-
-    new_w = target.preferred_width.to_pixels(VIEWPORT_W)
-    assert abs(new_w - 100) <= 0.5
-
-
-def test_max_width_constraint():
-    target = _make_target(250)
-    sp = Splitter(target=target, side="right")
-    sp._max_size = 600
-
-    ev_down = MouseEvent(x=1000, y=300, button=MouseButton.LEFT)
-    sp.on_mouse_down(ev_down)
-
-    ev_move = MouseEvent(x=9999, y=300)
-    sp.on_mouse_move(ev_move)
-
-    new_w = target.preferred_width.to_pixels(VIEWPORT_W)
-    assert abs(new_w - 600) <= 0.5
+@pytest.mark.parametrize(
+    ("side", "down_x", "move_x", "min_size", "max_size", "expected_width"),
+    [
+        ("left", 250, 9999, 100, None, 100),
+        ("right", 1000, 9999, None, 600, 600),
+    ],
+)
+def test_drag_respects_width_constraints(
+    side,
+    down_x,
+    move_x,
+    min_size,
+    max_size,
+    expected_width,
+):
+    new_w = _drag_splitter_width(
+        side=side,
+        down_x=down_x,
+        move_x=move_x,
+        min_size=min_size,
+        max_size=max_size,
+    )
+    assert abs(new_w - expected_width) <= 0.5
