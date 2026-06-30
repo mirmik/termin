@@ -1,5 +1,7 @@
 """VStack layout tests."""
 
+import pytest
+
 from tcgui.widgets.vstack import VStack
 from tests.conftest import make_widget, assert_rect, VIEWPORT_W, VIEWPORT_H
 
@@ -16,6 +18,12 @@ def _make_vstack(*children, spacing=0, justify="start"):
     return vs
 
 
+def _assert_vstack(children, expected_rects, spacing=0, justify="start"):
+    _make_vstack(*children, spacing=spacing, justify=justify)
+    for child, rect in zip(children, expected_rects):
+        assert_rect(child, *rect)
+
+
 # --- Basic ---
 
 def test_empty():
@@ -24,26 +32,16 @@ def test_empty():
     assert_rect(vs, 0, 0, W, H)
 
 
-def test_single_child():
-    c = make_widget(100, 50)
-    _make_vstack(c)
-    assert_rect(c, 0, 0, W, 50)
-
-
-def test_two_children():
-    c1 = make_widget(100, 30)
-    c2 = make_widget(100, 50)
-    _make_vstack(c1, c2)
-    assert_rect(c1, 0, 0, W, 30)
-    assert_rect(c2, 0, 30, W, 50)
-
-
-def test_spacing():
-    c1 = make_widget(100, 30)
-    c2 = make_widget(100, 50)
-    _make_vstack(c1, c2, spacing=10)
-    assert_rect(c1, 0, 0, W, 30)
-    assert_rect(c2, 0, 40, W, 50)
+@pytest.mark.parametrize(
+    ("children", "spacing", "expected_rects"),
+    [
+        ([make_widget(100, 50)], 0, [(0, 0, W, 50)]),
+        ([make_widget(100, 30), make_widget(100, 50)], 0, [(0, 0, W, 30), (0, 30, W, 50)]),
+        ([make_widget(100, 30), make_widget(100, 50)], 10, [(0, 0, W, 30), (0, 40, W, 50)]),
+    ],
+)
+def test_fixed_children_layout(children, spacing, expected_rects):
+    _assert_vstack(children, expected_rects, spacing=spacing)
 
 
 # --- Stretch ---
@@ -54,51 +52,19 @@ def test_single_stretch():
     assert_rect(c, 0, 0, W, H)
 
 
-def test_stretch_with_fixed():
-    fixed = make_widget(100, 50)
-    stretch = make_widget(stretch=True)
-    _make_vstack(fixed, stretch)
-    assert_rect(fixed, 0, 0, W, 50)
-    assert_rect(stretch, 0, 50, W, 550)
-
-
-def test_two_stretch():
-    s1 = make_widget(stretch=True)
-    s2 = make_widget(stretch=True)
-    _make_vstack(s1, s2)
-    assert_rect(s1, 0, 0, W, 300)
-    assert_rect(s2, 0, 300, W, 300)
-
-
-def test_stretch_with_spacing():
-    fixed = make_widget(100, 50)
-    stretch = make_widget(stretch=True)
-    # 3 children: fixed, stretch — spacing between pairs = 1 * 10
-    # But we have 2 children, so spacing_total = 10
-    _make_vstack(fixed, stretch, spacing=10)
-    # remaining = 600 - 50 - 10 = 540
-    assert_rect(fixed, 0, 0, W, 50)
-    assert_rect(stretch, 0, 60, W, 540)
-
-
-def test_stretch_uses_preferred_height_when_it_fits():
-    c = make_widget(100, 400, stretch=True)
-    _make_vstack(c)
-    assert_rect(c, 0, 0, W, H)
-
-
-def test_stretch_shrinks_preferred_height_that_exceeds_container():
-    c = make_widget(100, 999, stretch=True)
-    _make_vstack(c)
-    assert_rect(c, 0, 0, W, H)
-
-
-def test_stretch_shrinks_after_fixed_children():
-    fixed = make_widget(100, 50)
-    stretch = make_widget(100, 999, stretch=True)
-    _make_vstack(fixed, stretch, spacing=10)
-    assert_rect(fixed, 0, 0, W, 50)
-    assert_rect(stretch, 0, 60, W, 540)
+@pytest.mark.parametrize(
+    ("children", "spacing", "expected_rects"),
+    [
+        ([make_widget(100, 50), make_widget(stretch=True)], 0, [(0, 0, W, 50), (0, 50, W, 550)]),
+        ([make_widget(stretch=True), make_widget(stretch=True)], 0, [(0, 0, W, 300), (0, 300, W, 300)]),
+        ([make_widget(100, 50), make_widget(stretch=True)], 10, [(0, 0, W, 50), (0, 60, W, 540)]),
+        ([make_widget(100, 400, stretch=True)], 0, [(0, 0, W, H)]),
+        ([make_widget(100, 999, stretch=True)], 0, [(0, 0, W, H)]),
+        ([make_widget(100, 50), make_widget(100, 999, stretch=True)], 10, [(0, 0, W, 50), (0, 60, W, 540)]),
+    ],
+)
+def test_stretch_layout(children, spacing, expected_rects):
+    _assert_vstack(children, expected_rects, spacing=spacing)
 
 
 def test_compute_size_includes_stretch_preferred_height():
@@ -126,22 +92,16 @@ def test_invisible_child_skipped():
 
 # --- Justify ---
 
-def test_justify_center():
-    c1 = make_widget(100, 50)
-    c2 = make_widget(100, 50)
-    _make_vstack(c1, c2, justify="center")
-    # total = 100, offset = (600 - 100) / 2 = 250
-    assert_rect(c1, 0, 250, W, 50)
-    assert_rect(c2, 0, 300, W, 50)
-
-
-def test_justify_end():
-    c1 = make_widget(100, 50)
-    c2 = make_widget(100, 50)
-    _make_vstack(c1, c2, justify="end")
-    # total = 100, offset = 600 - 100 = 500
-    assert_rect(c1, 0, 500, W, 50)
-    assert_rect(c2, 0, 550, W, 50)
+@pytest.mark.parametrize(
+    ("justify", "expected_rects"),
+    [
+        ("center", [(0, 250, W, 50), (0, 300, W, 50)]),
+        ("end", [(0, 500, W, 50), (0, 550, W, 50)]),
+    ],
+)
+def test_justify_layout(justify, expected_rects):
+    children = [make_widget(100, 50), make_widget(100, 50)]
+    _assert_vstack(children, expected_rects, justify=justify)
 
 
 def test_justify_ignored_with_stretch():
