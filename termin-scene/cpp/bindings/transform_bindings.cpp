@@ -211,6 +211,14 @@ void bind_transform(nb::module_& m) {
             Vec3 v = numpy_to_vec3(vec);
             return vec3_to_numpy(self.transform_vector_inverse(v));
         })
+        .def("transform_direction", [](const GeneralTransform3& self, nb::ndarray<double, nb::c_contig, nb::device::cpu> vec) {
+            Vec3 v = numpy_to_vec3(vec);
+            return vec3_to_numpy(self.transform_direction(v));
+        })
+        .def("transform_direction_inverse", [](const GeneralTransform3& self, nb::ndarray<double, nb::c_contig, nb::device::cpu> vec) {
+            Vec3 v = numpy_to_vec3(vec);
+            return vec3_to_numpy(self.transform_direction_inverse(v));
+        })
         .def("forward", [](const GeneralTransform3& self, double distance) {
             return vec3_to_numpy(self.forward(distance));
         }, nb::arg("distance") = 1.0)
