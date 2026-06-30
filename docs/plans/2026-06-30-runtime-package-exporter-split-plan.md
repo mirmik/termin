@@ -1,7 +1,7 @@
 # Runtime package exporter responsibility split
 
 Date: 2026-06-30
-Status: active
+Status: completed 2026-06-30
 Kanboard: `#161 [build/runtime] Разделить runtime_package_exporter responsibilities`
 
 ## Goal
@@ -61,6 +61,32 @@ termin/project_build/
 
 The exact file names may change if the code shape suggests a cleaner split, but
 the ownership boundaries should stay close to this structure.
+
+## Completion Summary
+
+Completed on 2026-06-30:
+
+- `runtime_package_exporter.py` is now the public orchestration/facade layer.
+- Runtime package responsibilities are split into focused modules:
+  `models.py`, `package_files.py`, `scene_refs.py`, `pipelines.py`,
+  `meshes.py`, `materials.py`, `shaders.py`, and
+  `builtin_shader_catalog.py`.
+- Transitional private helper names used by tests are re-exported from the
+  facade while implementation ownership lives in the focused modules.
+- Mesh/material UUID refs prefer explicit `kind`/`role` metadata. Field-name
+  and resource-name inference remains as compatibility behavior but records
+  manifest diagnostics so migration debt is visible.
+- Built-in shader catalog/source lookup is isolated in
+  `runtime_package/builtin_shader_catalog.py`; the ownership contract remains
+  documented in `docs/builtin-shader-catalog.md`.
+
+Verification:
+
+```bash
+./run-tests-python.sh --full termin-project-build/tests/test_runtime_package_exporter.py termin-project-build/tests/test_runtime_package_exporter_android.py termin-project-build/tests/test_shader_tool_resolution.py
+./run-tests.sh
+git diff --check
+```
 
 ## Phase 1: Behavior-Preserving Split
 

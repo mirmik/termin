@@ -51,25 +51,41 @@ def read_scene_data(scene_path: Path) -> dict[str, Any]:
     raise ValueError(f"Scene file has no scene data: {scene_path}")
 
 
-def collect_runtime_refs(scene_data: dict[str, Any]) -> RuntimeRefs:
+def collect_runtime_refs(
+    scene_data: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic] | None = None,
+) -> RuntimeRefs:
     refs = RuntimeRefs()
-    collect_refs_recursive(scene_data, refs, "")
+    collect_refs_recursive(scene_data, refs, "", diagnostics, "$")
     return refs
 
 
-def collect_refs_recursive(value: Any, refs: RuntimeRefs, field_name: str) -> None:
+def collect_refs_recursive(
+    value: Any,
+    refs: RuntimeRefs,
+    field_name: str,
+    diagnostics: list[RuntimePackageExportDiagnostic] | None = None,
+    ref_path: str = "$",
+) -> None:
     if isinstance(value, dict):
         collect_pipeline_refs(value, refs)
-        collect_typed_ref(value, refs, field_name)
+        collect_typed_ref(value, refs, field_name, diagnostics, ref_path)
         for key, child in value.items():
-            collect_refs_recursive(child, refs, key)
+            child_path = f"{ref_path}.{key}" if ref_path != "$" else f"$.{key}"
+            collect_refs_recursive(child, refs, key, diagnostics, child_path)
         return
     if isinstance(value, list):
-        for child in value:
-            collect_refs_recursive(child, refs, field_name)
+        for index, child in enumerate(value):
+            collect_refs_recursive(child, refs, field_name, diagnostics, f"{ref_path}[{index}]")
 
 
-def collect_typed_ref(value: dict[str, Any], refs: RuntimeRefs, field_name: str) -> None:
+def collect_typed_ref(
+    value: dict[str, Any],
+    refs: RuntimeRefs,
+    field_name: str,
+    diagnostics: list[RuntimePackageExportDiagnostic] | None = None,
+    ref_path: str = "$",
+) -> None:
     uuid_value = value.get("uuid")
     type_value = value.get("type")
     if not isinstance(uuid_value, str) or uuid_value == "":
@@ -80,10 +96,14 @@ def collect_typed_ref(value: dict[str, Any], refs: RuntimeRefs, field_name: str)
     name_value = value.get("name")
     name = name_value if isinstance(name_value, str) and name_value != "" else uuid_value
 
-    if looks_like_mesh_ref(value, field_name):
+    mesh_reason = resource_ref_match_reason(value, field_name, "mesh")
+    if mesh_reason is not None:
         refs.meshes[uuid_value] = name
-    if looks_like_material_ref(value, field_name):
+        append_legacy_ref_diagnostic(diagnostics, mesh_reason, "mesh", ref_path)
+    material_reason = resource_ref_match_reason(value, field_name, "material")
+    if material_reason is not None:
         refs.materials[uuid_value] = name
+        append_legacy_ref_diagnostic(diagnostics, material_reason, "material", ref_path)
 
 
 def collect_pipeline_refs(value: dict[str, Any], refs: RuntimeRefs) -> None:
@@ -148,27 +168,61 @@ def iter_project_material_paths(project_root: Path):
 
 
 def looks_like_mesh_ref(value: dict[str, Any], field_name: str) -> bool:
-    if field_name == "mesh":
-        return True
-    kind_value = value.get("kind")
-    role_value = value.get("role")
-    if kind_value == "tc_mesh" or role_value == "mesh":
-        return True
-    name_value = value.get("name")
-    if isinstance(name_value, str):
-        return "mesh" in name_value.lower()
-    return False
+    return resource_ref_match_reason(value, field_name, "mesh") is not None
 
 
 def looks_like_material_ref(value: dict[str, Any], field_name: str) -> bool:
-    if field_name == "material":
-        return True
+    return resource_ref_match_reason(value, field_name, "material") is not None
+
+
+def resource_ref_match_reason(
+    value: dict[str, Any],
+    field_name: str,
+    resource_type: str,
+) -> str | None:
+    if resource_type == "mesh":
+        canonical_kind = "tc_mesh"
+    elif resource_type == "material":
+        canonical_kind = "tc_material"
+    else:
+        raise ValueError(f"Unsupported runtime resource ref type: {resource_type}")
+
     kind_value = value.get("kind")
     role_value = value.get("role")
-    if kind_value == "tc_material" or role_value == "material":
-        return True
-    name_value = value.get("name")
-    if isinstance(name_value, str):
-        return "material" in name_value.lower()
-    return False
+    if kind_value == canonical_kind or role_value == resource_type:
+        return "explicit"
 
+    if field_name == resource_type:
+        return "legacy field name"
+
+    name_value = value.get("name")
+    if isinstance(name_value, str) and resource_type in name_value.lower():
+        return "legacy resource name"
+
+    return None
+
+
+def append_legacy_ref_diagnostic(
+    diagnostics: list[RuntimePackageExportDiagnostic] | None,
+    reason: str,
+    resource_type: str,
+    ref_path: str,
+) -> None:
+    if diagnostics is None or reason == "explicit":
+        return
+    if resource_type == "mesh":
+        canonical_hint = "kind='tc_mesh' or role='mesh'"
+    elif resource_type == "material":
+        canonical_hint = "kind='tc_material' or role='material'"
+    else:
+        raise ValueError(f"Unsupported runtime resource ref type: {resource_type}")
+    diagnostics.append(
+        RuntimePackageExportDiagnostic(
+            level="warning",
+            path="scene.json",
+            message=(
+                f"Runtime exporter inferred {resource_type} resource ref from {reason} "
+                f"at {ref_path}; add {canonical_hint} to the uuid ref"
+            ),
+        )
+    )
