@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
-from tcgui.widgets.dialog import Dialog
-from tcgui.widgets.vstack import VStack
-from tcgui.widgets.hstack import HStack
-from tcgui.widgets.label import Label
-from tcgui.widgets.tabs import TabView
-from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.table_widget import TableWidget, TableColumn
-from tcgui.widgets.button import Button
-from tcgui.widgets.units import px
+from tcgui.widgets.table_widget import TableColumn
 
+from termin.editor_tcgui.dialogs.registry_viewer_dialog import RegistryViewerDialog
 from tcbase import log
 
 
@@ -21,21 +14,19 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
 
     rm = ResourceManager.instance()
 
-    content = HStack()
-    content.spacing = 8
-    content.preferred_height = px(500)
-
-    # Left: TabView with asset lists
-    left = VStack()
-    left.spacing = 4
-    left.stretch = True
-
-    tabs = TabView()
-    tabs.stretch = True
-
     # Column definitions per tab
-    _asset_cols = [TableColumn("Name"), TableColumn("Status", 80), TableColumn("Ver", 50), TableColumn("UUID", 200)]
-    _pipeline_cols = [TableColumn("Name"), TableColumn("Passes", 70), TableColumn("Ver", 50), TableColumn("UUID", 200)]
+    _asset_cols = [
+        TableColumn("Name"),
+        TableColumn("Status", 80),
+        TableColumn("Ver", 50),
+        TableColumn("UUID", 200),
+    ]
+    _pipeline_cols = [
+        TableColumn("Name"),
+        TableColumn("Passes", 70),
+        TableColumn("Ver", 50),
+        TableColumn("UUID", 200),
+    ]
     tab_columns = {
         "Materials": [TableColumn("Name"), TableColumn("Phases", 70), TableColumn("Source")],
         "Shaders": _asset_cols,
@@ -50,53 +41,12 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
         "ComponentRegistry": [TableColumn("Name"), TableColumn("Type", 80)],
         "Watched Files": [TableColumn("Group", 160), TableColumn("File"), TableColumn("Resources", 180)],
     }
-    tab_lists: dict[str, TableWidget] = {}
     tab_names = list(tab_columns.keys())
-    for name, cols in tab_columns.items():
-        tw = TableWidget()
-        tw.set_columns(cols)
-        tw.stretch = True
-        tab_lists[name] = tw
-        tabs.add_tab(name, tw)
 
-    left.add_child(tabs)
-
-    # Status label
-    status_lbl = Label()
-    status_lbl.text = ""
-    left.add_child(status_lbl)
-
-    content.add_child(left)
-
-    # Right: details panel
-    right = VStack()
-    right.spacing = 4
-    right.preferred_width = px(350)
-
-    details = TextArea()
-    details.read_only = True
-    details.word_wrap = False
-    details.stretch = True
-    details.placeholder = "Select an item to view details"
-    right.add_child(details)
-
-    # Load button
-    btn_row = HStack()
-    btn_row.spacing = 4
-    load_btn = Button()
-    load_btn.text = "Load Asset"
-    load_btn.padding = 6
-    load_btn.on_click = lambda: _load_selected()
-    btn_row.add_child(load_btn)
-
-    refresh_btn = Button()
-    refresh_btn.text = "Refresh"
-    refresh_btn.padding = 6
-    refresh_btn.on_click = lambda: _refresh_all()
-    btn_row.add_child(refresh_btn)
-    right.add_child(btn_row)
-
-    content.add_child(right)
+    viewer = RegistryViewerDialog("Resource Manager", tab_columns, details_width=350)
+    tab_lists = viewer.tab_lists
+    details = viewer.details
+    status_lbl = viewer.status_label
 
     # Data storage — maps tab name → list of dicts with "data" key
     all_data: dict[str, list[dict]] = {}
@@ -181,7 +131,10 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
             asset = rm.get_pipeline_asset(name)
             if asset is None:
                 continue
-            passes = str(len(asset.data.passes)) if asset.is_loaded and asset.data else _make_status(name, asset.is_loaded)
+            if asset.is_loaded and asset.data:
+                passes = str(len(asset.data.passes))
+            else:
+                passes = _make_status(name, asset.is_loaded)
             rows.append([name, passes, str(asset.version), _uuid_short(asset.uuid)])
             names.append(name)
         _set_tab("Pipelines", rows, names)
@@ -286,8 +239,7 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
         selected_item["name"] = name
         _show_details(tab, name)
 
-    for tw in tab_lists.values():
-        tw.on_select = _on_select
+    viewer.set_table_select_handler(_on_select)
 
     # --- Detail display ---
     def _show_details(tab: str, name: str):
@@ -561,14 +513,8 @@ def show_resource_manager_viewer(ui, project_file_watcher=None) -> None:
                 log.error(f"Failed to load asset '{name}': {e}")
                 details.text = f"Error loading '{name}': {e}"
 
+    viewer.add_button("Load Asset", _load_selected)
+    viewer.add_button("Refresh", _refresh_all)
+
     _refresh_all()
-
-    dlg = Dialog()
-    dlg.title = "Resource Manager"
-    dlg.content = content
-    dlg.buttons = ["Close"]
-    dlg.default_button = "Close"
-    dlg.cancel_button = "Close"
-    dlg.min_width = 900
-
-    dlg.show(ui, windowed=True)
+    viewer.show(ui)

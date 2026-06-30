@@ -14,6 +14,88 @@ from termin.navmesh.triangulation import (
 )
 
 
+def _triangle_area(vertices, triangle):
+    a, b, c = vertices[list(triangle)]
+    cross = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])
+    return abs(float(cross)) * 0.5
+
+
+def _polygon_area(vertices):
+    shifted = np.roll(vertices, -1, axis=0)
+    cross = vertices[:, 0] * shifted[:, 1] - shifted[:, 0] * vertices[:, 1]
+    return abs(float(np.sum(cross))) * 0.5
+
+
+def _edge_counts(triangles):
+    counts = {}
+    for tri in triangles:
+        for i in range(3):
+            edge = tuple(sorted((int(tri[i]), int(tri[(i + 1) % 3]))))
+            counts[edge] = counts.get(edge, 0) + 1
+    return counts
+
+
+def _assert_triangle_indices_valid(vertices, triangles):
+    assert np.asarray(triangles).ndim == 2
+    assert np.asarray(triangles).shape[1] == 3
+    assert np.min(triangles) >= 0
+    assert np.max(triangles) < len(vertices)
+
+
+def _assert_non_degenerate(vertices, triangles):
+    for tri in triangles:
+        assert _triangle_area(vertices, tri) > 1e-6, f"Degenerate triangle: {tri}"
+
+
+def _assert_manifold_edges(triangles):
+    for edge, count in _edge_counts(triangles).items():
+        assert count <= 2, f"Non-manifold edge {edge}: used {count} times"
+
+
+def _assert_boundary_edges(triangles, expected_boundary):
+    boundary = {edge for edge, count in _edge_counts(triangles).items() if count == 1}
+    assert boundary == expected_boundary
+
+
+def _assert_triangulates_polygon(vertices, triangles):
+    _assert_triangle_indices_valid(vertices, triangles)
+    _assert_non_degenerate(vertices, triangles)
+    _assert_manifold_edges(triangles)
+    assert len(triangles) == len(vertices) - 2
+    assert np.isclose(
+        sum(_triangle_area(vertices, tri) for tri in triangles),
+        _polygon_area(vertices),
+        atol=1e-5,
+    )
+    _assert_boundary_edges(triangles, extract_boundary_edges(len(vertices)))
+
+
+def _assert_refinement_preserves_mesh(
+    original_vertices,
+    original_triangles,
+    new_vertices,
+    new_triangles,
+):
+    _assert_triangle_indices_valid(new_vertices, new_triangles)
+    _assert_non_degenerate(new_vertices, new_triangles)
+    _assert_manifold_edges(new_triangles)
+    assert np.allclose(new_vertices[:len(original_vertices)], original_vertices)
+    assert np.isclose(
+        sum(_triangle_area(new_vertices, tri) for tri in new_triangles),
+        sum(_triangle_area(original_vertices, tri) for tri in original_triangles),
+        atol=1e-4,
+    )
+
+
+def _assert_all_edges_within(vertices, triangles, max_edge_length):
+    for tri in triangles:
+        for i in range(3):
+            v0 = vertices[tri[i]]
+            v1 = vertices[tri[(i + 1) % 3]]
+            length = np.linalg.norm(v1 - v0)
+            assert length <= max_edge_length + 0.01, f"Edge too long: {length}"
+
+
 class TestInCircumcircle:
     """Тесты для in_circumcircle."""
 
@@ -84,8 +166,7 @@ class TestEarClippingWithOptimization:
 
         result = ear_clipping(vertices, optimize=True)
 
-        assert len(result) == 2
-        assert result.shape == (2, 3)
+        _assert_triangulates_polygon(vertices, result)
 
     def test_pentagon(self):
         """Пятиугольник."""
@@ -95,7 +176,7 @@ class TestEarClippingWithOptimization:
 
         result = ear_clipping(vertices, optimize=True)
 
-        assert len(result) == 3  # n - 2
+        _assert_triangulates_polygon(vertices, result)
 
     def test_complex_polygon(self):
         """Сложный полигон."""
@@ -112,9 +193,8 @@ class TestEarClippingWithOptimization:
         result_optimized = ear_clipping(vertices, optimize=True)
         result_basic = ear_clipping(vertices, optimize=False)
 
-        # Оба должны давать 4 треугольника
-        assert len(result_optimized) == 4
-        assert len(result_basic) == 4
+        _assert_triangulates_polygon(vertices, result_optimized)
+        _assert_triangulates_polygon(vertices, result_basic)
 
     def test_minimum_angle_improvement(self):
         """Проверяем улучшение минимального угла."""
@@ -171,6 +251,7 @@ class TestRefinement:
 
         assert len(new_verts) == 3
         assert len(new_tris) == 1
+        _assert_refinement_preserves_mesh(vertices, triangles, new_verts, new_tris)
 
     def test_single_split(self):
         """Один большой треугольник — разбивается."""
@@ -184,9 +265,10 @@ class TestRefinement:
 
         new_verts, new_tris = refine_triangulation(vertices, triangles, max_edge_length=5.0)
 
-        # Должно быть больше треугольников
         assert len(new_tris) > 1
         assert len(new_verts) > 3
+        _assert_refinement_preserves_mesh(vertices, triangles, new_verts, new_tris)
+        _assert_all_edges_within(new_verts, new_tris, max_edge_length=5.0)
 
     def test_rectangle_refinement(self):
         """Вытянутый прямоугольник — разбивается на много треугольников."""
@@ -204,13 +286,8 @@ class TestRefinement:
         # Длинные рёбра (10 единиц) должны быть разбиты
         assert len(new_tris) > 2
 
-        # Проверяем, что все рёбра <= max_edge_length
-        for tri in new_tris:
-            for i in range(3):
-                v0 = new_verts[tri[i]]
-                v1 = new_verts[tri[(i+1) % 3]]
-                length = np.linalg.norm(v1 - v0)
-                assert length <= 2.0 + 0.01, f"Edge too long: {length}"
+        _assert_refinement_preserves_mesh(vertices, triangles, new_verts, new_tris)
+        _assert_all_edges_within(new_verts, new_tris, max_edge_length=2.0)
 
 
 class TestEarClippingRefined:
@@ -227,8 +304,14 @@ class TestEarClippingRefined:
 
         new_verts, triangles = ear_clipping_refined(vertices, max_edge_length=3.0)
 
-        # Должно быть много маленьких треугольников
         assert len(triangles) > 2
+        _assert_refinement_preserves_mesh(
+            vertices,
+            ear_clipping(vertices, optimize=True),
+            new_verts,
+            triangles,
+        )
+        _assert_all_edges_within(new_verts, triangles, max_edge_length=3.0)
 
     def test_l_shaped(self):
         """L-образный полигон."""
@@ -243,13 +326,10 @@ class TestEarClippingRefined:
 
         new_verts, triangles = ear_clipping_refined(vertices, max_edge_length=2.0)
 
-        # Проверяем все рёбра
-        max_edge = 0
-        for tri in triangles:
-            for i in range(3):
-                v0 = new_verts[tri[i]]
-                v1 = new_verts[tri[(i+1) % 3]]
-                length = np.linalg.norm(v1 - v0)
-                max_edge = max(max_edge, length)
-
-        assert max_edge <= 2.0 + 0.01
+        _assert_refinement_preserves_mesh(
+            vertices,
+            ear_clipping(vertices, optimize=True),
+            new_verts,
+            triangles,
+        )
+        _assert_all_edges_within(new_verts, triangles, max_edge_length=2.0)

@@ -2,17 +2,11 @@
 
 from __future__ import annotations
 
-from tcgui.widgets.dialog import Dialog
-from tcgui.widgets.vstack import VStack
-from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
-from tcgui.widgets.tabs import TabView
-from tcgui.widgets.text_area import TextArea
-from tcgui.widgets.table_widget import TableWidget, TableColumn
+from tcgui.widgets.table_widget import TableColumn
 from tcgui.widgets.tree import TreeNode, TreeWidget
-from tcgui.widgets.button import Button
-from tcgui.widgets.units import px
 
+from termin.editor_tcgui.dialogs.registry_viewer_dialog import RegistryViewerDialog
 from tcbase import log
 
 
@@ -45,71 +39,59 @@ def show_core_registry_viewer(ui) -> None:
         log.error(f"Core registry APIs not available: {e}")
         return
 
-    content = HStack()
-    content.spacing = 8
-    content.preferred_height = px(500)
-
-    # Left: TabView
-    left = VStack()
-    left.spacing = 4
-    left.stretch = True
-
-    tabs = TabView()
-    tabs.stretch = True
-
     tab_columns = {
-        "Meshes": [TableColumn("Name"), TableColumn("Vertices", 80), TableColumn("Triangles", 80), TableColumn("Memory", 80)],
-        "Textures": [TableColumn("Name"), TableColumn("Size", 80), TableColumn("Channels", 80), TableColumn("Memory", 80)],
-        "Shaders": [TableColumn("Name"), TableColumn("Type", 80), TableColumn("Version", 70), TableColumn("Size", 80)],
-        "Materials": [TableColumn("Name"), TableColumn("Phases", 70), TableColumn("Textures", 70), TableColumn("Version", 70)],
-        "Components": [TableColumn("Name"), TableColumn("Language", 80), TableColumn("Drawable", 70), TableColumn("Parent"), TableColumn("Descendants", 80)],
-        "SoA Types": [TableColumn("Name"), TableColumn("ID", 60), TableColumn("Size", 60), TableColumn("Align", 60), TableColumn("Init", 50), TableColumn("Destroy", 60)],
+        "Meshes": [
+            TableColumn("Name"),
+            TableColumn("Vertices", 80),
+            TableColumn("Triangles", 80),
+            TableColumn("Memory", 80),
+        ],
+        "Textures": [
+            TableColumn("Name"),
+            TableColumn("Size", 80),
+            TableColumn("Channels", 80),
+            TableColumn("Memory", 80),
+        ],
+        "Shaders": [
+            TableColumn("Name"),
+            TableColumn("Type", 80),
+            TableColumn("Version", 70),
+            TableColumn("Size", 80),
+        ],
+        "Materials": [
+            TableColumn("Name"),
+            TableColumn("Phases", 70),
+            TableColumn("Textures", 70),
+            TableColumn("Version", 70),
+        ],
+        "Components": [
+            TableColumn("Name"),
+            TableColumn("Language", 80),
+            TableColumn("Drawable", 70),
+            TableColumn("Parent"),
+            TableColumn("Descendants", 80),
+        ],
+        "SoA Types": [
+            TableColumn("Name"),
+            TableColumn("ID", 60),
+            TableColumn("Size", 60),
+            TableColumn("Align", 60),
+            TableColumn("Init", 50),
+            TableColumn("Destroy", 60),
+        ],
         "Pipelines": [TableColumn("Name"), TableColumn("Pass Count", 80)],
         "Passes": [TableColumn("Type Name"), TableColumn("Language", 80)],
     }
-    tab_lists: dict[str, TableWidget] = {}
-    for name, cols in tab_columns.items():
-        tw = TableWidget()
-        tw.set_columns(cols)
-        tw.stretch = True
-        tab_lists[name] = tw
-        tabs.add_tab(name, tw)
+
+    viewer = RegistryViewerDialog("Core Registry", tab_columns)
+    tab_lists = viewer.tab_lists
+    details = viewer.details
+    status_lbl = viewer.status_label
 
     scene_tree = TreeWidget()
     scene_tree.row_height = 22
     scene_tree.stretch = True
-    tabs.add_tab("Scenes", scene_tree)
-
-    left.add_child(tabs)
-
-    status_lbl = Label()
-    status_lbl.text = ""
-    left.add_child(status_lbl)
-
-    content.add_child(left)
-
-    # Right: details
-    right = VStack()
-    right.spacing = 4
-    right.preferred_width = px(400)
-
-    details = TextArea()
-    details.read_only = True
-    details.word_wrap = False
-    details.stretch = True
-    details.placeholder = "Select an item to view details"
-    right.add_child(details)
-
-    btn_row = HStack()
-    btn_row.spacing = 4
-    refresh_btn = Button()
-    refresh_btn.text = "Refresh"
-    refresh_btn.padding = 6
-    refresh_btn.on_click = lambda: _refresh_all()
-    btn_row.add_child(refresh_btn)
-    right.add_child(btn_row)
-
-    content.add_child(right)
+    viewer.add_tab("Scenes", scene_tree)
 
     # Storage
     all_infos: dict[str, list] = {}
@@ -307,8 +289,7 @@ def show_core_registry_viewer(ui) -> None:
         elif kind == "Entity":
             _show_entity_details(info)
 
-    for tw in tab_lists.values():
-        tw.on_select = _on_select
+    viewer.set_table_select_handler(_on_select)
     scene_tree.on_select = _on_scene_tree_select
 
     # --- Detail display ---
@@ -566,14 +547,7 @@ def show_core_registry_viewer(ui) -> None:
             lines.append(f"  before_render:    {component.get('has_before_render', False)}")
         details.text = "\n".join(lines)
 
+    viewer.add_button("Refresh", _refresh_all)
+
     _refresh_all()
-
-    dlg = Dialog()
-    dlg.title = "Core Registry"
-    dlg.content = content
-    dlg.buttons = ["Close"]
-    dlg.default_button = "Close"
-    dlg.cancel_button = "Close"
-    dlg.min_width = 900
-
-    dlg.show(ui, windowed=True)
+    viewer.show(ui)
