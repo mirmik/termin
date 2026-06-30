@@ -594,6 +594,15 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
     tc_log_info("[NavMesh] PolyMesh built: %d verts, %d polys (nvp=%d)",
         pmesh->nverts, pmesh->npolys, pmesh->nvp);
 
+    if (pmesh->nverts <= 0 || pmesh->npolys <= 0) {
+        result.error = "Recast produced an empty polygon mesh; check agent radius, cell size, region area, and source mesh scale";
+        tc_log_error("RecastNavMeshBuilderComponent: %s", result.error.c_str());
+        rcFreePolyMesh(pmesh);
+        rcFreeContourSet(cset);
+        rcFreeCompactHeightfield(chf);
+        return result;
+    }
+
     // Done with contours
     rcFreeContourSet(cset);
     cset = nullptr;
@@ -680,6 +689,15 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
         tc_log_error("RecastNavMeshBuilderComponent: cannot save Detour asset without a successful poly mesh");
         return false;
     }
+    if (pmesh->nverts <= 0 || pmesh->npolys <= 0 || !pmesh->verts || !pmesh->polys) {
+        tc_log_error("RecastNavMeshBuilderComponent: cannot save Detour asset from invalid poly mesh "
+                     "(verts=%d polys=%d verts_ptr=%p polys_ptr=%p)",
+                     pmesh ? pmesh->nverts : 0,
+                     pmesh ? pmesh->npolys : 0,
+                     pmesh ? static_cast<const void*>(pmesh->verts) : nullptr,
+                     pmesh ? static_cast<const void*>(pmesh->polys) : nullptr);
+        return false;
+    }
 
     const int poly_area_id = std::clamp(area_id, 0, 63);
     if (poly_area_id != area_id) {
@@ -737,7 +755,14 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     unsigned char* nav_data = nullptr;
     int nav_data_size = 0;
     if (!dtCreateNavMeshData(&params, &nav_data, &nav_data_size) || !nav_data || nav_data_size <= 0) {
-        tc_log_error("RecastNavMeshBuilderComponent: dtCreateNavMeshData failed");
+        tc_log_error("RecastNavMeshBuilderComponent: dtCreateNavMeshData failed "
+                     "(verts=%d polys=%d nvp=%d offmesh=%d detail_verts=%d detail_tris=%d)",
+                     params.vertCount,
+                     params.polyCount,
+                     params.nvp,
+                     params.offMeshConCount,
+                     params.detailVertsCount,
+                     params.detailTriCount);
         return false;
     }
 
