@@ -130,7 +130,7 @@ class PrefabAsset(DataAsset[dict]):
     def apply_to_instance(self, entity: "Entity") -> None:
         """Apply prefab data to an instance, preserving overrides."""
         from termin.prefab.instance_marker import PrefabInstanceMarker
-        from termin.prefab.property_path import PropertyPath
+        from termin.prefab.property_path import PropertyPath, PropertyPathError
 
         marker = entity.get_component(PrefabInstanceMarker)
         if marker is None:
@@ -149,8 +149,8 @@ class PrefabAsset(DataAsset[dict]):
 
             try:
                 deserialized = self._deserialize_property_value(path, value)
-                PropertyPath.set(entity, path, deserialized)
-            except (KeyError, AttributeError):
+                PropertyPath.set_or_raise(entity, path, deserialized)
+            except PropertyPathError:
                 log.warning(f"[PrefabAsset] Cannot apply property path: {path}", exc_info=True)
 
     def _deserialize_property_value(self, path: str, value: Any) -> Any:
