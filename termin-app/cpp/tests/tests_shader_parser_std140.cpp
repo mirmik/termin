@@ -728,6 +728,8 @@ TEST_CASE("parse_shader_text: Slang texture properties synthesize Sampler2D decl
     CHECK_EQ(phase.uniforms[0].name, "albedo");
     CHECK_EQ(phase.uniforms[0].property_type, "Texture");
     CHECK(phase.material_ubo_layout.empty());
+    REQUIRE_EQ(phase.material_texture_resources.size(), 1u);
+    CHECK_EQ(phase.material_texture_resources[0], "albedo");
 
     const auto& frag = phase.stages.at("fragment").source;
     CHECK(frag.find("[[TerminScope(\"material\")]]") != std::string::npos);
