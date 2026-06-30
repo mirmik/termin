@@ -11,6 +11,7 @@ from termin.project_build.runtime_package_exporter import (
     _default_pipeline_engine_shaders,
     _material_textures_to_json,
 )
+from termin.project_build.runtime_package.scene_refs import collect_runtime_refs
 
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
@@ -292,6 +293,85 @@ def test_default_pipeline_exports_world_text_shader() -> None:
     shader_uuids = {shader.uuid for shader in _default_pipeline_engine_shaders()}
 
     assert ENGINE_TEXT3D_SHADER_UUID in shader_uuids
+
+
+def test_collect_runtime_refs_accepts_explicit_mesh_material_metadata() -> None:
+    diagnostics = []
+
+    refs = collect_runtime_refs(
+        {
+            "components": [
+                {
+                    "mesh_ref": {
+                        "uuid": "typed-mesh",
+                        "name": "Typed Mesh",
+                        "type": "uuid",
+                        "kind": "tc_mesh",
+                    },
+                },
+                {
+                    "material_ref": {
+                        "uuid": "typed-material",
+                        "name": "Typed Material",
+                        "type": "uuid",
+                        "role": "material",
+                    },
+                },
+            ],
+        },
+        diagnostics,
+    )
+
+    assert refs.meshes == {"typed-mesh": "Typed Mesh"}
+    assert refs.materials == {"typed-material": "Typed Material"}
+    assert diagnostics == []
+
+
+def test_collect_runtime_refs_reports_legacy_mesh_material_inference() -> None:
+    diagnostics = []
+
+    refs = collect_runtime_refs(
+        {
+            "components": [
+                {
+                    "mesh": {
+                        "uuid": "field-mesh",
+                        "name": "Field Mesh",
+                        "type": "uuid",
+                    },
+                },
+                {
+                    "resource_ref": {
+                        "uuid": "name-material",
+                        "name": "Name Material",
+                        "type": "uuid",
+                    },
+                },
+            ],
+        },
+        diagnostics,
+    )
+
+    assert refs.meshes == {"field-mesh": "Field Mesh"}
+    assert refs.materials == {"name-material": "Name Material"}
+    assert [
+        (diagnostic.level, diagnostic.path, diagnostic.message)
+        for diagnostic in diagnostics
+    ] == [
+        (
+            "warning",
+            "scene.json",
+            "Runtime exporter inferred mesh resource ref from legacy field name "
+            "at $.components[0].mesh; add kind='tc_mesh' or role='mesh' to the uuid ref",
+        ),
+        (
+            "warning",
+            "scene.json",
+            "Runtime exporter inferred material resource ref from legacy resource name "
+            "at $.components[1].resource_ref; add kind='tc_material' or role='material' "
+            "to the uuid ref",
+        ),
+    ]
 
 
 @full_runtime_package_exporter
@@ -1614,6 +1694,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
                                     "uuid": mesh_uuid,
                                     "name": "Live Triangle",
                                     "type": "uuid",
+                                    "kind": "tc_mesh",
                                 },
                             },
                         },
@@ -1624,6 +1705,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
                                     "uuid": material_uuid,
                                     "name": "Live Material",
                                     "type": "uuid",
+                                    "kind": "tc_material",
                                 },
                             },
                         }
@@ -1714,6 +1796,7 @@ def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -
                                     "uuid": material_uuid,
                                     "name": "Live Slang Material",
                                     "type": "uuid",
+                                    "kind": "tc_material",
                                 },
                             },
                         }
@@ -1803,6 +1886,7 @@ def test_export_runtime_package_can_record_d3d11_shader_artifacts(tmp_path: Path
                                     "uuid": material_uuid,
                                     "name": "Live D3D11 Material",
                                     "type": "uuid",
+                                    "kind": "tc_material",
                                 },
                             },
                         }
