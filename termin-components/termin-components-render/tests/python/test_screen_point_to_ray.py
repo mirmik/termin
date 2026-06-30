@@ -6,6 +6,11 @@ from termin.render_components.camera import PerspectiveCameraComponent
 from termin.geombase import GeneralPose3, Pose3
 
 
+VIEWPORT_WIDTH = 800
+VIEWPORT_HEIGHT = 600
+VIEWPORT = (0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
+
+
 def build_basic_camera():
     cam_entity = Entity(
         pose=GeneralPose3(lin=np.array([0.0, 0.0, 0.0])),
@@ -16,69 +21,47 @@ def build_basic_camera():
     return cam_entity, cam
 
 
+def assert_valid_ray(ray, expected_direction):
+    origin = np.array(ray.origin, dtype=float)
+    direction = np.array(ray.direction, dtype=float)
+
+    assert np.isfinite(origin).all()
+    assert np.isfinite(direction).all()
+    assert np.linalg.norm(direction) == pytest.approx(1.0, rel=1e-6)
+    np.testing.assert_allclose(
+        direction,
+        np.array(expected_direction, dtype=float),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+
+
 def test_entity_pose_constructor_rejects_legacy_pose3():
     with pytest.raises(RuntimeError, match="GeneralPose3"):
         Entity(pose=Pose3.identity(), name="legacy_pose")
 
 
 def test_center_ray_direction_forward():
-    w, h = 800, 600
-    viewport = (0, 0, w, h)
-
     cam_entity, cam = build_basic_camera()
-    ray = cam.screen_point_to_ray(w * 0.5, h * 0.5, viewport)
+    ray = cam.screen_point_to_ray(VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT * 0.5, VIEWPORT)
 
     # Project uses Y-forward convention (local +Y = forward)
-    forward = np.array([0, 1, 0], dtype=float)
-    dot = np.dot(ray.direction / np.linalg.norm(ray.direction), forward)
-    assert dot > 0.99, f"Bad direction: {ray.direction}, dot={dot}"
+    assert_valid_ray(ray, (0.0, 1.0, 0.0))
 
 
-def test_left_right_ray_symmetry():
-    w, h = 800, 600
-    viewport = (0, 0, w, h)
-
+@pytest.mark.parametrize(
+    ("x", "y", "expected_direction"),
+    [
+        (0.0, VIEWPORT_HEIGHT * 0.5, (-0.5, 0.8660254037844387, 0.0)),
+        (VIEWPORT_WIDTH, VIEWPORT_HEIGHT * 0.5, (0.5, 0.8660254037844387, 0.0)),
+        (VIEWPORT_WIDTH * 0.5, 0.0, (0.0, 0.917662935482247, 0.3973597071195132)),
+        (VIEWPORT_WIDTH * 0.5, VIEWPORT_HEIGHT, (0.0, 0.917662935482247, -0.3973597071195132)),
+        (0.0, 0.0, (-0.4681645887845222, 0.8108848540793832, 0.3511234415883917)),
+        (VIEWPORT_WIDTH, VIEWPORT_HEIGHT, (0.4681645887845222, 0.8108848540793832, -0.3511234415883917)),
+    ],
+)
+def test_viewport_edge_rays_match_camera_projection(x, y, expected_direction):
     cam_entity, cam = build_basic_camera()
+    ray = cam.screen_point_to_ray(x, y, VIEWPORT)
 
-    ray_left = cam.screen_point_to_ray(0, h * 0.5, viewport)
-    ray_right = cam.screen_point_to_ray(w, h * 0.5, viewport)
-
-    assert pytest.approx(ray_left.direction[0], rel=1e-3) == -ray_right.direction[0]
-    assert pytest.approx(ray_left.direction[1], rel=1e-3) == ray_right.direction[1]
-    assert pytest.approx(ray_left.direction[2], rel=1e-3) == ray_right.direction[2]
-
-
-def test_top_bottom_symmetry():
-    w, h = 800, 600
-    viewport = (0, 0, w, h)
-
-    cam_entity, cam = build_basic_camera()
-
-    ray_top = cam.screen_point_to_ray(w * 0.5, 0, viewport)
-    ray_bottom = cam.screen_point_to_ray(w * 0.5, h, viewport)
-
-    # Y-forward convention: vertical screen maps to Z axis
-    assert pytest.approx(ray_top.direction[2], rel=1e-3) == -ray_bottom.direction[2]
-    assert pytest.approx(ray_top.direction[0], rel=1e-3) == ray_bottom.direction[0]
-
-
-
-def test_screen_edges_not_nan():
-    w, h = 800, 600
-    viewport = (0, 0, w, h)
-
-    cam_entity, cam = build_basic_camera()
-
-    edges = [
-        (0, 0),
-        (0, h),
-        (w, 0),
-        (w, h),
-        (w // 2, 0),
-        (0, h // 2),
-    ]
-
-    for x, y in edges:
-        ray = cam.screen_point_to_ray(x, y, viewport)
-        assert not np.isnan(ray.direction).any()
-        assert not np.isnan(ray.origin).any()
+    assert_valid_ray(ray, expected_direction)
