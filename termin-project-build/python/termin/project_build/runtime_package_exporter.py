@@ -24,10 +24,62 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from termin.project_build.runtime_package.models import (
+    RuntimePackageExportDiagnostic,
+    RuntimePackageExportResult,
+    RuntimeRefs as _RuntimeRefs,
+    ShaderSpec as _ShaderSpec,
+)
+from termin.project_build.runtime_package.meshes import (
+    attrib_type_to_json as _attrib_type_to_json,
+    draw_mode_to_json as _draw_mode_to_json,
+    export_mesh_spec as _export_mesh_spec,
+    fallback_mesh_spec as _fallback_mesh_spec,
+    find_mesh_source as _find_mesh_source,
+    flat_number_list as _flat_number_list,
+    iter_project_mesh_paths as _iter_project_mesh_paths,
+    mesh_layout_to_json as _mesh_layout_to_json,
+    mesh_source_to_spec as _mesh_source_to_spec,
+    mesh_to_spec as _mesh_to_spec,
+    resource_policy_allows_fallback as _resource_policy_allows_fallback,
+    write_meshes as _write_meshes,
+)
+from termin.project_build.runtime_package.builtin_shader_catalog import (
+    builtin_shader_catalog as _builtin_shader_catalog,
+    builtin_shader_catalog_entry as _builtin_shader_catalog_entry,
+    builtin_shader_catalog_path as _builtin_shader_catalog_path,
+    builtin_shader_roots as _builtin_shader_roots,
+    builtin_shader_source as _builtin_shader_source,
+)
+from termin.project_build.runtime_package.package_files import (
+    append_project_file_diagnostic as _append_project_file_diagnostic,
+    project_relative_path as _project_relative_path,
+    resource_sort_key as _resource_sort_key,
+    write_clean_package_dir as _write_clean_package_dir,
+    write_json as _write_json,
+)
+from termin.project_build.runtime_package.pipelines import (
+    find_pipeline_source as _find_pipeline_source,
+    iter_project_pipeline_paths as _iter_project_pipeline_paths,
+    safe_package_stem as _safe_package_stem,
+    write_pipelines as _write_pipelines,
+)
+from termin.project_build.runtime_package.scene_refs import (
+    collect_pipeline_refs as _collect_pipeline_refs,
+    collect_project_material_refs as _collect_project_material_refs,
+    collect_refs_recursive as _collect_refs_recursive,
+    collect_runtime_refs as _collect_runtime_refs,
+    collect_typed_ref as _collect_typed_ref,
+    iter_project_material_paths as _iter_project_material_paths,
+    looks_like_material_ref as _looks_like_material_ref,
+    looks_like_mesh_ref as _looks_like_mesh_ref,
+    read_scene_data as _read_scene_data,
+    resolve_entry_scene as _resolve_entry_scene,
+)
 from termin.shader_tools import existing_executable, resolve_path_tool, resolve_sdk_tool
 
 
@@ -67,35 +119,6 @@ ENGINE_TEXT3D_SHADER_UUID = "termin-engine-text3d"
 ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
 TCGUI_UI_SHADER_UUID = "termin-tcgui-ui-engine"
 TCGUI_UI_SHADER_NAME = "UIEngineVSFS"
-
-
-PLACEHOLDER_MESH_VERTICES = [
-    0.0, 0.65, 0.0, 1.0, 0.05, 0.05,
-    -0.75, -0.55, 0.0, 0.05, 1.0, 0.05,
-    0.75, -0.55, 0.0, 0.05, 0.20, 1.0,
-]
-
-
-@dataclass
-class RuntimePackageExportDiagnostic:
-    level: str
-    path: str
-    message: str
-
-    def to_dict(self) -> dict[str, str]:
-        return {
-            "level": self.level,
-            "path": self.path,
-            "message": self.message,
-        }
-
-
-@dataclass
-class RuntimePackageExportResult:
-    package_dir: Path
-    manifest_path: Path
-    scene_path: Path
-    diagnostics: list[RuntimePackageExportDiagnostic] = field(default_factory=list)
 
 
 def export_runtime_package(
@@ -268,29 +291,6 @@ def _artifact_path_text(shader_uuid: str, target: str, stage_name: str, fallback
     return f"shaders/{target}/{_artifact_filename(shader_uuid, target, stage_name, fallback_stage_ext)}"
 
 
-@dataclass
-class _RuntimeRefs:
-    meshes: dict[str, str] = field(default_factory=dict)
-    materials: dict[str, str] = field(default_factory=dict)
-    pipelines: dict[str, str] = field(default_factory=dict)
-
-
-@dataclass
-class _ShaderSpec:
-    uuid: str
-    name: str
-    source_path: str
-    vertex_source: str
-    fragment_source: str
-    geometry_source: str = ""
-    language: str = "glsl"
-    vertex_entry: str = "main"
-    fragment_entry: str = "main"
-    geometry_entry: str = "main"
-    allow_precompiled_default: bool = False
-    features: int = 0
-
-
 def _default_shader_spec(language: str) -> _ShaderSpec:
     normalized = _normalize_default_shader_language(language)
     if normalized == "glsl":
@@ -322,176 +322,6 @@ def _normalize_default_shader_language(language: str) -> str:
     if text.endswith(".slang") or text == "slang":
         return "slang"
     raise ValueError(f"Unsupported default shader language: {language}")
-
-
-def _resolve_entry_scene(project_root: Path, entry_scene: Path) -> Path:
-    scene_path = entry_scene
-    if not scene_path.is_absolute():
-        scene_path = project_root / scene_path
-    scene_path = scene_path.resolve()
-    if not scene_path.exists():
-        raise FileNotFoundError(f"Entry scene does not exist: {scene_path}")
-    if scene_path.suffix.lower() != ".scene":
-        raise ValueError(f"Entry scene must be a .scene file: {scene_path}")
-    try:
-        scene_path.relative_to(project_root)
-    except ValueError as exc:
-        raise ValueError(f"Entry scene is outside project root: {scene_path}") from exc
-    return scene_path
-
-
-def _read_scene_data(scene_path: Path) -> dict[str, Any]:
-    with open(scene_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    if not isinstance(data, dict):
-        raise ValueError(f"Scene JSON root must be an object: {scene_path}")
-
-    scene_data = data.get("scene")
-    if isinstance(scene_data, dict):
-        return scene_data
-
-    scenes_data = data.get("scenes")
-    if isinstance(scenes_data, list) and len(scenes_data) > 0:
-        first_scene = scenes_data[0]
-        if isinstance(first_scene, dict):
-            return first_scene
-
-    if "entities" in data:
-        return data
-
-    raise ValueError(f"Scene file has no scene data: {scene_path}")
-
-
-def _project_relative_path(project_root: Path, path: Path) -> str:
-    return path.relative_to(project_root).as_posix()
-
-
-def _collect_runtime_refs(scene_data: dict[str, Any]) -> _RuntimeRefs:
-    refs = _RuntimeRefs()
-    _collect_refs_recursive(scene_data, refs, "")
-    return refs
-
-
-def _collect_refs_recursive(value: Any, refs: _RuntimeRefs, field_name: str) -> None:
-    if isinstance(value, dict):
-        _collect_pipeline_refs(value, refs)
-        _collect_typed_ref(value, refs, field_name)
-        for key, child in value.items():
-            _collect_refs_recursive(child, refs, key)
-        return
-    if isinstance(value, list):
-        for child in value:
-            _collect_refs_recursive(child, refs, field_name)
-
-
-def _collect_typed_ref(value: dict[str, Any], refs: _RuntimeRefs, field_name: str) -> None:
-    uuid_value = value.get("uuid")
-    type_value = value.get("type")
-    if not isinstance(uuid_value, str) or uuid_value == "":
-        return
-    if type_value != "uuid":
-        return
-
-    name_value = value.get("name")
-    name = name_value if isinstance(name_value, str) and name_value != "" else uuid_value
-
-    if _looks_like_mesh_ref(value, field_name):
-        refs.meshes[uuid_value] = name
-    if _looks_like_material_ref(value, field_name):
-        refs.materials[uuid_value] = name
-
-
-def _collect_pipeline_refs(value: dict[str, Any], refs: _RuntimeRefs) -> None:
-    pipeline_uuid = value.get("pipeline_uuid")
-    pipeline_name = value.get("pipeline_name")
-    if isinstance(pipeline_uuid, str) and pipeline_uuid != "":
-        name = pipeline_name if isinstance(pipeline_name, str) and pipeline_name != "" else pipeline_uuid
-        refs.pipelines[pipeline_uuid] = name
-
-
-def _collect_project_material_refs(
-    project_root: Path,
-    refs: _RuntimeRefs,
-    diagnostics: list[RuntimePackageExportDiagnostic],
-) -> None:
-    for path in _iter_project_material_paths(project_root):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as exc:
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    level="warning",
-                    path=_project_relative_path(project_root, path),
-                    message=f"Runtime exporter failed to inspect material asset: {exc}",
-                )
-            )
-            continue
-
-        if not isinstance(data, dict):
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    level="warning",
-                    path=_project_relative_path(project_root, path),
-                    message="Runtime exporter skipped material asset because JSON root is not an object",
-                )
-            )
-            continue
-
-        uuid_value = data.get("uuid")
-        if not isinstance(uuid_value, str) or uuid_value == "":
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    level="warning",
-                    path=_project_relative_path(project_root, path),
-                    message="Runtime exporter skipped material asset because it has no uuid",
-                )
-            )
-            continue
-
-        refs.materials[uuid_value] = path.stem
-
-
-def _iter_project_material_paths(project_root: Path):
-    ignored_parts = {".git", "__pycache__", "build", "dist"}
-    for path in project_root.rglob("*.material"):
-        rel = path.relative_to(project_root)
-        if any(part in ignored_parts for part in rel.parts):
-            continue
-        if path.is_file():
-            yield path
-
-
-def _looks_like_mesh_ref(value: dict[str, Any], field_name: str) -> bool:
-    if field_name == "mesh":
-        return True
-    kind_value = value.get("kind")
-    role_value = value.get("role")
-    if kind_value == "tc_mesh" or role_value == "mesh":
-        return True
-    name_value = value.get("name")
-    if isinstance(name_value, str):
-        return "mesh" in name_value.lower()
-    return False
-
-
-def _looks_like_material_ref(value: dict[str, Any], field_name: str) -> bool:
-    if field_name == "material":
-        return True
-    kind_value = value.get("kind")
-    role_value = value.get("role")
-    if kind_value == "tc_material" or role_value == "material":
-        return True
-    name_value = value.get("name")
-    if isinstance(name_value, str):
-        return "material" in name_value.lower()
-    return False
-
-
-def _write_clean_package_dir(output_dir: Path) -> None:
-    if output_dir.exists():
-        shutil.rmtree(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
 
 
 def _write_shaders(
@@ -895,61 +725,6 @@ def _source_extension_for_language(language: str) -> str:
     raise ValueError(f"Unsupported shader language: {language}")
 
 
-def _builtin_shader_catalog_entry(uuid_value: str) -> dict[str, Any]:
-    catalog = _builtin_shader_catalog()
-    shaders = catalog.get("shaders")
-    if not isinstance(shaders, list):
-        raise ValueError("Built-in shader catalog has no shader list")
-    for entry in shaders:
-        if isinstance(entry, dict) and entry.get("uuid") == uuid_value:
-            return entry
-    raise KeyError(f"Built-in shader catalog has no entry for '{uuid_value}'")
-
-
-def _builtin_shader_catalog() -> dict[str, Any]:
-    catalog_path = _builtin_shader_catalog_path()
-    data = json.loads(catalog_path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"Built-in shader catalog is not an object: {catalog_path}")
-    version = data.get("version")
-    if version != 1:
-        raise ValueError(f"Built-in shader catalog has unsupported version: {version}")
-    return data
-
-
-def _builtin_shader_catalog_path() -> Path:
-    filename = "engine-shader-catalog.json"
-    for root in _builtin_shader_roots():
-        path = root / filename
-        if path.exists():
-            return path
-    roots = ", ".join(str(root) for root in _builtin_shader_roots())
-    raise FileNotFoundError(f"Built-in shader catalog '{filename}' was not found in: {roots}")
-
-
-def _builtin_shader_source(filename: str) -> str:
-    for root in _builtin_shader_roots():
-        path = root / filename
-        if path.exists():
-            return path.read_text(encoding="utf-8")
-    roots = ", ".join(str(root) for root in _builtin_shader_roots())
-    raise FileNotFoundError(f"Built-in shader source '{filename}' was not found in: {roots}")
-
-
-def _builtin_shader_roots() -> list[Path]:
-    repo_root = Path(__file__).resolve().parents[3]
-    roots = [
-        repo_root / "termin-graphics" / "resources" / "builtin_shaders",
-    ]
-
-    sdk_env = os.environ.get("TERMIN_SDK")
-    if sdk_env:
-        roots.append(Path(sdk_env).resolve() / "share" / "termin" / "builtin_shaders")
-
-    roots.append(Path(sys.prefix).resolve() / "share" / "termin" / "builtin_shaders")
-    return roots
-
-
 def _copy_default_spirv(target_path: Path, source_name: str) -> None:
     source_path = (
         Path(__file__).resolve().parents[3]
@@ -962,200 +737,6 @@ def _copy_default_spirv(target_path: Path, source_name: str) -> None:
     if not source_path.exists():
         raise FileNotFoundError(f"Default SPIR-V artifact is missing: {source_path}")
     shutil.copy2(source_path, target_path)
-
-
-def _resource_sort_key(resource: dict[str, str]) -> tuple[int, str]:
-    type_order = {
-        "shader": 0,
-        "pipeline": 1,
-        "mesh": 2,
-        "material": 3,
-    }
-    resource_type = resource["type"]
-    return (type_order.get(resource_type, 100), resource["path"])
-
-
-def _write_pipelines(
-    project_root: Path,
-    package_dir: Path,
-    pipelines: dict[str, str],
-    resources: list[dict[str, str]],
-    diagnostics: list[RuntimePackageExportDiagnostic],
-) -> None:
-    if not pipelines:
-        return
-
-    pipeline_dir = package_dir / "pipelines"
-    pipeline_dir.mkdir(parents=True, exist_ok=True)
-
-    for uuid_value, name in sorted(pipelines.items()):
-        source = _find_pipeline_source(project_root, uuid_value, name, diagnostics)
-        if source is None:
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    level="error",
-                    path=f"pipelines/{uuid_value}.pipeline.json",
-                    message=(
-                        f"Runtime exporter could not find pipeline asset "
-                        f"'{name}' ({uuid_value})"
-                    ),
-                )
-            )
-            continue
-
-        try:
-            with open(source, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if not isinstance(data, dict):
-                raise ValueError("pipeline JSON root must be an object")
-        except Exception as exc:
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    level="error",
-                    path=_project_relative_path(project_root, source),
-                    message=f"Runtime exporter failed to read pipeline asset: {exc}",
-                )
-            )
-            continue
-
-        data.setdefault("uuid", uuid_value)
-        data.setdefault("name", name)
-
-        target_name = _safe_package_stem(uuid_value or name)
-        target = pipeline_dir / f"{target_name}.pipeline.json"
-        _write_json(target, data)
-        resources.append(
-            {
-                "type": "pipeline",
-                "uuid": uuid_value,
-                "name": name,
-                "path": f"pipelines/{target_name}.pipeline.json",
-            }
-        )
-
-
-def _safe_package_stem(value: str) -> str:
-    result = []
-    for ch in value:
-        if ch.isalnum() or ch in ("-", "_", "."):
-            result.append(ch)
-        else:
-            result.append("_")
-    stem = "".join(result).strip("._")
-    return stem or "pipeline"
-
-
-def _append_project_file_diagnostic(
-    diagnostics: list[RuntimePackageExportDiagnostic],
-    project_root: Path,
-    path: Path,
-    message: str,
-    level: str = "warning",
-) -> None:
-    diagnostics.append(
-        RuntimePackageExportDiagnostic(
-            level=level,
-            path=_project_relative_path(project_root, path),
-            message=message,
-        )
-    )
-
-
-def _find_pipeline_source(
-    project_root: Path,
-    uuid_value: str,
-    name: str,
-    diagnostics: list[RuntimePackageExportDiagnostic],
-) -> Path | None:
-    pipeline_paths = list(_iter_project_pipeline_paths(project_root))
-
-    if uuid_value:
-        for path in pipeline_paths:
-            meta_path = path.with_suffix(path.suffix + ".meta")
-            if meta_path.exists():
-                try:
-                    with open(meta_path, "r", encoding="utf-8") as f:
-                        meta = json.load(f)
-                    if isinstance(meta, dict) and meta.get("uuid") == uuid_value:
-                        return path
-                    if not isinstance(meta, dict):
-                        _append_project_file_diagnostic(
-                            diagnostics,
-                            project_root,
-                            meta_path,
-                            "Runtime exporter skipped pipeline metadata because JSON root is not an object",
-                        )
-                except Exception as exc:
-                    _append_project_file_diagnostic(
-                        diagnostics,
-                        project_root,
-                        meta_path,
-                        f"Runtime exporter failed to inspect pipeline metadata: {exc}",
-                    )
-
-        for path in pipeline_paths:
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict) and data.get("uuid") == uuid_value:
-                    return path
-                if not isinstance(data, dict):
-                    _append_project_file_diagnostic(
-                        diagnostics,
-                        project_root,
-                        path,
-                        "Runtime exporter skipped pipeline asset during source lookup because JSON root is not an object",
-                    )
-            except Exception as exc:
-                _append_project_file_diagnostic(
-                    diagnostics,
-                    project_root,
-                    path,
-                    f"Runtime exporter failed to inspect pipeline asset during source lookup: {exc}",
-                )
-
-    if name:
-        expected = f"{name}.pipeline"
-        for path in pipeline_paths:
-            if path.name == expected:
-                return path
-
-    return None
-
-
-def _iter_project_pipeline_paths(project_root: Path):
-    ignored_parts = {".git", "__pycache__", "build", "dist"}
-    for path in project_root.rglob("*.pipeline"):
-        rel = path.relative_to(project_root)
-        if any(part in ignored_parts for part in rel.parts):
-            continue
-        yield path
-
-
-def _write_meshes(
-    project_root: Path,
-    package_dir: Path,
-    meshes: dict[str, str],
-    resources: list[dict[str, str]],
-    diagnostics: list[RuntimePackageExportDiagnostic],
-    resource_policy: str,
-) -> None:
-    mesh_dir = package_dir / "meshes"
-    mesh_dir.mkdir(parents=True, exist_ok=True)
-
-    for uuid_value, name in sorted(meshes.items()):
-        path = mesh_dir / f"{uuid_value}.tmesh.json"
-        mesh_spec = _export_mesh_spec(project_root, uuid_value, name, diagnostics, resource_policy)
-        if mesh_spec is None:
-            continue
-        _write_json(path, mesh_spec)
-        resources.append(
-            {
-                "type": "mesh",
-                "uuid": uuid_value,
-                "path": f"meshes/{uuid_value}.tmesh.json",
-            }
-        )
 
 
 def _write_materials(
@@ -1190,203 +771,6 @@ def _write_materials(
                 "path": f"materials/{uuid_value}.tmat.json",
             }
         )
-
-
-def _export_mesh_spec(
-    project_root: Path,
-    uuid_value: str,
-    name: str,
-    diagnostics: list[RuntimePackageExportDiagnostic],
-    resource_policy: str,
-) -> dict[str, Any] | None:
-    mesh_source = _find_mesh_source(project_root, uuid_value, name, diagnostics)
-    if mesh_source is not None:
-        try:
-            return _mesh_source_to_spec(mesh_source, uuid_value, name)
-        except Exception as exc:
-            diagnostics.append(
-                RuntimePackageExportDiagnostic(
-                    level="warning",
-                    path=_project_relative_path(project_root, mesh_source),
-                    message=f"Runtime exporter failed to read mesh asset: {exc}",
-                )
-            )
-
-    try:
-        from tmesh import TcMesh
-
-        mesh = TcMesh.from_uuid(uuid_value)
-        if mesh.is_valid:
-            return _mesh_to_spec(mesh)
-    except Exception as exc:
-        diagnostics.append(
-            RuntimePackageExportDiagnostic(
-                level="warning",
-                path=f"meshes/{uuid_value}.tmesh.json",
-                message=f"Runtime exporter failed to read mesh registry entry: {exc}",
-            )
-        )
-
-    if _resource_policy_allows_fallback(resource_policy):
-        diagnostics.append(
-            RuntimePackageExportDiagnostic(
-                level="warning",
-                path=f"meshes/{uuid_value}.tmesh.json",
-                message="Runtime exporter used fallback mesh because registry entry is unavailable",
-            )
-        )
-        return _fallback_mesh_spec(uuid_value, name)
-
-    diagnostics.append(
-        RuntimePackageExportDiagnostic(
-            level="error",
-            path=f"meshes/{uuid_value}.tmesh.json",
-            message=(
-                "Runtime exporter could not export mesh because no project source "
-                "or runtime registry entry was found; fallback mesh requires "
-                "resource_policy=dev_smoke"
-            ),
-        )
-    )
-    return None
-
-
-def _find_mesh_source(
-    project_root: Path,
-    uuid_value: str,
-    name: str,
-    diagnostics: list[RuntimePackageExportDiagnostic],
-) -> Path | None:
-    mesh_paths = list(_iter_project_mesh_paths(project_root))
-
-    if uuid_value:
-        for path in mesh_paths:
-            meta_path = Path(str(path) + ".meta")
-            if not meta_path.exists():
-                continue
-            try:
-                with open(meta_path, "r", encoding="utf-8") as f:
-                    meta = json.load(f)
-                if isinstance(meta, dict) and meta.get("uuid") == uuid_value:
-                    return path
-                if not isinstance(meta, dict):
-                    _append_project_file_diagnostic(
-                        diagnostics,
-                        project_root,
-                        meta_path,
-                        "Runtime exporter skipped mesh metadata because JSON root is not an object",
-                    )
-            except Exception as exc:
-                _append_project_file_diagnostic(
-                    diagnostics,
-                    project_root,
-                    meta_path,
-                    f"Runtime exporter failed to inspect mesh metadata: {exc}",
-                )
-
-    if name:
-        for path in mesh_paths:
-            if path.stem == name:
-                return path
-
-    return None
-
-
-def _iter_project_mesh_paths(project_root: Path):
-    ignored_parts = {".git", "__pycache__", "build", "dist"}
-    supported_suffixes = {".obj", ".stl"}
-    for path in project_root.rglob("*"):
-        rel = path.relative_to(project_root)
-        if any(part in ignored_parts for part in rel.parts):
-            continue
-        if path.is_file() and path.suffix.lower() in supported_suffixes:
-            yield path
-
-
-def _mesh_source_to_spec(source_path: Path, uuid_value: str, name: str) -> dict[str, Any]:
-    from termin.default_assets.mesh.asset import MeshAsset
-
-    asset = MeshAsset(name=name, source_path=source_path, uuid=uuid_value)
-    meta_path = Path(str(source_path) + ".meta")
-    if meta_path.exists():
-        with open(meta_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-        if not isinstance(meta, dict):
-            raise ValueError(f"mesh meta JSON root must be an object: {meta_path}")
-        asset.parse_spec(meta)
-
-    mesh = asset.data
-    if mesh is None or not mesh.is_valid:
-        raise ValueError(f"mesh asset did not produce a valid TcMesh: {source_path}")
-    return _mesh_to_spec(mesh)
-
-
-def _mesh_to_spec(mesh: Any) -> dict[str, Any]:
-    vertices_buffer = mesh.get_vertices_buffer()
-    indices_buffer = mesh.get_indices_buffer()
-    if vertices_buffer is None or indices_buffer is None:
-        raise ValueError(f"Mesh '{mesh.uuid}' has no vertex or index data")
-
-    return {
-        "uuid": mesh.uuid,
-        "name": mesh.name or mesh.uuid,
-        "draw_mode": _draw_mode_to_json(mesh.draw_mode),
-        "layout": _mesh_layout_to_json(mesh),
-        "vertices": _flat_number_list(vertices_buffer, float),
-        "indices": _flat_number_list(indices_buffer, int),
-        "vertex_count": int(mesh.vertex_count),
-        "stride": int(mesh.stride),
-    }
-
-
-def _mesh_layout_to_json(mesh: Any) -> list[dict[str, Any]]:
-    layout_obj = mesh.mesh.layout
-    attributes: list[dict[str, Any]] = []
-    for attr_name in ("position", "normal", "uv", "color", "tangent", "joints", "weights"):
-        attr = layout_obj.find(attr_name)
-        if attr is None:
-            continue
-        attr_type = _attrib_type_to_json(attr["type"])
-        if attr_type != "float32":
-            raise ValueError(
-                f"Mesh '{mesh.uuid}' has unsupported runtime attribute type: {attr_name}={attr_type}"
-            )
-        attributes.append(
-            {
-                "name": str(attr["name"]),
-                "location": int(attr["location"]),
-                "components": int(attr["size"]),
-                "type": attr_type,
-            }
-        )
-    if not attributes:
-        raise ValueError(f"Mesh '{mesh.uuid}' has no exportable vertex attributes")
-    attributes.sort(key=lambda item: item["location"])
-    return attributes
-
-
-def _fallback_mesh_spec(uuid_value: str, name: str) -> dict[str, Any]:
-    return {
-        "uuid": uuid_value,
-        "name": name,
-        "draw_mode": "triangles",
-        "layout": [
-            {
-                "name": "position",
-                "location": 0,
-                "components": 3,
-                "type": "float32",
-            },
-            {
-                "name": "color",
-                "location": 1,
-                "components": 3,
-                "type": "float32",
-            },
-        ],
-        "vertices": PLACEHOLDER_MESH_VERTICES,
-        "indices": [0, 1, 2],
-    }
 
 
 def _export_material_spec(
@@ -1435,10 +819,6 @@ def _export_material_spec(
         )
     )
     return None
-
-
-def _resource_policy_allows_fallback(resource_policy: str) -> bool:
-    return resource_policy == "dev_smoke"
 
 
 def _material_to_spec(material: Any, shaders: dict[str, _ShaderSpec]) -> dict[str, Any]:
@@ -1630,46 +1010,3 @@ def _executable_command(path: Path) -> list[str]:
     if os.name == "nt" and path.suffix.lower() == ".py":
         return [sys.executable]
     return []
-
-
-def _flat_number_list(values: Any, converter: Any) -> list[Any]:
-    import numpy as np
-
-    values = np.asarray(values).reshape(-1).tolist()
-    result: list[Any] = []
-    for value in values:
-        result.append(converter(value))
-    return result
-
-
-def _draw_mode_to_json(value: Any) -> str:
-    text = str(value)
-    if text.endswith(".LINES"):
-        return "lines"
-    return "triangles"
-
-
-def _attrib_type_to_json(value: Any) -> str:
-    text = str(value)
-    if text.endswith(".FLOAT32"):
-        return "float32"
-    if text.endswith(".INT32"):
-        return "int32"
-    if text.endswith(".UINT32"):
-        return "uint32"
-    if text.endswith(".INT16"):
-        return "int16"
-    if text.endswith(".UINT16"):
-        return "uint16"
-    if text.endswith(".INT8"):
-        return "int8"
-    if text.endswith(".UINT8"):
-        return "uint8"
-    raise ValueError(f"Unsupported vertex attribute type: {value}")
-
-
-def _write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-        f.write("\n")
