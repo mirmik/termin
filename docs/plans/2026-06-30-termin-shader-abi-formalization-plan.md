@@ -22,6 +22,11 @@ lists, and backend placement decisions that depend on special resource names.
   aliases are canonicalized before resource merge, and a well-known ABI name
   with incompatible kind/scope now reports an ABI contract diagnostic instead
   of becoming an unrelated resource.
+- 2026-06-30: Promoted the ABI vocabulary to `termin-graphics` C API
+  (`tc_shader_abi_*`) and made the `termin-render` C++ API a facade over that
+  table. `termin_shaderc` now canonicalizes ABI aliases, assigns documented ABI
+  scopes when reflection/source omits them, and rejects explicit ABI kind/scope
+  mismatches before backend placement.
 
 ## Order Of Work
 
