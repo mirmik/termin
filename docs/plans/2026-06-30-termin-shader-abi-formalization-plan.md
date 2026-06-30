@@ -12,6 +12,17 @@ The goal is not to remove all well-known shader resource names. The goal is to
 turn them into documented ABI and remove ad hoc name inference, private alias
 lists, and backend placement decisions that depend on special resource names.
 
+## Progress
+
+- 2026-06-30: Added runtime shader ABI vocabulary in `termin-render`, made
+  `draw_data` canonical, isolated `draw` as a documented legacy alias, and
+  routed frame/material/draw/lighting/shadow runtime binding helpers through ABI
+  lookup and validation.
+- 2026-06-30: Added material-pipeline ABI boundary validation. Well-known ABI
+  aliases are canonicalized before resource merge, and a well-known ABI name
+  with incompatible kind/scope now reports an ABI contract diagnostic instead
+  of becoming an unrelated resource.
+
 ## Order Of Work
 
 ### 1. ABI Vocabulary
