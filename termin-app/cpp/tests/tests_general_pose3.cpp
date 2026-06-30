@@ -1,11 +1,31 @@
 #include "guard_main.h"
 #include "termin/geom/general_pose3.hpp"
+#include <cstddef>
 #include <cmath>
+#include <type_traits>
 
 using guard::Approx;
 using termin::GeneralPose3;
 using termin::Quat;
 using termin::Vec3;
+
+TEST_CASE("Pose3 and GeneralPose3 alias C ABI pose types")
+{
+    static_assert(std::is_same_v<termin::Pose3, tc_pose3>);
+    static_assert(std::is_same_v<termin::GeneralPose3, tc_general_pose3>);
+
+    CHECK_EQ(offsetof(tc_pose3, ang), 0u);
+    CHECK_EQ(offsetof(tc_pose3, lin), sizeof(tc_quat));
+    CHECK_EQ(offsetof(tc_general_pose3, ang), 0u);
+    CHECK_EQ(offsetof(tc_general_pose3, lin), sizeof(tc_quat));
+    CHECK_EQ(offsetof(tc_general_pose3, scale), sizeof(tc_quat) + sizeof(tc_vec3));
+
+    tc_pose3 pose{Quat::identity(), Vec3{1.0, 2.0, 3.0}};
+    CHECK_EQ(pose.lin.x, Approx(1.0).epsilon(1e-12));
+
+    tc_general_pose3 gpose{Quat::identity(), Vec3{1.0, 2.0, 3.0}, Vec3{4.0, 5.0, 6.0}};
+    CHECK_EQ(gpose.scale.z, Approx(6.0).epsilon(1e-12));
+}
 
 TEST_CASE("Vec3 named directions follow Termin axes")
 {
@@ -79,17 +99,17 @@ TEST_CASE("GeneralPose3 transform and inverse")
     CHECK_EQ(back.z, Approx(p_local.z).epsilon(1e-12));
 
     Vec3 scaled_vector = pose.transform_vector(Vec3{1.0, 0.0, 0.0});
-    CHECK_EQ(scaled_vector.x, Approx(0.0).margin(1e-12));
+    CHECK(std::abs(scaled_vector.x) < 1e-12);
     CHECK_EQ(scaled_vector.y, Approx(2.0).epsilon(1e-12));
     CHECK_EQ(scaled_vector.z, Approx(0.0).epsilon(1e-12));
 
     Vec3 direction = pose.transform_direction(Vec3{1.0, 0.0, 0.0});
-    CHECK_EQ(direction.x, Approx(0.0).margin(1e-12));
+    CHECK(std::abs(direction.x) < 1e-12);
     CHECK_EQ(direction.y, Approx(1.0).epsilon(1e-12));
     CHECK_EQ(direction.z, Approx(0.0).epsilon(1e-12));
 
     Vec3 local_direction = pose.inverse_transform_direction(direction);
     CHECK_EQ(local_direction.x, Approx(1.0).epsilon(1e-12));
-    CHECK_EQ(local_direction.y, Approx(0.0).margin(1e-12));
+    CHECK(std::abs(local_direction.y) < 1e-12);
     CHECK_EQ(local_direction.z, Approx(0.0).epsilon(1e-12));
 }
