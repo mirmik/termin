@@ -1,6 +1,7 @@
 #include <termin/navmesh/detour_query_session.hpp>
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/navmesh_query_space.hpp>
 #include <DetourNavMesh.h>
 #include <DetourNavMeshQuery.h>
 #include <DetourStatus.h>
@@ -262,12 +263,40 @@ DetourClosestPointResult DetourQuerySession::closest_point(const std::array<floa
     return result;
 }
 
+DetourClosestPointResult DetourQuerySession::closest_point_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& point)
+{
+    DetourClosestPointResult result = closest_point(navmesh_world_to_bake_point(bake_frame, point));
+    if (result.success) {
+        result.point = navmesh_bake_to_world_point(bake_frame, result.point);
+    }
+    return result;
+}
+
 std::vector<std::array<float, 3>> DetourQuerySession::find_path(
     const std::array<float, 3>& start,
     const std::array<float, 3>& end
 ) {
     std::vector<std::array<float, 3>> result;
     DetourPathResult detailed = find_detailed_path(start, end);
+    if (!detailed.success) {
+        return result;
+    }
+    result.reserve(detailed.points.size());
+    for (const DetourPathPoint& point : detailed.points) {
+        result.push_back(point.point);
+    }
+    return result;
+}
+
+std::vector<std::array<float, 3>> DetourQuerySession::find_path_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& start,
+    const std::array<float, 3>& end)
+{
+    std::vector<std::array<float, 3>> result;
+    DetourPathResult detailed = find_detailed_path_world(bake_frame, start, end);
     if (!detailed.success) {
         return result;
     }
@@ -450,6 +479,23 @@ DetourPathResult DetourQuerySession::find_detailed_path(
     return result;
 }
 
+DetourPathResult DetourQuerySession::find_detailed_path_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& start,
+    const std::array<float, 3>& end)
+{
+    DetourPathResult result = find_detailed_path(
+        navmesh_world_to_bake_point(bake_frame, start),
+        navmesh_world_to_bake_point(bake_frame, end));
+    if (!result.success) {
+        return result;
+    }
+    for (DetourPathPoint& point : result.points) {
+        point.point = navmesh_bake_to_world_point(bake_frame, point.point);
+    }
+    return result;
+}
+
 DetourRaycastResult DetourQuerySession::raycast(
     const std::array<float, 3>& start,
     const std::array<float, 3>& end
@@ -502,6 +548,21 @@ DetourRaycastResult DetourQuerySession::raycast(
     result.visited.reserve(static_cast<size_t>(visited_count));
     for (int i = 0; i < visited_count; ++i) {
         result.visited.push_back(static_cast<unsigned long long>(visited[static_cast<size_t>(i)]));
+    }
+    return result;
+}
+
+DetourRaycastResult DetourQuerySession::raycast_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& start,
+    const std::array<float, 3>& end)
+{
+    DetourRaycastResult result = raycast(
+        navmesh_world_to_bake_point(bake_frame, start),
+        navmesh_world_to_bake_point(bake_frame, end));
+    if (result.success) {
+        result.hit_position = navmesh_bake_to_world_point(bake_frame, result.hit_position);
+        result.hit_normal = navmesh_bake_to_world_vector(bake_frame, result.hit_normal);
     }
     return result;
 }

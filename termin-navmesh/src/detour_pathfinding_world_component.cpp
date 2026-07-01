@@ -99,6 +99,17 @@ DetourClosestPointResult DetourPathfindingWorldComponent::closest_point(
     return _query_session.closest_point(point);
 }
 
+DetourClosestPointResult DetourPathfindingWorldComponent::closest_point_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& point
+) {
+    if (!ensure_query_loaded()) {
+        return {};
+    }
+    sync_query_settings();
+    return _query_session.closest_point_world(bake_frame, point);
+}
+
 std::vector<std::array<float, 3>> DetourPathfindingWorldComponent::find_path(
     const std::array<float, 3>& start,
     const std::array<float, 3>& end
@@ -108,6 +119,18 @@ std::vector<std::array<float, 3>> DetourPathfindingWorldComponent::find_path(
     }
     sync_query_settings();
     return _query_session.find_path(start, end);
+}
+
+std::vector<std::array<float, 3>> DetourPathfindingWorldComponent::find_path_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& start,
+    const std::array<float, 3>& end
+) {
+    if (!ensure_query_loaded()) {
+        return {};
+    }
+    sync_query_settings();
+    return _query_session.find_path_world(bake_frame, start, end);
 }
 
 DetourPathResult DetourPathfindingWorldComponent::find_detailed_path(
@@ -125,6 +148,22 @@ DetourPathResult DetourPathfindingWorldComponent::find_detailed_path(
     return _query_session.find_detailed_path(start, end);
 }
 
+DetourPathResult DetourPathfindingWorldComponent::find_detailed_path_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& start,
+    const std::array<float, 3>& end
+) {
+    if (!ensure_query_loaded()) {
+        tc_log_warn("[DetourPathfindingWorldComponent] world-space path query failed: navmesh is not ready "
+                    "uuid=%s loaded_uuid=%s",
+                    navmesh_uuid.c_str(),
+                    _loaded_navmesh_uuid.c_str());
+        return {};
+    }
+    sync_query_settings();
+    return _query_session.find_detailed_path_world(bake_frame, start, end);
+}
+
 DetourRaycastResult DetourPathfindingWorldComponent::raycast(
     const std::array<float, 3>& start,
     const std::array<float, 3>& end
@@ -134,6 +173,18 @@ DetourRaycastResult DetourPathfindingWorldComponent::raycast(
     }
     sync_query_settings();
     return _query_session.raycast(start, end);
+}
+
+DetourRaycastResult DetourPathfindingWorldComponent::raycast_world(
+    const Pose3& bake_frame,
+    const std::array<float, 3>& start,
+    const std::array<float, 3>& end
+) {
+    if (!ensure_query_loaded()) {
+        return {};
+    }
+    sync_query_settings();
+    return _query_session.raycast_world(bake_frame, start, end);
 }
 
 namespace {
