@@ -10,7 +10,7 @@ from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
 from termin_assets import PreLoadResult
-from termin_modules import ModuleKind
+from termin_modules import ModuleKind, ModuleState
 
 
 class RecordingPreLoader(FilePreLoader):
@@ -52,7 +52,6 @@ class RecordingPythonPreLoader(RecordingPreLoader):
 
 class RecordingModulesRuntime:
     def __init__(self) -> None:
-        self.auto_reload_enabled = True
         self.last_error = ""
         self.reloaded_descriptors: list[Path] = []
         self.reloaded_paths: list[Path] = []
@@ -78,6 +77,28 @@ class RuntimeUnderTest(ProjectModulesRuntime):
 
     def records(self) -> list[object]:
         return list(self._records)
+
+
+class ReloadRuntimeUnderTest(RuntimeUnderTest):
+    def __init__(self, records: list[object], stale_modules: list[str] | None = None) -> None:
+        super().__init__(records)
+        self._closed = False
+        self._stale_modules = stale_modules or []
+        self.reloaded_modules: list[str] = []
+        self.fail_modules: set[str] = set()
+
+    def find(self, module_id: str):
+        for record in self._records:
+            if record.id == module_id:
+                return record
+        return None
+
+    def stale_modules(self) -> list[str]:
+        return list(self._stale_modules)
+
+    def reload_module(self, module_id: str) -> bool:
+        self.reloaded_modules.append(module_id)
+        return module_id not in self.fail_modules
 
 
 class FailingComponentResourceManager:
@@ -118,7 +139,7 @@ def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> 
     assert processor.changed == [str(shader_path)]
 
 
-def test_module_file_processor_reloads_pymodule_when_auto_reload_enabled(tmp_path: Path) -> None:
+def test_module_file_processor_marks_pymodule_dirty(tmp_path: Path) -> None:
     descriptor = tmp_path / "gameplay.pymodule"
     descriptor.write_text("name: gameplay\n", encoding="utf-8")
     runtime = RecordingModulesRuntime()
@@ -131,8 +152,9 @@ def test_module_file_processor_reloads_pymodule_when_auto_reload_enabled(tmp_pat
 
     processor.on_file_changed(str(descriptor))
 
-    assert runtime.reloaded_descriptors == [descriptor]
-    assert reloaded == [("module", "gameplay")]
+    assert runtime.dirty_paths == [descriptor]
+    assert runtime.reloaded_descriptors == []
+    assert reloaded == []
 
 
 def test_module_file_processor_leaves_cpp_descriptors_to_policy_neutral_input_tracking() -> None:
@@ -142,11 +164,10 @@ def test_module_file_processor_leaves_cpp_descriptors_to_policy_neutral_input_tr
     assert ".module" not in processor.extensions
 
 
-def test_module_file_processor_ignores_changes_when_auto_reload_disabled(tmp_path: Path) -> None:
+def test_module_file_processor_marks_changes_without_auto_reload_mode(tmp_path: Path) -> None:
     descriptor = tmp_path / "gameplay.pymodule"
     descriptor.write_text("name: gameplay\n", encoding="utf-8")
     runtime = RecordingModulesRuntime()
-    runtime.auto_reload_enabled = False
     processor = ModuleFileProcessor(
         resource_manager=None,
         modules_runtime_provider=lambda: runtime,
@@ -154,7 +175,23 @@ def test_module_file_processor_ignores_changes_when_auto_reload_disabled(tmp_pat
 
     processor.on_file_changed(str(descriptor))
 
+    assert runtime.dirty_paths == [descriptor]
     assert runtime.reloaded_descriptors == []
+
+
+def test_module_file_processor_initial_scan_does_not_mark_pymodule_dirty(tmp_path: Path) -> None:
+    descriptor = tmp_path / "gameplay.pymodule"
+    descriptor.write_text("name: gameplay\n", encoding="utf-8")
+    runtime = RecordingModulesRuntime()
+    processor = ModuleFileProcessor(
+        resource_manager=None,
+        modules_runtime_provider=lambda: runtime,
+    )
+
+    processor.on_initial_file_added(str(descriptor))
+
+    assert runtime.dirty_paths == []
+    assert processor.get_tracked_files() == {str(descriptor): set()}
 
 
 def test_module_input_processor_marks_cpp_descriptor_dirty_without_reload(tmp_path: Path) -> None:
@@ -297,7 +334,7 @@ def test_project_modules_runtime_ignores_cpp_build_directory_inputs(tmp_path: Pa
     assert runtime.dirty_modules() == {}
 
 
-def test_project_modules_runtime_keeps_python_path_lookup_reload_only(tmp_path: Path) -> None:
+def test_project_modules_runtime_marks_python_package_dirty(tmp_path: Path) -> None:
     descriptor = tmp_path / "gameplay.pymodule"
     package_file = tmp_path / "gameplay" / "components.py"
     package_file.parent.mkdir()
@@ -316,10 +353,55 @@ def test_project_modules_runtime_keeps_python_path_lookup_reload_only(tmp_path: 
     )
 
     assert runtime.module_ids_for_path(package_file) == ["gameplay"]
-    assert runtime.mark_modules_dirty_for_path(package_file) == []
+    assert runtime.mark_modules_dirty_for_path(package_file) == ["gameplay"]
+    dirty = runtime.dirty_modules()
+    assert list(dirty) == ["gameplay"]
+    assert str(package_file) in dirty["gameplay"][0]
 
 
-def test_component_processor_routes_package_python_files_to_module_reload(tmp_path: Path) -> None:
+def test_project_modules_runtime_reload_dirty_modules_coalesces_loaded_dependents(tmp_path: Path) -> None:
+    core_dir = tmp_path / "core"
+    leaf_dir = tmp_path / "leaf"
+    core_dir.mkdir()
+    leaf_dir.mkdir()
+    core_descriptor = core_dir / "core.module"
+    leaf_descriptor = leaf_dir / "leaf.module"
+    core_descriptor.write_text("name: core\ntype: cpp\n", encoding="utf-8")
+    leaf_descriptor.write_text("name: leaf\ntype: cpp\ndependencies: [core]\n", encoding="utf-8")
+    core_source = core_dir / "core.cpp"
+    leaf_source = leaf_dir / "leaf.cpp"
+    core_source.write_text("// core\n", encoding="utf-8")
+    leaf_source.write_text("// leaf\n", encoding="utf-8")
+
+    runtime = ReloadRuntimeUnderTest(
+        [
+            SimpleNamespace(
+                id="core",
+                kind=ModuleKind.Cpp,
+                descriptor_path=str(core_descriptor),
+                dependencies=[],
+                state=ModuleState.Loaded,
+            ),
+            SimpleNamespace(
+                id="leaf",
+                kind=ModuleKind.Cpp,
+                descriptor_path=str(leaf_descriptor),
+                dependencies=["core"],
+                state=ModuleState.Loaded,
+            ),
+        ]
+    )
+
+    assert runtime.mark_modules_dirty_for_path(core_source) == ["core"]
+    assert runtime.mark_modules_dirty_for_path(leaf_source) == ["leaf"]
+
+    assert runtime.reload_dirty_modules()
+
+    assert runtime.reloaded_modules == ["core"]
+    assert runtime.dirty_modules() == {}
+
+
+def test_component_processor_marks_package_python_files_dirty(tmp_path: Path) -> None:
     package = tmp_path / "gameplay"
     package.mkdir()
     (package / "__init__.py").write_text("", encoding="utf-8")
@@ -333,7 +415,8 @@ def test_component_processor_routes_package_python_files_to_module_reload(tmp_pa
 
     processor.on_file_changed(str(component))
 
-    assert runtime.reloaded_paths == [component]
+    assert runtime.dirty_paths == [component]
+    assert runtime.reloaded_paths == []
 
 
 def test_project_file_watcher_initial_scan_loads_loose_python_components(tmp_path: Path) -> None:
@@ -385,10 +468,15 @@ def test_component_processor_registers_real_loose_python_component(tmp_path: Pat
 
     try:
         processor.on_file_added(str(script_path))
+        assert processor.dirty_component_paths() == (str(script_path),)
+        assert resource_manager.get_component(component_name) is None
+
+        assert processor.reload_dirty_components()
 
         assert resource_manager.get_component(component_name) is not None
         assert ComponentRegistry.instance().has(component_name)
         assert processor.get_tracked_files() == {str(script_path): {component_name}}
+        assert processor.dirty_component_paths() == ()
     finally:
         ComponentRegistry.instance().unregister_python(component_name)
 
@@ -426,7 +514,7 @@ def test_component_processor_loads_loose_python_in_project_namespace(tmp_path: P
     processor.set_project_root(str(tmp_path))
 
     try:
-        processor.on_file_added(str(script_path))
+        processor.on_initial_file_added(str(script_path))
 
         cls = resource_manager.get_component(component_name)
         assert cls is not None
@@ -469,13 +557,17 @@ def test_component_processor_reloads_real_loose_python_component_class(tmp_path:
     )
 
     try:
-        processor.on_file_added(str(script_path))
+        processor.on_initial_file_added(str(script_path))
         old_cls = resource_manager.get_component(component_name)
         assert old_cls is not None
         instance = old_cls()
 
         write_component(2)
         processor.on_file_changed(str(script_path))
+        assert processor.dirty_component_paths() == (str(script_path),)
+        assert resource_manager.get_component(component_name) is old_cls
+
+        assert processor.reload_dirty_components()
 
         new_cls = resource_manager.get_component(component_name)
         assert new_cls is not None
@@ -528,14 +620,18 @@ def test_component_processor_reloads_dependents_after_loose_helper_change(tmp_pa
     processor.set_project_root(str(tmp_path))
 
     try:
-        processor.on_file_added(str(helper_path))
-        processor.on_file_added(str(script_path))
+        processor.on_initial_file_added(str(helper_path))
+        processor.on_initial_file_added(str(script_path))
         old_cls = resource_manager.get_component(component_name)
         assert old_cls is not None
         assert old_cls.value == 1
 
         write_helper(5)
         processor.on_file_changed(str(helper_path))
+        assert processor.dirty_component_paths() == (str(helper_path),)
+        assert resource_manager.get_component(component_name) is old_cls
+
+        assert processor.reload_dirty_components()
 
         new_cls = resource_manager.get_component(component_name)
         assert new_cls is not None
@@ -585,14 +681,18 @@ def test_component_processor_reloads_cross_dir_termin_project_dependents(tmp_pat
     processor.set_project_root(str(tmp_path))
 
     try:
-        processor.on_file_added(str(helper_path))
-        processor.on_file_added(str(script_path))
+        processor.on_initial_file_added(str(helper_path))
+        processor.on_initial_file_added(str(script_path))
         old_cls = resource_manager.get_component(component_name)
         assert old_cls is not None
         assert old_cls.value == 3
 
         write_helper(8)
         processor.on_file_changed(str(helper_path))
+        assert processor.dirty_component_paths() == (str(helper_path),)
+        assert resource_manager.get_component(component_name) is old_cls
+
+        assert processor.reload_dirty_components()
 
         new_cls = resource_manager.get_component(component_name)
         assert new_cls is not None
@@ -602,7 +702,7 @@ def test_component_processor_reloads_cross_dir_termin_project_dependents(tmp_pat
         ComponentRegistry.instance().unregister_python(component_name)
 
 
-def test_project_file_watcher_created_event_loads_loose_python_components(tmp_path: Path) -> None:
+def test_project_file_watcher_created_event_marks_loose_python_components_dirty(tmp_path: Path) -> None:
     script_path = tmp_path / "Scripts" / "EnemyComponent.py"
     script_path.parent.mkdir()
     script_path.write_text("class EnemyComponent: pass\n", encoding="utf-8")
@@ -615,13 +715,13 @@ def test_project_file_watcher_created_event_loads_loose_python_components(tmp_pa
     _queue_change(watcher, script_path, "created")
     watcher.poll()
 
-    assert resource_manager.scanned_paths == [[str(script_path)]]
-    assert resource_manager.scan_options == [(None, None)]
+    assert resource_manager.scanned_paths == []
     assert watcher.watched_files == {str(script_path)}
-    assert processor.get_tracked_files() == {str(script_path): {"EnemyComponent"}}
+    assert processor.get_tracked_files() == {}
+    assert processor.dirty_component_paths() == (str(script_path),)
 
 
-def test_project_file_watcher_modified_event_reloads_loose_python_components(tmp_path: Path) -> None:
+def test_project_file_watcher_modified_event_marks_loose_python_components_dirty(tmp_path: Path) -> None:
     script_path = tmp_path / "Scripts" / "InputComponent.py"
     script_path.parent.mkdir()
     script_path.write_text("class InputComponent: pass\n", encoding="utf-8")
@@ -638,10 +738,11 @@ def test_project_file_watcher_modified_event_reloads_loose_python_components(tmp
     _queue_change(watcher, script_path, "modified")
     watcher.poll()
 
-    assert resource_manager.scanned_paths == [[str(script_path)]]
-    assert resource_manager.scan_options == [(None, None)]
-    assert processor.get_tracked_files() == {str(script_path): {"InputComponent"}}
-    assert reloaded == [("component", "InputComponent")]
+    assert resource_manager.scanned_paths == []
+    assert resource_manager.scan_options == []
+    assert processor.get_tracked_files() == {}
+    assert processor.dirty_component_paths() == (str(script_path),)
+    assert reloaded == []
 
 
 def test_project_file_watcher_ignores_service_termin_directory_events(tmp_path: Path) -> None:

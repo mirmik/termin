@@ -286,6 +286,7 @@ class EditorWindowTcgui:
         self._project_file_watcher = ProjectFileWatcher(
             on_resource_reloaded=self._on_resource_reloaded,
         )
+        self._component_file_processor: ComponentFileProcessor | None = None
         self._register_file_processors()
         self._project_session_controller = ProjectSessionController(
             get_ui=lambda: self._ui,
@@ -490,6 +491,7 @@ class EditorWindowTcgui:
                 get_editor_scene_name=lambda: self._editor_scene_name,
                 scene_tree_controller=self.scene_tree_controller,
                 render_connector=self,
+                prepare_code_for_play=self._prepare_code_for_play,
             )
             self._game_mode_model.mode_entered.connect(self._on_game_mode_entered)
 
@@ -1501,14 +1503,28 @@ class EditorWindowTcgui:
                 self.resource_manager,
                 self._on_resource_reloaded,
             )
-            self._project_file_watcher.register_processor(
-                ComponentFileProcessor(
-                    self.resource_manager,
-                    on_resource_reloaded=self._on_resource_reloaded,
-                )
+            self._component_file_processor = ComponentFileProcessor(
+                self.resource_manager,
+                on_resource_reloaded=self._on_resource_reloaded,
             )
+            self._project_file_watcher.register_processor(self._component_file_processor)
         except Exception as e:
             log.error(f"Failed to register default file processors: {e}")
+
+    def _prepare_code_for_play(self) -> bool:
+        from termin.project_modules.runtime import get_project_modules_runtime
+
+        modules_runtime = get_project_modules_runtime()
+        if not modules_runtime.prepare_changed_modules_for_play():
+            log.error(f"[EditorWindow] Module update before Play failed: {modules_runtime.last_error}")
+            return False
+
+        if self._component_file_processor is not None:
+            if not self._component_file_processor.reload_dirty_components():
+                log.error("[EditorWindow] Loose Python component update before Play failed")
+                return False
+
+        return True
 
     # ------------------------------------------------------------------
     # Scene / scene manager callbacks

@@ -17,6 +17,7 @@ from termin_modules import (
     ModuleKind,
     ModuleRecord,
     ModuleRuntime,
+    ModuleState,
     PythonModuleBackend,
 )
 
@@ -57,7 +58,6 @@ class ProjectModulesRuntime:
         self._project_root: Path | None = None
         self._integration = TermModulesIntegration()
         self._runtime = ModuleRuntime()
-        self._auto_reload_enabled = False
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
         self._dirty_module_reasons: dict[str, set[str]] = {}
@@ -76,14 +76,6 @@ class ProjectModulesRuntime:
     @property
     def last_error(self) -> str:
         return self._runtime.last_error
-
-    @property
-    def auto_reload_enabled(self) -> bool:
-        return self._auto_reload_enabled
-
-    @auto_reload_enabled.setter
-    def auto_reload_enabled(self, enabled: bool) -> None:
-        self._auto_reload_enabled = bool(enabled)
 
     @property
     def sync_live_scenes(self) -> bool:
@@ -223,8 +215,6 @@ class ProjectModulesRuntime:
     def mark_modules_dirty_for_path(self, path: str | Path) -> list[str]:
         module_ids: list[str] = []
         for change in self.module_file_changes_for_path(path):
-            if change.kind not in {"cpp_descriptor", "cpp_input"}:
-                continue
             reasons = self._dirty_module_reasons.setdefault(change.module_id, set())
             reasons.add(f"{change.reason}: {change.path}")
             if change.module_id not in module_ids:
@@ -251,18 +241,49 @@ class ProjectModulesRuntime:
                 result.append(record.id)
         return result
 
+    def changed_modules(self) -> list[str]:
+        """Return dirty or stale module IDs in runtime record order."""
+        pending = set(self._dirty_module_reasons)
+        pending.update(self.stale_modules())
+        return [record.id for record in self.records() if record.id in pending]
+
+    def reload_dirty_modules(self) -> bool:
+        """Reload modules with pending code changes. Returns True if all succeeded."""
+        self._ensure_open()
+        pending = set(self.changed_modules())
+        if not pending:
+            return True
+
+        success = True
+        while pending:
+            module_id = self._first_pending_module(pending)
+            if module_id is None:
+                break
+
+            affected = self._loaded_dependent_closure(module_id)
+            log.info(f"[ProjectModulesRuntime] Reloading changed module: {module_id}")
+            if not self.reload_module(module_id):
+                log.error(
+                    f"[ProjectModulesRuntime] Failed to reload changed module '{module_id}': "
+                    f"{self._runtime.last_error}"
+                )
+                success = False
+                break
+
+            for affected_id in affected:
+                self._dirty_module_reasons.pop(affected_id, None)
+            pending.difference_update(affected)
+            pending = {module_id for module_id in pending if self.find(module_id) is not None}
+
+        return success
+
+    def prepare_changed_modules_for_play(self) -> bool:
+        """Apply pending module changes before entering Play mode."""
+        return self.reload_dirty_modules()
+
     def rebuild_stale_modules(self) -> bool:
         """Rebuild all modules that need it. Returns True if all succeeded."""
-        stale = self.stale_modules()
-        if not stale:
-            return True
-        success = True
-        for module_id in stale:
-            log.info(f"[ProjectModulesRuntime] Rebuilding stale module: {module_id}")
-            if not self.reload_module(module_id):
-                log.error(f"[ProjectModulesRuntime] Failed to rebuild: {module_id}: {self._runtime.last_error}")
-                success = False
-        return success
+        return self.reload_dirty_modules()
 
     def build_module(self, module_id: str) -> bool:
         self._ensure_open()
@@ -373,6 +394,30 @@ class ProjectModulesRuntime:
             if part.startswith("."):
                 return True
         return False
+
+    def _first_pending_module(self, pending: set[str]) -> str | None:
+        for record in self.records():
+            if record.id in pending:
+                return record.id
+        return next(iter(pending), None)
+
+    def _loaded_dependent_closure(self, module_id: str) -> set[str]:
+        affected = {module_id}
+        changed = True
+        while changed:
+            changed = False
+            for record in self.records():
+                if record.id in affected:
+                    continue
+                if not self._record_is_loaded(record):
+                    continue
+                if any(dependency in affected for dependency in record.dependencies):
+                    affected.add(record.id)
+                    changed = True
+        return affected
+
+    def _record_is_loaded(self, record: ModuleRecord) -> bool:
+        return record.state == ModuleState.Loaded
 
     def _dispatch_event(self, event: ModuleEvent) -> None:
         for listener in list(self._listeners):
