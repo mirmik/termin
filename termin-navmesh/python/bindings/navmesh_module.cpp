@@ -3,10 +3,13 @@
 #include "common.hpp"
 #include "termin/navmesh/detour_pathfinding_world_component.hpp"
 #include "termin/navmesh/navmesh_keeper_component.hpp"
+#include "termin/navmesh/navmesh_query_space.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/navmesh/tc_navmesh_handle.hpp"
 #include <termin/entity/component.hpp>
+#include <termin/geom/general_pose3.hpp>
+#include <termin/geom/pose3.hpp>
 #include <termin/bindings/entity_helpers.hpp>
 #include <inspect/tc_inspect_python.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
@@ -412,15 +415,31 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def("closest_point", [](DetourQuerySession& self, nb::handle point) {
             return self.closest_point(py_vec3(point));
         }, nb::arg("point"))
+        .def("closest_point_world", [](DetourQuerySession& self, const Pose3& bake_frame, nb::handle point) {
+            return self.closest_point_world(bake_frame, py_vec3(point));
+        }, nb::arg("bake_frame"), nb::arg("point"))
         .def("find_path", [](DetourQuerySession& self, nb::handle start, nb::handle end) {
             return path_to_python(self.find_path(py_vec3(start), py_vec3(end)));
         }, nb::arg("start"), nb::arg("end"))
+        .def("find_path_world", [](DetourQuerySession& self, const Pose3& bake_frame,
+                                    nb::handle start, nb::handle end) {
+            return path_to_python(self.find_path_world(bake_frame, py_vec3(start), py_vec3(end)));
+        }, nb::arg("bake_frame"), nb::arg("start"), nb::arg("end"))
         .def("find_detailed_path", [](DetourQuerySession& self, nb::handle start, nb::handle end) {
             return detailed_path_to_python(self.find_detailed_path(py_vec3(start), py_vec3(end)));
         }, nb::arg("start"), nb::arg("end"))
+        .def("find_detailed_path_world", [](DetourQuerySession& self, const Pose3& bake_frame,
+                                             nb::handle start, nb::handle end) {
+            return detailed_path_to_python(
+                self.find_detailed_path_world(bake_frame, py_vec3(start), py_vec3(end)));
+        }, nb::arg("bake_frame"), nb::arg("start"), nb::arg("end"))
         .def("raycast", [](DetourQuerySession& self, nb::handle start, nb::handle end) {
             return self.raycast(py_vec3(start), py_vec3(end));
-        }, nb::arg("start"), nb::arg("end"));
+        }, nb::arg("start"), nb::arg("end"))
+        .def("raycast_world", [](DetourQuerySession& self, const Pose3& bake_frame,
+                                  nb::handle start, nb::handle end) {
+            return self.raycast_world(bake_frame, py_vec3(start), py_vec3(end));
+        }, nb::arg("bake_frame"), nb::arg("start"), nb::arg("end"));
 
     nb::class_<DetourPathfindingWorldComponent, CxxComponent>(m, "DetourPathfindingWorldComponent")
         .def("__init__", [](nb::handle self) {
@@ -455,15 +474,41 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def("closest_point", [](DetourPathfindingWorldComponent& self, nb::handle point) {
             return self.closest_point(py_vec3(point));
         }, nb::arg("point"))
+        .def("closest_point_world", [](DetourPathfindingWorldComponent& self,
+                                        const Pose3& bake_frame, nb::handle point) {
+            return self.closest_point_world(bake_frame, py_vec3(point));
+        }, nb::arg("bake_frame"), nb::arg("point"))
         .def("find_path", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
             return path_to_python(self.find_path(py_vec3(start), py_vec3(end)));
         }, nb::arg("start"), nb::arg("end"))
+        .def("find_path_world", [](DetourPathfindingWorldComponent& self, const Pose3& bake_frame,
+                                    nb::handle start, nb::handle end) {
+            return path_to_python(self.find_path_world(bake_frame, py_vec3(start), py_vec3(end)));
+        }, nb::arg("bake_frame"), nb::arg("start"), nb::arg("end"))
         .def("find_detailed_path", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
             return detailed_path_to_python(self.find_detailed_path(py_vec3(start), py_vec3(end)));
         }, nb::arg("start"), nb::arg("end"))
+        .def("find_detailed_path_world", [](DetourPathfindingWorldComponent& self, const Pose3& bake_frame,
+                                             nb::handle start, nb::handle end) {
+            return detailed_path_to_python(
+                self.find_detailed_path_world(bake_frame, py_vec3(start), py_vec3(end)));
+        }, nb::arg("bake_frame"), nb::arg("start"), nb::arg("end"))
         .def("raycast", [](DetourPathfindingWorldComponent& self, nb::handle start, nb::handle end) {
             return self.raycast(py_vec3(start), py_vec3(end));
-        }, nb::arg("start"), nb::arg("end"));
+        }, nb::arg("start"), nb::arg("end"))
+        .def("raycast_world", [](DetourPathfindingWorldComponent& self, const Pose3& bake_frame,
+                                  nb::handle start, nb::handle end) {
+            return self.raycast_world(bake_frame, py_vec3(start), py_vec3(end));
+        }, nb::arg("bake_frame"), nb::arg("start"), nb::arg("end"));
+
+    m.def("navmesh_bake_frame_from_pose", &navmesh_bake_frame_from_pose,
+          nb::arg("base_pose"));
+    m.def("navmesh_world_to_bake_point", [](const Pose3& bake_frame, nb::handle point) {
+        return point_to_python(navmesh_world_to_bake_point(bake_frame, py_vec3(point)));
+    }, nb::arg("bake_frame"), nb::arg("point"));
+    m.def("navmesh_bake_to_world_point", [](const Pose3& bake_frame, nb::handle point) {
+        return point_to_python(navmesh_bake_to_world_point(bake_frame, py_vec3(point)));
+    }, nb::arg("bake_frame"), nb::arg("point"));
 
     // RecastNavMeshBuilderComponent
     nb::class_<RecastNavMeshBuilderComponent, CxxComponent>(m, "RecastNavMeshBuilderComponent")

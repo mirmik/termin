@@ -8,12 +8,15 @@ import pytest
 
 
 try:
-    from termin.geombase import Vec3
+    from termin.geombase import Pose3, Vec3
     from termin.mesh import MeshComponent, TcMesh
     from termin.navmesh import (
         DetourQuerySession,
         MeshSource,
         RecastNavMeshBuilderComponent,
+        navmesh_bake_frame_from_pose,
+        navmesh_bake_to_world_point,
+        navmesh_world_to_bake_point,
     )
     from termin.scene import Entity
     from tmesh import CubeMesh
@@ -91,6 +94,44 @@ def test_scaled_translated_cube_keeps_scale_in_bake_space_pathfinding() -> None:
         start=(-1.5, -1.5, 0.2),
         end=(1.5, 1.5, 0.2),
     )
+
+
+def test_world_space_query_uses_builder_pose_frame() -> None:
+    root = Entity("navmesh_world_space_root")
+    root.transform.set_local_position(Vec3(10.0, 20.0, 0.0))
+    root.transform.set_local_rotation(Pose3.rotateZ(1.5707963267948966).ang)
+    root.transform.set_local_scale(5.0, 5.0, 0.3)
+
+    builder = RecastNavMeshBuilderComponent()
+    root.add_component(builder)
+    _configure_builder(builder)
+    _attach_cube_mesh(root, "navmesh-world-space-cube")
+
+    query = _build_query_session(builder)
+    bake_frame = navmesh_bake_frame_from_pose(root.transform.global_pose())
+
+    bake_start = (-1.5, -1.5, 0.2)
+    bake_end = (1.5, 1.5, 0.2)
+    world_start = navmesh_bake_to_world_point(bake_frame, bake_start)
+    world_end = navmesh_bake_to_world_point(bake_frame, bake_end)
+
+    assert navmesh_world_to_bake_point(bake_frame, world_start) == pytest.approx(bake_start)
+    assert navmesh_world_to_bake_point(bake_frame, world_end) == pytest.approx(bake_end)
+
+    bake_closest = query.closest_point(bake_start)
+    world_closest = query.closest_point_world(bake_frame, world_start)
+    assert world_closest.success
+    assert world_closest.over_poly
+    assert bake_closest.success
+    assert world_closest.point == pytest.approx(
+        navmesh_bake_to_world_point(bake_frame, bake_closest.point)
+    )
+
+    bake_path = query.find_path(bake_start, bake_end)
+    world_path = query.find_path_world(bake_frame, world_start, world_end)
+    assert len(world_path) == len(bake_path) == 2
+    for world_point, bake_point in zip(world_path, bake_path):
+        assert world_point == pytest.approx(navmesh_bake_to_world_point(bake_frame, bake_point))
 
 
 def test_descendant_mesh_source_keeps_child_transform_scale() -> None:

@@ -37,6 +37,9 @@ _NATIVE_EXPORT_NAMES = frozenset(
         "TcNavMesh",
         "clear_navmesh_load_callback",
         "declare_navmesh_asset",
+        "navmesh_bake_frame_from_pose",
+        "navmesh_bake_to_world_point",
+        "navmesh_world_to_bake_point",
         "set_navmesh_load_callback",
         "set_detour_navmesh_asset_data",
     }
@@ -80,6 +83,9 @@ def _load_native_exports() -> dict[str, object]:
             TcNavMesh,
             clear_navmesh_load_callback,
             declare_navmesh_asset,
+            navmesh_bake_frame_from_pose,
+            navmesh_bake_to_world_point,
+            navmesh_world_to_bake_point,
             set_detour_navmesh_asset_data,
             set_navmesh_load_callback,
         )
@@ -108,6 +114,9 @@ def _load_native_exports() -> dict[str, object]:
         "TcNavMesh": TcNavMesh,
         "clear_navmesh_load_callback": clear_navmesh_load_callback,
         "declare_navmesh_asset": declare_navmesh_asset,
+        "navmesh_bake_frame_from_pose": navmesh_bake_frame_from_pose,
+        "navmesh_bake_to_world_point": navmesh_bake_to_world_point,
+        "navmesh_world_to_bake_point": navmesh_world_to_bake_point,
         "set_navmesh_load_callback": set_navmesh_load_callback,
         "set_detour_navmesh_asset_data": set_detour_navmesh_asset_data,
     }
@@ -152,6 +161,9 @@ __all__ = [
     "TcNavMesh",
     "clear_navmesh_load_callback",
     "declare_navmesh_asset",
+    "navmesh_bake_frame_from_pose",
+    "navmesh_bake_to_world_point",
+    "navmesh_world_to_bake_point",
     "set_navmesh_load_callback",
     "set_detour_navmesh_asset_data",
 ]

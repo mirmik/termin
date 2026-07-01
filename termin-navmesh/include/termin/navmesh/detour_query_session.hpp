@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
+#include <termin/geom/pose3.hpp>
 
 class dtNavMesh;
 class dtNavMeshQuery;
@@ -73,6 +74,25 @@ public:
         const std::array<float, 3>& end);
 
     DetourClosestPointResult closest_point(const std::array<float, 3>& point);
+
+    std::vector<std::array<float, 3>> find_path_world(
+        const Pose3& bake_frame,
+        const std::array<float, 3>& start,
+        const std::array<float, 3>& end);
+
+    DetourPathResult find_detailed_path_world(
+        const Pose3& bake_frame,
+        const std::array<float, 3>& start,
+        const std::array<float, 3>& end);
+
+    DetourRaycastResult raycast_world(
+        const Pose3& bake_frame,
+        const std::array<float, 3>& start,
+        const std::array<float, 3>& end);
+
+    DetourClosestPointResult closest_point_world(
+        const Pose3& bake_frame,
+        const std::array<float, 3>& point);
 
 private:
     std::string _asset_name;
