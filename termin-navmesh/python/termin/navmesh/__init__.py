@@ -23,8 +23,11 @@ _DATA_EXPORT_NAMES = frozenset(
 _NATIVE_EXPORT_NAMES = frozenset(
     {
         "DetourClosestPointResult",
+        "DetourNavMeshTileBuildResult",
         "DetourPathfindingWorldComponent",
+        "DetourQuerySession",
         "DetourRaycastResult",
+        "MeshSource",
         "NavMeshKeeperComponent",
         "OffMeshLinkComponent",
         "OffMeshLinkType",
@@ -63,8 +66,11 @@ def _load_native_exports() -> dict[str, object]:
 
         from termin.navmesh._navmesh_native import (
             DetourClosestPointResult,
+            DetourNavMeshTileBuildResult,
             DetourPathfindingWorldComponent,
+            DetourQuerySession,
             DetourRaycastResult,
+            MeshSource,
             NavMeshKeeperComponent,
             OffMeshLinkComponent,
             OffMeshLinkType,
@@ -88,8 +94,11 @@ def _load_native_exports() -> dict[str, object]:
 
     exports = {
         "DetourClosestPointResult": DetourClosestPointResult,
+        "DetourNavMeshTileBuildResult": DetourNavMeshTileBuildResult,
         "DetourPathfindingWorldComponent": DetourPathfindingWorldComponent,
+        "DetourQuerySession": DetourQuerySession,
         "DetourRaycastResult": DetourRaycastResult,
+        "MeshSource": MeshSource,
         "NavMeshKeeperComponent": NavMeshKeeperComponent,
         "OffMeshLinkComponent": OffMeshLinkComponent,
         "OffMeshLinkType": OffMeshLinkType,
@@ -129,8 +138,11 @@ __all__ = [
     "PolygonBuilder",
     "Portal",
     "DetourClosestPointResult",
+    "DetourNavMeshTileBuildResult",
     "DetourPathfindingWorldComponent",
+    "DetourQuerySession",
     "DetourRaycastResult",
+    "MeshSource",
     "NavMeshKeeperComponent",
     "OffMeshLinkComponent",
     "OffMeshLinkType",

@@ -130,6 +130,24 @@ nb::list detailed_path_to_python(const DetourPathResult& path) {
     return result;
 }
 
+nb::bytes bytes_from_vector(const std::vector<unsigned char>& data) {
+    if (data.empty()) {
+        return nb::bytes("", 0);
+    }
+    return nb::bytes(reinterpret_cast<const char*>(data.data()), data.size());
+}
+
+std::vector<unsigned char> bytes_to_vector(nb::handle value) {
+    nb::bytes data = nb::cast<nb::bytes>(value);
+    char* raw = nullptr;
+    Py_ssize_t size = 0;
+    if (PyBytes_AsStringAndSize(data.ptr(), &raw, &size) != 0 || raw == nullptr || size <= 0) {
+        return {};
+    }
+    const unsigned char* begin = reinterpret_cast<const unsigned char*>(raw);
+    return std::vector<unsigned char>(begin, begin + size);
+}
+
 nb::list vec3_to_python(const Vec3& point) {
     nb::list result;
     result.append(point.x);
@@ -292,6 +310,14 @@ void bind_recast_navmesh_builder(nb::module_& m) {
             return r.poly_mesh ? r.poly_mesh->nverts : 0;
         });
 
+    nb::class_<DetourNavMeshTileBuildResult>(m, "DetourNavMeshTileBuildResult")
+        .def_ro("success", &DetourNavMeshTileBuildResult::success)
+        .def_ro("error", &DetourNavMeshTileBuildResult::error)
+        .def("data_size", &DetourNavMeshTileBuildResult::data_size)
+        .def_prop_ro("data", [](const DetourNavMeshTileBuildResult& self) {
+            return bytes_from_vector(self.data);
+        });
+
     nb::class_<NavMeshKeeperComponent, CxxComponent>(m, "NavMeshKeeperComponent")
         .def("__init__", [](nb::handle self) {
             cxx_component_init<NavMeshKeeperComponent>(self);
@@ -369,6 +395,32 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def_prop_ro("hit_normal", [](const DetourRaycastResult& self) {
             return point_to_python(self.hit_normal);
         });
+
+    nb::class_<DetourQuerySession>(m, "DetourQuerySession")
+        .def(nb::init<>())
+        .def_rw("query_extent_x", &DetourQuerySession::query_extent_x)
+        .def_rw("query_extent_y", &DetourQuerySession::query_extent_y)
+        .def_rw("query_extent_z", &DetourQuerySession::query_extent_z)
+        .def_rw("max_polys", &DetourQuerySession::max_polys)
+        .def_rw("max_straight_path", &DetourQuerySession::max_straight_path)
+        .def("load_tile_data", [](DetourQuerySession& self, nb::handle data, const std::string& asset_name) {
+            std::vector<unsigned char> tile_data = bytes_to_vector(data);
+            return self.load_single_tile_data(tile_data, asset_name);
+        }, nb::arg("data"), nb::arg("asset_name") = "")
+        .def("clear", &DetourQuerySession::clear)
+        .def("is_ready", &DetourQuerySession::is_ready)
+        .def("closest_point", [](DetourQuerySession& self, nb::handle point) {
+            return self.closest_point(py_vec3(point));
+        }, nb::arg("point"))
+        .def("find_path", [](DetourQuerySession& self, nb::handle start, nb::handle end) {
+            return path_to_python(self.find_path(py_vec3(start), py_vec3(end)));
+        }, nb::arg("start"), nb::arg("end"))
+        .def("find_detailed_path", [](DetourQuerySession& self, nb::handle start, nb::handle end) {
+            return detailed_path_to_python(self.find_detailed_path(py_vec3(start), py_vec3(end)));
+        }, nb::arg("start"), nb::arg("end"))
+        .def("raycast", [](DetourQuerySession& self, nb::handle start, nb::handle end) {
+            return self.raycast(py_vec3(start), py_vec3(end));
+        }, nb::arg("start"), nb::arg("end"));
 
     nb::class_<DetourPathfindingWorldComponent, CxxComponent>(m, "DetourPathfindingWorldComponent")
         .def("__init__", [](nb::handle self) {
@@ -477,6 +529,9 @@ void bind_recast_navmesh_builder(nb::module_& m) {
            "Build navmesh from vertices (Nx3 float array) and triangles (Mx3 int array)")
         // Build from entity
         .def("build_from_entity", &RecastNavMeshBuilderComponent::build_from_entity)
+        .def("build_from_entity_geometry", &RecastNavMeshBuilderComponent::build_from_entity_geometry)
+        .def("build_detour_tile_data", &RecastNavMeshBuilderComponent::build_detour_tile_data,
+             nb::arg("recast_result"))
         // Clear debug data
         .def("clear_debug_data", &RecastNavMeshBuilderComponent::clear_debug_data)
         // Free result

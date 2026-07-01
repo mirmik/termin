@@ -1,46 +1,13 @@
 #pragma once
 
-#include <array>
 #include <string>
 #include <vector>
 
 #include <termin/entity/component.hpp>
+#include <termin/navmesh/detour_query_session.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
 
-class dtNavMesh;
-class dtNavMeshQuery;
-
 namespace termin {
-
-struct TERMIN_NAVMESH_COMPONENTS_API DetourRaycastResult {
-    bool success = false;
-    bool hit = false;
-    float t = 0.0f;
-    std::array<float, 3> hit_position{0.0f, 0.0f, 0.0f};
-    std::array<float, 3> hit_normal{0.0f, 0.0f, 0.0f};
-    std::vector<unsigned long long> visited;
-};
-
-struct TERMIN_NAVMESH_COMPONENTS_API DetourClosestPointResult {
-    bool success = false;
-    bool over_poly = false;
-    unsigned long long poly_ref = 0;
-    std::array<float, 3> point{0.0f, 0.0f, 0.0f};
-};
-
-struct TERMIN_NAVMESH_COMPONENTS_API DetourPathPoint {
-    std::array<float, 3> point{0.0f, 0.0f, 0.0f};
-    unsigned char flags = 0;
-    unsigned long long poly_ref = 0;
-    bool off_mesh_connection = false;
-    unsigned int off_mesh_user_id = 0;
-    unsigned char area = 0;
-};
-
-struct TERMIN_NAVMESH_COMPONENTS_API DetourPathResult {
-    bool success = false;
-    std::vector<DetourPathPoint> points;
-};
 
 class TERMIN_NAVMESH_COMPONENTS_API DetourPathfindingWorldComponent : public CxxComponent {
 public:
@@ -78,15 +45,11 @@ private:
     mutable std::string _loaded_navmesh_uuid;
     mutable std::string _loaded_asset_path;
     mutable bool _load_failed = false;
-    dtNavMesh* _navmesh = nullptr;
-    dtNavMeshQuery* _query = nullptr;
     std::vector<std::vector<unsigned char>> _tile_blobs;
+    DetourQuerySession _query_session;
 
     bool ensure_query_loaded();
-    bool find_nearest_poly(const std::array<float, 3>& point,
-                           unsigned long long& poly_ref,
-                           float nearest[3],
-                           bool* over_poly = nullptr);
+    void sync_query_settings();
 };
 
 } // namespace termin
