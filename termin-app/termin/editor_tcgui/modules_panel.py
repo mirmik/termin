@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from tcbase import log
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.basic import Label, Button, Checkbox
+from tcgui.widgets.basic import Label, Button
 from tcgui.widgets.containers import VStack, HStack
 from tcgui.widgets.scroll_area import ScrollArea
 from tcgui.widgets.tree import TreeWidget, TreeNode
@@ -54,24 +54,30 @@ class ModulesPanel(VStack):
         toolbar.spacing = 8
         toolbar.preferred_height = px(28)
 
-        self._auto_reload_check = Checkbox()
-        self._auto_reload_check.text = "Auto-reload"
-        self._auto_reload_check.font_size = 12
-        self._auto_reload_check.enabled = True
-        self._auto_reload_check.checked = self._modules_runtime.auto_reload_enabled
-        self._auto_reload_check.on_changed = self._on_auto_reload_toggled
-        toolbar.add_child(self._auto_reload_check)
-
-        spacer = Label()
-        spacer.stretch = True
-        toolbar.add_child(spacer)
-
         rescan_btn = Button()
         rescan_btn.text = "Rescan"
         rescan_btn.font_size = 11
         rescan_btn.padding = 4
         rescan_btn.on_click = self._on_rescan_clicked
         toolbar.add_child(rescan_btn)
+
+        reload_changed_btn = Button()
+        reload_changed_btn.text = "Reload Changed"
+        reload_changed_btn.font_size = 11
+        reload_changed_btn.padding = 4
+        reload_changed_btn.on_click = self._on_reload_changed_clicked
+        toolbar.add_child(reload_changed_btn)
+
+        build_reload_changed_btn = Button()
+        build_reload_changed_btn.text = "Build & Reload Changed"
+        build_reload_changed_btn.font_size = 11
+        build_reload_changed_btn.padding = 4
+        build_reload_changed_btn.on_click = self._on_build_reload_changed_clicked
+        toolbar.add_child(build_reload_changed_btn)
+
+        spacer = Label()
+        spacer.stretch = True
+        toolbar.add_child(spacer)
 
         self._reload_btn = Button()
         self._reload_btn.text = "Reload"
@@ -127,7 +133,7 @@ class ModulesPanel(VStack):
 
         header.add_child(_hdr("Module", stretch=True))
         header.add_child(_hdr("Status", 70))
-        header.add_child(_hdr("Kind", 260))
+        header.add_child(_hdr("Details", 260))
         self.add_child(header)
 
         list_scroll = ScrollArea()
@@ -150,11 +156,6 @@ class ModulesPanel(VStack):
         if event.message:
             log.info(f"{_TAG} {event.message}")
 
-    def _on_auto_reload_toggled(self, checked: bool) -> None:
-        self._modules_runtime.auto_reload_enabled = checked
-        state = "enabled" if checked else "disabled"
-        log.info(f"{_TAG} Auto-reload {state}")
-
     def _on_rescan_clicked(self) -> None:
         project_root = self._modules_runtime.project_root
         if project_root is None:
@@ -165,6 +166,22 @@ class ModulesPanel(VStack):
             log.error(f"{_TAG} Rescan failed: {self._modules_runtime.last_error}")
         else:
             log.info(f"{_TAG} Rescan complete")
+        self.update_display()
+
+    def _on_reload_changed_clicked(self) -> None:
+        log.info(f"{_TAG} Reloading changed modules...")
+        if not self._modules_runtime.reload_dirty_modules():
+            log.error(f"{_TAG} Reload changed modules failed: {self._modules_runtime.last_error}")
+        else:
+            log.info(f"{_TAG} Reload changed modules complete")
+        self.update_display()
+
+    def _on_build_reload_changed_clicked(self) -> None:
+        log.info(f"{_TAG} Building and reloading changed modules...")
+        if not self._modules_runtime.prepare_changed_modules_for_play():
+            log.error(f"{_TAG} Build and reload changed modules failed: {self._modules_runtime.last_error}")
+        else:
+            log.info(f"{_TAG} Build and reload changed modules complete")
         self.update_display()
 
     def _on_reload_clicked(self) -> None:
@@ -240,19 +257,32 @@ class ModulesPanel(VStack):
         self._tree.clear()
 
         records = sorted(self._modules_runtime.records(), key=lambda record: record.id)
+        dirty = self._modules_runtime.dirty_modules()
+        stale = set(self._modules_runtime.stale_modules())
         loaded_count = 0
         failed_count = 0
+        dirty_count = 0
 
         for record in records:
             if record.state == ModuleState.Loaded:
                 loaded_count += 1
             elif record.state == ModuleState.Failed:
                 failed_count += 1
+            if record.id in dirty or record.id in stale:
+                dirty_count += 1
 
+            details = record.kind.name.lower()
+            flags = []
+            if record.id in dirty:
+                flags.append("dirty")
+            if record.id in stale:
+                flags.append("stale")
+            if flags:
+                details = f"{details} ({', '.join(flags)})"
             row = self._make_module_row(
                 record.id,
                 record.state.name.lower(),
-                record.kind.name.lower(),
+                details,
             )
             node = TreeNode(content=row)
             node.data = record.id
@@ -266,6 +296,8 @@ class ModulesPanel(VStack):
                 parts.append(f"{loaded_count} loaded")
             if failed_count > 0:
                 parts.append(f"{failed_count} failed")
+            if dirty_count > 0:
+                parts.append(f"{dirty_count} changed")
             self._status_label.text = ", ".join(parts)
 
     def _make_module_row(self, name: str, status: str, details: str) -> Widget:
