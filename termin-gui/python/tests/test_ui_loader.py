@@ -8,7 +8,7 @@ from tcgui.widgets.loader import UILoader
 from tcgui.widgets.menu import Menu
 from tcgui.widgets.status_bar import StatusBar
 from tcgui.widgets.tabs import TabView
-from tcgui.widgets.tree import TreeNode, TreeWidget
+from tcgui.widgets.tree import TreeWidget
 
 
 def test_loader_applies_declarative_widget_attributes() -> None:

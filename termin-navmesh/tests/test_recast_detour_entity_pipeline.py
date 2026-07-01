@@ -130,7 +130,7 @@ def test_world_space_query_uses_builder_pose_frame() -> None:
     bake_path = query.find_path(bake_start, bake_end)
     world_path = query.find_path_world(bake_frame, world_start, world_end)
     assert len(world_path) == len(bake_path) == 2
-    for world_point, bake_point in zip(world_path, bake_path):
+    for world_point, bake_point in zip(world_path, bake_path, strict=True):
         assert world_point == pytest.approx(navmesh_bake_to_world_point(bake_frame, bake_point))
 
 

@@ -20,7 +20,7 @@ def _make_vstack(*children, spacing=0, justify="start"):
 
 def _assert_vstack(children, expected_rects, spacing=0, justify="start"):
     _make_vstack(*children, spacing=spacing, justify=justify)
-    for child, rect in zip(children, expected_rects):
+    for child, rect in zip(children, expected_rects, strict=True):
         assert_rect(child, *rect)
 
 
