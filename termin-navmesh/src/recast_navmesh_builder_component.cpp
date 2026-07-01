@@ -1,4 +1,5 @@
 #include <termin/navmesh/recast_navmesh_builder_component.hpp>
+#include "recast_navmesh_bake_space.hpp"
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
 #include <termin/navmesh/navmesh_keeper_component.hpp>
 #include <termin/navmesh/off_mesh_link_component.hpp>
@@ -44,14 +45,6 @@ Vec3 termin_local_to_recast(const Vec3& point) {
     return Vec3{point.x, point.z, point.y};
 }
 
-Mat44 mat44_from_mat44f(const Mat44f& value) {
-    Mat44 result;
-    for (int i = 0; i < 16; ++i) {
-        result.data[i] = static_cast<double>(value.data[i]);
-    }
-    return result;
-}
-
 DetourOffMeshLinks collect_off_mesh_links_for_builder(
     Entity builder_entity,
     const std::string& agent_type_name)
@@ -62,11 +55,7 @@ DetourOffMeshLinks collect_off_mesh_links_for_builder(
         return links;
     }
 
-    double base_world_data[16];
-    builder_entity.get_world_matrix(base_world_data);
-    Mat44 base_world;
-    std::memcpy(base_world.ptr(), base_world_data, sizeof(base_world_data));
-    Mat44 base_inv = base_world.inverse();
+    Mat44 base_inv = recast_navmesh_builder_frame_inverse(builder_entity);
 
     TcSceneRef scene = builder_entity.scene();
     if (!scene.valid()) {
@@ -89,10 +78,10 @@ DetourOffMeshLinks collect_off_mesh_links_for_builder(
             continue;
         }
 
-        Vec3 start_local = base_inv.transform_point(link->start_world());
-        Vec3 end_local = base_inv.transform_point(link->end_world());
-        Vec3 start_recast = termin_local_to_recast(start_local);
-        Vec3 end_recast = termin_local_to_recast(end_local);
+        Vec3 start_bake = base_inv.transform_point(link->start_world());
+        Vec3 end_bake = base_inv.transform_point(link->end_world());
+        Vec3 start_recast = termin_local_to_recast(start_bake);
+        Vec3 end_recast = termin_local_to_recast(end_bake);
 
         links.verts.push_back(static_cast<float>(start_recast.x));
         links.verts.push_back(static_cast<float>(start_recast.y));
@@ -1000,9 +989,10 @@ void RecastNavMeshBuilderComponent::build_input_mesh(const float* verts, int nve
     std::vector<Vertex> vertices;
     vertices.reserve(nverts);
 
-    // Vertices are in base entity local space (after B^-1 @ W transform)
+    // Vertices are in the builder bake frame: base translation/rotation removed,
+    // but source scale is preserved in scene units.
     // Just convert from Recast (Y-up) back to termin (Z-up): (x, y, z) -> (x, z, y)
-    // Note: these coords are LOCAL to the base entity, so they will be
+    // Note: these coords are relative to the builder frame, so they will be
     // transformed by entity's world matrix when drawn
     for (int i = 0; i < nverts; i++) {
         float rc_x = verts[i * 3 + 0];

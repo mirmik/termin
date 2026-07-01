@@ -1,4 +1,5 @@
 #include <termin/navmesh/recast_navmesh_builder_component.hpp>
+#include "recast_navmesh_bake_space.hpp"
 #include <components/mesh_component.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/tc_scene.hpp>
@@ -41,16 +42,16 @@ bool extract_mesh_positions(
     for (size_t i = 0; i < n; ++i) {
         const float* p = reinterpret_cast<const float*>(src + i * stride + pos->offset);
         Vec3 local_pos{p[0], p[1], p[2]};
-        Vec3 transformed = transform.transform_point(local_pos);
-        dst[i * 3] = static_cast<float>(transformed.x);
-        dst[i * 3 + 1] = static_cast<float>(transformed.z);
-        dst[i * 3 + 2] = static_cast<float>(transformed.y);
+        Vec3 bake_pos = transform.transform_point(local_pos);
+        dst[i * 3] = static_cast<float>(bake_pos.x);
+        dst[i * 3 + 1] = static_cast<float>(bake_pos.z);
+        dst[i * 3 + 2] = static_cast<float>(bake_pos.y);
 
         if (i < 3) {
             tc_log_info(
-                "[NavMesh] vert[%zu]: local=(%.2f, %.2f, %.2f) -> world=(%.2f, %.2f, %.2f) -> recast=(%.2f, %.2f, %.2f)",
+                "[NavMesh] vert[%zu]: mesh_local=(%.2f, %.2f, %.2f) -> bake=(%.2f, %.2f, %.2f) -> recast=(%.2f, %.2f, %.2f)",
                 i, p[0], p[1], p[2],
-                transformed.x, transformed.y, transformed.z,
+                bake_pos.x, bake_pos.y, bake_pos.z,
                 dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
         }
     }
@@ -79,15 +80,15 @@ void collect_meshes_recursive(
     Mat44 world;
     std::memcpy(world.ptr(), w_data, sizeof(w_data));
 
-    Mat44 local_to_base = base_inv * world;
+    Mat44 local_to_bake = base_inv * world;
 
     MeshComponent* mesh_component = ent.get_component<MeshComponent>();
     if (mesh_component && mesh_component->mesh.is_valid()) {
-        Mat44 mesh_to_base = local_to_base * mat44_from_mat44f(mesh_component->get_mesh_offset_matrix());
+        Mat44 mesh_to_bake = local_to_bake * mat44_from_mat44f(mesh_component->get_mesh_offset_matrix());
         tc_log_info("[NavMesh] Processing entity: %s", ent.name() ? ent.name() : "(unnamed)");
         tc_log_info("[NavMesh]   world col0: (%.2f, %.2f, %.2f, %.2f)", w_data[0], w_data[1], w_data[2], w_data[3]);
         tc_log_info("[NavMesh]   world col3: (%.2f, %.2f, %.2f, %.2f)", w_data[12], w_data[13], w_data[14], w_data[15]);
-        extract_mesh_positions(mesh_component->mesh, mesh_to_base, verts, tris);
+        extract_mesh_positions(mesh_component->mesh, mesh_to_bake, verts, tris);
     }
 
     if (recurse) {
@@ -107,9 +108,8 @@ void RecastNavMeshBuilderComponent::build_from_entity() {
 
     double b_data[16];
     entity().get_world_matrix(b_data);
-    Mat44 base_world;
-    std::memcpy(base_world.ptr(), b_data, sizeof(b_data));
-    Mat44 base_inv = base_world.inverse();
+    GeneralPose3 base_pose = entity().transform().global_pose();
+    Mat44 base_inv = recast_navmesh_builder_frame_inverse(entity());
 
     bool recurse = (mesh_source == static_cast<int>(MeshSource::AllDescendants));
     tc_log_info("[NavMesh] Build mode: %s, base entity: %s",
@@ -123,6 +123,10 @@ void RecastNavMeshBuilderComponent::build_from_entity() {
         b_data[8], b_data[9], b_data[10], b_data[11]);
     tc_log_info("[NavMesh] Base world matrix col3 (pos): (%.2f, %.2f, %.2f, %.2f)",
         b_data[12], b_data[13], b_data[14], b_data[15]);
+    tc_log_info("[NavMesh] Base bake frame keeps TR only: position=(%.2f, %.2f, %.2f) "
+                "scale_preserved_in_geometry=(%.2f, %.2f, %.2f)",
+        base_pose.lin.x, base_pose.lin.y, base_pose.lin.z,
+        base_pose.scale.x, base_pose.scale.y, base_pose.scale.z);
 
     std::vector<float> verts;
     std::vector<int> tris;
