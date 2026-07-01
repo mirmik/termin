@@ -10,7 +10,7 @@ Run it with:
 ```
 
 The default `./run-tests-python.sh` flow also runs the repo-wide Ruff check
-before pytest. Explicit pytest-target runs skip the repo-wide lint pass so
+after pytest. Explicit pytest-target runs skip the repo-wide lint pass so
 focused test commands stay focused.
 
 Specific paths can be checked during focused work:
