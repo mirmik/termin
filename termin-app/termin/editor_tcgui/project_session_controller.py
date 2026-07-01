@@ -37,7 +37,7 @@ class ProjectSessionController:
         self._resolve_termin_shaderc = resolve_termin_shaderc
         self._resolve_slangc = resolve_slangc
 
-    def restore_project(self) -> None:
+    def restore_project(self, on_complete: Callable[[], None] | None = None) -> bool:
         """Restore project from launcher or last session."""
         from termin.launcher.recent import read_launch_project
 
@@ -55,8 +55,10 @@ class ProjectSessionController:
                 project_file = last
 
         if project_file is not None:
-            self.load_project(project_file)
+            self.load_project(project_file, on_complete=on_complete)
             EditorSettings.instance().set("last_project_file", project_file)
+            return True
+        return False
 
     def create_project_file(self, path: str) -> None:
         if not path:
@@ -79,7 +81,7 @@ class ProjectSessionController:
             return
         self.load_project(str(project_file))
 
-    def load_project(self, path: str) -> None:
+    def load_project(self, path: str, on_complete: Callable[[], None] | None = None) -> None:
         project_root = Path(path).parent
         project_dir = str(project_root)
         self._set_project_state(project_dir, Path(path).stem)
@@ -105,10 +107,14 @@ class ProjectSessionController:
 
         EditorSettings.instance().set("last_project_file", path)
 
-        self.load_project_modules(project_root)
-        self.run_project_init_script(project_root)
-        self._rescan_file_resources()
-        self._set_project_browser_root(project_dir)
+        def finish_project_load(_success: bool) -> None:
+            self.run_project_init_script(project_root)
+            self._rescan_file_resources()
+            self._set_project_browser_root(project_dir)
+            if on_complete is not None:
+                on_complete()
+
+        self.load_project_modules(project_root, on_complete=finish_project_load)
 
     @staticmethod
     def configure_shader_runtime_for_project(
@@ -157,14 +163,41 @@ class ProjectSessionController:
         except Exception as e:
             log.error(f"[ShaderRuntime] configure_shader_runtime failed: {e}")
 
-    def load_project_modules(self, project_root: Path) -> None:
+    def load_project_modules(
+        self,
+        project_root: Path,
+        on_complete: Callable[[bool], None] | None = None,
+    ) -> None:
         from termin.project_modules.runtime import get_project_modules_runtime
         from termin_modules import ModuleKind, ModuleState
 
         runtime = get_project_modules_runtime()
+
+        def finish(success: bool) -> None:
+            if not success and runtime.last_error:
+                self._log_to_console(f"Module load error: {runtime.last_error}")
+            self._log_project_module_summary(runtime, ModuleKind, ModuleState)
+            if on_complete is not None:
+                on_complete(success)
+
+        ui = self._get_ui()
+        if ui is not None:
+            from termin.editor_tcgui.dialogs.module_operation_dialog import show_module_operation_dialog
+
+            show_module_operation_dialog(
+                ui,
+                runtime,
+                title="Load Project Modules",
+                start_message=f"Loading project modules: {project_root.name}",
+                action=lambda: runtime.load_project(project_root),
+                on_complete=finish,
+            )
+            return
+
         success = runtime.load_project(project_root)
-        if not success and runtime.last_error:
-            self._log_to_console(f"Module load error: {runtime.last_error}")
+        finish(success)
+
+    def _log_project_module_summary(self, runtime, ModuleKind, ModuleState) -> None:
 
         cpp_loaded = 0
         cpp_failed = 0

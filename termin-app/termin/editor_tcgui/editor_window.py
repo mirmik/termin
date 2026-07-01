@@ -537,13 +537,8 @@ class EditorWindowTcgui:
             log_message=self._log_to_console,
             get_editor_scene_name=lambda: self._editor_scene_name,
         )
-        self._restore_project()
-        # _rescan_file_resources is called inside _load_project, don't call again
-        if self._current_project_path is None:
-            self._rescan_file_resources()
-        self._load_last_scene()
-
-        self._update_window_title()
+        if not self._restore_project(on_complete=self._finish_startup_project_restore):
+            self._finish_startup_project_restore()
 
     def _setup_editor_viewport_input_managers(self, display) -> None:
         """Create EditorViewportInputManager for each viewport on the display."""
@@ -1162,8 +1157,15 @@ class EditorWindowTcgui:
     # Project restore on startup
     # ------------------------------------------------------------------
 
-    def _restore_project(self) -> None:
-        self._project_session_controller.restore_project()
+    def _restore_project(self, on_complete=None) -> bool:
+        return self._project_session_controller.restore_project(on_complete=on_complete)
+
+    def _finish_startup_project_restore(self) -> None:
+        # _rescan_file_resources is called inside _load_project, don't call again.
+        if self._current_project_path is None:
+            self._rescan_file_resources()
+        self._load_last_scene()
+        self._update_window_title()
 
     # ------------------------------------------------------------------
     # Project operations (stub — file dialogs via tcgui)
