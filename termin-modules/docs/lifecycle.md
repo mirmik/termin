@@ -167,26 +167,29 @@ Dependents, которые не были загружены к моменту re
 автоматический rollback, потому что после закрытия native handle старую версию
 модуля нельзя считать безопасно восстанавливаемой.
 
-В editor auto-reload сейчас подключен для Python `.pymodule`: изменение
-дескриптора вызывает load/reload descriptor, а изменение `.py` файла внутри
-пакета из `packages` перезагружает владеющий Python-модуль.
+Editor watcher не выполняет module reload прямо на filesystem-событии. Изменения
+Python `.pymodule`, `.py` файлов внутри `packages`, C++ `.module` и native
+input-файлов помечают владеющий модуль dirty. Initial scan не пачкает уже
+существующие native inputs; live create/change/remove события помечают модуль
+dirty.
 
-C++ `.module` и native input-файлы отслеживаются отдельно как policy-neutral
-dirty-сигнал: watcher может отметить владеющий модуль изменённым, но сам по себе
-не запускает build/reload. Initial scan не пачкает уже существующие native inputs;
-live create/change/remove события помечают владеющий C++ модуль dirty. Это
-оставляет место для явной editor policy (`manual`, `prompt`,
-`auto-after-successful-build`) вместо безусловного unload / build / dlopen на
-каждое filesystem-событие.
+Применение изменений выполняется явным действием (`Reload Changed` /
+`Build & Reload Changed`) или Play-gate перед входом в Game Mode. Play-gate
+вызывает editor-level `prepare_changed_modules_for_play()`: dirty/stale модули
+reload-ятся через dependency-aware cascade, а C++ backend при load выполняет
+build command. Если build/reload падает, Play не стартует, модуль остаётся в
+`Failed`/degraded состоянии с диагностикой.
 
 Loose `.py` файлы вне `.pymodule` являются поддерживаемой editor policy, а не
 случайным fallback: проектное Python-пространство рассматривается как единый
 package-like namespace для scripts, editor extensions и быстрых runtime
 компонентов. Watcher передаёт такие файлы в legacy `ComponentFileProcessor`,
 `ResourceManager.scan_components()` исполняет их, а `ComponentClassRegistry.scan()`
-регистрирует найденные `PythonComponent` subclasses. Файлы, которые не объявляют
-компоненты, всё равно могут быть helper/editor-extension scripts и остаются
-частью этого проектного Python-пространства.
+регистрирует найденные `PythonComponent` subclasses. Initial scan загружает loose
+components при открытии проекта; live create/change события только помечают файл
+dirty до явного reload или Play-gate. Файлы, которые не объявляют компоненты, всё
+равно могут быть helper/editor-extension scripts и остаются частью этого
+проектного Python-пространства.
 В editor watcher path loose `.py` файлы живут в synthetic namespace
 `termin_project`: `Scripts/player.py` загружается как
 `termin_project.Scripts.player`. Это позволяет использовать relative imports
@@ -200,24 +203,25 @@ requirements или module lifecycle, его нужно оформить как 
 через `.pymodule`.
 Повторная загрузка loose-файла читает source напрямую, без `.pyc` cache, и
 заменяет классы, найденные в том же generated module.
-Если изменённый loose `.py` не регистрирует компонентов, processor выполняет
-conservative refresh уже отслеженных loose component scripts. Это покрывает
-типичный helper-only сценарий: `Scripts/helper.py` меняется, а ранее загруженный
-`Scripts/player.py` или `termin_project.Shared.values` dependent пересканируется
-и получает новые imports. Это не полноценный dependency graph и не заменяет
-`.pymodule` lifecycle, но сохраняет текущую удобную editor-политику свободных
-scripts.
+Если изменённый loose `.py` не регистрирует компонентов, explicit reload
+выполняет conservative refresh уже отслеженных loose component scripts. Это
+покрывает типичный helper-only сценарий: `Scripts/helper.py` меняется, а ранее
+загруженный `Scripts/player.py` или `termin_project.Shared.values` dependent
+пересканируется и получает новые imports. Это не полноценный dependency graph и
+не заменяет `.pymodule` lifecycle, но сохраняет текущую удобную editor-политику
+свободных scripts.
 
 ## 8. Smoke-проверки
 
-Для проверки editor-process hot reload есть два headless smoke-скрипта:
+Для проверки editor-process explicit reload есть два headless smoke-скрипта:
 
-- `scripts/smoke-python-module-hot-reload` проверяет Python `.pymodule` reload,
-  failed reload degradation в `UnknownComponent` и последующее восстановление.
+- `scripts/smoke-python-module-hot-reload` проверяет Python `.pymodule` explicit
+  reload, failed reload degradation в `UnknownComponent` и последующее
+  восстановление.
 - `scripts/smoke-cpp-module-cascade-hot-reload` проверяет C++ dependency cascade
-  reload внутри editor process: `native_leaf` зависит от `native_core`, reload
-  `native_core` должен выгрузить dependent раньше dependency, загрузить обратно
-  в dependency order и восстановить live C++ scene component.
+  explicit reload внутри editor process: `native_leaf` зависит от `native_core`,
+  reload `native_core` должен выгрузить dependent раньше dependency, загрузить
+  обратно в dependency order и восстановить live C++ scene component.
 
 Оба скрипта используют `scripts/termin-editor-mcp`; на headless Linux они
 автоматически запускают editor через `xvfb-run`, если нет активного display.
