@@ -7,6 +7,7 @@
 #include "termin/render/render_pipeline.hpp"
 #include <termin/tc_scene.hpp>
 #include "termin/camera/camera_component.hpp"
+#include "termin/camera/orbit_camera_controller.hpp"
 #include "termin/render/mesh_renderer.hpp"
 #include <components/mesh_component.hpp>
 #include <termin/entity/component.hpp>
@@ -714,24 +715,43 @@ void EditorInteractionSystem::_handle_double_click(
     float x, float y, tc_viewport_handle vp, tc_display* display)
 {
     Entity ent = pick_entity_at(x, y, vp, display);
-    if (!ent.valid()) return;
+    if (!ent.valid()) {
+        return;
+    }
 
-    // Get entity position
-    double pos[3];
+    double pos[3] = {0.0, 0.0, 0.0};
     ent.get_global_position(pos);
+    Vec3 focus{pos[0], pos[1], pos[2]};
 
-    // Find camera controller and center on entity
     tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+    if (!tc_render_target_handle_valid(rt)) {
+        tc_log(TC_LOG_WARN, "[EditorInteractionSystem] cannot focus double-click target: viewport has no render target");
+        return;
+    }
+
     tc_component* cam_comp = tc_render_target_get_camera(rt);
-    if (!cam_comp) return;
+    if (!cam_comp) {
+        tc_log(TC_LOG_WARN, "[EditorInteractionSystem] cannot focus double-click target: render target has no camera");
+        return;
+    }
 
     CxxComponent* cxx = CxxComponent::from_tc(cam_comp);
-    if (!cxx) return;
+    auto* camera = dynamic_cast<CameraComponent*>(cxx);
+    if (!camera || !camera->entity().valid()) {
+        tc_log(TC_LOG_WARN, "[EditorInteractionSystem] cannot focus double-click target: active camera component is invalid");
+        return;
+    }
 
-    // TODO: Call center_on via CameraController interface
-    // For now, double-click just selects
-    (void)pos;
-    (void)display;
+    OrbitCameraController* orbit = camera->entity().get_component<OrbitCameraController>();
+    if (!orbit) {
+        tc_log(TC_LOG_WARN,
+               "[EditorInteractionSystem] cannot focus double-click target: camera entity '%s' has no OrbitCameraController",
+               camera->entity().name());
+        return;
+    }
+
+    orbit->center_on(focus);
+    _request_update();
 }
 
 // ============================================================================
