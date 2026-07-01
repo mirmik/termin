@@ -97,11 +97,12 @@ Supported build targets:
 - `quest_openxr` - exports the shared runtime package and assembles a
   Quest/OpenXR APK.
 
-Profiles may set `shader_targets` to a list of `vulkan`, `opengl`, and `d3d11`.
-When present, the runtime package manifest records those target requirements
-and the exporter emits only the requested shader artifact families. When the
-field is omitted, Slang shaders are exported for all three desktop backends:
-Vulkan, OpenGL, and D3D11.
+Desktop profiles must set `shader_targets` to an ordered list of `vulkan`,
+`opengl`, and `d3d11`. The list is both the set of shipped shader artifact
+families and the packaged player backend priority. Linux-friendly profiles
+normally use `["vulkan", "opengl"]`; Windows/D3D-first profiles can use
+`["d3d11", "vulkan", "opengl"]`. D3D11 artifacts require `fxc`, so they are
+opt-in instead of an implicit Linux build requirement.
 
 `termin_builder` resolves the project and profile, then delegates to the
 canonical Python backend:
@@ -242,10 +243,12 @@ and `package/python` to `sys.path`, and calls
 `TERMIN_BACKEND` before CPython is initialized; display options such as
 `--width`, `--height`, `--title`, and `--windowed` are forwarded to the Python
 player. If `TERMIN_BACKEND` is not set explicitly, standalone player runs use
-D3D11 on Windows and Vulkan on other platforms. By default the player switches
-the window to borderless desktop fullscreen after creating it; `--width` and
-`--height` define the normal-window size used when `--windowed` is passed and
-the initial size before the OS applies fullscreen mode.
+the first compiled backend listed in `package/manifest.json`
+`target_requirements.shader_targets`. Source-scene `play` runs without a
+package manifest keep the platform compiled default. By default the player
+switches the window to borderless desktop fullscreen after creating it;
+`--width` and `--height` define the normal-window size used when `--windowed`
+is passed and the initial size before the OS applies fullscreen mode.
 
 By default `run` does not rebuild implicitly and expects a packaged desktop
 bundle. Pass `--build-if-missing` to build when packaged output is absent, or

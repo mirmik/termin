@@ -88,6 +88,79 @@ def _player_window_from_manifest(data: dict, manifest_path: Path):
     return ProjectPlayerWindowSettings.from_dict(window)
 
 
+def _package_shader_targets(manifest_path: Path) -> tuple[str, ...]:
+    from tcbase import log
+
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except Exception as exc:
+        log.error(f"[PlayerRuntime] Failed to read runtime package manifest {manifest_path}: {exc}")
+        return ()
+    if not isinstance(manifest, dict):
+        log.error(f"[PlayerRuntime] Runtime package manifest root must be an object: {manifest_path}")
+        return ()
+
+    requirements = manifest.get("target_requirements")
+    if not isinstance(requirements, dict):
+        return ()
+    shader_targets = requirements.get("shader_targets")
+    if not isinstance(shader_targets, list):
+        return ()
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for index, target in enumerate(shader_targets):
+        if not isinstance(target, str) or target == "":
+            log.error(
+                "[PlayerRuntime] Runtime package manifest "
+                f"target_requirements.shader_targets[{index}] must be a non-empty string"
+            )
+            continue
+        if target in seen:
+            continue
+        seen.add(target)
+        result.append(target)
+    return tuple(result)
+
+
+def _backend_is_compiled(name: str) -> bool:
+    try:
+        import tgfx
+
+        return bool(tgfx.backend_is_compiled(name))
+    except Exception:
+        if name == "d3d11":
+            return sys.platform == "win32"
+        if name in ("vulkan", "opengl"):
+            return sys.platform != "win32" or name == "vulkan"
+        return False
+
+
+def _compiled_backend_name() -> str:
+    try:
+        import tgfx
+
+        return str(tgfx.compiled_backend_name())
+    except Exception:
+        return "d3d11" if sys.platform == "win32" else "vulkan"
+
+
+def _canonical_backend_name(name: str) -> str:
+    lowered = name.lower()
+    if lowered in ("opengl", "gl"):
+        return "opengl"
+    if lowered in ("vulkan", "vk"):
+        return "vulkan"
+    if lowered in ("d3d11", "dx11"):
+        return "d3d11"
+    if lowered == "metal":
+        return "metal"
+    if lowered == "null":
+        return "null"
+    return lowered
+
+
 def _resolve_positive_window_int(value: object, default: int, field_name: str) -> int:
     from tcbase import log
 
@@ -422,14 +495,41 @@ class PlayerRuntime:
             )
 
     def _configure_backend_default(self) -> None:
-        """Use the project-wide primary graphics backend unless overridden."""
+        """Use package backend priority or project-wide default unless overridden."""
         from tcbase import log
 
+        package_targets: tuple[str, ...] = ()
+        if self.asset_manifest_path is not None:
+            manifest_path = self.asset_manifest_path
+            if not manifest_path.is_absolute():
+                manifest_path = self.project_path / manifest_path
+            package_targets = _package_shader_targets(manifest_path)
+
         if "TERMIN_BACKEND" in os.environ:
-            log.info(f"[PlayerRuntime] Using TERMIN_BACKEND={os.environ['TERMIN_BACKEND']}")
+            backend = os.environ["TERMIN_BACKEND"]
+            canonical_backend = _canonical_backend_name(backend)
+            if package_targets and canonical_backend not in package_targets:
+                log.error(
+                    "[PlayerRuntime] TERMIN_BACKEND="
+                    f"{backend} is not listed in package shader_targets {list(package_targets)}"
+                )
+            log.info(f"[PlayerRuntime] Using TERMIN_BACKEND={backend}")
             return
 
-        default_backend = "d3d11" if sys.platform == "win32" else "vulkan"
+        default_backend = ""
+        for target in package_targets:
+            if _backend_is_compiled(target):
+                default_backend = target
+                break
+        if default_backend == "":
+            if package_targets:
+                log.error(
+                    "[PlayerRuntime] Runtime package has no compiled backend from "
+                    f"shader_targets {list(package_targets)}; using compiled default"
+                )
+                default_backend = _compiled_backend_name()
+            else:
+                default_backend = "d3d11" if sys.platform == "win32" else "vulkan"
         os.environ["TERMIN_BACKEND"] = default_backend
         log.info(
             f"[PlayerRuntime] TERMIN_BACKEND not set; using {default_backend} for standalone player"

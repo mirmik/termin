@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cctype>
 #include <csignal>
 #include <cstdlib>
 #include <filesystem>
@@ -33,6 +34,7 @@
 #include <termin/runtime/runtime_package.hpp>
 #include <termin/scene/scene_manager.hpp>
 #include <termin/tc_scene.hpp>
+#include <tgfx2/device_factory.hpp>
 
 #include <termin_modules/module_cpp_backend.hpp>
 #include <termin_modules/module_python_backend.hpp>
@@ -200,6 +202,74 @@ bool bool_field(const nos::trent& t, const char* key, bool def = false) {
         return def;
     }
     return value->as_bool();
+}
+
+std::vector<std::string> package_shader_targets(const fs::path& manifest_path) {
+    std::vector<std::string> result;
+    if (!fs::is_regular_file(manifest_path)) {
+        tc_log_warn("termin_player: package manifest not found for backend selection: %s", manifest_path.string().c_str());
+        return result;
+    }
+
+    const nos::trent root = nos::json::parse(read_text_file(manifest_path));
+    if (!root.is_dict()) {
+        tc_log_warn("termin_player: package manifest root is not an object: %s", manifest_path.string().c_str());
+        return result;
+    }
+    const nos::trent* requirements = dict_get(root, "target_requirements");
+    if (!requirements || !requirements->is_dict()) {
+        return result;
+    }
+    const nos::trent* shader_targets = dict_get(*requirements, "shader_targets");
+    if (!shader_targets || !shader_targets->is_list()) {
+        return result;
+    }
+
+    for (const nos::trent& item : shader_targets->as_list()) {
+        if (!item.is_string()) {
+            tc_log_warn("termin_player: package shader_targets contains a non-string entry");
+            continue;
+        }
+        std::string target = item.as_string();
+        if (target.empty()) {
+            tc_log_warn("termin_player: package shader_targets contains an empty entry");
+            continue;
+        }
+        if (std::find(result.begin(), result.end(), target) == result.end()) {
+            result.push_back(std::move(target));
+        }
+    }
+    return result;
+}
+
+bool vector_contains(const std::vector<std::string>& values, const std::string& value) {
+    return std::find(values.begin(), values.end(), value) != values.end();
+}
+
+std::string lowercase(std::string value) {
+    for (char& ch : value) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return value;
+}
+
+std::string canonical_backend_name(const std::string& value) {
+    const std::string lowered = lowercase(value);
+    tgfx::BackendType backend = tgfx::backend_from_name(lowered);
+    if (backend != tgfx::BackendType::Null || lowered == "null") {
+        return tgfx::backend_name(backend);
+    }
+    return lowered;
+}
+
+std::string select_package_backend(const std::vector<std::string>& shader_targets) {
+    for (const std::string& target : shader_targets) {
+        tgfx::BackendType backend = tgfx::backend_from_name(target);
+        if (tgfx::backend_is_compiled(backend)) {
+            return target;
+        }
+    }
+    return tgfx::backend_name(tgfx::compiled_default_backend());
 }
 
 fs::path relative_to_root(const fs::path& root, const std::string& value) {
@@ -484,6 +554,7 @@ struct AppManifest {
     fs::path package_manifest_path;
     fs::path project_python_root;
     fs::path module_manifest_path;
+    std::vector<std::string> shader_targets;
     std::string project_name = "Termin Player";
     PlayerWindowSettings window;
     bool python_enabled = false;
@@ -515,6 +586,7 @@ AppManifest load_app_manifest(const fs::path& app_manifest_path) {
         manifest.bundle_root,
         string_field(*package, "manifest", "package/manifest.json")
     );
+    manifest.shader_targets = package_shader_targets(manifest.package_manifest_path);
 
     const nos::trent* runtime = dict_get(root, "runtime");
     const nos::trent* python = runtime && runtime->is_dict() ? dict_get(*runtime, "python") : nullptr;
@@ -631,12 +703,25 @@ struct PlayerRuntimeHost::Impl {
 
             if (!cli.backend.empty()) {
                 set_env_value("TERMIN_BACKEND", cli.backend);
+                const std::string canonical_backend = canonical_backend_name(cli.backend);
+                if (!manifest.shader_targets.empty() && !vector_contains(manifest.shader_targets, canonical_backend)) {
+                    tc_log_error(
+                        "termin_player: --backend=%s is not listed in package shader_targets",
+                        cli.backend.c_str()
+                    );
+                }
             } else if (std::getenv("TERMIN_BACKEND") == nullptr) {
-#ifdef _WIN32
-                set_env_value("TERMIN_BACKEND", "d3d11");
-#else
-                set_env_value("TERMIN_BACKEND", "vulkan");
-#endif
+                const std::string selected_backend = select_package_backend(manifest.shader_targets);
+                set_env_value("TERMIN_BACKEND", selected_backend);
+                tc_log_info("termin_player: selected TERMIN_BACKEND=%s", selected_backend.c_str());
+            } else if (!manifest.shader_targets.empty()) {
+                const char* env_backend = std::getenv("TERMIN_BACKEND");
+                if (env_backend != nullptr && !vector_contains(manifest.shader_targets, canonical_backend_name(env_backend))) {
+                    tc_log_error(
+                        "termin_player: TERMIN_BACKEND=%s is not listed in package shader_targets",
+                        env_backend
+                    );
+                }
             }
 
             set_env_if_missing("TERMIN_SDK", bundle_root);
