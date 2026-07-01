@@ -15,7 +15,7 @@ from tcgui.widgets.events import DragPayload
 from tcgui.widgets.icon_theme import FileIconProvider
 from tcgui.widgets.menu import Menu, MenuItem
 
-from termin.editor_core.project_operations import ProjectOperations, sync_stdlib
+from termin.editor_core.project_operations import ProjectOperations
 from termin.editor_core.project_context import set_current_project_path
 from termin.project.ignored_paths import is_path_ignored, project_ignored_roots
 
@@ -115,8 +115,6 @@ class ProjectBrowserTcgui:
         if not root.is_dir():
             log.error(f"[ProjectBrowserTcgui] set_root: not a directory: {path}")
             return
-
-        sync_stdlib(root)
 
         self._root_path = root
         set_current_project_path(root)
