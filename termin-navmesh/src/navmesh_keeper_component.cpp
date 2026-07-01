@@ -1,12 +1,25 @@
 #include <termin/navmesh/navmesh_keeper_component.hpp>
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/navmesh_query_space.hpp>
 #include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <utility>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
+
+namespace {
+
+Mat44f to_mat44f(const Mat44& value) {
+    Mat44f result;
+    for (int i = 0; i < 16; ++i) {
+        result.data[i] = static_cast<float>(value.data[i]);
+    }
+    return result;
+}
+
+} // namespace
 
 NavMeshKeeperComponent::NavMeshKeeperComponent()
     : CxxComponent("NavMeshKeeperComponent")
@@ -118,6 +131,16 @@ tc_mesh* NavMeshKeeperComponent::get_mesh_for_phase(const std::string& phase_mar
         return nullptr;
     }
     return ensure_debug_mesh_loaded() && _navmesh_debug_mesh.is_valid() ? _navmesh_debug_mesh.get() : nullptr;
+}
+
+Mat44f NavMeshKeeperComponent::get_model_matrix(const Entity& entity) const {
+    if (!entity.valid()) {
+        tc_log_error("[NavMeshKeeperComponent] cannot compute debug model matrix: entity is invalid");
+        return Mat44f::identity();
+    }
+
+    const Pose3 bake_frame = navmesh_bake_frame_from_pose(entity.transform().global_pose());
+    return to_mat44f(bake_frame.as_mat44());
 }
 
 } // namespace termin

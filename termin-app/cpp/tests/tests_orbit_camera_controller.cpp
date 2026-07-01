@@ -78,3 +78,29 @@ TEST_CASE("OrbitCameraController only handles events from viewports rendered by 
     tc_entity_free(primary.entity.handle());
     tc_entity_free(secondary.entity.handle());
 }
+
+TEST_CASE("OrbitCameraController center_on keeps camera offset from target")
+{
+    CameraRig rig = make_camera_rig("focus-camera");
+
+    const termin::Vec3 initial_eye = rig.entity.transform().global_position();
+    const termin::Vec3 initial_target = rig.controller->target();
+    const termin::Vec3 initial_offset = initial_eye - initial_target;
+
+    const termin::Vec3 focus{12.0, -3.0, 4.5};
+    rig.controller->center_on(focus);
+
+    const termin::Vec3 focused_eye = rig.entity.transform().global_position();
+    const termin::Vec3 focused_target = rig.controller->target();
+    const termin::Vec3 focused_offset = focused_eye - focused_target;
+
+    CHECK_EQ(focused_target.x, Approx(focus.x).epsilon(1e-12));
+    CHECK_EQ(focused_target.y, Approx(focus.y).epsilon(1e-12));
+    CHECK_EQ(focused_target.z, Approx(focus.z).epsilon(1e-12));
+
+    CHECK_EQ(focused_offset.x, Approx(initial_offset.x).epsilon(1e-12));
+    CHECK_EQ(focused_offset.y, Approx(initial_offset.y).epsilon(1e-12));
+    CHECK_EQ(focused_offset.z, Approx(initial_offset.z).epsilon(1e-12));
+
+    tc_entity_free(rig.entity.handle());
+}
