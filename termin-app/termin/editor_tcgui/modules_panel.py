@@ -11,6 +11,7 @@ from tcgui.widgets.tree import TreeWidget, TreeNode
 from tcgui.widgets.units import px
 
 from termin.project_modules.runtime import get_project_modules_runtime
+from termin.editor_tcgui.dialogs.module_operation_dialog import show_module_operation_dialog
 from termin_modules import ModuleEvent, ModuleState
 
 
@@ -42,6 +43,9 @@ class ModulesPanel(VStack):
         self.spacing = 4
 
         self._selected_module: str | None = None
+        self._operation_running = False
+        self._operation_message = ""
+        self._operation_buttons: list[Button] = []
         self._modules_runtime = get_project_modules_runtime()
         self._modules_runtime.add_listener(self._on_runtime_event)
 
@@ -60,6 +64,7 @@ class ModulesPanel(VStack):
         rescan_btn.padding = 4
         rescan_btn.on_click = self._on_rescan_clicked
         toolbar.add_child(rescan_btn)
+        self._operation_buttons.append(rescan_btn)
 
         reload_changed_btn = Button()
         reload_changed_btn.text = "Reload Changed"
@@ -67,6 +72,7 @@ class ModulesPanel(VStack):
         reload_changed_btn.padding = 4
         reload_changed_btn.on_click = self._on_reload_changed_clicked
         toolbar.add_child(reload_changed_btn)
+        self._operation_buttons.append(reload_changed_btn)
 
         build_reload_changed_btn = Button()
         build_reload_changed_btn.text = "Build & Reload Changed"
@@ -74,6 +80,7 @@ class ModulesPanel(VStack):
         build_reload_changed_btn.padding = 4
         build_reload_changed_btn.on_click = self._on_build_reload_changed_clicked
         toolbar.add_child(build_reload_changed_btn)
+        self._operation_buttons.append(build_reload_changed_btn)
 
         spacer = Label()
         spacer.stretch = True
@@ -85,6 +92,7 @@ class ModulesPanel(VStack):
         self._reload_btn.padding = 4
         self._reload_btn.on_click = self._on_reload_clicked
         toolbar.add_child(self._reload_btn)
+        self._operation_buttons.append(self._reload_btn)
 
         self._build_btn = Button()
         self._build_btn.text = "Build"
@@ -92,6 +100,7 @@ class ModulesPanel(VStack):
         self._build_btn.padding = 4
         self._build_btn.on_click = self._on_build_clicked
         toolbar.add_child(self._build_btn)
+        self._operation_buttons.append(self._build_btn)
 
         self._clean_btn = Button()
         self._clean_btn.text = "Clean"
@@ -99,6 +108,7 @@ class ModulesPanel(VStack):
         self._clean_btn.padding = 4
         self._clean_btn.on_click = self._on_clean_clicked
         toolbar.add_child(self._clean_btn)
+        self._operation_buttons.append(self._clean_btn)
 
         self._rebuild_btn = Button()
         self._rebuild_btn.text = "Rebuild"
@@ -106,6 +116,7 @@ class ModulesPanel(VStack):
         self._rebuild_btn.padding = 4
         self._rebuild_btn.on_click = self._on_rebuild_clicked
         toolbar.add_child(self._rebuild_btn)
+        self._operation_buttons.append(self._rebuild_btn)
 
         self._unload_btn = Button()
         self._unload_btn.text = "Unload"
@@ -113,6 +124,7 @@ class ModulesPanel(VStack):
         self._unload_btn.padding = 4
         self._unload_btn.on_click = self._on_unload_clicked
         toolbar.add_child(self._unload_btn)
+        self._operation_buttons.append(self._unload_btn)
 
         self.add_child(toolbar)
 
@@ -161,28 +173,31 @@ class ModulesPanel(VStack):
         if project_root is None:
             log.error(f"{_TAG} No project root is configured for modules runtime")
             return
-        log.info(f"{_TAG} Rescanning project: {project_root}")
-        if not self._modules_runtime.load_project(project_root):
-            log.error(f"{_TAG} Rescan failed: {self._modules_runtime.last_error}")
-        else:
-            log.info(f"{_TAG} Rescan complete")
-        self.update_display()
+        self._run_operation(
+            title="Rescan Project Modules",
+            running_message=f"Rescanning project: {project_root}",
+            success_message="Rescan complete",
+            failure_message="Rescan failed",
+            action=lambda: self._modules_runtime.load_project(project_root),
+        )
 
     def _on_reload_changed_clicked(self) -> None:
-        log.info(f"{_TAG} Reloading changed modules...")
-        if not self._modules_runtime.reload_dirty_modules():
-            log.error(f"{_TAG} Reload changed modules failed: {self._modules_runtime.last_error}")
-        else:
-            log.info(f"{_TAG} Reload changed modules complete")
-        self.update_display()
+        self._run_operation(
+            title="Reload Changed Modules",
+            running_message="Reloading changed modules...",
+            success_message="Reload changed modules complete",
+            failure_message="Reload changed modules failed",
+            action=self._modules_runtime.reload_dirty_modules,
+        )
 
     def _on_build_reload_changed_clicked(self) -> None:
-        log.info(f"{_TAG} Building and reloading changed modules...")
-        if not self._modules_runtime.prepare_changed_modules_for_play():
-            log.error(f"{_TAG} Build and reload changed modules failed: {self._modules_runtime.last_error}")
-        else:
-            log.info(f"{_TAG} Build and reload changed modules complete")
-        self.update_display()
+        self._run_operation(
+            title="Build and Reload Changed Modules",
+            running_message="Building and reloading changed modules...",
+            success_message="Build and reload changed modules complete",
+            failure_message="Build and reload changed modules failed",
+            action=self._modules_runtime.prepare_changed_modules_for_play,
+        )
 
     def _on_reload_clicked(self) -> None:
         if self._selected_module:
@@ -191,47 +206,50 @@ class ModulesPanel(VStack):
     def _on_build_clicked(self) -> None:
         if not self._selected_module:
             return
-        log.info(f"{_TAG} Building module '{self._selected_module}'...")
-        if not self._modules_runtime.build_module(self._selected_module):
-            log.error(f"{_TAG} Build failed: {self._modules_runtime.last_error}")
-        else:
-            log.info(f"{_TAG} Build complete: '{self._selected_module}'")
-        self.update_display()
+        module_name = self._selected_module
+        self._run_operation(
+            title=f"Build Module: {module_name}",
+            running_message=f"Building module '{module_name}'...",
+            success_message=f"Build complete: '{module_name}'",
+            failure_message="Build failed",
+            action=lambda: self._modules_runtime.build_module(module_name),
+        )
 
     def _on_clean_clicked(self) -> None:
         if not self._selected_module:
             return
-        log.info(f"{_TAG} Cleaning module '{self._selected_module}'...")
-        if not self._modules_runtime.clean_module(self._selected_module):
-            log.error(f"{_TAG} Clean failed: {self._modules_runtime.last_error}")
-        else:
-            log.info(f"{_TAG} Clean complete: '{self._selected_module}'")
-        self.update_display()
+        module_name = self._selected_module
+        self._run_operation(
+            title=f"Clean Module: {module_name}",
+            running_message=f"Cleaning module '{module_name}'...",
+            success_message=f"Clean complete: '{module_name}'",
+            failure_message="Clean failed",
+            action=lambda: self._modules_runtime.clean_module(module_name),
+        )
 
     def _on_rebuild_clicked(self) -> None:
         if not self._selected_module:
             return
         module_name = self._selected_module
-        log.info(f"{_TAG} Rebuilding module '{module_name}'...")
-        try:
-            success = self._modules_runtime.rebuild_module(module_name)
-            if not success:
-                log.error(f"{_TAG} Rebuild failed: {self._modules_runtime.last_error}")
-            else:
-                log.info(f"{_TAG} Rebuild complete: '{module_name}'")
-            self.update_display()
-        except Exception as e:
-            log.error(f"{_TAG} Rebuild exception for '{module_name}': {e}")
+        self._run_operation(
+            title=f"Rebuild Module: {module_name}",
+            running_message=f"Rebuilding module '{module_name}'...",
+            success_message=f"Rebuild complete: '{module_name}'",
+            failure_message="Rebuild failed",
+            action=lambda: self._modules_runtime.rebuild_module(module_name),
+        )
 
     def _on_unload_clicked(self) -> None:
         if not self._selected_module:
             return
-        log.info(f"{_TAG} Unloading module '{self._selected_module}'...")
-        if not self._modules_runtime.unload_module(self._selected_module):
-            log.error(f"{_TAG} Unload failed: {self._modules_runtime.last_error}")
-        else:
-            log.info(f"{_TAG} Unloaded: '{self._selected_module}'")
-        self.update_display()
+        module_name = self._selected_module
+        self._run_operation(
+            title=f"Unload Module: {module_name}",
+            running_message=f"Unloading module '{module_name}'...",
+            success_message=f"Unloaded: '{module_name}'",
+            failure_message="Unload failed",
+            action=lambda: self._modules_runtime.unload_module(module_name),
+        )
 
     def _on_selection_changed(self, node) -> None:
         if node and node.data:
@@ -240,20 +258,94 @@ class ModulesPanel(VStack):
             self._selected_module = None
 
     def _reload_module(self, module_name: str) -> None:
-        log.info(f"{_TAG} Reloading module '{module_name}'...")
-        try:
-            success = self._modules_runtime.reload_module(module_name)
-            if not success:
-                log.error(f"{_TAG} Reload failed: {self._modules_runtime.last_error}")
-            else:
-                log.info(f"{_TAG} Reload complete: '{module_name}'")
-            self.update_display()
+        def on_complete(success: bool) -> None:
             if self.on_module_reloaded:
                 self.on_module_reloaded(module_name, success)
-        except Exception as e:
-            log.error(f"{_TAG} Reload exception for '{module_name}': {e}")
+
+        self._run_operation(
+            title=f"Reload Module: {module_name}",
+            running_message=f"Reloading module '{module_name}'...",
+            success_message=f"Reload complete: '{module_name}'",
+            failure_message="Reload failed",
+            action=lambda: self._modules_runtime.reload_module(module_name),
+            on_complete=on_complete,
+        )
+
+    def _run_operation(
+        self,
+        *,
+        title: str,
+        running_message: str,
+        success_message: str,
+        failure_message: str,
+        action,
+        on_complete=None,
+    ) -> None:
+        if self._operation_running:
+            log.info(f"{_TAG} Ignoring '{title}' because another module operation is running")
+            return
+
+        ui = self._ui
+        if ui is None:
+            log.info(f"{_TAG} {running_message}")
+            try:
+                success = action()
+            except Exception as e:
+                log.error(f"{_TAG} {failure_message}: {e}", exc_info=True)
+                success = False
+            self._finish_operation(success, success_message, failure_message, on_complete)
+            return
+
+        log.info(f"{_TAG} {running_message}")
+        self._operation_running = True
+        self._operation_message = running_message
+        self._set_operation_buttons_enabled(False)
+        self._status_label.text = running_message
+        ui.request_layout()
+
+        show_module_operation_dialog(
+            ui,
+            self._modules_runtime,
+            title=title,
+            start_message=running_message,
+            action=action,
+            on_complete=lambda success: self._finish_operation(
+                success,
+                success_message,
+                failure_message,
+                on_complete,
+            ),
+        )
+
+    def _finish_operation(
+        self,
+        success: bool,
+        success_message: str,
+        failure_message: str,
+        on_complete,
+    ) -> None:
+        if success:
+            log.info(f"{_TAG} {success_message}")
+        else:
+            log.error(f"{_TAG} {failure_message}: {self._modules_runtime.last_error}")
+
+        self._operation_running = False
+        self._operation_message = ""
+        self._set_operation_buttons_enabled(True)
+        self.update_display()
+        if on_complete:
+            on_complete(success)
+
+    def _set_operation_buttons_enabled(self, enabled: bool) -> None:
+        for button in self._operation_buttons:
+            button.enabled = enabled
 
     def update_display(self) -> None:
+        if self._operation_running:
+            if self._operation_message:
+                self._status_label.text = self._operation_message
+            return
+
         self._tree.clear()
 
         records = sorted(self._modules_runtime.records(), key=lambda record: record.id)
