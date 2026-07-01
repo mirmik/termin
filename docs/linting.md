@@ -6,7 +6,9 @@ coverage once the baseline is stable.
 
 ## Current State
 
-- Python uses Ruff through `./run-lint-python.sh`.
+- Python uses Ruff through `./run-lint-python.sh`; the default
+  `./run-tests-python.sh` and central `./run-tests.sh` flows run it before
+  pytest.
 - The Python baseline is defect-oriented and documented in
   `docs/python-linting.md`; full Bugbear `B` and full Pyflakes `F` are enabled.
 - CI runs Python lint as a separate job before the heavier build jobs.
