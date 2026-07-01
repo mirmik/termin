@@ -1,9 +1,12 @@
+import sys
+import threading
+import time
 from types import SimpleNamespace
 
 from termin.editor_tcgui.dialogs import module_operation_dialog
 from termin.editor_tcgui import modules_panel as modules_panel_module
 from termin.editor_tcgui.modules_panel import ModulesPanel
-from termin_modules import ModuleKind, ModuleState
+from termin_modules import CppModuleBackend, ModuleEnvironment, ModuleKind, ModuleRuntime, ModuleState
 
 
 class FakeUi:
@@ -155,3 +158,43 @@ def test_module_operation_dialog_uses_overlay_and_closes_on_completion(monkeypat
     assert closed == [True]
     assert completed == [True]
     assert runtime._build_output_listeners == []
+
+
+def test_native_module_build_releases_gil_while_waiting_for_command(tmp_path) -> None:
+    build_script = tmp_path / "slow_build.py"
+    build_script.write_text("import time\ntime.sleep(0.4)\n", encoding="utf-8")
+
+    descriptor = tmp_path / "slow.module"
+    command = f"{sys.executable} {build_script}"
+    descriptor.write_text(
+        "name: slow\n"
+        "build:\n"
+        f"  command: {command}\n"
+        "  output: unused.so\n",
+        encoding="utf-8",
+    )
+
+    runtime = ModuleRuntime()
+    runtime.set_environment(ModuleEnvironment())
+    runtime.register_cpp_backend(CppModuleBackend())
+    runtime.discover(tmp_path)
+
+    ticks = 0
+    stop = False
+
+    def ticker() -> None:
+        nonlocal ticks
+        while not stop:
+            ticks += 1
+            time.sleep(0.01)
+
+    thread = threading.Thread(target=ticker)
+    thread.start()
+    try:
+        ticks = 0
+        assert runtime.build_module("slow")
+    finally:
+        stop = True
+        thread.join(timeout=1.0)
+
+    assert ticks > 5
