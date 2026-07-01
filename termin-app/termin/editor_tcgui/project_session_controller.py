@@ -12,6 +12,7 @@ from typing import Callable
 from tcbase import log
 from tcgui.widgets.message_box import MessageBox
 
+from termin.editor_core.project_operations import sync_stdlib
 from termin.editor_core.settings import EditorSettings
 
 
@@ -90,6 +91,14 @@ class ProjectSessionController:
         from termin.editor_core.project_context import set_current_project_path
 
         set_current_project_path(project_root)
+        try:
+            sync_stdlib(project_root)
+        except Exception as e:
+            log.error(f"[ProjectSessionController] stdlib sync failed for {project_root}: {e}")
+            ui = self._get_ui()
+            if ui is not None:
+                MessageBox.error(ui, "Standard Library Sync Failed", f"Failed to sync project stdlib:\n{e}")
+            return
 
         self.configure_shader_runtime_for_project(
             project_root,
