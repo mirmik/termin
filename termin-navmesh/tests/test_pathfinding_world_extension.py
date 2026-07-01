@@ -11,6 +11,7 @@ def test_pathfinding_world_tracks_multiple_components_on_one_entity() -> None:
         world = PathfindingWorld.ensure_scene(scene)
         assert world is not None
         assert world.size == 0
+        assert world.candidates_for_world_point((0.0, 0.0, 0.0)) == []
 
         entity.add_component(DetourPathfindingWorldComponent())
         entity.add_component(DetourPathfindingWorldComponent())

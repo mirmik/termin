@@ -29,6 +29,23 @@ std::tuple<int, double, double> PathfindingWorldCandidate::score() const {
     return {off_poly_count, total_distance_sq, max_distance_sq};
 }
 
+bool PathfindingWorldPointCandidate::valid() const {
+    return entity.valid() && component != nullptr;
+}
+
+std::string PathfindingWorldPointCandidate::entity_name() const {
+    return entity.valid() ? std::string(entity.name()) : std::string();
+}
+
+std::string PathfindingWorldPointCandidate::navmesh_uuid() const {
+    return component ? component->navmesh_uuid : std::string();
+}
+
+std::tuple<int, double> PathfindingWorldPointCandidate::score() const {
+    const int off_poly_count = closest.over_poly ? 0 : 1;
+    return {off_poly_count, distance_sq};
+}
+
 PathfindingWorld* PathfindingWorld::from_scene(tc_scene_handle scene) {
     return reinterpret_cast<PathfindingWorld*>(tc_pathfinding_world_get_scene(scene));
 }
@@ -124,6 +141,72 @@ void PathfindingWorld::rebuild_from_scene() {
 
 size_t PathfindingWorld::size() const {
     return entries_.size();
+}
+
+std::vector<PathfindingWorldPointCandidate> PathfindingWorld::candidates_for_world_point(
+    const std::array<float, 3>& point)
+{
+    prune_invalid_entries();
+
+    std::vector<PathfindingWorldPointCandidate> candidates;
+    candidates.reserve(entries_.size());
+
+    for (const Entry& entry : entries_) {
+        if (!entry.component) {
+            continue;
+        }
+
+        Entity entity(entry.owner);
+        if (!entity.valid()) {
+            continue;
+        }
+        if (!entity.enabled() || !entry.component->enabled()) {
+            continue;
+        }
+        if (!entry.component->is_ready() && !entry.component->rebuild()) {
+            tc_log_warn("[PathfindingWorld] skipped point query world: entity='%s' "
+                        "navmesh_uuid='%s' is not ready",
+                        entity.name(),
+                        entry.component->navmesh_uuid.c_str());
+            continue;
+        }
+
+        const Pose3 bake_frame = navmesh_bake_frame_from_pose(entity.transform().global_pose());
+        DetourClosestPointResult closest = entry.component->closest_point_world(bake_frame, point);
+        if (!closest.success) {
+            tc_log_warn("[PathfindingWorld] skipped point query world: entity='%s' "
+                        "navmesh_uuid='%s' closest_success=0",
+                        entity.name(),
+                        entry.component->navmesh_uuid.c_str());
+            continue;
+        }
+
+        PathfindingWorldPointCandidate candidate;
+        candidate.entity = entity;
+        candidate.component = entry.component;
+        candidate.bake_frame = bake_frame;
+        candidate.closest = closest;
+        candidate.distance_sq = distance_sq(point, closest.point);
+        candidates.push_back(candidate);
+    }
+
+    std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
+        return a.score() < b.score();
+    });
+    return candidates;
+}
+
+bool PathfindingWorld::find_best_candidate_world_point(
+    const std::array<float, 3>& point,
+    PathfindingWorldPointCandidate& out_candidate)
+{
+    std::vector<PathfindingWorldPointCandidate> candidates = candidates_for_world_point(point);
+    if (candidates.empty()) {
+        return false;
+    }
+
+    out_candidate = candidates.front();
+    return true;
 }
 
 std::vector<PathfindingWorldCandidate> PathfindingWorld::candidates_for_world_points(
