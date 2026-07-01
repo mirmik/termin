@@ -100,10 +100,13 @@ void collect_meshes_recursive(
 
 } // namespace
 
-void RecastNavMeshBuilderComponent::build_from_entity() {
+RecastBuildResult RecastNavMeshBuilderComponent::build_from_entity_geometry() {
     if (!entity().valid()) {
         tc_log_error("RecastNavMeshBuilderComponent: no entity");
-        return;
+        RecastBuildResult result;
+        result.success = false;
+        result.error = "builder component has no entity";
+        return result;
     }
 
     double b_data[16];
@@ -135,7 +138,10 @@ void RecastNavMeshBuilderComponent::build_from_entity() {
 
     if (verts.empty() || tris.empty()) {
         tc_log_error("RecastNavMeshBuilderComponent: no mesh geometry found");
-        return;
+        RecastBuildResult result;
+        result.success = false;
+        result.error = "no mesh geometry found";
+        return result;
     }
 
     int nverts = static_cast<int>(verts.size() / 3);
@@ -143,14 +149,21 @@ void RecastNavMeshBuilderComponent::build_from_entity() {
 
     tc_log_info("RecastNavMeshBuilderComponent: building from %d vertices, %d triangles", nverts, ntris);
 
-    auto result = build(verts.data(), nverts, tris.data(), ntris);
+    RecastBuildResult result = build(verts.data(), nverts, tris.data(), ntris);
 
     if (result.success) {
         tc_log_info("RecastNavMeshBuilderComponent: build successful (%d polys)",
                     result.poly_mesh ? result.poly_mesh->npolys : 0);
-        save_detour_asset(result);
     } else {
         tc_log_error("RecastNavMeshBuilderComponent: build failed - %s", result.error.c_str());
+    }
+    return result;
+}
+
+void RecastNavMeshBuilderComponent::build_from_entity() {
+    RecastBuildResult result = build_from_entity_geometry();
+    if (result.success) {
+        save_detour_asset(result);
     }
 }
 

@@ -115,10 +115,13 @@ endif()
 if(TERMIN_HAS_RECAST)
     add_library(termin_navmesh_components SHARED
         src/components_bootstrap.cpp
+        src/detour_navmesh_build.cpp
         src/detour_navmesh_asset_utils.cpp
         src/detour_pathfinding_world_component.cpp
+        src/detour_query_session.cpp
         src/navmesh_keeper_component.cpp
         src/off_mesh_link_component.cpp
+        src/recast_navmesh_bake.cpp
         src/recast_navmesh_entity_geometry.cpp
         src/recast_navmesh_builder_component.cpp
     )

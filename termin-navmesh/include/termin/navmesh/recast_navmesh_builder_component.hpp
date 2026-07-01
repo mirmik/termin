@@ -8,10 +8,11 @@
 #include <termin/render/drawable.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
+#include <termin/navmesh/recast_navmesh_bake.hpp>
 #include <termin/navmesh/recast_debug_data.hpp>
+#include <termin/navmesh/detour_navmesh_build.hpp>
 #include <termin/navmesh/navmesh_keeper_component.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
-#include <Recast.h>
 #include <string>
 
 namespace termin {
@@ -20,16 +21,6 @@ namespace termin {
 enum class MeshSource : int {
     CurrentMesh = 0,      // Only current entity mesh
     AllDescendants = 1,   // All descendant meshes (including current entity)
-};
-
-// Result of navmesh build
-struct TERMIN_NAVMESH_COMPONENTS_API RecastBuildResult {
-    bool success = false;
-    std::string error;
-
-    // Resulting meshes (caller takes ownership, must call free_result)
-    rcPolyMesh* poly_mesh = nullptr;
-    rcPolyMeshDetail* detail_mesh = nullptr;
 };
 
 // NavMesh builder component using Recast library
@@ -90,6 +81,9 @@ public:
     // Build from entity's MeshRenderer (called by inspector button)
     void build_from_entity();
 
+    // Build Recast meshes from entity geometry without writing a navmesh asset.
+    RecastBuildResult build_from_entity_geometry();
+
     // --- Runtime state ---
 
     // Captured debug data (filled during build if capture flags are set)
@@ -110,6 +104,9 @@ public:
     // tris: int[ntris * 3] - triangle indices
     RecastBuildResult build(const float* verts, int nverts,
                             const int* tris, int ntris);
+
+    // Convert a successful Recast result into a single Detour tile in memory.
+    DetourNavMeshTileBuildResult build_detour_tile_data(const RecastBuildResult& result);
 
     // Free result meshes
     static void free_result(RecastBuildResult& result);

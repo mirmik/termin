@@ -1,14 +1,13 @@
 #include <termin/navmesh/recast_navmesh_builder_component.hpp>
 #include "recast_navmesh_bake_space.hpp"
+#include <termin/navmesh/detour_navmesh_build.hpp>
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
 #include <termin/navmesh/navmesh_keeper_component.hpp>
 #include <termin/navmesh/off_mesh_link_component.hpp>
 #include <components/mesh_component.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/tc_scene.hpp>
-#include <DetourAlloc.h>
 #include <DetourNavMesh.h>
-#include <DetourNavMeshBuilder.h>
 #include <array>
 #include <cstring>
 #include <cmath>
@@ -28,28 +27,15 @@ namespace {
 
 constexpr const char* NAVMESH_DEBUG_SHADER_UUID = "termin-engine-navmesh-debug";
 
-struct DetourOffMeshLinks {
-    std::vector<float> verts;
-    std::vector<float> radii;
-    std::vector<unsigned char> dirs;
-    std::vector<unsigned char> areas;
-    std::vector<unsigned short> flags;
-    std::vector<unsigned int> user_ids;
-
-    int count() const {
-        return static_cast<int>(radii.size());
-    }
-};
-
 Vec3 termin_local_to_recast(const Vec3& point) {
     return Vec3{point.x, point.z, point.y};
 }
 
-DetourOffMeshLinks collect_off_mesh_links_for_builder(
+DetourOffMeshLinkData collect_off_mesh_links_for_builder(
     Entity builder_entity,
     const std::string& agent_type_name)
 {
-    DetourOffMeshLinks links;
+    DetourOffMeshLinkData links;
     if (!builder_entity.valid()) {
         tc_log_error("[NavMesh] cannot collect off-mesh links: builder entity is invalid");
         return links;
@@ -109,19 +95,6 @@ DetourOffMeshLinks collect_off_mesh_links_for_builder(
 }
 
 } // namespace
-
-// Simple context for logging
-class BuildContext : public rcContext {
-public:
-    std::string last_error;
-
-protected:
-    void doLog(const rcLogCategory category, const char* msg, const int len) override {
-        if (category == RC_LOG_ERROR) {
-            last_error = std::string(msg, len);
-        }
-    }
-};
 
 RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent()
     : CxxComponent("RecastNavMeshBuilderComponent")
@@ -357,319 +330,65 @@ void RecastNavMeshBuilderComponent::clear_debug_data() {
 
 RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int nverts,
                                                         const int* tris, int ntris) {
-    // Free previous result
     free_result(last_result);
     clear_debug_data();
 
-    RecastBuildResult result;
+    RecastNavMeshBuildConfig config;
+    config.cell_size = cell_size;
+    config.cell_height = cell_height;
+    config.agent_height = agent_height;
+    config.agent_radius = agent_radius;
+    config.agent_max_climb = agent_max_climb;
+    config.agent_max_slope = agent_max_slope;
+    config.min_region_area = min_region_area;
+    config.merge_region_area = merge_region_area;
+    config.max_edge_length = max_edge_length;
+    config.max_simplification_error = max_simplification_error;
+    config.max_verts_per_poly = max_verts_per_poly;
+    config.detail_sample_dist = detail_sample_dist;
+    config.detail_sample_max_error = detail_sample_max_error;
+    config.build_detail_mesh = build_detail_mesh;
 
-    if (verts == nullptr || nverts == 0 || tris == nullptr || ntris == 0) {
-        result.error = "Invalid input: empty geometry";
-        return result;
-    }
-
-    // Build debug mesh from input geometry (in Recast coordinates)
-    build_input_mesh(verts, nverts, tris, ntris);
-
-    BuildContext ctx;
-
-    // Calculate bounds
-    float bmin[3], bmax[3];
-    rcCalcBounds(verts, nverts, bmin, bmax);
-    tc_log_info("[NavMesh] Bounds: min=(%.2f, %.2f, %.2f) max=(%.2f, %.2f, %.2f)",
-        bmin[0], bmin[1], bmin[2], bmax[0], bmax[1], bmax[2]);
-
-    // Initialize config
-    rcConfig cfg;
-    memset(&cfg, 0, sizeof(cfg));
-
-    cfg.cs = cell_size;
-    cfg.ch = cell_height;
-    cfg.walkableSlopeAngle = agent_max_slope;
-    cfg.walkableHeight = static_cast<int>(std::ceil(agent_height / cfg.ch));
-    cfg.walkableClimb = static_cast<int>(std::floor(agent_max_climb / cfg.ch));
-    cfg.walkableRadius = static_cast<int>(std::ceil(agent_radius / cfg.cs));
-    cfg.maxEdgeLen = static_cast<int>(max_edge_length / cfg.cs);
-    cfg.maxSimplificationError = max_simplification_error;
-    cfg.minRegionArea = min_region_area;
-    cfg.mergeRegionArea = merge_region_area;
-    cfg.maxVertsPerPoly = max_verts_per_poly;
-    cfg.detailSampleDist = detail_sample_dist < 0.9f ? 0 : cfg.cs * detail_sample_dist;
-    cfg.detailSampleMaxError = cfg.ch * detail_sample_max_error;
-
-    rcVcopy(cfg.bmin, bmin);
-    rcVcopy(cfg.bmax, bmax);
-    rcCalcGridSize(cfg.bmin, cfg.bmax, cfg.cs, &cfg.width, &cfg.height);
-
-    tc_log_info("[NavMesh] Config: cs=%.3f ch=%.3f grid=%dx%d",
-        cfg.cs, cfg.ch, cfg.width, cfg.height);
-    tc_log_info("[NavMesh] Agent: height=%d climb=%d radius=%d slope=%.1f",
-        cfg.walkableHeight, cfg.walkableClimb, cfg.walkableRadius, cfg.walkableSlopeAngle);
-    tc_log_info("[NavMesh] Region: minArea=%d mergeArea=%d", cfg.minRegionArea, cfg.mergeRegionArea);
-    tc_log_info("[NavMesh] Edge: maxLen=%d maxSimplErr=%.2f maxVertsPerPoly=%d",
-        cfg.maxEdgeLen, cfg.maxSimplificationError, cfg.maxVertsPerPoly);
-
-    // Stage 1: Create heightfield
-    rcHeightfield* hf = rcAllocHeightfield();
-    if (!hf) {
-        result.error = "Failed to allocate heightfield";
-        return result;
-    }
-
-    if (!rcCreateHeightfield(&ctx, *hf, cfg.width, cfg.height,
-                             cfg.bmin, cfg.bmax, cfg.cs, cfg.ch)) {
-        result.error = "Failed to create heightfield";
-        rcFreeHeightField(hf);
-        return result;
-    }
-
-    // Mark walkable triangles
-    std::vector<unsigned char> tri_areas(ntris, RC_WALKABLE_AREA);
-    rcMarkWalkableTriangles(&ctx, cfg.walkableSlopeAngle,
-                            verts, nverts, tris, ntris, tri_areas.data());
-
-    // Count walkable triangles
-    int walkable_count = 0;
-    for (int i = 0; i < ntris; i++) {
-        if (tri_areas[i] != RC_NULL_AREA) walkable_count++;
-    }
-    tc_log_info("[NavMesh] Walkable triangles: %d / %d", walkable_count, ntris);
-
-    // Rasterize triangles
-    if (!rcRasterizeTriangles(&ctx, verts, nverts, tris, tri_areas.data(), ntris,
-                              *hf, cfg.walkableClimb)) {
-        result.error = "Failed to rasterize triangles";
-        rcFreeHeightField(hf);
-        return result;
-    }
-
-    // Count spans before filtering
-    int span_count_before = 0;
-    for (int i = 0; i < hf->width * hf->height; i++) {
-        for (rcSpan* s = hf->spans[i]; s; s = s->next) span_count_before++;
-    }
-    tc_log_info("[NavMesh] Heightfield spans after rasterize: %d", span_count_before);
-
-    // Filter walkable surfaces
-    rcFilterLowHangingWalkableObstacles(&ctx, cfg.walkableClimb, *hf);
-    rcFilterLedgeSpans(&ctx, cfg.walkableHeight, cfg.walkableClimb, *hf);
-    rcFilterWalkableLowHeightSpans(&ctx, cfg.walkableHeight, *hf);
-
-    // Count spans after filtering
-    int span_count_after = 0;
-    int walkable_spans = 0;
-    for (int i = 0; i < hf->width * hf->height; i++) {
-        for (rcSpan* s = hf->spans[i]; s; s = s->next) {
-            span_count_after++;
-            if (s->area != RC_NULL_AREA) walkable_spans++;
-        }
-    }
-    tc_log_info("[NavMesh] After filtering: %d spans, %d walkable", span_count_after, walkable_spans);
-
-    // Capture heightfield debug data
+    RecastNavMeshBuildDebugHooks debug_hooks;
+    debug_hooks.build_input_mesh = [this](const float* v, int nv, const int* t, int nt) {
+        build_input_mesh(v, nv, t, nt);
+    };
     if (capture_heightfield) {
-        capture_heightfield_data(hf);
+        debug_hooks.capture_heightfield = [this](rcHeightfield* hf) { capture_heightfield_data(hf); };
     }
-
-    // Stage 2: Build compact heightfield
-    rcCompactHeightfield* chf = rcAllocCompactHeightfield();
-    if (!chf) {
-        result.error = "Failed to allocate compact heightfield";
-        rcFreeHeightField(hf);
-        return result;
-    }
-
-    if (!rcBuildCompactHeightfield(&ctx, cfg.walkableHeight, cfg.walkableClimb, *hf, *chf)) {
-        result.error = "Failed to build compact heightfield";
-        rcFreeCompactHeightfield(chf);
-        rcFreeHeightField(hf);
-        return result;
-    }
-
-    tc_log_info("[NavMesh] Compact heightfield: %d spans", chf->spanCount);
-
-    // Done with heightfield
-    rcFreeHeightField(hf);
-    hf = nullptr;
-
-    // Erode walkable area by agent radius
-    if (!rcErodeWalkableArea(&ctx, cfg.walkableRadius, *chf)) {
-        result.error = "Failed to erode walkable area";
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    // Count walkable after erode
-    int walkable_after_erode = 0;
-    for (int i = 0; i < chf->spanCount; i++) {
-        if (chf->areas[i] != RC_NULL_AREA) walkable_after_erode++;
-    }
-    tc_log_info("[NavMesh] After erode (radius=%d): %d walkable spans", cfg.walkableRadius, walkable_after_erode);
-
-    // Build distance field
-    if (!rcBuildDistanceField(&ctx, *chf)) {
-        result.error = "Failed to build distance field";
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    tc_log_info("[NavMesh] Distance field built, maxDistance=%d", chf->maxDistance);
-
-    // Build regions (watershed algorithm)
-    if (!rcBuildRegions(&ctx, *chf, cfg.borderSize, cfg.minRegionArea, cfg.mergeRegionArea)) {
-        result.error = "Failed to build regions";
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    // Count regions
-    int max_region = 0;
-    for (int i = 0; i < chf->spanCount; i++) {
-        if (chf->spans[i].reg > max_region) max_region = chf->spans[i].reg;
-    }
-    tc_log_info("[NavMesh] Regions built: %d regions", max_region);
-
-    // Capture compact heightfield debug data
     if (capture_compact) {
-        capture_compact_data(chf);
+        debug_hooks.capture_compact = [this](rcCompactHeightfield* chf) { capture_compact_data(chf); };
     }
-
-    // Stage 3: Build contours
-    rcContourSet* cset = rcAllocContourSet();
-    if (!cset) {
-        result.error = "Failed to allocate contour set";
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    if (!rcBuildContours(&ctx, *chf, cfg.maxSimplificationError, cfg.maxEdgeLen, *cset)) {
-        result.error = "Failed to build contours";
-        rcFreeContourSet(cset);
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    tc_log_info("[NavMesh] Contours built: %d contours", cset->nconts);
-    for (int i = 0; i < cset->nconts && i < 5; i++) {
-        tc_log_info("[NavMesh]   contour[%d]: %d verts, region=%d, area=%d",
-            i, cset->conts[i].nverts, cset->conts[i].reg, cset->conts[i].area);
-    }
-    if (cset->nconts > 5) {
-        tc_log_info("[NavMesh]   ... and %d more contours", cset->nconts - 5);
-    }
-
-    // Capture contours debug data
     if (capture_contours) {
-        capture_contour_data(cset);
+        debug_hooks.capture_contours = [this](rcContourSet* cset) { capture_contour_data(cset); };
     }
-
-    // Stage 4: Build polygon mesh
-    rcPolyMesh* pmesh = rcAllocPolyMesh();
-    if (!pmesh) {
-        result.error = "Failed to allocate polygon mesh";
-        rcFreeContourSet(cset);
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    if (!rcBuildPolyMesh(&ctx, *cset, cfg.maxVertsPerPoly, *pmesh)) {
-        result.error = "Failed to build polygon mesh";
-        rcFreePolyMesh(pmesh);
-        rcFreeContourSet(cset);
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    tc_log_info("[NavMesh] PolyMesh built: %d verts, %d polys (nvp=%d)",
-        pmesh->nverts, pmesh->npolys, pmesh->nvp);
-
-    if (pmesh->nverts <= 0 || pmesh->npolys <= 0) {
-        result.error = "Recast produced an empty polygon mesh; check agent radius, cell size, region area, and source mesh scale";
-        tc_log_error("RecastNavMeshBuilderComponent: %s", result.error.c_str());
-        rcFreePolyMesh(pmesh);
-        rcFreeContourSet(cset);
-        rcFreeCompactHeightfield(chf);
-        return result;
-    }
-
-    // Done with contours
-    rcFreeContourSet(cset);
-    cset = nullptr;
-
-    // Capture poly mesh debug data
     if (capture_poly_mesh) {
-        capture_poly_mesh_data(pmesh);
+        debug_hooks.capture_poly_mesh = [this](rcPolyMesh* pmesh) { capture_poly_mesh_data(pmesh); };
+    }
+    if (capture_detail_mesh) {
+        debug_hooks.capture_detail_mesh = [this](rcPolyMeshDetail* dmesh) { capture_detail_mesh_data(dmesh); };
     }
 
-    // Stage 5: Build detail mesh (optional)
-    rcPolyMeshDetail* dmesh = nullptr;
-    if (build_detail_mesh) {
-        dmesh = rcAllocPolyMeshDetail();
-        if (!dmesh) {
-            result.error = "Failed to allocate detail mesh";
-            rcFreePolyMesh(pmesh);
-            rcFreeCompactHeightfield(chf);
-            return result;
-        }
-
-        if (!rcBuildPolyMeshDetail(&ctx, *pmesh, *chf,
-                                   cfg.detailSampleDist, cfg.detailSampleMaxError, *dmesh)) {
-            result.error = "Failed to build detail mesh";
-            rcFreePolyMeshDetail(dmesh);
-            rcFreePolyMesh(pmesh);
-            rcFreeCompactHeightfield(chf);
-            return result;
-        }
-
-        tc_log_info("[NavMesh] DetailMesh built: %d meshes, %d verts, %d tris",
-            dmesh->nmeshes, dmesh->nverts, dmesh->ntris);
-        tc_log_info("[NavMesh] DetailMesh params: sampleDist=%.2f, sampleMaxError=%.2f",
-            cfg.detailSampleDist, cfg.detailSampleMaxError);
-
-        // Log first few detail verts vs poly verts for comparison
-        if (dmesh->nverts > 0 && pmesh->nverts > 0) {
-            tc_log_info("[NavMesh] PolyMesh vert[0] (voxel): (%d, %d, %d) -> world: (%.2f, %.2f, %.2f)",
-                pmesh->verts[0], pmesh->verts[1], pmesh->verts[2],
-                pmesh->bmin[0] + pmesh->verts[0] * pmesh->cs,
-                pmesh->bmin[1] + pmesh->verts[1] * pmesh->ch,
-                pmesh->bmin[2] + pmesh->verts[2] * pmesh->cs);
-            tc_log_info("[NavMesh] DetailMesh vert[0] (float): (%.2f, %.2f, %.2f)",
-                dmesh->verts[0], dmesh->verts[1], dmesh->verts[2]);
-        }
-
-        // Capture detail mesh debug data
-        if (capture_detail_mesh) {
-            capture_detail_mesh_data(dmesh);
-        }
-    }
-
-    // Done with compact heightfield
-    rcFreeCompactHeightfield(chf);
-
-    // Success
-    result.success = true;
-    result.poly_mesh = pmesh;
-    result.detail_mesh = dmesh;
-
-    // Store as last result
+    RecastBuildResult result = build_recast_navmesh(verts, nverts, tris, ntris, config, &debug_hooks);
     last_result = result;
-
-    // Rebuild debug meshes
     rebuild_debug_meshes();
 
     return result;
 }
 
 void RecastNavMeshBuilderComponent::free_result(RecastBuildResult& result) {
-    if (result.poly_mesh) {
-        rcFreePolyMesh(result.poly_mesh);
-        result.poly_mesh = nullptr;
-    }
-    if (result.detail_mesh) {
-        rcFreePolyMeshDetail(result.detail_mesh);
-        result.detail_mesh = nullptr;
-    }
-    result.success = false;
+    free_recast_build_result(result);
+}
+
+DetourNavMeshTileBuildResult RecastNavMeshBuilderComponent::build_detour_tile_data(
+    const RecastBuildResult& result
+) {
+    DetourNavMeshBuildConfig detour_config;
+    detour_config.area_id = area_id;
+    detour_config.agent_height = agent_height;
+    detour_config.agent_radius = agent_radius;
+    detour_config.agent_max_climb = agent_max_climb;
+    return build_detour_navmesh_tile_data(result, detour_config);
 }
 
 bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& result) {
@@ -688,70 +407,20 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
         return false;
     }
 
-    const int poly_area_id = std::clamp(area_id, 0, 63);
-    if (poly_area_id != area_id) {
-        tc_log_warn("[NavMesh] RecastNavMeshBuilderComponent area_id=%d is outside Detour range, using %d",
-                    area_id, poly_area_id);
-    }
+    DetourOffMeshLinkData off_mesh_links = collect_off_mesh_links_for_builder(entity(), agent_type_name);
+    DetourNavMeshBuildConfig detour_config;
+    detour_config.area_id = area_id;
+    detour_config.agent_height = agent_height;
+    detour_config.agent_radius = agent_radius;
+    detour_config.agent_max_climb = agent_max_climb;
 
-    std::vector<unsigned short> poly_flags(static_cast<size_t>(pmesh->npolys), 0);
-    std::vector<unsigned char> poly_areas(static_cast<size_t>(pmesh->npolys), 0);
-    for (int i = 0; i < pmesh->npolys; ++i) {
-        const unsigned char area = pmesh->areas ? pmesh->areas[i] : RC_WALKABLE_AREA;
-        poly_areas[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : static_cast<unsigned char>(poly_area_id);
-        poly_flags[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 1;
-    }
-
-    DetourOffMeshLinks off_mesh_links = collect_off_mesh_links_for_builder(entity(), agent_type_name);
-
-    dtNavMeshCreateParams params;
-    std::memset(&params, 0, sizeof(params));
-    params.verts = pmesh->verts;
-    params.vertCount = pmesh->nverts;
-    params.polys = pmesh->polys;
-    params.polyAreas = poly_areas.data();
-    params.polyFlags = poly_flags.data();
-    params.polyCount = pmesh->npolys;
-    params.nvp = pmesh->nvp;
-
-    if (off_mesh_links.count() > 0) {
-        params.offMeshConVerts = off_mesh_links.verts.data();
-        params.offMeshConRad = off_mesh_links.radii.data();
-        params.offMeshConDir = off_mesh_links.dirs.data();
-        params.offMeshConAreas = off_mesh_links.areas.data();
-        params.offMeshConFlags = off_mesh_links.flags.data();
-        params.offMeshConUserID = off_mesh_links.user_ids.data();
-        params.offMeshConCount = off_mesh_links.count();
-    }
-
-    if (result.detail_mesh) {
-        params.detailMeshes = result.detail_mesh->meshes;
-        params.detailVerts = result.detail_mesh->verts;
-        params.detailVertsCount = result.detail_mesh->nverts;
-        params.detailTris = result.detail_mesh->tris;
-        params.detailTriCount = result.detail_mesh->ntris;
-    }
-
-    rcVcopy(params.bmin, pmesh->bmin);
-    rcVcopy(params.bmax, pmesh->bmax);
-    params.walkableHeight = agent_height;
-    params.walkableRadius = agent_radius;
-    params.walkableClimb = agent_max_climb;
-    params.cs = pmesh->cs;
-    params.ch = pmesh->ch;
-    params.buildBvTree = true;
-
-    unsigned char* nav_data = nullptr;
-    int nav_data_size = 0;
-    if (!dtCreateNavMeshData(&params, &nav_data, &nav_data_size) || !nav_data || nav_data_size <= 0) {
-        tc_log_error("RecastNavMeshBuilderComponent: dtCreateNavMeshData failed "
-                     "(verts=%d polys=%d nvp=%d offmesh=%d detail_verts=%d detail_tris=%d)",
-                     params.vertCount,
-                     params.polyCount,
-                     params.nvp,
-                     params.offMeshConCount,
-                     params.detailVertsCount,
-                     params.detailTriCount);
+    DetourNavMeshTileBuildResult tile = build_detour_navmesh_tile_data(
+        result,
+        detour_config,
+        off_mesh_links.count() > 0 ? &off_mesh_links : nullptr);
+    if (!tile.success) {
+        tc_log_error("RecastNavMeshBuilderComponent: failed to build Detour navmesh tile: %s",
+                     tile.error.c_str());
         return false;
     }
 
@@ -760,7 +429,6 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     std::filesystem::path output_path = resolve_navmesh_output_path(entity(), agent_type_name);
     if (output_path.empty()) {
         tc_log_error("RecastNavMeshBuilderComponent: cannot save Detour navmesh: scene has no file path");
-        dtFree(nav_data);
         return false;
     }
     std::error_code ec;
@@ -768,7 +436,6 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     if (ec) {
         tc_log_error("RecastNavMeshBuilderComponent: failed to create directory '%s': %s",
                      output_path.parent_path().string().c_str(), ec.message().c_str());
-        dtFree(nav_data);
         return false;
     }
 
@@ -782,13 +449,12 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
         : stable_uuid(std::string(entity().uuid() ? entity().uuid() : entity_name) + ":" + agent_type_name);
     std::string asset_name = output_path.stem().string();
 
-    const std::string blob = base64_encode(nav_data, nav_data_size);
+    const std::string blob = base64_encode(tile.data.data(), tile.data_size());
 
     std::ofstream out(output_path, std::ios::binary);
     if (!out) {
         tc_log_error("RecastNavMeshBuilderComponent: failed to open '%s' for writing",
                      output_path.string().c_str());
-        dtFree(nav_data);
         return false;
     }
 
@@ -816,7 +482,7 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     out << "      \"y\": 0,\n";
     out << "      \"layer\": 0,\n";
     out << "      \"data_encoding\": \"base64\",\n";
-    out << "      \"data_size\": " << nav_data_size << ",\n";
+    out << "      \"data_size\": " << tile.data_size() << ",\n";
     out << "      \"data\": \"" << blob << "\"\n";
     out << "    }\n";
     out << "  ]\n";
@@ -826,7 +492,6 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     if (!out) {
         tc_log_error("RecastNavMeshBuilderComponent: failed while writing '%s'",
                      output_path.string().c_str());
-        dtFree(nav_data);
         return false;
     }
 
@@ -848,8 +513,7 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     keeper->invalidate_debug_mesh();
 
     tc_log_info("RecastNavMeshBuilderComponent: saved Detour navmesh '%s' (%d bytes, uuid=%s)",
-                output_path.string().c_str(), nav_data_size, uuid.c_str());
-    dtFree(nav_data);
+                output_path.string().c_str(), tile.data_size(), uuid.c_str());
     return true;
 }
 
