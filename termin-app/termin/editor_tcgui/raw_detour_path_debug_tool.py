@@ -27,23 +27,6 @@ class _DetourPathPoint:
     off_mesh_user_id: int
 
 
-@dataclass
-class _DetourPathCandidate:
-    entity_name: str
-    navmesh_uuid: str
-    start_distance_sq: float
-    end_distance_sq: float
-    start_over_poly: bool
-    end_over_poly: bool
-    path_points: list[_DetourPathPoint]
-
-    def score(self) -> tuple[int, float, float]:
-        off_poly_count = int(not self.start_over_poly) + int(not self.end_over_poly)
-        total_distance_sq = self.start_distance_sq + self.end_distance_sq
-        max_distance_sq = max(self.start_distance_sq, self.end_distance_sq)
-        return (off_poly_count, total_distance_sq, max_distance_sq)
-
-
 class RawDetourPathDebugTool:
     """Viewport click tool that draws DetourPathfindingWorldComponent results."""
 
@@ -154,17 +137,18 @@ class RawDetourPathDebugTool:
         if self._start is None or self._end is None:
             return
 
-        candidate = self._find_best_path_candidate(self._start, self._end)
-        if candidate is None:
-            log.error("[RawDetourPathDebugTool] failed: no DetourPathfindingWorldComponent accepted path query")
+        result = self._find_path_result(self._start, self._end)
+        if result is None or not result.success:
+            log.error("[RawDetourPathDebugTool] failed: PathfindingWorld did not return a path")
             self._path_points = []
             return
 
-        self._path_points = candidate.path_points
+        self._path_points = _detailed_path_points(result.path)
         if not self._path_points:
             log.error("[RawDetourPathDebugTool] Detour returned empty path")
             return
 
+        candidate = result.candidate
         log.info(
             "[RawDetourPathDebugTool] selected pathfinding world: "
             f"entity='{candidate.entity_name}' navmesh_uuid='{candidate.navmesh_uuid}' "
@@ -183,83 +167,43 @@ class RawDetourPathDebugTool:
                 f"offmesh_user_id={point.off_mesh_user_id}"
             )
 
-    def _find_best_path_candidate(
+    def _find_path_result(
         self,
         start: tuple[float, float, float],
         end: tuple[float, float, float],
-    ) -> _DetourPathCandidate | None:
+    ):
         scene = self._editor.scene
         if scene is None:
             log.error("[RawDetourPathDebugTool] failed: editor scene is not available")
             return None
 
         try:
-            from termin.navmesh import DetourPathfindingWorldComponent, navmesh_bake_frame_from_pose
+            from termin.navmesh import PathfindingWorld
         except Exception as e:
             log.error(f"[RawDetourPathDebugTool] failed to import termin.navmesh: {e}")
             return None
 
-        best: _DetourPathCandidate | None = None
-        total_worlds = 0
-        for entity in scene.entities:
-            component = entity.get_component(DetourPathfindingWorldComponent)
-            if component is None:
-                continue
-            total_worlds += 1
+        world = PathfindingWorld.ensure_scene(scene)
+        if world is None:
+            log.error("[RawDetourPathDebugTool] failed: PathfindingWorld extension is unavailable")
+            return None
 
-            if not component.is_ready() and not component.rebuild():
-                log.warning(
-                    "[RawDetourPathDebugTool] skipped pathfinding world: "
-                    f"entity='{entity.name}' navmesh_uuid='{component.navmesh_uuid}' is not ready"
-                )
-                continue
-
-            bake_frame = navmesh_bake_frame_from_pose(entity.transform.global_pose())
-            start_closest = component.closest_point_world(bake_frame, start)
-            end_closest = component.closest_point_world(bake_frame, end)
-            if not start_closest.success or not end_closest.success:
-                log.warning(
-                    "[RawDetourPathDebugTool] skipped pathfinding world: "
-                    f"entity='{entity.name}' navmesh_uuid='{component.navmesh_uuid}' "
-                    f"start_success={1 if start_closest.success else 0} "
-                    f"end_success={1 if end_closest.success else 0}"
-                )
-                continue
-
-            path_points = _detailed_path_points(
-                component.find_detailed_path_world(bake_frame, start, end)
-            )
-            if not path_points:
-                log.warning(
-                    "[RawDetourPathDebugTool] skipped pathfinding world: "
-                    f"entity='{entity.name}' navmesh_uuid='{component.navmesh_uuid}' returned empty path"
-                )
-                continue
-
-            candidate = _DetourPathCandidate(
-                entity_name=entity.name,
-                navmesh_uuid=str(component.navmesh_uuid),
-                start_distance_sq=_distance_sq(start, _tuple3(start_closest.point)),
-                end_distance_sq=_distance_sq(end, _tuple3(end_closest.point)),
-                start_over_poly=bool(start_closest.over_poly),
-                end_over_poly=bool(end_closest.over_poly),
-                path_points=path_points,
-            )
+        candidates = world.candidates_for_world_points(start, end)
+        for candidate in candidates:
             log.info(
                 "[RawDetourPathDebugTool] candidate: "
                 f"entity='{candidate.entity_name}' navmesh_uuid='{candidate.navmesh_uuid}' "
-                f"points={len(candidate.path_points)} "
                 f"start_distance={candidate.start_distance_sq ** 0.5:.3f} "
                 f"end_distance={candidate.end_distance_sq ** 0.5:.3f} "
                 f"start_over_poly={1 if candidate.start_over_poly else 0} "
                 f"end_over_poly={1 if candidate.end_over_poly else 0}"
             )
-            if best is None or candidate.score() < best.score():
-                best = candidate
 
-        if total_worlds == 0:
+        if not candidates:
             log.error("[RawDetourPathDebugTool] failed: DetourPathfindingWorldComponent not found")
-        return best
+            return None
+
+        return world.find_detailed_path_world(start, end)
 
     def _draw_overlay(self) -> None:
         if not self._enabled:
@@ -321,17 +265,6 @@ def _detailed_path_points(detailed_path) -> list[_DetourPathPoint]:
             )
         )
     return points
-
-
-def _distance_sq(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
-    dx = a[0] - b[0]
-    dy = a[1] - b[1]
-    dz = a[2] - b[2]
-    return dx * dx + dy * dy + dz * dz
-
-
-def _tuple3(point) -> tuple[float, float, float]:
-    return (float(point[0]), float(point[1]), float(point[2]))
 
 
 def _draw_marker(renderer, point: tuple[float, float, float], color: Color4, radius: float) -> None:

@@ -1,7 +1,9 @@
 #include <termin/navmesh/detour_pathfinding_world_component.hpp>
 
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
+#include <termin/navmesh/pathfinding_world.hpp>
 #include <termin/navmesh/tc_navmesh_handle.hpp>
+#include <termin/tc_scene.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <algorithm>
 #include <utility>
@@ -14,7 +16,35 @@ DetourPathfindingWorldComponent::DetourPathfindingWorldComponent()
 {}
 
 DetourPathfindingWorldComponent::~DetourPathfindingWorldComponent() {
+    on_removed();
     clear();
+}
+
+void DetourPathfindingWorldComponent::on_added() {
+    const Entity owner = entity();
+    if (!owner.valid()) {
+        tc_log_warn("[DetourPathfindingWorldComponent] on_added skipped: owner entity is invalid");
+        return;
+    }
+
+    PathfindingWorld* world = PathfindingWorld::ensure_scene(owner.scene().handle());
+    if (!world) {
+        tc_log_warn("[DetourPathfindingWorldComponent] on_added skipped: pathfinding world is unavailable");
+        return;
+    }
+    world->add(this);
+}
+
+void DetourPathfindingWorldComponent::on_removed() {
+    const Entity owner = entity();
+    if (!owner.valid()) {
+        return;
+    }
+
+    PathfindingWorld* world = PathfindingWorld::from_scene(owner.scene().handle());
+    if (world) {
+        world->remove(this);
+    }
 }
 
 void DetourPathfindingWorldComponent::sync_query_settings() {

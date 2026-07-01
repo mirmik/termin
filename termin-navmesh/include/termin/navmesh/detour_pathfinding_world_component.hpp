@@ -23,6 +23,9 @@ public:
 
     static void register_type();
 
+    void on_added() override;
+    void on_removed() override;
+
     bool rebuild();
     void clear();
     bool is_ready() const;
