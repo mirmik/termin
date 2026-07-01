@@ -80,8 +80,27 @@ def build_editor_menu_spec(
     on_toggle_surface_edge_debug_tool: Callable[[], None] | None = None,
     is_surface_edge_debug_tool_enabled: Callable[[], bool] | None = None,
     set_surface_edge_debug_tool_handle: Callable[[object], None] | None = None,
+    on_toggle_raw_detour_path_debug_tool: Callable[[], None] | None = None,
+    is_raw_detour_path_debug_tool_enabled: Callable[[], bool] | None = None,
+    set_raw_detour_path_debug_tool_handle: Callable[[object], None] | None = None,
 ) -> list[MenuSpec]:
     """Build the full menu-bar specification for the editor."""
+    navigation_items = [
+        MenuItemSpec("Agent Types...", on_show_agent_types),
+        MenuItemSpec("NavMesh Areas...", on_show_navmesh_areas),
+    ]
+    if on_toggle_raw_detour_path_debug_tool is not None:
+        navigation_items.extend([
+            None,
+            MenuItemSpec(
+                "Raw Detour Path Debug",
+                on_toggle_raw_detour_path_debug_tool,
+                is_checkable=True,
+                state_getter=is_raw_detour_path_debug_tool_enabled,
+                handle_getter=set_raw_detour_path_debug_tool_handle,
+            ),
+        ])
+
     debug_items = [
         MenuItemSpec(
             "Profiler", on_toggle_profiler, shortcut="F7",
@@ -185,10 +204,7 @@ def build_editor_menu_spec(
         # ── Navigation ─────────────────────────────────────────────────
         MenuSpec(
             name="Navigation",
-            items=[
-                MenuItemSpec("Agent Types...", on_show_agent_types),
-                MenuItemSpec("NavMesh Areas...", on_show_navmesh_areas),
-            ],
+            items=navigation_items,
         ),
         # ── Game ───────────────────────────────────────────────────────
         MenuSpec(
