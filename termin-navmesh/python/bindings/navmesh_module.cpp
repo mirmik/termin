@@ -5,12 +5,14 @@
 #include "termin/navmesh/navmesh_keeper_component.hpp"
 #include "termin/navmesh/navmesh_query_space.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
+#include "termin/navmesh/pathfinding_world.hpp"
 #include "termin/navmesh/recast_navmesh_builder_component.hpp"
 #include "termin/navmesh/tc_navmesh_handle.hpp"
 #include <termin/entity/component.hpp>
 #include <termin/geom/general_pose3.hpp>
 #include <termin/geom/pose3.hpp>
 #include <termin/bindings/entity_helpers.hpp>
+#include <termin/tc_scene.hpp>
 #include <inspect/tc_inspect_python.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <nanobind/stl/string.h>
@@ -500,6 +502,54 @@ void bind_recast_navmesh_builder(nb::module_& m) {
                                   nb::handle start, nb::handle end) {
             return self.raycast_world(bake_frame, py_vec3(start), py_vec3(end));
         }, nb::arg("bake_frame"), nb::arg("start"), nb::arg("end"));
+
+    nb::class_<PathfindingWorldCandidate>(m, "PathfindingWorldCandidate")
+        .def_prop_ro("valid", &PathfindingWorldCandidate::valid)
+        .def_prop_ro("entity_name", &PathfindingWorldCandidate::entity_name)
+        .def_prop_ro("navmesh_uuid", &PathfindingWorldCandidate::navmesh_uuid)
+        .def_ro("start_distance_sq", &PathfindingWorldCandidate::start_distance_sq)
+        .def_ro("end_distance_sq", &PathfindingWorldCandidate::end_distance_sq)
+        .def_prop_ro("start_over_poly", [](const PathfindingWorldCandidate& self) {
+            return self.start_closest.over_poly;
+        })
+        .def_prop_ro("end_over_poly", [](const PathfindingWorldCandidate& self) {
+            return self.end_closest.over_poly;
+        })
+        .def_prop_ro("start_closest_point", [](const PathfindingWorldCandidate& self) {
+            return point_to_python(self.start_closest.point);
+        })
+        .def_prop_ro("end_closest_point", [](const PathfindingWorldCandidate& self) {
+            return point_to_python(self.end_closest.point);
+        });
+
+    nb::class_<PathfindingWorldPathResult>(m, "PathfindingWorldPathResult")
+        .def_ro("success", &PathfindingWorldPathResult::success)
+        .def_ro("candidate", &PathfindingWorldPathResult::candidate)
+        .def_prop_ro("path", [](const PathfindingWorldPathResult& self) {
+            return detailed_path_to_python(self.path);
+        });
+
+    nb::class_<PathfindingWorld>(m, "PathfindingWorld")
+        .def_static("from_scene", [](TcSceneRef& scene) {
+            return PathfindingWorld::from_scene(scene.handle());
+        }, nb::arg("scene"), nb::rv_policy::reference)
+        .def_static("ensure_scene", [](TcSceneRef& scene) {
+            return PathfindingWorld::ensure_scene(scene.handle());
+        }, nb::arg("scene"), nb::rv_policy::reference)
+        .def_prop_ro("size", &PathfindingWorld::size)
+        .def("rebuild_from_scene", &PathfindingWorld::rebuild_from_scene)
+        .def("candidates_for_world_points",
+            [](PathfindingWorld& self, nb::handle start, nb::handle end) {
+                return self.candidates_for_world_points(py_vec3(start), py_vec3(end));
+            },
+            nb::arg("start"), nb::arg("end"))
+        .def("find_detailed_path_world",
+            [](PathfindingWorld& self, nb::handle start, nb::handle end, bool navmesh_precast) {
+                PathfindingWorldQueryOptions options;
+                options.navmesh_precast = navmesh_precast;
+                return self.find_detailed_path_world(py_vec3(start), py_vec3(end), options);
+            },
+            nb::arg("start"), nb::arg("end"), nb::arg("navmesh_precast") = true);
 
     m.def("navmesh_bake_frame_from_pose", &navmesh_bake_frame_from_pose,
           nb::arg("base_pose"));

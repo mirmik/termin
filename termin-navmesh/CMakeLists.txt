@@ -121,9 +121,11 @@ if(TERMIN_HAS_RECAST)
         src/detour_query_session.cpp
         src/navmesh_keeper_component.cpp
         src/off_mesh_link_component.cpp
+        src/pathfinding_world.cpp
         src/recast_navmesh_bake.cpp
         src/recast_navmesh_entity_geometry.cpp
         src/recast_navmesh_builder_component.cpp
+        src/tc_pathfinding_world_ext.cpp
     )
     add_library(termin_navmesh::termin_navmesh_components ALIAS termin_navmesh_components)
     target_include_directories(termin_navmesh_components PUBLIC
