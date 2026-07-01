@@ -522,6 +522,18 @@ void bind_recast_navmesh_builder(nb::module_& m) {
             return point_to_python(self.end_closest.point);
         });
 
+    nb::class_<PathfindingWorldPointCandidate>(m, "PathfindingWorldPointCandidate")
+        .def_prop_ro("valid", &PathfindingWorldPointCandidate::valid)
+        .def_prop_ro("entity_name", &PathfindingWorldPointCandidate::entity_name)
+        .def_prop_ro("navmesh_uuid", &PathfindingWorldPointCandidate::navmesh_uuid)
+        .def_ro("distance_sq", &PathfindingWorldPointCandidate::distance_sq)
+        .def_prop_ro("over_poly", [](const PathfindingWorldPointCandidate& self) {
+            return self.closest.over_poly;
+        })
+        .def_prop_ro("closest_point", [](const PathfindingWorldPointCandidate& self) {
+            return point_to_python(self.closest.point);
+        });
+
     nb::class_<PathfindingWorldPathResult>(m, "PathfindingWorldPathResult")
         .def_ro("success", &PathfindingWorldPathResult::success)
         .def_ro("candidate", &PathfindingWorldPathResult::candidate)
@@ -538,6 +550,11 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         }, nb::arg("scene"), nb::rv_policy::reference)
         .def_prop_ro("size", &PathfindingWorld::size)
         .def("rebuild_from_scene", &PathfindingWorld::rebuild_from_scene)
+        .def("candidates_for_world_point",
+            [](PathfindingWorld& self, nb::handle point) {
+                return self.candidates_for_world_point(py_vec3(point));
+            },
+            nb::arg("point"))
         .def("candidates_for_world_points",
             [](PathfindingWorld& self, nb::handle start, nb::handle end) {
                 return self.candidates_for_world_points(py_vec3(start), py_vec3(end));

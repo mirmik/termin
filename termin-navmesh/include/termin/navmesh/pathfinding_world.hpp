@@ -32,6 +32,19 @@ struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldCandidate {
     std::tuple<int, double, double> score() const;
 };
 
+struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldPointCandidate {
+    Entity entity;
+    DetourPathfindingWorldComponent* component = nullptr;
+    Pose3 bake_frame;
+    DetourClosestPointResult closest;
+    double distance_sq = std::numeric_limits<double>::infinity();
+
+    bool valid() const;
+    std::string entity_name() const;
+    std::string navmesh_uuid() const;
+    std::tuple<int, double> score() const;
+};
+
 struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldPathResult {
     bool success = false;
     PathfindingWorldCandidate candidate;
@@ -54,6 +67,13 @@ public:
     void rebuild_from_scene();
 
     size_t size() const;
+
+    std::vector<PathfindingWorldPointCandidate> candidates_for_world_point(
+        const std::array<float, 3>& point);
+
+    bool find_best_candidate_world_point(
+        const std::array<float, 3>& point,
+        PathfindingWorldPointCandidate& out_candidate);
 
     std::vector<PathfindingWorldCandidate> candidates_for_world_points(
         const std::array<float, 3>& start,
