@@ -93,7 +93,7 @@ def _point_in_mesh_xz(point, vertices, triangles):
 
 
 def _assert_path_inside_mesh(path, vertices, triangles, samples_per_segment=32):
-    for segment_index, (start, end) in enumerate(zip(path, path[1:])):
+    for segment_index, (start, end) in enumerate(zip(path, path[1:], strict=False)):
         for sample_index in range(samples_per_segment + 1):
             t = sample_index / samples_per_segment
             point = start * (1.0 - t) + end * t
@@ -104,13 +104,13 @@ def _assert_path_inside_mesh(path, vertices, triangles, samples_per_segment=32):
 
 def _assert_triangle_path_connected(path_tris, neighbors):
     assert len(path_tris) >= 1
-    for left, right in zip(path_tris, path_tris[1:]):
+    for left, right in zip(path_tris, path_tris[1:], strict=False):
         assert right in neighbors[left], f"Triangles {left} and {right} are not adjacent"
 
 
 def _assert_portals_match_triangle_path(path_tris, portals, triangles, vertices):
     assert len(portals) == max(0, len(path_tris) - 1)
-    for portal_index, (tri_a, tri_b) in enumerate(zip(path_tris, path_tris[1:])):
+    for portal_index, (tri_a, tri_b) in enumerate(zip(path_tris, path_tris[1:], strict=False)):
         shared = set(map(int, triangles[tri_a])).intersection(map(int, triangles[tri_b]))
         assert len(shared) == 2, f"Triangles {tri_a} and {tri_b} do not share an edge"
         expected = {tuple(vertices[idx]) for idx in shared}
