@@ -237,6 +237,7 @@ class EditorWindowTcgui:
             update_modules_action=self._update_modules_action,
         )
         self._surface_edge_debug_tool = None
+        self._raw_detour_path_debug_tool = None
         self._scene_event_subscription = None
         self._scene_tree_rebuild_pending: bool = False
         self._viewport_interactions = ViewportInteractionHub(
@@ -752,6 +753,8 @@ class EditorWindowTcgui:
             on_pipeline_editor=self._show_pipeline_editor,
             on_show_agent_types=self._show_agent_types,
             on_show_navmesh_areas=self._show_navmesh_areas,
+            on_toggle_raw_detour_path_debug_tool=self._toggle_raw_detour_path_debug_tool,
+            is_raw_detour_path_debug_tool_enabled=self._is_raw_detour_path_debug_tool_enabled,
             on_toggle_game_mode=self._toggle_game_mode,
             on_build_project=self._build_project,
             on_build_android=self._build_android,
@@ -902,6 +905,19 @@ class EditorWindowTcgui:
         if self._surface_edge_debug_tool is None:
             return False
         return self._surface_edge_debug_tool.enabled()
+
+    def _toggle_raw_detour_path_debug_tool(self) -> None:
+        if self._raw_detour_path_debug_tool is None:
+            from termin.editor_tcgui.raw_detour_path_debug_tool import RawDetourPathDebugTool
+            self._raw_detour_path_debug_tool = RawDetourPathDebugTool(self)
+        self._raw_detour_path_debug_tool.toggle()
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_raw_detour_path_debug_tool_action()
+
+    def _is_raw_detour_path_debug_tool_enabled(self) -> bool:
+        if self._raw_detour_path_debug_tool is None:
+            return False
+        return self._raw_detour_path_debug_tool.enabled()
 
     def _on_viewport_external_drag(self, event) -> bool:
         return is_gltf_project_file_drag(event)

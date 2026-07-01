@@ -54,6 +54,8 @@ class MenuBarControllerTcgui:
         # Navigation
         on_show_agent_types: Callable,
         on_show_navmesh_areas: Callable,
+        on_toggle_raw_detour_path_debug_tool: Callable,
+        is_raw_detour_path_debug_tool_enabled: Callable[[], bool],
         # Game
         on_toggle_game_mode: Callable,
         on_build_project: Callable,
@@ -91,6 +93,7 @@ class MenuBarControllerTcgui:
         self._is_profiler_visible = is_profiler_visible
         self._is_modules_visible = is_modules_visible
         self._is_surface_edge_debug_tool_enabled = is_surface_edge_debug_tool_enabled
+        self._is_raw_detour_path_debug_tool_enabled = is_raw_detour_path_debug_tool_enabled
 
         # Toolkit-specific handles for dynamic state
         self._item_undo: MenuItem | None = None
@@ -100,6 +103,7 @@ class MenuBarControllerTcgui:
         self._item_profiler: MenuItem | None = None
         self._item_modules: MenuItem | None = None
         self._item_surface_edge_debug_tool: MenuItem | None = None
+        self._item_raw_detour_path_debug_tool: MenuItem | None = None
 
         # Build shared menu spec
         specs = build_editor_menu_spec(
@@ -128,6 +132,8 @@ class MenuBarControllerTcgui:
             on_pipeline_editor=on_pipeline_editor,
             on_show_agent_types=on_show_agent_types,
             on_show_navmesh_areas=on_show_navmesh_areas,
+            on_toggle_raw_detour_path_debug_tool=on_toggle_raw_detour_path_debug_tool,
+            is_raw_detour_path_debug_tool_enabled=is_raw_detour_path_debug_tool_enabled,
             on_toggle_game_mode=on_toggle_game_mode,
             on_build_project=on_build_project,
             on_build_android=on_build_android,
@@ -158,6 +164,7 @@ class MenuBarControllerTcgui:
             set_profiler_handle=self._set_profiler_handle,
             set_modules_handle=self._set_modules_handle,
             set_surface_edge_debug_tool_handle=self._set_surface_edge_debug_tool_handle,
+            set_raw_detour_path_debug_tool_handle=self._set_raw_detour_path_debug_tool_handle,
         )
 
         self._render_specs(menu_bar, specs)
@@ -187,6 +194,9 @@ class MenuBarControllerTcgui:
 
     def _set_surface_edge_debug_tool_handle(self, h: MenuItem) -> None:
         self._item_surface_edge_debug_tool = h
+
+    def _set_raw_detour_path_debug_tool_handle(self, h: MenuItem) -> None:
+        self._item_raw_detour_path_debug_tool = h
 
     def _render_specs(self, menu_bar: MenuBar, specs: list[MenuSpec]) -> None:
         """Render MenuSpec list into tcgui Menu / MenuItem widgets."""
@@ -250,3 +260,8 @@ class MenuBarControllerTcgui:
         """Update surface-edge debug tool action checked state."""
         if self._item_surface_edge_debug_tool is not None:
             self._item_surface_edge_debug_tool.checked = self._is_surface_edge_debug_tool_enabled()
+
+    def update_raw_detour_path_debug_tool_action(self) -> None:
+        """Update raw Detour path debug tool action checked state."""
+        if self._item_raw_detour_path_debug_tool is not None:
+            self._item_raw_detour_path_debug_tool.checked = self._is_raw_detour_path_debug_tool_enabled()
