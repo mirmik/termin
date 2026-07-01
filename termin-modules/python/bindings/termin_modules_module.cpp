@@ -118,16 +118,21 @@ NB_MODULE(_termin_modules_native, m) {
             self.register_backend(std::make_shared<PythonModuleBackend>());
         })
         .def("set_discovery_ignored_roots", &ModuleRuntime::set_discovery_ignored_roots, nb::arg("roots"))
-        .def("discover", &ModuleRuntime::discover, nb::arg("project_root"))
-        .def("load_all", &ModuleRuntime::load_all)
-        .def("load_module", &ModuleRuntime::load_module, nb::arg("module_id"))
-        .def("unload_module", &ModuleRuntime::unload_module, nb::arg("module_id"))
-        .def("reload_module", &ModuleRuntime::reload_module, nb::arg("module_id"))
-        .def("reload_module_with_dependents", &ModuleRuntime::reload_module_with_dependents, nb::arg("module_id"))
+        .def("discover", &ModuleRuntime::discover, nb::arg("project_root"), nb::call_guard<nb::gil_scoped_release>())
+        .def("load_all", &ModuleRuntime::load_all, nb::call_guard<nb::gil_scoped_release>())
+        .def("load_module", &ModuleRuntime::load_module, nb::arg("module_id"), nb::call_guard<nb::gil_scoped_release>())
+        .def("unload_module", &ModuleRuntime::unload_module, nb::arg("module_id"), nb::call_guard<nb::gil_scoped_release>())
+        .def("reload_module", &ModuleRuntime::reload_module, nb::arg("module_id"), nb::call_guard<nb::gil_scoped_release>())
+        .def(
+            "reload_module_with_dependents",
+            &ModuleRuntime::reload_module_with_dependents,
+            nb::arg("module_id"),
+            nb::call_guard<nb::gil_scoped_release>()
+        )
         .def("needs_rebuild", &ModuleRuntime::needs_rebuild, nb::arg("module_id"))
-        .def("build_module", &ModuleRuntime::build_module, nb::arg("module_id"))
-        .def("clean_module", &ModuleRuntime::clean_module, nb::arg("module_id"))
-        .def("rebuild_module", &ModuleRuntime::rebuild_module, nb::arg("module_id"))
+        .def("build_module", &ModuleRuntime::build_module, nb::arg("module_id"), nb::call_guard<nb::gil_scoped_release>())
+        .def("clean_module", &ModuleRuntime::clean_module, nb::arg("module_id"), nb::call_guard<nb::gil_scoped_release>())
+        .def("rebuild_module", &ModuleRuntime::rebuild_module, nb::arg("module_id"), nb::call_guard<nb::gil_scoped_release>())
         .def("list", [](const ModuleRuntime& self) {
             nb::list result;
             for (const ModuleRecord* record : self.list()) {
