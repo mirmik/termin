@@ -489,6 +489,12 @@ def _profile_string_choice(
 def _profile_shader_targets(profile: BuildProfile) -> tuple[str, ...] | None:
     value = profile.data.get("shader_targets")
     if value is None:
+        if profile.target == "desktop":
+            raise ProfileBuildError(
+                f"profile '{profile.name}' target 'desktop' must set ordered field "
+                "'shader_targets' to the packaged backend priority, for example "
+                '["vulkan", "opengl"] or ["d3d11", "vulkan"]'
+            )
         return None
     if not isinstance(value, list):
         raise ProfileBuildError(f"profile '{profile.name}' field 'shader_targets' must be a list")
