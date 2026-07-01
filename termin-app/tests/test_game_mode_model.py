@@ -27,16 +27,6 @@ RenderSceneAttachment = _load_source_module(
 ).RenderSceneAttachment
 
 
-class _ProjectModulesRuntime:
-    rebuild_count: int
-
-    def __init__(self):
-        self.rebuild_count = 0
-
-    def rebuild_stale_modules(self) -> None:
-        self.rebuild_count += 1
-
-
 class _RenderingController:
     editor_display = None
 
@@ -350,16 +340,7 @@ class _Display:
             self.viewports.remove(viewport)
 
 
-def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(monkeypatch):
-    import termin.project_modules.runtime as modules_runtime
-
-    runtime = _ProjectModulesRuntime()
-    monkeypatch.setattr(
-        modules_runtime,
-        "get_project_modules_runtime",
-        lambda: runtime,
-    )
-
+def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments():
     scene_manager = SceneManager()
     editor_scene = scene_manager.create_scene("Editor", [])
     assert editor_scene is not None
@@ -369,6 +350,7 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
     connector = _EditorConnector()
     render_connector = _RenderConnector()
     tree = _SceneTreeController()
+    prepare_calls = []
 
     model = GameModeModel(
         scene_manager=scene_manager,
@@ -377,6 +359,7 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
         get_editor_scene_name=lambda: "Editor",
         scene_tree_controller=tree,
         render_connector=render_connector,
+        prepare_code_for_play=lambda: prepare_calls.append("prepare") or True,
     )
 
     state_events = []
@@ -391,7 +374,7 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
     try:
         model.toggle_game_mode()
 
-        assert runtime.rebuild_count == 1
+        assert prepare_calls == ["prepare"]
         assert model.is_game_mode is True
         assert model.is_game_paused is False
         assert model.game_scene_name == "Editor(game)"
@@ -479,16 +462,36 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments(m
         scene_manager.close_all_scenes()
 
 
-def test_game_mode_model_restores_render_counts_with_shared_render_attachment(monkeypatch):
-    import termin.project_modules.runtime as modules_runtime
+def test_game_mode_model_blocks_play_when_code_prepare_fails():
+    scene_manager = SceneManager()
+    editor_scene = scene_manager.create_scene("Editor", [])
+    assert editor_scene is not None
+    scene_manager.set_mode("Editor", SceneMode.STOP)
 
-    runtime = _ProjectModulesRuntime()
-    monkeypatch.setattr(
-        modules_runtime,
-        "get_project_modules_runtime",
-        lambda: runtime,
+    connector = _EditorConnector()
+    render_connector = _RenderConnector()
+    model = GameModeModel(
+        scene_manager=scene_manager,
+        editor_connector=connector,
+        rendering_controller=_RenderingController(),
+        get_editor_scene_name=lambda: "Editor",
+        render_connector=render_connector,
+        prepare_code_for_play=lambda: False,
     )
 
+    try:
+        model.toggle_game_mode()
+
+        assert model.is_game_mode is False
+        assert scene_manager.has_scene("Editor(game)") is False
+        assert scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert connector.events == []
+        assert render_connector.events == []
+    finally:
+        scene_manager.close_all_scenes()
+
+
+def test_game_mode_model_restores_render_counts_with_shared_render_attachment():
     scene_manager = SceneManager()
     editor_scene = scene_manager.create_scene("Editor", [])
     assert editor_scene is not None

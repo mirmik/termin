@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from tcbase import log
 from termin.editor_core.signal import Signal
 
 
@@ -21,6 +22,7 @@ class GameModeModel:
         get_editor_scene_name: Callable[[], str | None],
         scene_tree_controller=None,
         render_connector=None,
+        prepare_code_for_play: Callable[[], bool] | None = None,
     ):
         self._scene_manager = scene_manager
         self._editor_connector = editor_connector
@@ -28,6 +30,7 @@ class GameModeModel:
         self._get_editor_scene_name = get_editor_scene_name
         self._scene_tree_controller = scene_tree_controller
         self._render_connector = render_connector
+        self._prepare_code_for_play = prepare_code_for_play or (lambda: True)
 
         self._game_scene_name: str | None = None
         self._saved_tree_expanded_uuids: list[str] | None = None
@@ -90,14 +93,16 @@ class GameModeModel:
         if editor_scene_name is None:
             return
 
-        from termin.engine import scene as engine_scene
-        SceneMode = engine_scene.SceneMode
-        from termin.project_modules.runtime import get_project_modules_runtime
-        get_project_modules_runtime().rebuild_stale_modules()
+        if not self._prepare_code_for_play():
+            log.error("[GameModeModel] Play blocked because code update failed")
+            return
 
         editor_scene = self._scene_manager.get_scene(editor_scene_name)
         if editor_scene is None:
             return
+
+        from termin.engine import scene as engine_scene
+        SceneMode = engine_scene.SceneMode
 
         self._saved_tree_expanded_uuids = None
         if self._scene_tree_controller is not None:

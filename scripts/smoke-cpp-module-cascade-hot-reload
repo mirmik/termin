@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run an editor-process smoke test for C++ module cascade hot reload."""
+"""Run an editor-process smoke test for C++ module cascade explicit reload."""
 
 from __future__ import annotations
 

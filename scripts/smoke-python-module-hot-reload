@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run an editor-process smoke test for Python .pymodule hot reload."""
+"""Run an editor-process smoke test for Python .pymodule explicit reload."""
 
 from __future__ import annotations
 
@@ -170,11 +170,12 @@ def _write_probe(tmp_dir: Path) -> Path:
             from termin.project_modules import get_project_modules_runtime
 
             runtime = get_project_modules_runtime()
-            runtime.auto_reload_enabled = True
 
             poll_error = None
+            prepare_success = None
             try:
                 editor._project_file_watcher.poll()
+                prepare_success = runtime.prepare_changed_modules_for_play()
             except Exception as exc:
                 poll_error = f"{type(exc).__name__}: {exc}"
 
@@ -210,7 +211,9 @@ def _write_probe(tmp_dir: Path) -> Path:
                 "component_module": component_module,
                 "unknown_count": unknown_count,
                 "component_type_counts": counts,
+                "dirty_modules": runtime.dirty_modules(),
                 "poll_error": poll_error,
+                "prepare_success": prepare_success,
             }
             print(json.dumps(status, sort_keys=True))
             """
