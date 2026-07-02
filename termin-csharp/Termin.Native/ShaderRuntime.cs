@@ -14,6 +14,9 @@ public static class ShaderRuntime
     [DllImport(UcrtDll, EntryPoint = "_putenv_s", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
     private static extern int PutEnv(string name, string value);
 
+    [DllImport("termin_graphics2", EntryPoint = "tgfx2_set_shader_artifact_root", CharSet = CharSet.Ansi)]
+    private static extern void Tgfx2SetShaderArtifactRoot(string root);
+
     public static void ConfigureFromAssemblyDirectory()
     {
         var configuredRoot = Environment.GetEnvironmentVariable(ArtifactRootEnv);
@@ -36,6 +39,7 @@ public static class ShaderRuntime
     private static void ApplyArtifactRoot(string root)
     {
         Environment.SetEnvironmentVariable(ArtifactRootEnv, root);
+        Tgfx2SetShaderArtifactRoot(root);
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             return;
