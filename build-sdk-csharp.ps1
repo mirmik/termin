@@ -227,27 +227,33 @@ if (Test-Path $nativeSource) {
 }
 
 # Managed assemblies
-$dllPath = Get-ChildItem -Path (Join-Path (Join-Path (Join-Path $ScriptDir "termin-csharp") "Termin.Native") "bin") `
-    -Filter "Termin.Native.dll" -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match $BuildType } |
-    Select-Object -First 1
+function Copy-ManagedAssembly {
+    param(
+        [string]$ProjectName,
+        [string]$TargetFramework,
+        [switch]$LegacyFlatCopy
+    )
 
-if ($dllPath) {
-    Copy-Item -Force $dllPath.FullName $libDir
-    Write-Host "  Copied $($dllPath.Name) to $libDir"
+    $sourcePath = Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $ScriptDir "termin-csharp") $ProjectName) "bin") $BuildType) $TargetFramework
+    $assemblyPath = Join-Path $sourcePath "$ProjectName.dll"
+    if (-not (Test-Path $assemblyPath)) {
+        throw "$ProjectName.dll ($BuildType, $TargetFramework) not found at $assemblyPath. Build termin-csharp first."
+    }
+
+    $frameworkLibDir = Join-Path $libDir $TargetFramework
+    New-Item -ItemType Directory -Path $frameworkLibDir -Force | Out-Null
+    Copy-Item -Force $assemblyPath $frameworkLibDir
+    Write-Host "  Copied $ProjectName.dll ($TargetFramework) to $frameworkLibDir"
+
+    if ($LegacyFlatCopy) {
+        Copy-Item -Force $assemblyPath $libDir
+        Write-Host "  Copied $ProjectName.dll ($TargetFramework) to $libDir"
+    }
 }
 
-$wpfDllPath = Get-ChildItem -Path (Join-Path (Join-Path (Join-Path $ScriptDir "termin-csharp") "Termin.Wpf") "bin") `
-    -Filter "Termin.Wpf.dll" -Recurse -ErrorAction SilentlyContinue |
-    Where-Object { $_.FullName -match $BuildType } |
-    Select-Object -First 1
-
-if ($wpfDllPath) {
-    Copy-Item -Force $wpfDllPath.FullName $libDir
-    Write-Host "  Copied $($wpfDllPath.Name) to $libDir"
-} else {
-    throw "Termin.Wpf.dll ($BuildType) not found. Build termin-csharp first."
-}
+Copy-ManagedAssembly -ProjectName "Termin.Native" -TargetFramework "netstandard2.1" -LegacyFlatCopy
+Copy-ManagedAssembly -ProjectName "Termin.Wpf" -TargetFramework "netcoreapp3.1" -LegacyFlatCopy
+Copy-ManagedAssembly -ProjectName "Termin.Wpf" -TargetFramework "net8.0-windows"
 
 # Shader sources and backend artifacts used by tgfx2 renderers and tcplot.
 $requiredShareFiles = @(

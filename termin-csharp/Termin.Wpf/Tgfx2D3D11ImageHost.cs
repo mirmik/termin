@@ -321,6 +321,27 @@ public sealed class Tgfx2D3D11ImageHost : Image, IDisposable
         Console.Error.WriteLine($"[Termin.Wpf.D3DImageHost:{GetHashCode():X8}:{name}] {message}");
     }
 
-    private readonly record struct SizeInPixels(int Width, int Height);
-    private readonly record struct PointInPixels(float X, float Y);
+    private readonly struct SizeInPixels
+    {
+        public SizeInPixels(int width, int height)
+        {
+            Width = width;
+            Height = height;
+        }
+
+        public int Width { get; }
+        public int Height { get; }
+    }
+
+    private readonly struct PointInPixels
+    {
+        public PointInPixels(float x, float y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        public float X { get; }
+        public float Y { get; }
+    }
 }
