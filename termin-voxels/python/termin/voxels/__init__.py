@@ -6,22 +6,64 @@ Provides chunked voxel grid with visualization and serialization support.
 
 from pkgutil import extend_path
 
-from termin.voxels.chunk import VoxelChunk, CHUNK_SIZE
-from termin.voxels.grid import VoxelGrid
-from termin.voxels.voxelizer import (
-    MeshVoxelizer,
-    SceneVoxelizer,
-    voxelize_scene,
-    VOXEL_EMPTY,
-    VOXEL_SOLID,
-    VOXEL_SURFACE,
-)
-from termin.voxels.persistence import VoxelPersistence, VOXEL_FILE_EXTENSION
-
 __path__ = extend_path(__path__, __name__)
 
 
 def __getattr__(name: str):
+    if name in ("VoxelChunk", "CHUNK_SIZE"):
+        from termin.voxels.chunk import CHUNK_SIZE, VoxelChunk
+
+        exports = {
+            "VoxelChunk": VoxelChunk,
+            "CHUNK_SIZE": CHUNK_SIZE,
+        }
+        globals().update(exports)
+        return exports[name]
+
+    if name == "VoxelGrid":
+        from termin.voxels.grid import VoxelGrid
+
+        globals()["VoxelGrid"] = VoxelGrid
+        return VoxelGrid
+
+    if name in (
+        "MeshVoxelizer",
+        "SceneVoxelizer",
+        "voxelize_scene",
+        "VOXEL_EMPTY",
+        "VOXEL_SOLID",
+        "VOXEL_SURFACE",
+    ):
+        from termin.voxels.voxelizer import (
+            MeshVoxelizer,
+            SceneVoxelizer,
+            VOXEL_EMPTY,
+            VOXEL_SOLID,
+            VOXEL_SURFACE,
+            voxelize_scene,
+        )
+
+        exports = {
+            "MeshVoxelizer": MeshVoxelizer,
+            "SceneVoxelizer": SceneVoxelizer,
+            "voxelize_scene": voxelize_scene,
+            "VOXEL_EMPTY": VOXEL_EMPTY,
+            "VOXEL_SOLID": VOXEL_SOLID,
+            "VOXEL_SURFACE": VOXEL_SURFACE,
+        }
+        globals().update(exports)
+        return exports[name]
+
+    if name in ("VoxelPersistence", "VOXEL_FILE_EXTENSION"):
+        from termin.voxels.persistence import VOXEL_FILE_EXTENSION, VoxelPersistence
+
+        exports = {
+            "VoxelPersistence": VoxelPersistence,
+            "VOXEL_FILE_EXTENSION": VOXEL_FILE_EXTENSION,
+        }
+        globals().update(exports)
+        return exports[name]
+
     if name in (
         "TcVoxelGrid",
         "VoxelGridHandle",

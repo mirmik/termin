@@ -55,7 +55,7 @@ class ProjectBuildController:
             "termin.player",
             str(entry.project_root),
             "--scene",
-            str(entry.scene_rel_path),
+            entry.scene_rel_path.as_posix(),
         ]
         self._log_to_console(f"Launching standalone: {' '.join(cmd)}")
         try:
