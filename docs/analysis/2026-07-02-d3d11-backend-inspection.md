@@ -102,10 +102,27 @@ Useful next tests:
 - `blit_to_texture()` does not leak state into the next low-level command-list
   user.
 
-## Suggested Next Fixes
+## Follow-up Fixes
 
-1. Reject D3D11 storage textures/UAV bindings explicitly in binding-plan/runtime
-   creation.
-2. Decide and enforce the D3D11 public `RGB8_UNorm` policy.
-3. Make `blit_to_texture()` restore or clear all state it mutates.
-4. Add focused D3D11 negative tests around the new resource validation rules.
+- D3D11 storage texture/UAV paths now fail explicitly: storage textures are
+  rejected by the D3D11 binding-plan builder, `TextureUsage::Storage` texture
+  descriptors are rejected at creation/registration, and D3D11 resource-set
+  creation refuses planned or legacy `u#` placements.
+- Public D3D11 `RGB8_UNorm` texture descriptors are rejected with a clear log.
+  The tc texture bridge still normalizes `TC_TEXTURE_RGB8` to RGBA8 before
+  upload.
+- D3D11 texture uploads now validate mip, region bounds, format byte size, and
+  minimum payload size before `UpdateSubresource`.
+- The shader `blit_to_texture()` path now clears D3D11 immediate-context state
+  via `reset_state()` after the draw.
+- Regression coverage now includes D3D11 binding-plan rejection for storage
+  textures and D3D11 smoke checks for public RGB8, storage texture creation, and
+  storage texture resource-set creation.
+
+## Remaining Suggested Next Fixes
+
+1. Add focused negative tests for invalid native texture view creation once a
+   convenient D3D11-only negative test harness exists.
+2. Add coverage for buffer upload/readback out-of-range logging and texture
+   upload range rejection.
+3. Tighten or document partial upload semantics for `cpu_visible` D3D11 buffers.
