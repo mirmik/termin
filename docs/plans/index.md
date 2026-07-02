@@ -44,3 +44,7 @@
 - [termin-app asset footprint cleanup goal plan](2026-06-29-termin-app-asset-footprint-goal-plan.md)
 - [termin-app tests migration plan](2026-06-29-termin-app-tests-migration-plan.md)
 - [Runtime package exporter responsibility split](2026-06-30-runtime-package-exporter-split-plan.md)
+
+## 2026-07
+
+- [D3D11 Slang scope preservation](2026-07-02-d3d11-slang-scope-preservation-plan.md)
