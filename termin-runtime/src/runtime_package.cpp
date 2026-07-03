@@ -691,6 +691,52 @@ tc_draw_mode parse_draw_mode(const std::string& value) {
     return TC_DRAW_TRIANGLES;
 }
 
+bool parse_mesh_submeshes(
+    const nos::trent* submesh_spec,
+    size_t index_count,
+    tc_draw_mode default_draw_mode,
+    std::vector<tc_submesh>& submeshes,
+    std::string& error,
+    const std::string& uuid
+) {
+    if (!submesh_spec) {
+        return true;
+    }
+    if (!submesh_spec->is_list()) {
+        error = "mesh '" + uuid + "' submeshes must be a list";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    for (const nos::trent& item : submesh_spec->as_list()) {
+        if (!item.is_dict()) {
+            error = "mesh '" + uuid + "' has invalid submesh entry";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        tc_submesh submesh{};
+        submesh.first_index = static_cast<uint32_t>(number_field(item, "first_index", 0.0));
+        submesh.index_count = static_cast<uint32_t>(number_field(item, "index_count", 0.0));
+        submesh.vertex_offset = static_cast<int32_t>(number_field(item, "vertex_offset", 0.0));
+        submesh.material_slot = static_cast<uint32_t>(number_field(item, "material_slot", 0.0));
+        submesh.draw_mode = static_cast<uint8_t>(
+            parse_draw_mode(string_field(item, "draw_mode", default_draw_mode == TC_DRAW_LINES ? "lines" : "triangles")));
+        const std::string name = string_field(item, "name");
+        if (!name.empty()) {
+            std::snprintf(submesh.name, sizeof(submesh.name), "%s", name.c_str());
+        }
+        if (submesh.index_count == 0 ||
+            static_cast<size_t>(submesh.first_index) > index_count ||
+            static_cast<size_t>(submesh.index_count) > index_count - static_cast<size_t>(submesh.first_index)) {
+            error = "mesh '" + uuid + "' has invalid submesh range";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        submeshes.push_back(submesh);
+    }
+    return true;
+}
+
 bool load_mesh_resource(
     const nos::trent& spec,
     RuntimePackageResourceKeepalive& keepalive,
@@ -770,16 +816,35 @@ bool load_mesh_resource(
     }
 
     const size_t vertex_count = vertices.size() / floats_per_vertex;
-    TcMesh mesh = TcMesh::from_interleaved(
-        vertices.data(),
-        vertex_count,
-        indices.data(),
-        indices.size(),
-        layout,
-        name,
-        uuid,
-        parse_draw_mode(string_field(spec, "draw_mode", "triangles"))
-    );
+    tc_draw_mode draw_mode = parse_draw_mode(string_field(spec, "draw_mode", "triangles"));
+    std::vector<tc_submesh> submeshes;
+    if (!parse_mesh_submeshes(dict_get(spec, "submeshes"), indices.size(), draw_mode, submeshes, error, uuid)) {
+        return false;
+    }
+
+    TcMesh mesh;
+    if (submeshes.empty()) {
+        mesh = TcMesh::from_interleaved(
+            vertices.data(),
+            vertex_count,
+            indices.data(),
+            indices.size(),
+            layout,
+            name,
+            uuid,
+            draw_mode);
+    } else {
+        mesh = TcMesh::from_interleaved_with_submeshes(
+            vertices.data(),
+            vertex_count,
+            indices.data(),
+            indices.size(),
+            layout,
+            submeshes,
+            name,
+            uuid,
+            draw_mode);
+    }
     if (!mesh.is_valid()) {
         error = "failed to create mesh '" + uuid + "'";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());

@@ -50,11 +50,19 @@ def builtin_shader_source(filename: str) -> str:
     raise FileNotFoundError(f"Built-in shader source '{filename}' was not found in: {roots}")
 
 
+def _repo_builtin_shader_root() -> Path | None:
+    for parent in Path(__file__).resolve().parents:
+        root = parent / "termin-graphics" / "resources" / "builtin_shaders"
+        if root.is_dir():
+            return root
+    return None
+
+
 def builtin_shader_roots() -> list[Path]:
-    repo_root = Path(__file__).resolve().parents[4]
-    roots = [
-        repo_root / "termin-graphics" / "resources" / "builtin_shaders",
-    ]
+    roots = []
+    repo_builtin_root = _repo_builtin_shader_root()
+    if repo_builtin_root is not None:
+        roots.append(repo_builtin_root)
 
     sdk_env = os.environ.get("TERMIN_SDK")
     if sdk_env:
@@ -62,4 +70,3 @@ def builtin_shader_roots() -> list[Path]:
 
     roots.append(Path(sys.prefix).resolve() / "share" / "termin" / "builtin_shaders")
     return roots
-

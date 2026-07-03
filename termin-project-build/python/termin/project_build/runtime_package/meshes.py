@@ -189,9 +189,26 @@ def mesh_to_spec(mesh: Any) -> dict[str, Any]:
         "layout": mesh_layout_to_json(mesh),
         "vertices": flat_number_list(vertices_buffer, float),
         "indices": flat_number_list(indices_buffer, int),
+        "submeshes": mesh_submeshes_to_json(mesh),
         "vertex_count": int(mesh.vertex_count),
         "stride": int(mesh.stride),
     }
+
+
+def mesh_submeshes_to_json(mesh: Any) -> list[dict[str, Any]]:
+    submeshes = []
+    for submesh in mesh.submeshes:
+        submeshes.append(
+            {
+                "first_index": int(submesh.first_index),
+                "index_count": int(submesh.index_count),
+                "vertex_offset": int(submesh.vertex_offset),
+                "material_slot": int(submesh.material_slot),
+                "draw_mode": draw_mode_to_json(submesh.draw_mode),
+                "name": str(submesh.name),
+            }
+        )
+    return submeshes
 
 
 def mesh_layout_to_json(mesh: Any) -> list[dict[str, Any]]:
@@ -241,6 +258,16 @@ def fallback_mesh_spec(uuid_value: str, name: str) -> dict[str, Any]:
         ],
         "vertices": PLACEHOLDER_MESH_VERTICES,
         "indices": [0, 1, 2],
+        "submeshes": [
+            {
+                "first_index": 0,
+                "index_count": 3,
+                "vertex_offset": 0,
+                "material_slot": 0,
+                "draw_mode": "triangles",
+                "name": name,
+            }
+        ],
     }
 
 
@@ -282,4 +309,3 @@ def attrib_type_to_json(value: Any) -> str:
     if text.endswith(".UINT8"):
         return "uint8"
     raise ValueError(f"Unsupported vertex attribute type: {value}")
-

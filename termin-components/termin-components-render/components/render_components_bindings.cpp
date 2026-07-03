@@ -559,6 +559,13 @@ NB_MODULE(_components_render_native, m) {
             })
         .def("get_material", &MeshRenderer::get_material)
         .def("get_base_material", &MeshRenderer::get_base_material)
+        .def_prop_ro("material_slot_count", &MeshRenderer::material_slot_count)
+        .def_prop_ro("materials", [](MeshRenderer& self) {
+            return self.materials;
+        })
+        .def("get_material_for_slot", &MeshRenderer::get_material_for_slot, nb::arg("slot"))
+        .def("get_material_for_submesh", &MeshRenderer::get_material_for_submesh, nb::arg("submesh_index"))
+        .def("set_material_slot", &MeshRenderer::set_material_slot, nb::arg("slot"), nb::arg("material"))
         .def("set_material", &MeshRenderer::set_material)
         .def("set_material_by_name", &MeshRenderer::set_material_by_name)
         .def_prop_rw("override_material", &MeshRenderer::override_material, &MeshRenderer::set_override_material)

@@ -208,6 +208,49 @@ tc_material* MeshRenderer::get_material_ptr() const {
     return material.get();
 }
 
+TcMaterial MeshRenderer::get_material_for_slot(size_t slot) const {
+    if (slot < materials.size() && materials[slot].is_valid()) {
+        return materials[slot];
+    }
+    if (slot == 0) {
+        return get_material();
+    }
+
+    tc::Log::warn(
+        "[MeshRenderer] Missing material slot %zu for renderer on entity '%s'; using slot 0",
+        slot,
+        entity().valid() && entity().name() ? entity().name() : "<no-entity>");
+    return get_material();
+}
+
+tc_material* MeshRenderer::get_material_ptr_for_slot(size_t slot) const {
+    TcMaterial slot_material = get_material_for_slot(slot);
+    return slot_material.get();
+}
+
+TcMaterial MeshRenderer::get_material_for_submesh(size_t submesh_index) const {
+    tc_mesh* mesh = current_mesh_ptr();
+    if (!mesh) {
+        return get_material();
+    }
+    const tc_submesh* submesh = tc_mesh_get_submesh(mesh, submesh_index);
+    if (!submesh) {
+        tc::Log::warn(
+            "[MeshRenderer] Missing submesh %zu for mesh '%s'; using slot 0 material",
+            submesh_index,
+            mesh->header.name ? mesh->header.name : mesh->header.uuid);
+        return get_material();
+    }
+    return get_material_for_slot(submesh->material_slot);
+}
+
+void MeshRenderer::set_material_slot(size_t slot, const TcMaterial& mat) {
+    if (materials.size() <= slot) {
+        materials.resize(slot + 1);
+    }
+    materials[slot] = mat;
+}
+
 void MeshRenderer::set_material(const TcMaterial& mat) {
     material = mat;
     if (_override_material) {
@@ -424,6 +467,13 @@ std::set<std::string> MeshRenderer::get_phase_marks() const {
             marks.insert(mat->phases[i].phase_mark);
         }
     }
+    for (size_t slot = 0; slot < materials.size(); ++slot) {
+        tc_material* slot_mat = get_material_ptr_for_slot(slot);
+        if (!slot_mat) continue;
+        for (size_t i = 0; i < slot_mat->phase_count; i++) {
+            marks.insert(slot_mat->phases[i].phase_mark);
+        }
+    }
 
     if (cast_shadow) {
         marks.insert("shadow");
@@ -462,25 +512,59 @@ std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::str
     return result;
 }
 
+static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
+    tc_material* mat,
+    const std::string* phase_mark
+) {
+    std::vector<tc_material_phase*> phases;
+    if (!mat) return phases;
+
+    if (phase_mark) {
+        tc_material_phase* matched[TC_MATERIAL_MAX_PHASES];
+        size_t count = tc_material_get_phases_for_mark(
+            mat,
+            phase_mark->c_str(),
+            matched,
+            TC_MATERIAL_MAX_PHASES);
+        phases.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            phases.push_back(matched[i]);
+        }
+        return phases;
+    }
+
+    phases.reserve(mat->phase_count);
+    for (size_t i = 0; i < mat->phase_count; i++) {
+        phases.push_back(&mat->phases[i]);
+    }
+    return phases;
+}
+
 std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string* phase_mark) {
     std::vector<GeometryDrawCall> draws;
     tc_mesh* m = current_mesh_ptr();
     if (!m) return draws;
 
-    tc_material* mat = get_material_ptr();
-    if (!mat) return draws;
-
-    std::vector<tc_material_phase*> phases;
-    if (phase_mark) {
-        phases = get_phases_for_mark(*phase_mark);
-    } else {
-        for (size_t i = 0; i < mat->phase_count; i++) {
-            phases.push_back(&mat->phases[i]);
-        }
+    if (m->submesh_count == 0) {
+        tc_mesh_ensure_default_submesh(m);
     }
 
-    for (auto* phase : phases) {
-        draws.emplace_back(phase, 0);
+    size_t submesh_count = m->submesh_count;
+    if (submesh_count == 0 && m->index_count > 0) {
+        submesh_count = 1;
+    }
+
+    for (size_t submesh_index = 0; submesh_index < submesh_count; ++submesh_index) {
+        const tc_submesh* submesh = tc_mesh_get_submesh(m, submesh_index);
+        uint32_t material_slot = submesh ? submesh->material_slot : 0;
+        tc_material* mat = get_material_ptr_for_slot(material_slot);
+        if (!mat) continue;
+
+        std::vector<tc_material_phase*> phases =
+            mesh_renderer_phases_for_mark(mat, phase_mark);
+        for (auto* phase : phases) {
+            draws.emplace_back(phase, static_cast<int>(submesh_index));
+        }
     }
     return draws;
 }
