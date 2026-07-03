@@ -59,6 +59,7 @@ from termin.editor_tcgui.debug_panel_controller import DebugPanelController
 from termin.editor_tcgui.fullscreen_controller import FullscreenController
 from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarController
 from termin.editor_tcgui.game_mode_ui_controller import GameModeUiController
+from termin.editor_tcgui.gizmo_mode_ui_controller import GizmoModeUiController
 from termin.editor_tcgui.resource_actions_controller import ResourceActionsController
 from termin.editor_tcgui.editor_dialog_launcher import EditorDialogLauncher
 from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
@@ -192,6 +193,10 @@ class EditorWindowTcgui:
         self._game_mode_ui = GameModeUiController(
             update_play_action=self._update_play_action,
             update_window_title=self._update_window_title,
+            request_viewport_update=self._request_viewport_update,
+        )
+        self._gizmo_mode_ui = GizmoModeUiController(
+            get_interaction_system=lambda: self._interaction_system,
             request_viewport_update=self._request_viewport_update,
         )
         self._pre_prefab_scene_name: str | None = None
@@ -349,6 +354,7 @@ class EditorWindowTcgui:
                 toggle_pause=self._toggle_pause,
                 save_prefab=self._save_prefab,
                 exit_prefab_editing=self._exit_prefab_editing,
+                toggle_gizmo_orientation=self._toggle_gizmo_orientation,
                 viewport_external_drag=self._on_viewport_external_drag,
                 viewport_external_drop=self._on_viewport_external_drop,
             )
@@ -366,6 +372,9 @@ class EditorWindowTcgui:
             play_button=widgets.play_button,
             pause_button=widgets.pause_button,
             status_bar=widgets.status_bar,
+        )
+        self._gizmo_mode_ui.set_widgets(
+            orientation_button=widgets.gizmo_orientation_button,
         )
         self._prefab_toolbar_controller.set_widgets(
             prefab_toolbar=widgets.prefab_toolbar,
@@ -763,6 +772,8 @@ class EditorWindowTcgui:
             on_run_standalone=self._run_standalone,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_modules=self._toggle_modules,
+            on_toggle_camera_frustums=self._toggle_camera_frustums,
+            is_camera_frustums_visible=self._is_camera_frustums_visible,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
@@ -886,6 +897,9 @@ class EditorWindowTcgui:
 
     def _sync_gizmo_target(self) -> None:
         self._interaction_coordinator.sync_gizmo_target()
+
+    def _toggle_gizmo_orientation(self) -> None:
+        self._gizmo_mode_ui.toggle_orientation_mode()
 
     def _on_inspector_component_selected(self, entity, component_ref) -> None:
         self._component_extension_panels.select_component(entity, component_ref)
@@ -1382,6 +1396,22 @@ class EditorWindowTcgui:
     def _toggle_modules(self) -> None:
         self._debug_panels.toggle_modules()
 
+    def _toggle_camera_frustums(self) -> None:
+        if self._interaction_system is None:
+            log.error("[EditorWindowTcgui] cannot toggle camera frustums: interaction system is unavailable")
+            return
+        self._interaction_system.set_camera_frustums_visible(
+            not self._interaction_system.camera_frustums_visible
+        )
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_camera_frustums_action()
+        self._request_viewport_update()
+
+    def _is_camera_frustums_visible(self) -> bool:
+        if self._interaction_system is None:
+            return False
+        return bool(self._interaction_system.camera_frustums_visible)
+
     def _update_profiler_action(self) -> None:
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_profiler_action()
@@ -1389,6 +1419,10 @@ class EditorWindowTcgui:
     def _update_modules_action(self) -> None:
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_modules_action()
+
+    def _update_camera_frustums_action(self) -> None:
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_camera_frustums_action()
 
     def _toggle_fullscreen(self) -> None:
         self._fullscreen.toggle()

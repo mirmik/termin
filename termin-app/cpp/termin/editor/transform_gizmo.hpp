@@ -84,9 +84,10 @@ public:
 
     // Configuration
     float size = 1.5f;
-    std::string orientation_mode = "local";  // "local" or "world"
 
 private:
+    std::string _orientation_mode = "local";  // "local" or "world"
+
     // Target being edited. EntityTransformGizmoTarget preserves the old behavior.
     std::shared_ptr<TransformGizmoTarget> _target;
     Vec3f _target_position{0.0f, 0.0f, 0.0f};
@@ -142,7 +143,8 @@ public:
     bool snap_to(const Vec3& position);
 
     void set_screen_scale(float scale) { _screen_scale = scale; }
-    void set_orientation_mode(const std::string& mode) { orientation_mode = mode; }
+    const std::string& orientation_mode() const { return _orientation_mode; }
+    void set_orientation_mode(const std::string& mode);
     void set_drag_end_handler(std::function<void(const GeneralPose3&, const GeneralPose3&)> handler) { on_drag_end = handler; }
 
     // Gizmo interface

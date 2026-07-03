@@ -593,6 +593,45 @@ int test_unknown_only_deserialization() {
     return 0;
 }
 
+int test_unknown_only_auto_upgrade_keeps_default_enabled() {
+    std::cout << "Testing UnknownOnly auto-upgrade preserves default enabled...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("unknown_only_enabled_default");
+    const std::string json = R"({
+        "entities": [{
+            "uuid": "12121212-1212-1212-1212-121212121212",
+            "name": "entity",
+            "components": [{
+                "type": "ReloadableComponent",
+                "data": { "value": 44 }
+            }]
+        }]
+    })";
+
+    scene.from_json_string(
+        json,
+        termin::ComponentDeserializationMode::UnknownOnly,
+        termin::UnknownUpgradeStrategy{},
+        true);
+
+    const auto entities = scene.get_all_entities();
+    TEST_ASSERT(entities.size() == 1, "single entity created");
+    termin::Entity entity = entities.front();
+    TEST_ASSERT(entity.valid(), "entity created");
+    TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "UnknownComponent upgraded away");
+
+    auto* restored =
+        dynamic_cast<ReloadableComponent*>(entity.get_component<ReloadableComponent>());
+    TEST_ASSERT(restored != nullptr, "component restored");
+    TEST_ASSERT(restored->value == 44, "component data restored");
+    TEST_ASSERT(restored->enabled(), "default enabled preserved after UnknownOnly upgrade");
+
+    scene.destroy();
+    std::cout << "  UnknownOnly auto-upgrade default enabled: PASS\n";
+    return 0;
+}
+
 int test_custom_upgrade_strategy() {
     std::cout << "Testing UnknownOnly custom upgrade strategy...\n";
 
@@ -729,6 +768,7 @@ int main() {
     result |= test_requirement_satisfied_by_derived_component();
     result |= test_requirement_cycle_blocks_add();
     result |= test_unknown_only_deserialization();
+    result |= test_unknown_only_auto_upgrade_keeps_default_enabled();
     result |= test_custom_upgrade_strategy();
     result |= test_custom_upgrade_from_unregistered_source_type();
     result |= test_module_owner_registration_cleanup();
