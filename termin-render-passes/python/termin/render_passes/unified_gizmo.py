@@ -42,12 +42,14 @@ class UnifiedGizmoPass(PythonFramePass):
     def __init__(
         self,
         gizmo_manager: GizmoDrawSource | Callable[[], GizmoDrawSource | None] | None = None,
+        before_render: Callable[["ExecuteContext"], None] | None = None,
         input_res: str = "color",
         output_res: str = "color",
         pass_name: str = "UnifiedGizmoPass",
     ):
         super().__init__(pass_name=pass_name)
         self._gizmo_manager_source = gizmo_manager
+        self._before_render = before_render
         self.input_res = input_res
         self.output_res = output_res
 
@@ -110,6 +112,8 @@ class UnifiedGizmoPass(PythonFramePass):
                 proj = ctx.camera.get_projection_matrix()
 
             try:
+                if self._before_render is not None:
+                    self._before_render(ctx)
                 if manager is not None and renderer is not None:
                     with profiler.section("GizmoRender"):
                         manager.render(renderer, ctx2, view, proj)
