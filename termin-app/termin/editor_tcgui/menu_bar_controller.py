@@ -66,6 +66,8 @@ class MenuBarControllerTcgui:
         # Debug
         on_toggle_profiler: Callable,
         on_toggle_modules: Callable,
+        on_toggle_camera_frustums: Callable,
+        is_camera_frustums_visible: Callable[[], bool],
         on_show_undo_stack_viewer: Callable,
         on_show_framegraph_debugger: Callable,
         on_show_resource_manager_viewer: Callable,
@@ -92,6 +94,7 @@ class MenuBarControllerTcgui:
         self._is_fullscreen = is_fullscreen
         self._is_profiler_visible = is_profiler_visible
         self._is_modules_visible = is_modules_visible
+        self._is_camera_frustums_visible = is_camera_frustums_visible
         self._is_surface_edge_debug_tool_enabled = is_surface_edge_debug_tool_enabled
         self._is_raw_detour_path_debug_tool_enabled = is_raw_detour_path_debug_tool_enabled
 
@@ -102,6 +105,7 @@ class MenuBarControllerTcgui:
         self._item_fullscreen: MenuItem | None = None
         self._item_profiler: MenuItem | None = None
         self._item_modules: MenuItem | None = None
+        self._item_camera_frustums: MenuItem | None = None
         self._item_surface_edge_debug_tool: MenuItem | None = None
         self._item_raw_detour_path_debug_tool: MenuItem | None = None
 
@@ -144,6 +148,8 @@ class MenuBarControllerTcgui:
             is_profiler_visible=is_profiler_visible,
             on_toggle_modules=on_toggle_modules,
             is_modules_visible=is_modules_visible,
+            on_toggle_camera_frustums=on_toggle_camera_frustums,
+            is_camera_frustums_visible=is_camera_frustums_visible,
             on_show_undo_stack_viewer=on_show_undo_stack_viewer,
             on_show_framegraph_debugger=on_show_framegraph_debugger,
             on_show_resource_manager_viewer=on_show_resource_manager_viewer,
@@ -163,6 +169,7 @@ class MenuBarControllerTcgui:
             set_fullscreen_handle=self._set_fullscreen_handle,
             set_profiler_handle=self._set_profiler_handle,
             set_modules_handle=self._set_modules_handle,
+            set_camera_frustums_handle=self._set_camera_frustums_handle,
             set_surface_edge_debug_tool_handle=self._set_surface_edge_debug_tool_handle,
             set_raw_detour_path_debug_tool_handle=self._set_raw_detour_path_debug_tool_handle,
         )
@@ -191,6 +198,9 @@ class MenuBarControllerTcgui:
 
     def _set_modules_handle(self, h: MenuItem) -> None:
         self._item_modules = h
+
+    def _set_camera_frustums_handle(self, h: MenuItem) -> None:
+        self._item_camera_frustums = h
 
     def _set_surface_edge_debug_tool_handle(self, h: MenuItem) -> None:
         self._item_surface_edge_debug_tool = h
@@ -255,6 +265,11 @@ class MenuBarControllerTcgui:
         """Update modules action checked state."""
         if self._item_modules is not None:
             self._item_modules.checked = self._is_modules_visible()
+
+    def update_camera_frustums_action(self) -> None:
+        """Update camera frustums action checked state."""
+        if self._item_camera_frustums is not None:
+            self._item_camera_frustums.checked = self._is_camera_frustums_visible()
 
     def update_surface_edge_debug_tool_action(self) -> None:
         """Update surface-edge debug tool action checked state."""
