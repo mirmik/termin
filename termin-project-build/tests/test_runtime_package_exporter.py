@@ -1729,6 +1729,16 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
 
     assert mesh_data["vertices"] == vertices.astype(float).tolist()
     assert mesh_data["indices"] == [0, 1, 2]
+    assert mesh_data["submeshes"] == [
+        {
+            "first_index": 0,
+            "index_count": 3,
+            "vertex_offset": 0,
+            "material_slot": 0,
+            "draw_mode": "triangles",
+            "name": "Live Triangle",
+        }
+    ]
     assert mesh_data["layout"] == [
         {"name": "position", "location": 0, "components": 3, "type": "float32"},
         {"name": "color", "location": 1, "components": 3, "type": "float32"},

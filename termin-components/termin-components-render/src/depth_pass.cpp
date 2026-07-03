@@ -278,9 +278,10 @@ void DepthPass::execute_with_data_tgfx2(
                 nullptr,
                 draw_resources);
             // Base depth VS only reads position.
-            draw_material_pipeline_mesh(
+            draw_material_pipeline_submesh(
                 *ctx.ctx2,
                 mesh,
+                static_cast<size_t>(dc.geometry_id),
                 material_mesh_vertex_input_for_shader(
                     depth_shader.shader,
                     MaterialMeshVertexInput::Position));
@@ -305,9 +306,10 @@ void DepthPass::execute_with_data_tgfx2(
                 draw_resources);
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            draw_material_pipeline_mesh(
+            draw_material_pipeline_submesh(
                 *ctx.ctx2,
                 mesh,
+                static_cast<size_t>(dc.geometry_id),
                 material_mesh_vertex_input_for_shader(
                     skinned_shader.shader,
                     MaterialMeshVertexInput::Position));
@@ -642,9 +644,10 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 depth_shader.shader,
                 nullptr,
                 draw_resources);
-            draw_material_pipeline_mesh(
+            draw_material_pipeline_submesh(
                 *ctx.ctx2,
                 mesh,
+                static_cast<size_t>(dc.geometry_id),
                 material_mesh_vertex_input_for_shader(
                     depth_shader.shader,
                     MaterialMeshVertexInput::Position));
@@ -668,9 +671,10 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-            draw_material_pipeline_mesh(
+            draw_material_pipeline_submesh(
                 *ctx.ctx2,
                 mesh,
+                static_cast<size_t>(dc.geometry_id),
                 material_mesh_vertex_input_for_shader(
                     skinned_shader.shader,
                     MaterialMeshVertexInput::Position));

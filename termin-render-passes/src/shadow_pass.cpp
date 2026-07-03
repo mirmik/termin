@@ -566,9 +566,10 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         nullptr,
                         draw_resources);
                     // Non-skinned fast path. Shadow VS only reads position.
-                    draw_material_pipeline_mesh(
+                    draw_material_pipeline_submesh(
                         *ctx.ctx2,
                         mesh,
+                        static_cast<size_t>(dc.geometry_id),
                         material_mesh_vertex_input_for_shader(
                             shadow_shader.shader,
                             MaterialMeshVertexInput::Position));
@@ -595,9 +596,10 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                     drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
-                    draw_material_pipeline_mesh(
+                    draw_material_pipeline_submesh(
                         *ctx.ctx2,
                         mesh,
+                        static_cast<size_t>(dc.geometry_id),
                         material_mesh_vertex_input_for_shader(
                             skinned_shader.shader,
                             MaterialMeshVertexInput::Position));
