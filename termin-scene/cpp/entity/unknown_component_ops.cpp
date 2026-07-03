@@ -17,6 +17,33 @@ bool is_unknown_component(tc_component* component) {
     return type_name != nullptr && std::string(type_name) == "UnknownComponent";
 }
 
+bool data_has_field(const tc_value* data, const char* field_name) {
+    return data != nullptr
+        && data->type == TC_VALUE_DICT
+        && tc_value_dict_has(const_cast<tc_value*>(data), field_name);
+}
+
+void apply_component_core_fields(tc_component* component, const tc_value* data) {
+    if (component == nullptr || data == nullptr || data->type != TC_VALUE_DICT) {
+        return;
+    }
+
+    tc_value* display_name = tc_value_dict_get(const_cast<tc_value*>(data), "display_name");
+    if (display_name != nullptr && display_name->type == TC_VALUE_STRING) {
+        tc_component_set_display_name(component, display_name->data.s ? display_name->data.s : "");
+    }
+
+    tc_value* enabled = tc_value_dict_get(const_cast<tc_value*>(data), "enabled");
+    if (enabled != nullptr && enabled->type == TC_VALUE_BOOL) {
+        component->enabled = enabled->data.b;
+    }
+
+    tc_value* active_in_editor = tc_value_dict_get(const_cast<tc_value*>(data), "active_in_editor");
+    if (active_in_editor != nullptr && active_in_editor->type == TC_VALUE_BOOL) {
+        component->active_in_editor = active_in_editor->data.b;
+    }
+}
+
 void* component_object_ptr(tc_component* component) {
     if (component == nullptr) {
         return nullptr;
@@ -63,6 +90,10 @@ bool upgrade_unknown_component_ref_impl(const Entity& entity,
         return false;
     }
 
+    auto* unknown_obj = dynamic_cast<UnknownComponent*>(CxxComponent::from_tc(component));
+    const bool preserve_runtime_state =
+        unknown_obj != nullptr && unknown_obj->preserve_runtime_state_on_upgrade;
+
     if (target_type.empty()) {
         if (error) {
             *error = "Target type is empty";
@@ -96,14 +127,23 @@ bool upgrade_unknown_component_ref_impl(const Entity& entity,
     Entity mutable_entity = entity;
     mutable_entity.add_component_ptr(upgraded_tc);
 
-    upgraded_tc->enabled = component->enabled;
-    upgraded_tc->active_in_editor = component->active_in_editor;
-    tc_component_set_display_name(upgraded_tc, tc_component_get_display_name(component));
-
     tc_scene_handle scene_handle = entity.scene().handle();
     tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
     tc_value empty_data = tc_value_dict_new();
     const tc_value* data_to_apply = target_data != nullptr ? target_data : &empty_data;
+
+    if (preserve_runtime_state && !data_has_field(data_to_apply, "enabled")) {
+        upgraded_tc->enabled = component->enabled;
+    }
+    if (preserve_runtime_state && !data_has_field(data_to_apply, "active_in_editor")) {
+        upgraded_tc->active_in_editor = component->active_in_editor;
+    }
+    if (preserve_runtime_state && !data_has_field(data_to_apply, "display_name")) {
+        tc_component_set_display_name(upgraded_tc, tc_component_get_display_name(component));
+    }
+
+    apply_component_core_fields(upgraded_tc, data_to_apply);
+
     tc_inspect_deserialize(
         upgraded_obj,
         target_type.c_str(),
@@ -230,6 +270,25 @@ bool degrade_component_ref_to_unknown(const Entity& entity, tc_component* compon
     }
 
     tc_value original_data = tc_inspect_serialize(obj_ptr, original_type_name);
+    if (original_data.type == TC_VALUE_DICT) {
+        if (!tc_value_dict_has(&original_data, "enabled")) {
+            tc_value_dict_set(&original_data, "enabled", tc_value_bool(component->enabled));
+        }
+        if (!tc_value_dict_has(&original_data, "active_in_editor")) {
+            tc_value_dict_set(
+                &original_data,
+                "active_in_editor",
+                tc_value_bool(component->active_in_editor)
+            );
+        }
+
+        const char* display_name = tc_component_get_display_name(component);
+        if (display_name != nullptr && display_name[0] != '\0'
+            && !tc_value_dict_has(&original_data, "display_name")) {
+            tc_value_dict_set(&original_data, "display_name", tc_value_string(display_name));
+        }
+    }
+
     tc_component* unknown_tc = tc_component_registry_create("UnknownComponent");
     if (unknown_tc == nullptr) {
         tc_value_free(&original_data);
@@ -249,6 +308,7 @@ bool degrade_component_ref_to_unknown(const Entity& entity, tc_component* compon
     }
 
     unknown_obj->original_type = original_type_name;
+    unknown_obj->preserve_runtime_state_on_upgrade = true;
     tc_value_free(&unknown_obj->original_data);
     unknown_obj->original_data = tc_value_copy(&original_data);
     tc_value_free(&original_data);

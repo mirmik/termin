@@ -5,8 +5,10 @@
 #include "termin/editor/selection_manager.hpp"
 #include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
+#include "termin/editor/camera_frustum_debug_gizmo.hpp"
 #include <termin/geom/general_pose3.hpp>
 #include "termin/input/input_events.hpp"
+#include "core/tc_scene.h"
 #include "render/tc_display.h"
 #include "render/tc_viewport.h"
 
@@ -43,6 +45,7 @@ public:
 
 private:
     TransformGizmo _transform_gizmo;
+    CameraFrustumDebugGizmo _camera_frustum_debug_gizmo;
     std::vector<std::unique_ptr<Gizmo>> _component_visual_gizmos;
 
     // Click/drag detection
@@ -90,6 +93,11 @@ private:
     PendingEntityPick _async_hover_pick;
     PendingSurfacePick _async_release_pick;
 
+    bool _camera_frustums_visible = false;
+    tc_scene_handle _camera_frustum_scene = TC_SCENE_HANDLE_INVALID;
+    int _camera_frustum_view_width = 0;
+    int _camera_frustum_view_height = 0;
+
 public:
     // Callbacks to Python
     std::function<void()> on_request_update;
@@ -109,6 +117,11 @@ public:
     // Transform gizmo access
     TransformGizmo* transform_gizmo() { return &_transform_gizmo; }
     void set_gizmo_target(Entity entity);
+    void set_camera_frustums_visible(bool visible);
+    bool camera_frustums_visible() const { return _camera_frustums_visible; }
+    void set_camera_frustum_render_context(tc_scene_handle scene, int width, int height);
+    tc_scene_handle camera_frustum_scene() const { return _camera_frustum_scene; }
+    double camera_frustum_aspect_override() const;
 
     // Picking (reads from ID buffer)
     Entity pick_entity_at(float x, float y, tc_viewport_handle viewport, tc_display* display);

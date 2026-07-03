@@ -14,6 +14,10 @@ class ENTITY_API UnknownComponent : public CxxComponent {
 public:
     std::string original_type;
     tc_value original_data = tc_value_nil();
+    // True only for placeholders created from live components during module unload.
+    // Placeholders loaded from serialized unknown component data keep this false,
+    // so their disabled runtime state does not override restored component defaults.
+    bool preserve_runtime_state_on_upgrade = false;
 
 public:
     UnknownComponent();

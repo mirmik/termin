@@ -2,8 +2,10 @@
 #include <termin/entity/entity.hpp>
 #include "termin/render/solid_primitive_renderer.hpp"
 #include <termin/geom/quat.hpp>
+#include <tcbase/tc_log.h>
 
 #include <cmath>
+#include <stdexcept>
 
 namespace termin {
 
@@ -156,6 +158,14 @@ bool TransformGizmo::snap_to(const Vec3& position) {
     return true;
 }
 
+void TransformGizmo::set_orientation_mode(const std::string& mode) {
+    if (mode != "local" && mode != "world") {
+        tc_log(TC_LOG_ERROR, "[TransformGizmo] invalid orientation mode: %s", mode.c_str());
+        throw std::invalid_argument("TransformGizmo orientation mode must be 'local' or 'world'");
+    }
+    _orientation_mode = mode;
+}
+
 void TransformGizmo::_update_position() {
     if (_has_target()) {
         GeneralPose3 pose = _target->global_pose();
@@ -180,7 +190,7 @@ Vec3f TransformGizmo::_get_world_axis(const std::string& axis) {
     else if (axis == "y") base = Vec3f{0.0f, 1.0f, 0.0f};
     else base = Vec3f{0.0f, 0.0f, 1.0f};
 
-    if (orientation_mode == "world" || !_has_target() || !_target->supports_rotation()) {
+    if (_orientation_mode == "world" || !_has_target() || !_target->supports_rotation()) {
         return base;
     }
 

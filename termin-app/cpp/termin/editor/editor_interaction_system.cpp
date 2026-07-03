@@ -111,7 +111,9 @@ static bool mesh_triangle_indices(const tc_mesh* mesh, uint32_t tri, uint32_t ou
 // Constructor / Destructor
 // ============================================================================
 
-EditorInteractionSystem::EditorInteractionSystem() {
+EditorInteractionSystem::EditorInteractionSystem()
+    : _camera_frustum_debug_gizmo(this)
+{
     g_editor_interaction_instance = this;
 
     // Setup transform gizmo
@@ -126,12 +128,14 @@ EditorInteractionSystem::EditorInteractionSystem() {
         }
     };
     gizmo_manager.add_gizmo(&_transform_gizmo);
+    gizmo_manager.add_gizmo(&_camera_frustum_debug_gizmo);
 
     tc_log(TC_LOG_INFO, "[EditorInteractionSystem] Created");
 }
 
 EditorInteractionSystem::~EditorInteractionSystem() {
     _clear_component_visual_gizmos();
+    gizmo_manager.remove_gizmo(&_camera_frustum_debug_gizmo);
     gizmo_manager.remove_gizmo(&_transform_gizmo);
 
     if (g_editor_interaction_instance == this) {
@@ -160,6 +164,25 @@ void EditorInteractionSystem::set_gizmo_target(Entity entity) {
     _transform_gizmo.set_target(entity);
     _transform_gizmo.visible = entity.valid();
     _rebuild_component_visual_gizmos(entity);
+}
+
+void EditorInteractionSystem::set_camera_frustums_visible(bool visible) {
+    _camera_frustums_visible = visible;
+    _camera_frustum_debug_gizmo.visible = visible;
+    _request_update();
+}
+
+void EditorInteractionSystem::set_camera_frustum_render_context(tc_scene_handle scene, int width, int height) {
+    _camera_frustum_scene = scene;
+    _camera_frustum_view_width = width;
+    _camera_frustum_view_height = height;
+}
+
+double EditorInteractionSystem::camera_frustum_aspect_override() const {
+    if (_camera_frustum_view_width <= 0 || _camera_frustum_view_height <= 0) {
+        return 0.0;
+    }
+    return static_cast<double>(_camera_frustum_view_width) / static_cast<double>(_camera_frustum_view_height);
 }
 
 void EditorInteractionSystem::_rebuild_component_visual_gizmos(Entity entity) {
