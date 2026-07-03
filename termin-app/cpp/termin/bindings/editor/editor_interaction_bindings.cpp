@@ -8,6 +8,10 @@
 #include "termin/editor/editor_viewport_input_manager.hpp"
 #include "termin/editor/selection_manager.hpp"
 #include <termin/entity/entity.hpp>
+#include <termin/render/execute_context.hpp>
+#include <termin/tc_scene.hpp>
+#include <tgfx2/immediate_renderer.hpp>
+#include <tgfx2/render_context.hpp>
 
 namespace nb = nanobind;
 
@@ -76,9 +80,36 @@ void bind_editor_interaction(nb::module_& m) {
                 return s.transform_gizmo();
             }, nb::rv_policy::reference_internal)
         .def("after_render", &EditorInteractionSystem::after_render)
+        .def_prop_rw("camera_frustums_visible",
+            [](const EditorInteractionSystem& s) {
+                return s.camera_frustums_visible();
+            },
+            [](EditorInteractionSystem& s, bool visible) {
+                s.set_camera_frustums_visible(visible);
+            })
+        .def("set_camera_frustums_visible", &EditorInteractionSystem::set_camera_frustums_visible,
+            nb::arg("visible"))
+        .def("set_camera_frustum_render_context",
+            [](EditorInteractionSystem& s, const TcSceneRef& scene, const Rect4i& rect) {
+                s.set_camera_frustum_render_context(scene.handle(), rect.width, rect.height);
+            },
+            nb::arg("scene"),
+            nb::arg("render_rect"))
         .def("set_gizmo_target", [](EditorInteractionSystem& s, nb::object obj) {
             s.set_gizmo_target(obj.is_none() ? Entity() : nb::cast<Entity>(obj));
         }, nb::arg("entity").none())
+        .def("render", [](EditorInteractionSystem& s,
+                          ImmediateRenderer* renderer,
+                          tgfx::RenderContext2* ctx2,
+                          const Mat44& view,
+                          const Mat44& proj) {
+            Mat44f view_f, proj_f;
+            for (int i = 0; i < 16; ++i) {
+                view_f.data[i] = static_cast<float>(view.data[i]);
+                proj_f.data[i] = static_cast<float>(proj.data[i]);
+            }
+            s.gizmo_manager.render(renderer, ctx2, view_f, proj_f);
+        }, nb::arg("renderer"), nb::arg("ctx2"), nb::arg("view"), nb::arg("proj"))
         .def("pick_entity_at", [](EditorInteractionSystem& s,
                 float x, float y,
                 uint32_t vp_index, uint32_t vp_generation,
