@@ -245,8 +245,10 @@ void DepthPass::execute_with_data_tgfx2(
         }
         if (!drawable) continue;
 
-        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_name(), dc.geometry_id);
-        if (!mesh) continue;  // non-mesh drawables skipped
+        MeshDrawGeometry mesh_geometry{};
+        if (!drawable->resolve_mesh_geometry(phase_name(), dc.geometry_id, mesh_geometry)) {
+            continue;  // non-mesh drawables skipped
+        }
 
         Mat44f model = drawable->get_model_matrix(dc.entity);
 
@@ -280,8 +282,8 @@ void DepthPass::execute_with_data_tgfx2(
             // Base depth VS only reads position.
             draw_material_pipeline_submesh(
                 *ctx.ctx2,
-                mesh,
-                static_cast<size_t>(dc.geometry_id),
+                mesh_geometry.mesh,
+                mesh_geometry.submesh_index,
                 material_mesh_vertex_input_for_shader(
                     depth_shader.shader,
                     MaterialMeshVertexInput::Position));
@@ -308,8 +310,8 @@ void DepthPass::execute_with_data_tgfx2(
 
             draw_material_pipeline_submesh(
                 *ctx.ctx2,
-                mesh,
-                static_cast<size_t>(dc.geometry_id),
+                mesh_geometry.mesh,
+                mesh_geometry.submesh_index,
                 material_mesh_vertex_input_for_shader(
                     skinned_shader.shader,
                     MaterialMeshVertexInput::Position));
@@ -441,13 +443,26 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         auto* collect_ctx = static_cast<CollectContext*>(user_data);
         Entity ent(c->owner);
 
-        DrawCall dc;
-        dc.entity = ent;
-        dc.component = c;
-        dc.final_shader = tc_component_override_shader(
-            c, "depth", 0, collect_ctx->pass->depth_shader_handle_);
-        dc.geometry_id = 0;
-        collect_ctx->draw_calls->push_back(dc);
+        std::vector<int> geometry_ids;
+        if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
+            auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
+            if (drawable) {
+                geometry_ids = drawable->get_geometry_ids_for_phase("depth");
+            }
+        }
+        if (geometry_ids.empty()) {
+            geometry_ids.push_back(0);
+        }
+
+        for (int geometry_id : geometry_ids) {
+            DrawCall dc;
+            dc.entity = ent;
+            dc.component = c;
+            dc.final_shader = tc_component_override_shader(
+                c, "depth", geometry_id, collect_ctx->pass->depth_shader_handle_);
+            dc.geometry_id = geometry_id;
+            collect_ctx->draw_calls->push_back(dc);
+        }
         return true;
     };
 
@@ -615,8 +630,10 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         }
         if (!drawable) continue;
 
-        tc_mesh* mesh = drawable->get_mesh_for_phase("depth", dc.geometry_id);
-        if (!mesh) continue;
+        MeshDrawGeometry mesh_geometry{};
+        if (!drawable->resolve_mesh_geometry("depth", dc.geometry_id, mesh_geometry)) {
+            continue;
+        }
 
         Mat44f model = drawable->get_model_matrix(dc.entity);
 
@@ -646,8 +663,8 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 draw_resources);
             draw_material_pipeline_submesh(
                 *ctx.ctx2,
-                mesh,
-                static_cast<size_t>(dc.geometry_id),
+                mesh_geometry.mesh,
+                mesh_geometry.submesh_index,
                 material_mesh_vertex_input_for_shader(
                     depth_shader.shader,
                     MaterialMeshVertexInput::Position));
@@ -673,8 +690,8 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
             draw_material_pipeline_submesh(
                 *ctx.ctx2,
-                mesh,
-                static_cast<size_t>(dc.geometry_id),
+                mesh_geometry.mesh,
+                mesh_geometry.submesh_index,
                 material_mesh_vertex_input_for_shader(
                     skinned_shader.shader,
                     MaterialMeshVertexInput::Position));

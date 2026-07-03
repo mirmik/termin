@@ -76,6 +76,12 @@ public:
         (void)geometry_id;
         return current_mesh_ptr();
     }
+    bool resolve_mesh_geometry(
+        const std::string& phase_mark,
+        int geometry_id,
+        MeshDrawGeometry& out
+    ) const override;
+    std::vector<int> get_geometry_ids_for_phase(const std::string& phase_mark) override;
     Mat44f get_model_matrix(const Entity& entity) const override;
     std::vector<tc_material_phase*> get_phases_for_mark(const std::string& phase_mark);
     std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
