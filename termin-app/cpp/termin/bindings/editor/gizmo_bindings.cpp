@@ -209,7 +209,9 @@ void bind_gizmo(nb::module_& m) {
     nb::class_<TransformGizmo, Gizmo>(m, "TransformGizmo")
         .def(nb::init<>())
         .def_rw("size", &TransformGizmo::size)
-        .def_rw("orientation_mode", &TransformGizmo::orientation_mode)
+        .def_prop_rw("orientation_mode",
+            [](const TransformGizmo& self) { return self.orientation_mode(); },
+            [](TransformGizmo& self, const std::string& mode) { self.set_orientation_mode(mode); })
         .def_prop_rw("on_transform_changed",
             [](TransformGizmo& self) { return self.on_transform_changed; },
             [](TransformGizmo& self, std::function<void()> cb) { self.on_transform_changed = cb; })
