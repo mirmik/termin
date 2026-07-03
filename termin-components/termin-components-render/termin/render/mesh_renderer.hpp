@@ -20,6 +20,7 @@ namespace termin {
 class ENTITY_API MeshRenderer : public Component, public Drawable {
 public:
     TcMaterial material;
+    std::vector<TcMaterial> materials;
     bool cast_shadow = true;
     bool _override_material = false;
     TcMaterial _overridden_material;
@@ -49,6 +50,11 @@ public:
     TcMaterial get_base_material() const { return material; }
     TcMaterial& get_material_ref() { return material; }
     const TcMaterial& get_material_ref() const { return material; }
+    size_t material_slot_count() const { return materials.size(); }
+    TcMaterial get_material_for_slot(size_t slot) const;
+    tc_material* get_material_ptr_for_slot(size_t slot) const;
+    TcMaterial get_material_for_submesh(size_t submesh_index) const;
+    void set_material_slot(size_t slot, const TcMaterial& mat);
     void set_material(const TcMaterial& mat);
     void set_material_by_name(const std::string& name);
     bool override_material() const { return _override_material; }
