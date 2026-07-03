@@ -31,7 +31,12 @@ def make_editor_pipeline() -> RenderPipeline:
 
     def get_gizmo_manager():
         sys = EditorInteractionSystem.instance()
-        return sys.gizmo_manager if sys else None
+        return sys if sys else None
+
+    def prepare_gizmo_context(ctx):
+        sys = EditorInteractionSystem.instance()
+        if sys:
+            sys.set_camera_frustum_render_context(ctx.scene, ctx.render_rect)
 
     def get_selected_pick_id():
         sys = EditorInteractionSystem.instance()
@@ -126,6 +131,7 @@ def make_editor_pipeline() -> RenderPipeline:
 
     gizmo_pass = UnifiedGizmoPass(
         gizmo_manager=get_gizmo_manager,
+        before_render=prepare_gizmo_context,
         input_res="color_immediate_depth",
         output_res="color",
         pass_name="Gizmo",

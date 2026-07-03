@@ -772,6 +772,8 @@ class EditorWindowTcgui:
             on_run_standalone=self._run_standalone,
             on_toggle_profiler=self._toggle_profiler,
             on_toggle_modules=self._toggle_modules,
+            on_toggle_camera_frustums=self._toggle_camera_frustums,
+            is_camera_frustums_visible=self._is_camera_frustums_visible,
             on_show_undo_stack_viewer=self._show_undo_stack_viewer,
             on_show_framegraph_debugger=self._show_framegraph_debugger,
             on_show_resource_manager_viewer=self._show_resource_manager_viewer,
@@ -1394,6 +1396,22 @@ class EditorWindowTcgui:
     def _toggle_modules(self) -> None:
         self._debug_panels.toggle_modules()
 
+    def _toggle_camera_frustums(self) -> None:
+        if self._interaction_system is None:
+            log.error("[EditorWindowTcgui] cannot toggle camera frustums: interaction system is unavailable")
+            return
+        self._interaction_system.set_camera_frustums_visible(
+            not self._interaction_system.camera_frustums_visible
+        )
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_camera_frustums_action()
+        self._request_viewport_update()
+
+    def _is_camera_frustums_visible(self) -> bool:
+        if self._interaction_system is None:
+            return False
+        return bool(self._interaction_system.camera_frustums_visible)
+
     def _update_profiler_action(self) -> None:
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_profiler_action()
@@ -1401,6 +1419,10 @@ class EditorWindowTcgui:
     def _update_modules_action(self) -> None:
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_modules_action()
+
+    def _update_camera_frustums_action(self) -> None:
+        if self._menu_bar_controller is not None:
+            self._menu_bar_controller.update_camera_frustums_action()
 
     def _toggle_fullscreen(self) -> None:
         self._fullscreen.toggle()

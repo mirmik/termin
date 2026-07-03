@@ -9,6 +9,8 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/bindings/editor/editor_interaction_bindings.cpp
     termin/bindings/editor/frame_graph_debugger_bindings.cpp
     termin/bindings/render/solid_primitive.cpp
+    termin/editor/camera_frustum_debug_gizmo.cpp
+    termin/editor/camera_frustum_math.cpp
     termin/editor/component_editor_visual.cpp
     termin/editor/editor_snap.cpp
     termin/editor/gizmo_manager.cpp
