@@ -695,8 +695,8 @@ void ColorPass::execute_with_data(
             continue;
         }
 
-        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_mark, dc.geometry_id);
-        if (!mesh) {
+        MeshDrawGeometry mesh_geometry{};
+        if (!drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, mesh_geometry)) {
             if (!drawable->supports_direct_tgfx2_draw(
                     phase_mark, dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
                 ++draw_index;
@@ -920,8 +920,8 @@ void ColorPass::execute_with_data(
         // bindings.
         draw_material_pipeline_submesh(
             *ctx2,
-            mesh,
-            static_cast<size_t>(dc.geometry_id),
+            mesh_geometry.mesh,
+            mesh_geometry.submesh_index,
             material_mesh_vertex_input_for_shader(
                 raw_shader,
                 MaterialMeshVertexInput::FullMaterial));

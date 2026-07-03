@@ -145,8 +145,10 @@ void NormalPass::execute_with_data_tgfx2(
         }
         if (!drawable) continue;
 
-        tc_mesh* mesh = drawable->get_mesh_for_phase(phase_name(), dc.geometry_id);
-        if (!mesh) continue;  // non-mesh drawables skipped
+        MeshDrawGeometry mesh_geometry{};
+        if (!drawable->resolve_mesh_geometry(phase_name(), dc.geometry_id, mesh_geometry)) {
+            continue;  // non-mesh drawables skipped
+        }
 
         Mat44f model = drawable->get_model_matrix(dc.entity);
 
@@ -176,8 +178,8 @@ void NormalPass::execute_with_data_tgfx2(
                 draw_resources);
             draw_material_pipeline_submesh(
                 *ctx.ctx2,
-                mesh,
-                static_cast<size_t>(dc.geometry_id),
+                mesh_geometry.mesh,
+                mesh_geometry.submesh_index,
                 material_mesh_vertex_input_for_shader(
                     normal_shader.shader,
                     MaterialMeshVertexInput::PositionNormal));
@@ -204,8 +206,8 @@ void NormalPass::execute_with_data_tgfx2(
 
             draw_material_pipeline_submesh(
                 *ctx.ctx2,
-                mesh,
-                static_cast<size_t>(dc.geometry_id),
+                mesh_geometry.mesh,
+                mesh_geometry.submesh_index,
                 material_mesh_vertex_input_for_shader(
                     skinned_shader.shader,
                     MaterialMeshVertexInput::PositionNormal));

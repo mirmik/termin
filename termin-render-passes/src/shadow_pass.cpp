@@ -508,8 +508,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 }
                 if (!drawable) continue;
 
-                tc_mesh* mesh = drawable->get_mesh_for_phase("shadow", dc.geometry_id);
-                if (!mesh) {
+                MeshDrawGeometry mesh_geometry{};
+                if (!drawable->resolve_mesh_geometry("shadow", dc.geometry_id, mesh_geometry)) {
                     if (!drawable->supports_direct_tgfx2_draw(
                             "shadow", dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
                         continue;
@@ -568,8 +568,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     // Non-skinned fast path. Shadow VS only reads position.
                     draw_material_pipeline_submesh(
                         *ctx.ctx2,
-                        mesh,
-                        static_cast<size_t>(dc.geometry_id),
+                        mesh_geometry.mesh,
+                        mesh_geometry.submesh_index,
                         material_mesh_vertex_input_for_shader(
                             shadow_shader.shader,
                             MaterialMeshVertexInput::Position));
@@ -598,8 +598,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                     draw_material_pipeline_submesh(
                         *ctx.ctx2,
-                        mesh,
-                        static_cast<size_t>(dc.geometry_id),
+                        mesh_geometry.mesh,
+                        mesh_geometry.submesh_index,
                         material_mesh_vertex_input_for_shader(
                             skinned_shader.shader,
                             MaterialMeshVertexInput::Position));

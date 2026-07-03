@@ -1,6 +1,7 @@
 #include <termin/render/mesh_renderer.hpp>
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 #include <tcbase/tc_log.hpp>
@@ -496,6 +497,64 @@ Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
 void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
     (void)context;
     (void)geometry_id;
+}
+
+bool MeshRenderer::resolve_mesh_geometry(
+    const std::string& phase_mark,
+    int geometry_id,
+    MeshDrawGeometry& out
+) const {
+    (void)phase_mark;
+    if (geometry_id < 0) {
+        return false;
+    }
+
+    tc_mesh* mesh = current_mesh_ptr();
+    if (!mesh) {
+        return false;
+    }
+
+    if (mesh->submesh_count == 0) {
+        tc_mesh_ensure_default_submesh(mesh);
+    }
+
+    const size_t submesh_index = static_cast<size_t>(geometry_id);
+    if (!tc_mesh_get_submesh(mesh, submesh_index)) {
+        tc::Log::warn(
+            "[MeshRenderer] geometry_id %d does not resolve to a submesh for mesh '%s'",
+            geometry_id,
+            mesh->header.name ? mesh->header.name : mesh->header.uuid);
+        return false;
+    }
+
+    out.mesh = mesh;
+    out.submesh_index = submesh_index;
+    return true;
+}
+
+std::vector<int> MeshRenderer::get_geometry_ids_for_phase(const std::string& phase_mark) {
+    (void)phase_mark;
+    std::vector<int> ids;
+    tc_mesh* mesh = current_mesh_ptr();
+    if (!mesh) {
+        return ids;
+    }
+
+    if (mesh->submesh_count == 0) {
+        tc_mesh_ensure_default_submesh(mesh);
+    }
+
+    ids.reserve(mesh->submesh_count);
+    for (size_t i = 0; i < mesh->submesh_count; ++i) {
+        if (i > static_cast<size_t>(std::numeric_limits<int>::max())) {
+            tc::Log::error(
+                "[MeshRenderer] mesh '%s' has too many submeshes for geometry_id",
+                mesh->header.name ? mesh->header.name : mesh->header.uuid);
+            break;
+        }
+        ids.push_back(static_cast<int>(i));
+    }
+    return ids;
 }
 
 std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {

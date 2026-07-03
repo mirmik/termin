@@ -129,9 +129,9 @@ public:
     // per-draw vertex/index buffers, PerFrame UBOs and push constants
     // for engine-supplied state.
     //
-    // Non-MeshRenderer drawables (SolidPrimitive, Immediate, ...) are
-    // currently skipped with a warning — until they expose a tc_mesh
-    // via get_mesh_for_phase() they can't go through ctx2.draw.
+    // Non-mesh-backed drawables (SolidPrimitive, Immediate, ...) are handled
+    // only when they opt into the direct tgfx2 draw contract. Mesh-backed
+    // drawables expose geometry_id through resolve_mesh_geometry().
     void execute_with_data(
         ExecuteContext& ctx,
         const Rect4i& rect,

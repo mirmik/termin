@@ -91,17 +91,31 @@ void GeometryPassBase::collect_draw_calls(
             return true;
         }
 
-        tc_shader_handle final_shader = tc_component_override_shader(
-            c, ctx->pass->phase_name(), 0, ctx->base_shader
-        );
+        std::vector<int> geometry_ids;
+        if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
+            auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
+            if (drawable) {
+                geometry_ids = drawable->get_geometry_ids_for_phase(ctx->pass->phase_name());
+            }
+        }
+        if (geometry_ids.empty()) {
+            geometry_ids.push_back(0);
+        }
 
-        DrawCall dc;
-        dc.entity = ent;
-        dc.component = c;
-        dc.final_shader = final_shader;
-        dc.geometry_id = 0;
-        dc.pick_id = ctx->pass->get_pick_id(ent);
-        ctx->draw_calls->push_back(dc);
+        const int pick_id = ctx->pass->get_pick_id(ent);
+        for (int geometry_id : geometry_ids) {
+            tc_shader_handle final_shader = tc_component_override_shader(
+                c, ctx->pass->phase_name(), geometry_id, ctx->base_shader
+            );
+
+            DrawCall dc;
+            dc.entity = ent;
+            dc.component = c;
+            dc.final_shader = final_shader;
+            dc.geometry_id = geometry_id;
+            dc.pick_id = pick_id;
+            ctx->draw_calls->push_back(dc);
+        }
         return true;
     };
 
