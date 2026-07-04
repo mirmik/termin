@@ -59,7 +59,6 @@ from termin.editor_tcgui.debug_panel_controller import DebugPanelController
 from termin.editor_tcgui.fullscreen_controller import FullscreenController
 from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarController
 from termin.editor_tcgui.game_mode_ui_controller import GameModeUiController
-from termin.editor_tcgui.gizmo_mode_ui_controller import GizmoModeUiController
 from termin.editor_tcgui.resource_actions_controller import ResourceActionsController
 from termin.editor_tcgui.editor_dialog_launcher import EditorDialogLauncher
 from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
@@ -193,10 +192,6 @@ class EditorWindowTcgui:
         self._game_mode_ui = GameModeUiController(
             update_play_action=self._update_play_action,
             update_window_title=self._update_window_title,
-            request_viewport_update=self._request_viewport_update,
-        )
-        self._gizmo_mode_ui = GizmoModeUiController(
-            get_interaction_system=lambda: self._interaction_system,
             request_viewport_update=self._request_viewport_update,
         )
         self._pre_prefab_scene_name: str | None = None
@@ -354,7 +349,6 @@ class EditorWindowTcgui:
                 toggle_pause=self._toggle_pause,
                 save_prefab=self._save_prefab,
                 exit_prefab_editing=self._exit_prefab_editing,
-                toggle_gizmo_orientation=self._toggle_gizmo_orientation,
                 viewport_external_drag=self._on_viewport_external_drag,
                 viewport_external_drop=self._on_viewport_external_drop,
             )
@@ -372,9 +366,6 @@ class EditorWindowTcgui:
             play_button=widgets.play_button,
             pause_button=widgets.pause_button,
             status_bar=widgets.status_bar,
-        )
-        self._gizmo_mode_ui.set_widgets(
-            orientation_button=widgets.gizmo_orientation_button,
         )
         self._prefab_toolbar_controller.set_widgets(
             prefab_toolbar=widgets.prefab_toolbar,
@@ -897,9 +888,6 @@ class EditorWindowTcgui:
 
     def _sync_gizmo_target(self) -> None:
         self._interaction_coordinator.sync_gizmo_target()
-
-    def _toggle_gizmo_orientation(self) -> None:
-        self._gizmo_mode_ui.toggle_orientation_mode()
 
     def _on_inspector_component_selected(self, entity, component_ref) -> None:
         self._component_extension_panels.select_component(entity, component_ref)
