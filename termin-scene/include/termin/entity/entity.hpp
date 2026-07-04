@@ -167,6 +167,7 @@ public:
     Entity find_child(const std::string& name) const;
     Entity create_child(const std::string& name = "entity");
     void destroy_children();
+    Entity clone(const std::string& name_suffix = "_copy") const;
 
     // --- Lifecycle ---
 

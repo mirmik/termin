@@ -444,6 +444,7 @@ void bind_entity_class(nb::module_& m) {
         .def("create_child", &Entity::create_child, nb::arg("name") = "entity")
         .def("destroy_children", &Entity::destroy_children)
         .def("find_child", &Entity::find_child, nb::arg("name"))
+        .def("clone", &Entity::clone, nb::arg("name_suffix") = "_copy")
         .def("ancestors", [](Entity& e) {
             return EntityAncestorIterator(e);
         })
