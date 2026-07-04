@@ -5,7 +5,21 @@ Kanboard: #184, #185
 
 ## Status
 
-Proposed migration plan.
+Active migration plan.
+
+Progress:
+
+- 2026-07-04: Added context-aware C++ drawable shader override path carrying a
+  `MaterialPipelinePassContract` separately from `phase_mark`. Updated
+  `ColorPass`, `ShadowPass`, `GeometryPassBase`, and `DepthOnlyPass` to use it
+  for C++ drawables while keeping the C drawable ABI fallback.
+- 2026-07-04: Extended material shader override requests so callers can pass
+  explicit vertex/pass contracts. Skinned and foliage shader variants now have
+  pass-contract based entry points; phase-name mapping remains only in legacy
+  compatibility overloads and foliage direct-draw code.
+- 2026-07-04: Made material shader override variant UUIDs include the explicit
+  vertex/pass contract signature, so custom contracts no longer collide solely
+  because they share the same original shader and variant op.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.
@@ -374,4 +388,3 @@ The migration is complete when:
   central enum;
 - `pick`/`id` naming is resolved;
 - shadow shader ownership is explicit and tested.
-

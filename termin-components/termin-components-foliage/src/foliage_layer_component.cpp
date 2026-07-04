@@ -55,7 +55,11 @@ struct MeshBindingReleaseGuard {
     }
 };
 
-TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_variant = false) {
+TcShader get_foliage_instanced_shader(
+    TcShader original_shader,
+    const MaterialPipelinePassContract& pass_contract)
+{
+    const bool shadow_variant = pass_contract.kind == MaterialPipelinePassKind::Shadow;
     MaterialShaderOverrideRequest request{};
     request.original_shader = original_shader;
     request.vertex_transform_kind = shadow_variant
@@ -63,7 +67,12 @@ TcShader get_foliage_instanced_shader(TcShader original_shader, bool shadow_vari
         : VertexTransformKind::Foliage;
     request.pass_kind = shadow_variant
         ? MaterialPipelinePassKind::Shadow
-        : MaterialPipelinePassKind::Color;
+        : pass_contract.kind;
+    request.pass_contract = pass_contract;
+    request.vertex_transform_contract =
+        material_pipeline_builtin_vertex_transform_contract(
+            request.vertex_transform_kind,
+            request.pass_kind);
     request.shader_variant_op = shadow_variant
         ? TC_SHADER_VARIANT_FOLIAGE_SHADOW
         : TC_SHADER_VARIANT_FOLIAGE;
@@ -422,14 +431,47 @@ TcShader FoliageLayerComponent::override_shader(
     int geometry_id,
     TcShader original_shader
 ) {
+    ShaderOverrideContext context;
+    context.phase_mark = phase_mark;
+    context.geometry_id = geometry_id;
+    context.original_shader = original_shader;
+    if (phase_mark == "shadow") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
+    } else if (phase_mark == "depth") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Depth);
+    } else if (phase_mark == "pick") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
+    } else if (phase_mark == "normal") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Normal);
+    } else {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+    }
+    return override_shader_with_context(context);
+}
+
+TcShader FoliageLayerComponent::override_shader_with_context(
+    const ShaderOverrideContext& context
+) {
+    const std::string& phase_mark = context.phase_mark;
+    const int geometry_id = context.geometry_id;
+    TcShader original_shader = context.original_shader;
+
     if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
         return original_shader;
     }
-    if (phase_mark == "depth") {
+    if (context.pass_contract.kind == MaterialPipelinePassKind::Depth ||
+        context.pass_contract.kind == MaterialPipelinePassKind::DepthOnly) {
         return original_shader;
     }
 
-    TcShader variant = get_foliage_instanced_shader(original_shader, phase_mark == "shadow");
+    TcShader variant = get_foliage_instanced_shader(
+        original_shader,
+        context.pass_contract);
     if (!variant.is_valid()) {
         tc::Log::error(
             "[FoliageLayerComponent] failed to create foliage shader variant for '%s'",
@@ -454,7 +496,11 @@ void FoliageLayerComponent::collect_shader_usages(
         return;
     }
 
-    TcShader variant = get_foliage_instanced_shader(original_shader, phase_mark == "shadow");
+    TcShader variant = get_foliage_instanced_shader(
+        original_shader,
+        phase_mark == "shadow"
+            ? material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow)
+            : material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color));
     if (variant.is_valid()) {
         emit(variant);
     }
@@ -535,6 +581,10 @@ bool FoliageLayerComponent::draw_tgfx2(
     }
 
     const bool shadow_variant = phase_mark == "shadow";
+    MaterialPipelinePassContract pass_contract =
+        shadow_variant
+            ? material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow)
+            : material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
     tgfx::VertexBufferLayout vertex_layout;
     if (!build_foliage_vertex_layout(mesh_binding, shadow_variant, vertex_layout)) {
         return false;
@@ -558,9 +608,9 @@ bool FoliageLayerComponent::draw_tgfx2(
 
     TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
-        shader = get_foliage_instanced_shader(TcShader(phase->shader), shadow_variant);
+        shader = get_foliage_instanced_shader(TcShader(phase->shader), pass_contract);
     } else if (!shader_contract_requires_foliage_instances(shader)) {
-        shader = get_foliage_instanced_shader(shader, shadow_variant);
+        shader = get_foliage_instanced_shader(shader, pass_contract);
     }
     if (!shader.is_valid()) {
         tc::Log::error("[FoliageLayerComponent] cannot draw foliage: shader variant is invalid");

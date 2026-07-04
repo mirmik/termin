@@ -53,6 +53,9 @@ public:
 protected:
     std::array<float, 4> clear_color() const override { return {0.5f, 0.5f, 0.5f, 1.0f}; }
     const char* phase_name() const override { return "normal"; }
+    MaterialPipelinePassContract shader_pass_contract() const override {
+        return material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Normal);
+    }
 };
 
 } // namespace termin

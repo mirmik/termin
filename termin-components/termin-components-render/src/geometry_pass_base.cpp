@@ -6,6 +6,7 @@
 #include <termin/render/geometry_pass_base.hpp>
 
 #include <termin/camera/camera_component.hpp>
+#include <termin/render/material_pipeline_shader_assembler.hpp>
 
 namespace termin {
 
@@ -55,6 +56,10 @@ std::optional<std::string> GeometryPassBase::fbo_format() const {
     return std::nullopt;
 }
 
+MaterialPipelinePassContract GeometryPassBase::shader_pass_contract() const {
+    return material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+}
+
 bool GeometryPassBase::entity_filter(const Entity& ent) const {
     (void)ent;
     return true;
@@ -81,6 +86,7 @@ void GeometryPassBase::collect_draw_calls(
         const GeometryPassBase* pass = nullptr;
         std::vector<DrawCall>* draw_calls = nullptr;
         tc_shader_handle base_shader = tc_shader_handle_invalid();
+        MaterialPipelinePassContract pass_contract;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
@@ -104,9 +110,13 @@ void GeometryPassBase::collect_draw_calls(
 
         const int pick_id = ctx->pass->get_pick_id(ent);
         for (int geometry_id : geometry_ids) {
-            tc_shader_handle final_shader = tc_component_override_shader(
-                c, ctx->pass->phase_name(), geometry_id, ctx->base_shader
-            );
+            ShaderOverrideContext override_context;
+            override_context.phase_mark = ctx->pass->phase_name();
+            override_context.geometry_id = geometry_id;
+            override_context.original_shader = TcShader(ctx->base_shader);
+            override_context.pass_contract = ctx->pass_contract;
+            tc_shader_handle final_shader =
+                override_drawable_shader(c, override_context).handle;
 
             DrawCall dc;
             dc.entity = ent;
@@ -119,7 +129,11 @@ void GeometryPassBase::collect_draw_calls(
         return true;
     };
 
-    CollectContext context{this, &cached_draw_calls_, base_shader};
+    CollectContext context{
+        this,
+        &cached_draw_calls_,
+        base_shader,
+        shader_pass_contract()};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE

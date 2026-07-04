@@ -186,6 +186,7 @@ namespace {
 struct CollectShadowDrawCallsData {
     std::vector<ShadowDrawCall>* draw_calls;
     tc_shader_handle base_shader;
+    MaterialPipelinePassContract pass_contract;
 };
 
 bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
@@ -209,9 +210,13 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
             continue;
         }
         // Get final shader with overrides (skinning, alpha-test, etc.)
-        tc_shader_handle final_shader = tc_component_override_shader(
-            tc, "shadow", gd.geometry_id, data->base_shader
-        );
+        ShaderOverrideContext override_context;
+        override_context.phase_mark = "shadow";
+        override_context.geometry_id = gd.geometry_id;
+        override_context.original_shader = TcShader(data->base_shader);
+        override_context.pass_contract = data->pass_contract;
+        tc_shader_handle final_shader =
+            override_drawable_shader(tc, override_context).handle;
         ShadowDrawCall dc;
         dc.entity = ent;
         dc.component = tc;
@@ -241,6 +246,8 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
     // assembled through the material pipeline vertex-variant helper and keep
     // the same draw/per-frame resource contract as the base path.
     data.base_shader = shadow_shader_handle_;
+    data.pass_contract =
+        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE

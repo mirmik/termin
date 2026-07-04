@@ -230,6 +230,7 @@ namespace {
 struct CollectDrawCallsData {
     std::vector<PhaseDrawCall>* draw_calls;
     const char* phase_mark;
+    MaterialPipelinePassContract pass_contract;
 };
 
 const char* safe_component_type(const tc_component* component) {
@@ -271,9 +272,13 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
         if (phase) {
             // Get final shader with overrides (skinning, etc.) applied
             tc_shader_handle base_shader = phase->shader;
-            tc_shader_handle final_shader = tc_component_override_shader(
-                tc, data->phase_mark, gd.geometry_id, base_shader
-            );
+            ShaderOverrideContext override_context;
+            override_context.phase_mark = data->phase_mark;
+            override_context.geometry_id = gd.geometry_id;
+            override_context.original_shader = TcShader(base_shader);
+            override_context.pass_contract = data->pass_contract;
+            tc_shader_handle final_shader =
+                override_drawable_shader(tc, override_context).handle;
 
             PhaseDrawCall dc;
             dc.entity = ent;
@@ -306,7 +311,8 @@ ResolvedDrawPhase resolve_draw_phase(
     const std::string& phase_mark,
     int geometry_id,
     tc_material_handle expected_material,
-    size_t expected_phase_index
+    size_t expected_phase_index,
+    const MaterialPipelinePassContract& pass_contract
 ) {
     ResolvedDrawPhase resolved;
     if (!component || !drawable) {
@@ -325,11 +331,13 @@ ResolvedDrawPhase resolve_draw_phase(
             continue;
         }
 
-        tc_shader_handle final_shader = tc_component_override_shader(
-            component,
-            phase_mark.c_str(),
-            geometry_id,
-            phase->shader);
+        ShaderOverrideContext override_context;
+        override_context.phase_mark = phase_mark;
+        override_context.geometry_id = geometry_id;
+        override_context.original_shader = TcShader(phase->shader);
+        override_context.pass_contract = pass_contract;
+        tc_shader_handle final_shader =
+            override_drawable_shader(component, override_context).handle;
 
         resolved.phase = phase;
         resolved.final_shader = final_shader;
@@ -358,6 +366,8 @@ void ColorPass::collect_draw_calls(
     CollectDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
     data.phase_mark = phase_mark.c_str();
+    data.pass_contract =
+        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
 
     // Use tc_scene_foreach_drawable with filtering
     int filter_flags = TC_SCENE_FILTER_ENABLED
@@ -673,7 +683,8 @@ void ColorPass::execute_with_data(
                 phase_mark,
                 dc.geometry_id,
                 dc.material,
-                dc.phase_index);
+                dc.phase_index,
+                material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color));
             if (!resolved.phase) {
                 tc::Log::error(
                     "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' geometry=%d could not resolve live material phase",

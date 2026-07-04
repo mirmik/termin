@@ -45,6 +45,9 @@ public:
 protected:
     std::array<float, 4> clear_color() const override { return {0.0f, 0.0f, 0.0f, 0.0f}; }
     const char* phase_name() const override { return "pick"; }
+    MaterialPipelinePassContract shader_pass_contract() const override {
+        return material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
+    }
 
     bool entity_filter(const Entity& ent) const override {
         return ent.pickable();
