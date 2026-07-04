@@ -20,6 +20,10 @@ Progress:
 - 2026-07-04: Made material shader override variant UUIDs include the explicit
   vertex/pass contract signature, so custom contracts no longer collide solely
   because they share the same original shader and variant op.
+- 2026-07-04: Added pass contract to `RenderContext` for direct tgfx2 draw
+  paths. `ColorPass`, `ShadowPass`, and `IdPass` now populate it; foliage
+  direct drawing and line material-fragment selection use the pass contract
+  instead of deriving shader intent from `phase_mark`.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.

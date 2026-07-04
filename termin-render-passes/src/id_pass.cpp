@@ -228,6 +228,8 @@ void IdPass::execute_with_data_tgfx2(
             direct_context.projection = projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
             direct_context.phase = phase_name();
+            direct_context.pass_contract =
+                material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
             direct_context.current_tc_shader = TcShader(dc.final_shader);
             direct_context.layer_mask = layer_mask;
             direct_context.camera_position = camera_position;

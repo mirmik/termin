@@ -118,6 +118,18 @@ bool uses_material_fragment_variant(LineRenderMode mode, const std::string& phas
         || mode == LineRenderMode::WorldTube;
 }
 
+bool uses_material_fragment_variant_for_pass(
+    LineRenderMode mode,
+    const MaterialPipelinePassContract& pass_contract)
+{
+    if (!pass_contract.uses_material_fragment ||
+        pass_contract.required_material_fragment_input.semantics.empty()) {
+        return false;
+    }
+    return mode == LineRenderMode::WorldBillboard
+        || mode == LineRenderMode::WorldTube;
+}
+
 bool is_auxiliary_geometry_phase(const std::string& phase_mark) {
     return phase_mark == "shadow"
         || phase_mark == "depth"
@@ -716,9 +728,31 @@ TcShader LineRenderer::override_shader(
     int geometry_id,
     TcShader original_shader
 ) {
+    ShaderOverrideContext context;
+    context.phase_mark = phase_mark;
+    context.geometry_id = geometry_id;
+    context.original_shader = original_shader;
+    context.pass_contract =
+        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+    if (phase_mark == "shadow") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
+    } else if (phase_mark == "pick") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
+    }
+    return override_shader_with_context(context);
+}
+
+TcShader LineRenderer::override_shader_with_context(
+    const ShaderOverrideContext& context
+) {
+    const std::string& phase_mark = context.phase_mark;
+    const int geometry_id = context.geometry_id;
     (void)geometry_id;
+    TcShader original_shader = context.original_shader;
     const LineRenderMode mode = effective_render_mode();
-    if (!uses_material_fragment_variant(mode, phase_mark)
+    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
         || !accepts_phase(mode, phase_mark, cast_shadow)) {
         return original_shader;
     }
@@ -807,8 +841,10 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
     tgfx::ShaderHandle material_fragment_shader{};
     MaterialPipelineShaderBinding tube_body_shader{};
     MaterialPipelineShaderBinding tube_cap_shader{};
+    const bool use_material_fragment =
+        uses_material_fragment_variant_for_pass(mode, context.pass_contract);
     if (!context.has_override_color && mode == LineRenderMode::WorldTube
-        && uses_material_fragment_variant(mode, phase_mark)) {
+        && use_material_fragment) {
         TcShader material_shader(phase ? phase->shader : tc_shader_handle_invalid());
         TcShader body_variant = get_line_tube_material_shader(material_shader, false);
         TcShader cap_variant = get_line_tube_material_shader(material_shader, true);
@@ -832,7 +868,7 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
             tc::Log::error("[LineRenderer] failed to prepare line tube material shader variants");
             return false;
         }
-    } else if (!context.has_override_color && uses_material_fragment_variant(mode, phase_mark)) {
+    } else if (!context.has_override_color && use_material_fragment) {
         tc_shader* shader = context.current_tc_shader.get();
         if (!shader) {
             tc::Log::error(
