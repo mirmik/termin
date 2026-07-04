@@ -89,6 +89,10 @@ public:
         TcShader original_shader
     ) override;
 
+    TcShader override_shader_with_context(
+        const ShaderOverrideContext& context
+    ) override;
+
     void collect_shader_usages(
         const std::string& phase_mark,
         int geometry_id,

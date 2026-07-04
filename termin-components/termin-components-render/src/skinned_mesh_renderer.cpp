@@ -45,14 +45,14 @@ struct TcShaderEqual {
 
 struct SkinnedShaderCacheKey {
     TcShader shader;
-    std::string phase_mark;
+    std::string intent_key;
 };
 
 struct SkinnedShaderCacheKeyHash {
     size_t operator()(const SkinnedShaderCacheKey& key) const {
         TcShaderHash shader_hash;
         return shader_hash(key.shader)
-            ^ (std::hash<std::string>()(key.phase_mark) << 1);
+            ^ (std::hash<std::string>()(key.intent_key) << 1);
     }
 };
 
@@ -60,16 +60,37 @@ struct SkinnedShaderCacheKeyEqual {
     bool operator()(const SkinnedShaderCacheKey& a, const SkinnedShaderCacheKey& b) const {
         TcShaderEqual shader_equal;
         return shader_equal(a.shader, b.shader)
-            && a.phase_mark == b.phase_mark;
+            && a.intent_key == b.intent_key;
     }
 };
 
-// Static cache: (original shader, phase mark) -> skinned shader
+// Static cache: (original shader, shader intent signature) -> skinned shader
 static std::unordered_map<
     SkinnedShaderCacheKey,
     TcShader,
     SkinnedShaderCacheKeyHash,
 SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
+
+std::string pass_contract_cache_key(const MaterialPipelinePassContract& pass_contract)
+{
+    std::string key = pass_contract.debug_name;
+    key += "|kind=";
+    key += std::to_string(static_cast<unsigned>(pass_contract.kind));
+    key += "|material_fragment=";
+    key += pass_contract.uses_material_fragment ? "1" : "0";
+    key += "|resources=";
+    for (const MaterialPipelineResourceDecl& resource : pass_contract.resources) {
+        key += resource.requirement.name;
+        key += ':';
+        key += std::to_string(resource.requirement.kind);
+        key += ':';
+        key += std::to_string(resource.requirement.scope);
+        key += ':';
+        key += std::to_string(resource.requirement.stage_mask);
+        key += ';';
+    }
+    return key;
+}
 
 void SkinnedMeshRenderer::register_type() {
     MeshRenderer::register_type();
@@ -217,6 +238,36 @@ TcShader SkinnedMeshRenderer::override_shader(
     int geometry_id,
     TcShader original_shader
 ) {
+    ShaderOverrideContext context;
+    context.phase_mark = phase_mark;
+    context.geometry_id = geometry_id;
+    context.original_shader = original_shader;
+    if (phase_mark == "shadow") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
+    } else if (phase_mark == "depth") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Depth);
+    } else if (phase_mark == "pick") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
+    } else if (phase_mark == "normal") {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Normal);
+    } else {
+        context.pass_contract =
+            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+    }
+    return override_shader_with_context(context);
+}
+
+TcShader SkinnedMeshRenderer::override_shader_with_context(
+    const ShaderOverrideContext& context
+) {
+    const std::string& phase_mark = context.phase_mark;
+    const int geometry_id = context.geometry_id;
+    TcShader original_shader = context.original_shader;
+
     if (!_skeleton_controller.valid() || !original_shader.is_valid()) {
         return original_shader;
     }
@@ -231,7 +282,9 @@ TcShader SkinnedMeshRenderer::override_shader(
     }
 
     // Check C++ cache first
-    SkinnedShaderCacheKey cache_key{original_shader, phase_mark};
+    SkinnedShaderCacheKey cache_key{
+        original_shader,
+        pass_contract_cache_key(context.pass_contract)};
     auto it = s_skinned_shader_cache.find(cache_key);
     if (it != s_skinned_shader_cache.end()) {
         TcShader& cached = it->second;
@@ -244,7 +297,9 @@ TcShader SkinnedMeshRenderer::override_shader(
     }
 
     // Use C++ skinning injection
-    TcShader skinned = get_skinned_shader(phase_mark, original_shader);
+    TcShader skinned = get_skinned_shader_for_pass(
+        context.pass_contract,
+        original_shader);
     if (skinned.is_valid()) {
         s_skinned_shader_cache[cache_key] = skinned;
         return skinned;

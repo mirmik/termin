@@ -437,6 +437,7 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
     public:
         const DepthOnlyPass* pass = nullptr;
         std::vector<DepthOnlyPass::DrawCall>* draw_calls = nullptr;
+        MaterialPipelinePassContract pass_contract;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
@@ -458,15 +459,23 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
             DrawCall dc;
             dc.entity = ent;
             dc.component = c;
-            dc.final_shader = tc_component_override_shader(
-                c, "depth", geometry_id, collect_ctx->pass->depth_shader_handle_);
+            ShaderOverrideContext override_context;
+            override_context.phase_mark = "depth";
+            override_context.geometry_id = geometry_id;
+            override_context.original_shader =
+                TcShader(collect_ctx->pass->depth_shader_handle_);
+            override_context.pass_contract = collect_ctx->pass_contract;
+            dc.final_shader = override_drawable_shader(c, override_context).handle;
             dc.geometry_id = geometry_id;
             collect_ctx->draw_calls->push_back(dc);
         }
         return true;
     };
 
-    CollectContext collect_ctx{this, &cached_draw_calls_};
+    CollectContext collect_ctx{
+        this,
+        &cached_draw_calls_,
+        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::DepthOnly)};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE

@@ -72,6 +72,9 @@ public:
 protected:
     std::array<float, 4> clear_color() const override;
     const char* phase_name() const override { return "depth"; }
+    MaterialPipelinePassContract shader_pass_contract() const override {
+        return material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Depth);
+    }
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
 
