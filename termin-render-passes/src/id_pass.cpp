@@ -245,9 +245,10 @@ void IdPass::execute_with_data_tgfx2(
         }
 
         MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry(phase_name(), dc.geometry_id, mesh_geometry)) {
+        const char* pick_phase = phase_mark();
+        if (!drawable->resolve_mesh_geometry(pick_phase, dc.geometry_id, mesh_geometry)) {
             if (!drawable->supports_direct_tgfx2_draw(
-                    phase_name(), dc.geometry_id, DirectTgfx2DrawKind::OverrideColor)) {
+                    pick_phase, dc.geometry_id, DirectTgfx2DrawKind::OverrideColor)) {
                 continue;
             }
 
@@ -255,7 +256,7 @@ void IdPass::execute_with_data_tgfx2(
             direct_context.view = view;
             direct_context.projection = projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
-            direct_context.phase = phase_name();
+            direct_context.phase = pick_phase;
             direct_context.pass_contract = id_material_pass_contract();
             direct_context.current_tc_shader = TcShader(dc.final_shader);
             direct_context.layer_mask = layer_mask;
@@ -265,7 +266,7 @@ void IdPass::execute_with_data_tgfx2(
             direct_context.has_override_color = true;
             direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
 
-            drawable->draw_tgfx2(*ctx.ctx2, direct_context, phase_name(), nullptr, dc.geometry_id);
+            drawable->draw_tgfx2(*ctx.ctx2, direct_context, pick_phase, nullptr, dc.geometry_id);
             capture_debug_symbol(name);
             restore_id_raster_state();
             ctx.ctx2->clear_resource_bindings();

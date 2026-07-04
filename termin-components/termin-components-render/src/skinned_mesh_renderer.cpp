@@ -1,6 +1,7 @@
 #include <termin/render/skinned_mesh_renderer.hpp>
 #include <termin/render/skeleton_controller.hpp>
 #include <termin/render/shader_skinning.hpp>
+#include <termin/render/material_pipeline.hpp>
 #include <termin/entity/entity.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx2/render_context.hpp>
@@ -70,33 +71,6 @@ static std::unordered_map<
     TcShader,
     SkinnedShaderCacheKeyHash,
 SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
-
-std::string pass_contract_cache_key(const MaterialPipelinePassContract& pass_contract)
-{
-    std::string key = pass_contract.debug_name;
-    key += "|material_fragment=";
-    key += pass_contract.uses_material_fragment ? "1" : "0";
-    key += "|required_inputs=";
-    for (const MaterialPipelineSemantic& semantic :
-         pass_contract.required_material_fragment_input.semantics) {
-        key += semantic.name;
-        key += ':';
-        key += std::to_string(static_cast<unsigned>(semantic.type));
-        key += ';';
-    }
-    key += "|resources=";
-    for (const MaterialPipelineResourceDecl& resource : pass_contract.resources) {
-        key += resource.requirement.name;
-        key += ':';
-        key += std::to_string(resource.requirement.kind);
-        key += ':';
-        key += std::to_string(resource.requirement.scope);
-        key += ':';
-        key += std::to_string(resource.requirement.stage_mask);
-        key += ';';
-    }
-    return key;
-}
 
 MaterialPipelinePassContract legacy_material_pass_contract()
 {
@@ -298,9 +272,16 @@ TcShader SkinnedMeshRenderer::override_shader_with_context(
     }
 
     // Check C++ cache first
-    SkinnedShaderCacheKey cache_key{
-        original_shader,
-        pass_contract_cache_key(context.pass_contract)};
+    const tc_shader_variant_op variant_op = TC_SHADER_VARIANT_SKINNING;
+    const std::string intent_key =
+        context.pass_contract.skinned_vertex_transform.has_value()
+            ? material_pipeline_shader_intent_fingerprint(
+                original_shader,
+                variant_op,
+                *context.pass_contract.skinned_vertex_transform,
+                context.pass_contract)
+            : context.pass_contract.debug_name;
+    SkinnedShaderCacheKey cache_key{original_shader, intent_key};
     auto it = s_skinned_shader_cache.find(cache_key);
     if (it != s_skinned_shader_cache.end()) {
         TcShader& cached = it->second;
@@ -330,30 +311,12 @@ void SkinnedMeshRenderer::collect_shader_usages(
     TcShader original_shader,
     const std::function<void(TcShader)>& emit
 ) {
-    (void)phase_mark;
-    (void)geometry_id;
-
-    emit(original_shader);
-
-    if (!original_shader.is_valid()) {
-        return;
-    }
-    if (shader_uses_skinning(original_shader)) {
-        return;
-    }
-
-    const char* vert_source = original_shader.vertex_source();
-    if (!vert_source || vert_source[0] == '\0') {
-        return;
-    }
-    if (std::strstr(vert_source, "u_bone_matrices") != nullptr) {
-        return;
-    }
-
-    TcShader skinned = get_skinned_shader(phase_mark, original_shader);
-    if (skinned.is_valid()) {
-        emit(skinned);
-    }
+    ShaderOverrideContext context;
+    context.phase_mark = phase_mark;
+    context.geometry_id = geometry_id;
+    context.original_shader = original_shader;
+    context.pass_contract = legacy_material_pass_contract();
+    collect_shader_usages_with_context(context, emit);
 }
 
 std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {
