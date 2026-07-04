@@ -6,9 +6,198 @@
 #include "inspect/tc_inspect_context.h"
 #include <tcbase/tc_value_trent.hpp>
 #include <tcbase/tc_log.hpp>
+#include <tcbase/tc_uuid.h>
 #include <algorithm>
+#include <unordered_map>
 
 namespace termin {
+
+namespace {
+
+std::string generate_entity_clone_uuid() {
+    char uuid[64] = {};
+    tc_generate_uuid(uuid);
+    return std::string(uuid);
+}
+
+nos::trent serialize_entity_base_for_clone(
+    const Entity& entity,
+    const std::string& uuid,
+    const std::string& name
+) {
+    nos::trent data;
+    data["uuid"] = uuid;
+    data["name"] = name;
+    data["priority"] = static_cast<int64_t>(entity.priority());
+    data["visible"] = entity.visible();
+    data["enabled"] = entity.enabled();
+    data["pickable"] = entity.pickable();
+    data["selectable"] = entity.selectable();
+    data["serializable"] = entity.serializable();
+    data["layer"] = static_cast<int64_t>(entity.layer());
+    data["flags"] = static_cast<int64_t>(entity.flags());
+
+    double pos[3], rot[4], scl[3];
+    entity.get_local_position(pos);
+    entity.get_local_rotation(rot);
+    entity.get_local_scale(scl);
+
+    nos::trent position;
+    position.init(nos::trent::type::list);
+    position.push_back(pos[0]);
+    position.push_back(pos[1]);
+    position.push_back(pos[2]);
+
+    nos::trent rotation;
+    rotation.init(nos::trent::type::list);
+    rotation.push_back(rot[0]);
+    rotation.push_back(rot[1]);
+    rotation.push_back(rot[2]);
+    rotation.push_back(rot[3]);
+
+    nos::trent pose;
+    pose["position"] = std::move(position);
+    pose["rotation"] = std::move(rotation);
+    data["pose"] = std::move(pose);
+
+    nos::trent scale;
+    scale.init(nos::trent::type::list);
+    scale.push_back(scl[0]);
+    scale.push_back(scl[1]);
+    scale.push_back(scl[2]);
+    data["scale"] = std::move(scale);
+
+    return data;
+}
+
+nos::trent serialize_entity_for_clone(
+    const Entity& entity,
+    const std::string& root_name_suffix,
+    bool is_root,
+    std::unordered_map<std::string, std::string>& uuid_remap
+) {
+    const char* old_uuid_c = entity.uuid();
+    std::string old_uuid = old_uuid_c ? old_uuid_c : "";
+    std::string new_uuid = generate_entity_clone_uuid();
+    if (!old_uuid.empty()) {
+        uuid_remap[old_uuid] = new_uuid;
+    }
+
+    std::string name = entity.name() ? entity.name() : "Entity";
+    if (is_root && !root_name_suffix.empty()) {
+        name += root_name_suffix;
+    }
+
+    nos::trent data = serialize_entity_base_for_clone(entity, new_uuid, name);
+
+    nos::trent components;
+    components.init(nos::trent::type::list);
+    const size_t comp_count = entity.component_count();
+    for (size_t i = 0; i < comp_count; ++i) {
+        tc_component* tc = entity.component_at(i);
+        if (tc == nullptr) {
+            continue;
+        }
+
+        const char* type_name = tc_component_type_name(tc);
+        if (type_name == nullptr || type_name[0] == '\0') {
+            continue;
+        }
+
+        nos::trent comp_data;
+        comp_data["type"] = type_name;
+        if (tc->kind == TC_CXX_COMPONENT) {
+            CxxComponent* component = CxxComponent::from_tc(tc);
+            if (component != nullptr) {
+                tc_value value = component->serialize_data();
+                comp_data["data"] = tc::tc_value_to_trent(value);
+                tc_value_free(&value);
+            }
+        } else if (tc->body != nullptr) {
+            tc_value value = tc_inspect_serialize(tc->body, type_name);
+            comp_data["data"] = tc::tc_value_to_trent(value);
+            tc_value_free(&value);
+        }
+        components.push_back(std::move(comp_data));
+    }
+    data["components"] = std::move(components);
+
+    std::vector<Entity> child_list = entity.children();
+    if (!child_list.empty()) {
+        nos::trent children;
+        children.init(nos::trent::type::list);
+        for (const Entity& child : child_list) {
+            if (!child.valid()) {
+                continue;
+            }
+            children.push_back(serialize_entity_for_clone(
+                child,
+                root_name_suffix,
+                false,
+                uuid_remap
+            ));
+        }
+        data["children"] = std::move(children);
+    }
+
+    return data;
+}
+
+void remap_entity_uuid_refs(
+    nos::trent& data,
+    const std::unordered_map<std::string, std::string>& uuid_remap
+) {
+    if (data.is_dict()) {
+        if (data.contains("uuid") && data["uuid"].is_string()) {
+            const std::string current = data["uuid"].as_string();
+            auto it = uuid_remap.find(current);
+            if (it != uuid_remap.end()) {
+                data["uuid"] = it->second;
+            }
+        }
+
+        for (auto& [key, value] : data.as_dict()) {
+            (void)key;
+            remap_entity_uuid_refs(value, uuid_remap);
+        }
+        return;
+    }
+
+    if (data.is_list()) {
+        for (nos::trent& item : data.as_list()) {
+            remap_entity_uuid_refs(item, uuid_remap);
+        }
+    }
+}
+
+Entity deserialize_clone_hierarchy(
+    const nos::trent& data,
+    tc_scene_handle scene,
+    Entity* parent,
+    std::vector<std::pair<Entity, nos::trent>>& entity_data_pairs
+) {
+    Entity entity = Entity::deserialize_base_trent(data, scene);
+    if (!entity.valid()) {
+        tc::Log::error("[Entity] clone failed: could not deserialize cloned entity base");
+        return Entity();
+    }
+
+    if (parent != nullptr && parent->valid()) {
+        entity.set_parent(*parent);
+    }
+
+    entity_data_pairs.emplace_back(entity, data);
+
+    if (data.contains("children") && data["children"].is_list()) {
+        for (const nos::trent& child_data : data["children"].as_list()) {
+            deserialize_clone_hierarchy(child_data, scene, &entity, entity_data_pairs);
+        }
+    }
+
+    return entity;
+}
+
+} // namespace
 
 // Global standalone pool handle
 static tc_entity_pool_handle g_standalone_pool_handle = TC_ENTITY_POOL_HANDLE_INVALID;
@@ -212,6 +401,40 @@ void Entity::destroy_children() {
             tc_entity_pool_free(child.pool(), child.id());
         }
     }
+}
+
+Entity Entity::clone(const std::string& name_suffix) const {
+    if (!valid()) {
+        tc::Log::warn("[Entity] clone requested for invalid entity");
+        return Entity();
+    }
+
+    tc_scene_handle scene_handle = TC_SCENE_HANDLE_INVALID;
+    if (tc_entity_pool* p = pool_ptr()) {
+        scene_handle = tc_entity_pool_get_scene(p);
+    }
+
+    std::unordered_map<std::string, std::string> uuid_remap;
+    nos::trent clone_data = serialize_entity_for_clone(*this, name_suffix, true, uuid_remap);
+    remap_entity_uuid_refs(clone_data, uuid_remap);
+
+    std::vector<std::pair<Entity, nos::trent>> entity_data_pairs;
+    Entity cloned_root = deserialize_clone_hierarchy(
+        clone_data,
+        scene_handle,
+        nullptr,
+        entity_data_pairs
+    );
+    if (!cloned_root.valid()) {
+        tc::Log::error("[Entity] clone failed for '%s'", name() ? name() : "<unnamed>");
+        return Entity();
+    }
+
+    for (auto& [entity, entity_data] : entity_data_pairs) {
+        entity.deserialize_components_trent(entity_data, scene_handle);
+    }
+
+    return cloned_root;
 }
 
 void Entity::update(float dt) {
@@ -475,6 +698,9 @@ Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle sc
     if (data.contains("selectable")) {
         ent.set_selectable(data["selectable"].as_bool_default(true));
     }
+    if (data.contains("serializable")) {
+        ent.set_serializable(data["serializable"].as_bool_default(true));
+    }
     if (data.contains("layer")) {
         ent.set_layer(static_cast<uint64_t>(data["layer"].as_numer_default(0)));
     }
@@ -599,17 +825,17 @@ void Entity::deserialize_components_trent(
 
         // Deserialize data BEFORE adding to entity
         if (comp_data.contains("data")) {
-            void* obj_ptr = nullptr;
             if (tc->kind == TC_CXX_COMPONENT) {
-                obj_ptr = CxxComponent::from_tc(tc);
-            } else {
-                obj_ptr = tc->body;
-            }
-
-            if (obj_ptr) {
+                CxxComponent* component = CxxComponent::from_tc(tc);
+                if (component != nullptr) {
+                    tc_value v = tc::trent_to_tc_value(comp_data["data"]);
+                    component->deserialize_data(&v, scene);
+                    tc_value_free(&v);
+                }
+            } else if (tc->body != nullptr) {
                 tc_value v = tc::trent_to_tc_value(comp_data["data"]);
                 tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
-                tc_inspect_deserialize(obj_ptr, type_name.c_str(), &v, &inspect_ctx);
+                tc_inspect_deserialize(tc->body, type_name.c_str(), &v, &inspect_ctx);
                 tc_value_free(&v);
             }
         }
