@@ -76,6 +76,37 @@ void register_python_uuid_handle_kind(const char* kind_name, nb::handle type_obj
     );
 }
 
+void register_python_entity_kind() {
+    nb::module_ scene_module = nb::module_::import_("termin.scene");
+    nb::handle entity_type = scene_module.attr("Entity");
+
+    tc::KindRegistry::instance().register_type(entity_type, "entity");
+    tc::KindRegistry::instance().register_python(
+        "entity",
+        nb::cpp_function([](nb::object obj) -> nb::object {
+            Entity entity = nb::cast<Entity>(obj);
+            nb::dict result;
+            if (entity.valid()) {
+                result["uuid"] = nb::str(entity.uuid());
+                if (entity.name() != nullptr) {
+                    result["name"] = nb::str(entity.name());
+                }
+            }
+            return result;
+        }),
+        nb::cpp_function([](nb::object data, uintptr_t context_ptr) -> nb::object {
+            tc_value value = tc::nb_to_tc_value(data);
+            Entity entity;
+            entity.deserialize_from(&value, reinterpret_cast<void*>(context_ptr));
+            tc_value_free(&value);
+            if (!entity.valid()) {
+                return nb::none();
+            }
+            return nb::cast(entity);
+        })
+    );
+}
+
 static bool g_pointer_extractors_initialized = false;
 static bool g_callbacks_initialized = false;
 static bool g_python_inspect_adapters_initialized = false;
@@ -87,6 +118,7 @@ static bool g_skeleton_python_kind_initialized = false;
 static bool g_animation_python_kind_initialized = false;
 static bool g_voxel_grid_python_kind_initialized = false;
 static bool g_navmesh_python_kind_initialized = false;
+static bool g_entity_python_kind_initialized = false;
 
 bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
     PyGILState_STATE gstate = PyGILState_Ensure();
@@ -283,6 +315,10 @@ void init_python_kind_handlers(const RuntimeKindOptions& options) {
         register_python_uuid_handle_kind<TcNavMesh>("navmesh_handle", navmesh_module.attr("TcNavMesh"));
         g_navmesh_python_kind_initialized = true;
     }
+    if (options.entity && !g_entity_python_kind_initialized) {
+        register_python_entity_kind();
+        g_entity_python_kind_initialized = true;
+    }
 }
 
 void init_pointer_extractors() {
@@ -364,6 +400,7 @@ void reset_python_bootstrap_state() {
     g_animation_python_kind_initialized = false;
     g_voxel_grid_python_kind_initialized = false;
     g_navmesh_python_kind_initialized = false;
+    g_entity_python_kind_initialized = false;
 
     g_py_geometry_draw_cache.clear();
 

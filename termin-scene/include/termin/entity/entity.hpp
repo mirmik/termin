@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <cstdint>
 #include <trent/trent.h>
@@ -125,9 +126,6 @@ public:
     bool selectable() const { return tc_entity_selectable(_h); }
     void set_selectable(bool v) { tc_entity_set_selectable(_h, v); }
 
-    bool serializable() const { return tc_entity_serializable(_h); }
-    void set_serializable(bool v) { tc_entity_set_serializable(_h, v); }
-
     int priority() const { return tc_entity_priority(_h); }
     void set_priority(int p) { tc_entity_set_priority(_h, p); }
 
@@ -167,6 +165,21 @@ public:
     Entity find_child(const std::string& name) const;
     Entity create_child(const std::string& name = "entity");
     void destroy_children();
+    nos::trent serialize_hierarchy() const;
+    static nos::trent make_clone_payload(
+        const nos::trent& data,
+        const std::string& name_suffix,
+        std::unordered_map<std::string, std::string>& uuid_remap
+    );
+    static void remap_entity_refs(
+        nos::trent& data,
+        const std::unordered_map<std::string, std::string>& uuid_remap
+    );
+    static Entity deserialize_hierarchy(
+        const nos::trent& data,
+        tc_scene_handle scene,
+        const Entity& parent
+    );
     Entity clone(const std::string& name_suffix = "_copy") const;
 
     // --- Lifecycle ---

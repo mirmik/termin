@@ -20,7 +20,7 @@ std::string generate_entity_clone_uuid() {
     return std::string(uuid);
 }
 
-nos::trent serialize_entity_base_for_clone(
+nos::trent serialize_entity_base(
     const Entity& entity,
     const std::string& uuid,
     const std::string& name
@@ -33,7 +33,6 @@ nos::trent serialize_entity_base_for_clone(
     data["enabled"] = entity.enabled();
     data["pickable"] = entity.pickable();
     data["selectable"] = entity.selectable();
-    data["serializable"] = entity.serializable();
     data["layer"] = static_cast<int64_t>(entity.layer());
     data["flags"] = static_cast<int64_t>(entity.flags());
 
@@ -70,25 +69,12 @@ nos::trent serialize_entity_base_for_clone(
     return data;
 }
 
-nos::trent serialize_entity_for_clone(
-    const Entity& entity,
-    const std::string& root_name_suffix,
-    bool is_root,
-    std::unordered_map<std::string, std::string>& uuid_remap
-) {
-    const char* old_uuid_c = entity.uuid();
-    std::string old_uuid = old_uuid_c ? old_uuid_c : "";
-    std::string new_uuid = generate_entity_clone_uuid();
-    if (!old_uuid.empty()) {
-        uuid_remap[old_uuid] = new_uuid;
-    }
-
+nos::trent serialize_entity_hierarchy(const Entity& entity) {
+    const char* uuid_c = entity.uuid();
+    std::string uuid = uuid_c ? uuid_c : "";
     std::string name = entity.name() ? entity.name() : "Entity";
-    if (is_root && !root_name_suffix.empty()) {
-        name += root_name_suffix;
-    }
 
-    nos::trent data = serialize_entity_base_for_clone(entity, new_uuid, name);
+    nos::trent data = serialize_entity_base(entity, uuid, name);
 
     nos::trent components;
     components.init(nos::trent::type::list);
@@ -104,73 +90,192 @@ nos::trent serialize_entity_for_clone(
             continue;
         }
 
+        if (tc->body == nullptr) {
+            continue;
+        }
+
         nos::trent comp_data;
         comp_data["type"] = type_name;
-        if (tc->kind == TC_CXX_COMPONENT) {
-            CxxComponent* component = CxxComponent::from_tc(tc);
-            if (component != nullptr) {
-                tc_value value = component->serialize_data();
-                comp_data["data"] = tc::tc_value_to_trent(value);
-                tc_value_free(&value);
-            }
-        } else if (tc->body != nullptr) {
-            tc_value value = tc_inspect_serialize(tc->body, type_name);
-            comp_data["data"] = tc::tc_value_to_trent(value);
-            tc_value_free(&value);
+        if (!tc_inspect_has_type(type_name)) {
+            tc::Log::warn(
+                "[Entity] Component '%s' has no inspect registration; serialized component data will be empty",
+                type_name
+            );
         }
+        tc_value value = tc_inspect_serialize(tc->body, type_name);
+        comp_data["data"] = tc::tc_value_to_trent(value);
+        tc_value_free(&value);
         components.push_back(std::move(comp_data));
     }
     data["components"] = std::move(components);
 
-    std::vector<Entity> child_list = entity.children();
-    if (!child_list.empty()) {
-        nos::trent children;
-        children.init(nos::trent::type::list);
-        for (const Entity& child : child_list) {
-            if (!child.valid()) {
-                continue;
-            }
-            children.push_back(serialize_entity_for_clone(
-                child,
-                root_name_suffix,
-                false,
-                uuid_remap
-            ));
+    nos::trent children;
+    children.init(nos::trent::type::list);
+    for (const Entity& child : entity.children()) {
+        if (!child.valid()) {
+            continue;
         }
-        data["children"] = std::move(children);
+        children.push_back(serialize_entity_hierarchy(child));
     }
+    data["children"] = std::move(children);
 
     return data;
 }
 
-void remap_entity_uuid_refs(
+nos::trent make_clone_payload_recursive(
+    const nos::trent& source_data,
+    const std::string& root_name_suffix,
+    bool is_root,
+    std::unordered_map<std::string, std::string>& uuid_remap
+) {
+    if (!source_data.is_dict()) {
+        return nos::trent();
+    }
+
+    nos::trent clone_data = source_data;
+
+    const std::string old_uuid = clone_data["uuid"].as_string_default("");
+    const std::string new_uuid = generate_entity_clone_uuid();
+    if (!old_uuid.empty()) {
+        uuid_remap[old_uuid] = new_uuid;
+    }
+    clone_data["uuid"] = new_uuid;
+
+    if (is_root && !root_name_suffix.empty()) {
+        std::string name = clone_data["name"].as_string_default("Entity");
+        clone_data["name"] = name + root_name_suffix;
+    }
+
+    nos::trent cloned_children;
+    cloned_children.init(nos::trent::type::list);
+    if (clone_data.contains("children") && clone_data["children"].is_list()) {
+        for (const nos::trent& child : clone_data["children"].as_list()) {
+            nos::trent cloned_child = make_clone_payload_recursive(
+                child,
+                root_name_suffix,
+                false,
+                uuid_remap
+            );
+            if (cloned_child.is_dict()) {
+                cloned_children.push_back(std::move(cloned_child));
+            }
+        }
+    }
+    clone_data["children"] = std::move(cloned_children);
+
+    return clone_data;
+}
+
+nos::trent* find_trent_path(nos::trent& data, const std::string& path) {
+    nos::trent* current = &data;
+    size_t start = 0;
+    while (start <= path.size()) {
+        const size_t dot = path.find('.', start);
+        const std::string part = dot == std::string::npos
+            ? path.substr(start)
+            : path.substr(start, dot - start);
+        if (part.empty() || !current->is_dict() || !current->contains(part)) {
+            return nullptr;
+        }
+        current = &((*current)[part]);
+        if (dot == std::string::npos) {
+            return current;
+        }
+        start = dot + 1;
+    }
+    return nullptr;
+}
+
+bool remap_entity_ref_value(
+    nos::trent& value,
+    const std::unordered_map<std::string, std::string>& uuid_remap
+) {
+    if (value.is_dict()) {
+        if (value.contains("uuid") && value["uuid"].is_string()) {
+            const std::string current = value["uuid"].as_string();
+            auto it = uuid_remap.find(current);
+            if (it != uuid_remap.end()) {
+                value["uuid"] = it->second;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (value.is_string()) {
+        const std::string current = value.as_string();
+        auto it = uuid_remap.find(current);
+        if (it != uuid_remap.end()) {
+            value = it->second;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool remap_entity_ref_list_value(
+    nos::trent& value,
+    const std::unordered_map<std::string, std::string>& uuid_remap
+) {
+    if (!value.is_list()) {
+        return false;
+    }
+    bool changed = false;
+    for (nos::trent& item : value.as_list()) {
+        changed = remap_entity_ref_value(item, uuid_remap) || changed;
+    }
+    return changed;
+}
+
+void remap_component_entity_refs(
     nos::trent& data,
     const std::unordered_map<std::string, std::string>& uuid_remap
 ) {
-    if (data.is_dict()) {
-        if (data.contains("uuid") && data["uuid"].is_string()) {
-            const std::string current = data["uuid"].as_string();
-            auto it = uuid_remap.find(current);
-            if (it != uuid_remap.end()) {
-                data["uuid"] = it->second;
-            }
-        }
-
-        for (auto& [key, value] : data.as_dict()) {
-            (void)key;
-            remap_entity_uuid_refs(value, uuid_remap);
-        }
+    if (!data.is_dict()) {
         return;
     }
 
-    if (data.is_list()) {
-        for (nos::trent& item : data.as_list()) {
-            remap_entity_uuid_refs(item, uuid_remap);
+    if (data.contains("components") && data["components"].is_list()) {
+        for (nos::trent& component_data : data["components"].as_list()) {
+            if (!component_data.is_dict() ||
+                !component_data.contains("type") ||
+                !component_data.contains("data") ||
+                !component_data["data"].is_dict()) {
+                continue;
+            }
+
+            const std::string type_name = component_data["type"].as_string_default("");
+            if (type_name.empty()) {
+                continue;
+            }
+
+            for (const tc::InspectFieldInfo& field : tc::InspectRegistry::instance().all_fields(type_name)) {
+                if (field.kind != "entity" && field.kind != "list[entity]") {
+                    continue;
+                }
+
+                nos::trent* value = find_trent_path(component_data["data"], field.path);
+                if (value == nullptr) {
+                    continue;
+                }
+
+                if (field.kind == "entity") {
+                    remap_entity_ref_value(*value, uuid_remap);
+                } else {
+                    remap_entity_ref_list_value(*value, uuid_remap);
+                }
+            }
+        }
+    }
+
+    if (data.contains("children") && data["children"].is_list()) {
+        for (nos::trent& child : data["children"].as_list()) {
+            remap_component_entity_refs(child, uuid_remap);
         }
     }
 }
 
-Entity deserialize_clone_hierarchy(
+Entity deserialize_entity_hierarchy(
     const nos::trent& data,
     tc_scene_handle scene,
     Entity* parent,
@@ -178,7 +283,7 @@ Entity deserialize_clone_hierarchy(
 ) {
     Entity entity = Entity::deserialize_base_trent(data, scene);
     if (!entity.valid()) {
-        tc::Log::error("[Entity] clone failed: could not deserialize cloned entity base");
+        tc::Log::error("[Entity] hierarchy deserialization failed: could not deserialize entity base");
         return Entity();
     }
 
@@ -190,7 +295,7 @@ Entity deserialize_clone_hierarchy(
 
     if (data.contains("children") && data["children"].is_list()) {
         for (const nos::trent& child_data : data["children"].as_list()) {
-            deserialize_clone_hierarchy(child_data, scene, &entity, entity_data_pairs);
+            deserialize_entity_hierarchy(child_data, scene, &entity, entity_data_pairs);
         }
     }
 
@@ -403,6 +508,63 @@ void Entity::destroy_children() {
     }
 }
 
+nos::trent Entity::serialize_hierarchy() const {
+    if (!valid()) {
+        tc::Log::warn("[Entity] hierarchy serialization requested for invalid entity");
+        return nos::trent();
+    }
+
+    return serialize_entity_hierarchy(*this);
+}
+
+nos::trent Entity::make_clone_payload(
+    const nos::trent& data,
+    const std::string& name_suffix,
+    std::unordered_map<std::string, std::string>& uuid_remap
+) {
+    if (!data.is_dict()) {
+        tc::Log::error("[Entity] clone payload creation failed: source data must be a dict");
+        return nos::trent();
+    }
+    return make_clone_payload_recursive(data, name_suffix, true, uuid_remap);
+}
+
+void Entity::remap_entity_refs(
+    nos::trent& data,
+    const std::unordered_map<std::string, std::string>& uuid_remap
+) {
+    remap_component_entity_refs(data, uuid_remap);
+}
+
+Entity Entity::deserialize_hierarchy(
+    const nos::trent& data,
+    tc_scene_handle scene,
+    const Entity& parent
+) {
+    if (!data.is_dict()) {
+        tc::Log::error("[Entity] hierarchy deserialization failed: data must be a dict");
+        return Entity();
+    }
+    std::vector<std::pair<Entity, nos::trent>> entity_data_pairs;
+    Entity parent_copy = parent;
+    Entity cloned_root = deserialize_entity_hierarchy(
+        data,
+        scene,
+        parent_copy.valid() ? &parent_copy : nullptr,
+        entity_data_pairs
+    );
+    if (!cloned_root.valid()) {
+        tc::Log::error("[Entity] hierarchy deserialization failed: root entity was not deserialized");
+        return Entity();
+    }
+
+    for (auto& [entity, entity_data] : entity_data_pairs) {
+        entity.deserialize_components_trent(entity_data, scene);
+    }
+
+    return cloned_root;
+}
+
 Entity Entity::clone(const std::string& name_suffix) const {
     if (!valid()) {
         tc::Log::warn("[Entity] clone requested for invalid entity");
@@ -415,26 +577,9 @@ Entity Entity::clone(const std::string& name_suffix) const {
     }
 
     std::unordered_map<std::string, std::string> uuid_remap;
-    nos::trent clone_data = serialize_entity_for_clone(*this, name_suffix, true, uuid_remap);
-    remap_entity_uuid_refs(clone_data, uuid_remap);
-
-    std::vector<std::pair<Entity, nos::trent>> entity_data_pairs;
-    Entity cloned_root = deserialize_clone_hierarchy(
-        clone_data,
-        scene_handle,
-        nullptr,
-        entity_data_pairs
-    );
-    if (!cloned_root.valid()) {
-        tc::Log::error("[Entity] clone failed for '%s'", name() ? name() : "<unnamed>");
-        return Entity();
-    }
-
-    for (auto& [entity, entity_data] : entity_data_pairs) {
-        entity.deserialize_components_trent(entity_data, scene_handle);
-    }
-
-    return cloned_root;
+    nos::trent clone_data = Entity::make_clone_payload(serialize_hierarchy(), name_suffix, uuid_remap);
+    Entity::remap_entity_refs(clone_data, uuid_remap);
+    return Entity::deserialize_hierarchy(clone_data, scene_handle, parent());
 }
 
 void Entity::update(float dt) {
@@ -457,7 +602,7 @@ void Entity::on_removed_from_scene() {
 }
 
 tc_value Entity::serialize_base() const {
-    if (!valid() || !serializable()) {
+    if (!valid()) {
         return tc_value_nil();
     }
 
@@ -697,9 +842,6 @@ Entity Entity::deserialize_base_trent(const nos::trent& data, tc_scene_handle sc
     }
     if (data.contains("selectable")) {
         ent.set_selectable(data["selectable"].as_bool_default(true));
-    }
-    if (data.contains("serializable")) {
-        ent.set_serializable(data["serializable"].as_bool_default(true));
     }
     if (data.contains("layer")) {
         ent.set_layer(static_cast<uint64_t>(data["layer"].as_numer_default(0)));

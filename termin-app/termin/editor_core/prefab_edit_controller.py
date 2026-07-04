@@ -168,7 +168,7 @@ class PrefabEditController:
         Find the prefab root entity in current scene.
 
         Looks for entity named "[Root]" first, then falls back to
-        first serializable root entity (without parent).
+        the first root entity (without parent).
         """
         from termin.editor_core.prefab_persistence import PrefabPersistence
 
@@ -179,9 +179,6 @@ class PrefabEditController:
         fallback = None
 
         for entity in scene.entities:
-            # Skip non-serializable entities (editor entities like camera, gizmo)
-            if not entity.serializable:
-                continue
             # Root entity has no parent
             if entity.transform.parent is not None:
                 continue
