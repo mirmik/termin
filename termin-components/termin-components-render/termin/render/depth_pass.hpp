@@ -26,8 +26,10 @@ private:
 
 public:
     std::string depth_encoding = "linear";
+    std::string material_phase_mark = "depth";
     bool clear = true;
 
+    INSPECT_FIELD(DepthPass, material_phase_mark, "Material Phase Mark", "string")
     INSPECT_FIELD_CHOICES(DepthPass, depth_encoding, "Depth Encoding", "string",
         {"linear", "Linear"},
         {"linear_inverse", "Linear Inverse"},
@@ -71,10 +73,9 @@ public:
 
 protected:
     std::array<float, 4> clear_color() const override;
-    const char* phase_name() const override { return "depth"; }
-    MaterialPipelinePassContract shader_pass_contract() const override {
-        return material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Depth);
-    }
+    const char* phase_name() const override { return ""; }
+    const char* material_shader_phase_name() const override { return material_phase_mark.c_str(); }
+    MaterialPipelinePassContract shader_pass_contract() const override;
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
 
@@ -92,6 +93,7 @@ public:
     std::string output_res = "depth_texture";
     std::string output_res_target;
     std::string camera_name;
+    std::string material_phase_mark = "depth";
     std::vector<std::string> entity_names;
 
 private:
@@ -105,6 +107,7 @@ public:
     INSPECT_FIELD(DepthOnlyPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(DepthOnlyPass, output_res_target, "Output Target", "string")
     INSPECT_FIELD(DepthOnlyPass, camera_name, "Camera Name", "string")
+    INSPECT_FIELD(DepthOnlyPass, material_phase_mark, "Material Phase Mark", "string")
     INSPECT_TYPE_METADATA(DepthOnlyPass, graph, make_pass_graph_metadata(
         {{"output_res_target", "depth_texture"}},
         {{"output_res", "depth_texture"}},

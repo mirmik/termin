@@ -78,6 +78,39 @@ inline Vec3 get_global_position(const Entity& entity) {
     return entity.transform().global_pose().lin;
 }
 
+MaterialPipelinePassContract color_material_pass_contract()
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = "color";
+    contract.required_material_fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.uses_material_fragment = true;
+
+    MaterialFragmentInterface fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.static_vertex_transform =
+        material_pipeline_make_static_vertex_transform_contract(
+            "static",
+            material_pipeline_full_material_mesh_input(),
+            fragment_input,
+            material_pipeline_common_vertex_resources("draw_data"));
+    contract.skinned_vertex_transform =
+        material_pipeline_make_skinned_vertex_transform_contract(
+            *contract.static_vertex_transform,
+            "skinned",
+            "termin-engine-skinned-material",
+            material_pipeline_skinned_material_mesh_input());
+    contract.foliage_vertex_transform =
+        material_pipeline_make_foliage_vertex_transform_contract(
+            VertexTransformKind::Foliage,
+            "foliage",
+            "termin-engine-foliage-instanced",
+            material_pipeline_foliage_material_mesh_input(),
+            fragment_input,
+            material_pipeline_foliage_vertex_resources());
+    return contract;
+}
+
 // Convert float distance to uint32 for radix-friendly sorting.
 // Preserves order: smaller distance -> smaller uint value.
 inline uint32_t float_to_sortable_uint(float f) {
@@ -366,8 +399,7 @@ void ColorPass::collect_draw_calls(
     CollectDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
     data.phase_mark = phase_mark.c_str();
-    data.pass_contract =
-        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+    data.pass_contract = color_material_pass_contract();
 
     // Use tc_scene_foreach_drawable with filtering
     int filter_flags = TC_SCENE_FILTER_ENABLED
@@ -684,7 +716,7 @@ void ColorPass::execute_with_data(
                 dc.geometry_id,
                 dc.material,
                 dc.phase_index,
-                material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color));
+                color_material_pass_contract());
             if (!resolved.phase) {
                 tc::Log::error(
                     "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' geometry=%d could not resolve live material phase",
@@ -748,8 +780,7 @@ void ColorPass::execute_with_data(
             direct_context.projection = projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
             direct_context.phase = phase_mark;
-            direct_context.pass_contract =
-                material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+            direct_context.pass_contract = color_material_pass_contract();
             direct_context.current_tc_shader = TcShader(final_shader);
             direct_context.layer_mask = layer_mask;
             direct_context.camera_position = camera_position;

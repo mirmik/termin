@@ -56,8 +56,8 @@ std::optional<std::string> GeometryPassBase::fbo_format() const {
     return std::nullopt;
 }
 
-MaterialPipelinePassContract GeometryPassBase::shader_pass_contract() const {
-    return material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+const char* GeometryPassBase::material_shader_phase_name() const {
+    return "";
 }
 
 bool GeometryPassBase::entity_filter(const Entity& ent) const {
@@ -98,10 +98,20 @@ void GeometryPassBase::collect_draw_calls(
         }
 
         std::vector<int> geometry_ids;
+        std::vector<GeometryDrawCall> material_phase_draws;
+        const char* material_phase = ctx->pass->material_shader_phase_name();
+        const bool use_material_phase =
+            material_phase && material_phase[0] != '\0';
         if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
             auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
             if (drawable) {
-                geometry_ids = drawable->get_geometry_ids_for_phase(ctx->pass->phase_name());
+                const char* routing_phase = ctx->pass->phase_name();
+                geometry_ids = drawable->get_geometry_ids_for_phase(routing_phase);
+
+                if (use_material_phase) {
+                    std::string mark = material_phase;
+                    material_phase_draws = drawable->get_geometry_draws(&mark);
+                }
             }
         }
         if (geometry_ids.empty()) {
@@ -110,10 +120,22 @@ void GeometryPassBase::collect_draw_calls(
 
         const int pick_id = ctx->pass->get_pick_id(ent);
         for (int geometry_id : geometry_ids) {
+            tc_shader_handle original_shader = ctx->base_shader;
+            for (const GeometryDrawCall& draw : material_phase_draws) {
+                tc_material_phase* phase = draw.resolve_phase();
+                if (draw.geometry_id == geometry_id &&
+                    phase &&
+                    !tc_shader_handle_is_invalid(phase->shader)) {
+                    original_shader = phase->shader;
+                    break;
+                }
+            }
+
             ShaderOverrideContext override_context;
-            override_context.phase_mark = ctx->pass->phase_name();
+            override_context.phase_mark =
+                use_material_phase ? material_phase : ctx->pass->phase_name();
             override_context.geometry_id = geometry_id;
-            override_context.original_shader = TcShader(ctx->base_shader);
+            override_context.original_shader = TcShader(original_shader);
             override_context.pass_contract = ctx->pass_contract;
             tc_shader_handle final_shader =
                 override_drawable_shader(c, override_context).handle;

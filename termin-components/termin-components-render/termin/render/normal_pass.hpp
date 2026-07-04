@@ -21,6 +21,10 @@ private:
     void release_tgfx2_resources();
 
 public:
+    std::string material_phase_mark = "normal";
+
+    INSPECT_FIELD(NormalPass, material_phase_mark, "Material Phase Mark", "string")
+
     NormalPass(
         const std::string& input_res = "empty_normal",
         const std::string& output_res = "normal",
@@ -52,10 +56,9 @@ public:
 
 protected:
     std::array<float, 4> clear_color() const override { return {0.5f, 0.5f, 0.5f, 1.0f}; }
-    const char* phase_name() const override { return "normal"; }
-    MaterialPipelinePassContract shader_pass_contract() const override {
-        return material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Normal);
-    }
+    const char* phase_name() const override { return ""; }
+    const char* material_shader_phase_name() const override { return material_phase_mark.c_str(); }
+    MaterialPipelinePassContract shader_pass_contract() const override;
 };
 
 } // namespace termin

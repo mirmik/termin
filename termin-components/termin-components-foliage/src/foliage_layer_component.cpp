@@ -59,25 +59,76 @@ TcShader get_foliage_instanced_shader(
     TcShader original_shader,
     const MaterialPipelinePassContract& pass_contract)
 {
-    const bool shadow_variant = pass_contract.kind == MaterialPipelinePassKind::Shadow;
+    if (!pass_contract.foliage_vertex_transform.has_value()) {
+        return TcShader();
+    }
+    const VertexTransformContract& foliage_transform =
+        *pass_contract.foliage_vertex_transform;
+    const bool shadow_variant =
+        foliage_transform.kind == VertexTransformKind::FoliageShadow;
     MaterialShaderOverrideRequest request{};
     request.original_shader = original_shader;
-    request.vertex_transform_kind = shadow_variant
-        ? VertexTransformKind::FoliageShadow
-        : VertexTransformKind::Foliage;
-    request.pass_kind = shadow_variant
-        ? MaterialPipelinePassKind::Shadow
-        : pass_contract.kind;
+    request.vertex_transform_kind = foliage_transform.kind;
     request.pass_contract = pass_contract;
-    request.vertex_transform_contract =
-        material_pipeline_builtin_vertex_transform_contract(
-            request.vertex_transform_kind,
-            request.pass_kind);
+    request.vertex_transform_contract = foliage_transform;
     request.shader_variant_op = shadow_variant
         ? TC_SHADER_VARIANT_FOLIAGE_SHADOW
         : TC_SHADER_VARIANT_FOLIAGE;
     request.debug_context = "FoliageLayerComponent";
     return assemble_material_shader_override(request);
+}
+
+MaterialPipelinePassContract legacy_foliage_material_pass_contract()
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = "legacy_foliage_material";
+    contract.required_material_fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.uses_material_fragment = true;
+
+    MaterialFragmentInterface fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.static_vertex_transform =
+        material_pipeline_make_static_vertex_transform_contract(
+            "static",
+            material_pipeline_full_material_mesh_input(),
+            fragment_input,
+            material_pipeline_common_vertex_resources("draw_data"));
+    contract.foliage_vertex_transform =
+        material_pipeline_make_foliage_vertex_transform_contract(
+            VertexTransformKind::Foliage,
+            "foliage",
+            "termin-engine-foliage-instanced",
+            material_pipeline_foliage_material_mesh_input(),
+            fragment_input,
+            material_pipeline_foliage_vertex_resources());
+    return contract;
+}
+
+MaterialPipelinePassContract legacy_foliage_shadow_pass_contract()
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = "legacy_foliage_shadow";
+    contract.required_material_fragment_input = MaterialFragmentInterface{};
+    contract.uses_material_fragment = true;
+
+    MaterialFragmentInterface fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.static_vertex_transform =
+        material_pipeline_make_static_vertex_transform_contract(
+            "static_shadow",
+            material_pipeline_position_mesh_input(),
+            fragment_input,
+            material_pipeline_common_vertex_resources("shadow_draw"));
+    contract.foliage_vertex_transform =
+        material_pipeline_make_foliage_vertex_transform_contract(
+            VertexTransformKind::FoliageShadow,
+            "foliage_shadow",
+            "termin-engine-foliage-shadow",
+            material_pipeline_position_mesh_input(),
+            fragment_input,
+            material_pipeline_foliage_vertex_resources());
+    return contract;
 }
 
 bool shader_contract_requires_foliage_instances(TcShader shader)
@@ -436,20 +487,9 @@ TcShader FoliageLayerComponent::override_shader(
     context.geometry_id = geometry_id;
     context.original_shader = original_shader;
     if (phase_mark == "shadow") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
-    } else if (phase_mark == "depth") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Depth);
-    } else if (phase_mark == "pick") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
-    } else if (phase_mark == "normal") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Normal);
+        context.pass_contract = legacy_foliage_shadow_pass_contract();
     } else {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+        context.pass_contract = legacy_foliage_material_pass_contract();
     }
     return override_shader_with_context(context);
 }
@@ -464,8 +504,7 @@ TcShader FoliageLayerComponent::override_shader_with_context(
     if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
         return original_shader;
     }
-    if (context.pass_contract.kind == MaterialPipelinePassKind::Depth ||
-        context.pass_contract.kind == MaterialPipelinePassKind::DepthOnly) {
+    if (!context.pass_contract.foliage_vertex_transform.has_value()) {
         return original_shader;
     }
 
@@ -492,15 +531,11 @@ void FoliageLayerComponent::collect_shader_usages(
     if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
         return;
     }
-    if (phase_mark == "depth") {
-        return;
-    }
-
     TcShader variant = get_foliage_instanced_shader(
         original_shader,
         phase_mark == "shadow"
-            ? material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow)
-            : material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color));
+            ? legacy_foliage_shadow_pass_contract()
+            : legacy_foliage_material_pass_contract());
     if (variant.is_valid()) {
         emit(variant);
     }
@@ -581,8 +616,11 @@ bool FoliageLayerComponent::draw_tgfx2(
     }
 
     const MaterialPipelinePassContract& pass_contract = context.pass_contract;
+    if (!pass_contract.foliage_vertex_transform.has_value()) {
+        return false;
+    }
     const bool shadow_variant =
-        pass_contract.kind == MaterialPipelinePassKind::Shadow;
+        pass_contract.foliage_vertex_transform->kind == VertexTransformKind::FoliageShadow;
     tgfx::VertexBufferLayout vertex_layout;
     if (!build_foliage_vertex_layout(mesh_binding, shadow_variant, vertex_layout)) {
         return false;
