@@ -527,6 +527,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     direct_context.projection = proj_matrix;
                     direct_context.model = drawable->get_model_matrix(dc.entity);
                     direct_context.phase = "shadow";
+                    direct_context.pass_contract =
+                        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
                     direct_context.current_tc_shader = TcShader(dc.final_shader);
                     direct_context.layer_mask = layer_mask;
                     direct_context.camera_position = shadow_camera_position(params);

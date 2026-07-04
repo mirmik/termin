@@ -580,11 +580,9 @@ bool FoliageLayerComponent::draw_tgfx2(
         return false;
     }
 
-    const bool shadow_variant = phase_mark == "shadow";
-    MaterialPipelinePassContract pass_contract =
-        shadow_variant
-            ? material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow)
-            : material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+    const MaterialPipelinePassContract& pass_contract = context.pass_contract;
+    const bool shadow_variant =
+        pass_contract.kind == MaterialPipelinePassKind::Shadow;
     tgfx::VertexBufferLayout vertex_layout;
     if (!build_foliage_vertex_layout(mesh_binding, shadow_variant, vertex_layout)) {
         return false;
