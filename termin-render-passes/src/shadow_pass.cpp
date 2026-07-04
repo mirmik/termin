@@ -54,6 +54,38 @@ struct ShadowPushStd140 {
 static_assert(sizeof(ShadowPushStd140) == 64,
               "ShadowPushStd140 must be mat4");
 
+MaterialPipelinePassContract shadow_material_pass_contract()
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = "shadow";
+    contract.required_material_fragment_input = MaterialFragmentInterface{};
+    contract.uses_material_fragment = true;
+
+    MaterialFragmentInterface fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.static_vertex_transform =
+        material_pipeline_make_static_vertex_transform_contract(
+            "static_shadow",
+            material_pipeline_position_mesh_input(),
+            fragment_input,
+            material_pipeline_common_vertex_resources("shadow_draw"));
+    contract.skinned_vertex_transform =
+        material_pipeline_make_skinned_vertex_transform_contract(
+            *contract.static_vertex_transform,
+            "skinned_shadow",
+            "termin-engine-skinned-shadow",
+            material_pipeline_skinned_position_mesh_input());
+    contract.foliage_vertex_transform =
+        material_pipeline_make_foliage_vertex_transform_contract(
+            VertexTransformKind::FoliageShadow,
+            "foliage_shadow",
+            "termin-engine-foliage-shadow",
+            material_pipeline_position_mesh_input(),
+            fragment_input,
+            material_pipeline_foliage_vertex_resources());
+    return contract;
+}
+
 } // anonymous namespace
 
 
@@ -246,8 +278,7 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
     // assembled through the material pipeline vertex-variant helper and keep
     // the same draw/per-frame resource contract as the base path.
     data.base_shader = shadow_shader_handle_;
-    data.pass_contract =
-        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
+    data.pass_contract = shadow_material_pass_contract();
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
@@ -527,8 +558,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     direct_context.projection = proj_matrix;
                     direct_context.model = drawable->get_model_matrix(dc.entity);
                     direct_context.phase = "shadow";
-                    direct_context.pass_contract =
-                        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
+                    direct_context.pass_contract = shadow_material_pass_contract();
                     direct_context.current_tc_shader = TcShader(dc.final_shader);
                     direct_context.layer_mask = layer_mask;
                     direct_context.camera_position = shadow_camera_position(params);

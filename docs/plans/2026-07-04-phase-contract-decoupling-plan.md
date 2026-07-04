@@ -24,6 +24,16 @@ Progress:
   paths. `ColorPass`, `ShadowPass`, and `IdPass` now populate it; foliage
   direct drawing and line material-fragment selection use the pass contract
   instead of deriving shader intent from `phase_mark`.
+- 2026-07-04: Removed the central material-pipeline pass enum from production
+  code. `MaterialPipelinePassContract` now carries explicit static/skinned/
+  foliage vertex transform contracts. Depth and normal passes no longer route
+  through material/drawable phase marks named `depth` or `normal`.
+- 2026-07-04: Restored pass-local material shader overrides for depth and
+  normal rendering through explicit `material_phase_mark` fields on
+  `DepthPass`, `DepthOnlyPass`, and `NormalPass`. The canonical defaults are
+  `depth` and `normal`; these fields select an optional material phase shader
+  for matching geometry ids, but they do not define routing, visibility, or
+  material-pipeline layout.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.
@@ -95,7 +105,7 @@ ColorPass
   pass contract = keep material fragment, standard color resources
 
 CustomDepthPass
-  phase_mark = "my_depth_prepass"
+  phase_mark = "" or a project-owned routing label
   pass contract = depth output, position-only vertex interface
 
 IdPass
@@ -103,7 +113,7 @@ IdPass
   pass contract = id payload/output resources
 
 NormalPass
-  phase_mark = "normal"
+  phase_mark = "" or a project-owned routing label
   pass contract = normal output resources and vertex normal requirement
 ```
 
@@ -113,8 +123,8 @@ The material pipeline core should see the contracts, not the phase names.
 
 ### Phase-to-contract mapping
 
-`termin-components-render/src/shader_skinning.cpp` maps phase strings to
-`MaterialPipelinePassKind`:
+Previously, `termin-components-render/src/shader_skinning.cpp` mapped phase
+strings to concrete material-pipeline pass meanings:
 
 ```text
 shadow -> Shadow
@@ -124,21 +134,23 @@ normal -> Normal
 else   -> Color
 ```
 
-This makes an arbitrary routing label select vertex templates and draw-scope
-resources.
+That made an arbitrary routing label select vertex templates and draw-scope
+resources. Production code no longer contains this authoritative mapping;
+legacy overloads accept the old signature but do not infer `depth` or `normal`
+shader layouts from the string.
 
 ### Central pass-kind enum
 
-`MaterialPipelinePassKind` currently contains concrete pass meanings:
+The removed central pass-kind enum contained concrete pass meanings:
 
 ```text
 Color, Shadow, Depth, DepthOnly, Id, Normal
 ```
 
-`vertex_transform_contracts.cpp` uses that enum to choose resource names and
-template UUIDs. This is better than raw string checks at call sites, but it
-still puts knowledge of specific engine passes inside a shared material/vertex
-contract layer.
+`vertex_transform_contracts.cpp` used that enum to choose resource names and
+template UUIDs. This was better than raw string checks at call sites, but it
+still put knowledge of specific engine passes inside a shared material/vertex
+contract layer. The current code exposes descriptor builders instead.
 
 ### Shadow special case
 
@@ -267,14 +279,14 @@ Validation:
 - existing `shadow/depth/pick/normal` behavior remains covered by tests;
 - a non-standard phase label can still request color-style skinned rendering.
 
-### 4. Replace central pass-kind enum with contract factories
+### 4. Replace central pass-kind enum with contract descriptors
 
-Demote `MaterialPipelinePassKind` from core architecture to a temporary helper,
-then remove it when callers no longer need it.
+Remove the central pass-kind enum and make pass contracts carry explicit
+vertex-transform descriptors.
 
 Expected changes:
 
-- move built-in `Depth`, `Normal`, `Id`, and `Shadow` knowledge out of generic
+- move built-in depth, normal, id, and shadow knowledge out of generic
   material pipeline assembly code;
 - make vertex transform factories accept explicit requirements/resource
   declarations instead of pass-kind enum values;
@@ -337,7 +349,7 @@ Expected changes:
 
 - remove phase-name-to-contract adapters;
 - remove warnings added in step 3;
-- remove unused enum values or the whole `MaterialPipelinePassKind` enum;
+- remove any remaining compatibility-only contract inference;
 - update docs from migration wording to final architecture wording.
 
 Validation:
@@ -353,7 +365,7 @@ Add focused tests before broad migration:
 
 - a skinned mesh rendered under a custom color phase that is not named
   `opaque` or `transparent`;
-- a custom depth-like pass with a non-`depth` phase label;
+- a custom depth-like pass that does not require a `depth` phase label;
 - a custom color-like pass whose phase label is `depth_debug` and must not pick
   depth layout by substring or fallback convention;
 - IdPass/picking behavior with the canonical `pick` label;
@@ -370,14 +382,25 @@ Existing assets and projects may continue to use:
 - `opaque`;
 - `transparent`;
 - `shadow`;
-- `depth`;
-- `normal`;
 - `pick`;
 - editor/debug phase labels.
 
-During migration these labels should remain accepted, but only as routing labels
-owned by the relevant pass setup. Their presence must not be sufficient to
-select a shader contract in shared material pipeline code.
+`depth` and `normal` are canonical material shader override labels for the
+engine depth and normal passes. They are no longer routing/layout labels: if a
+project uses those strings, their presence alone carries no special layout
+meaning. Depth and normal engine passes use explicit shader contracts instead
+of deriving contracts from those names.
+
+If depth/normal rendering needs material-specific shader code, the pass may set
+its own `material_phase_mark`; by default depth passes look for `depth` and the
+normal pass looks for `normal`. That mark is deliberately pass-local: it is a
+shader override lookup key only. The pass still chooses the geometry set through
+its routing phase, owns the material-pipeline contract, and falls back to the
+engine shader when no matching material phase exists.
+
+During migration the remaining labels should remain accepted only as routing
+labels owned by the relevant pass setup. Their presence must not be sufficient
+to select a shader contract in shared material pipeline code.
 
 ## Completion Criteria
 

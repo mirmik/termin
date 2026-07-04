@@ -77,7 +77,8 @@ public:
 protected:
     virtual std::array<float, 4> clear_color() const = 0;
     virtual const char* phase_name() const = 0;
-    virtual MaterialPipelinePassContract shader_pass_contract() const;
+    virtual const char* material_shader_phase_name() const;
+    virtual MaterialPipelinePassContract shader_pass_contract() const = 0;
     virtual std::optional<std::string> fbo_format() const;
 
     virtual bool entity_filter(const Entity& ent) const;

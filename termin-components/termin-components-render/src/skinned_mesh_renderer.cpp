@@ -74,10 +74,16 @@ SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
 std::string pass_contract_cache_key(const MaterialPipelinePassContract& pass_contract)
 {
     std::string key = pass_contract.debug_name;
-    key += "|kind=";
-    key += std::to_string(static_cast<unsigned>(pass_contract.kind));
     key += "|material_fragment=";
     key += pass_contract.uses_material_fragment ? "1" : "0";
+    key += "|required_inputs=";
+    for (const MaterialPipelineSemantic& semantic :
+         pass_contract.required_material_fragment_input.semantics) {
+        key += semantic.name;
+        key += ':';
+        key += std::to_string(static_cast<unsigned>(semantic.type));
+        key += ';';
+    }
     key += "|resources=";
     for (const MaterialPipelineResourceDecl& resource : pass_contract.resources) {
         key += resource.requirement.name;
@@ -90,6 +96,31 @@ std::string pass_contract_cache_key(const MaterialPipelinePassContract& pass_con
         key += ';';
     }
     return key;
+}
+
+MaterialPipelinePassContract legacy_material_pass_contract()
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = "legacy_material";
+    contract.required_material_fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.uses_material_fragment = true;
+
+    MaterialFragmentInterface fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.static_vertex_transform =
+        material_pipeline_make_static_vertex_transform_contract(
+            "static",
+            material_pipeline_full_material_mesh_input(),
+            fragment_input,
+            material_pipeline_common_vertex_resources("draw_data"));
+    contract.skinned_vertex_transform =
+        material_pipeline_make_skinned_vertex_transform_contract(
+            *contract.static_vertex_transform,
+            "skinned",
+            "termin-engine-skinned-material",
+            material_pipeline_skinned_material_mesh_input());
+    return contract;
 }
 
 void SkinnedMeshRenderer::register_type() {
@@ -242,22 +273,7 @@ TcShader SkinnedMeshRenderer::override_shader(
     context.phase_mark = phase_mark;
     context.geometry_id = geometry_id;
     context.original_shader = original_shader;
-    if (phase_mark == "shadow") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
-    } else if (phase_mark == "depth") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Depth);
-    } else if (phase_mark == "pick") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
-    } else if (phase_mark == "normal") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Normal);
-    } else {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
-    }
+    context.pass_contract = legacy_material_pass_contract();
     return override_shader_with_context(context);
 }
 

@@ -84,7 +84,35 @@ bool depth_encoding_is_inverse(const std::string& encoding) {
            encoding == "logarithmic_inverse";
 }
 
+MaterialPipelinePassContract depth_material_pass_contract(const char* debug_name)
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = debug_name ? debug_name : "depth";
+    contract.required_material_fragment_input = MaterialFragmentInterface{};
+    contract.uses_material_fragment = true;
+
+    MaterialFragmentInterface fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.static_vertex_transform =
+        material_pipeline_make_static_vertex_transform_contract(
+            "static_depth",
+            material_pipeline_position_mesh_input(),
+            fragment_input,
+            material_pipeline_common_vertex_resources("depth_draw"));
+    contract.skinned_vertex_transform =
+        material_pipeline_make_skinned_vertex_transform_contract(
+            *contract.static_vertex_transform,
+            "skinned_depth",
+            "termin-engine-skinned-depth",
+            material_pipeline_skinned_position_mesh_input());
+    return contract;
+}
+
 } // anonymous namespace
+
+MaterialPipelinePassContract DepthPass::shader_pass_contract() const {
+    return depth_material_pass_contract("depth");
+}
 
 void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
@@ -260,9 +288,9 @@ void DepthPass::execute_with_data_tgfx2(
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
 
-        // Both paths share the same draw-scope model matrix + PerFrame UBO.
-        // The skinned variant adds TerminBoneBlock as another reflected draw
-        // resource instead of changing the model binding contract.
+        // Base, skinned, and material-phase override shaders share the same
+        // draw-scope model matrix + PerFrame UBO. Skinning adds BoneBlock as
+        // another reflected draw resource.
         DepthDrawStd140 draw{};
         std::memcpy(draw.u_model, model.data, sizeof(float) * 16);
         std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
@@ -289,8 +317,8 @@ void DepthPass::execute_with_data_tgfx2(
                     MaterialMeshVertexInput::Position));
             capture_debug_symbol(name);
         } else {
-            // Skinning variant: compile via bridge, bind, upload BoneBlock
-            // UBO from SkinnedMeshRenderer, draw.
+            // Non-base shader: compile via bridge, bind reflected resources,
+            // and let the drawable upload optional per-draw data such as BoneBlock.
             MaterialPipelineShaderBinding skinned_shader{};
             if (!ensure_material_pipeline_shader(
                     *ctx.ctx2,
@@ -445,10 +473,17 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         Entity ent(c->owner);
 
         std::vector<int> geometry_ids;
+        std::vector<GeometryDrawCall> material_phase_draws;
+        const bool use_material_phase =
+            !collect_ctx->pass->material_phase_mark.empty();
         if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
             auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
             if (drawable) {
-                geometry_ids = drawable->get_geometry_ids_for_phase("depth");
+                geometry_ids = drawable->get_geometry_ids_for_phase("");
+                if (use_material_phase) {
+                    material_phase_draws = drawable->get_geometry_draws(
+                        &collect_ctx->pass->material_phase_mark);
+                }
             }
         }
         if (geometry_ids.empty()) {
@@ -456,14 +491,27 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         }
 
         for (int geometry_id : geometry_ids) {
+            tc_shader_handle original_shader =
+                collect_ctx->pass->depth_shader_handle_;
+            for (const GeometryDrawCall& draw : material_phase_draws) {
+                tc_material_phase* phase = draw.resolve_phase();
+                if (draw.geometry_id == geometry_id &&
+                    phase &&
+                    !tc_shader_handle_is_invalid(phase->shader)) {
+                    original_shader = phase->shader;
+                    break;
+                }
+            }
+
             DrawCall dc;
             dc.entity = ent;
             dc.component = c;
             ShaderOverrideContext override_context;
-            override_context.phase_mark = "depth";
+            override_context.phase_mark = use_material_phase
+                ? collect_ctx->pass->material_phase_mark
+                : "";
             override_context.geometry_id = geometry_id;
-            override_context.original_shader =
-                TcShader(collect_ctx->pass->depth_shader_handle_);
+            override_context.original_shader = TcShader(original_shader);
             override_context.pass_contract = collect_ctx->pass_contract;
             dc.final_shader = override_drawable_shader(c, override_context).handle;
             dc.geometry_id = geometry_id;
@@ -475,7 +523,7 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
     CollectContext collect_ctx{
         this,
         &cached_draw_calls_,
-        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::DepthOnly)};
+        depth_material_pass_contract("depth_only")};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
@@ -640,7 +688,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         if (!drawable) continue;
 
         MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry("depth", dc.geometry_id, mesh_geometry)) {
+        if (!drawable->resolve_mesh_geometry("", dc.geometry_id, mesh_geometry)) {
             continue;
         }
 

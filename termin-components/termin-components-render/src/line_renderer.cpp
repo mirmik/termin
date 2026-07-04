@@ -132,8 +132,6 @@ bool uses_material_fragment_variant_for_pass(
 
 bool is_auxiliary_geometry_phase(const std::string& phase_mark) {
     return phase_mark == "shadow"
-        || phase_mark == "depth"
-        || phase_mark == "normal"
         || phase_mark == "id";
 }
 
@@ -174,6 +172,25 @@ std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_b
 std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_cap_shader_cache() {
     static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
     return cache;
+}
+
+MaterialPipelinePassContract legacy_line_material_pass_contract()
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = "legacy_line_material";
+    contract.required_material_fragment_input =
+        material_pipeline_standard_material_fragment_interface();
+    contract.uses_material_fragment = true;
+    return contract;
+}
+
+MaterialPipelinePassContract legacy_line_auxiliary_pass_contract(const char* debug_name)
+{
+    MaterialPipelinePassContract contract;
+    contract.debug_name = debug_name ? debug_name : "legacy_line_auxiliary";
+    contract.required_material_fragment_input = MaterialFragmentInterface{};
+    contract.uses_material_fragment = true;
+    return contract;
 }
 
 TcShader get_line_material_fragment_shader(TcShader original_shader) {
@@ -732,14 +749,11 @@ TcShader LineRenderer::override_shader(
     context.phase_mark = phase_mark;
     context.geometry_id = geometry_id;
     context.original_shader = original_shader;
-    context.pass_contract =
-        material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Color);
+    context.pass_contract = legacy_line_material_pass_contract();
     if (phase_mark == "shadow") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Shadow);
+        context.pass_contract = legacy_line_auxiliary_pass_contract("shadow");
     } else if (phase_mark == "pick") {
-        context.pass_contract =
-            material_pipeline_builtin_pass_contract(MaterialPipelinePassKind::Id);
+        context.pass_contract = legacy_line_auxiliary_pass_contract("id");
     }
     return override_shader_with_context(context);
 }
