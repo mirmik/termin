@@ -174,7 +174,7 @@ void NormalPass::execute_with_data_tgfx2(
         if (!drawable) continue;
 
         MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry(phase_name(), dc.geometry_id, mesh_geometry)) {
+        if (!drawable->resolve_mesh_geometry(phase_mark(), dc.geometry_id, mesh_geometry)) {
             continue;  // non-mesh drawables skipped
         }
 
@@ -187,6 +187,7 @@ void NormalPass::execute_with_data_tgfx2(
 
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, normal_shader_handle_);
+        tc_material_phase* material_phase = dc.resolve_material_phase();
 
         NormalDrawStd140 draw{};
         std::memcpy(draw.u_model, model.data, sizeof(float) * 16);
@@ -227,7 +228,7 @@ void NormalPass::execute_with_data_tgfx2(
                 *ctx.ctx2,
                 device,
                 skinned_shader.shader,
-                nullptr,
+                material_phase,
                 draw_resources);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);

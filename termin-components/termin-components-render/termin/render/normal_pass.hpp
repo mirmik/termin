@@ -56,8 +56,10 @@ public:
 
 protected:
     std::array<float, 4> clear_color() const override { return {0.5f, 0.5f, 0.5f, 1.0f}; }
-    const char* phase_name() const override { return ""; }
-    const char* material_shader_phase_name() const override { return material_phase_mark.c_str(); }
+    const char* phase_mark() const override {
+        return material_phase_mark.c_str();
+    }
+    bool uses_material_phase_shader_override() const override { return true; }
     MaterialPipelinePassContract shader_pass_contract() const override;
 };
 

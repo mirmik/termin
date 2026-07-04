@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include <termin/render/geometry_pass_base.hpp>
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -73,8 +75,10 @@ public:
 
 protected:
     std::array<float, 4> clear_color() const override;
-    const char* phase_name() const override { return ""; }
-    const char* material_shader_phase_name() const override { return material_phase_mark.c_str(); }
+    const char* phase_mark() const override {
+        return material_phase_mark.c_str();
+    }
+    bool uses_material_phase_shader_override() const override { return true; }
     MaterialPipelinePassContract shader_pass_contract() const override;
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
@@ -86,7 +90,20 @@ public:
         Entity entity;
         tc_component* component = nullptr;
         tc_shader_handle final_shader = tc_shader_handle_invalid();
+        tc_material_phase* material_phase = nullptr;
+        tc_material_handle material = tc_material_handle_invalid();
+        size_t phase_index = SIZE_MAX;
         int geometry_id = 0;
+
+        tc_material_phase* resolve_material_phase() const {
+            if (!tc_material_handle_is_invalid(material) && phase_index != SIZE_MAX) {
+                tc_material* mat = tc_material_get(material);
+                if (mat && phase_index < mat->phase_count) {
+                    return &mat->phases[phase_index];
+                }
+            }
+            return material_phase;
+        }
     };
 
 public:

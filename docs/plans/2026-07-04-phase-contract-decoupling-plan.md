@@ -34,6 +34,11 @@ Progress:
   `depth` and `normal`; these fields select an optional material phase shader
   for matching geometry ids, but they do not define routing, visibility, or
   material-pipeline layout.
+- 2026-07-04: Corrected the final phase model after review. A render pass must
+  pass an explicit `phase_mark` when asking a drawable for geometry or direct
+  drawing support. The phase is a drawable/render representation request and
+  may also select a material phase draw set. It does not define shader ABI,
+  vertex layout, resource layout, or material-pipeline variant intent.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.
@@ -53,15 +58,22 @@ well-known phase names or pass kinds inside material pipeline core.
 
 ## Target Boundary
 
-`phase_mark` is a routing and material-selection label.
+`phase_mark` is a mandatory drawable/render representation label.
 
 It may be used to:
 
-- filter drawable participation in a render pass;
-- ask a drawable for geometry draw calls for that label;
-- select a matching `tc_material_phase`;
-- describe render queue membership such as `opaque`, `transparent`, `editor`,
-  or a project-defined label.
+- ask a drawable which geometry ids exist for that label;
+- resolve the phase-specific mesh or direct draw representation for a geometry
+  id;
+- select a matching `tc_material_phase` or material phase draw set;
+- describe material/render queue or representation membership such as
+  `opaque`, `transparent`, `shadow`, `pick`, `depth`, `normal`, `editor`, or a
+  project-defined label.
+
+A pass must not use an empty or omitted phase as a generic "all geometry"
+request. A renderer may decide that a phase uses the same mesh geometry as
+another phase, but that decision belongs inside the drawable/renderer
+implementation for the requested label.
 
 It must not be used to infer:
 
@@ -78,14 +90,16 @@ Render passes own shader intent.
 A pass that needs a non-color shader contract must provide it explicitly. The
 material pipeline assembler consumes generic contract objects and produces a
 final `tc_shader` with `tc_shader_contract` plus resolved resource layout. It
-does not decide that `normal`, `pick`, or `depth` are special names.
+does not decide that `normal`, `pick`, or `depth` are special shader-layout
+names.
 
 ## Desired Model
 
-The draw path should carry two independent pieces of information:
+The draw path should keep representation selection/material phase lookup
+separate from shader assembly intent:
 
 ```text
-PhaseSelection
+DrawablePhaseRequest
   phase_mark: string
 
 ShaderAssemblyIntent
@@ -94,26 +108,33 @@ ShaderAssemblyIntent
   pass shader contract
 ```
 
-The first one is user/project-visible routing. The second one is render-owned
-shader ABI and layout intent.
+The first one is the drawable-facing request for a render representation. It
+can also be a user/project-visible material lookup label. The second one is
+render-owned shader ABI and layout intent.
 
 Examples:
 
 ```text
 ColorPass
   phase_mark = "opaque"
+  geometry = material draws for "opaque"
   pass contract = keep material fragment, standard color resources
 
 CustomDepthPass
-  phase_mark = "" or a project-owned routing label
+  phase_mark = "depth" or a project-owned label
+  geometry = drawable representation for that phase
+  optional material phase shader lookup = same label
   pass contract = depth output, position-only vertex interface
 
 IdPass
   phase_mark = "pick"
+  geometry = drawable pick representation
   pass contract = id payload/output resources
 
 NormalPass
-  phase_mark = "" or a project-owned routing label
+  phase_mark = "normal"
+  geometry = drawable normal representation
+  optional material phase shader lookup = "normal"
   pass contract = normal output resources and vertex normal requirement
 ```
 
@@ -218,8 +239,8 @@ The helpers are convenience factories, not the only legal vocabulary.
 
 ### 1. Document and enforce the phase boundary
 
-Add living render documentation that defines `phase_mark` as routing/material
-selection only.
+Add living render documentation that defines `phase_mark` as a mandatory
+drawable representation/material selection label.
 
 Expected changes:
 
@@ -241,7 +262,7 @@ shader override paths.
 
 The context should carry:
 
-- `phase_mark` for routing/material selection;
+- `phase_mark` for drawable representation/material selection;
 - pass-owned shader contract or a handle to one;
 - optional debug label/pass name.
 
@@ -365,7 +386,8 @@ Add focused tests before broad migration:
 
 - a skinned mesh rendered under a custom color phase that is not named
   `opaque` or `transparent`;
-- a custom depth-like pass that does not require a `depth` phase label;
+- a custom depth-like pass that can request a project-owned phase label instead
+  of the built-in `depth` label;
 - a custom color-like pass whose phase label is `depth_debug` and must not pick
   depth layout by substring or fallback convention;
 - IdPass/picking behavior with the canonical `pick` label;
@@ -373,7 +395,8 @@ Add focused tests before broad migration:
 - shadow caster with material alpha/discard requirements.
 
 The key assertion is that shader contract resources come from explicit pass
-intent, while material phase selection comes from `phase_mark`.
+intent, while drawable representation and material phase selection come from
+`phase_mark`.
 
 ## Compatibility Notes
 
@@ -386,17 +409,18 @@ Existing assets and projects may continue to use:
 - editor/debug phase labels.
 
 `depth` and `normal` are canonical material shader override labels for the
-engine depth and normal passes. They are no longer routing/layout labels: if a
-project uses those strings, their presence alone carries no special layout
-meaning. Depth and normal engine passes use explicit shader contracts instead
-of deriving contracts from those names.
+engine depth and normal passes, and they are also the default drawable
+representation requests those passes issue. They are not shader layout labels:
+if a project uses those strings, their presence alone carries no special layout
+meaning. Depth and normal engine passes request the matching drawable phase and
+use explicit shader contracts instead of deriving contracts from those names.
 
 If depth/normal rendering needs material-specific shader code, the pass may set
 its own `material_phase_mark`; by default depth passes look for `depth` and the
-normal pass looks for `normal`. That mark is deliberately pass-local: it is a
-shader override lookup key only. The pass still chooses the geometry set through
-its routing phase, owns the material-pipeline contract, and falls back to the
-engine shader when no matching material phase exists.
+normal pass looks for `normal`. That mark is the phase request sent to
+drawables and the material phase lookup key. The pass still owns the
+material-pipeline contract and falls back to the engine shader when no matching
+material phase exists.
 
 During migration the remaining labels should remain accepted only as routing
 labels owned by the relevant pass setup. Their presence must not be sufficient
@@ -406,7 +430,8 @@ to select a shader contract in shared material pipeline code.
 
 The migration is complete when:
 
-- `phase_mark` is documented as routing/material selection;
+- `phase_mark` is documented as mandatory drawable representation/material
+  phase selection;
 - material pipeline assembly accepts explicit pass and vertex transform
   contracts;
 - no shared material pipeline or component shader override code infers layout
