@@ -4,8 +4,9 @@ EditorCameraUIController - контроллер для UI редакторско
 Подписывается на кнопки в editor_camera_ui.uiscript и управляет:
 - Отображением коллайдеров (ColliderGizmoPass.enabled)
 - Отображением editor debug navmesh overlay (EditorDebug.passthrough)
-- Режимом wireframe (TODO)
-- Ортографической камерой (TODO)
+- Режимом wireframe
+- Ортографической камерой
+- Ориентацией transform gizmo: local / global
 
 Использование:
     Контроллер должен быть на entity-потомке камеры (или на самой камере).
@@ -21,6 +22,7 @@ from termin.render_components.camera import CameraComponent
 from termin.ui_components import UIComponent
 from tcgui.widgets.basic import IconButton
 from termin.inspect import InspectField
+from tcbase import log
 
 if TYPE_CHECKING:
     from termin.viewport import Viewport
@@ -59,6 +61,12 @@ class EditorCameraUIController(PythonComponent):
             is_serializable=True,
             is_inspectable=True,
         ),
+        "gizmo_world_orientation_enabled": InspectField(
+            path="gizmo_world_orientation_enabled",
+            kind="bool",
+            is_serializable=True,
+            is_inspectable=True,
+        ),
     }
 
     def __init__(self):
@@ -72,12 +80,14 @@ class EditorCameraUIController(PythonComponent):
         self.navmesh_enabled: bool = True
         self.wireframe_enabled: bool = False
         self.ortho_enabled: bool = False
+        self.gizmo_world_orientation_enabled: bool = False
 
         # Кнопки (найдутся в start)
         self._colliders_btn: IconButton | None = None
         self._navmesh_btn: IconButton | None = None
         self._wireframe_btn: IconButton | None = None
         self._ortho_btn: IconButton | None = None
+        self._gizmo_orientation_btn: IconButton | None = None
 
     @property
     def viewport(self) -> "Viewport | None":
@@ -141,6 +151,10 @@ class EditorCameraUIController(PythonComponent):
         if self._ortho_btn is not None:
             self._ortho_btn.on_click = self._on_ortho_click
 
+        self._gizmo_orientation_btn = self._ui_component.find("gizmo_orientation_btn")
+        if self._gizmo_orientation_btn is not None:
+            self._gizmo_orientation_btn.on_click = self._on_gizmo_orientation_click
+
     def _sync_button_states(self) -> None:
         """Применяет сохранённые состояния к кнопкам и пассам."""
         # Colliders
@@ -175,6 +189,9 @@ class EditorCameraUIController(PythonComponent):
         if self._ortho_btn is not None:
             self._ortho_btn.active = self.ortho_enabled
 
+        # Transform gizmo orientation
+        self._apply_gizmo_orientation()
+
     def _find_pass_by_name(self, pass_name: str):
         """Ищет пасс по имени в pipeline."""
         vp = self.viewport
@@ -194,6 +211,39 @@ class EditorCameraUIController(PythonComponent):
         editor_debug_transparent_pass = self._find_pass_by_name("EditorDebugTransparent")
         if editor_debug_transparent_pass is not None:
             editor_debug_transparent_pass.passthrough = passthrough
+
+    def _apply_gizmo_orientation(self, *, request_update: bool = False) -> None:
+        """Переключает ориентацию transform gizmo между local и global."""
+        mode = "world" if self.gizmo_world_orientation_enabled else "local"
+
+        if self._gizmo_orientation_btn is not None:
+            self._gizmo_orientation_btn.active = self.gizmo_world_orientation_enabled
+            self._gizmo_orientation_btn.icon = "G" if self.gizmo_world_orientation_enabled else "L"
+            self._gizmo_orientation_btn.tooltip = (
+                "Transform Gizmo: Global"
+                if self.gizmo_world_orientation_enabled
+                else "Transform Gizmo: Local"
+            )
+
+        try:
+            from termin.editor._editor_native import EditorInteractionSystem
+        except Exception as e:
+            log.error(f"[EditorCameraUIController] cannot import EditorInteractionSystem: {e}")
+            return
+
+        interaction_system = EditorInteractionSystem.instance()
+        if interaction_system is None:
+            log.error("[EditorCameraUIController] cannot set gizmo orientation: interaction system is unavailable")
+            return
+
+        transform_gizmo = interaction_system.transform_gizmo
+        if transform_gizmo is None:
+            log.error("[EditorCameraUIController] cannot set gizmo orientation: transform gizmo is unavailable")
+            return
+
+        transform_gizmo.set_orientation_mode(mode)
+        if request_update and interaction_system.on_request_update is not None:
+            interaction_system.on_request_update()
 
     def _on_colliders_click(self) -> None:
         """Переключает отображение коллайдеров."""
@@ -235,3 +285,8 @@ class EditorCameraUIController(PythonComponent):
             self._camera_component.projection_type = "orthographic" if self.ortho_enabled else "perspective"
         if self._ortho_btn is not None:
             self._ortho_btn.active = self.ortho_enabled
+
+    def _on_gizmo_orientation_click(self) -> None:
+        """Переключает ориентацию transform gizmo."""
+        self.gizmo_world_orientation_enabled = not self.gizmo_world_orientation_enabled
+        self._apply_gizmo_orientation(request_update=True)

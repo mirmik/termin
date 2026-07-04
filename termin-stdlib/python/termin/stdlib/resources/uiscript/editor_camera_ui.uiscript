@@ -2,13 +2,14 @@
 #
 # Layout:
 #   - Bottom-left: Colliders/NavMesh visibility toggles
-#   - Top-right: Camera mode buttons (Ortho, Wireframe)
+#   - Top-right: Camera and transform mode buttons
 #
 # Widget names for binding:
 #   - colliders_btn: Toggle collider gizmos visibility
 #   - navmesh_btn: Toggle navmesh debug visibility
 #   - ortho_btn: Toggle orthographic camera mode
 #   - wireframe_btn: Toggle wireframe rendering
+#   - gizmo_orientation_btn: Toggle transform gizmo local/global orientation
 
 root:
   type: Panel
@@ -54,7 +55,7 @@ root:
               active_color: [0.2, 0.5, 0.8, 0.95]
               border_radius: 4
 
-    # Top-right: Camera controls
+    # Top-right: Camera and transform controls
     - type: Panel
       name: top_right_panel
       anchor: top-right
@@ -66,6 +67,17 @@ root:
           spacing: 4
 
           children:
+            - type: IconButton
+              name: gizmo_orientation_btn
+              icon: "L"
+              tooltip: "Toggle Gizmo Local/Global"
+              size: 26
+              font_size: 14
+              background_color: [0.15, 0.15, 0.15, 0.85]
+              hover_color: [0.25, 0.25, 0.25, 0.95]
+              active_color: [0.2, 0.5, 0.8, 0.95]
+              border_radius: 4
+
             - type: IconButton
               name: wireframe_btn
               icon: "W"

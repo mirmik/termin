@@ -51,7 +51,6 @@ class EditorWindowWidgets:
     status_bar: StatusBar
     play_button: Button
     pause_button: Button
-    gizmo_orientation_button: Button
     prefab_toolbar: HStack
     prefab_toolbar_label: Label
     save_prefab_button: Button
@@ -64,7 +63,6 @@ class EditorWindowLayoutCallbacks:
     toggle_pause: Callable[[], None]
     save_prefab: Callable[[], None]
     exit_prefab_editing: Callable[[], None]
-    toggle_gizmo_orientation: Callable[[], None]
     viewport_external_drag: Callable[[object], bool]
     viewport_external_drop: Callable[[object], bool]
 
@@ -129,14 +127,6 @@ def build_editor_window_layout(callbacks: EditorWindowLayoutCallbacks) -> Editor
     pause_button.visible = False
     pause_button.on_click = callbacks.toggle_pause
     toolbar.add_child(pause_button)
-
-    gizmo_orientation_button = Button()
-    gizmo_orientation_button.text = "Local"
-    gizmo_orientation_button.tooltip = "Transform gizmo orientation"
-    gizmo_orientation_button.preferred_width = px(68)
-    gizmo_orientation_button.preferred_height = px(24)
-    gizmo_orientation_button.on_click = callbacks.toggle_gizmo_orientation
-    toolbar.add_child(gizmo_orientation_button)
 
     prefab_toolbar = HStack()
     prefab_toolbar.spacing = 4
@@ -280,7 +270,6 @@ def build_editor_window_layout(callbacks: EditorWindowLayoutCallbacks) -> Editor
         status_bar=status_bar,
         play_button=play_button,
         pause_button=pause_button,
-        gizmo_orientation_button=gizmo_orientation_button,
         prefab_toolbar=prefab_toolbar,
         prefab_toolbar_label=prefab_toolbar_label,
         save_prefab_button=save_prefab_button,
