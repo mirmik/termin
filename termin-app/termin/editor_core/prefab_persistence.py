@@ -85,7 +85,7 @@ class PrefabPersistence:
         # Serialize entity hierarchy
         entity_data = entity.serialize()
         if entity_data is None:
-            raise ValueError(f"Entity '{entity.name}' is not serializable")
+            raise ValueError(f"Entity '{entity.name}' could not be serialized")
 
         data = {
             "version": self.VERSION,

@@ -470,7 +470,7 @@ class EditorWindowTcgui:
 
             self._rendering_controller.set_center_tabs(self._center_tabs)
 
-            # Register editor display and mark it as non-serializable
+            # Register editor display in the editor-only standalone hierarchy.
             self._rendering_controller.add_editor_display(self._editor_display, "Editor")
             self._rendering_controller.set_editor_display_ptr(self._editor_display.tc_display_ptr)
 

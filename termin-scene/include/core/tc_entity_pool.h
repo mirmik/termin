@@ -148,9 +148,6 @@ TC_POOL_API void tc_entity_pool_set_pickable(tc_entity_pool* pool, tc_entity_id 
 TC_POOL_API bool tc_entity_pool_selectable(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API void tc_entity_pool_set_selectable(tc_entity_pool* pool, tc_entity_id id, bool v);
 
-TC_POOL_API bool tc_entity_pool_serializable(const tc_entity_pool* pool, tc_entity_id id);
-TC_POOL_API void tc_entity_pool_set_serializable(tc_entity_pool* pool, tc_entity_id id, bool v);
-
 TC_POOL_API int tc_entity_pool_priority(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API void tc_entity_pool_set_priority(tc_entity_pool* pool, tc_entity_id id, int v);
 
@@ -364,16 +361,6 @@ static inline bool tc_entity_selectable(tc_entity_handle h) {
 static inline void tc_entity_set_selectable(tc_entity_handle h, bool v) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     if (pool) tc_entity_pool_set_selectable(pool, h.id, v);
-}
-
-static inline bool tc_entity_serializable(tc_entity_handle h) {
-    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
-    return pool ? tc_entity_pool_serializable(pool, h.id) : false;
-}
-
-static inline void tc_entity_set_serializable(tc_entity_handle h, bool v) {
-    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
-    if (pool) tc_entity_pool_set_serializable(pool, h.id, v);
 }
 
 static inline int tc_entity_priority(tc_entity_handle h) {

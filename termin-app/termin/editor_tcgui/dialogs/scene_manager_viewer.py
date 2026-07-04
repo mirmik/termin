@@ -275,9 +275,8 @@ def show_scene_manager_viewer(
         lines.append("")
 
         for entity in root_entities[:20]:
-            serializable = "S" if entity.serializable else "-"
             enabled = "E" if entity.enabled else "-"
-            lines.append(f"  [{serializable}{enabled}] {entity.name}")
+            lines.append(f"  [{enabled}] {entity.name}")
 
         if len(root_entities) > 20:
             lines.append(f"  ... and {len(root_entities) - 20} more")

@@ -1,11 +1,15 @@
 #include <iostream>
 #include <string>
+#include <unordered_map>
 
 #include <inspect/tc_inspect_context.h>
+#include <tcbase/tc_value_trent.hpp>
+#include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/tc_scene.hpp>
+#include <inspect/tc_inspect_init.h>
 
 #define TEST_ASSERT(cond, msg) \
     do { \
@@ -24,12 +28,14 @@ public:
 
     int value = 0;
     termin::Entity target;
+    std::string plain_uuid_string;
 
     tc_value serialize_data() const override {
         tc_value data = tc_value_dict_new();
         tc_value_dict_set(&data, "value", tc_value_int(value));
         tc_value target_value = target.serialize_to_value();
         tc_value_dict_set(&data, "target", target_value);
+        tc_value_dict_set(&data, "plain_uuid", tc_value_string(plain_uuid_string.c_str()));
         return data;
     }
 
@@ -46,18 +52,75 @@ public:
         tc_value* target_data = tc_value_dict_get(const_cast<tc_value*>(data), "target");
         tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene);
         target.deserialize_from(target_data, &inspect_ctx);
+
+        tc_value* plain_uuid_data = tc_value_dict_get(const_cast<tc_value*>(data), "plain_uuid");
+        if (plain_uuid_data != nullptr && plain_uuid_data->type == TC_VALUE_STRING && plain_uuid_data->data.s) {
+            plain_uuid_string = plain_uuid_data->data.s;
+        }
     }
 };
 
 static ::termin::ComponentRegistrar<CloneRefComponent>
     clone_ref_component_registrar("CloneRefComponent", "CxxComponent");
 
+void register_clone_ref_inspect_fields() {
+    tc::register_cpp_handle_kind<termin::Entity>("entity");
+
+    {
+        tc::InspectFieldInfo info;
+        info.type_name = "CloneRefComponent";
+        info.path = "value";
+        info.label = "Value";
+        info.kind = "int";
+        info.is_serializable = true;
+        info.getter = [](void* obj) -> tc_value {
+            return tc_value_int(static_cast<CloneRefComponent*>(obj)->value);
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            if (value.type == TC_VALUE_INT) {
+                static_cast<CloneRefComponent*>(obj)->value = static_cast<int>(value.data.i);
+            }
+        };
+        tc::InspectRegistry::instance().add_field_with_choices("CloneRefComponent", std::move(info));
+    }
+    tc::InspectRegistry::instance().add_handle(
+        "CloneRefComponent",
+        &CloneRefComponent::target,
+        "target",
+        "Target",
+        "entity"
+    );
+    {
+        tc::InspectFieldInfo info;
+        info.type_name = "CloneRefComponent";
+        info.path = "plain_uuid";
+        info.label = "Plain UUID";
+        info.kind = "string";
+        info.is_serializable = true;
+        info.getter = [](void* obj) -> tc_value {
+            return tc_value_string(static_cast<CloneRefComponent*>(obj)->plain_uuid_string.c_str());
+        };
+        info.setter = [](void* obj, tc_value value, void*) {
+            if (value.type == TC_VALUE_STRING && value.data.s) {
+                static_cast<CloneRefComponent*>(obj)->plain_uuid_string = value.data.s;
+            }
+        };
+        tc::InspectRegistry::instance().add_field_with_choices("CloneRefComponent", std::move(info));
+    }
+}
+
 } // namespace
 
 int main() {
+    tc_inspect_kind_core_init();
+    register_clone_ref_inspect_fields();
+
     termin::TcSceneRef scene = termin::TcSceneRef::create("entity-clone-test");
 
+    termin::Entity parent = scene.create_entity("Parent");
+
     termin::Entity root = scene.create_entity("Root");
+    root.set_parent(parent);
     root.set_pickable(true);
     root.set_selectable(true);
     double root_pos[3] = {1.0, 2.0, 3.0};
@@ -66,7 +129,6 @@ int main() {
     termin::Entity child = root.create_child("Child");
     child.set_pickable(false);
     child.set_selectable(false);
-    child.set_serializable(false);
     double child_pos[3] = {4.0, 5.0, 6.0};
     child.set_local_position(child_pos);
 
@@ -78,13 +140,47 @@ int main() {
     TEST_ASSERT(component != nullptr, "test component should be a C++ component");
     component->value = 42;
     component->target = child;
+    component->plain_uuid_string = child.uuid();
     root.add_component_ptr(raw_component);
 
-    termin::Entity clone = root.clone("_ghost");
+    nos::trent source_data = root.serialize_hierarchy();
+    TEST_ASSERT(source_data.is_dict(), "hierarchy serialization should return a dict");
+    TEST_ASSERT(source_data["uuid"].as_string() == std::string(root.uuid()),
+                "hierarchy serialization should keep source root uuid");
+    TEST_ASSERT(source_data["children"].as_list()[0]["uuid"].as_string() == std::string(child.uuid()),
+                "hierarchy serialization should keep source child uuid");
+    TEST_ASSERT(source_data["components"].as_list()[0]["data"]["target"]["uuid"].as_string() == std::string(child.uuid()),
+                "hierarchy serialization should keep source entity refs");
+
+    std::unordered_map<std::string, std::string> uuid_remap;
+    nos::trent clone_data = termin::Entity::make_clone_payload(source_data, "_ghost", uuid_remap);
+    TEST_ASSERT(clone_data.is_dict(), "clone payload should return a dict");
+    TEST_ASSERT(clone_data.contains("children"), "clone payload should include children");
+    const std::string cloned_child_uuid =
+        clone_data["children"].as_list()[0]["uuid"].as_string();
+    TEST_ASSERT(clone_data["components"].as_list()[0]["data"]["target"]["uuid"].as_string() == std::string(child.uuid()),
+                "clone payload creation should not remap component entity refs");
+
+    termin::Entity::remap_entity_refs(clone_data, uuid_remap);
+    const std::string component_target_uuid =
+        clone_data["components"].as_list()[0]["data"]["target"]["uuid"].as_string();
+    TEST_ASSERT(component_target_uuid == cloned_child_uuid,
+                "explicit entity ref remap should remap string entity refs to cloned entities");
+    const std::string component_plain_uuid =
+        clone_data["components"].as_list()[0]["data"]["plain_uuid"].as_string();
+    TEST_ASSERT(component_plain_uuid == std::string(child.uuid()),
+                "clone serialization should not remap untyped uuid-looking strings");
+
+    termin::Entity clone = termin::Entity::deserialize_hierarchy(
+        clone_data,
+        scene.handle(),
+        parent
+    );
     TEST_ASSERT(clone.valid(), "clone root should be valid");
     TEST_ASSERT(clone != root, "clone root should be a different entity");
     TEST_ASSERT(std::string(clone.name()) == "Root_ghost", "clone root should use suffix");
     TEST_ASSERT(std::string(clone.uuid()) != std::string(root.uuid()), "clone root should have new uuid");
+    TEST_ASSERT(clone.parent() == parent, "clone root should preserve original parent");
     TEST_ASSERT(clone.pickable() == root.pickable(), "clone should preserve pickable flag");
     TEST_ASSERT(clone.selectable() == root.selectable(), "clone should preserve selectable flag");
 
@@ -93,7 +189,6 @@ int main() {
     TEST_ASSERT(cloned_child != child, "clone child should be a different entity");
     TEST_ASSERT(std::string(cloned_child.uuid()) != std::string(child.uuid()), "clone child should have new uuid");
     TEST_ASSERT(cloned_child.parent() == clone, "clone child parent should be cloned root");
-    TEST_ASSERT(cloned_child.serializable() == child.serializable(), "clone child should preserve serializable flag");
 
     CloneRefComponent* cloned_component = clone.get_component<CloneRefComponent>();
     TEST_ASSERT(cloned_component != nullptr, "clone component should exist");
