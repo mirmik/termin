@@ -49,3 +49,4 @@
 
 - [D3D11 Slang scope preservation](2026-07-02-d3d11-slang-scope-preservation-plan.md)
 - [TcMesh submesh and multi-material GLB plan](2026-07-03-tcmesh-submesh-glb-plan.md)
+- [Phase contract decoupling](2026-07-04-phase-contract-decoupling-plan.md)
