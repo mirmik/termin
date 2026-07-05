@@ -43,18 +43,44 @@ struct TERMIN_NAVMESH_COMPONENTS_API NavMeshOffMeshLinkRecord {
     std::string debug_name;
 };
 
+struct TERMIN_NAVMESH_COMPONENTS_API NavMeshLinearPathSegmentRecord {
+    float start[3] = {0.0f, 0.0f, 0.0f};
+    float end[3] = {0.0f, 0.0f, 0.0f};
+    unsigned char area_id = 0;
+    unsigned short flags = 1;
+    unsigned int user_id = 0;
+    Entity source;
+    std::string debug_name;
+};
+
+struct TERMIN_NAVMESH_COMPONENTS_API NavMeshLinearPathLinkRecord {
+    int from_segment = -1;
+    int to_segment = -1;
+    unsigned short from_t = 0;
+    unsigned short to_t = 0;
+    unsigned char flags = 1;
+    Entity source;
+    std::string debug_name;
+};
+
 struct TERMIN_NAVMESH_COMPONENTS_API NavMeshBakeInput {
     std::vector<NavMeshGeometryBatch> geometry;
     std::vector<NavMeshOffMeshLinkRecord> off_mesh_links;
+    std::vector<NavMeshLinearPathSegmentRecord> linear_segments;
+    std::vector<NavMeshLinearPathLinkRecord> linear_links;
     int visited_registered_component_count = 0;
 
     bool has_geometry() const;
     int triangle_count() const;
     int vertex_count() const;
     int off_mesh_link_count() const;
+    int linear_segment_count() const;
+    int linear_link_count() const;
 
     void add_geometry_batch(NavMeshGeometryBatch batch);
     void add_off_mesh_link(NavMeshOffMeshLinkRecord link);
+    int add_linear_segment(NavMeshLinearPathSegmentRecord segment);
+    void add_linear_link(NavMeshLinearPathLinkRecord link);
 };
 
 using NavMeshBakeVisitor = std::function<void(
@@ -69,17 +95,21 @@ public:
 
     bool register_geometry_visitor(const std::string& component_type, NavMeshBakeVisitor visitor);
     bool register_link_visitor(const std::string& component_type, NavMeshBakeVisitor visitor);
+    bool register_linear_visitor(const std::string& component_type, NavMeshBakeVisitor visitor);
     bool unregister_geometry_visitor(const std::string& component_type);
     bool unregister_link_visitor(const std::string& component_type);
+    bool unregister_linear_visitor(const std::string& component_type);
     size_t unregister_owner(const std::string& owner);
     void set_registration_owner(const std::string& owner);
     std::string registration_owner() const;
     std::string geometry_visitor_owner(const std::string& component_type) const;
     std::string link_visitor_owner(const std::string& component_type) const;
+    std::string linear_visitor_owner(const std::string& component_type) const;
     void ensure_builtin_visitors_registered();
 
     const NavMeshBakeVisitor* geometry_visitor(const std::string& component_type) const;
     const NavMeshBakeVisitor* link_visitor(const std::string& component_type) const;
+    const NavMeshBakeVisitor* linear_visitor(const std::string& component_type) const;
     int visit_component(Entity entity,
                         CxxComponent* component,
                         const char* component_type,
@@ -104,6 +134,7 @@ private:
 
     VisitorMap _geometry_visitors;
     VisitorMap _link_visitors;
+    VisitorMap _linear_visitors;
     std::string _current_registration_owner;
     bool _builtin_visitors_registered = false;
 };

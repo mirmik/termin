@@ -5,6 +5,7 @@
 #include <DetourNavMesh.h>
 #include <Recast.h>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -187,6 +188,10 @@ void collect_off_mesh_link_component(
     input.add_off_mesh_link(record);
 }
 
+bool is_finite_point(const float point[3]) {
+    return std::isfinite(point[0]) && std::isfinite(point[1]) && std::isfinite(point[2]);
+}
+
 } // namespace
 
 bool NavMeshBakeInput::has_geometry() const {
@@ -211,6 +216,14 @@ int NavMeshBakeInput::vertex_count() const {
 
 int NavMeshBakeInput::off_mesh_link_count() const {
     return static_cast<int>(off_mesh_links.size());
+}
+
+int NavMeshBakeInput::linear_segment_count() const {
+    return static_cast<int>(linear_segments.size());
+}
+
+int NavMeshBakeInput::linear_link_count() const {
+    return static_cast<int>(linear_links.size());
 }
 
 void NavMeshBakeInput::add_geometry_batch(NavMeshGeometryBatch batch) {
@@ -246,6 +259,35 @@ void NavMeshBakeInput::add_off_mesh_link(NavMeshOffMeshLinkRecord link) {
     off_mesh_links.push_back(std::move(link));
 }
 
+int NavMeshBakeInput::add_linear_segment(NavMeshLinearPathSegmentRecord segment) {
+    if (!is_finite_point(segment.start) || !is_finite_point(segment.end)) {
+        tc_log_error("[NavMesh] rejecting linear segment '%s': endpoint contains non-finite coordinates",
+                     segment.debug_name.c_str());
+        return -1;
+    }
+    if (segment.user_id == 0) {
+        tc_log_error("[NavMesh] rejecting linear segment '%s': stable user id is zero",
+                     segment.debug_name.c_str());
+        return -1;
+    }
+    linear_segments.push_back(std::move(segment));
+    return static_cast<int>(linear_segments.size()) - 1;
+}
+
+void NavMeshBakeInput::add_linear_link(NavMeshLinearPathLinkRecord link) {
+    const int segment_count = linear_segment_count();
+    if (link.from_segment < 0 || link.to_segment < 0 ||
+        link.from_segment >= segment_count || link.to_segment >= segment_count) {
+        tc_log_error("[NavMesh] rejecting linear link '%s': invalid segment indices from=%d to=%d segments=%d",
+                     link.debug_name.c_str(),
+                     link.from_segment,
+                     link.to_segment,
+                     segment_count);
+        return;
+    }
+    linear_links.push_back(std::move(link));
+}
+
 NavMeshBakeVisitorRegistry& NavMeshBakeVisitorRegistry::instance() {
     static NavMeshBakeVisitorRegistry registry;
     return registry;
@@ -275,6 +317,18 @@ bool NavMeshBakeVisitorRegistry::register_link_visitor(
         _current_registration_owner);
 }
 
+bool NavMeshBakeVisitorRegistry::register_linear_visitor(
+    const std::string& component_type,
+    NavMeshBakeVisitor visitor)
+{
+    return register_visitor(
+        _linear_visitors,
+        "linear path",
+        component_type,
+        std::move(visitor),
+        _current_registration_owner);
+}
+
 bool NavMeshBakeVisitorRegistry::unregister_geometry_visitor(
     const std::string& component_type)
 {
@@ -285,6 +339,12 @@ bool NavMeshBakeVisitorRegistry::unregister_link_visitor(
     const std::string& component_type)
 {
     return unregister_visitor(_link_visitors, component_type);
+}
+
+bool NavMeshBakeVisitorRegistry::unregister_linear_visitor(
+    const std::string& component_type)
+{
+    return unregister_visitor(_linear_visitors, component_type);
 }
 
 size_t NavMeshBakeVisitorRegistry::unregister_owner(const std::string& owner) {
@@ -305,6 +365,7 @@ size_t NavMeshBakeVisitorRegistry::unregister_owner(const std::string& owner) {
     };
     remove_owned(_geometry_visitors);
     remove_owned(_link_visitors);
+    remove_owned(_linear_visitors);
     return removed;
 }
 
@@ -328,6 +389,12 @@ std::string NavMeshBakeVisitorRegistry::link_visitor_owner(
     return visitor_owner(_link_visitors, component_type);
 }
 
+std::string NavMeshBakeVisitorRegistry::linear_visitor_owner(
+    const std::string& component_type) const
+{
+    return visitor_owner(_linear_visitors, component_type);
+}
+
 void NavMeshBakeVisitorRegistry::ensure_builtin_visitors_registered() {
     if (_builtin_visitors_registered) {
         return;
@@ -349,6 +416,13 @@ const NavMeshBakeVisitor* NavMeshBakeVisitorRegistry::link_visitor(
 {
     auto it = _link_visitors.find(component_type);
     return it == _link_visitors.end() ? nullptr : &it->second.visitor;
+}
+
+const NavMeshBakeVisitor* NavMeshBakeVisitorRegistry::linear_visitor(
+    const std::string& component_type) const
+{
+    auto it = _linear_visitors.find(component_type);
+    return it == _linear_visitors.end() ? nullptr : &it->second.visitor;
 }
 
 bool NavMeshBakeVisitorRegistry::register_visitor(
@@ -419,6 +493,10 @@ int NavMeshBakeVisitorRegistry::visit_component(
             visited++;
         }
         if (const NavMeshBakeVisitor* visitor = link_visitor(type_name)) {
+            (*visitor)(entity, component, context, input);
+            visited++;
+        }
+        if (const NavMeshBakeVisitor* visitor = linear_visitor(type_name)) {
             (*visitor)(entity, component, context, input);
             visited++;
         }
