@@ -20,6 +20,8 @@ const char* detour_poly_type_name(unsigned char type) {
             return "ground";
         case DT_POLYTYPE_OFFMESH_CONNECTION:
             return "offmesh";
+        case DT_POLYTYPE_LINEAR:
+            return "linear";
         default:
             return "unknown";
     }
@@ -75,10 +77,12 @@ std::string straight_path_flags_to_string(unsigned char flags) {
     append_flag(DT_STRAIGHTPATH_START, "start");
     append_flag(DT_STRAIGHTPATH_END, "end");
     append_flag(DT_STRAIGHTPATH_OFFMESH_CONNECTION, "offmesh");
+    append_flag(DT_STRAIGHTPATH_LINEAR, "linear");
     const unsigned char known =
         DT_STRAIGHTPATH_START |
         DT_STRAIGHTPATH_END |
-        DT_STRAIGHTPATH_OFFMESH_CONNECTION;
+        DT_STRAIGHTPATH_OFFMESH_CONNECTION |
+        DT_STRAIGHTPATH_LINEAR;
     const unsigned char unknown = static_cast<unsigned char>(flags & ~known);
     if (unknown != 0) {
         if (wrote) {
@@ -154,6 +158,24 @@ void log_detour_poly_info(dtNavMesh* navmesh, const char* prefix, int index, dtP
                         connection->pos[3],
                         connection->pos[4],
                         connection->pos[5]);
+        }
+    } else if (type == DT_POLYTYPE_LINEAR) {
+        const dtLinearSegment* segment = navmesh->getLinearSegmentByRef(ref);
+        if (segment) {
+            const float* v0 = &tile->verts[poly->verts[0] * 3];
+            const float* v1 = &tile->verts[poly->verts[1] * 3];
+            tc_log_info("%s[%d] linear: user_id=%u flags=0x%04x "
+                        "start_rc=(%.3f, %.3f, %.3f) end_rc=(%.3f, %.3f, %.3f)",
+                        prefix,
+                        index,
+                        segment->userId,
+                        static_cast<unsigned int>(segment->flags),
+                        v0[0],
+                        v0[1],
+                        v0[2],
+                        v1[0],
+                        v1[1],
+                        v1[2]);
         }
     }
 }
@@ -433,18 +455,26 @@ DetourPathResult DetourQuerySession::find_detailed_path(
         point.flags = flags[static_cast<size_t>(i)];
         point.poly_ref = static_cast<unsigned long long>(ref);
         point.off_mesh_connection = (point.flags & DT_STRAIGHTPATH_OFFMESH_CONNECTION) != 0;
+        point.linear_segment = (point.flags & DT_STRAIGHTPATH_LINEAR) != 0;
 
         if (ref != 0) {
             const dtMeshTile* tile = nullptr;
             const dtPoly* poly = nullptr;
             if (dtStatusSucceed(_navmesh->getTileAndPolyByRef(ref, &tile, &poly)) && poly) {
                 point.area = poly->getArea();
+                point.poly_type = poly->getType();
             }
 
             if (point.off_mesh_connection) {
                 const dtOffMeshConnection* connection = _navmesh->getOffMeshConnectionByRef(ref);
                 if (connection) {
                     point.off_mesh_user_id = connection->userId;
+                }
+            }
+            if (point.linear_segment) {
+                const dtLinearSegment* segment = _navmesh->getLinearSegmentByRef(ref);
+                if (segment) {
+                    point.linear_user_id = segment->userId;
                 }
             }
         }
@@ -457,15 +487,18 @@ DetourPathResult DetourQuerySession::find_detailed_path(
         const std::string straight_flags = straight_path_flags_to_string(point.flags);
         tc_log_info("[DetourQuerySession] straight[%d]: "
                     "point=(%.3f, %.3f, %.3f) ref=%llu flags=0x%02x(%s) "
-                    "area=%u offmesh=%d offmesh_user_id=%u",
+                    "area=%u type=%s offmesh=%d offmesh_user_id=%u linear=%d linear_user_id=%u",
                     i,
                     point.point[0], point.point[1], point.point[2],
                     point.poly_ref,
                     static_cast<unsigned int>(point.flags),
                     straight_flags.c_str(),
                     static_cast<unsigned int>(point.area),
+                    detour_poly_type_name(point.poly_type),
                     point.off_mesh_connection ? 1 : 0,
-                    point.off_mesh_user_id);
+                    point.off_mesh_user_id,
+                    point.linear_segment ? 1 : 0,
+                    point.linear_user_id);
         log_detour_poly_info(_navmesh, "[DetourQuerySession] straight poly", i, ref);
 
         result.points.push_back(point);

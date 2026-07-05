@@ -128,8 +128,11 @@ nb::list detailed_path_to_python(const DetourPathResult& path) {
         item["point"] = point_to_python(p.point);
         item["flags"] = p.flags;
         item["poly_ref"] = p.poly_ref;
+        item["poly_type"] = p.poly_type;
         item["off_mesh_connection"] = p.off_mesh_connection;
         item["off_mesh_user_id"] = p.off_mesh_user_id;
+        item["linear_segment"] = p.linear_segment;
+        item["linear_user_id"] = p.linear_user_id;
         item["area"] = p.area;
         result.append(item);
     }

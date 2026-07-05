@@ -200,6 +200,18 @@ if(TERMIN_HAS_RECAST)
             NAME termin_navmesh_bake_visitor_registry_test
             COMMAND termin_navmesh_bake_visitor_registry_test
         )
+
+        add_executable(termin_navmesh_detour_linear_paths_test
+            tests/test_detour_linear_paths.cpp
+        )
+        target_link_libraries(termin_navmesh_detour_linear_paths_test
+            PRIVATE Detour
+        )
+        termin_set_rpath_test(termin_navmesh_detour_linear_paths_test)
+        add_test(
+            NAME termin_navmesh_detour_linear_paths_test
+            COMMAND termin_navmesh_detour_linear_paths_test
+        )
     endif()
 endif()
 
