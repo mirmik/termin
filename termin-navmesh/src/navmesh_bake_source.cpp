@@ -251,26 +251,89 @@ NavMeshBakeVisitorRegistry& NavMeshBakeVisitorRegistry::instance() {
     return registry;
 }
 
-void NavMeshBakeVisitorRegistry::register_geometry_visitor(
+bool NavMeshBakeVisitorRegistry::register_geometry_visitor(
     const std::string& component_type,
     NavMeshBakeVisitor visitor)
 {
-    _geometry_visitors[component_type] = std::move(visitor);
+    return register_visitor(
+        _geometry_visitors,
+        "geometry",
+        component_type,
+        std::move(visitor),
+        _current_registration_owner);
 }
 
-void NavMeshBakeVisitorRegistry::register_link_visitor(
+bool NavMeshBakeVisitorRegistry::register_link_visitor(
     const std::string& component_type,
     NavMeshBakeVisitor visitor)
 {
-    _link_visitors[component_type] = std::move(visitor);
+    return register_visitor(
+        _link_visitors,
+        "off-mesh link",
+        component_type,
+        std::move(visitor),
+        _current_registration_owner);
+}
+
+bool NavMeshBakeVisitorRegistry::unregister_geometry_visitor(
+    const std::string& component_type)
+{
+    return unregister_visitor(_geometry_visitors, component_type);
+}
+
+bool NavMeshBakeVisitorRegistry::unregister_link_visitor(
+    const std::string& component_type)
+{
+    return unregister_visitor(_link_visitors, component_type);
+}
+
+size_t NavMeshBakeVisitorRegistry::unregister_owner(const std::string& owner) {
+    if (owner.empty()) {
+        return 0;
+    }
+
+    size_t removed = 0;
+    auto remove_owned = [&owner, &removed](VisitorMap& visitors) {
+        for (auto it = visitors.begin(); it != visitors.end();) {
+            if (it->second.owner == owner) {
+                it = visitors.erase(it);
+                ++removed;
+            } else {
+                ++it;
+            }
+        }
+    };
+    remove_owned(_geometry_visitors);
+    remove_owned(_link_visitors);
+    return removed;
+}
+
+void NavMeshBakeVisitorRegistry::set_registration_owner(const std::string& owner) {
+    _current_registration_owner = owner;
+}
+
+std::string NavMeshBakeVisitorRegistry::registration_owner() const {
+    return _current_registration_owner;
+}
+
+std::string NavMeshBakeVisitorRegistry::geometry_visitor_owner(
+    const std::string& component_type) const
+{
+    return visitor_owner(_geometry_visitors, component_type);
+}
+
+std::string NavMeshBakeVisitorRegistry::link_visitor_owner(
+    const std::string& component_type) const
+{
+    return visitor_owner(_link_visitors, component_type);
 }
 
 void NavMeshBakeVisitorRegistry::ensure_builtin_visitors_registered() {
     if (_builtin_visitors_registered) {
         return;
     }
-    register_geometry_visitor("MeshComponent", collect_mesh_component);
-    register_link_visitor("OffMeshLinkComponent", collect_off_mesh_link_component);
+    register_visitor(_geometry_visitors, "geometry", "MeshComponent", collect_mesh_component, "");
+    register_visitor(_link_visitors, "off-mesh link", "OffMeshLinkComponent", collect_off_mesh_link_component, "");
     _builtin_visitors_registered = true;
 }
 
@@ -278,14 +341,63 @@ const NavMeshBakeVisitor* NavMeshBakeVisitorRegistry::geometry_visitor(
     const std::string& component_type) const
 {
     auto it = _geometry_visitors.find(component_type);
-    return it == _geometry_visitors.end() ? nullptr : &it->second;
+    return it == _geometry_visitors.end() ? nullptr : &it->second.visitor;
 }
 
 const NavMeshBakeVisitor* NavMeshBakeVisitorRegistry::link_visitor(
     const std::string& component_type) const
 {
     auto it = _link_visitors.find(component_type);
-    return it == _link_visitors.end() ? nullptr : &it->second;
+    return it == _link_visitors.end() ? nullptr : &it->second.visitor;
+}
+
+bool NavMeshBakeVisitorRegistry::register_visitor(
+    VisitorMap& visitors,
+    const char* visitor_kind,
+    const std::string& component_type,
+    NavMeshBakeVisitor visitor,
+    const std::string& owner)
+{
+    if (component_type.empty()) {
+        tc_log_error("[NavMesh] cannot register %s bake visitor for empty component type",
+                     visitor_kind ? visitor_kind : "unknown");
+        return false;
+    }
+    if (!visitor) {
+        tc_log_error("[NavMesh] cannot register empty %s bake visitor for component type '%s'",
+                     visitor_kind ? visitor_kind : "unknown",
+                     component_type.c_str());
+        return false;
+    }
+
+    auto it = visitors.find(component_type);
+    if (it != visitors.end() && it->second.owner != owner) {
+        tc_log_error(
+            "[NavMesh] refusing to replace %s bake visitor for component type '%s' owned by '%s' from owner '%s'",
+            visitor_kind ? visitor_kind : "unknown",
+            component_type.c_str(),
+            it->second.owner.c_str(),
+            owner.c_str());
+        return false;
+    }
+
+    visitors[component_type] = VisitorRecord{std::move(visitor), owner};
+    return true;
+}
+
+bool NavMeshBakeVisitorRegistry::unregister_visitor(
+    VisitorMap& visitors,
+    const std::string& component_type)
+{
+    return visitors.erase(component_type) > 0;
+}
+
+std::string NavMeshBakeVisitorRegistry::visitor_owner(
+    const VisitorMap& visitors,
+    const std::string& component_type)
+{
+    auto it = visitors.find(component_type);
+    return it == visitors.end() ? std::string() : it->second.owner;
 }
 
 int NavMeshBakeVisitorRegistry::visit_component(
@@ -315,14 +427,6 @@ int NavMeshBakeVisitorRegistry::visit_component(
         }
     }
 
-    for (const auto& item : _geometry_visitors) {
-        item.second(entity, component, context, input);
-        visited++;
-    }
-    for (const auto& item : _link_visitors) {
-        item.second(entity, component, context, input);
-        visited++;
-    }
     return visited;
 }
 

@@ -156,6 +156,26 @@ The builder scans components in its configured scope and asks the registry
 whether a visitor exists for each component type. If yes, the visitor receives
 the raw component pointer plus bake context and emits geometry or links.
 
+Visitor registrations are module-owned. A project module that registers
+`LedgeComponent` bake visitors must do it inside a navmesh visitor registration
+owner scope, and module unload must call owner cleanup before the shared library
+is unloaded. Otherwise a global `std::function` can keep a callable pointing into
+unloaded code. The registry therefore needs:
+
+```cpp
+set_navmesh_bake_visitor_registration_owner(module_id);
+register_navmesh_geometry_visitor("LedgeComponent", collect_ledge_ribbon);
+register_navmesh_link_visitor("LedgeComponent", collect_ledge_access_links);
+unregister_navmesh_bake_visitor_owner(module_id);
+```
+
+Python bindings can expose this cleanup, but automatic project-module cleanup
+should not force every module import to load navmesh native code. C++/Python
+module integration should either call the navmesh cleanup explicitly from module
+close code or grow a generic module-registration lifecycle hook so optional
+systems like navmesh can participate without forcing `termin_engine` to link or
+import every extension library.
+
 This keeps dependencies pointed the right way:
 
 - `termin-navmesh` may know how to read a mesh for navmesh purposes;
