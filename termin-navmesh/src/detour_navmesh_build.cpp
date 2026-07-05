@@ -1,5 +1,6 @@
 #include <termin/navmesh/detour_navmesh_build.hpp>
 
+#include <termin/navmesh/navmesh_bake_source.hpp>
 #include <DetourAlloc.h>
 #include <DetourNavMeshBuilder.h>
 #include <Recast.h>
@@ -41,8 +42,11 @@ DetourNavMeshTileBuildResult build_detour_navmesh_tile_data(
     std::vector<unsigned short> poly_flags(static_cast<size_t>(pmesh->npolys), 0);
     std::vector<unsigned char> poly_areas(static_cast<size_t>(pmesh->npolys), 0);
     for (int i = 0; i < pmesh->npolys; ++i) {
-        const unsigned char area = pmesh->areas ? pmesh->areas[i] : RC_WALKABLE_AREA;
-        poly_areas[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : static_cast<unsigned char>(poly_area_id);
+        const unsigned char area = pmesh->areas
+            ? pmesh->areas[i]
+            : navmesh_detour_area_to_recast_area(poly_area_id);
+        poly_areas[static_cast<size_t>(i)] =
+            navmesh_recast_area_to_detour_area(area, poly_area_id);
         poly_flags[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 1;
     }
 

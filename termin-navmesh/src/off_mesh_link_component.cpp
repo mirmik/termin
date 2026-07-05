@@ -41,6 +41,13 @@ void OffMeshLinkComponent::register_type() {
         "navmesh_area"
     );
     tc::register_inspect_field(
+        &OffMeshLinkComponent::stable_user_id,
+        "OffMeshLinkComponent",
+        "stable_user_id",
+        "Stable User Id",
+        "int"
+    );
+    tc::register_inspect_field(
         &OffMeshLinkComponent::start_local,
         "OffMeshLinkComponent",
         "start_local",

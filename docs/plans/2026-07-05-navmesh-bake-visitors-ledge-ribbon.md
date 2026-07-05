@@ -146,7 +146,7 @@ struct OffMeshLinkSink {
 And registration:
 
 ```cpp
-register_navmesh_geometry_visitor("NavMeshSourceComponent", collect_mesh_source);
+register_navmesh_geometry_visitor("MeshComponent", collect_mesh_component);
 register_navmesh_link_visitor("OffMeshLinkComponent", collect_off_mesh_link);
 register_navmesh_geometry_visitor("LedgeComponent", collect_ledge_ribbon);
 register_navmesh_link_visitor("LedgeComponent", collect_ledge_access_links);
@@ -163,23 +163,22 @@ This keeps dependencies pointed the right way:
 - ChronoSquad can register ledge visitors from its own module;
 - the generic builder does not need to include ChronoSquad headers.
 
-## Mesh Opt-In
+## Builder Scope And Sources
 
-Do not make every `MeshComponent` an implicit navmesh source.
+Do not add a new navmesh source component just to opt meshes into the bake.
 
-Prefer an explicit navmesh-side component, for example:
+The existing builder scope remains the source selection mechanism:
 
 ```text
-NavMeshSourceComponent
-  include_current_mesh
-  include_children
-  area_id
-  agent mask/type
+CurrentMesh      -> inspect components on the builder entity
+AllDescendants   -> inspect components on the builder entity and descendants
 ```
 
-The mesh visitor can use this component to decide which entity meshes to read.
-That preserves old builder behavior through configuration while giving level
-authors control over what participates in pathfinding.
+For each entity selected by that scope, the bake collector scans components and
+invokes visitors for registered component types. `termin-navmesh` registers the
+built-in mesh visitor for `MeshComponent`; `MeshComponent` itself does not know
+about navmesh. Other sources, such as ledge ribbons, must register their own
+geometry/link visitors during their module bootstrap.
 
 ## Area Ownership
 
@@ -263,7 +262,7 @@ A sensible first implementation pass:
 1. Add navmesh bake input structs and visitor registry inside `termin-navmesh`.
 2. Replace the builder's hard-coded mesh/off-mesh collection with registry
    collection.
-3. Add `NavMeshSourceComponent` and a built-in mesh-source visitor.
+3. Add a built-in `MeshComponent` geometry visitor registered by navmesh.
 4. Convert `OffMeshLinkComponent` collection into a built-in link visitor.
 5. Preserve per-triangle or per-batch area ids through Recast and Detour tile
    build.

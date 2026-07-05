@@ -36,6 +36,7 @@ public:
     int link_type = static_cast<int>(OffMeshLinkType::JumpDown);
     std::string agent_type = "Human";
     int area_id = 0;
+    unsigned int stable_user_id = 0;
     tc_vec3 start_local = {0.0, 0.0, 0.0};
     tc_vec3 end_local = {0.0, 1.0, -1.0};
     double radius = 0.35;

@@ -118,6 +118,7 @@ if(TERMIN_HAS_RECAST)
         src/detour_navmesh_build.cpp
         src/detour_navmesh_asset_utils.cpp
         src/detour_pathfinding_world_component.cpp
+        src/navmesh_bake_source.cpp
         src/detour_query_session.cpp
         src/navmesh_keeper_component.cpp
         src/off_mesh_link_component.cpp

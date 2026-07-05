@@ -1,5 +1,6 @@
 #include <termin/navmesh/recast_navmesh_bake.hpp>
 
+#include <termin/navmesh/navmesh_bake_source.hpp>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -29,6 +30,7 @@ RecastBuildResult build_recast_navmesh(
     int nverts,
     const int* tris,
     int ntris,
+    const unsigned char* triangle_area_ids,
     const RecastNavMeshBuildConfig& build_config,
     const RecastNavMeshBuildDebugHooks* debug_hooks)
 {
@@ -92,9 +94,20 @@ RecastBuildResult build_recast_navmesh(
         return result;
     }
 
-    std::vector<unsigned char> tri_areas(ntris, RC_WALKABLE_AREA);
+    std::vector<unsigned char> tri_areas(
+        ntris,
+        navmesh_detour_area_to_recast_area(build_config.default_area_id));
     rcMarkWalkableTriangles(&ctx, cfg.walkableSlopeAngle,
                             verts, nverts, tris, ntris, tri_areas.data());
+    for (int i = 0; i < ntris; ++i) {
+        if (tri_areas[i] == RC_NULL_AREA) {
+            continue;
+        }
+        const int area_id = triangle_area_ids
+            ? static_cast<int>(triangle_area_ids[i])
+            : build_config.default_area_id;
+        tri_areas[i] = navmesh_detour_area_to_recast_area(area_id);
+    }
 
     int walkable_count = 0;
     for (int i = 0; i < ntris; i++) {
@@ -295,6 +308,24 @@ RecastBuildResult build_recast_navmesh(
     result.poly_mesh = pmesh;
     result.detail_mesh = dmesh;
     return result;
+}
+
+RecastBuildResult build_recast_navmesh(
+    const float* verts,
+    int nverts,
+    const int* tris,
+    int ntris,
+    const RecastNavMeshBuildConfig& build_config,
+    const RecastNavMeshBuildDebugHooks* debug_hooks)
+{
+    return build_recast_navmesh(
+        verts,
+        nverts,
+        tris,
+        ntris,
+        nullptr,
+        build_config,
+        debug_hooks);
 }
 
 void free_recast_build_result(RecastBuildResult& result) {

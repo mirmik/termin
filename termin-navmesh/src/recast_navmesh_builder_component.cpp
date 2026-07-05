@@ -1,19 +1,16 @@
 #include <termin/navmesh/recast_navmesh_builder_component.hpp>
-#include "recast_navmesh_bake_space.hpp"
 #include <termin/navmesh/detour_navmesh_build.hpp>
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
 #include <termin/navmesh/navmesh_keeper_component.hpp>
-#include <termin/navmesh/off_mesh_link_component.hpp>
-#include <components/mesh_component.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/tc_scene.hpp>
-#include <DetourNavMesh.h>
 #include <array>
 #include <cstring>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <iterator>
 #include <sstream>
 #include <set>
 #include <utility>
@@ -27,69 +24,16 @@ namespace {
 
 constexpr const char* NAVMESH_DEBUG_SHADER_UUID = "termin-engine-navmesh-debug";
 
-Vec3 termin_local_to_recast(const Vec3& point) {
-    return Vec3{point.x, point.z, point.y};
-}
-
-DetourOffMeshLinkData collect_off_mesh_links_for_builder(
-    Entity builder_entity,
-    const std::string& agent_type_name)
-{
+DetourOffMeshLinkData detour_links_from_bake_input(const NavMeshBakeInput& input) {
     DetourOffMeshLinkData links;
-    if (!builder_entity.valid()) {
-        tc_log_error("[NavMesh] cannot collect off-mesh links: builder entity is invalid");
-        return links;
-    }
-
-    Mat44 base_inv = recast_navmesh_builder_frame_inverse(builder_entity);
-
-    TcSceneRef scene = builder_entity.scene();
-    if (!scene.valid()) {
-        tc_log_error("[NavMesh] cannot collect off-mesh links: builder scene is invalid");
-        return links;
-    }
-
-    const std::vector<Entity> entities = scene.get_all_entities();
-    unsigned int next_user_id = 1;
-    for (Entity ent : entities) {
-        if (!ent.valid()) {
-            continue;
-        }
-
-        OffMeshLinkComponent* link = ent.get_component<OffMeshLinkComponent>();
-        if (!link || !link->enabled) {
-            continue;
-        }
-        if (link->agent_type != agent_type_name) {
-            continue;
-        }
-
-        Vec3 start_bake = base_inv.transform_point(link->start_world());
-        Vec3 end_bake = base_inv.transform_point(link->end_world());
-        Vec3 start_recast = termin_local_to_recast(start_bake);
-        Vec3 end_recast = termin_local_to_recast(end_bake);
-
-        links.verts.push_back(static_cast<float>(start_recast.x));
-        links.verts.push_back(static_cast<float>(start_recast.y));
-        links.verts.push_back(static_cast<float>(start_recast.z));
-        links.verts.push_back(static_cast<float>(end_recast.x));
-        links.verts.push_back(static_cast<float>(end_recast.y));
-        links.verts.push_back(static_cast<float>(end_recast.z));
-        links.radii.push_back(static_cast<float>(link->radius));
-        links.dirs.push_back(link->bidirectional ? DT_OFFMESH_CON_BIDIR : 0);
-        const int area_id = std::clamp(link->area_id, 0, 63);
-        if (area_id != link->area_id) {
-            tc_log_warn("[NavMesh] OffMeshLinkComponent area_id=%d is outside Detour range, using %d",
-                        link->area_id, area_id);
-        }
-        links.areas.push_back(static_cast<unsigned char>(area_id));
-        links.flags.push_back(1);
-        links.user_ids.push_back(next_user_id++);
-    }
-
-    if (links.count() > 0) {
-        tc_log_info("[NavMesh] Collected %d off-mesh link(s) for agent type '%s'",
-                    links.count(), agent_type_name.c_str());
+    for (const NavMeshOffMeshLinkRecord& record : input.off_mesh_links) {
+        links.verts.insert(links.verts.end(), std::begin(record.start), std::end(record.start));
+        links.verts.insert(links.verts.end(), std::begin(record.end), std::end(record.end));
+        links.radii.push_back(record.radius);
+        links.dirs.push_back(record.direction);
+        links.areas.push_back(record.area_id);
+        links.flags.push_back(record.flags);
+        links.user_ids.push_back(record.user_id);
     }
     return links;
 }
@@ -330,8 +274,32 @@ void RecastNavMeshBuilderComponent::clear_debug_data() {
 
 RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int nverts,
                                                         const int* tris, int ntris) {
+    return build_internal(verts, nverts, tris, ntris, nullptr, true);
+}
+
+RecastBuildResult RecastNavMeshBuilderComponent::build_with_areas(
+    const float* verts,
+    int nverts,
+    const int* tris,
+    int ntris,
+    const unsigned char* triangle_area_ids)
+{
+    return build_internal(verts, nverts, tris, ntris, triangle_area_ids, true);
+}
+
+RecastBuildResult RecastNavMeshBuilderComponent::build_internal(
+    const float* verts,
+    int nverts,
+    const int* tris,
+    int ntris,
+    const unsigned char* triangle_area_ids,
+    bool clear_bake_input)
+{
     free_result(last_result);
     clear_debug_data();
+    if (clear_bake_input) {
+        last_bake_input = NavMeshBakeInput();
+    }
 
     RecastNavMeshBuildConfig config;
     config.cell_size = cell_size;
@@ -348,6 +316,7 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
     config.detail_sample_dist = detail_sample_dist;
     config.detail_sample_max_error = detail_sample_max_error;
     config.build_detail_mesh = build_detail_mesh;
+    config.default_area_id = area_id;
 
     RecastNavMeshBuildDebugHooks debug_hooks;
     debug_hooks.build_input_mesh = [this](const float* v, int nv, const int* t, int nt) {
@@ -369,7 +338,14 @@ RecastBuildResult RecastNavMeshBuilderComponent::build(const float* verts, int n
         debug_hooks.capture_detail_mesh = [this](rcPolyMeshDetail* dmesh) { capture_detail_mesh_data(dmesh); };
     }
 
-    RecastBuildResult result = build_recast_navmesh(verts, nverts, tris, ntris, config, &debug_hooks);
+    RecastBuildResult result = build_recast_navmesh(
+        verts,
+        nverts,
+        tris,
+        ntris,
+        triangle_area_ids,
+        config,
+        &debug_hooks);
     last_result = result;
     rebuild_debug_meshes();
 
@@ -383,12 +359,16 @@ void RecastNavMeshBuilderComponent::free_result(RecastBuildResult& result) {
 DetourNavMeshTileBuildResult RecastNavMeshBuilderComponent::build_detour_tile_data(
     const RecastBuildResult& result
 ) {
+    DetourOffMeshLinkData off_mesh_links = detour_links_from_bake_input(last_bake_input);
     DetourNavMeshBuildConfig detour_config;
     detour_config.area_id = area_id;
     detour_config.agent_height = agent_height;
     detour_config.agent_radius = agent_radius;
     detour_config.agent_max_climb = agent_max_climb;
-    return build_detour_navmesh_tile_data(result, detour_config);
+    return build_detour_navmesh_tile_data(
+        result,
+        detour_config,
+        off_mesh_links.count() > 0 ? &off_mesh_links : nullptr);
 }
 
 bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& result) {
@@ -407,7 +387,7 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
         return false;
     }
 
-    DetourOffMeshLinkData off_mesh_links = collect_off_mesh_links_for_builder(entity(), agent_type_name);
+    DetourOffMeshLinkData off_mesh_links = detour_links_from_bake_input(last_bake_input);
     DetourNavMeshBuildConfig detour_config;
     detour_config.area_id = area_id;
     detour_config.agent_height = agent_height;
