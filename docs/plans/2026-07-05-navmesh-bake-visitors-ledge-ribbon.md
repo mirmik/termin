@@ -12,6 +12,11 @@ general navmesh bake-source architecture in Termin, what shape that architecture
 should probably take, and how the ledge/climbing use case should drive the
 design without hard-coding ChronoSquad concepts into the generic navmesh module.
 
+Update 2026-07-05: the bake visitor registry direction remains valid, but the
+synthetic ribbon representation has been rejected after testing. The replacement
+path is first-class 1D Detour linear polygons, tracked in
+`2026-07-05-detour-1d-linear-paths.md`.
+
 ## Problem
 
 ChronoSquad needs climbable ledges that behave like navigable one-dimensional
