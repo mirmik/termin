@@ -38,6 +38,35 @@ DetourOffMeshLinkData detour_links_from_bake_input(const NavMeshBakeInput& input
     return links;
 }
 
+DetourLinearPathData detour_linear_paths_from_bake_input(const NavMeshBakeInput& input) {
+    DetourLinearPathData paths;
+    paths.segment_verts.reserve(input.linear_segments.size() * 6);
+    paths.areas.reserve(input.linear_segments.size());
+    paths.flags.reserve(input.linear_segments.size());
+    paths.user_ids.reserve(input.linear_segments.size());
+    paths.links.reserve(input.linear_links.size());
+
+    for (const NavMeshLinearPathSegmentRecord& record : input.linear_segments) {
+        paths.segment_verts.insert(paths.segment_verts.end(), std::begin(record.start), std::end(record.start));
+        paths.segment_verts.insert(paths.segment_verts.end(), std::begin(record.end), std::end(record.end));
+        paths.areas.push_back(record.area_id);
+        paths.flags.push_back(record.flags);
+        paths.user_ids.push_back(record.user_id);
+    }
+
+    for (const NavMeshLinearPathLinkRecord& record : input.linear_links) {
+        DetourLinearLinkData link;
+        link.from_segment = static_cast<unsigned short>(record.from_segment);
+        link.to_segment = static_cast<unsigned short>(record.to_segment);
+        link.from_t = record.from_t;
+        link.to_t = record.to_t;
+        link.flags = record.flags;
+        paths.links.push_back(link);
+    }
+
+    return paths;
+}
+
 } // namespace
 
 RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent()
@@ -360,6 +389,7 @@ DetourNavMeshTileBuildResult RecastNavMeshBuilderComponent::build_detour_tile_da
     const RecastBuildResult& result
 ) {
     DetourOffMeshLinkData off_mesh_links = detour_links_from_bake_input(last_bake_input);
+    DetourLinearPathData linear_paths = detour_linear_paths_from_bake_input(last_bake_input);
     DetourNavMeshBuildConfig detour_config;
     detour_config.area_id = area_id;
     detour_config.agent_height = agent_height;
@@ -368,7 +398,8 @@ DetourNavMeshTileBuildResult RecastNavMeshBuilderComponent::build_detour_tile_da
     return build_detour_navmesh_tile_data(
         result,
         detour_config,
-        off_mesh_links.count() > 0 ? &off_mesh_links : nullptr);
+        off_mesh_links.count() > 0 ? &off_mesh_links : nullptr,
+        linear_paths.count() > 0 ? &linear_paths : nullptr);
 }
 
 bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& result) {
@@ -388,6 +419,7 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     }
 
     DetourOffMeshLinkData off_mesh_links = detour_links_from_bake_input(last_bake_input);
+    DetourLinearPathData linear_paths = detour_linear_paths_from_bake_input(last_bake_input);
     DetourNavMeshBuildConfig detour_config;
     detour_config.area_id = area_id;
     detour_config.agent_height = agent_height;
@@ -397,7 +429,8 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     DetourNavMeshTileBuildResult tile = build_detour_navmesh_tile_data(
         result,
         detour_config,
-        off_mesh_links.count() > 0 ? &off_mesh_links : nullptr);
+        off_mesh_links.count() > 0 ? &off_mesh_links : nullptr,
+        linear_paths.count() > 0 ? &linear_paths : nullptr);
     if (!tile.success) {
         tc_log_error("RecastNavMeshBuilderComponent: failed to build Detour navmesh tile: %s",
                      tile.error.c_str());
@@ -454,7 +487,9 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
     out << "    \"agent_max_climb\": " << agent_max_climb << ",\n";
     out << "    \"agent_max_slope\": " << agent_max_slope << ",\n";
     out << "    \"max_verts_per_poly\": " << max_verts_per_poly << ",\n";
-    out << "    \"off_mesh_link_count\": " << off_mesh_links.count() << "\n";
+    out << "    \"off_mesh_link_count\": " << off_mesh_links.count() << ",\n";
+    out << "    \"linear_segment_count\": " << linear_paths.count() << ",\n";
+    out << "    \"linear_link_count\": " << static_cast<int>(linear_paths.links.size()) << "\n";
     out << "  },\n";
     out << "  \"tiles\": [\n";
     out << "    {\n";
