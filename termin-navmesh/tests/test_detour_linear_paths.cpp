@@ -27,6 +27,38 @@ void require_near(float actual, float expected, const char* message)
     }
 }
 
+float point_distance_sq(const float* a, const float* b)
+{
+    const float dx = a[0] - b[0];
+    const float dy = a[1] - b[1];
+    const float dz = a[2] - b[2];
+    return dx * dx + dy * dy + dz * dz;
+}
+
+void require_no_duplicate_linear_straight_points(const float* points,
+                                                 const unsigned char* flags,
+                                                 const dtPolyRef* refs,
+                                                 int count,
+                                                 const char* message)
+{
+    static const float linearEpsilonSq = 0.01f * 0.01f;
+    for (int i = 1; i < count; ++i)
+    {
+        const bool previousLinear = (flags[i - 1] & DT_STRAIGHTPATH_LINEAR) != 0;
+        const bool currentLinear = (flags[i] & DT_STRAIGHTPATH_LINEAR) != 0;
+        if (previousLinear && currentLinear && refs[i - 1] == refs[i] &&
+            point_distance_sq(&points[(i - 1) * 3], &points[i * 3]) < linearEpsilonSq)
+        {
+            std::fprintf(stderr, "%s: duplicate indices %d and %d ref=%llu\n",
+                         message,
+                         i - 1,
+                         i,
+                         static_cast<unsigned long long>(refs[i]));
+            std::abort();
+        }
+    }
+}
+
 dtNavMesh* build_linear_navmesh()
 {
     static const unsigned short verts[] = {
@@ -194,6 +226,8 @@ int main()
                                                     &straightCount, 16, 0)),
             "findStraightPath failed");
     require(straightCount >= 4, "straight path is too short");
+    require_no_duplicate_linear_straight_points(straight, straightFlags, straightRefs, straightCount,
+                                                "straight path contains duplicate linear points");
 
     bool hasLinearStraightPoint = false;
     for (int i = 0; i < straightCount; ++i)
@@ -221,6 +255,9 @@ int main()
                                                     &reverseStraightCount, 16, 0)),
             "reverse findStraightPath failed");
     require(reverseStraightCount >= 4, "reverse straight path is too short");
+    require_no_duplicate_linear_straight_points(reverseStraight, reverseStraightFlags, reverseStraightRefs,
+                                                reverseStraightCount,
+                                                "reverse straight path contains duplicate linear points");
 
     bool hasReverseOffmeshStraightPoint = false;
     for (int i = 0; i < reverseStraightCount; ++i)
