@@ -64,7 +64,7 @@ class _RawDetourPathInspectorPanel(VStack):
 
         self._details = TextArea()
         self._details.read_only = True
-        self._details.word_wrap = False
+        self._details.word_wrap = True
         self._details.preferred_height = px(680)
         self.add_child(self._details)
         self.update(
@@ -100,32 +100,20 @@ class _RawDetourPathInspectorPanel(VStack):
         lines.append(f"Candidates: {len(candidates)}")
         for index, candidate in enumerate(candidates):
             marker = "*" if selected_candidate == candidate else " "
-            lines.append(
-                f"{marker} [{index}] entity='{candidate.entity_name}' "
-                f"navmesh='{candidate.navmesh_uuid}' "
-                f"start_dist={candidate.start_distance_sq ** 0.5:.3f} "
-                f"end_dist={candidate.end_distance_sq ** 0.5:.3f} "
-                f"start_over_poly={int(candidate.start_over_poly)} "
-                f"end_over_poly={int(candidate.end_over_poly)}"
-            )
+            _append_candidate_lines(lines, marker, index, candidate)
         if selected_candidate is not None and selected_candidate not in candidates:
-            lines.append(
-                f"* selected entity='{selected_candidate.entity_name}' "
-                f"navmesh='{selected_candidate.navmesh_uuid}' "
-                f"start_dist={selected_candidate.start_distance_sq ** 0.5:.3f} "
-                f"end_dist={selected_candidate.end_distance_sq ** 0.5:.3f} "
-                f"start_over_poly={int(selected_candidate.start_over_poly)} "
-                f"end_over_poly={int(selected_candidate.end_over_poly)}"
-            )
+            _append_candidate_lines(lines, "*", "selected", selected_candidate)
         lines.append("")
 
         lines.append(f"Detour points: {len(path_points)}")
         for index, point in enumerate(path_points):
+            lines.append(f"[{index:02d}] pos={_format_point(point.point)}")
             lines.append(
-                f"[{index:02d}] pos={_format_point(point.point)} "
-                f"area={point.area} poly_type={point.poly_type} "
-                f"ref={point.poly_ref} flags=0x{point.flags:02x} "
-                f"offmesh={int(point.off_mesh_connection)} "
+                f"     area={point.area} poly_type={point.poly_type} "
+                f"ref={point.poly_ref} flags=0x{point.flags:02x}"
+            )
+            lines.append(
+                f"     offmesh={int(point.off_mesh_connection)} "
                 f"offmesh_user_id={point.off_mesh_user_id} "
                 f"linear={int(point.linear_segment)} "
                 f"linear_user_id={point.linear_user_id}"
@@ -438,6 +426,22 @@ def _candidate_info(candidate) -> _CandidateInfo:
         end_distance_sq=float(candidate.end_distance_sq),
         start_over_poly=bool(candidate.start_over_poly),
         end_over_poly=bool(candidate.end_over_poly),
+    )
+
+
+def _append_candidate_lines(
+    lines: list[str],
+    marker: str,
+    index,
+    candidate: _CandidateInfo,
+) -> None:
+    lines.append(f"{marker} [{index}] entity='{candidate.entity_name}'")
+    lines.append(f"      navmesh='{candidate.navmesh_uuid}'")
+    lines.append(
+        f"      start_dist={candidate.start_distance_sq ** 0.5:.3f} "
+        f"end_dist={candidate.end_distance_sq ** 0.5:.3f} "
+        f"start_over_poly={int(candidate.start_over_poly)} "
+        f"end_over_poly={int(candidate.end_over_poly)}"
     )
 
 
