@@ -67,8 +67,15 @@ class TERMIN_NAVMESH_COMPONENTS_API NavMeshBakeVisitorRegistry {
 public:
     static NavMeshBakeVisitorRegistry& instance();
 
-    void register_geometry_visitor(const std::string& component_type, NavMeshBakeVisitor visitor);
-    void register_link_visitor(const std::string& component_type, NavMeshBakeVisitor visitor);
+    bool register_geometry_visitor(const std::string& component_type, NavMeshBakeVisitor visitor);
+    bool register_link_visitor(const std::string& component_type, NavMeshBakeVisitor visitor);
+    bool unregister_geometry_visitor(const std::string& component_type);
+    bool unregister_link_visitor(const std::string& component_type);
+    size_t unregister_owner(const std::string& owner);
+    void set_registration_owner(const std::string& owner);
+    std::string registration_owner() const;
+    std::string geometry_visitor_owner(const std::string& component_type) const;
+    std::string link_visitor_owner(const std::string& component_type) const;
     void ensure_builtin_visitors_registered();
 
     const NavMeshBakeVisitor* geometry_visitor(const std::string& component_type) const;
@@ -80,8 +87,24 @@ public:
                         NavMeshBakeInput& input) const;
 
 private:
-    std::unordered_map<std::string, NavMeshBakeVisitor> _geometry_visitors;
-    std::unordered_map<std::string, NavMeshBakeVisitor> _link_visitors;
+    struct VisitorRecord {
+        NavMeshBakeVisitor visitor;
+        std::string owner;
+    };
+
+    using VisitorMap = std::unordered_map<std::string, VisitorRecord>;
+
+    bool register_visitor(VisitorMap& visitors,
+                          const char* visitor_kind,
+                          const std::string& component_type,
+                          NavMeshBakeVisitor visitor,
+                          const std::string& owner);
+    static bool unregister_visitor(VisitorMap& visitors, const std::string& component_type);
+    static std::string visitor_owner(const VisitorMap& visitors, const std::string& component_type);
+
+    VisitorMap _geometry_visitors;
+    VisitorMap _link_visitors;
+    std::string _current_registration_owner;
     bool _builtin_visitors_registered = false;
 };
 

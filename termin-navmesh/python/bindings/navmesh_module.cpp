@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "termin/navmesh/detour_pathfinding_world_component.hpp"
+#include "termin/navmesh/navmesh_bake_source.hpp"
 #include "termin/navmesh/navmesh_keeper_component.hpp"
 #include "termin/navmesh/navmesh_query_space.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
@@ -265,6 +266,16 @@ void bind_recast_navmesh_builder(nb::module_& m) {
 
         tc_navmesh_set_load_callback(navmesh.handle, nullptr, nullptr);
     }, nb::arg("navmesh"));
+
+    m.def("set_navmesh_bake_visitor_registration_owner", [](const std::string& owner) {
+        NavMeshBakeVisitorRegistry::instance().set_registration_owner(owner);
+    }, nb::arg("owner"));
+    m.def("navmesh_bake_visitor_registration_owner", []() {
+        return NavMeshBakeVisitorRegistry::instance().registration_owner();
+    });
+    m.def("unregister_navmesh_bake_visitor_owner", [](const std::string& owner) {
+        return NavMeshBakeVisitorRegistry::instance().unregister_owner(owner);
+    }, nb::arg("owner"));
 
     m.def("set_detour_navmesh_asset_data",
           [](const std::string& uuid,
