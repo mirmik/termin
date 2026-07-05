@@ -228,6 +228,12 @@ int main()
     require(straightCount >= 4, "straight path is too short");
     require_no_duplicate_linear_straight_points(straight, straightFlags, straightRefs, straightCount,
                                                 "straight path contains duplicate linear points");
+    require((straightFlags[straightCount - 1] & DT_STRAIGHTPATH_END) != 0,
+            "straight path final point is not marked as end");
+    require((straightFlags[straightCount - 1] & DT_STRAIGHTPATH_LINEAR) != 0,
+            "straight path final point on linear poly is not marked linear");
+    require(straightRefs[straightCount - 1] == endRef,
+            "straight path final linear point does not keep end linear ref");
 
     bool hasLinearStraightPoint = false;
     for (int i = 0; i < straightCount; ++i)
@@ -236,6 +242,55 @@ int main()
             hasLinearStraightPoint = true;
     }
     require(hasLinearStraightPoint, "straight path does not include a linear point");
+
+    const float sameLinearStart[] = {16.0f, 0.0f, 5.0f};
+    const float sameLinearEnd[] = {17.0f, 0.0f, 5.0f};
+    float nearestSameLinearStart[3];
+    float nearestSameLinearEnd[3];
+    dtPolyRef sameLinearStartRef = 0;
+    dtPolyRef sameLinearEndRef = 0;
+    require(dtStatusSucceed(query->findNearestPoly(sameLinearStart, extents, &filter,
+                                                    &sameLinearStartRef, nearestSameLinearStart)),
+            "same-linear findNearestPoly start failed");
+    require(dtStatusSucceed(query->findNearestPoly(sameLinearEnd, extents, &filter,
+                                                    &sameLinearEndRef, nearestSameLinearEnd)),
+            "same-linear findNearestPoly end failed");
+    require(sameLinearStartRef == sameLinearEndRef,
+            "same-linear points did not resolve to the same linear poly");
+    const dtLinearSegment* sameLinearSegment = nav->getLinearSegmentByRef(sameLinearStartRef);
+    require(sameLinearSegment != nullptr, "same-linear ref is not a linear segment");
+    require(sameLinearSegment->userId == 1002, "same-linear ref has unexpected user id");
+
+    dtPolyRef sameLinearPath[4];
+    int sameLinearPathCount = 0;
+    require(dtStatusSucceed(query->findPath(sameLinearStartRef, sameLinearEndRef,
+                                            nearestSameLinearStart, nearestSameLinearEnd, &filter,
+                                            sameLinearPath, &sameLinearPathCount, 4)),
+            "same-linear findPath failed");
+    require(sameLinearPathCount == 1, "same-linear corridor should contain one poly");
+
+    float sameLinearStraight[4 * 3];
+    unsigned char sameLinearStraightFlags[4];
+    dtPolyRef sameLinearStraightRefs[4];
+    int sameLinearStraightCount = 0;
+    require(dtStatusSucceed(query->findStraightPath(nearestSameLinearStart, nearestSameLinearEnd,
+                                                    sameLinearPath, sameLinearPathCount,
+                                                    sameLinearStraight, sameLinearStraightFlags,
+                                                    sameLinearStraightRefs, &sameLinearStraightCount, 4, 0)),
+            "same-linear findStraightPath failed");
+    require(sameLinearStraightCount == 2, "same-linear straight path should contain start and end");
+    require((sameLinearStraightFlags[0] & DT_STRAIGHTPATH_START) != 0,
+            "same-linear start point is not marked start");
+    require((sameLinearStraightFlags[0] & DT_STRAIGHTPATH_LINEAR) != 0,
+            "same-linear start point is not marked linear");
+    require(sameLinearStraightRefs[0] == sameLinearStartRef,
+            "same-linear start point does not keep linear ref");
+    require((sameLinearStraightFlags[1] & DT_STRAIGHTPATH_END) != 0,
+            "same-linear end point is not marked end");
+    require((sameLinearStraightFlags[1] & DT_STRAIGHTPATH_LINEAR) != 0,
+            "same-linear end point is not marked linear");
+    require(sameLinearStraightRefs[1] == sameLinearEndRef,
+            "same-linear end point does not keep linear ref");
 
     dtPolyRef reversePath[16];
     int reversePathCount = 0;
