@@ -5,6 +5,7 @@
 #include <DetourStatus.h>
 
 #include <cstring>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 
@@ -14,6 +15,14 @@ void require(bool condition, const char* message)
 {
     if (!condition) {
         std::fprintf(stderr, "%s\n", message);
+        std::abort();
+    }
+}
+
+void require_near(float actual, float expected, const char* message)
+{
+    if (std::fabs(actual - expected) > 0.001f) {
+        std::fprintf(stderr, "%s: actual=%.6f expected=%.6f\n", message, actual, expected);
         std::abort();
     }
 }
@@ -193,6 +202,45 @@ int main()
             hasLinearStraightPoint = true;
     }
     require(hasLinearStraightPoint, "straight path does not include a linear point");
+
+    dtPolyRef reversePath[16];
+    int reversePathCount = 0;
+    require(dtStatusSucceed(query->findPath(endRef, startRef, nearestEnd, nearestStart, &filter,
+                                            reversePath, &reversePathCount, 16)),
+            "reverse findPath failed");
+    require(reversePathCount == 4, "unexpected reverse corridor size");
+    require(reversePath[0] == endRef, "reverse path does not start at endRef");
+    require(reversePath[3] == startRef, "reverse path does not end at startRef");
+
+    float reverseStraight[16 * 3];
+    unsigned char reverseStraightFlags[16];
+    dtPolyRef reverseStraightRefs[16];
+    int reverseStraightCount = 0;
+    require(dtStatusSucceed(query->findStraightPath(nearestEnd, nearestStart, reversePath, reversePathCount,
+                                                    reverseStraight, reverseStraightFlags, reverseStraightRefs,
+                                                    &reverseStraightCount, 16, 0)),
+            "reverse findStraightPath failed");
+    require(reverseStraightCount >= 4, "reverse straight path is too short");
+
+    bool hasReverseOffmeshStraightPoint = false;
+    for (int i = 0; i < reverseStraightCount; ++i)
+    {
+        if (reverseStraightFlags[i] & DT_STRAIGHTPATH_OFFMESH_CONNECTION)
+        {
+            hasReverseOffmeshStraightPoint = true;
+            require_near(reverseStraight[i*3 + 0], 12.0f, "reverse offmesh point x");
+            require_near(reverseStraight[i*3 + 1], 0.0f, "reverse offmesh point y");
+            require_near(reverseStraight[i*3 + 2], 5.0f, "reverse offmesh point z");
+
+            const dtMeshTile* offmeshTile = nullptr;
+            const dtPoly* offmeshPoly = nullptr;
+            require(dtStatusSucceed(nav->getTileAndPolyByRef(reverseStraightRefs[i], &offmeshTile, &offmeshPoly)),
+                    "reverse offmesh straight ref lookup failed");
+            require(offmeshPoly->getType() == DT_POLYTYPE_OFFMESH_CONNECTION,
+                    "reverse offmesh straight ref is not offmesh");
+        }
+    }
+    require(hasReverseOffmeshStraightPoint, "reverse straight path does not include offmesh point");
 
     dtFreeNavMeshQuery(query);
     dtFreeNavMesh(nav);
