@@ -26,19 +26,22 @@ Progress:
   instead of deriving shader intent from `phase_mark`.
 - 2026-07-04: Removed the central material-pipeline pass enum from production
   code. `MaterialPipelinePassContract` now carries explicit static/skinned/
-  foliage vertex transform contracts. Depth and normal passes no longer route
-  through material/drawable phase marks named `depth` or `normal`.
-- 2026-07-04: Restored pass-local material shader overrides for depth and
-  normal rendering through explicit `material_phase_mark` fields on
-  `DepthPass`, `DepthOnlyPass`, and `NormalPass`. The canonical defaults are
-  `depth` and `normal`; these fields select an optional material phase shader
-  for matching geometry ids, but they do not define routing, visibility, or
-  material-pipeline layout.
+  foliage vertex transform contracts. Depth and normal passes own explicit
+  depth/normal shader contracts instead of deriving layout from phase labels.
 - 2026-07-04: Corrected the final phase model after review. A render pass must
   pass an explicit `phase_mark` when asking a drawable for geometry or direct
   drawing support. The phase is a drawable/render representation request and
   may also select a material phase draw set. It does not define shader ABI,
   vertex layout, resource layout, or material-pipeline variant intent.
+- 2026-07-06: Renamed the public/config depth and normal pass field from
+  `material_phase_mark` to `phase_mark`. The C++ storage is `pass_phase_mark`
+  to avoid colliding with the virtual `phase_mark()` accessor; inspector and
+  Python still expose `phase_mark`, and deserialization accepts the old
+  `material_phase_mark` key as an explicit legacy compatibility path.
+- 2026-07-06: Added context-aware `LineRenderer` shader usage collection.
+  Runtime shader override and offline usage collection now both use
+  `MaterialPipelinePassContract` for line material-fragment variants; the old
+  phase-string path remains a compatibility adapter.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.
@@ -185,6 +188,15 @@ owns the final layout. Shadow must become an explicit contract decision.
 `IdPass` uses phase `pick`, while some line-renderer code and documentation
 refer to auxiliary phase `id`. This looks like a stale compatibility alias and
 should not leak into the new contract model.
+
+### Offline shader usage collection
+
+`collect_scene_shader_usages()` still walks scene material phases and calls the
+legacy drawable usage hook. Individual C++ drawables can now implement
+`collect_shader_usages_with_context()`, but runtime package/export still needs
+a pass-aware collector that feeds actual render-pipeline pass contracts into
+that hook. Until then, package precompile can miss variants required by
+pass-owned contracts.
 
 ## Contract Shape
 
@@ -390,6 +402,9 @@ Add focused tests before broad migration:
   of the built-in `depth` label;
 - a custom color-like pass whose phase label is `depth_debug` and must not pick
   depth layout by substring or fallback convention;
+- a line renderer under a non-standard phase whose material-fragment variants
+  are selected from `MaterialPipelinePassContract`, including world-tube body
+  and cap variants;
 - IdPass/picking behavior with the canonical `pick` label;
 - line-renderer direct draw rejection/acceptance after `id` cleanup;
 - shadow caster with material alpha/discard requirements.
@@ -415,12 +430,12 @@ if a project uses those strings, their presence alone carries no special layout
 meaning. Depth and normal engine passes request the matching drawable phase and
 use explicit shader contracts instead of deriving contracts from those names.
 
-If depth/normal rendering needs material-specific shader code, the pass may set
-its own `material_phase_mark`; by default depth passes look for `depth` and the
-normal pass looks for `normal`. That mark is the phase request sent to
-drawables and the material phase lookup key. The pass still owns the
-material-pipeline contract and falls back to the engine shader when no matching
-material phase exists.
+If depth/normal rendering needs material-specific shader code, the pass uses
+its configured `phase_mark` as both the drawable representation request and the
+material phase lookup key. The pass still owns the material-pipeline contract
+and falls back to the engine shader when no matching material phase exists.
+Serialized data using the old `material_phase_mark` key is read only as a
+legacy migration path.
 
 During migration the remaining labels should remain accepted only as routing
 labels owned by the relevant pass setup. Their presence must not be sufficient

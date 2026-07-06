@@ -99,6 +99,10 @@ public:
         TcShader original_shader,
         const std::function<void(TcShader)>& emit
     ) override;
+    void collect_shader_usages_with_context(
+        const ShaderOverrideContext& context,
+        const std::function<void(TcShader)>& emit
+    ) override;
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
     bool draw_tgfx2(tgfx::RenderContext2& ctx2,
                     const RenderContext& context,

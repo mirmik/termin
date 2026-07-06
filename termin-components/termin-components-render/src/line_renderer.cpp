@@ -786,11 +786,35 @@ void LineRenderer::collect_shader_usages(
     TcShader original_shader,
     const std::function<void(TcShader)>& emit
 ) {
-    (void)geometry_id;
-    emit(original_shader);
+    ShaderOverrideContext context;
+    context.phase_mark = phase_mark;
+    context.geometry_id = geometry_id;
+    context.original_shader = original_shader;
+    context.pass_contract = legacy_line_material_pass_contract();
+    if (phase_mark == "shadow") {
+        context.pass_contract = legacy_line_auxiliary_pass_contract("shadow");
+    } else if (phase_mark == "pick") {
+        context.pass_contract = legacy_line_auxiliary_pass_contract("id");
+    }
+    collect_shader_usages_with_context(context, emit);
+}
+
+void LineRenderer::collect_shader_usages_with_context(
+    const ShaderOverrideContext& context,
+    const std::function<void(TcShader)>& emit
+) {
+    if (!emit) {
+        return;
+    }
+
+    TcShader original_shader = context.original_shader;
+    if (original_shader.is_valid()) {
+        emit(original_shader);
+    }
+
     const LineRenderMode mode = effective_render_mode();
-    if (!uses_material_fragment_variant(mode, phase_mark)
-        || !accepts_phase(mode, phase_mark, cast_shadow)) {
+    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
+        || !accepts_phase(mode, context.phase_mark, cast_shadow)) {
         return;
     }
 
