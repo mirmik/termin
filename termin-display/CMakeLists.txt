@@ -350,6 +350,10 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
     target_link_libraries(display_input_router_test PRIVATE termin_display)
     add_test(NAME display_input_router_test COMMAND display_input_router_test)
 
+    add_executable(viewport_input_manager_source_test tests/test_viewport_input_manager_source.cpp)
+    target_link_libraries(viewport_input_manager_source_test PRIVATE termin_display)
+    add_test(NAME viewport_input_manager_source_test COMMAND viewport_input_manager_source_test)
+
     # Standalone smoke test: the same triangle code running on either backend.
     if(TERMIN_DISPLAY_HAS_SDL AND TERMIN_DISPLAY_BUILD_WINDOW_TESTS)
         add_executable(backend_window_triangle tests/test_backend_window_triangle.cpp)

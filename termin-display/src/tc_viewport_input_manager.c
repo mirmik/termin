@@ -18,25 +18,33 @@
 
 static bool dispatch_mouse_button_cb(tc_component* c, void* user_data) {
     tc_mouse_button_event* event = (tc_mouse_button_event*)user_data;
-    tc_component_on_mouse_button(c, event);
+    if (tc_component_accepts_input_source(c, event->source)) {
+        tc_component_on_mouse_button(c, event);
+    }
     return !event->handled;
 }
 
 static bool dispatch_mouse_move_cb(tc_component* c, void* user_data) {
     tc_mouse_move_event* event = (tc_mouse_move_event*)user_data;
-    tc_component_on_mouse_move(c, event);
+    if (tc_component_accepts_input_source(c, event->source)) {
+        tc_component_on_mouse_move(c, event);
+    }
     return !event->handled;
 }
 
 static bool dispatch_scroll_cb(tc_component* c, void* user_data) {
     tc_scroll_event* event = (tc_scroll_event*)user_data;
-    tc_component_on_scroll(c, event);
+    if (tc_component_accepts_input_source(c, event->source)) {
+        tc_component_on_scroll(c, event);
+    }
     return !event->handled;
 }
 
 static bool dispatch_key_cb(tc_component* c, void* user_data) {
     tc_key_event* event = (tc_key_event*)user_data;
-    tc_component_on_key(c, event);
+    if (tc_component_accepts_input_source(c, event->source)) {
+        tc_component_on_key(c, event);
+    }
     return !event->handled;
 }
 
@@ -96,8 +104,8 @@ static void vim_on_mouse_button(tc_input_manager* self, int button, int action, 
     if (!m || !tc_viewport_alive(m->viewport)) return;
 
     tc_mouse_button_event event;
-    tc_mouse_button_event_init(&event, m->viewport,
-        m->last_cursor_x, m->last_cursor_y, button, action, mods);
+    tc_mouse_button_event_init_source(&event, m->viewport,
+        m->last_cursor_x, m->last_cursor_y, button, action, mods, TC_INPUT_SOURCE_RUNTIME);
 
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_button_cb, &event);
     if (event.handled) return;
@@ -118,7 +126,7 @@ static void vim_on_mouse_move(tc_input_manager* self, double x, double y) {
     m->has_cursor = true;
 
     tc_mouse_move_event event;
-    tc_mouse_move_event_init(&event, m->viewport, x, y, dx, dy);
+    tc_mouse_move_event_init_source(&event, m->viewport, x, y, dx, dy, TC_INPUT_SOURCE_RUNTIME);
 
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_move_cb, &event);
     if (event.handled) return;
@@ -130,8 +138,8 @@ static void vim_on_scroll(tc_input_manager* self, double xoffset, double yoffset
     if (!m || !tc_viewport_alive(m->viewport)) return;
 
     tc_scroll_event event;
-    tc_scroll_event_init(&event, m->viewport,
-        m->last_cursor_x, m->last_cursor_y, xoffset, yoffset, mods);
+    tc_scroll_event_init_source(&event, m->viewport,
+        m->last_cursor_x, m->last_cursor_y, xoffset, yoffset, mods, TC_INPUT_SOURCE_RUNTIME);
 
     dispatch_to_internal_entities(m->viewport, dispatch_scroll_cb, &event);
     if (event.handled) return;
@@ -143,7 +151,7 @@ static void vim_on_key(tc_input_manager* self, int key, int scancode, int action
     if (!m || !tc_viewport_alive(m->viewport)) return;
 
     tc_key_event event;
-    tc_key_event_init(&event, m->viewport, key, scancode, action, mods);
+    tc_key_event_init_source(&event, m->viewport, key, scancode, action, mods, TC_INPUT_SOURCE_RUNTIME);
 
     dispatch_to_internal_entities(m->viewport, dispatch_key_cb, &event);
     if (event.handled) return;
