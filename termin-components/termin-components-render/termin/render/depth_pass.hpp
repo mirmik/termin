@@ -28,6 +28,9 @@ private:
 
 public:
     std::string depth_encoding = "linear";
+    // Drawable/material representation requested by depth passes. The depth
+    // shader ABI is declared by shader_pass_contract(), not inferred from the
+    // label value.
     std::string pass_phase_mark = "depth";
     bool clear = true;
 
@@ -113,6 +116,8 @@ public:
     std::string output_res = "depth_texture";
     std::string output_res_target;
     std::string camera_name;
+    // Drawable/material representation requested by DepthOnlyPass; kept
+    // separate from the explicit depth shader contract.
     std::string pass_phase_mark = "depth";
     std::vector<std::string> entity_names;
 

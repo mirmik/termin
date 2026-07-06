@@ -46,6 +46,10 @@ Progress:
   live `GeometryPassBase`/`ShaderOverrideContext` boundary in code: `phase_mark`
   selects drawable/material representation, while `MaterialPipelinePassContract`
   selects vertex layout, pass resources, and material-pipeline variant intent.
+- 2026-07-06: Promoted the phase responsibility boundary from migration plan to
+  stable documentation in `docs/render-phase-semantics.md`. The document
+  defines allowed/forbidden `phase_mark` responsibilities, catalogs current
+  consumers, and records the remaining legacy compatibility boundaries.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.
@@ -64,6 +68,8 @@ more rigid form. The target is pass-owned shader contracts, not a larger list of
 well-known phase names or pass kinds inside material pipeline core.
 
 ## Target Boundary
+
+Stable documentation: `docs/render-phase-semantics.md`.
 
 `phase_mark` is a mandatory drawable/render representation label.
 
@@ -198,11 +204,10 @@ should not leak into the new contract model.
 ### Offline shader usage collection
 
 `collect_scene_shader_usages()` still walks scene material phases and calls the
-legacy drawable usage hook. Individual C++ drawables can now implement
-`collect_shader_usages_with_context()`, but runtime package/export still needs
-a pass-aware collector that feeds actual render-pipeline pass contracts into
-that hook. Until then, package precompile can miss variants required by
-pass-owned contracts.
+legacy drawable usage hook. It remains useful as a scene/material-phase
+compatibility collector, but it is incomplete for pass-owned contracts.
+Runtime package/export now has a pass-aware path that feeds actual render
+pipeline pass contracts into `collect_shader_usages_with_context()`.
 
 ## Contract Shape
 
@@ -309,7 +314,8 @@ Expected changes:
 - replace `get_skinned_shader(phase_mark, original_shader)` with an API that
   receives explicit shader intent or contract objects;
 - keep the old overload as a compatibility adapter near pass boundaries;
-- make the adapter log once when it has to infer intent from phase name.
+- make legacy adapters conservative and local so they do not become a new
+  phase-name-to-layout policy source.
 
 Validation:
 
