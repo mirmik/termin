@@ -42,6 +42,10 @@ Progress:
   Runtime shader override and offline usage collection now both use
   `MaterialPipelinePassContract` for line material-fragment variants; the old
   phase-string path remains a compatibility adapter.
+- 2026-07-06: Isolated legacy line/skinned override adapters and documented the
+  live `GeometryPassBase`/`ShaderOverrideContext` boundary in code: `phase_mark`
+  selects drawable/material representation, while `MaterialPipelinePassContract`
+  selects vertex layout, pass resources, and material-pipeline variant intent.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.
@@ -161,7 +165,9 @@ else   -> Color
 That made an arbitrary routing label select vertex templates and draw-scope
 resources. Production code no longer contains this authoritative mapping;
 legacy overloads accept the old signature but do not infer `depth` or `normal`
-shader layouts from the string.
+shader layouts from the string. They build a full-material compatibility
+contract for callers that cannot yet provide `ShaderOverrideContext`; pass-owned
+render paths should not call them.
 
 ### Central pass-kind enum
 

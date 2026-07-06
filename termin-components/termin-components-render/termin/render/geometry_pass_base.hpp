@@ -94,9 +94,21 @@ public:
 
 protected:
     virtual std::array<float, 4> clear_color() const = 0;
+
+    // Drawable/material routing label requested by this pass. It is mandatory
+    // when asking drawables for geometry, but it is not a shader layout or pass
+    // kind selector. Custom passes should use project-owned labels here freely
+    // while describing vertex layout/resources through shader_pass_contract().
     virtual const char* phase_mark() const = 0;
+
     virtual bool uses_material_phase_shader_override() const;
+
+    // Explicit pass-owned shader intent consumed by material pipeline and
+    // drawable shader override paths. This is the only place GeometryPassBase
+    // subclasses should declare vertex transform, skinned/foliage template,
+    // fragment interface, and pass resource requirements.
     virtual MaterialPipelinePassContract shader_pass_contract() const = 0;
+
     virtual tc_shader_handle shader_usage_base_shader() const = 0;
     virtual std::optional<std::string> fbo_format() const;
 
