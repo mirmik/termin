@@ -7,9 +7,8 @@
 #include <unordered_set>
 
 namespace termin {
-namespace {
 
-MaterialPipelinePassContract legacy_material_pass_contract()
+MaterialPipelinePassContract legacy_full_material_pass_contract()
 {
     MaterialPipelinePassContract contract;
     contract.debug_name = "legacy_material";
@@ -33,6 +32,8 @@ MaterialPipelinePassContract legacy_material_pass_contract()
             material_pipeline_skinned_material_mesh_input());
     return contract;
 }
+
+namespace {
 
 bool should_log_unsupported_skinning_shader(
     const std::string& phase_mark,
@@ -88,13 +89,13 @@ TcShader get_skinned_shader_for_pass(
 TcShader get_skinned_shader(const std::string& phase_mark, TcShader original_shader) {
     (void)phase_mark;
     return get_skinned_shader_for_pass(
-        legacy_material_pass_contract(),
+        legacy_full_material_pass_contract(),
         original_shader);
 }
 
 TcShader get_skinned_shader(TcShader original_shader) {
     return get_skinned_shader_for_pass(
-        legacy_material_pass_contract(),
+        legacy_full_material_pass_contract(),
         original_shader);
 }
 

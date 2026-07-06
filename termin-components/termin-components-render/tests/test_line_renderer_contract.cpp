@@ -43,7 +43,7 @@ FragmentOutput fs_main(FragmentInput input)
 }
 )";
 
-termin::TcShader make_test_material_shader()
+termin::TcShader make_test_material_shader(const char* uuid)
 {
     tc_shader_handle handle = tc_shader_from_sources_with_entries_ex(
         kVertexSource,
@@ -51,7 +51,7 @@ termin::TcShader make_test_material_shader()
         nullptr,
         "LineRendererContractMaterial",
         nullptr,
-        "termin-test-line-renderer-contract-material",
+        uuid,
         TC_SHADER_LANGUAGE_SLANG,
         TC_SHADER_ARTIFACT_OPTIONAL,
         "vs_main",
@@ -70,6 +70,15 @@ termin::MaterialPipelinePassContract line_material_fragment_contract()
     return contract;
 }
 
+termin::MaterialPipelinePassContract line_auxiliary_contract()
+{
+    termin::MaterialPipelinePassContract contract;
+    contract.debug_name = "custom_line_auxiliary";
+    contract.required_material_fragment_input = termin::MaterialFragmentInterface{};
+    contract.uses_material_fragment = true;
+    return contract;
+}
+
 bool has_variant(
     const std::vector<termin::TcShader>& shaders,
     tc_shader_variant_op variant_op)
@@ -84,14 +93,16 @@ bool has_variant(
 
 } // namespace
 
-TEST_CASE("LineRenderer context-aware usage collection emits full tube variants") {
+TEST_CASE("LineRenderer context-aware usage collection follows explicit pass contract") {
     tc_shader_init();
 
-    termin::TcShader material_shader = make_test_material_shader();
+    termin::TcShader material_shader = make_test_material_shader(
+        "line-contract-material");
     REQUIRE(material_shader.is_valid());
 
     termin::LineRenderer renderer;
     renderer.render_mode = termin::LineRenderMode::WorldTube;
+    renderer.cast_shadow = true;
 
     termin::ShaderOverrideContext context;
     context.phase_mark = "actor_attribute";
@@ -109,6 +120,38 @@ TEST_CASE("LineRenderer context-aware usage collection emits full tube variants"
     CHECK(emitted.size() >= 3u);
     CHECK(has_variant(emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
     CHECK(has_variant(emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
+
+    termin::ShaderOverrideContext auxiliary_context;
+    auxiliary_context.phase_mark = "actor_attribute";
+    auxiliary_context.geometry_id = 0;
+    auxiliary_context.original_shader = material_shader;
+    auxiliary_context.pass_contract = line_auxiliary_contract();
+
+    std::vector<termin::TcShader> auxiliary_emitted;
+    renderer.collect_shader_usages_with_context(
+        auxiliary_context,
+        [&](termin::TcShader shader) {
+            auxiliary_emitted.push_back(shader);
+        });
+
+    CHECK(!has_variant(auxiliary_emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
+    CHECK(!has_variant(auxiliary_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
+
+    termin::ShaderOverrideContext material_context;
+    material_context.phase_mark = "shadow";
+    material_context.geometry_id = 0;
+    material_context.original_shader = material_shader;
+    material_context.pass_contract = line_material_fragment_contract();
+
+    std::vector<termin::TcShader> material_emitted;
+    renderer.collect_shader_usages_with_context(
+        material_context,
+        [&](termin::TcShader shader) {
+            material_emitted.push_back(shader);
+        });
+
+    CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_BODY));
+    CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
 
     tc_shader_shutdown();
 }
