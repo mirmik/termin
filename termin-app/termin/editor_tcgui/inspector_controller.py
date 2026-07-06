@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from typing import Any, Callable, List, Optional
 
+from tcbase import log
+from tcgui.widgets.label import Label
+from tcgui.widgets.separator import Separator
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.widget import Widget
 
@@ -22,6 +25,47 @@ from termin.editor_tcgui.pipeline_inspector import PipelineInspectorTcgui
 from termin.editor_tcgui.render_target_inspector import RenderTargetInspectorTcgui
 from termin.editor_tcgui.texture_inspector import TextureInspectorTcgui
 from termin.editor_tcgui.viewport_inspector import ViewportInspectorTcgui
+
+
+class ToolInspectorHost(VStack):
+    """Host for editor-tool supplied inspector panels."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.spacing = 4
+        self._active_panel: Widget | None = None
+
+        title = Label()
+        title.text = "Tool Inspector"
+        title.font_size = 15
+        self.add_child(title)
+
+        self._subtitle = Label()
+        self._subtitle.color = (0.62, 0.66, 0.74, 1.0)
+        self.add_child(self._subtitle)
+        self.add_child(Separator())
+
+        self._empty = Label()
+        self._empty.text = "No tool inspector panel selected."
+        self._empty.color = (0.52, 0.56, 0.62, 1.0)
+        self.add_child(self._empty)
+
+    def set_panel(self, label: str, panel: Widget | None) -> None:
+        self._subtitle.text = label
+        if self._active_panel is not None and self._active_panel.parent is self:
+            self._active_panel.visible = False
+            self.remove_child(self._active_panel)
+        self._active_panel = None
+
+        if panel is None:
+            self._empty.visible = True
+            return
+
+        self._empty.visible = False
+        self._active_panel = panel
+        if panel.parent is not self:
+            self.add_child(panel)
+        panel.visible = True
 
 
 class InspectorControllerTcgui:
@@ -76,6 +120,8 @@ class InspectorControllerTcgui:
         self._mesh_inspector = MeshInspectorTcgui(resource_manager)
         self._glb_inspector = GLBInspectorTcgui(resource_manager)
         self._render_target_inspector = RenderTargetInspectorTcgui(resource_manager)
+        self._tool_inspector = ToolInspectorHost()
+        self._tool_panels: dict[str, Widget] = {}
 
         self._material_inspector.on_changed = self._emit_material_changed
         self._display_inspector.on_changed = self._emit_display_changed
@@ -93,6 +139,7 @@ class InspectorControllerTcgui:
             InspectorKind.MESH: self._mesh_inspector,
             InspectorKind.GLB: self._glb_inspector,
             InspectorKind.RENDER_TARGET: self._render_target_inspector,
+            InspectorKind.TOOL: self._tool_inspector,
         }
 
         for kind, panel in self._panel_by_kind.items():
@@ -169,6 +216,25 @@ class InspectorControllerTcgui:
         if scene is not None and scene is not self._model.scene:
             self._model.set_scene(scene)
         self._model.show_render_target(render_target)
+
+    def register_tool_inspector_panel(self, key: str, panel: Widget) -> None:
+        if not key:
+            log.error("[InspectorController] cannot register tool inspector panel with empty key")
+            return
+        self.unregister_tool_inspector_panel(key)
+        self._tool_panels[key] = panel
+        panel.visible = False
+
+    def unregister_tool_inspector_panel(self, key: str) -> None:
+        panel = self._tool_panels.pop(key, None)
+        if panel is None:
+            return
+        if panel.parent is self._tool_inspector:
+            self._tool_inspector.set_panel("", None)
+        panel.visible = False
+
+    def show_tool_inspector_panel(self, key: str, label: str = "") -> None:
+        self._model.show_tool(key, label or key)
 
     def show_pipeline_inspector_for_file(self, file_path: str) -> None:
         self._model.show_pipeline_for_file(file_path)
@@ -274,6 +340,13 @@ class InspectorControllerTcgui:
 
         elif kind is InspectorKind.RENDER_TARGET:
             self._render_target_inspector.set_render_target(model.target, model.scene)
+
+        elif kind is InspectorKind.TOOL:
+            key = str(model.target)
+            tool_panel = self._tool_panels.get(key)
+            if tool_panel is None:
+                log.error(f"[InspectorController] missing tool inspector panel for key '{key}'")
+            self._tool_inspector.set_panel(model.label, tool_panel)
 
         self._show_panel(panel)
 

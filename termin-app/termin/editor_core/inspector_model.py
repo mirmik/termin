@@ -27,6 +27,7 @@ class InspectorKind(Enum):
     MESH = "mesh"
     GLB = "glb"
     RENDER_TARGET = "render_target"
+    TOOL = "tool"
 
 
 class InspectorModel:
@@ -169,6 +170,9 @@ class InspectorModel:
 
     def show_render_target(self, render_target) -> None:
         self.request(InspectorKind.RENDER_TARGET, target=render_target, label="")
+
+    def show_tool(self, key: str, label: str = "") -> None:
+        self.request(InspectorKind.TOOL, target=key, label=label)
 
     # ------------------------------------------------------------------
     # Selection-driven dispatch

@@ -56,8 +56,8 @@ std::optional<std::string> GeometryPassBase::fbo_format() const {
     return std::nullopt;
 }
 
-const char* GeometryPassBase::material_shader_phase_name() const {
-    return "";
+bool GeometryPassBase::uses_material_phase_shader_override() const {
+    return false;
 }
 
 bool GeometryPassBase::entity_filter(const Entity& ent) const {
@@ -81,10 +81,10 @@ void GeometryPassBase::collect_draw_calls(
         return;
     }
 
-    const char* routing_phase = phase_name();
-    if (!routing_phase || routing_phase[0] == '\0') {
+    const char* collect_phase_mark = phase_mark();
+    if (!collect_phase_mark || collect_phase_mark[0] == '\0') {
         tc::Log::error(
-            "[%s] cannot collect geometry with empty phase mark",
+            "[GeometryPassBase] pass '%s' has empty phase mark; geometry collection requires an explicit phase",
             get_pass_name().c_str());
         return;
     }
@@ -95,6 +95,7 @@ void GeometryPassBase::collect_draw_calls(
         std::vector<DrawCall>* draw_calls = nullptr;
         tc_shader_handle base_shader = tc_shader_handle_invalid();
         MaterialPipelinePassContract pass_contract;
+        const char* phase_mark = nullptr;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
@@ -107,17 +108,15 @@ void GeometryPassBase::collect_draw_calls(
 
         std::vector<int> geometry_ids;
         std::vector<GeometryDrawCall> material_phase_draws;
-        const char* material_phase = ctx->pass->material_shader_phase_name();
         const bool use_material_phase =
-            material_phase && material_phase[0] != '\0';
+            ctx->pass->uses_material_phase_shader_override();
         if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
             auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
             if (drawable) {
-                geometry_ids = drawable->get_geometry_ids_for_phase(
-                    ctx->pass->phase_name());
+                geometry_ids = drawable->get_geometry_ids_for_phase(ctx->phase_mark);
 
                 if (use_material_phase) {
-                    std::string mark = material_phase;
+                    std::string mark = ctx->phase_mark;
                     material_phase_draws = drawable->get_geometry_draws(&mark);
                 }
             }
@@ -129,19 +128,20 @@ void GeometryPassBase::collect_draw_calls(
         const int pick_id = ctx->pass->get_pick_id(ent);
         for (int geometry_id : geometry_ids) {
             tc_shader_handle original_shader = ctx->base_shader;
+            const GeometryDrawCall* selected_material_draw = nullptr;
             for (const GeometryDrawCall& draw : material_phase_draws) {
                 tc_material_phase* phase = draw.resolve_phase();
                 if (draw.geometry_id == geometry_id &&
                     phase &&
                     !tc_shader_handle_is_invalid(phase->shader)) {
                     original_shader = phase->shader;
+                    selected_material_draw = &draw;
                     break;
                 }
             }
 
             ShaderOverrideContext override_context;
-            override_context.phase_mark =
-                use_material_phase ? material_phase : ctx->pass->phase_name();
+            override_context.phase_mark = ctx->phase_mark;
             override_context.geometry_id = geometry_id;
             override_context.original_shader = TcShader(original_shader);
             override_context.pass_contract = ctx->pass_contract;
@@ -154,6 +154,11 @@ void GeometryPassBase::collect_draw_calls(
             dc.final_shader = final_shader;
             dc.geometry_id = geometry_id;
             dc.pick_id = pick_id;
+            if (selected_material_draw) {
+                dc.material_phase = selected_material_draw->phase;
+                dc.material = selected_material_draw->material;
+                dc.phase_index = selected_material_draw->phase_index;
+            }
             ctx->draw_calls->push_back(dc);
         }
         return true;
@@ -163,7 +168,8 @@ void GeometryPassBase::collect_draw_calls(
         this,
         &cached_draw_calls_,
         base_shader,
-        shader_pass_contract()};
+        shader_pass_contract(),
+        collect_phase_mark};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE

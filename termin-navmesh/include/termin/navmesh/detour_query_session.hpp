@@ -32,8 +32,11 @@ struct TERMIN_NAVMESH_COMPONENTS_API DetourPathPoint {
     std::array<float, 3> point{0.0f, 0.0f, 0.0f};
     unsigned char flags = 0;
     unsigned long long poly_ref = 0;
+    unsigned char poly_type = 0;
     bool off_mesh_connection = false;
     unsigned int off_mesh_user_id = 0;
+    bool linear_segment = false;
+    unsigned int linear_user_id = 0;
     unsigned char area = 0;
 };
 

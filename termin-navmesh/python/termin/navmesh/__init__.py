@@ -42,10 +42,13 @@ _NATIVE_EXPORT_NAMES = frozenset(
         "clear_navmesh_load_callback",
         "declare_navmesh_asset",
         "navmesh_bake_frame_from_pose",
+        "navmesh_bake_visitor_registration_owner",
         "navmesh_bake_to_world_point",
         "navmesh_world_to_bake_point",
+        "set_navmesh_bake_visitor_registration_owner",
         "set_navmesh_load_callback",
         "set_detour_navmesh_asset_data",
+        "unregister_navmesh_bake_visitor_owner",
     }
 )
 
@@ -92,10 +95,13 @@ def _load_native_exports() -> dict[str, object]:
             clear_navmesh_load_callback,
             declare_navmesh_asset,
             navmesh_bake_frame_from_pose,
+            navmesh_bake_visitor_registration_owner,
             navmesh_bake_to_world_point,
             navmesh_world_to_bake_point,
             set_detour_navmesh_asset_data,
+            set_navmesh_bake_visitor_registration_owner,
             set_navmesh_load_callback,
+            unregister_navmesh_bake_visitor_owner,
         )
     except ImportError as exc:
         try:
@@ -127,10 +133,13 @@ def _load_native_exports() -> dict[str, object]:
         "clear_navmesh_load_callback": clear_navmesh_load_callback,
         "declare_navmesh_asset": declare_navmesh_asset,
         "navmesh_bake_frame_from_pose": navmesh_bake_frame_from_pose,
+        "navmesh_bake_visitor_registration_owner": navmesh_bake_visitor_registration_owner,
         "navmesh_bake_to_world_point": navmesh_bake_to_world_point,
         "navmesh_world_to_bake_point": navmesh_world_to_bake_point,
+        "set_navmesh_bake_visitor_registration_owner": set_navmesh_bake_visitor_registration_owner,
         "set_navmesh_load_callback": set_navmesh_load_callback,
         "set_detour_navmesh_asset_data": set_detour_navmesh_asset_data,
+        "unregister_navmesh_bake_visitor_owner": unregister_navmesh_bake_visitor_owner,
     }
     globals().update(exports)
     return exports
@@ -178,8 +187,11 @@ __all__ = [
     "clear_navmesh_load_callback",
     "declare_navmesh_asset",
     "navmesh_bake_frame_from_pose",
+    "navmesh_bake_visitor_registration_owner",
     "navmesh_bake_to_world_point",
     "navmesh_world_to_bake_point",
+    "set_navmesh_bake_visitor_registration_owner",
     "set_navmesh_load_callback",
     "set_detour_navmesh_asset_data",
+    "unregister_navmesh_bake_visitor_owner",
 ]

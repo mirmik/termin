@@ -1,9 +1,7 @@
 #include <termin/navmesh/recast_navmesh_builder_component.hpp>
 #include "recast_navmesh_bake_space.hpp"
-#include <components/mesh_component.hpp>
+#include <termin/navmesh/navmesh_bake_source.hpp>
 #include <termin/geom/mat44.hpp>
-#include <termin/tc_scene.hpp>
-#include <cstring>
 #include <vector>
 #include <tcbase/tc_log.hpp>
 
@@ -11,90 +9,32 @@ namespace termin {
 
 namespace {
 
-Mat44 mat44_from_mat44f(const Mat44f& value) {
-    Mat44 result;
-    for (int i = 0; i < 16; ++i) {
-        result.data[i] = static_cast<double>(value.data[i]);
-    }
-    return result;
-}
-
-bool extract_mesh_positions(
-    const TcMesh& mesh,
-    const Mat44& transform,
-    std::vector<float>& out_verts,
-    std::vector<int>& out_tris)
-{
-    tc_mesh* m = mesh.get();
-    if (!m || !m->vertices || m->vertex_count == 0) return false;
-    if (!m->indices || m->index_count == 0) return false;
-
-    const tc_vertex_attrib* pos = tc_vertex_layout_find(&m->layout, "position");
-    if (!pos || pos->size != 3) return false;
-
-    size_t n = m->vertex_count;
-    size_t stride = m->layout.stride;
-    const uint8_t* src = static_cast<const uint8_t*>(m->vertices);
-
-    size_t base_vert = out_verts.size() / 3;
-    out_verts.resize(out_verts.size() + n * 3);
-    float* dst = out_verts.data() + base_vert * 3;
-    for (size_t i = 0; i < n; ++i) {
-        const float* p = reinterpret_cast<const float*>(src + i * stride + pos->offset);
-        Vec3 local_pos{p[0], p[1], p[2]};
-        Vec3 bake_pos = transform.transform_point(local_pos);
-        dst[i * 3] = static_cast<float>(bake_pos.x);
-        dst[i * 3 + 1] = static_cast<float>(bake_pos.z);
-        dst[i * 3 + 2] = static_cast<float>(bake_pos.y);
-
-        if (i < 3) {
-            tc_log_info(
-                "[NavMesh] vert[%zu]: mesh_local=(%.2f, %.2f, %.2f) -> bake=(%.2f, %.2f, %.2f) -> recast=(%.2f, %.2f, %.2f)",
-                i, p[0], p[1], p[2],
-                bake_pos.x, bake_pos.y, bake_pos.z,
-                dst[i * 3], dst[i * 3 + 1], dst[i * 3 + 2]);
-        }
-    }
-
-    size_t num_tris = m->index_count / 3;
-    size_t base_tri = out_tris.size();
-    out_tris.resize(out_tris.size() + num_tris * 3);
-    for (size_t i = 0; i < num_tris * 3; ++i) {
-        out_tris[base_tri + i] = static_cast<int>(m->indices[i] + base_vert);
-    }
-
-    return true;
-}
-
-void collect_meshes_recursive(
-    Entity ent,
-    const Mat44& base_inv,
+void append_bake_geometry(
+    const NavMeshBakeInput& input,
     std::vector<float>& verts,
     std::vector<int>& tris,
-    bool recurse)
+    std::vector<unsigned char>& area_ids)
 {
-    if (!ent.valid()) return;
-
-    double w_data[16];
-    ent.get_world_matrix(w_data);
-    Mat44 world;
-    std::memcpy(world.ptr(), w_data, sizeof(w_data));
-
-    Mat44 local_to_bake = base_inv * world;
-
-    MeshComponent* mesh_component = ent.get_component<MeshComponent>();
-    if (mesh_component && mesh_component->mesh.is_valid()) {
-        Mat44 mesh_to_bake = local_to_bake * mat44_from_mat44f(mesh_component->get_mesh_offset_matrix());
-        tc_log_info("[NavMesh] Processing entity: %s", ent.name() ? ent.name() : "(unnamed)");
-        tc_log_info("[NavMesh]   world col0: (%.2f, %.2f, %.2f, %.2f)", w_data[0], w_data[1], w_data[2], w_data[3]);
-        tc_log_info("[NavMesh]   world col3: (%.2f, %.2f, %.2f, %.2f)", w_data[12], w_data[13], w_data[14], w_data[15]);
-        extract_mesh_positions(mesh_component->mesh, mesh_to_bake, verts, tris);
-    }
-
-    if (recurse) {
-        for (Entity child : ent.children()) {
-            collect_meshes_recursive(child, base_inv, verts, tris, true);
+    for (const NavMeshGeometryBatch& batch : input.geometry) {
+        const int base_vert = static_cast<int>(verts.size() / 3);
+        verts.insert(verts.end(), batch.verts.begin(), batch.verts.end());
+        for (int index : batch.tris) {
+            tris.push_back(index + base_vert);
         }
+        area_ids.insert(area_ids.end(), batch.triangle_area_ids.begin(), batch.triangle_area_ids.end());
+    }
+}
+
+void collect_builder_scope_entities(Entity root, bool include_descendants, std::vector<Entity>& out) {
+    if (!root.valid()) {
+        return;
+    }
+    out.push_back(root);
+    if (!include_descendants) {
+        return;
+    }
+    for (Entity child : root.children()) {
+        collect_builder_scope_entities(child, true, out);
     }
 }
 
@@ -131,10 +71,29 @@ RecastBuildResult RecastNavMeshBuilderComponent::build_from_entity_geometry() {
         base_pose.lin.x, base_pose.lin.y, base_pose.lin.z,
         base_pose.scale.x, base_pose.scale.y, base_pose.scale.z);
 
+    NavMeshBakeContext context;
+    context.builder_entity = entity();
+    context.world_to_bake = base_inv;
+    context.agent_type_name = agent_type_name;
+    context.agent_radius = agent_radius;
+    context.agent_height = agent_height;
+    context.agent_max_climb = agent_max_climb;
+    context.default_area_id = area_id;
+
+    std::vector<Entity> source_entities;
+    collect_builder_scope_entities(entity(), recurse, source_entities);
+    NavMeshBakeInput bake_input = collect_navmesh_bake_input(context, source_entities);
+
     std::vector<float> verts;
     std::vector<int> tris;
+    std::vector<unsigned char> area_ids;
 
-    collect_meshes_recursive(entity(), base_inv, verts, tris, recurse);
+    append_bake_geometry(bake_input, verts, tris, area_ids);
+    tc_log_info("[NavMesh] Collected %d navmesh bake geometry batch(es), %d off-mesh link(s)",
+                static_cast<int>(bake_input.geometry.size()),
+                bake_input.off_mesh_link_count());
+
+    last_bake_input = bake_input;
 
     if (verts.empty() || tris.empty()) {
         tc_log_error("RecastNavMeshBuilderComponent: no mesh geometry found");
@@ -149,7 +108,13 @@ RecastBuildResult RecastNavMeshBuilderComponent::build_from_entity_geometry() {
 
     tc_log_info("RecastNavMeshBuilderComponent: building from %d vertices, %d triangles", nverts, ntris);
 
-    RecastBuildResult result = build(verts.data(), nverts, tris.data(), ntris);
+    RecastBuildResult result = build_internal(
+        verts.data(),
+        nverts,
+        tris.data(),
+        ntris,
+        area_ids.empty() ? nullptr : area_ids.data(),
+        false);
 
     if (result.success) {
         tc_log_info("RecastNavMeshBuilderComponent: build successful (%d polys)",

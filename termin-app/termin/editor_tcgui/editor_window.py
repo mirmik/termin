@@ -470,7 +470,7 @@ class EditorWindowTcgui:
 
             self._rendering_controller.set_center_tabs(self._center_tabs)
 
-            # Register editor display and mark it as non-serializable
+            # Register editor display in the editor-only standalone hierarchy.
             self._rendering_controller.add_editor_display(self._editor_display, "Editor")
             self._rendering_controller.set_editor_display_ptr(self._editor_display.tc_display_ptr)
 
@@ -879,6 +879,23 @@ class EditorWindowTcgui:
 
     def remove_viewport_overlay_drawer(self, callback: Callable[[], None]) -> None:
         self._viewport_interactions.remove_overlay_drawer(callback)
+
+    def register_tool_inspector_panel(self, key: str, panel) -> None:
+        if self._inspector_controller is None:
+            log.error("[EditorWindowTcgui] cannot register tool inspector panel: inspector is not ready")
+            return
+        self._inspector_controller.register_tool_inspector_panel(key, panel)
+
+    def unregister_tool_inspector_panel(self, key: str) -> None:
+        if self._inspector_controller is None:
+            return
+        self._inspector_controller.unregister_tool_inspector_panel(key)
+
+    def show_tool_inspector_panel(self, key: str, label: str = "") -> None:
+        if self._inspector_controller is None:
+            log.error("[EditorWindowTcgui] cannot show tool inspector panel: inspector is not ready")
+            return
+        self._inspector_controller.show_tool_inspector_panel(key, label)
 
     def begin_viewport_tool(self) -> None:
         self._viewport_interactions.begin_tool()

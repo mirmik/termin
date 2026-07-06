@@ -274,7 +274,7 @@ void DepthPass::execute_with_data_tgfx2(
         if (!drawable) continue;
 
         MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry(phase_name(), dc.geometry_id, mesh_geometry)) {
+        if (!drawable->resolve_mesh_geometry(phase_mark(), dc.geometry_id, mesh_geometry)) {
             continue;  // non-mesh drawables skipped
         }
 
@@ -287,6 +287,7 @@ void DepthPass::execute_with_data_tgfx2(
 
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
+        tc_material_phase* material_phase = dc.resolve_material_phase();
 
         // Base, skinned, and material-phase override shaders share the same
         // draw-scope model matrix + PerFrame UBO. Skinning adds BoneBlock as
@@ -332,7 +333,7 @@ void DepthPass::execute_with_data_tgfx2(
                 *ctx.ctx2,
                 device,
                 skinned_shader.shader,
-                nullptr,
+                material_phase,
                 draw_resources);
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
 
@@ -461,9 +462,9 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         return;
     }
 
-    if (phase_mark.empty()) {
+    if (pass_phase_mark.empty()) {
         tc::Log::error(
-            "[%s] cannot collect geometry with empty phase mark",
+            "[DepthOnlyPass] pass '%s' has empty phase mark; geometry collection requires an explicit phase",
             get_pass_name().c_str());
         return;
     }
@@ -481,15 +482,15 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
 
         std::vector<int> geometry_ids;
         std::vector<GeometryDrawCall> material_phase_draws;
-        const bool has_phase_mark = !collect_ctx->pass->phase_mark.empty();
+        const bool use_material_phase = true;
         if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
             auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
             if (drawable) {
                 geometry_ids = drawable->get_geometry_ids_for_phase(
-                    collect_ctx->pass->phase_mark);
-                if (has_phase_mark) {
+                    collect_ctx->pass->pass_phase_mark);
+                if (use_material_phase) {
                     material_phase_draws = drawable->get_geometry_draws(
-                        &collect_ctx->pass->phase_mark);
+                        &collect_ctx->pass->pass_phase_mark);
                 }
             }
         }
@@ -500,12 +501,14 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         for (int geometry_id : geometry_ids) {
             tc_shader_handle original_shader =
                 collect_ctx->pass->depth_shader_handle_;
+            const GeometryDrawCall* selected_material_draw = nullptr;
             for (const GeometryDrawCall& draw : material_phase_draws) {
                 tc_material_phase* phase = draw.resolve_phase();
                 if (draw.geometry_id == geometry_id &&
                     phase &&
                     !tc_shader_handle_is_invalid(phase->shader)) {
                     original_shader = phase->shader;
+                    selected_material_draw = &draw;
                     break;
                 }
             }
@@ -514,14 +517,17 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
             dc.entity = ent;
             dc.component = c;
             ShaderOverrideContext override_context;
-            override_context.phase_mark = has_phase_mark
-                ? collect_ctx->pass->phase_mark
-                : "";
+            override_context.phase_mark = collect_ctx->pass->pass_phase_mark;
             override_context.geometry_id = geometry_id;
             override_context.original_shader = TcShader(original_shader);
             override_context.pass_contract = collect_ctx->pass_contract;
             dc.final_shader = override_drawable_shader(c, override_context).handle;
             dc.geometry_id = geometry_id;
+            if (selected_material_draw) {
+                dc.material_phase = selected_material_draw->phase;
+                dc.material = selected_material_draw->material;
+                dc.phase_index = selected_material_draw->phase_index;
+            }
             collect_ctx->draw_calls->push_back(dc);
         }
         return true;
@@ -695,7 +701,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         if (!drawable) continue;
 
         MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, mesh_geometry)) {
+        if (!drawable->resolve_mesh_geometry(pass_phase_mark, dc.geometry_id, mesh_geometry)) {
             continue;
         }
 
@@ -708,6 +714,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
         bool override_is_base =
             tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
+        tc_material_phase* material_phase = dc.resolve_material_phase();
 
         DepthDrawStd140 draw{};
         std::memcpy(draw.u_model, model.data, sizeof(float) * 16);
@@ -747,7 +754,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 *ctx.ctx2,
                 device,
                 skinned_shader.shader,
-                nullptr,
+                material_phase,
                 draw_resources);
 
             drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);

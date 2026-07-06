@@ -8,6 +8,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(TERMIN_BUILD_PYTHON "Build Python bindings" OFF)
 option(TERMIN_NAVMESH_BUILD_RECAST "Build Recast-backed navmesh components and Python bindings" ON)
+option(TERMIN_NAVMESH_BUILD_TESTS "Build termin-navmesh C/C++ tests" OFF)
+
+if(DEFINED TERMIN_BUILD_TESTS)
+    set(TERMIN_NAVMESH_EFFECTIVE_BUILD_TESTS ${TERMIN_BUILD_TESTS})
+else()
+    set(TERMIN_NAVMESH_EFFECTIVE_BUILD_TESTS ${TERMIN_NAVMESH_BUILD_TESTS})
+endif()
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -118,6 +125,7 @@ if(TERMIN_HAS_RECAST)
         src/detour_navmesh_build.cpp
         src/detour_navmesh_asset_utils.cpp
         src/detour_pathfinding_world_component.cpp
+        src/navmesh_bake_source.cpp
         src/detour_query_session.cpp
         src/navmesh_keeper_component.cpp
         src/off_mesh_link_component.cpp
@@ -177,6 +185,33 @@ if(TERMIN_HAS_RECAST)
         target_compile_features(_navmesh_native PRIVATE cxx_std_20)
         termin_set_rpath_python(_navmesh_native)
         install(TARGETS _navmesh_native DESTINATION lib/python/termin/navmesh)
+    endif()
+
+    if(TERMIN_NAVMESH_EFFECTIVE_BUILD_TESTS)
+        enable_testing()
+        add_executable(termin_navmesh_bake_visitor_registry_test
+            tests/test_navmesh_bake_visitor_registry.cpp
+        )
+        target_link_libraries(termin_navmesh_bake_visitor_registry_test
+            PRIVATE termin_navmesh_components
+        )
+        termin_set_rpath_test(termin_navmesh_bake_visitor_registry_test)
+        add_test(
+            NAME termin_navmesh_bake_visitor_registry_test
+            COMMAND termin_navmesh_bake_visitor_registry_test
+        )
+
+        add_executable(termin_navmesh_detour_linear_paths_test
+            tests/test_detour_linear_paths.cpp
+        )
+        target_link_libraries(termin_navmesh_detour_linear_paths_test
+            PRIVATE Detour
+        )
+        termin_set_rpath_test(termin_navmesh_detour_linear_paths_test)
+        add_test(
+            NAME termin_navmesh_detour_linear_paths_test
+            COMMAND termin_navmesh_detour_linear_paths_test
+        )
     endif()
 endif()
 

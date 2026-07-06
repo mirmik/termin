@@ -325,7 +325,7 @@ Entity TcSceneRef::migrate_entity(Entity& entity) {
 }
 
 nos::trent serialize_entity_recursive(const Entity& e) {
-    if (!e.valid() || !e.serializable()) {
+    if (!e.valid()) {
         return nos::trent();
     }
 
@@ -370,11 +370,9 @@ nos::trent serialize_entity_recursive(const Entity& e) {
         nos::trent children;
         children.init(nos::trent::type::list);
         for (const Entity& child : child_list) {
-            if (child.serializable()) {
-                nos::trent child_data = serialize_entity_recursive(child);
-                if (!child_data.is_nil()) {
-                    children.push_back(std::move(child_data));
-                }
+            nos::trent child_data = serialize_entity_recursive(child);
+            if (!child_data.is_nil()) {
+                children.push_back(std::move(child_data));
             }
         }
         if (!children.as_list().empty()) {
@@ -392,12 +390,11 @@ nos::trent TcSceneRef::serialize() const {
 
     result["uuid"] = uuid();
 
-    // Root entities (no parent, serializable)
+    // Root entities (no parent)
     nos::trent entities;
     entities.init(nos::trent::type::list);
     for (const Entity& e : get_all_entities()) {
         if (e.parent().valid()) continue;
-        if (!e.serializable()) continue;
 
         nos::trent ent_data = serialize_entity_recursive(e);
         if (!ent_data.is_nil()) {

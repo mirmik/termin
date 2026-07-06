@@ -16,14 +16,22 @@ from termin.editor_core.editor_commands import (
 )
 from termin.editor_core.undo_stack import UndoStack
 from termin.geombase import GeneralPose3
-from termin.scene import TcScene
-from termin.bootstrap import register_scene_extensions
+from termin.inspect import InspectField
+from termin.scene import PythonComponent, TcScene
+from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.render import scene_render_state
 
 
 class TestEditorUndoCommands(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        bootstrap_player()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutdown_player()
+
     def setUp(self) -> None:
-        register_scene_extensions()
         self.scene = TcScene.create("editor-command-test")
 
     def tearDown(self) -> None:
@@ -178,6 +186,43 @@ class TestEditorUndoCommands(unittest.TestCase):
         self.assertIsNone(self.scene.get_entity(duplicated_root_uuid))
         self.assertIsNone(self.scene.get_entity(duplicated_child_uuid))
         self.assertIsNone(self.scene.get_entity(duplicated_grandchild_uuid))
+
+        stack.redo()
+        self.assertEqual(cmd.entity.uuid, duplicated_root_uuid)
+        self.assertIsNotNone(self.scene.get_entity(duplicated_child_uuid))
+        self.assertIsNotNone(self.scene.get_entity(duplicated_grandchild_uuid))
+
+    def test_duplicate_entity_command_remaps_python_component_entity_refs(self) -> None:
+        class DuplicateEntityRefComponent(PythonComponent):
+            inspect_fields = {
+                "target": InspectField(path="target", label="Target", kind="entity"),
+            }
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.target = None
+
+        root = self.scene.create_entity("root")
+        child = self.scene.create_entity("child")
+        child.transform.set_parent(root.transform)
+
+        component = DuplicateEntityRefComponent()
+        component.target = child
+        root.add_component(component)
+
+        stack = UndoStack()
+        cmd = DuplicateEntityCommand(self.scene, root)
+        stack.push(cmd)
+
+        duplicated_root = cmd.entity
+        self.assertIsNotNone(duplicated_root)
+        duplicated_child = list(duplicated_root.transform.children)[0].entity
+        duplicated_component = duplicated_root.get_python_component("DuplicateEntityRefComponent")
+
+        self.assertIsNotNone(duplicated_component)
+        self.assertIsNotNone(duplicated_component.target)
+        self.assertEqual(duplicated_component.target.uuid, duplicated_child.uuid)
+        self.assertNotEqual(duplicated_component.target.uuid, child.uuid)
 
     def test_entity_property_command_edits_name_and_layer(self) -> None:
         entity = self.scene.create_entity("entity")

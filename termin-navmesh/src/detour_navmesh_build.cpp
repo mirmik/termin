@@ -1,5 +1,6 @@
 #include <termin/navmesh/detour_navmesh_build.hpp>
 
+#include <termin/navmesh/navmesh_bake_source.hpp>
 #include <DetourAlloc.h>
 #include <DetourNavMeshBuilder.h>
 #include <Recast.h>
@@ -12,7 +13,8 @@ namespace termin {
 DetourNavMeshTileBuildResult build_detour_navmesh_tile_data(
     const RecastBuildResult& recast_result,
     const DetourNavMeshBuildConfig& config,
-    const DetourOffMeshLinkData* off_mesh_links)
+    const DetourOffMeshLinkData* off_mesh_links,
+    const DetourLinearPathData* linear_paths)
 {
     DetourNavMeshTileBuildResult result;
     rcPolyMesh* pmesh = recast_result.poly_mesh;
@@ -41,9 +43,53 @@ DetourNavMeshTileBuildResult build_detour_navmesh_tile_data(
     std::vector<unsigned short> poly_flags(static_cast<size_t>(pmesh->npolys), 0);
     std::vector<unsigned char> poly_areas(static_cast<size_t>(pmesh->npolys), 0);
     for (int i = 0; i < pmesh->npolys; ++i) {
-        const unsigned char area = pmesh->areas ? pmesh->areas[i] : RC_WALKABLE_AREA;
-        poly_areas[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : static_cast<unsigned char>(poly_area_id);
+        const unsigned char area = pmesh->areas
+            ? pmesh->areas[i]
+            : navmesh_detour_area_to_recast_area(poly_area_id);
+        poly_areas[static_cast<size_t>(i)] =
+            navmesh_recast_area_to_detour_area(area, poly_area_id);
         poly_flags[static_cast<size_t>(i)] = (area == RC_NULL_AREA) ? 0 : 1;
+    }
+
+    std::vector<dtLinearLink> detour_linear_links;
+    if (linear_paths && linear_paths->count() > 0) {
+        const int count = linear_paths->count();
+        const bool valid =
+            static_cast<int>(linear_paths->segment_verts.size()) == count * 6 &&
+            static_cast<int>(linear_paths->flags.size()) == count &&
+            (linear_paths->user_ids.empty() ||
+             static_cast<int>(linear_paths->user_ids.size()) == count);
+        if (!valid) {
+            result.error = "invalid linear path data sizes";
+            tc_log_error("[NavMesh] %s (segments=%d verts=%zu flags=%zu user_ids=%zu)",
+                         result.error.c_str(),
+                         count,
+                         linear_paths->segment_verts.size(),
+                         linear_paths->flags.size(),
+                         linear_paths->user_ids.size());
+            return result;
+        }
+
+        detour_linear_links.reserve(linear_paths->links.size());
+        for (const DetourLinearLinkData& link : linear_paths->links) {
+            if (link.from_segment >= count || link.to_segment >= count) {
+                result.error = "linear path link references an invalid segment";
+                tc_log_error("[NavMesh] %s (from=%u to=%u segments=%d)",
+                             result.error.c_str(),
+                             static_cast<unsigned int>(link.from_segment),
+                             static_cast<unsigned int>(link.to_segment),
+                             count);
+                return result;
+            }
+            dtLinearLink detour_link;
+            std::memset(&detour_link, 0, sizeof(detour_link));
+            detour_link.fromPoly = static_cast<unsigned short>(pmesh->npolys + link.from_segment);
+            detour_link.toPoly = static_cast<unsigned short>(pmesh->npolys + link.to_segment);
+            detour_link.fromT = link.from_t;
+            detour_link.toT = link.to_t;
+            detour_link.flags = link.flags;
+            detour_linear_links.push_back(detour_link);
+        }
     }
 
     dtNavMeshCreateParams params;
@@ -64,6 +110,18 @@ DetourNavMeshTileBuildResult build_detour_navmesh_tile_data(
         params.offMeshConFlags = off_mesh_links->flags.data();
         params.offMeshConUserID = off_mesh_links->user_ids.data();
         params.offMeshConCount = off_mesh_links->count();
+    }
+
+    if (linear_paths && linear_paths->count() > 0) {
+        params.linearSegmentVerts = linear_paths->segment_verts.data();
+        params.linearSegmentAreas = linear_paths->areas.data();
+        params.linearSegmentFlags = linear_paths->flags.data();
+        params.linearSegmentUserID = linear_paths->user_ids.empty()
+            ? nullptr
+            : linear_paths->user_ids.data();
+        params.linearSegmentCount = linear_paths->count();
+        params.linearLinks = detour_linear_links.empty() ? nullptr : detour_linear_links.data();
+        params.linearLinkCount = static_cast<int>(detour_linear_links.size());
     }
 
     if (recast_result.detail_mesh) {
@@ -87,12 +145,13 @@ DetourNavMeshTileBuildResult build_detour_navmesh_tile_data(
     int nav_data_size = 0;
     if (!dtCreateNavMeshData(&params, &nav_data, &nav_data_size) || !nav_data || nav_data_size <= 0) {
         result.error = "dtCreateNavMeshData failed";
-        tc_log_error("[NavMesh] %s (verts=%d polys=%d nvp=%d offmesh=%d detail_verts=%d detail_tris=%d)",
+        tc_log_error("[NavMesh] %s (verts=%d polys=%d nvp=%d offmesh=%d linear=%d detail_verts=%d detail_tris=%d)",
                      result.error.c_str(),
                      params.vertCount,
                      params.polyCount,
                      params.nvp,
                      params.offMeshConCount,
+                     params.linearSegmentCount,
                      params.detailVertsCount,
                      params.detailTriCount);
         return result;

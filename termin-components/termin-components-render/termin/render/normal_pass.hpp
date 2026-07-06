@@ -21,9 +21,11 @@ private:
     void release_tgfx2_resources();
 
 public:
-    std::string phase_mark = "normal";
+    std::string pass_phase_mark = "normal";
 
-    INSPECT_FIELD(NormalPass, phase_mark, "Phase Mark", "string")
+    INSPECT_FIELD_ACCESSORS(NormalPass, std::string, phase_mark, "Phase Mark", "string",
+        ([](NormalPass* self) { return self->pass_phase_mark; }),
+        ([](NormalPass* self, std::string value) { self->pass_phase_mark = value; }))
 
     NormalPass(
         const std::string& input_res = "empty_normal",
@@ -56,8 +58,10 @@ public:
 
 protected:
     std::array<float, 4> clear_color() const override { return {0.5f, 0.5f, 0.5f, 1.0f}; }
-    const char* phase_name() const override { return phase_mark.c_str(); }
-    const char* material_shader_phase_name() const override { return phase_mark.c_str(); }
+    const char* phase_mark() const override {
+        return pass_phase_mark.c_str();
+    }
+    bool uses_material_phase_shader_override() const override { return true; }
     MaterialPipelinePassContract shader_pass_contract() const override;
 };
 
