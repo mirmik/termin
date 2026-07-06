@@ -164,6 +164,7 @@ def test_line_renderer_world_mesh_fallback_builds_cpu_mesh():
 
 
 def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
+    from tgfx import ShaderVariantOp
     from termin.render_framework import RenderPipeline, collect_shader_usages_for_pipeline
     from termin.render_passes import ColorPass
     from termin.scene import TcScene
@@ -188,6 +189,15 @@ def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
         assert "termin-engine-line-default_LineTubeBody" in shader_names
         assert "termin-engine-line-default_LineTubeCap" in shader_names
         assert len({shader.uuid for shader in shaders}) == len(shaders)
+        variant_ops = {shader.name: shader.variant_op for shader in shaders}
+        assert (
+            variant_ops["termin-engine-line-default_LineTubeBody"]
+            == ShaderVariantOp.LINE_TUBE_BODY
+        )
+        assert (
+            variant_ops["termin-engine-line-default_LineTubeCap"]
+            == ShaderVariantOp.LINE_TUBE_CAP
+        )
 
         empty_phase_pipeline.add_pass(ColorPass(phase_mark=""))
         assert len(collect_shader_usages_for_pipeline(scene.scene_handle(), empty_phase_pipeline)) == 0
