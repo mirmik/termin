@@ -131,7 +131,7 @@ void NormalPass::execute_with_data_tgfx2(
 
     // Use the UBO-based engine shader as base_shader for skinning override
     // (see DepthPass / ShadowPass for rationale).
-    collect_draw_calls(scene, layer_mask, normal_shader_handle_);
+    collect_draw_calls(scene, layer_mask, ctx.render_category_mask, normal_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();

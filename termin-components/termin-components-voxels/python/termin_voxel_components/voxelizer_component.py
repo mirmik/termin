@@ -201,9 +201,13 @@ class VoxelizerComponent(DrawableComponent):
         """Рисует отладочную геометрию."""
         pass
 
-    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
+    def get_geometry_draws(
+        self,
+        context: "RenderContext",
+        phase_mark: str | None = None,
+    ) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для отладочного рендеринга."""
-        return self._debug_draw.get_geometry_draws(self, phase_mark)
+        return self._debug_draw.get_geometry_draws(self, context, phase_mark)
 
     def _get_or_create_debug_material(self) -> Material:
         """Создаёт материал для отладочной визуализации."""

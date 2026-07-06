@@ -14,9 +14,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from termin.scene import Entity
+from termin.input import INPUT_SOURCE_EDITOR, INPUT_SOURCE_RUNTIME
+from termin.input._input_native import set_input_source_mask
 from termin.render_components import OrbitCameraController
 from termin.render_components.camera import CameraComponent
-from termin.ui_components import UIComponent
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
@@ -87,29 +88,27 @@ class EditorCameraManager:
         if self.editor_entities is not None:
             for child in self.editor_entities.transform.children:
                 if child.entity and child.entity.name == "camera":
-                    camera = child.entity.get_component(CameraComponent)
+                    camera = child.entity.get_component_by_type("CameraComponent")
                     if camera is not None:
                         self.camera = camera
+                        self._enable_editor_input_sources(child.entity)
                         print(f"[DEBUG] _ensure_editor_camera: FOUND existing camera={camera}", flush=True)
                         return
 
         # Create camera in standalone pool (not in scene)
         camera_entity = Entity(name="camera")
-        # camera = PerspectiveCameraComponent()
-        # camera_entity.add_component(camera)
-        # camera_entity.add_component(OrbitCameraController())
         camera_entity.add_component_by_name("CameraComponent")
         camera_entity.add_component_by_name("OrbitCameraController")
-        camera = camera_entity.get_component(CameraComponent)
+        camera = camera_entity.get_component_by_type("CameraComponent")
         print(f"[DEBUG] _ensure_editor_camera: CREATED new camera={camera}, entity={camera_entity}", flush=True)
 
         # Create child entity for editor UI with layer=1
         ui_entity = Entity(name="editor_ui")
         ui_entity.layer = 1  # Editor UI layer
-        #ui_comp = UIComponent()
         ui_entity.add_component_by_name("UIComponent")
-        ui_comp = ui_entity.get_component(UIComponent)
+        ui_comp = ui_entity.get_component_by_type("UIComponent")
         ui_comp.active_in_editor = True
+        ui_comp.input_source_mask = INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR
         ui_comp.set_ui_layout_by_name("editor_camera_ui")
 
         # Add EditorCameraUIController if available (loaded from stdlib)
@@ -127,13 +126,31 @@ class EditorCameraManager:
             self.editor_entities.transform.link(camera_entity.transform)
 
         self.camera = camera
+        self._enable_editor_input_sources(camera_entity)
+
+    def _enable_editor_input_sources(self, camera_entity: Entity) -> None:
+        """Opt editor-owned input components into editor viewport events."""
+        orbit = camera_entity.get_component_by_type("OrbitCameraController")
+        if orbit is not None:
+            set_input_source_mask(
+                orbit.c_component_ptr(),
+                INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR,
+            )
+
+        for child in camera_entity.transform.children:
+            child_entity = child.entity
+            if child_entity is None:
+                continue
+            ui_comp = child_entity.get_component_by_type("UIComponent")
+            if ui_comp is not None:
+                ui_comp.input_source_mask = INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR
 
     @property
     def orbit_controller(self) -> OrbitCameraController | None:
         """Get OrbitCameraController for the editor camera."""
         if self.camera is None or self.camera.entity is None:
             return None
-        return self.camera.entity.get_component(OrbitCameraController)
+        return self.camera.entity.get_component_by_type("OrbitCameraController")
 
     def get_camera_data(self) -> dict | None:
         """

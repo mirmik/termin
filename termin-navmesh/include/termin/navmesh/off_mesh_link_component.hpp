@@ -15,6 +15,7 @@
 #include <termin/render/drawable.hpp>
 #include <tc_log.h>
 
+#include <render/tc_render_category_flags.h>
 #include <termin/navmesh/detour_navmesh_asset_utils.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
 
@@ -87,8 +88,13 @@ public:
         ensure_debug_resources();
     }
 
-    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override {
+    std::vector<GeometryDrawCall> get_geometry_draws(
+        const RenderContext& context,
+        const std::string* phase_mark = nullptr) override {
         std::vector<GeometryDrawCall> result;
+        if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
+            return result;
+        }
         if (!enabled) {
             return result;
         }

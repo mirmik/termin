@@ -192,7 +192,11 @@ private:
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
     CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name) const;
-    void collect_draw_calls(tc_scene_handle scene, uint64_t layer_mask) const;
+    void collect_draw_calls(
+        tc_scene_handle scene,
+        uint64_t layer_mask,
+        uint64_t render_category_mask
+    ) const;
     void sort_draw_calls_by_shader() const;
 };
 

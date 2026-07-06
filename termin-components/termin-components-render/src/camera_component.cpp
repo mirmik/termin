@@ -44,6 +44,7 @@ static bool camera_cap_get_data(tc_component* self, double aspect_override, tc_c
     out->near_clip = cam->near_clip;
     out->far_clip = cam->far_clip;
     out->layer_mask = cam->layer_mask;
+    out->render_category_mask = cam->render_category_mask;
     return true;
 }
 
@@ -261,26 +262,49 @@ void register_fov_mode_field() {
 }
 
 void register_camera_layer_mask_field() {
-        tc::InspectFieldInfo info;
-        info.type_name = "CameraComponent";
-        info.path = "layer_mask";
-        info.label = "Layers";
-        info.kind = "layer_mask";
-        info.getter = [](void* obj) -> tc_value {
-            auto* c = static_cast<CameraComponent*>(obj);
-            char buf[32];
-            snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)c->layer_mask);
-            return tc_value_string(buf);
-        };
-        info.setter = [](void* obj, tc_value value, void*) {
-            auto* c = static_cast<CameraComponent*>(obj);
-            if (value.type == TC_VALUE_STRING && value.data.s) {
-                c->layer_mask = strtoull(value.data.s, nullptr, 0);
-            } else if (value.type == TC_VALUE_INT) {
-                c->layer_mask = static_cast<uint64_t>(value.data.i);
-            }
-        };
-        tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
+    tc::InspectFieldInfo info;
+    info.type_name = "CameraComponent";
+    info.path = "layer_mask";
+    info.label = "Layers";
+    info.kind = "layer_mask";
+    info.getter = [](void* obj) -> tc_value {
+        auto* c = static_cast<CameraComponent*>(obj);
+        char buf[32];
+        snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)c->layer_mask);
+        return tc_value_string(buf);
+    };
+    info.setter = [](void* obj, tc_value value, void*) {
+        auto* c = static_cast<CameraComponent*>(obj);
+        if (value.type == TC_VALUE_STRING && value.data.s) {
+            c->layer_mask = strtoull(value.data.s, nullptr, 0);
+        } else if (value.type == TC_VALUE_INT) {
+            c->layer_mask = static_cast<uint64_t>(value.data.i);
+        }
+    };
+    tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
+}
+
+void register_camera_render_category_mask_field() {
+    tc::InspectFieldInfo info;
+    info.type_name = "CameraComponent";
+    info.path = "render_category_mask";
+    info.label = "Render Categories";
+    info.kind = "string";
+    info.getter = [](void* obj) -> tc_value {
+        auto* c = static_cast<CameraComponent*>(obj);
+        char buf[32];
+        snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)c->render_category_mask);
+        return tc_value_string(buf);
+    };
+    info.setter = [](void* obj, tc_value value, void*) {
+        auto* c = static_cast<CameraComponent*>(obj);
+        if (value.type == TC_VALUE_STRING && value.data.s) {
+            c->render_category_mask = strtoull(value.data.s, nullptr, 0);
+        } else if (value.type == TC_VALUE_INT) {
+            c->render_category_mask = static_cast<uint64_t>(value.data.i);
+        }
+    };
+    tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
 }
 
 void register_camera_component_inspect_fields() {
@@ -346,6 +370,7 @@ void register_camera_component_inspect_fields() {
     );
     register_fov_mode_field();
     register_camera_layer_mask_field();
+    register_camera_render_category_mask_field();
 }
 
 } // namespace

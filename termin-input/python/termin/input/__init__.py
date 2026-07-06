@@ -4,6 +4,8 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("termin_input")
 
 from termin.input._input_native import (
+    INPUT_SOURCE_EDITOR,
+    INPUT_SOURCE_RUNTIME,
     XrHand,
     XrInput,
     XrRigInputState,
@@ -32,6 +34,8 @@ def __getattr__(name: str):
 
 __all__ = [
     "InputComponent",
+    "INPUT_SOURCE_EDITOR",
+    "INPUT_SOURCE_RUNTIME",
     "KeyEvent",
     "MouseButtonEvent",
     "MouseMoveEvent",

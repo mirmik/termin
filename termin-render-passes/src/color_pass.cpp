@@ -264,6 +264,7 @@ struct CollectDrawCallsData {
     std::vector<PhaseDrawCall>* draw_calls;
     const char* phase_mark;
     MaterialPipelinePassContract pass_contract;
+    const RenderContext* render_context;
 };
 
 struct CollectShaderUsagesData {
@@ -290,11 +291,14 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
         return true;
     }
 
-    // Get geometry draws via vtable
-    void* draws_ptr = tc_component_get_geometry_draws(tc, data->phase_mark);
+    void* draws_ptr = tc_component_get_geometry_draws(
+        tc,
+        const_cast<RenderContext*>(data->render_context),
+        data->phase_mark);
     if (!draws_ptr) {
         return true;
     }
+    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
 
     // Build Entity from component's owner
     Entity ent(tc->owner);
@@ -305,7 +309,6 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
         return true;
     }
 
-    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
     for (const auto& gd : *geometry_draws) {
         tc_material_phase* phase = gd.resolve_phase();
         if (phase) {
@@ -346,7 +349,13 @@ bool collect_color_drawable_shader_usages(tc_component* tc, void* user_data) {
         return true;
     }
 
-    void* draws_ptr = tc_component_get_geometry_draws(tc, data->phase_mark);
+    RenderContext render_context;
+    render_context.phase = data->phase_mark;
+    render_context.pass_contract = data->pass_contract;
+    void* draws_ptr = tc_component_get_geometry_draws(
+        tc,
+        &render_context,
+        data->phase_mark);
     if (!draws_ptr) {
         return true;
     }
@@ -380,7 +389,7 @@ struct ResolvedDrawPhase {
 
 ResolvedDrawPhase resolve_draw_phase(
     tc_component* component,
-    Drawable* drawable,
+    const RenderContext& render_context,
     const std::string& phase_mark,
     int geometry_id,
     tc_material_handle expected_material,
@@ -388,12 +397,19 @@ ResolvedDrawPhase resolve_draw_phase(
     const MaterialPipelinePassContract& pass_contract
 ) {
     ResolvedDrawPhase resolved;
-    if (!component || !drawable) {
+    if (!component) {
         return resolved;
     }
 
-    std::vector<GeometryDrawCall> geometry_draws = drawable->get_geometry_draws(&phase_mark);
-    for (const GeometryDrawCall& gd : geometry_draws) {
+    void* draws_ptr = tc_component_get_geometry_draws(
+        component,
+        const_cast<RenderContext*>(&render_context),
+        phase_mark.c_str());
+    if (!draws_ptr) {
+        return resolved;
+    }
+    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+    for (const GeometryDrawCall& gd : *geometry_draws) {
         tc_material_phase* phase = gd.resolve_phase();
         if (!phase || gd.geometry_id != geometry_id) {
             continue;
@@ -425,6 +441,7 @@ ResolvedDrawPhase resolve_draw_phase(
 void ColorPass::collect_draw_calls(
     tc_scene_handle scene,
     const std::string& phase_mark,
+    const RenderContext& render_context,
     uint64_t layer_mask
 ) {
     // Clear but keep capacity
@@ -440,6 +457,7 @@ void ColorPass::collect_draw_calls(
     data.draw_calls = &cached_draw_calls_;
     data.phase_mark = phase_mark.c_str();
     data.pass_contract = color_material_pass_contract();
+    data.render_context = &render_context;
 
     // Use tc_scene_foreach_drawable with filtering
     int filter_flags = TC_SCENE_FILTER_ENABLED
@@ -656,7 +674,20 @@ void ColorPass::execute_with_data(
     ctx2->set_depth_bias(false);
 
     // Collect + sort draw calls. Gathering logic is backend-agnostic.
-    collect_draw_calls(scene, phase_mark, layer_mask);
+    RenderContext collect_context;
+    collect_context.view = view;
+    collect_context.projection = projection;
+    collect_context.phase = phase_mark;
+    collect_context.pass_contract = color_material_pass_contract();
+    collect_context.layer_mask = layer_mask;
+    collect_context.render_category_mask = ctx.render_category_mask;
+    collect_context.camera_position = camera_position;
+    collect_context.viewport_width = rect.width;
+    collect_context.viewport_height = rect.height;
+    collect_context.scene = TcSceneRef(scene);
+    collect_context.camera = const_cast<RenderCamera*>(ctx.camera);
+
+    collect_draw_calls(scene, phase_mark, collect_context, layer_mask);
 
     if (sort_mode != "none" && !cached_draw_calls_.empty()) {
         compute_sort_keys(camera_position);
@@ -782,7 +813,7 @@ void ColorPass::execute_with_data(
         auto refresh_phase = [&]() -> bool {
             ResolvedDrawPhase resolved = resolve_draw_phase(
                 dc.component,
-                drawable,
+                collect_context,
                 phase_mark,
                 dc.geometry_id,
                 dc.material,
@@ -854,6 +885,7 @@ void ColorPass::execute_with_data(
             direct_context.pass_contract = color_material_pass_contract();
             direct_context.current_tc_shader = TcShader(final_shader);
             direct_context.layer_mask = layer_mask;
+            direct_context.render_category_mask = ctx.render_category_mask;
             direct_context.camera_position = camera_position;
             direct_context.viewport_width = rect.width;
             direct_context.viewport_height = rect.height;

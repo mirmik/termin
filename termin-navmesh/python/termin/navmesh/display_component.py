@@ -317,8 +317,13 @@ void main() {
             self._last_navmesh_version = current_version
             self._rebuild_mesh()
 
-    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
+    def get_geometry_draws(
+        self,
+        context: "RenderContext",
+        phase_mark: str | None = None,
+    ) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для рендеринга."""
+        del context
         result: List[GeometryDrawCall] = []
 
         # Основной меш
