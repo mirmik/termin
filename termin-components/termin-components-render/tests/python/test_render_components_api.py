@@ -71,33 +71,33 @@ def test_render_components_exports_camera_controller_and_material_pass_helpers()
     assert get_texture_inputs_for_material("(None)") == []
 
 
-def test_depth_and_normal_passes_expose_explicit_material_phase_override():
+def test_depth_and_normal_passes_expose_explicit_phase_mark():
     from termin.inspect import InspectRegistry
 
     depth = DepthPass()
     depth_only = DepthOnlyPass()
     normal = NormalPass()
 
-    assert depth.material_phase_mark == "depth"
-    assert depth_only.material_phase_mark == "depth"
-    assert normal.material_phase_mark == "normal"
+    assert depth.phase_mark == "depth"
+    assert depth_only.phase_mark == "depth"
+    assert normal.phase_mark == "normal"
 
-    depth.material_phase_mark = "custom_depth"
-    depth_only.material_phase_mark = "custom_depth_only"
-    normal.material_phase_mark = "custom_normals"
+    depth.phase_mark = "custom_depth"
+    depth_only.phase_mark = "custom_depth_only"
+    normal.phase_mark = "custom_normals"
 
-    assert depth.material_phase_mark == "custom_depth"
-    assert depth_only.material_phase_mark == "custom_depth_only"
-    assert normal.material_phase_mark == "custom_normals"
+    assert depth.phase_mark == "custom_depth"
+    assert depth_only.phase_mark == "custom_depth_only"
+    assert normal.phase_mark == "custom_normals"
 
     registry = InspectRegistry.instance()
     for type_name in ("DepthPass", "DepthOnlyPass", "NormalPass"):
         fields = {field.path: field for field in registry.all_fields(type_name)}
-        assert fields["material_phase_mark"].label == "Material Phase Mark"
-        assert fields["material_phase_mark"].kind == "string"
+        assert fields["phase_mark"].label == "Phase Mark"
+        assert fields["phase_mark"].kind == "string"
 
 
-def test_depth_and_normal_passes_deserialize_material_phase_override():
+def test_depth_and_normal_passes_deserialize_phase_mark():
     default_depth = DepthPass._deserialize_instance({"pass_name": "Depth", "data": {}}, None)
     default_depth_only = DepthOnlyPass._deserialize_instance(
         {"pass_name": "DepthOnly", "data": {}},
@@ -105,10 +105,29 @@ def test_depth_and_normal_passes_deserialize_material_phase_override():
     )
     default_normal = NormalPass._deserialize_instance({"pass_name": "Normal", "data": {}}, None)
 
-    assert default_depth.material_phase_mark == "depth"
-    assert default_depth_only.material_phase_mark == "depth"
-    assert default_normal.material_phase_mark == "normal"
+    assert default_depth.phase_mark == "depth"
+    assert default_depth_only.phase_mark == "depth"
+    assert default_normal.phase_mark == "normal"
 
+    depth = DepthPass._deserialize_instance(
+        {"pass_name": "Depth", "data": {"phase_mark": "custom_depth"}},
+        None,
+    )
+    depth_only = DepthOnlyPass._deserialize_instance(
+        {"pass_name": "DepthOnly", "data": {"phase_mark": "custom_depth_only"}},
+        None,
+    )
+    normal = NormalPass._deserialize_instance(
+        {"pass_name": "Normal", "data": {"phase_mark": "custom_normals"}},
+        None,
+    )
+
+    assert depth.phase_mark == "custom_depth"
+    assert depth_only.phase_mark == "custom_depth_only"
+    assert normal.phase_mark == "custom_normals"
+
+
+def test_depth_and_normal_passes_deserialize_legacy_material_phase_mark():
     depth = DepthPass._deserialize_instance(
         {"pass_name": "Depth", "data": {"material_phase_mark": "custom_depth"}},
         None,
@@ -122,9 +141,9 @@ def test_depth_and_normal_passes_deserialize_material_phase_override():
         None,
     )
 
-    assert depth.material_phase_mark == "custom_depth"
-    assert depth_only.material_phase_mark == "custom_depth_only"
-    assert normal.material_phase_mark == "custom_normals"
+    assert depth.phase_mark == "custom_depth"
+    assert depth_only.phase_mark == "custom_depth_only"
+    assert normal.phase_mark == "custom_normals"
 
 
 def test_line_renderer_defaults_to_world_billboard_mode():

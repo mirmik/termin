@@ -461,6 +461,13 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         return;
     }
 
+    if (phase_mark.empty()) {
+        tc::Log::error(
+            "[%s] cannot collect geometry with empty phase mark",
+            get_pass_name().c_str());
+        return;
+    }
+
     struct CollectContext {
     public:
         const DepthOnlyPass* pass = nullptr;
@@ -474,15 +481,15 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
 
         std::vector<int> geometry_ids;
         std::vector<GeometryDrawCall> material_phase_draws;
-        const bool use_material_phase =
-            !collect_ctx->pass->material_phase_mark.empty();
+        const bool has_phase_mark = !collect_ctx->pass->phase_mark.empty();
         if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
             auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
             if (drawable) {
-                geometry_ids = drawable->get_geometry_ids_for_phase("");
-                if (use_material_phase) {
+                geometry_ids = drawable->get_geometry_ids_for_phase(
+                    collect_ctx->pass->phase_mark);
+                if (has_phase_mark) {
                     material_phase_draws = drawable->get_geometry_draws(
-                        &collect_ctx->pass->material_phase_mark);
+                        &collect_ctx->pass->phase_mark);
                 }
             }
         }
@@ -507,8 +514,8 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
             dc.entity = ent;
             dc.component = c;
             ShaderOverrideContext override_context;
-            override_context.phase_mark = use_material_phase
-                ? collect_ctx->pass->material_phase_mark
+            override_context.phase_mark = has_phase_mark
+                ? collect_ctx->pass->phase_mark
                 : "";
             override_context.geometry_id = geometry_id;
             override_context.original_shader = TcShader(original_shader);
@@ -688,7 +695,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         if (!drawable) continue;
 
         MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry("", dc.geometry_id, mesh_geometry)) {
+        if (!drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, mesh_geometry)) {
             continue;
         }
 
