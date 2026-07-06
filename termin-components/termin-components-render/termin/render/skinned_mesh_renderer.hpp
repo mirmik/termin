@@ -34,6 +34,10 @@ public:
     std::vector<float> _bone_matrices_flat;
     int _bone_count = 0;
 
+private:
+    void resolve_skeleton_controller();
+
+public:
     // Note: material and cast_shadow are inherited from MeshRenderer;
     // mesh data lives on the required MeshComponent.
     // MeshRenderer::register_type() owns their inspect serialization.
