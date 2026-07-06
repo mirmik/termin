@@ -29,9 +29,9 @@ protected:
         }
     }
 
-    void install_overlay_input_vtable(tc_component* c) {
+    void set_input_priority(tc_component* c, int priority) {
         if (c) {
-            tc_overlay_input_capability_attach(c, &cxx_input_vtable);
+            tc_component_set_input_priority(c, priority);
         }
     }
 

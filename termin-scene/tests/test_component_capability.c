@@ -13,6 +13,19 @@ static bool count_components(tc_component* c, void* user_data) {
     return true;
 }
 
+typedef struct {
+    tc_component* items[4];
+    int count;
+} component_order;
+
+static bool collect_component_order(tc_component* c, void* user_data) {
+    component_order* order = (component_order*)user_data;
+    if (order->count < 4) {
+        order->items[order->count++] = c;
+    }
+    return true;
+}
+
 GUARD_C_TEST(test_capability_register_and_attach) {
     tc_component_cap_id cap = tc_component_capability_register("test.capability");
     GUARD_C_REQUIRE(cap != TC_COMPONENT_CAPABILITY_INVALID_ID);
@@ -69,9 +82,70 @@ GUARD_C_TEST(test_scene_capability_iteration) {
     return 0;
 }
 
+GUARD_C_TEST(test_scene_capability_priority_iteration) {
+    tc_component_cap_id cap = tc_component_capability_register("test.scene_capability_priority");
+    GUARD_C_REQUIRE(cap != TC_COMPONENT_CAPABILITY_INVALID_ID);
+
+    tc_scene_handle scene = tc_scene_new_named("capability-priority-scene");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    GUARD_C_REQUIRE(pool != NULL);
+
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "entity");
+    GUARD_C_REQUIRE(tc_entity_id_valid(entity));
+
+    tc_component low;
+    tc_component high;
+    tc_component mid;
+    tc_component_init(&low, NULL);
+    tc_component_init(&high, NULL);
+    tc_component_init(&mid, NULL);
+
+    int low_payload = 1;
+    int high_payload = 2;
+    int mid_payload = 3;
+    GUARD_C_REQUIRE(tc_component_attach_capability(&low, cap, &low_payload));
+    GUARD_C_REQUIRE(tc_component_attach_capability(&high, cap, &high_payload));
+    GUARD_C_REQUIRE(tc_component_attach_capability(&mid, cap, &mid_payload));
+    GUARD_C_REQUIRE(tc_component_set_capability_priority(&low, cap, 0));
+    GUARD_C_REQUIRE(tc_component_set_capability_priority(&high, cap, 10));
+    GUARD_C_REQUIRE(tc_component_set_capability_priority(&mid, cap, 5));
+
+    tc_entity_pool_add_component(pool, entity, &low);
+    tc_entity_pool_add_component(pool, entity, &high);
+    tc_entity_pool_add_component(pool, entity, &mid);
+    GUARD_C_CHECK_EQ_INT(3, tc_scene_capability_count(scene, cap));
+
+    component_order order = {0};
+    tc_scene_foreach_with_capability(scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
+    GUARD_C_CHECK_EQ_INT(3, order.count);
+    GUARD_C_CHECK_PTR_EQ(&high, order.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&mid, order.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&low, order.items[2]);
+
+    GUARD_C_REQUIRE(tc_component_set_capability_priority(&low, cap, 20));
+
+    order = (component_order){0};
+    tc_scene_foreach_with_capability(scene, cap, collect_component_order, &order, TC_SCENE_FILTER_NONE);
+    GUARD_C_CHECK_EQ_INT(3, order.count);
+    GUARD_C_CHECK_PTR_EQ(&low, order.items[0]);
+    GUARD_C_CHECK_PTR_EQ(&high, order.items[1]);
+    GUARD_C_CHECK_PTR_EQ(&mid, order.items[2]);
+
+    tc_entity_pool_remove_component(pool, entity, &low);
+    tc_entity_pool_remove_component(pool, entity, &high);
+    tc_entity_pool_remove_component(pool, entity, &mid);
+
+    tc_scene_free(scene);
+
+    return 0;
+}
+
 int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_capability_register_and_attach);
     GUARD_C_RUN(test_scene_capability_iteration);
+    GUARD_C_RUN(test_scene_capability_priority_iteration);
     return GUARD_C_END();
 }

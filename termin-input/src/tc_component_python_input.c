@@ -45,9 +45,3 @@ void tc_component_install_python_input_vtable(tc_component* c) {
         tc_input_capability_attach(c, &g_python_input_vtable);
     }
 }
-
-void tc_component_install_python_overlay_input_vtable(tc_component* c) {
-    if (c) {
-        tc_overlay_input_capability_attach(c, &g_python_input_vtable);
-    }
-}

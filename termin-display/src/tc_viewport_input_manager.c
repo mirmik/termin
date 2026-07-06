@@ -59,21 +59,6 @@ static void dispatch_to_internal_entities(
     }
 }
 
-static void dispatch_to_overlay_internal_entities(
-    tc_viewport_handle viewport,
-    tc_component_iter_fn callback,
-    void* user_data
-) {
-    if (!tc_viewport_has_internal_entities(viewport)) return;
-
-    tc_entity_handle ent = tc_viewport_get_internal_entities(viewport);
-    tc_entity_pool* pool = tc_entity_pool_registry_get(ent.pool);
-
-    if (pool && tc_entity_id_valid(ent.id)) {
-        tc_entity_pool_foreach_overlay_input_handler_subtree(pool, ent.id, callback, user_data);
-    }
-}
-
 // ============================================================================
 // Scene Dispatch
 // ============================================================================
@@ -87,22 +72,6 @@ static void dispatch_to_scene(
     if (!tc_scene_handle_valid(scene)) return;
 
     tc_scene_foreach_input_handler(
-        scene,
-        callback,
-        user_data,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED
-    );
-}
-
-static void dispatch_to_overlay_scene(
-    tc_viewport_handle viewport,
-    tc_component_iter_fn callback,
-    void* user_data
-) {
-    tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    if (!tc_scene_handle_valid(scene)) return;
-
-    tc_scene_foreach_overlay_input_handler(
         scene,
         callback,
         user_data,
@@ -130,11 +99,6 @@ static void vim_on_mouse_button(tc_input_manager* self, int button, int action, 
     tc_mouse_button_event_init(&event, m->viewport,
         m->last_cursor_x, m->last_cursor_y, button, action, mods);
 
-    dispatch_to_overlay_internal_entities(m->viewport, dispatch_mouse_button_cb, &event);
-    if (event.handled) return;
-    dispatch_to_overlay_scene(m->viewport, dispatch_mouse_button_cb, &event);
-    if (event.handled) return;
-
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_button_cb, &event);
     if (event.handled) return;
     dispatch_to_scene(m->viewport, dispatch_mouse_button_cb, &event);
@@ -156,11 +120,6 @@ static void vim_on_mouse_move(tc_input_manager* self, double x, double y) {
     tc_mouse_move_event event;
     tc_mouse_move_event_init(&event, m->viewport, x, y, dx, dy);
 
-    dispatch_to_overlay_internal_entities(m->viewport, dispatch_mouse_move_cb, &event);
-    if (event.handled) return;
-    dispatch_to_overlay_scene(m->viewport, dispatch_mouse_move_cb, &event);
-    if (event.handled) return;
-
     dispatch_to_internal_entities(m->viewport, dispatch_mouse_move_cb, &event);
     if (event.handled) return;
     dispatch_to_scene(m->viewport, dispatch_mouse_move_cb, &event);
@@ -174,11 +133,6 @@ static void vim_on_scroll(tc_input_manager* self, double xoffset, double yoffset
     tc_scroll_event_init(&event, m->viewport,
         m->last_cursor_x, m->last_cursor_y, xoffset, yoffset, mods);
 
-    dispatch_to_overlay_internal_entities(m->viewport, dispatch_scroll_cb, &event);
-    if (event.handled) return;
-    dispatch_to_overlay_scene(m->viewport, dispatch_scroll_cb, &event);
-    if (event.handled) return;
-
     dispatch_to_internal_entities(m->viewport, dispatch_scroll_cb, &event);
     if (event.handled) return;
     dispatch_to_scene(m->viewport, dispatch_scroll_cb, &event);
@@ -190,11 +144,6 @@ static void vim_on_key(tc_input_manager* self, int key, int scancode, int action
 
     tc_key_event event;
     tc_key_event_init(&event, m->viewport, key, scancode, action, mods);
-
-    dispatch_to_overlay_internal_entities(m->viewport, dispatch_key_cb, &event);
-    if (event.handled) return;
-    dispatch_to_overlay_scene(m->viewport, dispatch_key_cb, &event);
-    if (event.handled) return;
 
     dispatch_to_internal_entities(m->viewport, dispatch_key_cb, &event);
     if (event.handled) return;
