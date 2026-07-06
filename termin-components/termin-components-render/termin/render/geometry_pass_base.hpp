@@ -82,6 +82,10 @@ protected:
 
 public:
     std::vector<std::string> get_internal_symbols() const override;
+    void collect_shader_usages(
+        tc_scene_handle scene,
+        const std::function<void(TcShader)>& emit
+    ) const override;
     std::set<const char*> compute_reads() const override;
     std::set<const char*> compute_writes() const override;
     std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
@@ -93,6 +97,7 @@ protected:
     virtual const char* phase_mark() const = 0;
     virtual bool uses_material_phase_shader_override() const;
     virtual MaterialPipelinePassContract shader_pass_contract() const = 0;
+    virtual tc_shader_handle shader_usage_base_shader() const = 0;
     virtual std::optional<std::string> fbo_format() const;
 
     virtual bool entity_filter(const Entity& ent) const;

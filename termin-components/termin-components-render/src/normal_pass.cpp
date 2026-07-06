@@ -74,6 +74,14 @@ MaterialPipelinePassContract NormalPass::shader_pass_contract() const {
     return normal_material_pass_contract();
 }
 
+tc_shader_handle NormalPass::shader_usage_base_shader() const {
+    if (tc_shader_handle_is_invalid(normal_shader_handle_)) {
+        normal_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(NORMAL_ENGINE_SHADER_UUID);
+    }
+    return normal_shader_handle_;
+}
+
 void NormalPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
 

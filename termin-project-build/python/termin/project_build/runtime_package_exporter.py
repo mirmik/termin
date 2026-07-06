@@ -18,6 +18,7 @@ under the explicit `dev_smoke` resource policy.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,7 @@ from termin.project_build.runtime_package.materials import (
     export_material_spec,
     fallback_material_spec,
     material_textures_to_json as _material_textures_to_json,
+    shader_to_spec as _shader_to_spec,
     write_materials,
 )
 from termin.project_build.runtime_package.package_files import (
@@ -39,7 +41,10 @@ from termin.project_build.runtime_package.package_files import (
     write_clean_package_dir as _write_clean_package_dir,
     write_json as _write_json,
 )
-from termin.project_build.runtime_package.pipelines import write_pipelines as _write_pipelines
+from termin.project_build.runtime_package.pipelines import (
+    safe_package_stem as _safe_pipeline_package_stem,
+    write_pipelines as _write_pipelines,
+)
 from termin.project_build.runtime_package.scene_refs import (
     collect_project_material_refs as _collect_project_material_refs,
     collect_runtime_refs as _collect_runtime_refs,
@@ -122,6 +127,7 @@ def export_runtime_package(
         resource_policy,
     )
     _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
+    _collect_pipeline_shader_usages(output_dir_path, scene_data, refs.pipelines, diagnostics, shaders)
     if not shaders:
         shaders[DEFAULT_SHADER_UUID] = _default_shader_spec(default_shader_language)
     _write_shaders(
@@ -160,6 +166,80 @@ def export_runtime_package(
         scene_path=scene_path,
         diagnostics=diagnostics,
     )
+
+
+def _collect_pipeline_shader_usages(
+    package_dir: Path,
+    scene_data: dict[str, Any],
+    pipelines: dict[str, str],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    shaders: dict[str, _ShaderSpec],
+) -> None:
+    if not pipelines:
+        return
+
+    try:
+        from termin.bootstrap import bootstrap_player
+        from termin.default_assets.resource_manager import DefaultResourceManager
+        from termin.engine import deserialize_scene, destroy_scene
+        from termin.render_framework import RenderPipeline, collect_shader_usages_for_pipeline
+
+        bootstrap_player()
+        resource_manager = DefaultResourceManager.instance()
+        resource_manager.register_builtin_frame_passes()
+    except Exception as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="error",
+                path="pipelines",
+                message=f"Runtime exporter failed to initialize pipeline shader usage collection: {exc}",
+            )
+        )
+        return
+
+    scene = None
+    try:
+        scene = deserialize_scene(scene_data, "runtime-package-shader-usage")
+    except Exception as exc:
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                level="error",
+                path="scene.json",
+                message=f"Runtime exporter failed to deserialize scene for shader usage collection: {exc}",
+            )
+        )
+        return
+
+    try:
+        for uuid_value, name in sorted(pipelines.items()):
+            target_name = _safe_pipeline_package_stem(uuid_value or name)
+            pipeline_rel = f"pipelines/{target_name}.pipeline.json"
+            pipeline_path = package_dir / pipeline_rel
+            if not pipeline_path.exists():
+                continue
+
+            try:
+                with open(pipeline_path, "r", encoding="utf-8") as f:
+                    pipeline_data = json.load(f)
+                if not isinstance(pipeline_data, dict):
+                    raise ValueError("pipeline JSON root must be an object")
+
+                pipeline = RenderPipeline.deserialize(pipeline_data, resource_manager)
+                try:
+                    for shader in collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline):
+                        shaders[shader.uuid] = _shader_to_spec(shader)
+                finally:
+                    pipeline.destroy()
+            except Exception as exc:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        level="error",
+                        path=pipeline_rel,
+                        message=f"Runtime exporter failed to collect pipeline shader usages: {exc}",
+                    )
+                )
+    finally:
+        destroy_scene(scene)
 
 
 def _validate_resource_policy(resource_policy: str) -> None:

@@ -221,6 +221,12 @@ struct CollectShadowDrawCallsData {
     MaterialPipelinePassContract pass_contract;
 };
 
+struct CollectShadowShaderUsagesData {
+    tc_shader_handle base_shader = tc_shader_handle_invalid();
+    MaterialPipelinePassContract pass_contract;
+    const std::function<void(TcShader)>* emit = nullptr;
+};
+
 bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
     auto* data = static_cast<CollectShadowDrawCallsData*>(user_data);
 
@@ -263,6 +269,39 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
     return true;
 }
 
+bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
+    auto* data = static_cast<CollectShadowShaderUsagesData*>(user_data);
+    if (!tc || !data || !data->emit) {
+        return true;
+    }
+
+    if (!tc_component_has_phase(tc, "shadow")) {
+        return true;
+    }
+
+    void* draws_ptr = tc_component_get_geometry_draws(tc, "shadow");
+    if (!draws_ptr) {
+        return true;
+    }
+
+    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+    for (const auto& gd : *geometry_draws) {
+        tc_material_phase* phase = gd.resolve_phase();
+        if (!phase) {
+            continue;
+        }
+
+        ShaderOverrideContext override_context;
+        override_context.phase_mark = "shadow";
+        override_context.geometry_id = gd.geometry_id;
+        override_context.original_shader = TcShader(data->base_shader);
+        override_context.pass_contract = data->pass_contract;
+        collect_drawable_shader_usages_with_context(tc, override_context, *data->emit);
+    }
+
+    return true;
+}
+
 } // anonymous namespace
 
 void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_mask) {
@@ -284,6 +323,40 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
                      | TC_SCENE_FILTER_VISIBLE
                      | TC_SCENE_FILTER_ENTITY_ENABLED;
     tc_scene_foreach_drawable(scene, collect_shadow_drawable_draw_calls, &data, filter_flags, layer_mask);
+}
+
+void ShadowPass::collect_shader_usages(
+    tc_scene_handle scene,
+    const std::function<void(TcShader)>& emit
+) const {
+    if (!emit) {
+        return;
+    }
+    if (!tc_scene_handle_valid(scene)) {
+        tc::Log::error("[ShadowPass] cannot collect shader usages for invalid scene");
+        return;
+    }
+
+    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+        shadow_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(SHADOW_ENGINE_SHADER_UUID);
+    }
+    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+        tc::Log::error("[ShadowPass] cannot collect shader usages without a valid base shader");
+        return;
+    }
+
+    CollectShadowShaderUsagesData data;
+    data.base_shader = shadow_shader_handle_;
+    data.pass_contract = shadow_material_pass_contract();
+    data.emit = &emit;
+
+    tc_scene_foreach_drawable(
+        scene,
+        collect_shadow_drawable_shader_usages,
+        &data,
+        TC_SCENE_FILTER_NONE,
+        0);
 }
 
 void ShadowPass::sort_draw_calls_by_shader() {
