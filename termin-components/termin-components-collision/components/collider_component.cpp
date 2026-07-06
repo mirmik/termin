@@ -263,7 +263,7 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
         // Capsule: height = size.z, radius = min(size.x, size.y) / 2
         double radius = std::min(box_size.x, box_size.y) / 2.0;
         double half_height = box_size.z / 2.0;
-        return std::make_unique<colliders::CapsuleCollider>(radius, half_height);
+        return std::make_unique<colliders::CapsuleCollider>(half_height, radius);
     }
     else if (collider_type == "ConvexHull") {
         tc_mesh* m = nullptr;

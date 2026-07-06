@@ -6,6 +6,7 @@
 
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <termin/entity/entity.hpp>
 #include "termin/entity/cmp_ref.hpp"
 #include "termin/animation/tc_animation_handle.hpp"
 #include "termin/animation/termin_components_animation_api.hpp"
@@ -24,6 +25,9 @@ public:
     // Clip handles for serialization
     std::vector<animation::TcAnimationClip> clips;
 
+    // Non-bone entity targets imported from animation node hierarchies.
+    std::vector<Entity> node_targets;
+
     // Current clip name (for serialization, underscore prefix for compatibility)
     std::string _current_clip_name;
 
@@ -41,9 +45,14 @@ private:
     // Target skeleton controller (CmpRef validates entity liveness)
     CmpRef<SkeletonController> _target_skeleton_controller;
 
-    // Cached bone index mapping: channel index -> bone index
+    struct ChannelMapping {
+        int bone_index = -1;
+        Entity node_entity;
+    };
+
+    // Cached target mapping: channel index -> skeleton bone or node entity
     // Rebuilt when clip changes
-    std::vector<int> _channel_to_bone;
+    std::vector<ChannelMapping> _channel_mappings;
 
     // Cached samples buffer for reuse
     std::vector<tc_channel_sample> _samples_buffer;
@@ -95,8 +104,11 @@ private:
     // Find SkeletonController on entity
     void _acquire_skeleton();
 
-    // Build channel-to-bone mapping for current clip
+    // Build channel target mapping for current clip
     void _build_channel_mapping();
+
+    // Resolve non-bone target entity by channel target name
+    Entity _find_node_target(const char* target_name) const;
 
     // Apply animation sample to skeleton
     void _apply_sample(const tc_channel_sample* samples, size_t count);

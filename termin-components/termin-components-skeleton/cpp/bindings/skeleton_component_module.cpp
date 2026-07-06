@@ -1,4 +1,5 @@
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
@@ -62,6 +63,16 @@ void bind_skeleton_controller(nb::module_& m) {
                 }
                 self.set_bone_entities(std::move(vec));
             })
+        .def_prop_rw("skeleton_root",
+            [](const termin::SkeletonController& self) -> nb::object {
+                if (self.skeleton_root.valid()) {
+                    return nb::cast(self.skeleton_root);
+                }
+                return nb::none();
+            },
+            [](termin::SkeletonController& self, std::optional<termin::Entity> root) {
+                self.set_skeleton_root(root.value_or(termin::Entity()));
+            })
         .def_prop_ro("skeleton_instance",
             &termin::SkeletonController::skeleton_instance,
             nb::rv_policy::reference)
@@ -75,6 +86,7 @@ void bind_skeleton_controller(nb::module_& m) {
             }
             self.set_bone_entities(std::move(vec));
         })
+        .def("set_skeleton_root", &termin::SkeletonController::set_skeleton_root)
         .def("invalidate_instance", &termin::SkeletonController::invalidate_instance);
 }
 

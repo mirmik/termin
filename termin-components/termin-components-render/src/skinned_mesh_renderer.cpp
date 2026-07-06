@@ -146,21 +146,31 @@ void SkinnedMeshRenderer::resolve_skeleton_controller() {
 
     Entity owner = entity();
 
-    // After deserialization, skeleton_controller may be null. Prefer the
-    // parent controller used by imported GLB hierarchies, then the same entity.
-    Entity parent_entity = owner.parent();
-    if (parent_entity.valid()) {
-        Component* controller = parent_entity.get_component_by_type("SkeletonController");
+    auto try_resolve_on_entity = [this](Entity candidate) -> bool {
+        if (!candidate.valid()) {
+            return false;
+        }
+        Component* controller = candidate.get_component_by_type("SkeletonController");
         if (controller != nullptr) {
             _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
+            return _skeleton_controller.valid();
         }
+        return false;
+    };
+
+    if (try_resolve_on_entity(owner)) {
+        return;
     }
 
-    if (!_skeleton_controller.valid()) {
-        Component* controller = owner.get_component_by_type("SkeletonController");
-        if (controller != nullptr) {
-            _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
+    // Scene copy/deserialization does not preserve transient CmpRef values.
+    // Imported GLB meshes may be nested below Armature or intermediate nodes,
+    // while the SkeletonController lives on the model root.
+    Entity ancestor = owner.parent();
+    while (ancestor.valid()) {
+        if (try_resolve_on_entity(ancestor)) {
+            return;
         }
+        ancestor = ancestor.parent();
     }
 }
 
@@ -181,7 +191,16 @@ void SkinnedMeshRenderer::update_bone_matrices() {
         return;
     }
 
-    // Get bone count (skeleton was already updated in SkeletonController::before_render)
+    // Skinning shader applies this renderer's u_model after bone matrices.
+    // Compute bones in renderer-local space to avoid mixing Armature/root space
+    // with per-mesh draw space.
+    if (entity().valid()) {
+        si->update(entity());
+    } else {
+        si->update();
+    }
+
+    // Get bone count
     _bone_count = si->bone_count();
     if (_bone_count == 0) {
         _bone_matrices_flat.clear();

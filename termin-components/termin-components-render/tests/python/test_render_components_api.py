@@ -89,6 +89,104 @@ def test_render_components_exports_camera_controller_and_material_pass_helpers()
     assert get_texture_inputs_for_material("(None)") == []
 
 
+def test_skinned_mesh_renderer_computes_bones_in_renderer_space():
+    from termin.scene import TcScene
+    from termin.geombase import Vec3
+    from termin.skeleton import TcSkeleton
+    from termin.skeleton_components import SkeletonController
+
+    skeleton = TcSkeleton.create("Renderer Space Skeleton", f"renderer-space-skeleton-{uuid4()}")
+    skeleton.alloc_bones(1)
+    bone = skeleton.get_bone(0)
+    bone.name = "root"
+    bone.index = 0
+    bone.parent_index = -1
+    bone.inverse_bind_matrix = [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+    skeleton.rebuild_roots()
+
+    scene = TcScene.create("skinned-renderer-space")
+    try:
+        armature = scene.create_entity("Armature")
+        armature.transform.set_local_position(Vec3(10.0, 0.0, 0.0))
+
+        bone_entity = scene.create_entity("root")
+        bone_entity.transform.set_local_position(Vec3(5.0, 0.0, 0.0))
+        bone_entity.set_parent(armature)
+
+        mesh_entity = scene.create_entity("Body")
+        mesh_entity.transform.set_local_position(Vec3(2.0, 0.0, 0.0))
+        mesh_entity.set_parent(armature)
+
+        controller = SkeletonController(skeleton, [bone_entity])
+        armature.add_component(controller)
+        renderer = SkinnedMeshRenderer(None, controller, True)
+        mesh_entity.add_component(renderer)
+
+        renderer.update_bone_matrices()
+
+        matrix = renderer.get_bone_matrices_flat().reshape(-1)
+        assert renderer._bone_count == 1
+        assert matrix[12] == pytest.approx(3.0)
+        assert matrix[13] == pytest.approx(0.0)
+        assert matrix[14] == pytest.approx(0.0)
+    finally:
+        scene.destroy()
+
+
+def test_skinned_mesh_renderer_resolves_skeleton_controller_from_ancestor():
+    from termin.scene import TcScene
+    from termin.geombase import Vec3
+    from termin.skeleton import TcSkeleton
+    from termin.skeleton_components import SkeletonController
+
+    skeleton = TcSkeleton.create("Ancestor Skeleton", f"ancestor-skeleton-{uuid4()}")
+    skeleton.alloc_bones(1)
+    bone = skeleton.get_bone(0)
+    bone.name = "root"
+    bone.index = 0
+    bone.parent_index = -1
+    bone.inverse_bind_matrix = [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ]
+    skeleton.rebuild_roots()
+
+    scene = TcScene.create("skinned-renderer-ancestor-controller")
+    try:
+        model = scene.create_entity("Model")
+        armature = scene.create_entity("Armature")
+        armature.set_parent(model)
+
+        bone_entity = scene.create_entity("root")
+        bone_entity.transform.set_local_position(Vec3(5.0, 0.0, 0.0))
+        bone_entity.set_parent(armature)
+
+        mesh_entity = scene.create_entity("Body")
+        mesh_entity.transform.set_local_position(Vec3(2.0, 0.0, 0.0))
+        mesh_entity.set_parent(armature)
+
+        controller = SkeletonController(skeleton, [bone_entity])
+        model.add_component(controller)
+        renderer = SkinnedMeshRenderer()
+        mesh_entity.add_component(renderer)
+
+        renderer.update_bone_matrices()
+
+        matrix = renderer.get_bone_matrices_flat().reshape(-1)
+        assert renderer.skeleton_controller is controller
+        assert renderer._bone_count == 1
+        assert matrix[12] == pytest.approx(3.0)
+    finally:
+        scene.destroy()
+
+
 def test_depth_and_normal_passes_expose_explicit_phase_mark():
     from termin.inspect import InspectRegistry
 
