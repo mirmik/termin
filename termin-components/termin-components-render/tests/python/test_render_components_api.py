@@ -18,6 +18,7 @@ from termin.render_components import (
     MaterialPass,
     MeshRenderer,
     NormalPass,
+    SkinnedMeshRenderer,
     WorldTextAnchor,
     WorldTextComponent,
     WorldTextOrientation,
@@ -66,6 +67,7 @@ def test_render_components_exports_camera_controller_and_material_pass_helpers()
 
     assert camera.projection_type == CameraProjection.Perspective
     assert CameraController.__name__ == "CameraController"
+    assert SkinnedMeshRenderer.__name__ == "SkinnedMeshRenderer"
     assert MaterialPass.inspect_fields["material"].kind == "tc_material"
     assert MaterialPass.get_texture_inputs_for_material is not None
     assert get_texture_inputs_for_material("(None)") == []

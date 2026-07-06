@@ -1637,6 +1637,195 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
 
 
 @full_runtime_package_exporter
+def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage(
+    tmp_path: Path,
+) -> None:
+    import tgfx
+    from termin.bootstrap import bootstrap_player
+    from termin.materials import TcMaterial
+    from termin.mesh import MeshComponent
+    from termin.render_components import SkinnedMeshRenderer
+    from termin.scene import TcScene
+    from termin.skeleton import TcSkeleton
+    from termin.skeleton_components import SkeletonController
+    from tmesh import TcAttribType, TcDrawMode, TcMesh, TcVertexLayout
+
+    bootstrap_player()
+
+    project = tmp_path / "SkinnedDepthPipelineGame"
+    project.mkdir()
+    pipeline_uuid = "skinned-depth-pipeline-uuid"
+    mesh_uuid = "skinned-depth-mesh-uuid"
+    material_uuid = "skinned-depth-material-uuid"
+    shader_uuid = "skinned-depth-shader-uuid"
+    skeleton_uuid = "skinned-depth-skeleton-uuid"
+
+    layout = TcVertexLayout()
+    layout.add("position", 3, TcAttribType.FLOAT32, 0)
+    layout.add("normal", 3, TcAttribType.FLOAT32, 1)
+    vertices = np.array(
+        [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ],
+        dtype=np.float32,
+    )
+    indices = np.array([0, 1, 2], dtype=np.uint32)
+    mesh = TcMesh.from_interleaved(
+        vertices,
+        3,
+        indices,
+        layout,
+        "Skinned Depth Triangle",
+        mesh_uuid,
+        TcDrawMode.TRIANGLES,
+    )
+    assert mesh.is_valid
+
+    material = TcMaterial.create("Skinned Depth Material", material_uuid)
+    assert material.is_valid
+    phase = material.add_phase_from_sources(
+        '[shader("vertex")] void main() {}\n',
+        '[shader("fragment")] void main() {}\n',
+        "",
+        "SkinnedDepthShader",
+        "opaque",
+        0,
+        shader_uuid=shader_uuid,
+    )
+    assert phase is not None
+    shader = tgfx.TcShader.from_uuid(shader_uuid)
+    assert shader.is_valid
+    shader.set_language(tgfx.ShaderLanguage.SLANG)
+    shader.set_artifact_policy(tgfx.ShaderArtifactPolicy.REQUIRED)
+
+    skeleton = TcSkeleton.create("Skinned Depth Skeleton", skeleton_uuid)
+    skeleton.alloc_bones(1)
+    bone = skeleton.get_bone(0)
+    bone.name = "root"
+    bone.index = 0
+    bone.parent_index = -1
+    bone.inverse_bind_matrix = [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]
+    skeleton.rebuild_roots()
+
+    scene = TcScene.create("skinned-depth-pipeline-scene")
+    try:
+        root = scene.create_entity("skinned")
+        bone_entity = scene.create_entity("root_bone")
+        controller = SkeletonController(skeleton, [bone_entity])
+        root.add_component(controller)
+
+        mesh_component = MeshComponent()
+        mesh_component.set_mesh(mesh)
+        root.add_component(mesh_component)
+        root.add_component(SkinnedMeshRenderer(material, controller, True))
+
+        scene_data = scene.serialize()
+        scene_data["uuid"] = "scene-uuid"
+        scene_data["render_mount"] = {
+            "render_target_configs": [
+                {
+                    "name": "MainTarget",
+                    "kind": "window",
+                    "pipeline_uuid": pipeline_uuid,
+                    "pipeline_name": "SkinnedDepthPipeline",
+                    "enabled": True,
+                }
+            ],
+        }
+        _write_json(project / "Main.scene", scene_data)
+
+        _write_json(
+            project / "SkinnedDepthPipeline.pipeline",
+            {
+                "name": "SkinnedDepthPipeline",
+                "passes": [
+                    {
+                        "type": "DepthPass",
+                        "pass_name": "Depth",
+                        "enabled": True,
+                        "passthrough": False,
+                        "viewport_name": "",
+                        "data": {
+                            "input_res": "empty_depth",
+                            "output_res": "depth",
+                            "camera_name": "",
+                            "phase_mark": "opaque",
+                            "depth_encoding": "linear",
+                            "clear": True,
+                        },
+                    }
+                ],
+                "pipeline_specs": [],
+            },
+        )
+        _write_json(project / "SkinnedDepthPipeline.pipeline.meta", {"uuid": pipeline_uuid})
+    finally:
+        scene.destroy()
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    shader_specs = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in (result.package_dir / "shaders").glob("*.shader.json")
+    ]
+    shader_names = {spec["name"] for spec in shader_specs}
+    assert "SkinnedDepthShader" in shader_names
+    skinned_depth_spec = next(
+        (
+            spec
+            for spec in shader_specs
+            if spec["name"].startswith("SkinnedDepthShader_Skinned_skinned_depth")
+        ),
+        None,
+    )
+    assert skinned_depth_spec is not None
+    assert skinned_depth_spec["language"] == "slang"
+    assert (
+        result.package_dir / skinned_depth_spec["artifacts"]["vulkan"]["vertex"]
+    ).read_bytes() == b"SPIRV"
+    assert not [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"]
+
+
+@full_runtime_package_exporter
 def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) -> None:
     project = tmp_path / "MalformedPipelineMetaGame"
     project.mkdir()

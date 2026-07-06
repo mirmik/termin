@@ -164,7 +164,33 @@ void SkinnedMeshRenderer::set_skeleton_controller(SkeletonController* controller
     _skeleton_controller.reset(controller);
 }
 
+void SkinnedMeshRenderer::resolve_skeleton_controller() {
+    if (_skeleton_controller.valid() || !entity().valid()) {
+        return;
+    }
+
+    Entity owner = entity();
+
+    // After deserialization, skeleton_controller may be null. Prefer the
+    // parent controller used by imported GLB hierarchies, then the same entity.
+    Entity parent_entity = owner.parent();
+    if (parent_entity.valid()) {
+        Component* controller = parent_entity.get_component_by_type("SkeletonController");
+        if (controller != nullptr) {
+            _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
+        }
+    }
+
+    if (!_skeleton_controller.valid()) {
+        Component* controller = owner.get_component_by_type("SkeletonController");
+        if (controller != nullptr) {
+            _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
+        }
+    }
+}
+
 SkeletonInstance* SkinnedMeshRenderer::skeleton_instance() {
+    resolve_skeleton_controller();
     SkeletonController* ctrl = _skeleton_controller.get();
     if (!ctrl) {
         return nullptr;
@@ -205,6 +231,7 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     int geometry_id
 ) {
     (void)geometry_id;
+    resolve_skeleton_controller();
     if (!_skeleton_controller.valid()) return;
 
     update_bone_matrices();
@@ -258,6 +285,7 @@ TcShader SkinnedMeshRenderer::override_shader_with_context(
     const int geometry_id = context.geometry_id;
     TcShader original_shader = context.original_shader;
 
+    resolve_skeleton_controller();
     if (!_skeleton_controller.valid() || !original_shader.is_valid()) {
         return original_shader;
     }
@@ -326,28 +354,7 @@ std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std:
 
 void SkinnedMeshRenderer::start() {
     Component::start();
-
-    // After deserialization, skeleton_controller may be null - try to find it
-    if (!_skeleton_controller.valid() && entity().valid()) {
-        // Look for SkeletonController by type name
-        // Check parent entity first (typical for GLB structure)
-        Entity parent_entity = entity().parent();
-
-        if (parent_entity.valid()) {
-            Component* controller = parent_entity.get_component_by_type("SkeletonController");
-            if (controller != nullptr) {
-                _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
-            }
-        }
-
-        // Also check current entity
-        if (!_skeleton_controller.valid()) {
-            Component* controller = entity().get_component_by_type("SkeletonController");
-            if (controller != nullptr) {
-                _skeleton_controller.reset(dynamic_cast<SkeletonController*>(controller));
-            }
-        }
-    }
+    resolve_skeleton_controller();
 }
 
 } // namespace termin
