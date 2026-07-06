@@ -22,6 +22,7 @@ typedef struct {
 
 TC_API void tc_component_set_python_input_callbacks(const tc_python_input_callbacks* callbacks);
 TC_API void tc_component_install_python_input_vtable(tc_component* c);
+TC_API void tc_component_install_python_overlay_input_vtable(tc_component* c);
 
 #ifdef __cplusplus
 }

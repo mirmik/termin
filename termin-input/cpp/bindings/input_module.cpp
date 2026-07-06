@@ -70,6 +70,10 @@ NB_MODULE(_input_native, m) {
         return tc_input_capability_id();
     }, "Get the input capability ID");
 
+    m.def("overlay_input_capability_id", []() {
+        return tc_overlay_input_capability_id();
+    }, "Get the overlay input capability ID");
+
     m.def("install_input_vtable", [](uintptr_t c_ptr) {
         auto* c = reinterpret_cast<tc_component*>(c_ptr);
         if (c) {
@@ -78,9 +82,23 @@ NB_MODULE(_input_native, m) {
     }, nb::arg("c_ptr"),
        "Install input vtable on a component (by raw pointer)");
 
+    m.def("install_overlay_input_vtable", [](uintptr_t c_ptr) {
+        auto* c = reinterpret_cast<tc_component*>(c_ptr);
+        if (c) {
+            tc_component_install_python_overlay_input_vtable(c);
+        }
+    }, nb::arg("c_ptr"),
+       "Install overlay input vtable on a component (by raw pointer)");
+
     m.def("is_input_handler", [](uintptr_t c_ptr) -> bool {
         auto* c = reinterpret_cast<tc_component*>(c_ptr);
         return c && tc_component_is_input_handler(c);
     }, nb::arg("c_ptr"),
        "Check if component is an input handler");
+
+    m.def("is_overlay_input_handler", [](uintptr_t c_ptr) -> bool {
+        auto* c = reinterpret_cast<tc_component*>(c_ptr);
+        return c && tc_component_is_overlay_input_handler(c);
+    }, nb::arg("c_ptr"),
+       "Check if component is an overlay input handler");
 }

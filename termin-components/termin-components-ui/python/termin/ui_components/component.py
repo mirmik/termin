@@ -23,6 +23,8 @@ class UIComponent(InputComponent):
     Multiple UIComponents can exist in a scene, rendered by priority.
     """
 
+    input_category = "overlay"
+
     inspect_fields = {
         "ui_layout": InspectField(
             path="ui_layout",
@@ -224,9 +226,9 @@ class UIComponent(InputComponent):
             self._viewport_h = ph
 
         if event.action == Action.PRESS.value:
-            self.mouse_down(event.x, event.y)
+            event.handled = event.handled or self.mouse_down(event.x, event.y)
         elif event.action == Action.RELEASE.value:
-            self.mouse_up(event.x, event.y)
+            event.handled = event.handled or self.mouse_up(event.x, event.y)
 
     def on_mouse_move(self, event: MouseMoveEvent):
         """Handle mouse move events from the input system."""
@@ -239,4 +241,4 @@ class UIComponent(InputComponent):
             self._viewport_w = pw
             self._viewport_h = ph
 
-        self.mouse_move(event.x, event.y)
+        event.handled = event.handled or self.mouse_move(event.x, event.y)

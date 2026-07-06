@@ -11,8 +11,11 @@ struct tc_component;
 struct tc_input_vtable;
 
 TC_API tc_component_cap_id tc_input_capability_id(void);
+TC_API tc_component_cap_id tc_overlay_input_capability_id(void);
 TC_API bool tc_input_capability_attach(struct tc_component* c, const struct tc_input_vtable* vtable);
+TC_API bool tc_overlay_input_capability_attach(struct tc_component* c, const struct tc_input_vtable* vtable);
 TC_API const struct tc_input_vtable* tc_input_capability_get(const struct tc_component* c);
+TC_API const struct tc_input_vtable* tc_overlay_input_capability_get(const struct tc_component* c);
 
 #ifdef __cplusplus
 }

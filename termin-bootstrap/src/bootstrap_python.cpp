@@ -204,6 +204,7 @@ void py_input_cb_on_mouse_button(void* py_self, tc_mouse_button_event* event) {
         MouseButtonEvent cpp_event(*event);
         nb::object py_event = nb::cast(cpp_event);
         self.attr("on_mouse_button")(py_event);
+        event->handled = nb::cast<bool>(py_event.attr("handled"));
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_mouse_button");
         PyErr_Print();
@@ -218,6 +219,7 @@ void py_input_cb_on_mouse_move(void* py_self, tc_mouse_move_event* event) {
         MouseMoveEvent cpp_event(*event);
         nb::object py_event = nb::cast(cpp_event);
         self.attr("on_mouse_move")(py_event);
+        event->handled = nb::cast<bool>(py_event.attr("handled"));
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_mouse_move");
         PyErr_Print();
@@ -232,6 +234,7 @@ void py_input_cb_on_scroll(void* py_self, tc_scroll_event* event) {
         ScrollEvent cpp_event(*event);
         nb::object py_event = nb::cast(cpp_event);
         self.attr("on_scroll")(py_event);
+        event->handled = nb::cast<bool>(py_event.attr("handled"));
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_scroll");
         PyErr_Print();
@@ -246,6 +249,7 @@ void py_input_cb_on_key(void* py_self, tc_key_event* event) {
         KeyEvent cpp_event(*event);
         nb::object py_event = nb::cast(cpp_event);
         self.attr("on_key")(py_event);
+        event->handled = nb::cast<bool>(py_event.attr("handled"));
     } catch (const std::exception& e) {
         tc::Log::error(e, "InputHandler::on_key");
         PyErr_Print();
