@@ -2,12 +2,19 @@
 
 GUARD_TEST_MAIN();
 
+#include <cstring>
 #include <vector>
 
+#include <components/mesh_component.hpp>
+#include <termin/render/mesh_renderer.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/tc_scene.hpp>
+#include <tgfx/tgfx_mesh_handle.hpp>
 
 extern "C" {
+#include <core/tc_drawable_protocol.h>
+#include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_shader_registry.h>
 }
 
@@ -91,6 +98,41 @@ bool has_variant(
     return false;
 }
 
+termin::TcMesh make_two_submesh_mesh()
+{
+    const float vertices[] = {
+        0.0f, 0.0f, 0.0f,
+        1.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f,
+        2.0f, 0.0f, 0.0f,
+        3.0f, 0.0f, 0.0f,
+        2.0f, 1.0f, 0.0f,
+    };
+    const uint32_t indices[] = {0, 1, 2, 3, 4, 5};
+    auto make_submesh = [](uint32_t first_index, uint32_t index_count, uint32_t material_slot, const char* name) {
+        tc_submesh submesh{};
+        submesh.first_index = first_index;
+        submesh.index_count = index_count;
+        submesh.material_slot = material_slot;
+        submesh.draw_mode = TC_DRAW_TRIANGLES;
+        std::strncpy(submesh.name, name, TC_SUBMESH_NAME_MAX - 1);
+        return submesh;
+    };
+    const std::vector<tc_submesh> submeshes = {
+        make_submesh(0, 3, 0, "left"),
+        make_submesh(3, 3, 1, "right"),
+    };
+    return termin::TcMesh::from_interleaved_with_submeshes(
+        vertices,
+        6,
+        indices,
+        6,
+        tc_vertex_layout_pos(),
+        submeshes,
+        "mesh-renderer-geometry-ids-test",
+        "mesh-renderer-geometry-ids-test");
+}
+
 } // namespace
 
 TEST_CASE("LineRenderer context-aware usage collection follows explicit pass contract") {
@@ -154,4 +196,36 @@ TEST_CASE("LineRenderer context-aware usage collection follows explicit pass con
     CHECK(has_variant(material_emitted, TC_SHADER_VARIANT_LINE_TUBE_CAP));
 
     tc_shader_shutdown();
+}
+
+TEST_CASE("MeshRenderer geometry ids are permissive for pass phase labels") {
+    tc_mesh_init();
+
+    termin::TcMesh mesh = make_two_submesh_mesh();
+    REQUIRE(mesh.is_valid());
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("mesh-renderer-geometry-ids");
+    termin::Entity entity = scene.create_entity("mesh");
+
+    auto* mesh_component = new termin::MeshComponent();
+    mesh_component->set_mesh(mesh);
+    entity.add_component(mesh_component);
+
+    auto* renderer = new termin::MeshRenderer();
+    entity.add_component(renderer);
+
+    termin::RenderContext context;
+    context.phase = "custom_depth";
+    void* ids_ptr = tc_component_get_geometry_ids_for_phase(
+        renderer->tc_component_ptr(),
+        &context,
+        "custom_depth");
+    REQUIRE(ids_ptr != nullptr);
+
+    auto* ids = static_cast<std::vector<int>*>(ids_ptr);
+    REQUIRE(ids->size() == 2u);
+    CHECK((*ids)[0] == 0);
+    CHECK((*ids)[1] == 1);
+
+    tc_mesh_shutdown();
 }

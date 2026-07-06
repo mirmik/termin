@@ -580,6 +580,8 @@ NB_MODULE(_components_render_native, m) {
             return marks;
         })
         .def("draw_geometry", &MeshRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
+        .def("get_geometry_ids_for_phase", &MeshRenderer::get_geometry_ids_for_phase,
+            nb::arg("context"), nb::arg("phase_mark"))
         .def("get_geometry_draws", [](MeshRenderer& self, RenderContext& context, nb::object phase_mark) {
             if (phase_mark.is_none()) {
                 return self.get_geometry_draws(context, nullptr);
