@@ -341,8 +341,16 @@ if(BUILD_TESTS)
 
     add_executable(termin_tests
         tests/main.cpp
+        termin/editor/component_editor_visual.cpp
+        termin/editor/camera_frustum_debug_gizmo.cpp
+        termin/editor/editor_interaction_system.cpp
+        termin/editor/editor_snap.cpp
+        termin/editor/gizmo_manager.cpp
         termin/editor/camera_frustum_math.cpp
+        termin/editor/transform_gizmo.cpp
+        termin/render/solid_primitive_renderer.cpp
         tests/tests_general_pose3.cpp
+        tests/tests_editor_interaction_system.cpp
         tests/tests_inspect_registry.cpp
         tests/tests_orbit_camera_controller.cpp
         tests/tests_camera_frustum_debug_gizmo.cpp
@@ -361,6 +369,13 @@ if(BUILD_TESTS)
         termin_input::termin_input
         termin_engine::termin_engine
         termin_components_render::termin_components_render
+        termin_components_collision::termin_components_collision
+        termin_components_kinematic::termin_components_kinematic
+        termin_collision::termin_collision
+        termin_render::termin_render
+        termin_render_passes::termin_render_passes
+        tgfx::termin_graphics
+        tgfx::termin_graphics2
         ${CMAKE_DL_LIBS}
     )
     target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)

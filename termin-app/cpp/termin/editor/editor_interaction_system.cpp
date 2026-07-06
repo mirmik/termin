@@ -226,27 +226,31 @@ void EditorInteractionSystem::on_mouse_button(
     int button, int action, int mods,
     float x, float y, tc_viewport_handle vp, tc_display* display)
 {
-    if (on_viewport_pointer_event) {
-        const std::string phase = action == TC_INPUT_PRESS ? "down" : "up";
-        if (on_viewport_pointer_event(phase, x, y, 0.0f, 0.0f, button, action, mods)) {
-            _request_update();
-            return;
-        }
+    const std::string phase = action == TC_INPUT_PRESS ? "down" : "up";
+    if (_dispatch_viewport_pointer(ViewportPointerEvent{
+            phase,
+            Vec2f{x, y},
+            Vec2f{0.0f, 0.0f},
+            button,
+            action,
+            mods})) {
+        _request_update();
+        return;
     }
 
     if (button == 0) { // LEFT
         if (action == TC_INPUT_PRESS) {
-            _pending_press = {x, y, vp, display, true};
+            _pending_press = {Vec2f{x, y}, vp, display, true};
 
             // Double-click detection
             double now = _current_time();
             if (now - _last_click_time < _double_click_threshold) {
-                _handle_double_click(x, y, vp, display);
+                _handle_double_click(Vec2f{x, y}, vp, display);
             }
             _last_click_time = now;
         }
         if (action == TC_INPUT_RELEASE) {
-            _pending_release = {x, y, vp, display, true};
+            _pending_release = {Vec2f{x, y}, vp, display, true};
             if (gizmo_manager.is_dragging()) {
                 gizmo_manager.on_mouse_up();
             }
@@ -260,19 +264,23 @@ void EditorInteractionSystem::on_mouse_move(
     float x, float y, float dx, float dy,
     tc_viewport_handle vp, tc_display* display)
 {
-    if (on_viewport_pointer_event) {
-        if (on_viewport_pointer_event("move", x, y, dx, dy, -1, -1, 0)) {
-            _request_update();
-            return;
-        }
+    if (_dispatch_viewport_pointer(ViewportPointerEvent{
+            "move",
+            Vec2f{x, y},
+            Vec2f{dx, dy},
+            -1,
+            -1,
+            0})) {
+        _request_update();
+        return;
     }
 
-    _pending_hover = {x, y, vp, display, true};
+    _pending_hover = {Vec2f{x, y}, vp, display, true};
 
     // Forward to gizmo manager for drag updates
     if (gizmo_manager.is_dragging() && tc_viewport_handle_valid(vp)) {
         Vec3f origin, direction;
-        if (_screen_to_ray(x, y, vp, display, origin, direction)) {
+        if (_screen_to_ray(Vec2f{x, y}, vp, display, origin, direction)) {
             gizmo_manager.on_mouse_move(origin, direction);
         }
     }
@@ -282,8 +290,7 @@ void EditorInteractionSystem::on_mouse_move(
 
 bool EditorInteractionSystem::handle_key_event(
     const KeyEvent& event,
-    float cursor_x,
-    float cursor_y,
+    Vec2f cursor,
     tc_viewport_handle viewport,
     tc_display* display)
 {
@@ -291,7 +298,7 @@ bool EditorInteractionSystem::handle_key_event(
         return false;
     }
     if (event.key == TC_KEY_T || event.key == 't' || event.key == 292) {
-        bool handled = _snap_transform_gizmo_target(cursor_x, cursor_y, viewport, display);
+        bool handled = _snap_transform_gizmo_target(cursor, viewport, display);
         if (!handled) {
             tc_log(TC_LOG_WARN, "[EditorSnap] snap hotkey was not handled");
         }
@@ -301,8 +308,7 @@ bool EditorInteractionSystem::handle_key_event(
 }
 
 bool EditorInteractionSystem::_snap_transform_gizmo_target(
-    float cursor_x,
-    float cursor_y,
+    Vec2f cursor,
     tc_viewport_handle viewport,
     tc_display* display)
 {
@@ -327,18 +333,14 @@ bool EditorInteractionSystem::_snap_transform_gizmo_target(
     request.reference_position = _transform_gizmo.snap_reference_position();
     request.scene = target_entity.scene().handle();
 
-    SurfacePickResult surface = pick_surface_at(cursor_x, cursor_y, viewport, display);
+    SurfacePickResult surface = pick_surface_at(cursor, viewport, display);
     if (surface.has_world_point) {
-        request.reference_position = Vec3{
-            surface.world_point[0],
-            surface.world_point[1],
-            surface.world_point[2],
-        };
+        request.reference_position = surface.world_point;
     } else {
         tc_log(TC_LOG_WARN,
                "[EditorSnap] no cursor surface reference at cursor=(%.1f, %.1f)",
-               cursor_x,
-               cursor_y);
+               cursor.x,
+               cursor.y);
         if (request.source == EditorSnapSource::VisibleGeometry) {
             return false;
         }
@@ -388,20 +390,19 @@ void EditorInteractionSystem::after_render() {
 }
 
 void EditorInteractionSystem::_process_pending_press() {
-    float x = _pending_press.x;
-    float y = _pending_press.y;
+    Vec2f screen = _pending_press.screen;
     tc_viewport_handle vp = _pending_press.vp;
     tc_display* display = _pending_press.display;
 
-    _press_x = x;
-    _press_y = y;
+    _press_x = screen.x;
+    _press_y = screen.y;
     _has_press = true;
     _gizmo_handled_press = false;
 
     if (!tc_viewport_handle_valid(vp)) return;
 
     Vec3f origin, direction;
-    if (_screen_to_ray(x, y, vp, display, origin, direction)) {
+    if (_screen_to_ray(screen, vp, display, origin, direction)) {
         bool handled = gizmo_manager.on_mouse_down(origin, direction);
         if (handled) {
             _gizmo_handled_press = true;
@@ -410,8 +411,7 @@ void EditorInteractionSystem::_process_pending_press() {
 }
 
 void EditorInteractionSystem::_process_pending_release() {
-    float x = _pending_release.x;
-    float y = _pending_release.y;
+    Vec2f screen = _pending_release.screen;
     tc_viewport_handle vp = _pending_release.vp;
     tc_display* display = _pending_release.display;
 
@@ -422,40 +422,32 @@ void EditorInteractionSystem::_process_pending_release() {
         return;
     }
 
-    // Click vs drag detection
-    if (_has_press) {
-        float dx = x - _press_x;
-        float dy = y - _press_y;
-        float dist_sq = dx * dx + dy * dy;
-        float threshold_sq = _click_threshold * _click_threshold;
-        if (dist_sq > threshold_sq) {
-            // Drag detected, skip selection
-            _has_press = false;
-            return;
-        }
-        _has_press = false;
+    if (!_has_press) {
+        return;
     }
+
+    // Click vs drag detection
+    Vec2f drag = screen - Vec2f{_press_x, _press_y};
+    float dist_sq = drag.norm_squared();
+    float threshold_sq = _click_threshold * _click_threshold;
+    if (dist_sq > threshold_sq) {
+        // Drag detected, skip selection
+        _has_press = false;
+        return;
+    }
+    _has_press = false;
 
     if (_async_release_pick.valid) {
         _request_update();
         return;
     }
-    if (_start_async_surface_pick(x, y, vp, display)) {
+    if (_start_async_surface_pick(screen, vp, display)) {
         _request_update();
         return;
     }
 
-    SurfacePickResult pick = pick_surface_at(x, y, vp, display);
-    if (on_entity_click && on_entity_click(
-            pick.entity, x, y, pick.has_world_point,
-            pick.world_point[0], pick.world_point[1], pick.world_point[2],
-            pick.depth, pick.view_depth,
-            pick.reproject_screen_error, pick.reproject_depth_error,
-            pick.has_mesh_hit,
-            pick.mesh_point[0], pick.mesh_point[1], pick.mesh_point[2],
-            pick.mesh_normal[0], pick.mesh_normal[1], pick.mesh_normal[2],
-            pick.mesh_triangle_index,
-            pick.mesh_indices[0], pick.mesh_indices[1], pick.mesh_indices[2])) {
+    SurfacePickResult pick = pick_surface_at(screen, vp, display);
+    if (_dispatch_entity_click(screen, pick)) {
         _request_update();
         return;
     }
@@ -466,8 +458,7 @@ void EditorInteractionSystem::_process_pending_release() {
 }
 
 void EditorInteractionSystem::_process_pending_hover() {
-    float x = _pending_hover.x;
-    float y = _pending_hover.y;
+    Vec2f screen = _pending_hover.screen;
     tc_viewport_handle vp = _pending_hover.vp;
     tc_display* display = _pending_hover.display;
 
@@ -476,7 +467,7 @@ void EditorInteractionSystem::_process_pending_hover() {
     // Update gizmo hover state (raycast-based)
     if (!gizmo_manager.is_dragging()) {
         Vec3f origin, direction;
-        if (_screen_to_ray(x, y, vp, display, origin, direction)) {
+        if (_screen_to_ray(screen, vp, display, origin, direction)) {
             gizmo_manager.on_mouse_move(origin, direction);
         }
     }
@@ -486,17 +477,32 @@ void EditorInteractionSystem::_process_pending_hover() {
         _request_update();
         return;
     }
-    if (_start_async_entity_pick(x, y, vp, display)) {
+    if (_start_async_entity_pick(screen, vp, display)) {
         _request_update();
         return;
     }
 
-    Entity ent = pick_entity_at(x, y, vp, display);
+    Entity ent = pick_entity_at(screen, vp, display);
     selection.hover(ent);
 }
 
+bool EditorInteractionSystem::_dispatch_entity_click(Vec2f screen, const SurfacePickResult& pick) {
+    if (!on_entity_click) {
+        return false;
+    }
+    EditorEntityClickEvent event;
+    event.entity = pick.entity;
+    event.screen = screen;
+    event.surface = pick;
+    return on_entity_click(event);
+}
+
+bool EditorInteractionSystem::_dispatch_viewport_pointer(const ViewportPointerEvent& event) {
+    return on_viewport_pointer_event ? on_viewport_pointer_event(event) : false;
+}
+
 bool EditorInteractionSystem::_start_async_entity_pick(
-    float x, float y, tc_viewport_handle vp, tc_display* display)
+    Vec2f screen, tc_viewport_handle vp, tc_display* display)
 {
     if (_async_hover_pick.valid || !tc_viewport_handle_valid(vp)) return false;
 
@@ -510,23 +516,21 @@ bool EditorInteractionSystem::_start_async_entity_pick(
     auto* dev = pipeline.tex2_device();
     if (!dev) return false;
 
-    int fx = 0;
-    int fy = 0;
-    if (!_window_to_fbo_coords(x, y, vp, display, fx, fy)) return false;
+    Vec2i fbo;
+    if (!_window_to_fbo_coords(screen, vp, display, fbo)) return false;
 
-    uint64_t color_request = dev->request_pixel_rgba8(id_tex, fx, fy);
+    uint64_t color_request = dev->request_pixel_rgba8(id_tex, fbo.x, fbo.y);
     if (color_request == 0) return false;
 
-    _async_hover_pick.event = {x, y, vp, display, true};
-    _async_hover_pick.fx = fx;
-    _async_hover_pick.fy = fy;
+    _async_hover_pick.event = {screen, vp, display, true};
+    _async_hover_pick.fbo = fbo;
     _async_hover_pick.color_request = color_request;
     _async_hover_pick.valid = true;
     return true;
 }
 
 bool EditorInteractionSystem::_start_async_surface_pick(
-    float x, float y, tc_viewport_handle vp, tc_display* display)
+    Vec2f screen, tc_viewport_handle vp, tc_display* display)
 {
     const bool debug_pick = picking_debug_enabled();
     if (_async_release_pick.valid || !tc_viewport_handle_valid(vp)) return false;
@@ -542,9 +546,8 @@ bool EditorInteractionSystem::_start_async_surface_pick(
     auto* dev = pipeline.tex2_device();
     if (!dev) return false;
 
-    int fx = 0;
-    int fy = 0;
-    if (!_window_to_fbo_coords(x, y, vp, display, fx, fy)) {
+    Vec2i fbo;
+    if (!_window_to_fbo_coords(screen, vp, display, fbo)) {
         if (debug_pick) {
             int vp_x = 0;
             int vp_y = 0;
@@ -553,20 +556,20 @@ bool EditorInteractionSystem::_start_async_surface_pick(
             tc_viewport_get_pixel_rect(vp, &vp_x, &vp_y, &vp_w, &vp_h);
             tc_log(TC_LOG_WARN,
                    "[PickingDebug] async release coords outside viewport: cursor=(%.1f,%.1f) viewport_rect=(%d,%d %dx%d)",
-                   x, y, vp_x, vp_y, vp_w, vp_h);
+                   screen.x, screen.y, vp_x, vp_y, vp_w, vp_h);
         }
         return false;
     }
 
-    uint64_t color_request = dev->request_pixel_rgba8(id_tex, fx, fy);
-    uint64_t depth_request = dev->request_pixel_depth_float(depth_tex, fx, fy);
+    uint64_t color_request = dev->request_pixel_rgba8(id_tex, fbo.x, fbo.y);
+    uint64_t depth_request = dev->request_pixel_depth_float(depth_tex, fbo.x, fbo.y);
     if (color_request == 0 || depth_request == 0) {
         if (debug_pick) {
             const tgfx::TextureDesc color_desc = dev->texture_desc(id_tex);
             const tgfx::TextureDesc depth_desc = dev->texture_desc(depth_tex);
             tc_log(TC_LOG_WARN,
                    "[PickingDebug] async release request failed: fbo=(%d,%d) color_req=%llu depth_req=%llu id_tex=%u size=%ux%u format=%d depth_tex=%u size=%ux%u format=%d",
-                   fx, fy,
+                   fbo.x, fbo.y,
                    static_cast<unsigned long long>(color_request),
                    static_cast<unsigned long long>(depth_request),
                    id_tex.id, color_desc.width, color_desc.height,
@@ -580,16 +583,15 @@ bool EditorInteractionSystem::_start_async_surface_pick(
         const tgfx::TextureDesc color_desc = dev->texture_desc(id_tex);
         tc_log(TC_LOG_INFO,
                "[PickingDebug] async release requested: cursor=(%.1f,%.1f) fbo=(%d,%d) color_req=%llu depth_req=%llu id_tex=%u size=%ux%u format=%d",
-               x, y, fx, fy,
+               screen.x, screen.y, fbo.x, fbo.y,
                static_cast<unsigned long long>(color_request),
                static_cast<unsigned long long>(depth_request),
                id_tex.id, color_desc.width, color_desc.height,
                static_cast<int>(color_desc.format));
     }
 
-    _async_release_pick.event = {x, y, vp, display, true};
-    _async_release_pick.fx = fx;
-    _async_release_pick.fy = fy;
+    _async_release_pick.event = {screen, vp, display, true};
+    _async_release_pick.fbo = fbo;
     _async_release_pick.color_request = color_request;
     _async_release_pick.depth_request = depth_request;
     _async_release_pick.color_ready = false;
@@ -672,7 +674,7 @@ void EditorInteractionSystem::_poll_async_release_pick() {
         tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
         tc_log(TC_LOG_INFO,
                "[PickingDebug] async release read: fbo=(%d,%d) rgb=(%d,%d,%d) pick_id=%d depth=%.6f viewport_scene=(%u,%u) rt_scene=(%u,%u)",
-               _async_release_pick.fx, _async_release_pick.fy,
+               _async_release_pick.fbo.x, _async_release_pick.fbo.y,
                r, g, b, pick_id, _async_release_pick.depth,
                viewport_scene.index, viewport_scene.generation,
                rt_scene.index, rt_scene.generation);
@@ -680,8 +682,7 @@ void EditorInteractionSystem::_poll_async_release_pick() {
     SurfacePickResult pick = _surface_from_pick_color_depth(
         _async_release_pick.color,
         _async_release_pick.depth,
-        _async_release_pick.fx,
-        _async_release_pick.fy,
+        _async_release_pick.fbo,
         event.vp);
     _async_release_pick.valid = false;
 
@@ -696,23 +697,11 @@ void EditorInteractionSystem::_poll_async_release_pick() {
                pick.has_mesh_hit ? 1 : 0);
     }
 
-    bool click_handled = false;
-    if (on_entity_click) {
-        click_handled = on_entity_click(
-            pick.entity, event.x, event.y, pick.has_world_point,
-            pick.world_point[0], pick.world_point[1], pick.world_point[2],
-            pick.depth, pick.view_depth,
-            pick.reproject_screen_error, pick.reproject_depth_error,
-            pick.has_mesh_hit,
-            pick.mesh_point[0], pick.mesh_point[1], pick.mesh_point[2],
-            pick.mesh_normal[0], pick.mesh_normal[1], pick.mesh_normal[2],
-            pick.mesh_triangle_index,
-            pick.mesh_indices[0], pick.mesh_indices[1], pick.mesh_indices[2]);
-        if (debug_pick) {
-            tc_log(TC_LOG_INFO,
-                   "[PickingDebug] async release callback: handled=%d",
-                   click_handled ? 1 : 0);
-        }
+    bool click_handled = _dispatch_entity_click(event.screen, pick);
+    if (debug_pick) {
+        tc_log(TC_LOG_INFO,
+               "[PickingDebug] async release callback: handled=%d",
+               click_handled ? 1 : 0);
     }
     if (click_handled) {
         _request_update();
@@ -735,9 +724,9 @@ void EditorInteractionSystem::_poll_async_release_pick() {
 // ============================================================================
 
 void EditorInteractionSystem::_handle_double_click(
-    float x, float y, tc_viewport_handle vp, tc_display* display)
+    Vec2f screen, tc_viewport_handle vp, tc_display* display)
 {
-    Entity ent = pick_entity_at(x, y, vp, display);
+    Entity ent = pick_entity_at(screen, vp, display);
     if (!ent.valid()) {
         return;
     }
@@ -782,7 +771,7 @@ void EditorInteractionSystem::_handle_double_click(
 // ============================================================================
 
 Entity EditorInteractionSystem::pick_entity_at(
-    float x, float y, tc_viewport_handle viewport, tc_display* display)
+    Vec2f screen, tc_viewport_handle viewport, tc_display* display)
 {
     if (!tc_viewport_handle_valid(viewport)) {
         tc_log(TC_LOG_INFO, "[DBG pick] viewport invalid"); return Entity();
@@ -801,11 +790,11 @@ Entity EditorInteractionSystem::pick_entity_at(
     auto* dev = pipeline.tex2_device();
     if (!dev) return Entity();
 
-    int fx, fy;
-    if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) return Entity();
+    Vec2i fbo;
+    if (!_window_to_fbo_coords(screen, viewport, display, fbo)) return Entity();
 
     float color[4] = {0, 0, 0, 0};
-    if (!dev->read_pixel_rgba8(id_tex, fx, fy, color)) return Entity();
+    if (!dev->read_pixel_rgba8(id_tex, fbo.x, fbo.y, color)) return Entity();
 
     return _entity_from_pick_color(color, viewport);
 }
@@ -833,7 +822,7 @@ Entity EditorInteractionSystem::_entity_from_pick_color(
 }
 
 SurfacePickResult EditorInteractionSystem::pick_surface_at(
-    float x, float y, tc_viewport_handle viewport, tc_display* display)
+    Vec2f screen, tc_viewport_handle viewport, tc_display* display)
 {
     SurfacePickResult result;
     const bool debug_pick = picking_debug_enabled();
@@ -871,8 +860,8 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
         return result;
     }
 
-    int fx, fy;
-    if (!_window_to_fbo_coords(x, y, viewport, display, fx, fy)) {
+    Vec2i fbo;
+    if (!_window_to_fbo_coords(screen, viewport, display, fbo)) {
         if (debug_pick) {
             int vp_x = 0;
             int vp_y = 0;
@@ -881,18 +870,18 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
             tc_viewport_get_pixel_rect(viewport, &vp_x, &vp_y, &vp_w, &vp_h);
             tc_log(TC_LOG_WARN,
                    "[PickingDebug] surface pick coords outside viewport: cursor=(%.1f,%.1f) viewport_rect=(%d,%d %dx%d)",
-                   x, y, vp_x, vp_y, vp_w, vp_h);
+                   screen.x, screen.y, vp_x, vp_y, vp_w, vp_h);
         }
         return result;
     }
 
     float color[4] = {0, 0, 0, 0};
-    if (!dev->read_pixel_rgba8(id_tex, fx, fy, color)) {
+    if (!dev->read_pixel_rgba8(id_tex, fbo.x, fbo.y, color)) {
         if (debug_pick) {
             const tgfx::TextureDesc desc = dev->texture_desc(id_tex);
             tc_log(TC_LOG_WARN,
                    "[PickingDebug] surface pick color read failed: fbo=(%d,%d) id_tex=%u size=%ux%u format=%d",
-                   fx, fy, id_tex.id, desc.width, desc.height,
+                   fbo.x, fbo.y, id_tex.id, desc.width, desc.height,
                    static_cast<int>(desc.format));
         }
         return result;
@@ -908,7 +897,7 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
         tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
         tc_log(TC_LOG_INFO,
                "[PickingDebug] surface pick read: cursor=(%.1f,%.1f) fbo=(%d,%d) id_tex=%u size=%ux%u format=%d rgb=(%d,%d,%d) pick_id=%d viewport_scene=(%u,%u) rt_scene=(%u,%u)",
-               x, y, fx, fy, id_tex.id, desc.width, desc.height,
+               screen.x, screen.y, fbo.x, fbo.y, id_tex.id, desc.width, desc.height,
                static_cast<int>(desc.format), r, g, b, pick_id,
                viewport_scene.index, viewport_scene.generation,
                rt_scene.index, rt_scene.generation);
@@ -955,12 +944,12 @@ SurfacePickResult EditorInteractionSystem::pick_surface_at(
     if (!depth_tex) return result;
 
     float depth = 1.0f;
-    if (!dev->read_pixel_depth_float(depth_tex, fx, fy, &depth)) return result;
-    return _surface_from_pick_color_depth(color, depth, fx, fy, viewport);
+    if (!dev->read_pixel_depth_float(depth_tex, fbo.x, fbo.y, &depth)) return result;
+    return _surface_from_pick_color_depth(color, depth, fbo, viewport);
 }
 
 SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
-    const float color[4], float depth, int fx, int fy, tc_viewport_handle viewport)
+    const float color[4], float depth, Vec2i fbo, tc_viewport_handle viewport)
 {
     SurfacePickResult result;
 
@@ -1030,8 +1019,8 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
     const double width = std::max(1.0, static_cast<double>(desc.width));
     const double height = std::max(1.0, static_cast<double>(desc.height));
 
-    const double nx = ((static_cast<double>(fx) + 0.5) / width) * 2.0 - 1.0;
-    const double ny = ((static_cast<double>(fy) + 0.5) / height) * 2.0 - 1.0;
+    const double nx = ((static_cast<double>(fbo.x) + 0.5) / width) * 2.0 - 1.0;
+    const double ny = ((static_cast<double>(fbo.y) + 0.5) / height) * 2.0 - 1.0;
 
     const double aspect = width / height;
     Mat44 view = camera->get_view_matrix();
@@ -1053,14 +1042,16 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
         const double reproj_x = ((clip_x / clip_w) + 1.0) * 0.5 * width - 0.5;
         const double reproj_y = ((clip_y / clip_w) + 1.0) * 0.5 * height - 0.5;
         const double reproj_depth = clip_z / clip_w;
-        const double dx = reproj_x - static_cast<double>(fx);
-        const double dy = reproj_y - static_cast<double>(fy);
-        result.reproject_screen_error = std::sqrt(dx * dx + dy * dy);
+        const Vec2 reproj_error{
+            reproj_x - static_cast<double>(fbo.x),
+            reproj_y - static_cast<double>(fbo.y)
+        };
+        result.reproject_screen_error = reproj_error.norm();
         result.reproject_depth_error = reproj_depth - static_cast<double>(depth);
     }
 
     result.has_world_point = true;
-    result.world_point = {world.x, world.y, world.z};
+    result.world_point = world;
     result.view_depth = view_point.y;
 
     MeshComponent* mesh_component = result.entity.get_component<MeshComponent>();
@@ -1106,13 +1097,13 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
             Vec3 world_normal = pose.to_pose3().transform_vector(entity_local_normal).normalized();
 
             result.has_mesh_hit = true;
-            result.mesh_point = {world_hit.x, world_hit.y, world_hit.z};
-            result.mesh_normal = {world_normal.x, world_normal.y, world_normal.z};
+            result.mesh_point = world_hit;
+            result.mesh_normal = world_normal;
             result.mesh_triangle_index = hit.triangle_index;
-            result.mesh_indices = std::array<uint32_t, 3>{
-                hit.indices[0],
-                hit.indices[1],
-                hit.indices[2]
+            result.mesh_indices = Vec3i{
+                static_cast<int>(hit.indices[0]),
+                static_cast<int>(hit.indices[1]),
+                static_cast<int>(hit.indices[2])
             };
         }
     }
@@ -1124,8 +1115,8 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
 // ============================================================================
 
 bool EditorInteractionSystem::_window_to_fbo_coords(
-    float x, float y, tc_viewport_handle vp,
-    tc_display* display, int& fx, int& fy)
+    Vec2f screen, tc_viewport_handle vp,
+    tc_display* display, Vec2i& fbo)
 {
     if (!display) return false;
 
@@ -1140,8 +1131,8 @@ bool EditorInteractionSystem::_window_to_fbo_coords(
 
     float sx = (float)fb_w / (float)win_w;
     float sy = (float)fb_h / (float)win_h;
-    float x_phys = x * sx;
-    float y_phys = y * sy;
+    float x_phys = screen.x * sx;
+    float y_phys = screen.y * sy;
 
     float vx = x_phys - vp_x;
     float vy = y_phys - vp_y;
@@ -1151,8 +1142,7 @@ bool EditorInteractionSystem::_window_to_fbo_coords(
     // Top-down pixel coordinates: same convention as mouse/window input,
     // and the one IRenderDevice::read_pixel_rgba8 expects. Each backend
     // flips internally if its readback API wants bottom-up (GL does).
-    fx = (int)vx;
-    fy = (int)vy;
+    fbo = Vec2i{(int)vx, (int)vy};
     return true;
 }
 
@@ -1161,7 +1151,7 @@ bool EditorInteractionSystem::_window_to_fbo_coords(
 // ============================================================================
 
 bool EditorInteractionSystem::_screen_to_ray(
-    float x, float y, tc_viewport_handle vp, tc_display* display,
+    Vec2f screen, tc_viewport_handle vp, tc_display* display,
     Vec3f& origin, Vec3f& direction)
 {
     (void)display;
@@ -1178,7 +1168,7 @@ bool EditorInteractionSystem::_screen_to_ray(
     int vp_x, vp_y, vp_w, vp_h;
     tc_viewport_get_pixel_rect(vp, &vp_x, &vp_y, &vp_w, &vp_h);
 
-    auto [orig, dir] = camera->screen_point_to_ray(x, y, vp_x, vp_y, vp_w, vp_h);
+    auto [orig, dir] = camera->screen_point_to_ray(screen.x, screen.y, vp_x, vp_y, vp_w, vp_h);
     origin = Vec3f{(float)orig.x, (float)orig.y, (float)orig.z};
     direction = Vec3f{(float)dir.x, (float)dir.y, (float)dir.z};
     return true;

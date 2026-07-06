@@ -65,7 +65,7 @@ class ViewportGeometryController:
         self,
         x: float,
         y: float,
-    ) -> tuple[float, float, float]:
+    ) -> Vec3:
         fallback = self.fallback_drop_position()
         interaction_system = self._get_interaction_system()
         editor_display = self._get_editor_display()
@@ -92,20 +92,19 @@ class ViewportGeometryController:
         except Exception as e:
             log.error(f"[ViewportGeometryController] GLB viewport drop pick failed: {e}")
             return fallback
-        if bool(pick["has_world_point"]):
-            point = pick["world_point"]
-            return (float(point[0]), float(point[1]), float(point[2]))
+        if pick.has_world_point:
+            return pick.world_point
         return fallback
 
-    def fallback_drop_position(self) -> tuple[float, float, float]:
+    def fallback_drop_position(self) -> Vec3:
         camera = self._get_camera()
         if camera is None or camera.entity is None:
-            return (0.0, 0.0, 0.0)
+            return Vec3(0.0, 0.0, 0.0)
         cam_pose = camera.entity.transform.global_pose()
         cam_pos = cam_pose.lin
         rot = cam_pose.rotation_matrix()
         forward = rot[:, 1]
-        return (
+        return Vec3(
             float(cam_pos[0] + forward[0] * 5.0),
             float(cam_pos[1] + forward[1] * 5.0),
             float(cam_pos[2] + forward[2] * 5.0),
@@ -115,12 +114,12 @@ class ViewportGeometryController:
         self,
         x: float,
         y: float,
-    ) -> tuple[float, float, float] | None:
+    ) -> Vec3 | None:
         return self.world_point_on_plane(
             x,
             y,
-            (0.0, 0.0, 0.0),
-            (0.0, 0.0, 1.0),
+            Vec3(0.0, 0.0, 0.0),
+            Vec3(0.0, 0.0, 1.0),
             "OXY plane",
         )
 
@@ -128,7 +127,7 @@ class ViewportGeometryController:
         self,
         x: float,
         y: float,
-    ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+    ) -> tuple[Vec3, Vec3] | None:
         camera = self._get_camera()
         viewport_widget = self._get_viewport_widget()
         if camera is None or camera.entity is None:
@@ -141,19 +140,14 @@ class ViewportGeometryController:
         viewport_rect = self._viewport_rect(viewport_widget)
         try:
             ray = camera.screen_point_to_ray(float(x), float(y), viewport_rect)
-            origin = ray.origin
-            direction = ray.direction
-            return (
-                (float(origin[0]), float(origin[1]), float(origin[2])),
-                (float(direction[0]), float(direction[1]), float(direction[2])),
-            )
+            return (ray.origin, ray.direction)
         except Exception as e:
             log.error(f"[ViewportGeometryController] viewport ray failed: {e}")
             return None
 
     def project_world_point_to_viewport(
         self,
-        point: tuple[float, float, float],
+        point: Vec3,
     ) -> tuple[float, float] | None:
         camera = self._get_camera()
         viewport_widget = self._get_viewport_widget()
@@ -177,7 +171,7 @@ class ViewportGeometryController:
             view = camera.get_view_matrix().to_numpy()
             projection = camera.get_projection_matrix().to_numpy()
             clip = projection @ view @ np.array(
-                (float(point[0]), float(point[1]), float(point[2]), 1.0),
+                (float(point.x), float(point.y), float(point.z), 1.0),
                 dtype=np.float64,
             )
         except Exception as e:
@@ -204,10 +198,10 @@ class ViewportGeometryController:
         self,
         x: float,
         y: float,
-        plane_origin: tuple[float, float, float],
-        plane_normal: tuple[float, float, float],
+        plane_origin: Vec3,
+        plane_normal: Vec3,
         label: str = "plane",
-    ) -> tuple[float, float, float] | None:
+    ) -> Vec3 | None:
         camera = self._get_camera()
         viewport_widget = self._get_viewport_widget()
         if camera is None or camera.entity is None:
@@ -228,27 +222,15 @@ class ViewportGeometryController:
             ray = camera.screen_point_to_ray(float(x), float(y), viewport_rect)
             origin = ray.origin
             direction = ray.direction
-            denom = (
-                float(direction[0]) * plane_normal[0]
-                + float(direction[1]) * plane_normal[1]
-                + float(direction[2]) * plane_normal[2]
-            )
+            denom = direction.dot(plane_normal)
             if abs(denom) < 1e-9:
                 log.error(
                     f"[ViewportGeometryController] {label} pick failed: "
                     "ray is parallel to plane"
                 )
                 return None
-            t = (
-                (plane_origin[0] - float(origin[0])) * plane_normal[0]
-                + (plane_origin[1] - float(origin[1])) * plane_normal[1]
-                + (plane_origin[2] - float(origin[2])) * plane_normal[2]
-            ) / denom
-            return (
-                float(origin[0] + direction[0] * t),
-                float(origin[1] + direction[1] * t),
-                float(origin[2] + direction[2] * t),
-            )
+            t = (plane_origin - origin).dot(plane_normal) / denom
+            return origin + direction * t
         except Exception as e:
             log.error(f"[ViewportGeometryController] {label} pick failed: {e}")
             return None
@@ -258,7 +240,7 @@ class ViewportGeometryController:
         x: float,
         y: float,
         entity,
-    ) -> tuple[float, float, float] | None:
+    ) -> Vec3 | None:
         if entity is None or not entity.valid():
             log.error(
                 "[ViewportGeometryController] entity local OXY plane pick "
@@ -271,8 +253,8 @@ class ViewportGeometryController:
         return self.world_point_on_plane(
             x,
             y,
-            (float(origin.x), float(origin.y), float(origin.z)),
-            (float(normal.x), float(normal.y), float(normal.z)),
+            origin,
+            normal,
             "entity local OXY plane",
         )
 

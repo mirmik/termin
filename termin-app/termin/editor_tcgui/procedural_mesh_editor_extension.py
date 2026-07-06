@@ -289,53 +289,22 @@ class ProceduralMeshEditorExtension:
         if self._editor_panel.operation_params_panel._ui is not None:
             self._editor_panel.operation_params_panel._ui.request_layout()
 
-    def _on_viewport_click(
-        self,
-        entity,
-        x: float,
-        y: float,
-        has_world_point: bool,
-        world_x: float,
-        world_y: float,
-        world_z: float,
-        depth: float,
-        view_depth: float,
-        reproject_screen_error: float,
-        reproject_depth_error: float,
-        has_mesh_hit: bool,
-        mesh_x: float,
-        mesh_y: float,
-        mesh_z: float,
-        normal_x: float,
-        normal_y: float,
-        normal_z: float,
-        triangle_index: int,
-        index0: int,
-        index1: int,
-        index2: int,
-    ) -> bool:
+    def _on_viewport_click(self, event) -> bool:
         if self._controller.mode == "idle":
             return False
         if not self._ensure_controller_document():
             return True
 
+        entity = event.entity
+        x = float(event.screen.x)
+        y = float(event.screen.y)
+        surface = event.surface
         picked_name = "<none>"
-        if entity.valid():
+        if entity is not None and entity.valid():
             picked_name = entity.name
 
         local_ray = self._local_ray_from_viewport(x, y)
-        fallback = self._click_fallback(
-            x,
-            y,
-            has_mesh_hit,
-            mesh_x,
-            mesh_y,
-            mesh_z,
-            has_world_point,
-            world_x,
-            world_y,
-            world_z,
-        )
+        fallback = self._click_fallback(x, y, surface)
         if fallback.point is None:
             log.error("[ProceduralMeshEditor] click ignored: no mesh hit and no OXY plane point")
             return True
@@ -368,24 +337,17 @@ class ProceduralMeshEditorExtension:
         log.info(
             "[ProceduralMeshEditor] viewport click "
             f"mode={self._controller.mode} screen=({x:.1f}, {y:.1f}) picked='{picked_name}' "
-            f"{fallback.kind}_world=({world_point[0]:.3f}, {world_point[1]:.3f}, {world_point[2]:.3f}) "
+            f"{fallback.kind}_world=({world_point.x:.3f}, {world_point.y:.3f}, {world_point.z:.3f}) "
             f"local=({local_point[0]:.3f}, {local_point[1]:.3f}, {local_point[2]:.3f}) "
-            f"tri={triangle_index} draft_points={len(self._controller.draft.points)}"
+            f"tri={surface.mesh_triangle_index} draft_points={len(self._controller.draft.points)}"
         )
         return True
 
-    def _on_viewport_pointer(
-        self,
-        phase: str,
-        x: float,
-        y: float,
-        dx: float,
-        dy: float,
-        button: int,
-        action: int,
-        mods: int,
-    ) -> bool:
-        del dx, dy, action, mods
+    def _on_viewport_pointer(self, event) -> bool:
+        phase = event.phase
+        x = float(event.screen.x)
+        y = float(event.screen.y)
+        button = int(event.button)
         if phase == "move":
             if self._wall_height_drag is not None:
                 return self._drag_wall_height_to_viewport(x, y)
@@ -545,8 +507,8 @@ class ProceduralMeshEditorExtension:
             return None
         origin, direction = world_ray
         pose = entity.transform.global_pose()
-        local_origin = pose.point_to_local(Vec3(origin[0], origin[1], origin[2]))
-        local_direction = pose.vector_to_local(Vec3(direction[0], direction[1], direction[2]))
+        local_origin = pose.point_to_local(origin)
+        local_direction = pose.vector_to_local(direction)
         return (
             (float(local_origin.x), float(local_origin.y), float(local_origin.z)),
             (float(local_direction.x), float(local_direction.y), float(local_direction.z)),
@@ -555,33 +517,25 @@ class ProceduralMeshEditorExtension:
     def _world_point_from_local(
         self,
         point: tuple[float, float, float],
-    ) -> tuple[float, float, float] | None:
+    ) -> Vec3 | None:
         entity = self._entity
         if entity is None or not entity.valid():
             log.error("[ProceduralMeshEditor] cannot convert point to world space: entity is not available")
             return None
         pose = entity.transform.global_pose()
-        world = pose.point_to_global(Vec3(point[0], point[1], point[2]))
-        return (float(world.x), float(world.y), float(world.z))
+        return pose.point_to_global(Vec3(point[0], point[1], point[2]))
 
     def _click_fallback(
         self,
         x: float,
         y: float,
-        has_mesh_hit: bool,
-        mesh_x: float,
-        mesh_y: float,
-        mesh_z: float,
-        has_world_point: bool,
-        world_x: float,
-        world_y: float,
-        world_z: float,
+        surface,
     ) -> _ClickFallback:
-        if has_mesh_hit:
-            local = self._local_point_from_world((float(mesh_x), float(mesh_y), float(mesh_z)))
+        if surface.has_mesh_hit:
+            local = self._local_point_from_world(surface.mesh_point)
             return _ClickFallback(local, None, "mesh")
-        if has_world_point:
-            local = self._local_point_from_world((float(world_x), float(world_y), float(world_z)))
+        if surface.has_world_point:
+            local = self._local_point_from_world(surface.world_point)
             return _ClickFallback(local, None, "world")
         editor = self._editor
         if editor is None:
@@ -596,14 +550,14 @@ class ProceduralMeshEditorExtension:
 
     def _local_point_from_world(
         self,
-        point: tuple[float, float, float],
+        point: Vec3,
     ) -> tuple[float, float, float] | None:
         entity = self._entity
         if entity is None or not entity.valid():
             log.error("[ProceduralMeshEditor] cannot convert point to local space: entity is not available")
             return None
         pose = entity.transform.global_pose()
-        local = pose.point_to_local(Vec3(point[0], point[1], point[2]))
+        local = pose.point_to_local(point)
         return (float(local.x), float(local.y), float(local.z))
 
     def _draw_overlay(self) -> None:

@@ -26,7 +26,7 @@ _COLOR_FAILED = Color4(1.00, 0.10, 0.60, 1.00)
 
 @dataclass
 class _DetourPathPoint:
-    point: tuple[float, float, float]
+    point: Vec3
     flags: int
     poly_ref: int
     poly_type: int
@@ -81,8 +81,8 @@ class _RawDetourPathInspectorPanel(VStack):
         self,
         *,
         enabled: bool,
-        start: tuple[float, float, float] | None,
-        end: tuple[float, float, float] | None,
+        start: Vec3 | None,
+        end: Vec3 | None,
         path_points: list[_DetourPathPoint],
         candidates: list[_CandidateInfo],
         selected_candidate: _CandidateInfo | None,
@@ -127,8 +127,8 @@ class RawDetourPathDebugTool:
     def __init__(self, editor) -> None:
         self._editor = editor
         self._enabled = False
-        self._start: tuple[float, float, float] | None = None
-        self._end: tuple[float, float, float] | None = None
+        self._start: Vec3 | None = None
+        self._end: Vec3 | None = None
         self._path_points: list[_DetourPathPoint] = []
         self._candidates: list[_CandidateInfo] = []
         self._selected_candidate: _CandidateInfo | None = None
@@ -167,60 +167,28 @@ class RawDetourPathDebugTool:
     def toggle(self) -> None:
         self.set_enabled(not self._enabled)
 
-    def _on_viewport_click(
-        self,
-        entity,
-        x: float,
-        y: float,
-        has_world_point: bool,
-        world_x: float,
-        world_y: float,
-        world_z: float,
-        depth: float,
-        view_depth: float,
-        reproject_screen_error: float,
-        reproject_depth_error: float,
-        has_mesh_hit: bool,
-        mesh_x: float,
-        mesh_y: float,
-        mesh_z: float,
-        normal_x: float,
-        normal_y: float,
-        normal_z: float,
-        triangle_index: int,
-        index0: int,
-        index1: int,
-        index2: int,
-    ) -> bool:
+    def _on_viewport_click(self, event) -> bool:
         if not self._enabled:
             return False
 
-        point = _click_point(
-            has_mesh_hit,
-            mesh_x,
-            mesh_y,
-            mesh_z,
-            has_world_point,
-            world_x,
-            world_y,
-            world_z,
-        )
+        point = _click_point(event.surface)
         if point is None:
             log.error("[RawDetourPathDebugTool] click ignored: no world point")
             return True
 
         self._accept_point(point)
+        entity = event.entity
         picked_name = "<none>"
-        if entity.valid():
+        if entity is not None and entity.valid():
             picked_name = entity.name
         log.info(
             "[RawDetourPathDebugTool] click: "
-            f"screen=({x:.1f}, {y:.1f}) picked='{picked_name}' "
-            f"point=({point[0]:.3f}, {point[1]:.3f}, {point[2]:.3f})"
+            f"screen=({event.screen.x:.1f}, {event.screen.y:.1f}) picked='{picked_name}' "
+            f"point={_format_point(point)}"
         )
         return True
 
-    def _accept_point(self, point: tuple[float, float, float]) -> None:
+    def _accept_point(self, point: Vec3) -> None:
         if self._start is None or self._end is not None:
             self._start = point
             self._end = None
@@ -289,8 +257,8 @@ class RawDetourPathDebugTool:
 
     def _find_path_result(
         self,
-        start: tuple[float, float, float],
-        end: tuple[float, float, float],
+        start: Vec3,
+        end: Vec3,
     ):
         scene = self._editor.scene
         if scene is None:
@@ -357,7 +325,7 @@ class RawDetourPathDebugTool:
 
         if len(self._path_points) < 2:
             if self._start is not None and self._end is not None:
-                renderer.line(_vec3(self._start), _vec3(self._end), _COLOR_FAILED, False)
+                renderer.line(self._start, self._end, _COLOR_FAILED, False)
             return
 
         for i in range(len(self._path_points) - 1):
@@ -369,7 +337,7 @@ class RawDetourPathDebugTool:
                 color = _COLOR_LINEAR
             else:
                 color = _COLOR_STANDARD
-            renderer.line(_vec3(a.point), _vec3(b.point), color, False)
+            renderer.line(a.point, b.point, color, False)
 
         for point in self._path_points:
             if point.off_mesh_connection:
@@ -381,20 +349,11 @@ class RawDetourPathDebugTool:
             _draw_marker(renderer, point.point, color, 0.09)
 
 
-def _click_point(
-    has_mesh_hit: bool,
-    mesh_x: float,
-    mesh_y: float,
-    mesh_z: float,
-    has_world_point: bool,
-    world_x: float,
-    world_y: float,
-    world_z: float,
-) -> tuple[float, float, float] | None:
-    if has_mesh_hit:
-        return (float(mesh_x), float(mesh_y), float(mesh_z))
-    if has_world_point:
-        return (float(world_x), float(world_y), float(world_z))
+def _click_point(surface) -> Vec3 | None:
+    if surface.has_mesh_hit:
+        return surface.mesh_point
+    if surface.has_world_point:
+        return surface.world_point
     return None
 
 
@@ -404,7 +363,7 @@ def _detailed_path_points(detailed_path) -> list[_DetourPathPoint]:
         p = item["point"]
         points.append(
             _DetourPathPoint(
-                point=(float(p[0]), float(p[1]), float(p[2])),
+                point=Vec3(float(p[0]), float(p[1]), float(p[2])),
                 flags=int(item["flags"]),
                 poly_ref=int(item["poly_ref"]),
                 poly_type=int(item["poly_type"]),
@@ -445,19 +404,15 @@ def _append_candidate_lines(
     )
 
 
-def _format_optional_point(point: tuple[float, float, float] | None) -> str:
+def _format_optional_point(point: Vec3 | None) -> str:
     if point is None:
         return "<unset>"
     return _format_point(point)
 
 
-def _format_point(point: tuple[float, float, float]) -> str:
+def _format_point(point: Vec3) -> str:
     return f"({point[0]:.3f}, {point[1]:.3f}, {point[2]:.3f})"
 
 
-def _draw_marker(renderer, point: tuple[float, float, float], color: Color4, radius: float) -> None:
-    renderer.sphere_wireframe(_vec3(point), radius, color, 8, False)
-
-
-def _vec3(point: tuple[float, float, float]) -> Vec3:
-    return Vec3(point[0], point[1], point[2])
+def _draw_marker(renderer, point: Vec3, color: Color4, radius: float) -> None:
+    renderer.sphere_wireframe(point, radius, color, 8, False)

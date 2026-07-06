@@ -13,11 +13,15 @@
 #include <tgfx2/immediate_renderer.hpp>
 #include <tgfx2/render_context.hpp>
 
+#include <utility>
+
 namespace nb = nanobind;
 
 namespace termin {
 
 void bind_editor_interaction(nb::module_& m) {
+    nb::module_::import_("tcbase._geom_native");
+
     // SelectionManager
     nb::class_<SelectionManager>(m, "SelectionManager")
         .def_prop_ro("selected", &SelectionManager::selected)
@@ -57,6 +61,48 @@ void bind_editor_interaction(nb::module_& m) {
         .def("tc_input_manager_ptr", [](EditorViewportInputManager& s) {
             return reinterpret_cast<uintptr_t>(s.tc_input_manager_ptr());
         });
+
+    nb::class_<SurfacePickResult>(m, "SurfacePickResult")
+        .def(nb::init<>())
+        .def_prop_rw("entity",
+            [](const SurfacePickResult& r) -> nb::object {
+                return r.entity.valid() ? nb::cast(r.entity) : nb::none();
+            },
+            [](SurfacePickResult& r, nb::object obj) {
+                r.entity = obj.is_none() ? Entity() : nb::cast<Entity>(obj);
+            })
+        .def_rw("has_world_point", &SurfacePickResult::has_world_point)
+        .def_rw("world_point", &SurfacePickResult::world_point)
+        .def_rw("depth", &SurfacePickResult::depth)
+        .def_rw("view_depth", &SurfacePickResult::view_depth)
+        .def_rw("reproject_screen_error", &SurfacePickResult::reproject_screen_error)
+        .def_rw("reproject_depth_error", &SurfacePickResult::reproject_depth_error)
+        .def_rw("has_mesh_hit", &SurfacePickResult::has_mesh_hit)
+        .def_rw("mesh_point", &SurfacePickResult::mesh_point)
+        .def_rw("mesh_normal", &SurfacePickResult::mesh_normal)
+        .def_rw("mesh_triangle_index", &SurfacePickResult::mesh_triangle_index)
+        .def_rw("mesh_indices", &SurfacePickResult::mesh_indices);
+
+    nb::class_<EditorEntityClickEvent>(m, "EditorEntityClickEvent")
+        .def(nb::init<>())
+        .def_prop_rw("entity",
+            [](const EditorEntityClickEvent& e) -> nb::object {
+                return e.entity.valid() ? nb::cast(e.entity) : nb::none();
+            },
+            [](EditorEntityClickEvent& e, nb::object obj) {
+                e.entity = obj.is_none() ? Entity() : nb::cast<Entity>(obj);
+            })
+        .def_rw("screen", &EditorEntityClickEvent::screen)
+        .def_rw("surface", &EditorEntityClickEvent::surface);
+
+    nb::class_<ViewportPointerEvent>(m, "ViewportPointerEvent")
+        .def(nb::init<>())
+        .def_rw("phase", &ViewportPointerEvent::phase)
+        .def_rw("screen", &ViewportPointerEvent::screen)
+        .def_rw("delta", &ViewportPointerEvent::delta)
+        .def_rw("button", &ViewportPointerEvent::button)
+        .def_rw("action", &ViewportPointerEvent::action)
+        .def_rw("mods", &ViewportPointerEvent::mods);
 
     // EditorInteractionSystem (singleton)
     nb::class_<EditorInteractionSystem>(m, "EditorInteractionSystem")
@@ -117,7 +163,7 @@ void bind_editor_interaction(nb::module_& m) {
             tc_viewport_handle vp;
             vp.index = vp_index;
             vp.generation = vp_generation;
-            return s.pick_entity_at(x, y, vp,
+            return s.pick_entity_at(Vec2f{x, y}, vp,
                 reinterpret_cast<tc_display*>(display_ptr));
         })
         .def("pick_surface_at", [](EditorInteractionSystem& s,
@@ -127,38 +173,8 @@ void bind_editor_interaction(nb::module_& m) {
             tc_viewport_handle vp;
             vp.index = vp_index;
             vp.generation = vp_generation;
-            SurfacePickResult result = s.pick_surface_at(
-                x, y, vp, reinterpret_cast<tc_display*>(display_ptr));
-            nb::dict d;
-            if (result.entity.valid()) {
-                d["entity"] = nb::cast(result.entity);
-            } else {
-                d["entity"] = nb::none();
-            }
-            d["has_world_point"] = result.has_world_point;
-            d["world_point"] = nb::make_tuple(
-                result.world_point[0],
-                result.world_point[1],
-                result.world_point[2]);
-            d["depth"] = result.depth;
-            d["view_depth"] = result.view_depth;
-            d["reproject_screen_error"] = result.reproject_screen_error;
-            d["reproject_depth_error"] = result.reproject_depth_error;
-            d["has_mesh_hit"] = result.has_mesh_hit;
-            d["mesh_point"] = nb::make_tuple(
-                result.mesh_point[0],
-                result.mesh_point[1],
-                result.mesh_point[2]);
-            d["mesh_normal"] = nb::make_tuple(
-                result.mesh_normal[0],
-                result.mesh_normal[1],
-                result.mesh_normal[2]);
-            d["mesh_triangle_index"] = result.mesh_triangle_index;
-            d["mesh_indices"] = nb::make_tuple(
-                result.mesh_indices[0],
-                result.mesh_indices[1],
-                result.mesh_indices[2]);
-            return d;
+            return s.pick_surface_at(
+                Vec2f{x, y}, vp, reinterpret_cast<tc_display*>(display_ptr));
         })
         .def_prop_rw("on_request_update",
             [](EditorInteractionSystem& s) { return s.on_request_update; },
@@ -178,16 +194,30 @@ void bind_editor_interaction(nb::module_& m) {
                 s.on_key = cb;
             })
         .def_prop_rw("on_entity_click",
-            [](EditorInteractionSystem& s) { return s.on_entity_click; },
-            [](EditorInteractionSystem& s,
-               std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t)> cb) {
-                s.on_entity_click = cb;
+            [](EditorInteractionSystem&) -> nb::object { return nb::none(); },
+            [](EditorInteractionSystem& s, nb::object cb) {
+                if (cb.is_none()) {
+                    s.on_entity_click = nullptr;
+                    return;
+                }
+                nb::callable fn = nb::cast<nb::callable>(cb);
+                s.on_entity_click = [fn = std::move(fn)](const EditorEntityClickEvent& event) -> bool {
+                    nb::gil_scoped_acquire gil;
+                    return nb::cast<bool>(fn(event));
+                };
             })
         .def_prop_rw("on_viewport_pointer_event",
-            [](EditorInteractionSystem& s) { return s.on_viewport_pointer_event; },
-            [](EditorInteractionSystem& s,
-               std::function<bool(const std::string&, float, float, float, float, int, int, int)> cb) {
-                s.on_viewport_pointer_event = cb;
+            [](EditorInteractionSystem&) -> nb::object { return nb::none(); },
+            [](EditorInteractionSystem& s, nb::object cb) {
+                if (cb.is_none()) {
+                    s.on_viewport_pointer_event = nullptr;
+                    return;
+                }
+                nb::callable fn = nb::cast<nb::callable>(cb);
+                s.on_viewport_pointer_event = [fn = std::move(fn)](const ViewportPointerEvent& event) -> bool {
+                    nb::gil_scoped_acquire gil;
+                    return nb::cast<bool>(fn(event));
+                };
             });
 }
 

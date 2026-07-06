@@ -67,28 +67,28 @@ class _Editor:
 
     def world_ray_from_viewport_point(self, x, y):
         return (
-            ((float(x) - 100.0) / 100.0, (float(y) - 100.0) / 100.0, 1.0),
-            (0.0, 0.0, -1.0),
+            Vec3((float(x) - 100.0) / 100.0, (float(y) - 100.0) / 100.0, 1.0),
+            Vec3(0.0, 0.0, -1.0),
         )
 
     def project_world_point_to_viewport(self, point):
         return (
-            100.0 + float(point[0]) * 100.0,
-            100.0 + float(point[1]) * 100.0,
+            100.0 + float(point.x) * 100.0,
+            100.0 + float(point.y) * 100.0,
         )
 
 
 class _HeightEditor(_Editor):
     def world_ray_from_viewport_point(self, x, y):
         return (
-            ((float(x) - 100.0) / 100.0 - 1.0, 0.0, (float(y) - 100.0) / 100.0),
-            (1.0, 0.0, 0.0),
+            Vec3((float(x) - 100.0) / 100.0 - 1.0, 0.0, (float(y) - 100.0) / 100.0),
+            Vec3(1.0, 0.0, 0.0),
         )
 
     def project_world_point_to_viewport(self, point):
         return (
-            100.0 + float(point[0]) * 100.0,
-            100.0 + float(point[2]) * 100.0,
+            100.0 + float(point.x) * 100.0,
+            100.0 + float(point.z) * 100.0,
         )
 
 
@@ -116,6 +116,26 @@ class _Entity:
 
     def valid(self):
         return True
+
+
+class _Screen:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+
+
+class _PointerEvent:
+    def __init__(self, phase, x, y, button=0, action=0, mods=0):
+        self.phase = phase
+        self.screen = _Screen(x, y)
+        self.delta = _Screen(0.0, 0.0)
+        self.button = button
+        self.action = action
+        self.mods = mods
+
+
+def _pointer(phase, x, y, button=0, action=0, mods=0):
+    return _PointerEvent(phase, x, y, button, action, mods)
 
 
 def test_procedural_mesh_editor_extension_uses_shared_controller_for_document_commands():
@@ -219,9 +239,9 @@ def test_procedural_mesh_editor_extension_drags_selected_contour_point_in_viewpo
     extension._apply_controller_result(extension._controller.select_node(("contour", contour.id)))
 
     assert editor.pointer_handlers == [extension._on_viewport_pointer]
-    assert extension._on_viewport_pointer("down", 200.0, 200.0, 0.0, 0.0, 0, 1, 0) is True
+    assert extension._on_viewport_pointer(_pointer("down", 200.0, 200.0, 0, 1, 0)) is True
     assert editor.viewport_tool_count == 1
-    assert extension._on_viewport_pointer("up", 250.0, 225.0, 0.0, 0.0, 0, 0, 0) is True
+    assert extension._on_viewport_pointer(_pointer("up", 250.0, 225.0, 0, 0, 0)) is True
 
     assert editor.viewport_tool_count == 0
     assert isclose(contour.points[2][0], 1.5, abs_tol=1.0e-6)
@@ -254,9 +274,9 @@ def test_procedural_mesh_editor_extension_drags_selected_wall_height_in_viewport
     extension.build_left_panel()
     extension._apply_controller_result(extension._controller.select_node(("operation", operation.id)))
 
-    assert extension._on_viewport_pointer("down", 200.0, 400.0, 0.0, 0.0, 0, 1, 0) is True
+    assert extension._on_viewport_pointer(_pointer("down", 200.0, 400.0, 0, 1, 0)) is True
     assert editor.viewport_tool_count == 1
-    assert extension._on_viewport_pointer("up", 200.0, 525.0, 0.0, 0.0, 0, 0, 0) is True
+    assert extension._on_viewport_pointer(_pointer("up", 200.0, 525.0, 0, 0, 0)) is True
 
     offsets = operation.params["corner_height_offsets"][path.id]
     assert editor.viewport_tool_count == 0
@@ -288,9 +308,9 @@ def test_procedural_mesh_editor_extension_drags_wall_source_path_point_when_wall
     extension.build_left_panel()
     extension._apply_controller_result(extension._controller.select_node(("operation", operation.id)))
 
-    assert extension._on_viewport_pointer("down", 200.0, 100.0, 0.0, 0.0, 0, 1, 0) is True
+    assert extension._on_viewport_pointer(_pointer("down", 200.0, 100.0, 0, 1, 0)) is True
     assert editor.viewport_tool_count == 1
-    assert extension._on_viewport_pointer("up", 250.0, 125.0, 0.0, 0.0, 0, 0, 0) is True
+    assert extension._on_viewport_pointer(_pointer("up", 250.0, 125.0, 0, 0, 0)) is True
 
     assert editor.viewport_tool_count == 0
     assert isclose(path.points[1][0], 1.5, abs_tol=1.0e-6)

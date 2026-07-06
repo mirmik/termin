@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from tcbase import log
+from tcbase._geom_native import Vec3
 
 from tcgui.widgets.ui import UI
 from tcgui.widgets.hstack import HStack
@@ -841,31 +842,20 @@ class EditorWindowTcgui:
 
     def set_viewport_click_interceptor(
         self,
-        callback: Callable[
-            [
-                object,
-                float, float,
-                bool, float, float, float,
-                float, float, float, float,
-                bool, float, float, float,
-                float, float, float,
-                int, int, int, int,
-            ],
-            bool,
-        ] | None,
+        callback: Callable[[object], bool] | None,
     ) -> None:
         self._viewport_interactions.set_click_interceptor(callback)
 
-    def add_viewport_click_interceptor(self, callback: Callable) -> None:
+    def add_viewport_click_interceptor(self, callback: Callable[[object], bool]) -> None:
         self._viewport_interactions.add_click_interceptor(callback)
 
-    def remove_viewport_click_interceptor(self, callback: Callable) -> None:
+    def remove_viewport_click_interceptor(self, callback: Callable[[object], bool]) -> None:
         self._viewport_interactions.remove_click_interceptor(callback)
 
-    def add_viewport_pointer_handler(self, callback: Callable[[str, float, float, float, float, int, int, int], bool]) -> None:
+    def add_viewport_pointer_handler(self, callback: Callable[[object], bool]) -> None:
         self._viewport_interactions.add_pointer_handler(callback)
 
-    def remove_viewport_pointer_handler(self, callback: Callable[[str, float, float, float, float, int, int, int], bool]) -> None:
+    def remove_viewport_pointer_handler(self, callback: Callable[[object], bool]) -> None:
         self._viewport_interactions.remove_pointer_handler(callback)
 
     def add_viewport_key_handler(self, callback: Callable[[object], bool]) -> None:
@@ -944,19 +934,19 @@ class EditorWindowTcgui:
     def _on_viewport_external_drop(self, event) -> bool:
         return self._viewport_geometry.on_external_drop(event)
 
-    def world_point_on_oxy_plane(self, x: float, y: float) -> tuple[float, float, float] | None:
+    def world_point_on_oxy_plane(self, x: float, y: float) -> Vec3 | None:
         return self._viewport_geometry.world_point_on_oxy_plane(x, y)
 
     def world_ray_from_viewport_point(
         self,
         x: float,
         y: float,
-    ) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+    ) -> tuple[Vec3, Vec3] | None:
         return self._viewport_geometry.world_ray_from_viewport_point(x, y)
 
     def project_world_point_to_viewport(
         self,
-        point: tuple[float, float, float],
+        point: Vec3,
     ) -> tuple[float, float] | None:
         return self._viewport_geometry.project_world_point_to_viewport(point)
 
@@ -964,10 +954,10 @@ class EditorWindowTcgui:
         self,
         x: float,
         y: float,
-        plane_origin: tuple[float, float, float],
-        plane_normal: tuple[float, float, float],
+        plane_origin: Vec3,
+        plane_normal: Vec3,
         label: str = "plane",
-    ) -> tuple[float, float, float] | None:
+    ) -> Vec3 | None:
         return self._viewport_geometry.world_point_on_plane(
             x,
             y,
@@ -981,7 +971,7 @@ class EditorWindowTcgui:
         x: float,
         y: float,
         entity,
-    ) -> tuple[float, float, float] | None:
+    ) -> Vec3 | None:
         return self._viewport_geometry.world_point_on_entity_local_oxy_plane(
             x,
             y,
@@ -1021,54 +1011,11 @@ class EditorWindowTcgui:
     def _on_hover_changed(self, entity) -> None:
         self._interaction_coordinator.on_hover_changed(entity)
 
-    def _on_editor_viewport_click(
-        self,
-        entity,
-        x: float,
-        y: float,
-        has_world_point: bool,
-        world_x: float,
-        world_y: float,
-        world_z: float,
-        depth: float,
-        view_depth: float,
-        reproject_screen_error: float,
-        reproject_depth_error: float,
-        has_mesh_hit: bool,
-        mesh_x: float,
-        mesh_y: float,
-        mesh_z: float,
-        normal_x: float,
-        normal_y: float,
-        normal_z: float,
-        triangle_index: int,
-        index0: int,
-        index1: int,
-        index2: int,
-    ) -> bool:
-        args = (
-            entity, x, y, has_world_point, world_x, world_y, world_z, depth, view_depth,
-            reproject_screen_error, reproject_depth_error,
-            has_mesh_hit, mesh_x, mesh_y, mesh_z,
-            normal_x, normal_y, normal_z,
-            triangle_index, index0, index1, index2
-        )
-        return self._interaction_coordinator.on_editor_viewport_click(*args)
+    def _on_editor_viewport_click(self, event) -> bool:
+        return self._interaction_coordinator.on_editor_viewport_click(event)
 
-    def _dispatch_viewport_pointer(
-        self,
-        phase: str,
-        x: float,
-        y: float,
-        dx: float,
-        dy: float,
-        button: int,
-        action: int,
-        mods: int,
-    ) -> bool:
-        return self._interaction_coordinator.dispatch_viewport_pointer(
-            phase, x, y, dx, dy, button, action, mods
-        )
+    def _dispatch_viewport_pointer(self, event) -> bool:
+        return self._interaction_coordinator.dispatch_viewport_pointer(event)
 
     def _on_editor_key(self, event) -> None:
         self._interaction_coordinator.on_editor_key(event)
