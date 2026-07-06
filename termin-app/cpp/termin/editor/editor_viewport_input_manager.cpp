@@ -80,8 +80,8 @@ void EditorViewportInputManager::on_mouse_button(int button, int action, int mod
     double y = _last_cursor_y;
 
     // Dispatch to viewport-local editor entities, then scene components
-    // explicitly opted into editor input.
-    MouseButtonEvent event(_viewport, x, y, button, action, mods);
+    // explicitly opted into editor input via input_source_mask.
+    MouseButtonEvent event(_viewport, x, y, button, action, mods, TC_INPUT_SOURCE_EDITOR);
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -106,7 +106,7 @@ void EditorViewportInputManager::on_mouse_move(double x, double y) {
     _last_cursor_y = y;
     _has_cursor = true;
 
-    MouseMoveEvent event(_viewport, x, y, dx, dy);
+    MouseMoveEvent event(_viewport, x, y, dx, dy, TC_INPUT_SOURCE_EDITOR);
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -128,7 +128,7 @@ void EditorViewportInputManager::on_scroll(double xoffset, double yoffset, int m
     // Use mods from parameter if provided, otherwise fall back to tracked mods
     int actual_mods = mods != 0 ? mods : _current_mods;
 
-    ScrollEvent event(_viewport, x, y, xoffset, yoffset, actual_mods);
+    ScrollEvent event(_viewport, x, y, xoffset, yoffset, actual_mods, TC_INPUT_SOURCE_EDITOR);
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -145,7 +145,7 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
     if (!tc_viewport_alive(_viewport)) return;
 
     _current_mods = mods;
-    KeyEvent event(_viewport, key, scancode, action, mods);
+    KeyEvent event(_viewport, key, scancode, action, mods, TC_INPUT_SOURCE_EDITOR);
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -155,7 +155,7 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
     auto* sys = EditorInteractionSystem::instance();
     bool handled_by_editor = false;
     if (sys) {
-        KeyEvent key_event(_viewport, key, scancode, action, mods);
+        KeyEvent key_event(_viewport, key, scancode, action, mods, TC_INPUT_SOURCE_EDITOR);
         handled_by_editor = sys->handle_key_event(
             key_event,
             static_cast<float>(_last_cursor_x),
@@ -167,7 +167,7 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
                "[EditorViewportInputManager] no EditorInteractionSystem for snap hotkey");
     }
     if (sys && sys->on_key) {
-        KeyEvent key_event(_viewport, key, scancode, action, mods);
+        KeyEvent key_event(_viewport, key, scancode, action, mods, TC_INPUT_SOURCE_EDITOR);
         if (!handled_by_editor) {
             sys->on_key(key_event);
         }
@@ -177,7 +177,7 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
 }
 
 // ============================================================================
-// Dispatch helpers - Editor components (active_in_editor=true)
+// Dispatch helpers - Editor components opted into editor input source
 // ============================================================================
 
 void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_button_event* ev) {
@@ -186,11 +186,13 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_button_
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_mouse_button_event*>(ud);
-            tc_component_on_mouse_button(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_mouse_button(c, ev);
+            }
             return !ev->handled;
         },
         ev,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
 }
 
 void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_move_event* ev) {
@@ -199,11 +201,13 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_mouse_move_ev
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_mouse_move_event*>(ud);
-            tc_component_on_mouse_move(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_mouse_move(c, ev);
+            }
             return !ev->handled;
         },
         ev,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
 }
 
 void EditorViewportInputManager::_dispatch_to_editor_components(tc_scroll_event* ev) {
@@ -212,11 +216,13 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_scroll_event*
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_scroll_event*>(ud);
-            tc_component_on_scroll(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_scroll(c, ev);
+            }
             return !ev->handled;
         },
         ev,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
 }
 
 void EditorViewportInputManager::_dispatch_to_editor_components(tc_key_event* ev) {
@@ -225,11 +231,13 @@ void EditorViewportInputManager::_dispatch_to_editor_components(tc_key_event* ev
     tc_scene_foreach_input_handler(scene,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_key_event*>(ud);
-            tc_component_on_key(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_key(c, ev);
+            }
             return !ev->handled;
         },
         ev,
-        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED | TC_SCENE_FILTER_ACTIVE_IN_EDITOR);
+        TC_SCENE_FILTER_ENABLED | TC_SCENE_FILTER_ENTITY_ENABLED);
 }
 
 // ============================================================================
@@ -242,7 +250,9 @@ void EditorViewportInputManager::_dispatch_to_internal_entities(tc_mouse_button_
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_mouse_button_event*>(ud);
-            tc_component_on_mouse_button(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_mouse_button(c, ev);
+            }
             return !ev->handled;
         }, ev);
 }
@@ -253,7 +263,9 @@ void EditorViewportInputManager::_dispatch_to_internal_entities(tc_mouse_move_ev
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_mouse_move_event*>(ud);
-            tc_component_on_mouse_move(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_mouse_move(c, ev);
+            }
             return !ev->handled;
         }, ev);
 }
@@ -264,7 +276,9 @@ void EditorViewportInputManager::_dispatch_to_internal_entities(tc_scroll_event*
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_scroll_event*>(ud);
-            tc_component_on_scroll(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_scroll(c, ev);
+            }
             return !ev->handled;
         }, ev);
 }
@@ -275,7 +289,9 @@ void EditorViewportInputManager::_dispatch_to_internal_entities(tc_key_event* ev
     tc_entity_foreach_input_handler_subtree(ent,
         [](tc_component* c, void* ud) -> bool {
             auto* ev = static_cast<tc_key_event*>(ud);
-            tc_component_on_key(c, ev);
+            if (tc_component_accepts_input_source(c, ev->source)) {
+                tc_component_on_key(c, ev);
+            }
             return !ev->handled;
         }, ev);
 }

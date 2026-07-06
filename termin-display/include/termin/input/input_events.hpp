@@ -28,13 +28,16 @@ struct MouseButtonEvent : public tc_mouse_button_event {
         viewport = TC_VIEWPORT_HANDLE_INVALID;
         x = 0; y = 0;
         button = 0; action = 0; mods = 0;
+        source = TC_INPUT_SOURCE_RUNTIME;
         handled = false;
     }
 
-    MouseButtonEvent(tc_viewport_handle vp, double x_, double y_, int btn, int act, int m = 0) {
+    MouseButtonEvent(tc_viewport_handle vp, double x_, double y_, int btn, int act, int m = 0,
+                     uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
         viewport = vp;
         x = x_; y = y_;
         button = btn; action = act; mods = m;
+        source = source_;
         handled = false;
     }
 
@@ -42,6 +45,7 @@ struct MouseButtonEvent : public tc_mouse_button_event {
         viewport = e.viewport;
         x = e.x; y = e.y;
         button = e.button; action = e.action; mods = e.mods;
+        source = e.source;
         handled = e.handled;
     }
 };
@@ -55,13 +59,16 @@ struct MouseMoveEvent : public tc_mouse_move_event {
         viewport = TC_VIEWPORT_HANDLE_INVALID;
         x = 0; y = 0;
         dx = 0; dy = 0;
+        source = TC_INPUT_SOURCE_RUNTIME;
         handled = false;
     }
 
-    MouseMoveEvent(tc_viewport_handle vp, double x_, double y_, double dx_, double dy_) {
+    MouseMoveEvent(tc_viewport_handle vp, double x_, double y_, double dx_, double dy_,
+                   uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
         viewport = vp;
         x = x_; y = y_;
         dx = dx_; dy = dy_;
+        source = source_;
         handled = false;
     }
 
@@ -69,6 +76,7 @@ struct MouseMoveEvent : public tc_mouse_move_event {
         viewport = e.viewport;
         x = e.x; y = e.y;
         dx = e.dx; dy = e.dy;
+        source = e.source;
         handled = e.handled;
     }
 };
@@ -82,13 +90,16 @@ struct ScrollEvent : public tc_scroll_event {
         viewport = TC_VIEWPORT_HANDLE_INVALID;
         x = 0; y = 0;
         xoffset = 0; yoffset = 0; mods = 0;
+        source = TC_INPUT_SOURCE_RUNTIME;
         handled = false;
     }
 
-    ScrollEvent(tc_viewport_handle vp, double x_, double y_, double xoff, double yoff, int m = 0) {
+    ScrollEvent(tc_viewport_handle vp, double x_, double y_, double xoff, double yoff, int m = 0,
+                uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
         viewport = vp;
         x = x_; y = y_;
         xoffset = xoff; yoffset = yoff; mods = m;
+        source = source_;
         handled = false;
     }
 
@@ -96,6 +107,7 @@ struct ScrollEvent : public tc_scroll_event {
         viewport = e.viewport;
         x = e.x; y = e.y;
         xoffset = e.xoffset; yoffset = e.yoffset; mods = e.mods;
+        source = e.source;
         handled = e.handled;
     }
 };
@@ -109,13 +121,16 @@ struct KeyEvent : public tc_key_event {
         viewport = TC_VIEWPORT_HANDLE_INVALID;
         key = 0; scancode = 0;
         action = 0; mods = 0;
+        source = TC_INPUT_SOURCE_RUNTIME;
         handled = false;
     }
 
-    KeyEvent(tc_viewport_handle vp, int k, int sc, int act, int m = 0) {
+    KeyEvent(tc_viewport_handle vp, int k, int sc, int act, int m = 0,
+             uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
         viewport = vp;
         key = k; scancode = sc;
         action = act; mods = m;
+        source = source_;
         handled = false;
     }
 
@@ -123,6 +138,7 @@ struct KeyEvent : public tc_key_event {
         viewport = e.viewport;
         key = e.key; scancode = e.scancode;
         action = e.action; mods = e.mods;
+        source = e.source;
         handled = e.handled;
     }
 };

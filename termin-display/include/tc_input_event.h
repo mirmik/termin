@@ -3,6 +3,7 @@
 #define TC_INPUT_EVENT_H
 
 #include <tcbase/tc_types.h>
+#include "core/tc_input_source.h"
 #include "render/tc_viewport_pool.h"
 #include <stdint.h>
 
@@ -85,6 +86,7 @@ typedef struct tc_mouse_button_event {
     int button;     // 0=left, 1=right, 2=middle
     int action;     // 0=release, 1=press, 2=repeat
     int mods;       // Shift=1, Ctrl=2, Alt=4, Super=8
+    uint32_t source; // tc_input_source flag identifying the dispatch origin.
     bool handled;   // Set by a handler to stop further input propagation.
 } tc_mouse_button_event;
 
@@ -95,6 +97,7 @@ typedef struct tc_mouse_move_event {
     double y;
     double dx;
     double dy;
+    uint32_t source;
     bool handled;
 } tc_mouse_move_event;
 
@@ -106,6 +109,7 @@ typedef struct tc_scroll_event {
     double xoffset;
     double yoffset;
     int mods;
+    uint32_t source;
     bool handled;
 } tc_scroll_event;
 
@@ -116,6 +120,7 @@ typedef struct tc_key_event {
     int scancode;
     int action;     // 0=release, 1=press, 2=repeat
     int mods;
+    uint32_t source;
     bool handled;
 } tc_key_event;
 
@@ -123,11 +128,12 @@ typedef struct tc_key_event {
 // Initialization helpers
 // ============================================================================
 
-static inline void tc_mouse_button_event_init(
+static inline void tc_mouse_button_event_init_source(
     tc_mouse_button_event* e,
     tc_viewport_handle viewport,
     double x, double y,
-    int button, int action, int mods
+    int button, int action, int mods,
+    uint32_t source
 ) {
     e->viewport = viewport;
     e->x = x;
@@ -135,6 +141,32 @@ static inline void tc_mouse_button_event_init(
     e->button = button;
     e->action = action;
     e->mods = mods;
+    e->source = source;
+    e->handled = false;
+}
+
+static inline void tc_mouse_button_event_init(
+    tc_mouse_button_event* e,
+    tc_viewport_handle viewport,
+    double x, double y,
+    int button, int action, int mods
+) {
+    tc_mouse_button_event_init_source(e, viewport, x, y, button, action, mods, TC_INPUT_SOURCE_RUNTIME);
+}
+
+static inline void tc_mouse_move_event_init_source(
+    tc_mouse_move_event* e,
+    tc_viewport_handle viewport,
+    double x, double y,
+    double dx, double dy,
+    uint32_t source
+) {
+    e->viewport = viewport;
+    e->x = x;
+    e->y = y;
+    e->dx = dx;
+    e->dy = dy;
+    e->source = source;
     e->handled = false;
 }
 
@@ -144,11 +176,24 @@ static inline void tc_mouse_move_event_init(
     double x, double y,
     double dx, double dy
 ) {
+    tc_mouse_move_event_init_source(e, viewport, x, y, dx, dy, TC_INPUT_SOURCE_RUNTIME);
+}
+
+static inline void tc_scroll_event_init_source(
+    tc_scroll_event* e,
+    tc_viewport_handle viewport,
+    double x, double y,
+    double xoffset, double yoffset,
+    int mods,
+    uint32_t source
+) {
     e->viewport = viewport;
     e->x = x;
     e->y = y;
-    e->dx = dx;
-    e->dy = dy;
+    e->xoffset = xoffset;
+    e->yoffset = yoffset;
+    e->mods = mods;
+    e->source = source;
     e->handled = false;
 }
 
@@ -159,12 +204,22 @@ static inline void tc_scroll_event_init(
     double xoffset, double yoffset,
     int mods
 ) {
+    tc_scroll_event_init_source(e, viewport, x, y, xoffset, yoffset, mods, TC_INPUT_SOURCE_RUNTIME);
+}
+
+static inline void tc_key_event_init_source(
+    tc_key_event* e,
+    tc_viewport_handle viewport,
+    int key, int scancode,
+    int action, int mods,
+    uint32_t source
+) {
     e->viewport = viewport;
-    e->x = x;
-    e->y = y;
-    e->xoffset = xoffset;
-    e->yoffset = yoffset;
+    e->key = key;
+    e->scancode = scancode;
+    e->action = action;
     e->mods = mods;
+    e->source = source;
     e->handled = false;
 }
 
@@ -174,12 +229,7 @@ static inline void tc_key_event_init(
     int key, int scancode,
     int action, int mods
 ) {
-    e->viewport = viewport;
-    e->key = key;
-    e->scancode = scancode;
-    e->action = action;
-    e->mods = mods;
-    e->handled = false;
+    tc_key_event_init_source(e, viewport, key, scancode, action, mods, TC_INPUT_SOURCE_RUNTIME);
 }
 
 #ifdef __cplusplus
