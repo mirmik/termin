@@ -1,4 +1,5 @@
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -68,6 +69,12 @@ def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMate
             phase_mark,
             0,
         ) is not None
+    return material
+
+
+def create_unique_test_material(label: str) -> TcMaterial:
+    material = TcMaterial.create(f"{label}-{uuid4()}", str(uuid4()))
+    assert material.is_valid
     return material
 
 
@@ -290,6 +297,87 @@ def test_mesh_renderer_no_longer_exposes_mesh_mutators():
         _ = renderer.set_mesh_by_name
     with pytest.raises(AttributeError):
         _ = renderer.mesh
+
+
+def test_mesh_renderer_material_slots_serialize_data_roundtrip():
+    legacy_material = create_unique_test_material("MeshRendererSlotLegacy")
+    slot0_material = create_unique_test_material("MeshRendererSlot0")
+    slot2_material = create_unique_test_material("MeshRendererSlot2")
+
+    renderer = MeshRenderer(material=legacy_material)
+    renderer.set_material_slot(0, slot0_material)
+    renderer.set_material_slot(2, slot2_material)
+
+    data = renderer.serialize_data()
+
+    assert data["material"]["uuid"] == legacy_material.uuid
+    assert [slot["type"] for slot in data["materials"]] == ["uuid", "none", "uuid"]
+    assert data["materials"][0]["uuid"] == slot0_material.uuid
+    assert data["materials"][2]["uuid"] == slot2_material.uuid
+
+    restored = MeshRenderer()
+    restored.deserialize_data(data)
+
+    assert restored.material.uuid == legacy_material.uuid
+    assert restored.material_slot_count == 3
+    assert restored.materials[0].uuid == slot0_material.uuid
+    assert restored.materials[1].is_valid is False
+    assert restored.materials[2].uuid == slot2_material.uuid
+
+
+def test_mesh_renderer_material_slots_survive_entity_hierarchy_roundtrip():
+    from termin.scene import Entity, TcScene
+
+    legacy_material = create_unique_test_material("MeshRendererHierarchyLegacy")
+    slot0_material = create_unique_test_material("MeshRendererHierarchySlot0")
+    slot2_material = create_unique_test_material("MeshRendererHierarchySlot2")
+
+    source_scene = TcScene.create("mesh-renderer-material-slots-source")
+    restored_scene = TcScene.create("mesh-renderer-material-slots-restored")
+    try:
+        entity = source_scene.create_entity("mesh")
+        renderer = entity.add_component_by_name("MeshRenderer").to_python()
+        renderer.set_material(legacy_material)
+        renderer.set_material_slot(0, slot0_material)
+        renderer.set_material_slot(2, slot2_material)
+
+        restored_entity = Entity.deserialize_hierarchy(
+            entity.serialize_hierarchy(),
+            restored_scene,
+            None,
+        )
+        restored = restored_entity.get_component(MeshRenderer)
+
+        assert restored.material.uuid == legacy_material.uuid
+        assert restored.material_slot_count == 3
+        assert restored.materials[0].uuid == slot0_material.uuid
+        assert restored.materials[1].is_valid is False
+        assert restored.materials[2].uuid == slot2_material.uuid
+    finally:
+        source_scene.destroy()
+        restored_scene.destroy()
+
+
+def test_mesh_renderer_legacy_single_material_data_clears_material_slots():
+    legacy_material = create_unique_test_material("MeshRendererLegacySingleMaterial")
+    stale_slot_material = create_unique_test_material("MeshRendererStaleSlot")
+
+    renderer = MeshRenderer()
+    renderer.set_material_slot(0, stale_slot_material)
+    renderer.deserialize_data(
+        {
+            "material": {
+                "uuid": legacy_material.uuid,
+                "name": legacy_material.name,
+                "type": "uuid",
+            },
+            "cast_shadow": True,
+        }
+    )
+
+    assert renderer.material.uuid == legacy_material.uuid
+    assert renderer.material_slot_count == 0
+    assert renderer.get_material_for_slot(0).uuid == legacy_material.uuid
 
 
 def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():
