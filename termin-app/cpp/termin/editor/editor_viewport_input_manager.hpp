@@ -47,11 +47,23 @@ private:
     void _dispatch_to_editor_components(tc_scroll_event* ev);
     void _dispatch_to_editor_components(tc_key_event* ev);
 
+    // Dispatch to overlay scene editor components (active_in_editor=true)
+    void _dispatch_to_overlay_editor_components(tc_mouse_button_event* ev);
+    void _dispatch_to_overlay_editor_components(tc_mouse_move_event* ev);
+    void _dispatch_to_overlay_editor_components(tc_scroll_event* ev);
+    void _dispatch_to_overlay_editor_components(tc_key_event* ev);
+
     // Dispatch to viewport's internal entities
     void _dispatch_to_internal_entities(tc_mouse_button_event* ev);
     void _dispatch_to_internal_entities(tc_mouse_move_event* ev);
     void _dispatch_to_internal_entities(tc_scroll_event* ev);
     void _dispatch_to_internal_entities(tc_key_event* ev);
+
+    // Dispatch to viewport's overlay internal entities
+    void _dispatch_to_overlay_internal_entities(tc_mouse_button_event* ev);
+    void _dispatch_to_overlay_internal_entities(tc_mouse_move_event* ev);
+    void _dispatch_to_overlay_internal_entities(tc_scroll_event* ev);
+    void _dispatch_to_overlay_internal_entities(tc_key_event* ev);
 };
 
 } // namespace termin

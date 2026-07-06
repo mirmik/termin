@@ -15,6 +15,13 @@ TC_API void tc_scene_foreach_input_handler(
     int filter_flags
 );
 
+TC_API void tc_scene_foreach_overlay_input_handler(
+    tc_scene_handle h,
+    tc_component_iter_fn callback,
+    void* user_data,
+    int filter_flags
+);
+
 #ifdef __cplusplus
 }
 #endif

@@ -85,6 +85,7 @@ typedef struct tc_mouse_button_event {
     int button;     // 0=left, 1=right, 2=middle
     int action;     // 0=release, 1=press, 2=repeat
     int mods;       // Shift=1, Ctrl=2, Alt=4, Super=8
+    bool handled;   // Set by a handler to stop further input propagation.
 } tc_mouse_button_event;
 
 // Mouse move event
@@ -94,6 +95,7 @@ typedef struct tc_mouse_move_event {
     double y;
     double dx;
     double dy;
+    bool handled;
 } tc_mouse_move_event;
 
 // Scroll event
@@ -104,6 +106,7 @@ typedef struct tc_scroll_event {
     double xoffset;
     double yoffset;
     int mods;
+    bool handled;
 } tc_scroll_event;
 
 // Key event
@@ -113,6 +116,7 @@ typedef struct tc_key_event {
     int scancode;
     int action;     // 0=release, 1=press, 2=repeat
     int mods;
+    bool handled;
 } tc_key_event;
 
 // ============================================================================
@@ -131,6 +135,7 @@ static inline void tc_mouse_button_event_init(
     e->button = button;
     e->action = action;
     e->mods = mods;
+    e->handled = false;
 }
 
 static inline void tc_mouse_move_event_init(
@@ -144,6 +149,7 @@ static inline void tc_mouse_move_event_init(
     e->y = y;
     e->dx = dx;
     e->dy = dy;
+    e->handled = false;
 }
 
 static inline void tc_scroll_event_init(
@@ -159,6 +165,7 @@ static inline void tc_scroll_event_init(
     e->xoffset = xoffset;
     e->yoffset = yoffset;
     e->mods = mods;
+    e->handled = false;
 }
 
 static inline void tc_key_event_init(
@@ -172,6 +179,7 @@ static inline void tc_key_event_init(
     e->scancode = scancode;
     e->action = action;
     e->mods = mods;
+    e->handled = false;
 }
 
 #ifdef __cplusplus

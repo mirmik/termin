@@ -29,6 +29,12 @@ protected:
         }
     }
 
+    void install_overlay_input_vtable(tc_component* c) {
+        if (c) {
+            tc_overlay_input_capability_attach(c, &cxx_input_vtable);
+        }
+    }
+
 private:
     static void _cb_on_mouse_button(tc_component* c, tc_mouse_button_event* event);
     static void _cb_on_mouse_move(tc_component* c, tc_mouse_move_event* event);

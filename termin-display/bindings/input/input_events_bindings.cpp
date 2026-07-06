@@ -4,6 +4,7 @@
  */
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 
 #include <string>
 
@@ -59,6 +60,7 @@ void bind_input_events(nb::module_& m) {
                 self.action = a;
             })
         .def_rw("mods", &MouseButtonEvent::mods)
+        .def_rw("handled", &MouseButtonEvent::handled)
         .def("__repr__", [](const MouseButtonEvent& e) {
             const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
             return "MouseButtonEvent(viewport=" +
@@ -66,7 +68,8 @@ void bind_input_events(nb::module_& m) {
                    ", x=" + std::to_string(e.x) + ", y=" + std::to_string(e.y) +
                    ", button=" + std::to_string(e.button) +
                    ", action=" + std::to_string(e.action) +
-                   ", mods=" + std::to_string(e.mods) + ")";
+                   ", mods=" + std::to_string(e.mods) +
+                   ", handled=" + std::string(e.handled ? "True" : "False") + ")";
         });
 
     nb::class_<MouseMoveEvent>(m, "MouseMoveEvent",
@@ -92,12 +95,14 @@ void bind_input_events(nb::module_& m) {
         .def_rw("y", &MouseMoveEvent::y)
         .def_rw("dx", &MouseMoveEvent::dx)
         .def_rw("dy", &MouseMoveEvent::dy)
+        .def_rw("handled", &MouseMoveEvent::handled)
         .def("__repr__", [](const MouseMoveEvent& e) {
             const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
             return "MouseMoveEvent(viewport=" +
                    (name ? std::string(name) : "None") +
                    ", x=" + std::to_string(e.x) + ", y=" + std::to_string(e.y) +
-                   ", dx=" + std::to_string(e.dx) + ", dy=" + std::to_string(e.dy) + ")";
+                   ", dx=" + std::to_string(e.dx) + ", dy=" + std::to_string(e.dy) +
+                   ", handled=" + std::string(e.handled ? "True" : "False") + ")";
         });
 
     nb::class_<ScrollEvent>(m, "ScrollEvent",
@@ -125,6 +130,7 @@ void bind_input_events(nb::module_& m) {
         .def_rw("xoffset", &ScrollEvent::xoffset)
         .def_rw("yoffset", &ScrollEvent::yoffset)
         .def_rw("mods", &ScrollEvent::mods)
+        .def_rw("handled", &ScrollEvent::handled)
         .def("__repr__", [](const ScrollEvent& e) {
             const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
             return "ScrollEvent(viewport=" +
@@ -132,7 +138,8 @@ void bind_input_events(nb::module_& m) {
                    ", x=" + std::to_string(e.x) + ", y=" + std::to_string(e.y) +
                    ", xoffset=" + std::to_string(e.xoffset) +
                    ", yoffset=" + std::to_string(e.yoffset) +
-                   ", mods=" + std::to_string(e.mods) + ")";
+                   ", mods=" + std::to_string(e.mods) +
+                   ", handled=" + std::string(e.handled ? "True" : "False") + ")";
         });
 
     nb::class_<KeyEvent>(m, "KeyEvent",
@@ -171,6 +178,7 @@ void bind_input_events(nb::module_& m) {
                 self.action = a;
             })
         .def_rw("mods", &KeyEvent::mods)
+        .def_rw("handled", &KeyEvent::handled)
         .def("__repr__", [](const KeyEvent& e) {
             const char* name = tc_viewport_handle_valid(e.viewport) ? tc_viewport_get_name(e.viewport) : nullptr;
             return "KeyEvent(viewport=" +
@@ -178,7 +186,8 @@ void bind_input_events(nb::module_& m) {
                    ", key=" + std::to_string(e.key) +
                    ", scancode=" + std::to_string(e.scancode) +
                    ", action=" + std::to_string(e.action) +
-                   ", mods=" + std::to_string(e.mods) + ")";
+                   ", mods=" + std::to_string(e.mods) +
+                   ", handled=" + std::string(e.handled ? "True" : "False") + ")";
         });
 }
 
