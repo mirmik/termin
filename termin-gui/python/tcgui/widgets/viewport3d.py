@@ -155,14 +155,19 @@ class Viewport3D(Widget):
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
         if self._input_manager_ptr:
+            self._sync_mouse_position(event)
             self._dispatch_mouse_button(event.button, 1, event.mods)
         return True
 
     def on_mouse_up(self, event: MouseEvent) -> None:
         if self._input_manager_ptr:
+            self._sync_mouse_position(event)
             self._dispatch_mouse_button(event.button, 0, event.mods)
 
     def on_mouse_move(self, event: MouseEvent) -> None:
+        self._sync_mouse_position(event)
+
+    def _sync_mouse_position(self, event: MouseEvent | MouseWheelEvent) -> None:
         from tcbase import log
         if self._input_manager_ptr:
             try:
@@ -172,11 +177,12 @@ class Viewport3D(Widget):
                     float(event.x - self.x), float(event.y - self.y),
                 )
             except Exception as e:
-                log.error(f"Viewport3D.on_mouse_move: {e}")
+                log.error(f"Viewport3D._sync_mouse_position: {e}")
 
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
         from tcbase import log
         if self._input_manager_ptr:
+            self._sync_mouse_position(event)
             try:
                 from termin.display import _input_manager_on_scroll
                 _input_manager_on_scroll(
