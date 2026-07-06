@@ -40,7 +40,7 @@ void main() { out_color = vec4(1.0); }
 """
 
 
-def create_line_test_material() -> TcMaterial:
+def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMaterial:
     material = TcMaterial.create("LineRendererShadowPhaseTest", "")
     assert material.is_valid
     assert material.add_phase_from_sources(
@@ -59,6 +59,15 @@ def create_line_test_material() -> TcMaterial:
         "shadow",
         0,
     ) is not None
+    for phase_mark in extra_phase_marks:
+        assert material.add_phase_from_sources(
+            VERTEX,
+            FRAGMENT,
+            "",
+            f"LineRendererShadowPhaseTest{phase_mark.title()}Shader",
+            phase_mark,
+            0,
+        ) is not None
     return material
 
 
@@ -214,6 +223,20 @@ def test_line_renderer_direct_modes_skip_shadow_material_phase():
 
     assert renderer.phase_marks == {"opaque"}
     assert renderer.get_geometry_draws("shadow") == []
+
+
+def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
+    material = create_line_test_material(extra_phase_marks=("id",))
+
+    renderer = LineRenderer(
+        points=[(0, 0, 0), (1, 0, 0)],
+        material=material,
+        render_mode=LineRenderMode.WorldTube,
+    )
+
+    assert renderer.phase_marks == {"opaque", "id"}
+    assert len(renderer.get_geometry_draws("id")) == 1
+    assert renderer.get_geometry_draws("pick") == []
 
 
 def test_line_renderer_cast_shadow_enables_shadow_material_phase():

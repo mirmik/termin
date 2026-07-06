@@ -50,6 +50,10 @@ Progress:
   stable documentation in `docs/render-phase-semantics.md`. The document
   defines allowed/forbidden `phase_mark` responsibilities, catalogs current
   consumers, and records the remaining legacy compatibility boundaries.
+- 2026-07-06: Normalized picking phase naming. `IdPass` keeps `pick` as the
+  public drawable phase label; `LineRenderer` no longer treats `id` as a
+  built-in auxiliary phase alias, and documentation now reserves `id` for
+  resource/pass/debug terminology unless a real custom material phase owns it.
 
 This plan refines the material-pipeline contract direction from
 `2026-06-27-shader-contract-material-pipeline-architecture.md`.
@@ -197,9 +201,10 @@ owns the final layout. Shadow must become an explicit contract decision.
 
 ### `pick` versus `id`
 
-`IdPass` uses phase `pick`, while some line-renderer code and documentation
-refer to auxiliary phase `id`. This looks like a stale compatibility alias and
-should not leak into the new contract model.
+Resolved 2026-07-06: `IdPass` uses phase `pick`, while `id` is kept as
+object-id/resource/pass/debug terminology. `LineRenderer` no longer treats `id`
+as a built-in auxiliary phase alias; a material phase literally named `id` is
+just a user-authored material phase.
 
 ### Offline shader usage collection
 
@@ -372,6 +377,8 @@ Validation:
 
 Choose one public phase label for picking. Keep any old spelling only as a
 documented compatibility alias at the pass boundary.
+
+Status 2026-07-06: done for production line-renderer phase routing.
 
 Recommended direction:
 

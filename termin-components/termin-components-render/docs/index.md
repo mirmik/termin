@@ -44,8 +44,9 @@ the legacy `raw_lines` flag remains supported for compatibility. Those modes
 continue to expose a mesh through `get_mesh()`.
 
 `cast_shadow` is opt-in for all line modes. Direct GPU modes only participate
-in the `shadow` phase when this flag is enabled; other auxiliary geometry
-phases such as depth, normal, and id remain mesh-only.
+in the `shadow` phase when this flag is enabled. Object picking uses the
+engine-owned `pick` phase and pass contract; `id` remains ordinary
+resource/pass terminology, not a built-in line renderer phase alias.
 
 ## WorldTextComponent
 
