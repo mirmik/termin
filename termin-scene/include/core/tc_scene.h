@@ -189,6 +189,14 @@ TC_API size_t tc_scene_capability_count(tc_scene_handle h, tc_component_cap_id c
 // Does not affect lifecycle/update/type lists.
 TC_API void tc_scene_reindex_component_capabilities(tc_scene_handle h, tc_component* c);
 
+// Rebuild membership link for one component capability already registered in the scene.
+// Does not affect lifecycle/update/type lists or other capabilities.
+TC_API void tc_scene_reindex_component_capability(
+    tc_scene_handle h,
+    tc_component* c,
+    tc_component_cap_id cap_id
+);
+
 // ============================================================================
 // Component Type Enumeration
 // ============================================================================

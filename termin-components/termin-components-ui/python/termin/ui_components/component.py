@@ -23,8 +23,6 @@ class UIComponent(InputComponent):
     Multiple UIComponents can exist in a scene, rendered by priority.
     """
 
-    input_category = "overlay"
-
     inspect_fields = {
         "ui_layout": InspectField(
             path="ui_layout",
@@ -34,11 +32,12 @@ class UIComponent(InputComponent):
         ),
     }
 
-    def __init__(self, priority: int = 0):
+    def __init__(self, priority: int = 1000):
         super().__init__(enabled=True, active_in_editor=False)
         self._ui: UI | None = None
         self._font: FontTextureAtlas | None = None
-        self._priority = priority
+        self._priority = 0
+        self.priority = priority
         self._ui_handle: UIHandle | None = None
         self._ui_layout_name: str = ""
         self._viewport_w: int = 0
@@ -53,7 +52,8 @@ class UIComponent(InputComponent):
 
     @priority.setter
     def priority(self, value: int):
-        self._priority = value
+        self._priority = int(value)
+        self.input_priority = self._priority
 
     @property
     def ui(self) -> UI | None:
