@@ -861,6 +861,49 @@ class ClipSelectorWidget(FieldWidget):
         self._combo.on_changed = self._on_changed
         self.add_child(self._combo)
 
+    @staticmethod
+    def _clip_name(clip: Any) -> str:
+        if isinstance(clip, dict):
+            name = clip.get("name", "")
+            return str(name) if name else ""
+        try:
+            name_attr = clip.name
+            name = name_attr() if callable(name_attr) else name_attr
+            return str(name) if name else ""
+        except Exception as e:
+            log.debug(f"[ClipSelectorWidget] Failed to read clip name: {e}")
+            return ""
+
+    def _target_clips(self):
+        if self._target is None:
+            return []
+        clips = []
+        try:
+            from termin.scene import TcComponentRef
+        except ImportError as e:
+            log.error(f"[ClipSelectorWidget] Failed to import TcComponentRef: {e}")
+        else:
+            if isinstance(self._target, TcComponentRef):
+                try:
+                    return self._target.get_field("clips") or []
+                except Exception as e:
+                    log.error(f"[ClipSelectorWidget] Failed to get clips from component ref field: {e}")
+                return []
+        try:
+            from termin.inspect import InspectRegistry
+            clips = InspectRegistry.instance().get(self._target, "clips") or []
+        except Exception as e:
+            log.debug(f"[ClipSelectorWidget] Failed to get clips via inspect registry: {e}")
+        if clips:
+            return clips
+        try:
+            return self._target.clips or []
+        except AttributeError:
+            log.error("[ClipSelectorWidget] target has no clips field")
+        except Exception as e:
+            log.error(f"[ClipSelectorWidget] Failed to get target clips: {e}")
+        return []
+
     def bind_field(self, key: str, field: "InspectField", target: Any) -> None:
         super().bind_field(key, field, target)
         self._refresh_choices()
@@ -872,16 +915,10 @@ class ClipSelectorWidget(FieldWidget):
         self._combo.clear()
         self._combo.add_item("(none)")
         if self._target is not None:
-            try:
-                from termin.inspect import InspectRegistry
-                clips = InspectRegistry.instance().get(self._target, "clips")
-                if clips:
-                    for item in sorted(clips, key=lambda x: x.get("name", "")):
-                        name = item.get("name", "")
-                        if name:
-                            self._combo.add_item(name)
-            except Exception as e:
-                log.debug(f"[ClipSelectorWidget] Failed to get clips: {e}")
+            clips = self._target_clips()
+            names = sorted(name for item in clips if (name := self._clip_name(item)))
+            for name in names:
+                self._combo.add_item(name)
         for i in range(self._combo.item_count):
             if self._combo.item_text(i) == current:
                 self._combo.selected_index = i

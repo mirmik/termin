@@ -25,6 +25,10 @@ public:
     // Bone entities (same order as skeleton bones)
     std::vector<Entity> bone_entities;
 
+    // Entity whose local space is used as the skeleton skinning root.
+    // If unset, the controller owner entity is used for compatibility.
+    Entity skeleton_root;
+
 private:
     // Cached skeleton instance (created lazily)
     std::unique_ptr<SkeletonInstance> _skeleton_instance;
@@ -51,12 +55,17 @@ public:
     void set_bone_entities(std::vector<Entity> entities);
 
     /**
+     * Set skeleton root entity. Invalidates cached instance.
+     */
+    void set_skeleton_root(Entity root);
+
+    /**
      * Get or create SkeletonInstance.
      *
      * Creates instance lazily on first access using:
      * - skeleton
      * - bone_entities
-     * - this->entity as skeleton root
+     * - skeleton_root if valid, otherwise this->entity as skeleton root
      */
     SkeletonInstance* skeleton_instance();
 

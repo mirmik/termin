@@ -4,6 +4,7 @@
 #include <termin/render/skeleton_controller.hpp>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.hpp>
+#include <cstring>
 
 namespace termin {
 
@@ -22,6 +23,13 @@ void AnimationPlayer::register_type() {
         "clips",
         "Animation Clips",
         "list[tc_animation_clip]"
+    );
+    tc::register_inspect_field(
+        &AnimationPlayer::node_targets,
+        "AnimationPlayer",
+        "node_targets",
+        "Node Targets",
+        "list[entity]"
     );
     tc::register_inspect_field(
         &AnimationPlayer::_current_clip_name,
@@ -94,6 +102,9 @@ SkeletonInstance* AnimationPlayer::target_skeleton() const {
 }
 
 void AnimationPlayer::set_current(const std::string& name) {
+    if (_clips_map.empty() && !clips.empty()) {
+        _rebuild_clips_map();
+    }
     _current_clip_name = name;
     auto it = _clips_map.find(name);
     if (it != _clips_map.end()) {
@@ -101,11 +112,14 @@ void AnimationPlayer::set_current(const std::string& name) {
         _build_channel_mapping();
     } else {
         _current_index = -1;
-        _channel_to_bone.clear();
+        _channel_mappings.clear();
     }
 }
 
 void AnimationPlayer::play(const std::string& name, bool restart) {
+    if (_clips_map.empty() && !clips.empty()) {
+        _rebuild_clips_map();
+    }
     auto it = _clips_map.find(name);
     if (it == _clips_map.end()) {
         tc::Log::warn("[AnimationPlayer::play] clip '%s' not found", name.c_str());
@@ -124,7 +138,7 @@ void AnimationPlayer::play(const std::string& name, bool restart) {
 }
 
 void AnimationPlayer::_build_channel_mapping() {
-    _channel_to_bone.clear();
+    _channel_mappings.clear();
 
     if (_current_index < 0 || _current_index >= (int)clips.size()) {
         return;
@@ -132,22 +146,29 @@ void AnimationPlayer::_build_channel_mapping() {
 
     const animation::TcAnimationClip& clip = clips[_current_index];
     tc_animation* anim = clip.get();
-    SkeletonInstance* skel_inst = target_skeleton();
-    if (!anim || !skel_inst) {
+    if (!anim) {
         return;
     }
 
-    tc_skeleton* skel = skel_inst->_skeleton;
-    if (!skel) {
-        return;
+    tc_skeleton* skel = nullptr;
+    if (SkeletonInstance* skel_inst = target_skeleton()) {
+        skel = skel_inst->_skeleton;
     }
 
-    // Build mapping from channel index to bone index
-    _channel_to_bone.resize(anim->channel_count);
+    // Build mapping from channel index to either bone index or imported node entity.
+    _channel_mappings.resize(anim->channel_count);
     for (size_t i = 0; i < anim->channel_count; i++) {
         const char* target_name = anim->channels[i].target_name;
-        int bone_idx = tc_skeleton_find_bone(skel, target_name);
-        _channel_to_bone[i] = bone_idx;
+        const bool has_target_name = target_name && target_name[0] != '\0';
+        int bone_idx = (skel && has_target_name) ? tc_skeleton_find_bone(skel, target_name) : -1;
+        _channel_mappings[i].bone_index = bone_idx;
+        if (bone_idx < 0) {
+            _channel_mappings[i].node_entity = _find_node_target(target_name);
+            if (!_channel_mappings[i].node_entity.valid()) {
+                tc::Log::warn("[AnimationPlayer::_build_channel_mapping] no target for channel '%s'",
+                    target_name ? target_name : "<null>");
+            }
+        }
     }
 
     // Resize samples buffer
@@ -178,22 +199,31 @@ void AnimationPlayer::update_bones_at_time(double t) {
         _acquire_skeleton();
     }
 
-    SkeletonInstance* skel_inst = target_skeleton();
-    if (!skel_inst) {
-        tc::Log::warn("[AnimationPlayer::update_bones_at_time] no target skeleton");
-        return;
-    }
-
     const animation::TcAnimationClip& clip = clips[_current_index];
     size_t count = clip.sample_into(t, _samples_buffer.data(), _samples_buffer.size());
     _apply_sample(_samples_buffer.data(), count);
 }
 
+Entity AnimationPlayer::_find_node_target(const char* target_name) const {
+    if (!target_name || target_name[0] == '\0') {
+        return Entity();
+    }
+
+    for (const Entity& target : node_targets) {
+        if (!target.valid()) {
+            continue;
+        }
+        const char* name = target.name();
+        if (name && std::strcmp(name, target_name) == 0) {
+            return target;
+        }
+    }
+    return Entity();
+}
+
 void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t count) {
-    SkeletonInstance* skel_inst = target_skeleton();
-    if (!skel_inst || !samples) {
-        tc::Log::warn("[AnimationPlayer::_apply_sample] skeleton=%p samples=%p",
-            (void*)skel_inst, (void*)samples);
+    if (!samples) {
+        tc::Log::warn("[AnimationPlayer::_apply_sample] samples=null");
         return;
     }
 
@@ -202,20 +232,14 @@ void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t cou
         return;
     }
 
-    if (_channel_to_bone.empty()) {
-        tc::Log::warn("[AnimationPlayer::_apply_sample] _channel_to_bone is empty! count=%zu", count);
+    if (_channel_mappings.empty()) {
+        tc::Log::warn("[AnimationPlayer::_apply_sample] _channel_mappings is empty! count=%zu", count);
         return;
     }
 
-    // Use cached channel-to-bone mapping for fast lookup
-    for (size_t i = 0; i < count && i < _channel_to_bone.size(); ++i) {
-        int bone_idx = _channel_to_bone[i];
-        if (bone_idx < 0) {
-            continue;
-        }
-
+    SkeletonInstance* skel_inst = target_skeleton();
+    for (size_t i = 0; i < count && i < _channel_mappings.size(); ++i) {
         const tc_channel_sample& ch = samples[i];
-
         const double* tr_ptr = ch.has_translation ? ch.translation : nullptr;
         const double* rot_ptr = ch.has_rotation ? ch.rotation : nullptr;
 
@@ -228,7 +252,27 @@ void AnimationPlayer::_apply_sample(const tc_channel_sample* samples, size_t cou
             sc_ptr = sc;
         }
 
-        skel_inst->set_bone_transform(bone_idx, tr_ptr, rot_ptr, sc_ptr);
+        const ChannelMapping& mapping = _channel_mappings[i];
+        if (mapping.bone_index >= 0) {
+            if (skel_inst) {
+                skel_inst->set_bone_transform(mapping.bone_index, tr_ptr, rot_ptr, sc_ptr);
+            }
+            continue;
+        }
+
+        Entity node = mapping.node_entity;
+        if (!node.valid()) {
+            continue;
+        }
+        if (tr_ptr) {
+            node.set_local_position(tr_ptr);
+        }
+        if (rot_ptr) {
+            node.set_local_rotation(rot_ptr);
+        }
+        if (sc_ptr) {
+            node.set_local_scale(sc_ptr);
+        }
     }
 }
 

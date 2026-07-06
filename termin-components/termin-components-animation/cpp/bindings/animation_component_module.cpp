@@ -20,6 +20,26 @@ void bind_animation_player(nb::module_& m) {
             termin::cxx_component_init<AnimationPlayer>(self);
         })
         .def_rw("clips", &AnimationPlayer::clips)
+        .def_prop_rw("node_targets",
+            [](const AnimationPlayer& self) {
+                nb::list result;
+                for (const Entity& target : self.node_targets) {
+                    if (target.valid()) {
+                        result.append(nb::cast(target));
+                    } else {
+                        result.append(nb::none());
+                    }
+                }
+                return result;
+            },
+            [](AnimationPlayer& self, nb::list targets) {
+                self.node_targets.clear();
+                for (auto item : targets) {
+                    if (!item.is_none()) {
+                        self.node_targets.push_back(nb::cast<Entity>(item));
+                    }
+                }
+            })
         .def_rw("_current_clip_name", &AnimationPlayer::_current_clip_name)
         .def_rw("time", &AnimationPlayer::time)
         .def_rw("playing", &AnimationPlayer::playing)

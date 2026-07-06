@@ -28,6 +28,13 @@ void SkeletonController::register_type() {
         "Bone Entities",
         "list[entity]"
     );
+    tc::register_inspect_field(
+        &SkeletonController::skeleton_root,
+        "SkeletonController",
+        "skeleton_root",
+        "Skeleton Root",
+        "entity"
+    );
 }
 
 void SkeletonController::start() {
@@ -44,17 +51,27 @@ void SkeletonController::set_bone_entities(std::vector<Entity> entities) {
     _skeleton_instance.reset();
 }
 
+void SkeletonController::set_skeleton_root(Entity root) {
+    skeleton_root = root;
+    _skeleton_instance.reset();
+}
+
 SkeletonInstance* SkeletonController::skeleton_instance() {
     // Ensure skeleton is loaded (trigger lazy loading if needed)
     skeleton.ensure_loaded();
 
     tc_skeleton* skel = skeleton.get();
+    Entity effective_root = skeleton_root.valid() ? skeleton_root : entity();
+    if (_skeleton_instance != nullptr && _skeleton_instance->skeleton_root() != effective_root) {
+        _skeleton_instance.reset();
+    }
+
     if (_skeleton_instance == nullptr && skel != nullptr) {
         if (!bone_entities.empty()) {
             _skeleton_instance = std::make_unique<SkeletonInstance>(
                 skel,
                 bone_entities,
-                entity()
+                effective_root
             );
             _skeleton_instance->update();
         } else {

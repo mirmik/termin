@@ -30,6 +30,46 @@ NB_MODULE(_components_collision_native, m) {
             [](ColliderComponent& c, nb::tuple v) {
                 c.set_box_size(nb::cast<double>(v[0]), nb::cast<double>(v[1]), nb::cast<double>(v[2]));
             })
+        .def_prop_rw("collider_offset_enabled",
+            [](ColliderComponent& c) { return c.collider_offset_enabled; },
+            [](ColliderComponent& c, bool v) {
+                if (c.collider_offset_enabled != v) {
+                    c.collider_offset_enabled = v;
+                    c.rebuild_collider();
+                }
+            })
+        .def_prop_rw("collider_offset_position",
+            [](ColliderComponent& c) {
+                return nb::make_tuple(
+                    c.collider_offset_position.x,
+                    c.collider_offset_position.y,
+                    c.collider_offset_position.z
+                );
+            },
+            [](ColliderComponent& c, nb::tuple v) {
+                c.collider_offset_position = tc_vec3{
+                    nb::cast<double>(v[0]),
+                    nb::cast<double>(v[1]),
+                    nb::cast<double>(v[2])
+                };
+                c.rebuild_collider();
+            })
+        .def_prop_rw("collider_offset_euler",
+            [](ColliderComponent& c) {
+                return nb::make_tuple(
+                    c.collider_offset_euler.x,
+                    c.collider_offset_euler.y,
+                    c.collider_offset_euler.z
+                );
+            },
+            [](ColliderComponent& c, nb::tuple v) {
+                c.collider_offset_euler = tc_vec3{
+                    nb::cast<double>(v[0]),
+                    nb::cast<double>(v[1]),
+                    nb::cast<double>(v[2])
+                };
+                c.rebuild_collider();
+            })
         .def_prop_ro("collider", [](ColliderComponent& c) {
             return c.collider();
         }, nb::rv_policy::reference)

@@ -1,4 +1,5 @@
 from termin.editor_tcgui.widgets.field_widgets import (
+    ClipSelectorWidget,
     ComboFieldWidget,
     FieldWidgetFactory,
     HandleSelectorWidget,
@@ -58,3 +59,40 @@ def test_field_widget_factory_uses_handle_selector_for_tc_texture():
     widget = FieldWidgetFactory().create(field)
 
     assert isinstance(widget, HandleSelectorWidget)
+
+
+def test_clip_selector_lists_native_animation_player_clips():
+    from termin.animation import TcAnimationClip
+    from termin.animation_components import AnimationPlayer
+
+    clip = TcAnimationClip.create("Walk", "pytest-clip-selector")
+    player = AnimationPlayer()
+    player.add_clip(clip)
+
+    field = InspectField(path="_current_clip_name", label="Current Clip", kind="clip_selector")
+    widget = ClipSelectorWidget()
+    widget.bind_field("_current_clip_name", field, player)
+    widget.set_value("Walk")
+
+    assert widget._combo.items == ["(none)", "Walk"]
+    assert widget.get_value() == "Walk"
+
+
+def test_clip_selector_lists_component_ref_animation_player_clips(monkeypatch):
+    import termin.scene
+
+    class FakeComponentRef:
+        def get_field(self, field_name):
+            assert field_name == "clips"
+            return [{"uuid": "clip-uuid", "name": "Walk", "type": "uuid"}]
+
+    monkeypatch.setattr(termin.scene, "TcComponentRef", FakeComponentRef)
+    component_ref = FakeComponentRef()
+
+    field = InspectField(path="_current_clip_name", label="Current Clip", kind="clip_selector")
+    widget = ClipSelectorWidget()
+    widget.bind_field("_current_clip_name", field, component_ref)
+    widget.set_value("Walk")
+
+    assert widget._combo.items == ["(none)", "Walk"]
+    assert widget.get_value() == "Walk"
