@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from tcgui.widgets.loader import UILoader
 from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIController
+from termin.render import RENDER_CATEGORY_ALL, RENDER_CATEGORY_COLLIDERS, RENDER_CATEGORY_NAVMESH
 
 
 class _IconButton:
@@ -79,3 +80,41 @@ def test_editor_camera_ui_controller_toggles_gizmo_orientation(monkeypatch) -> N
     assert interaction_system.update_count == 1
     assert button.active is True
     assert button.icon == "G"
+
+
+def test_editor_camera_ui_controller_updates_camera_render_category_mask(monkeypatch) -> None:
+    interaction_system = _InteractionSystem()
+
+    class _EditorInteractionSystem:
+        @staticmethod
+        def instance():
+            return interaction_system
+
+    monkeypatch.setitem(
+        sys.modules,
+        "termin.editor._editor_native",
+        SimpleNamespace(EditorInteractionSystem=_EditorInteractionSystem),
+    )
+
+    controller = EditorCameraUIController()
+    camera = SimpleNamespace(render_category_mask=RENDER_CATEGORY_ALL, viewport=None)
+    colliders_button = _IconButton()
+    navmesh_button = _IconButton()
+    controller._camera_component = camera
+    controller._colliders_btn = colliders_button
+    controller._navmesh_btn = navmesh_button
+
+    controller._sync_button_states()
+
+    assert camera.render_category_mask & RENDER_CATEGORY_COLLIDERS == 0
+    assert camera.render_category_mask & RENDER_CATEGORY_NAVMESH
+    assert colliders_button.active is False
+    assert navmesh_button.active is True
+
+    controller._on_colliders_click()
+    assert camera.render_category_mask & RENDER_CATEGORY_COLLIDERS
+    assert colliders_button.active is True
+
+    controller._on_navmesh_click()
+    assert camera.render_category_mask & RENDER_CATEGORY_NAVMESH == 0
+    assert navmesh_button.active is False

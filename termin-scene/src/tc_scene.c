@@ -612,12 +612,32 @@ static void scene_capability_attach(uint32_t idx, tc_component* c, uint32_t slot
     if (CAPABILITY_HEAD(idx, slot) == c || c->capability_prev[slot] || c->capability_next[slot]) return;
 
     tc_component* head = CAPABILITY_HEAD(idx, slot);
-    c->capability_prev[slot] = NULL;
-    c->capability_next[slot] = head;
-    if (head) {
-        head->capability_prev[slot] = c;
+    int priority = c->capability_priorities[slot];
+
+    if (!head || priority >= head->capability_priorities[slot]) {
+        c->capability_prev[slot] = NULL;
+        c->capability_next[slot] = head;
+        if (head) {
+            head->capability_prev[slot] = c;
+        }
+        CAPABILITY_HEAD(idx, slot) = c;
+        CAPABILITY_COUNT(idx, slot)++;
+        return;
     }
-    CAPABILITY_HEAD(idx, slot) = c;
+
+    tc_component* prev = head;
+    while (prev->capability_next[slot] &&
+           prev->capability_next[slot]->capability_priorities[slot] > priority) {
+        prev = prev->capability_next[slot];
+    }
+
+    tc_component* next = prev->capability_next[slot];
+    c->capability_prev[slot] = prev;
+    c->capability_next[slot] = next;
+    prev->capability_next[slot] = c;
+    if (next) {
+        next->capability_prev[slot] = c;
+    }
     CAPABILITY_COUNT(idx, slot)++;
 }
 
@@ -781,6 +801,22 @@ void tc_scene_reindex_component_capabilities(tc_scene_handle h, tc_component* c)
     for (uint32_t slot = 0; slot < TC_COMPONENT_MAX_CAPABILITIES; slot++) {
         scene_capability_attach(idx, c, slot);
     }
+}
+
+void tc_scene_reindex_component_capability(
+    tc_scene_handle h,
+    tc_component* c,
+    tc_component_cap_id cap_id
+) {
+    if (!handle_alive(h) || !c) return;
+
+    uint32_t slot = 0;
+    if (!tc_component_capability_slot(cap_id, &slot)) return;
+
+    uint32_t idx = h.index;
+    scene_capability_sync_legacy_bridges(c);
+    scene_capability_detach(idx, c, slot);
+    scene_capability_attach(idx, c, slot);
 }
 
 // ============================================================================

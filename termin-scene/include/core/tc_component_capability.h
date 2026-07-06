@@ -32,6 +32,8 @@ TC_API bool tc_component_capability_slot(tc_component_cap_id id, uint32_t* out_s
 
 TC_API bool tc_component_has_capability(const tc_component* c, tc_component_cap_id id);
 TC_API void* tc_component_get_capability(const tc_component* c, tc_component_cap_id id);
+TC_API int tc_component_get_capability_priority(const tc_component* c, tc_component_cap_id id);
+TC_API bool tc_component_set_capability_priority(tc_component* c, tc_component_cap_id id, int priority);
 TC_API bool tc_component_attach_capability(tc_component* c, tc_component_cap_id id, void* cap_ptr);
 TC_API void tc_component_detach_capability(tc_component* c, tc_component_cap_id id);
 TC_API void tc_component_clear_capabilities(tc_component* c);

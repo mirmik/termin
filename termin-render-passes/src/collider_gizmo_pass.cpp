@@ -15,6 +15,7 @@
 extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_component.h"
+#include "render/tc_render_category_flags.h"
 }
 
 #include <algorithm>
@@ -161,6 +162,9 @@ std::vector<std::pair<std::string, std::string>> ColliderGizmoPass::get_inplace_
 
 void ColliderGizmoPass::execute(ExecuteContext& ctx) {
     if (!ctx.scene.valid() || !ctx.ctx2 || !ctx.camera) {
+        return;
+    }
+    if ((ctx.render_category_mask & TC_RENDER_CATEGORY_COLLIDERS) == 0) {
         return;
     }
 

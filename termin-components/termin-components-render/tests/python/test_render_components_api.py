@@ -25,6 +25,7 @@ from termin.render_components import (
     WorldTextOrientation,
     get_texture_inputs_for_material,
 )
+from termin.render_framework import RenderContext
 
 
 VERTEX = """
@@ -39,6 +40,10 @@ FRAGMENT = """
 layout(location=0) out vec4 out_color;
 void main() { out_color = vec4(1.0); }
 """
+
+
+def _render_context() -> RenderContext:
+    return RenderContext()
 
 
 def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMaterial:
@@ -327,7 +332,7 @@ def test_line_renderer_direct_modes_skip_shadow_material_phase():
     renderer = LineRenderer(points=[(0, 0, 0), (1, 0, 0)], material=material)
 
     assert renderer.phase_marks == {"opaque"}
-    assert renderer.get_geometry_draws("shadow") == []
+    assert renderer.get_geometry_draws(_render_context(), "shadow") == []
 
 
 def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
@@ -340,8 +345,8 @@ def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
     )
 
     assert renderer.phase_marks == {"opaque", "id"}
-    assert len(renderer.get_geometry_draws("id")) == 1
-    assert renderer.get_geometry_draws("pick") == []
+    assert len(renderer.get_geometry_draws(_render_context(), "id")) == 1
+    assert renderer.get_geometry_draws(_render_context(), "pick") == []
 
 
 def test_line_renderer_cast_shadow_enables_shadow_material_phase():
@@ -558,20 +563,22 @@ def test_world_text_component_defaults_to_transparent_direct_draw():
     assert text.depth_write is False
     assert text.blend is True
     assert text.phase_marks == {"transparent"}
-    assert text.get_geometry_draws("opaque") == []
-    assert len(text.get_geometry_draws("transparent")) == 1
+    context = _render_context()
+    assert text.get_geometry_draws(context, "opaque") == []
+    assert len(text.get_geometry_draws(context, "transparent")) == 1
 
 
 def test_world_text_component_hides_empty_text_from_draw_contract():
     text = WorldTextComponent()
 
     assert text.phase_marks == set()
-    assert text.get_geometry_draws() == []
+    context = _render_context()
+    assert text.get_geometry_draws(context) == []
 
     text.text = "A"
     text.phase_mark = "overlay"
     assert text.phase_marks == {"overlay"}
-    assert len(text.get_geometry_draws()) == 1
+    assert len(text.get_geometry_draws(context)) == 1
 
 
 def test_world_text_component_is_inspectable():

@@ -85,6 +85,32 @@ void* tc_component_get_capability(const tc_component* c, tc_component_cap_id id)
     return c->capability_ptrs[slot];
 }
 
+int tc_component_get_capability_priority(const tc_component* c, tc_component_cap_id id) {
+    uint32_t slot = 0;
+    if (!c || !capability_slot_from_id(id, &slot)) return 0;
+    return c->capability_priorities[slot];
+}
+
+bool tc_component_set_capability_priority(tc_component* c, tc_component_cap_id id, int priority) {
+    uint32_t slot = 0;
+    if (!c || !capability_slot_from_id(id, &slot)) return false;
+    if (c->capability_priorities[slot] == priority) return true;
+
+    c->capability_priorities[slot] = priority;
+
+    if (tc_entity_handle_valid(c->owner)) {
+        tc_entity_pool* pool = tc_entity_pool_registry_get(c->owner.pool);
+        if (pool) {
+            tc_scene_handle scene = tc_entity_pool_get_scene(pool);
+            if (tc_scene_handle_valid(scene)) {
+                tc_scene_reindex_component_capability(scene, c, id);
+            }
+        }
+    }
+
+    return true;
+}
+
 bool tc_component_attach_capability(tc_component* c, tc_component_cap_id id, void* cap_ptr) {
     uint32_t slot = 0;
     if (!c || !capability_slot_from_id(id, &slot)) return false;
@@ -145,6 +171,7 @@ void tc_component_clear_capabilities(tc_component* c) {
         c->capability_ptrs[slot] = NULL;
         c->capability_prev[slot] = NULL;
         c->capability_next[slot] = NULL;
+        c->capability_priorities[slot] = 0;
         if (cap_ptr && g_component_capability_registry.destroy_fns[slot]) {
             g_component_capability_registry.destroy_fns[slot](cap_ptr);
         }

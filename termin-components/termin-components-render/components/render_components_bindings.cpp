@@ -291,6 +291,7 @@ NB_MODULE(_components_render_native, m) {
         .def("set_aspect", &CameraComponent::set_aspect, nb::arg("aspect"))
         .def_rw("ortho_size", &CameraComponent::ortho_size)
         .def_rw("layer_mask", &CameraComponent::layer_mask)
+        .def_rw("render_category_mask", &CameraComponent::render_category_mask)
         .def("get_view_matrix", &CameraComponent::get_view_matrix)
         .def("get_projection_matrix", &CameraComponent::get_projection_matrix)
         .def("view_matrix", &CameraComponent::get_view_matrix)
@@ -579,13 +580,13 @@ NB_MODULE(_components_render_native, m) {
             return marks;
         })
         .def("draw_geometry", &MeshRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
-        .def("get_geometry_draws", [](MeshRenderer& self, nb::object phase_mark) {
+        .def("get_geometry_draws", [](MeshRenderer& self, RenderContext& context, nb::object phase_mark) {
             if (phase_mark.is_none()) {
-                return self.get_geometry_draws(nullptr);
+                return self.get_geometry_draws(context, nullptr);
             }
             std::string pm = nb::cast<std::string>(phase_mark);
-            return self.get_geometry_draws(&pm);
-        }, nb::arg("phase_mark") = nb::none());
+            return self.get_geometry_draws(context, &pm);
+        }, nb::arg("context"), nb::arg("phase_mark") = nb::none());
 
     nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
         .def("__init__", [](nb::handle self) {
@@ -734,13 +735,13 @@ NB_MODULE(_components_render_native, m) {
             return marks;
         })
         .def("draw_geometry", &LineRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
-        .def("get_geometry_draws", [](LineRenderer& self, nb::object phase_mark) {
+        .def("get_geometry_draws", [](LineRenderer& self, RenderContext& context, nb::object phase_mark) {
             if (phase_mark.is_none()) {
-                return self.get_geometry_draws(nullptr);
+                return self.get_geometry_draws(context, nullptr);
             }
             std::string pm = nb::cast<std::string>(phase_mark);
-            return self.get_geometry_draws(&pm);
-        }, nb::arg("phase_mark") = nb::none());
+            return self.get_geometry_draws(context, &pm);
+        }, nb::arg("context"), nb::arg("phase_mark") = nb::none());
 
     nb::enum_<WorldTextAnchor>(m, "WorldTextAnchor")
         .value("Left", WorldTextAnchor::Left)
@@ -847,13 +848,13 @@ NB_MODULE(_components_render_native, m) {
             }
             return marks;
         })
-        .def("get_geometry_draws", [](WorldTextComponent& self, nb::object phase_mark) {
+        .def("get_geometry_draws", [](WorldTextComponent& self, RenderContext& context, nb::object phase_mark) {
             if (phase_mark.is_none()) {
-                return self.get_geometry_draws(nullptr);
+                return self.get_geometry_draws(context, nullptr);
             }
             std::string pm = nb::cast<std::string>(phase_mark);
-            return self.get_geometry_draws(&pm);
-        }, nb::arg("phase_mark") = nb::none());
+            return self.get_geometry_draws(context, &pm);
+        }, nb::arg("context"), nb::arg("phase_mark") = nb::none());
 
     nb::class_<LightComponent, CxxComponent>(m, "LightComponent")
         .def("__init__", [](nb::handle self) {

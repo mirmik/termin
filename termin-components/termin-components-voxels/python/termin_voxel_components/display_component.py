@@ -253,8 +253,13 @@ class VoxelDisplayComponent(DrawableComponent):
 
     _DEBUG_GET_PHASES = False  # Debug: отладка get_geometry_draws
 
-    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
+    def get_geometry_draws(
+        self,
+        context: "RenderContext",
+        phase_mark: str | None = None,
+    ) -> List[GeometryDrawCall]:
         """Возвращает GeometryDrawCalls для рендеринга."""
+        del context
         mat = self._get_or_create_material()
 
         if phase_mark is None:
