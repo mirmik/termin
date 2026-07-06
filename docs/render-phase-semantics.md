@@ -78,10 +78,11 @@ contract. A custom pass may request `phase_mark = "actor_attribute"` while
 declaring either a full material/world-position contract or a compact
 position-only contract.
 
-`pick` is the canonical public phase label for object picking. Existing
-implementation details may still use `id` as an auxiliary/debug/pass-resource
-name, but new drawable phase APIs should not introduce `id` as a second public
-phase unless a separate pass really owns that representation.
+`pick` is the canonical public phase label for object picking. `id` is
+resource/pass/debug terminology, not a built-in picking phase alias. Material
+authors may still create a custom material phase named `id`, but engine
+drawable APIs must not treat it as a second public picking representation
+unless a separate pass really owns that representation.
 
 ## Current Consumers
 

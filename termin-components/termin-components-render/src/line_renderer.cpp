@@ -122,17 +122,9 @@ bool uses_material_fragment_variant_for_pass(
         || mode == LineRenderMode::WorldTube;
 }
 
-bool is_auxiliary_geometry_phase(const std::string& phase_mark) {
-    return phase_mark == "shadow"
-        || phase_mark == "id";
-}
-
-bool accepts_phase(LineRenderMode mode, const std::string& phase_mark, bool cast_shadow) {
+bool accepts_phase(const std::string& phase_mark, bool cast_shadow) {
     if (phase_mark == "shadow") {
         return cast_shadow;
-    }
-    if (is_direct_line_mode(mode) && is_auxiliary_geometry_phase(phase_mark)) {
-        return false;
     }
     return true;
 }
@@ -194,7 +186,7 @@ MaterialPipelinePassContract legacy_line_pass_contract_for_phase(const std::stri
         return legacy_line_auxiliary_pass_contract("shadow");
     }
     if (phase_mark == "pick") {
-        return legacy_line_auxiliary_pass_contract("id");
+        return legacy_line_auxiliary_pass_contract("pick");
     }
     return legacy_line_material_pass_contract();
 }
@@ -735,7 +727,7 @@ std::set<std::string> LineRenderer::get_phase_marks() const {
     const LineRenderMode mode = effective_render_mode();
     for (size_t i = 0; i < raw->phase_count; ++i) {
         const std::string phase_mark = raw->phases[i].phase_mark;
-        if (!accepts_phase(mode, phase_mark, cast_shadow)) {
+        if (!accepts_phase(phase_mark, cast_shadow)) {
             continue;
         }
         marks.insert(phase_mark);
@@ -768,7 +760,7 @@ TcShader LineRenderer::override_shader_with_context(
     TcShader original_shader = context.original_shader;
     const LineRenderMode mode = effective_render_mode();
     if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
-        || !accepts_phase(mode, phase_mark, cast_shadow)) {
+        || !accepts_phase(phase_mark, cast_shadow)) {
         return original_shader;
     }
 
@@ -810,7 +802,7 @@ void LineRenderer::collect_shader_usages_with_context(
 
     const LineRenderMode mode = effective_render_mode();
     if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
-        || !accepts_phase(mode, context.phase_mark, cast_shadow)) {
+        || !accepts_phase(context.phase_mark, cast_shadow)) {
         return;
     }
 
@@ -848,7 +840,7 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
     if (!is_direct_line_mode(mode)) {
         return false;
     }
-    if (!accepts_phase(mode, phase_mark, cast_shadow)) {
+    if (!accepts_phase(phase_mark, cast_shadow)) {
         return false;
     }
     if (points_.size() < 2) {
@@ -1000,7 +992,7 @@ bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
 bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int geometry_id) const {
     (void)geometry_id;
     LineRenderMode mode = effective_render_mode();
-    if (!accepts_phase(mode, phase_mark, cast_shadow)) {
+    if (!accepts_phase(phase_mark, cast_shadow)) {
         return false;
     }
     return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
@@ -1014,7 +1006,7 @@ bool LineRenderer::supports_direct_tgfx2_draw(
     (void)geometry_id;
     (void)kind;
     LineRenderMode mode = effective_render_mode();
-    return is_direct_line_mode(mode) && accepts_phase(mode, phase_mark, cast_shadow);
+    return is_direct_line_mode(mode) && accepts_phase(phase_mark, cast_shadow);
 }
 
 tc_mesh* LineRenderer::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
@@ -1034,7 +1026,7 @@ std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(const std::string
     }
 
     LineRenderMode mode = effective_render_mode();
-    if (phase_mark && !accepts_phase(mode, *phase_mark, cast_shadow)) {
+    if (phase_mark && !accepts_phase(*phase_mark, cast_shadow)) {
         return draws;
     }
 
@@ -1055,7 +1047,7 @@ std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(const std::string
     for (size_t i = 0; i < raw->phase_count; ++i) {
         tc_material_phase* phase = &raw->phases[i];
         const std::string draw_phase_mark = phase->phase_mark;
-        if (!accepts_phase(mode, draw_phase_mark, cast_shadow)) {
+        if (!accepts_phase(draw_phase_mark, cast_shadow)) {
             continue;
         }
         if (draw_phase_mark == "shadow") {
