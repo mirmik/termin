@@ -11,6 +11,11 @@
 
 namespace termin {
 
+// Compatibility contract for legacy Drawable::override_shader callers that do
+// not receive a pass-owned MaterialPipelinePassContract. New pass-owned code
+// should pass an explicit contract through ShaderOverrideContext instead.
+ENTITY_API MaterialPipelinePassContract legacy_full_material_pass_contract();
+
 ENTITY_API TcShader get_skinned_shader_for_pass(
     const MaterialPipelinePassContract& pass_contract,
     TcShader original_shader);

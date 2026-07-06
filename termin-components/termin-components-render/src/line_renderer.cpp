@@ -110,14 +110,6 @@ bool is_direct_line_mode(LineRenderMode mode) {
         || mode == LineRenderMode::WorldTube;
 }
 
-bool uses_material_fragment_variant(LineRenderMode mode, const std::string& phase_mark) {
-    if (phase_mark == "shadow" || phase_mark == "pick") {
-        return false;
-    }
-    return mode == LineRenderMode::WorldBillboard
-        || mode == LineRenderMode::WorldTube;
-}
-
 bool uses_material_fragment_variant_for_pass(
     LineRenderMode mode,
     const MaterialPipelinePassContract& pass_contract)
@@ -191,6 +183,20 @@ MaterialPipelinePassContract legacy_line_auxiliary_pass_contract(const char* deb
     contract.required_material_fragment_input = MaterialFragmentInterface{};
     contract.uses_material_fragment = true;
     return contract;
+}
+
+MaterialPipelinePassContract legacy_line_pass_contract_for_phase(const std::string& phase_mark)
+{
+    // Compatibility adapter for old Drawable::override_shader callers. Pass-owned
+    // render code must provide ShaderOverrideContext::pass_contract explicitly so
+    // material-fragment variant intent does not depend on phase_mark strings.
+    if (phase_mark == "shadow") {
+        return legacy_line_auxiliary_pass_contract("shadow");
+    }
+    if (phase_mark == "pick") {
+        return legacy_line_auxiliary_pass_contract("id");
+    }
+    return legacy_line_material_pass_contract();
 }
 
 TcShader get_line_material_fragment_shader(TcShader original_shader) {
@@ -749,12 +755,7 @@ TcShader LineRenderer::override_shader(
     context.phase_mark = phase_mark;
     context.geometry_id = geometry_id;
     context.original_shader = original_shader;
-    context.pass_contract = legacy_line_material_pass_contract();
-    if (phase_mark == "shadow") {
-        context.pass_contract = legacy_line_auxiliary_pass_contract("shadow");
-    } else if (phase_mark == "pick") {
-        context.pass_contract = legacy_line_auxiliary_pass_contract("id");
-    }
+    context.pass_contract = legacy_line_pass_contract_for_phase(phase_mark);
     return override_shader_with_context(context);
 }
 
@@ -790,12 +791,7 @@ void LineRenderer::collect_shader_usages(
     context.phase_mark = phase_mark;
     context.geometry_id = geometry_id;
     context.original_shader = original_shader;
-    context.pass_contract = legacy_line_material_pass_contract();
-    if (phase_mark == "shadow") {
-        context.pass_contract = legacy_line_auxiliary_pass_contract("shadow");
-    } else if (phase_mark == "pick") {
-        context.pass_contract = legacy_line_auxiliary_pass_contract("id");
-    }
+    context.pass_contract = legacy_line_pass_contract_for_phase(phase_mark);
     collect_shader_usages_with_context(context, emit);
 }
 

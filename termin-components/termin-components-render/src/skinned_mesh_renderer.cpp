@@ -72,31 +72,6 @@ static std::unordered_map<
     SkinnedShaderCacheKeyHash,
 SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
 
-MaterialPipelinePassContract legacy_material_pass_contract()
-{
-    MaterialPipelinePassContract contract;
-    contract.debug_name = "legacy_material";
-    contract.required_material_fragment_input =
-        material_pipeline_standard_material_fragment_interface();
-    contract.uses_material_fragment = true;
-
-    MaterialFragmentInterface fragment_input =
-        material_pipeline_standard_material_fragment_interface();
-    contract.static_vertex_transform =
-        material_pipeline_make_static_vertex_transform_contract(
-            "static",
-            material_pipeline_full_material_mesh_input(),
-            fragment_input,
-            material_pipeline_common_vertex_resources("draw_data"));
-    contract.skinned_vertex_transform =
-        material_pipeline_make_skinned_vertex_transform_contract(
-            *contract.static_vertex_transform,
-            "skinned",
-            "termin-engine-skinned-material",
-            material_pipeline_skinned_material_mesh_input());
-    return contract;
-}
-
 void SkinnedMeshRenderer::register_type() {
     MeshRenderer::register_type();
     register_component_type<SkinnedMeshRenderer>("SkinnedMeshRenderer", "MeshRenderer");
@@ -274,7 +249,7 @@ TcShader SkinnedMeshRenderer::override_shader(
     context.phase_mark = phase_mark;
     context.geometry_id = geometry_id;
     context.original_shader = original_shader;
-    context.pass_contract = legacy_material_pass_contract();
+    context.pass_contract = legacy_full_material_pass_contract();
     return override_shader_with_context(context);
 }
 
@@ -343,7 +318,7 @@ void SkinnedMeshRenderer::collect_shader_usages(
     context.phase_mark = phase_mark;
     context.geometry_id = geometry_id;
     context.original_shader = original_shader;
-    context.pass_contract = legacy_material_pass_contract();
+    context.pass_contract = legacy_full_material_pass_contract();
     collect_shader_usages_with_context(context, emit);
 }
 
