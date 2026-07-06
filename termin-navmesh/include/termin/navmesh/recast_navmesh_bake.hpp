@@ -35,6 +35,7 @@ struct TERMIN_NAVMESH_COMPONENTS_API RecastNavMeshBuildConfig {
     float detail_sample_dist = 6.0f;
     float detail_sample_max_error = 1.0f;
     bool build_detail_mesh = false;
+    int default_area_id = 0;
 };
 
 struct TERMIN_NAVMESH_COMPONENTS_API RecastNavMeshBuildDebugHooks {
@@ -45,6 +46,15 @@ struct TERMIN_NAVMESH_COMPONENTS_API RecastNavMeshBuildDebugHooks {
     std::function<void(rcPolyMesh* poly_mesh)> capture_poly_mesh;
     std::function<void(rcPolyMeshDetail* detail_mesh)> capture_detail_mesh;
 };
+
+TERMIN_NAVMESH_COMPONENTS_API RecastBuildResult build_recast_navmesh(
+    const float* verts,
+    int nverts,
+    const int* tris,
+    int ntris,
+    const unsigned char* triangle_area_ids,
+    const RecastNavMeshBuildConfig& config,
+    const RecastNavMeshBuildDebugHooks* debug_hooks = nullptr);
 
 TERMIN_NAVMESH_COMPONENTS_API RecastBuildResult build_recast_navmesh(
     const float* verts,

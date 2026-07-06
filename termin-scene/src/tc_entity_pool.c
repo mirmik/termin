@@ -101,7 +101,6 @@ struct tc_entity_pool {
     bool* enabled;
     bool* pickable;
     bool* selectable;
-    bool* serializable;
     bool* transform_dirty;
     uint32_t* version_for_walking_to_proximal;
     uint32_t* version_for_walking_to_distal;
@@ -339,7 +338,6 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
     pool->enabled = calloc(initial_capacity, sizeof(bool));
     pool->pickable = calloc(initial_capacity, sizeof(bool));
     pool->selectable = calloc(initial_capacity, sizeof(bool));
-    pool->serializable = calloc(initial_capacity, sizeof(bool));
     pool->transform_dirty = calloc(initial_capacity, sizeof(bool));
     pool->version_for_walking_to_proximal = calloc(initial_capacity, sizeof(uint32_t));
     pool->version_for_walking_to_distal = calloc(initial_capacity, sizeof(uint32_t));
@@ -426,7 +424,6 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->enabled);
     free(pool->pickable);
     free(pool->selectable);
-    free(pool->serializable);
     free(pool->transform_dirty);
     free(pool->version_for_walking_to_proximal);
     free(pool->version_for_walking_to_distal);
@@ -490,13 +487,11 @@ static void pool_grow(tc_entity_pool* pool) {
     pool->enabled = realloc(pool->enabled, new_cap * sizeof(bool));
     pool->pickable = realloc(pool->pickable, new_cap * sizeof(bool));
     pool->selectable = realloc(pool->selectable, new_cap * sizeof(bool));
-    pool->serializable = realloc(pool->serializable, new_cap * sizeof(bool));
     pool->transform_dirty = realloc(pool->transform_dirty, new_cap * sizeof(bool));
     memset(pool->visible + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(pool->enabled + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(pool->pickable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(pool->selectable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
-    memset(pool->serializable + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
     memset(pool->transform_dirty + old_cap, 0, (new_cap - old_cap) * sizeof(bool));
 
     pool->version_for_walking_to_proximal = realloc(pool->version_for_walking_to_proximal, new_cap * sizeof(uint32_t));
@@ -570,7 +565,6 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     pool->enabled[idx] = true;
     pool->pickable[idx] = true;
     pool->selectable[idx] = true;
-    pool->serializable[idx] = true;
     pool->transform_dirty[idx] = true;
     pool->version_for_walking_to_proximal[idx] = 0;
     pool->version_for_walking_to_distal[idx] = 0;
@@ -852,16 +846,6 @@ bool tc_entity_pool_selectable(const tc_entity_pool* pool, tc_entity_id id) {
 void tc_entity_pool_set_selectable(tc_entity_pool* pool, tc_entity_id id, bool v) {
     if (!tc_entity_pool_alive(pool, id)) return;
     pool->selectable[id.index] = v;
-}
-
-bool tc_entity_pool_serializable(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) return false;
-    return pool->serializable[id.index];
-}
-
-void tc_entity_pool_set_serializable(tc_entity_pool* pool, tc_entity_id id, bool v) {
-    if (!tc_entity_pool_alive(pool, id)) return;
-    pool->serializable[id.index] = v;
 }
 
 int tc_entity_pool_priority(const tc_entity_pool* pool, tc_entity_id id) {
@@ -1551,7 +1535,6 @@ tc_entity_id tc_entity_pool_migrate(
     dst_pool->enabled[dst_idx] = src_pool->enabled[src_idx];
     dst_pool->pickable[dst_idx] = src_pool->pickable[src_idx];
     dst_pool->selectable[dst_idx] = src_pool->selectable[src_idx];
-    dst_pool->serializable[dst_idx] = src_pool->serializable[src_idx];
     dst_pool->priorities[dst_idx] = src_pool->priorities[src_idx];
     dst_pool->layers[dst_idx] = src_pool->layers[src_idx];
     dst_pool->entity_flags[dst_idx] = src_pool->entity_flags[src_idx];

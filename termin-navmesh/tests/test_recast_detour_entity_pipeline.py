@@ -8,6 +8,7 @@ import pytest
 
 
 try:
+    import termin.bootstrap
     from termin.geombase import Pose3, Vec3
     from termin.mesh import MeshComponent, TcMesh
     from termin.navmesh import (
@@ -22,6 +23,15 @@ try:
     from tmesh import CubeMesh
 except ImportError as exc:  # pragma: no cover - depends on built SDK availability.
     pytestmark = pytest.mark.skip(reason=str(exc))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _bootstrap_runtime_component_types():
+    termin.bootstrap.bootstrap_player()
+    try:
+        yield
+    finally:
+        termin.bootstrap.shutdown_player()
 
 
 def _configure_builder(builder: RecastNavMeshBuilderComponent) -> None:

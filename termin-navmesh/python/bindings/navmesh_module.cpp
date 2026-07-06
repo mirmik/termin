@@ -2,6 +2,7 @@
 
 #include "common.hpp"
 #include "termin/navmesh/detour_pathfinding_world_component.hpp"
+#include "termin/navmesh/navmesh_bake_source.hpp"
 #include "termin/navmesh/navmesh_keeper_component.hpp"
 #include "termin/navmesh/navmesh_query_space.hpp"
 #include "termin/navmesh/off_mesh_link_component.hpp"
@@ -127,8 +128,11 @@ nb::list detailed_path_to_python(const DetourPathResult& path) {
         item["point"] = point_to_python(p.point);
         item["flags"] = p.flags;
         item["poly_ref"] = p.poly_ref;
+        item["poly_type"] = p.poly_type;
         item["off_mesh_connection"] = p.off_mesh_connection;
         item["off_mesh_user_id"] = p.off_mesh_user_id;
+        item["linear_segment"] = p.linear_segment;
+        item["linear_user_id"] = p.linear_user_id;
         item["area"] = p.area;
         result.append(item);
     }
@@ -266,6 +270,16 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         tc_navmesh_set_load_callback(navmesh.handle, nullptr, nullptr);
     }, nb::arg("navmesh"));
 
+    m.def("set_navmesh_bake_visitor_registration_owner", [](const std::string& owner) {
+        NavMeshBakeVisitorRegistry::instance().set_registration_owner(owner);
+    }, nb::arg("owner"));
+    m.def("navmesh_bake_visitor_registration_owner", []() {
+        return NavMeshBakeVisitorRegistry::instance().registration_owner();
+    });
+    m.def("unregister_navmesh_bake_visitor_owner", [](const std::string& owner) {
+        return NavMeshBakeVisitorRegistry::instance().unregister_owner(owner);
+    }, nb::arg("owner"));
+
     m.def("set_detour_navmesh_asset_data",
           [](const std::string& uuid,
              const std::string& name,
@@ -357,6 +371,7 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def_rw("link_type", &OffMeshLinkComponent::link_type)
         .def_rw("agent_type", &OffMeshLinkComponent::agent_type)
         .def_rw("area_id", &OffMeshLinkComponent::area_id)
+        .def_rw("stable_user_id", &OffMeshLinkComponent::stable_user_id)
         .def_prop_rw("start_local",
             [](OffMeshLinkComponent& self) {
                 return tc_vec3_to_python(self.start_local);
@@ -639,6 +654,21 @@ void bind_recast_navmesh_builder(nb::module_& m) {
             return self.build(verts_ptr, nverts, tris_ptr, ntris);
         }, nb::arg("vertices"), nb::arg("triangles"),
            "Build navmesh from vertices (Nx3 float array) and triangles (Mx3 int array)")
+        .def("build_with_areas", [](RecastNavMeshBuilderComponent& self,
+                         nb::ndarray<float, nb::shape<-1, 3>, nb::c_contig> verts,
+                         nb::ndarray<int, nb::shape<-1, 3>, nb::c_contig> tris,
+                         nb::ndarray<unsigned char, nb::shape<-1>, nb::c_contig> triangle_area_ids) {
+            int nverts = static_cast<int>(verts.shape(0));
+            int ntris = static_cast<int>(tris.shape(0));
+            if (static_cast<int>(triangle_area_ids.shape(0)) != ntris) {
+                throw std::runtime_error("triangle_area_ids length must match triangle count");
+            }
+            const float* verts_ptr = verts.data();
+            const int* tris_ptr = tris.data();
+            const unsigned char* areas_ptr = triangle_area_ids.data();
+            return self.build_with_areas(verts_ptr, nverts, tris_ptr, ntris, areas_ptr);
+        }, nb::arg("vertices"), nb::arg("triangles"), nb::arg("triangle_area_ids"),
+           "Build navmesh from vertices, triangles, and per-triangle Detour area ids")
         // Build from entity
         .def("build_from_entity", &RecastNavMeshBuilderComponent::build_from_entity)
         .def("build_from_entity_geometry", &RecastNavMeshBuilderComponent::build_from_entity_geometry)

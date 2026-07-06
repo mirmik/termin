@@ -12,6 +12,7 @@
 #include <termin/navmesh/recast_debug_data.hpp>
 #include <termin/navmesh/detour_navmesh_build.hpp>
 #include <termin/navmesh/navmesh_keeper_component.hpp>
+#include <termin/navmesh/navmesh_bake_source.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
 #include <string>
 
@@ -91,6 +92,7 @@ public:
 
     // Last build result
     RecastBuildResult last_result;
+    NavMeshBakeInput last_bake_input;
 
     // --- Methods ---
 
@@ -104,6 +106,10 @@ public:
     // tris: int[ntris * 3] - triangle indices
     RecastBuildResult build(const float* verts, int nverts,
                             const int* tris, int ntris);
+
+    RecastBuildResult build_with_areas(const float* verts, int nverts,
+                                       const int* tris, int ntris,
+                                       const unsigned char* triangle_area_ids);
 
     // Convert a successful Recast result into a single Detour tile in memory.
     DetourNavMeshTileBuildResult build_detour_tile_data(const RecastBuildResult& result);
@@ -163,6 +169,10 @@ private:
     void capture_poly_mesh_data(rcPolyMesh* pmesh);
     void capture_detail_mesh_data(rcPolyMeshDetail* dmesh);
     bool save_detour_asset(const RecastBuildResult& result);
+    RecastBuildResult build_internal(const float* verts, int nverts,
+                                     const int* tris, int ntris,
+                                     const unsigned char* triangle_area_ids,
+                                     bool clear_bake_input);
 };
 
 } // namespace termin

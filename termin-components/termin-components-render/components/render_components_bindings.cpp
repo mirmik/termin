@@ -906,7 +906,9 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("input_res", &DepthPass::input_res)
         .def_rw("output_res", &DepthPass::output_res)
         .def_rw("camera_name", &DepthPass::camera_name)
-        .def_rw("phase_mark", &DepthPass::phase_mark)
+        .def_prop_rw("phase_mark",
+            [](DepthPass& self) { return self.pass_phase_mark; },
+            [](DepthPass& self, const std::string& value) { self.pass_phase_mark = value; })
         .def_rw("depth_encoding", &DepthPass::depth_encoding)
         .def_rw("clear", &DepthPass::clear)
         .def("get_internal_symbols", &DepthPass::get_internal_symbols)
@@ -932,7 +934,7 @@ NB_MODULE(_components_render_native, m) {
             }
             auto* p = new DepthPass(input_res, output_res, pass_name);
             p->camera_name = camera_name;
-            p->phase_mark = phase_mark;
+            p->pass_phase_mark = phase_mark;
             p->depth_encoding = depth_encoding;
             p->clear = clear;
             return init_pass_from_deserialize(p, "DepthPass");
@@ -961,7 +963,9 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("output_res", &DepthOnlyPass::output_res)
         .def_rw("output_res_target", &DepthOnlyPass::output_res_target)
         .def_rw("camera_name", &DepthOnlyPass::camera_name)
-        .def_rw("phase_mark", &DepthOnlyPass::phase_mark)
+        .def_prop_rw("phase_mark",
+            [](DepthOnlyPass& self) { return self.pass_phase_mark; },
+            [](DepthOnlyPass& self, const std::string& value) { self.pass_phase_mark = value; })
         .def("get_internal_symbols", &DepthOnlyPass::get_internal_symbols)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
             (void)resource_manager;
@@ -982,7 +986,7 @@ NB_MODULE(_components_render_native, m) {
             auto* p = new DepthOnlyPass(output_res, pass_name);
             p->camera_name = camera_name;
             p->output_res_target = output_res_target;
-            p->phase_mark = phase_mark;
+            p->pass_phase_mark = phase_mark;
             return init_pass_from_deserialize(p, "DepthOnlyPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &DepthOnlyPass::compute_reads)
@@ -1081,7 +1085,9 @@ NB_MODULE(_components_render_native, m) {
         .def_rw("input_res", &NormalPass::input_res)
         .def_rw("output_res", &NormalPass::output_res)
         .def_rw("camera_name", &NormalPass::camera_name)
-        .def_rw("phase_mark", &NormalPass::phase_mark)
+        .def_prop_rw("phase_mark",
+            [](NormalPass& self) { return self.pass_phase_mark; },
+            [](NormalPass& self, const std::string& value) { self.pass_phase_mark = value; })
         .def("get_resource_specs", &NormalPass::get_resource_specs)
         .def("get_internal_symbols", &NormalPass::get_internal_symbols)
         .def_static("_deserialize_instance", [](nb::dict data, nb::object resource_manager) {
@@ -1102,7 +1108,7 @@ NB_MODULE(_components_render_native, m) {
             }
             auto* p = new NormalPass(input_res, output_res, pass_name);
             p->camera_name = camera_name;
-            p->phase_mark = phase_mark;
+            p->pass_phase_mark = phase_mark;
             return init_pass_from_deserialize(p, "NormalPass");
         }, nb::arg("data"), nb::arg("resource_manager") = nb::none())
         .def_prop_ro("reads", &NormalPass::compute_reads)

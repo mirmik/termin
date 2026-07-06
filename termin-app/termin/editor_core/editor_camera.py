@@ -79,7 +79,6 @@ class EditorCameraManager:
             return
 
         editor_entities = Entity(name="EditorEntities")
-        editor_entities.serializable = False
         self.editor_entities = editor_entities
 
     def _ensure_editor_camera(self) -> None:
@@ -96,7 +95,6 @@ class EditorCameraManager:
 
         # Create camera in standalone pool (not in scene)
         camera_entity = Entity(name="camera")
-        camera_entity.serializable = False
         # camera = PerspectiveCameraComponent()
         # camera_entity.add_component(camera)
         # camera_entity.add_component(OrbitCameraController())
@@ -107,7 +105,6 @@ class EditorCameraManager:
 
         # Create child entity for editor UI with layer=1
         ui_entity = Entity(name="editor_ui")
-        ui_entity.serializable = False
         ui_entity.layer = 1  # Editor UI layer
         #ui_comp = UIComponent()
         ui_entity.add_component_by_name("UIComponent")
@@ -175,27 +172,21 @@ class EditorCameraManager:
 
         result = {}
         for ent in entities:
-            # Temporarily enable serializable
-            old_serializable = ent.serializable
-            ent.serializable = True
-            try:
-                # Serialize only components (not the entity itself)
-                import traceback
-                components_data = []
-                for ref in ent.tc_components:
-                    print(f"[DEBUG] serializing {ref.type_name} on '{ent.name}'", flush=True)
-                    try:
-                        comp_data = ref.serialize()
-                    except Exception as e:
-                        print(f"[DEBUG] FAILED {ref.type_name}: {e}", flush=True)
-                        traceback.print_exc()
-                        continue
-                    if comp_data:
-                        components_data.append(comp_data)
-                if components_data:
-                    result[ent.name] = components_data
-            finally:
-                ent.serializable = old_serializable
+            # Serialize only components (not the entity itself)
+            import traceback
+            components_data = []
+            for ref in ent.tc_components:
+                print(f"[DEBUG] serializing {ref.type_name} on '{ent.name}'", flush=True)
+                try:
+                    comp_data = ref.serialize()
+                except Exception as e:
+                    print(f"[DEBUG] FAILED {ref.type_name}: {e}", flush=True)
+                    traceback.print_exc()
+                    continue
+                if comp_data:
+                    components_data.append(comp_data)
+            if components_data:
+                result[ent.name] = components_data
 
         return result if result else None
 

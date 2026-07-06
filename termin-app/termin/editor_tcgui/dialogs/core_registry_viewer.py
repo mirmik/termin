@@ -475,7 +475,6 @@ def show_core_registry_viewer(ui) -> None:
         flags.append("V" if entity.get("visible", True) else "-")
         flags.append("P" if entity.get("pickable", True) else "-")
         flags.append("S" if entity.get("selectable", True) else "-")
-        flags.append("Ser" if entity.get("serializable", True) else "---")
         return " ".join(flags)
 
     def _make_tree_label(text: str) -> Label:
@@ -523,7 +522,6 @@ def show_core_registry_viewer(ui) -> None:
             f"Visible:        {info.get('visible', True)}",
             f"Pickable:       {info.get('pickable', True)}",
             f"Selectable:     {info.get('selectable', True)}",
-            f"Serializable:   {info.get('serializable', True)}",
             f"Priority:       {info.get('priority', 0)}",
             f"Layer:          {info.get('layer', 0)}",
             f"Flags:          {info.get('flags', 0)}",

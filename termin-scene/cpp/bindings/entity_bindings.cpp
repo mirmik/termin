@@ -10,8 +10,10 @@
 #include <functional>
 #include <cstring>
 #include <cstdint>
+#include <unordered_map>
 
 #include <tcbase/tc_log.hpp>
+#include <tcbase/tc_value_trent.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry_python.hpp>
 #include <termin/entity/entity.hpp>
@@ -58,6 +60,27 @@ public:
     }
 };
 
+static nb::object trent_to_py_object(const nos::trent& data) {
+    tc_value value = tc::trent_to_tc_value(data);
+    nb::object result = tc_value_to_py(&value);
+    tc_value_free(&value);
+    return result;
+}
+
+static nos::trent py_object_to_trent(nb::object data) {
+    tc_value value = py_to_tc_value(data);
+    nos::trent result = tc::tc_value_to_trent(value);
+    tc_value_free(&value);
+    return result;
+}
+
+static tc_scene_handle scene_handle_from_py(nb::object scene) {
+    if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
+        return nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
+    }
+    return TC_SCENE_HANDLE_INVALID;
+}
+
 // Forward-declare TcComponentRef (defined in tc_component_ref_bindings.cpp, registered in same module)
 // We use tc_component* directly here since TcComponentRef is a local class in that TU.
 // For add_component_by_name etc., we return nb::object and let nanobind find the registered type.
@@ -73,7 +96,7 @@ void bind_entity_class(nb::module_& m) {
             new (self) Entity(Entity::create(get_standalone_pool(), name));
         }, nb::arg("name") = "entity", nb::arg("uuid") = "")
         .def("__init__", [](Entity* self, nb::object pose, const std::string& name, int priority,
-                        bool pickable, bool selectable, bool serializable,
+                        bool pickable, bool selectable,
                         int layer, uint64_t flags, const std::string& uuid) {
             new (self) Entity(Entity::create(get_standalone_pool(), name));
 
@@ -90,12 +113,11 @@ void bind_entity_class(nb::module_& m) {
             self->set_priority(priority);
             self->set_pickable(pickable);
             self->set_selectable(selectable);
-            self->set_serializable(serializable);
             self->set_layer(static_cast<uint64_t>(layer));
             self->set_flags(flags);
         }, nb::arg("pose") = nb::none(), nb::arg("name") = "entity",
             nb::arg("priority") = 0, nb::arg("pickable") = true,
-            nb::arg("selectable") = true, nb::arg("serializable") = true,
+            nb::arg("selectable") = true,
             nb::arg("layer") = 0, nb::arg("flags") = 0, nb::arg("uuid") = "")
 
         // Validity
@@ -443,7 +465,72 @@ void bind_entity_class(nb::module_& m) {
         .def("children", &Entity::children)
         .def("create_child", &Entity::create_child, nb::arg("name") = "entity")
         .def("destroy_children", &Entity::destroy_children)
+        .def("serialize_hierarchy", [](Entity& e) -> nb::object {
+            return trent_to_py_object(e.serialize_hierarchy());
+        })
+        .def_static("make_clone_payload", [](nb::object data, const std::string& name_suffix) -> nb::object {
+            try {
+                if (data.is_none()) return nb::none();
+
+                nos::trent source_data = py_object_to_trent(data);
+                std::unordered_map<std::string, std::string> uuid_remap;
+                nos::trent clone_data = Entity::make_clone_payload(source_data, name_suffix, uuid_remap);
+                if (!clone_data.is_dict()) return nb::none();
+
+                nb::dict py_remap;
+                for (const auto& [old_uuid, new_uuid] : uuid_remap) {
+                    py_remap[nb::str(old_uuid.c_str())] = nb::str(new_uuid.c_str());
+                }
+
+                return nb::make_tuple(trent_to_py_object(clone_data), py_remap);
+            } catch (const std::exception& ex) {
+                tc::Log::error(ex, "Entity::make_clone_payload");
+                return nb::none();
+            }
+        }, nb::arg("data"), nb::arg("name_suffix") = "_copy")
+        .def_static("remap_entity_refs", [](nb::object data, nb::object uuid_remap) -> nb::object {
+            try {
+                if (data.is_none()) return nb::none();
+
+                nos::trent remapped_data = py_object_to_trent(data);
+                std::unordered_map<std::string, std::string> remap;
+                if (!uuid_remap.is_none()) {
+                    nb::dict py_remap = nb::cast<nb::dict>(uuid_remap);
+                    for (auto item : py_remap) {
+                        remap[nb::cast<std::string>(item.first)] =
+                            nb::cast<std::string>(item.second);
+                    }
+                }
+
+                Entity::remap_entity_refs(remapped_data, remap);
+                return trent_to_py_object(remapped_data);
+            } catch (const std::exception& ex) {
+                tc::Log::error(ex, "Entity::remap_entity_refs");
+                return nb::none();
+            }
+        }, nb::arg("data"), nb::arg("uuid_remap"))
+        .def_static("deserialize_hierarchy", [](nb::object data, nb::object scene, nb::object parent) -> nb::object {
+            try {
+                if (data.is_none()) return nb::none();
+
+                nos::trent hierarchy_data = py_object_to_trent(data);
+                tc_scene_handle scene_handle = scene_handle_from_py(scene);
+
+                Entity parent_entity;
+                if (!parent.is_none()) {
+                    parent_entity = nb::cast<Entity>(parent);
+                }
+
+                Entity ent = Entity::deserialize_hierarchy(hierarchy_data, scene_handle, parent_entity);
+                if (!ent.valid()) return nb::none();
+                return nb::cast(ent);
+            } catch (const std::exception& ex) {
+                tc::Log::error(ex, "Entity::deserialize_hierarchy");
+                return nb::none();
+            }
+        }, nb::arg("data"), nb::arg("scene") = nb::none(), nb::arg("parent") = nb::none())
         .def("find_child", &Entity::find_child, nb::arg("name"))
+        .def("clone", &Entity::clone, nb::arg("name_suffix") = "_copy")
         .def("ancestors", [](Entity& e) {
             return EntityAncestorIterator(e);
         })
@@ -465,9 +552,6 @@ void bind_entity_class(nb::module_& m) {
         .def("validate_components", &Entity::validate_components)
 
         // Serialization
-        .def_prop_rw("serializable",
-            [](const Entity& e) { return e.serializable(); },
-            [](Entity& e, bool v) { e.set_serializable(v); })
         .def("serialize", [](Entity& e) -> nb::object {
             tc_value data = e.serialize_base();
             if (data.type == TC_VALUE_NIL) return nb::none();
@@ -490,11 +574,9 @@ void bind_entity_class(nb::module_& m) {
 
             nb::list children_list;
             for (Entity child : e.children()) {
-                if (child.serializable()) {
-                    nb::object py_child = nb::cast(child);
-                    nb::object child_data = py_child.attr("serialize")();
-                    if (!child_data.is_none()) children_list.append(child_data);
-                }
+                nb::object py_child = nb::cast(child);
+                nb::object child_data = py_child.attr("serialize")();
+                if (!child_data.is_none()) children_list.append(child_data);
             }
             result["children"] = children_list;
             return result;

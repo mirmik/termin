@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include <termin/render/geometry_pass_base.hpp>
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -26,10 +28,12 @@ private:
 
 public:
     std::string depth_encoding = "linear";
-    std::string phase_mark = "depth";
+    std::string pass_phase_mark = "depth";
     bool clear = true;
 
-    INSPECT_FIELD(DepthPass, phase_mark, "Phase Mark", "string")
+    INSPECT_FIELD_ACCESSORS(DepthPass, std::string, phase_mark, "Phase Mark", "string",
+        ([](DepthPass* self) { return self->pass_phase_mark; }),
+        ([](DepthPass* self, std::string value) { self->pass_phase_mark = value; }))
     INSPECT_FIELD_CHOICES(DepthPass, depth_encoding, "Depth Encoding", "string",
         {"linear", "Linear"},
         {"linear_inverse", "Linear Inverse"},
@@ -73,8 +77,10 @@ public:
 
 protected:
     std::array<float, 4> clear_color() const override;
-    const char* phase_name() const override { return phase_mark.c_str(); }
-    const char* material_shader_phase_name() const override { return phase_mark.c_str(); }
+    const char* phase_mark() const override {
+        return pass_phase_mark.c_str();
+    }
+    bool uses_material_phase_shader_override() const override { return true; }
     MaterialPipelinePassContract shader_pass_contract() const override;
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
@@ -86,14 +92,27 @@ public:
         Entity entity;
         tc_component* component = nullptr;
         tc_shader_handle final_shader = tc_shader_handle_invalid();
+        tc_material_phase* material_phase = nullptr;
+        tc_material_handle material = tc_material_handle_invalid();
+        size_t phase_index = SIZE_MAX;
         int geometry_id = 0;
+
+        tc_material_phase* resolve_material_phase() const {
+            if (!tc_material_handle_is_invalid(material) && phase_index != SIZE_MAX) {
+                tc_material* mat = tc_material_get(material);
+                if (mat && phase_index < mat->phase_count) {
+                    return &mat->phases[phase_index];
+                }
+            }
+            return material_phase;
+        }
     };
 
 public:
     std::string output_res = "depth_texture";
     std::string output_res_target;
     std::string camera_name;
-    std::string phase_mark = "depth";
+    std::string pass_phase_mark = "depth";
     std::vector<std::string> entity_names;
 
 private:
@@ -107,7 +126,9 @@ public:
     INSPECT_FIELD(DepthOnlyPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(DepthOnlyPass, output_res_target, "Output Target", "string")
     INSPECT_FIELD(DepthOnlyPass, camera_name, "Camera Name", "string")
-    INSPECT_FIELD(DepthOnlyPass, phase_mark, "Phase Mark", "string")
+    INSPECT_FIELD_ACCESSORS(DepthOnlyPass, std::string, phase_mark, "Phase Mark", "string",
+        ([](DepthOnlyPass* self) { return self->pass_phase_mark; }),
+        ([](DepthOnlyPass* self, std::string value) { self->pass_phase_mark = value; }))
     INSPECT_TYPE_METADATA(DepthOnlyPass, graph, make_pass_graph_metadata(
         {{"output_res_target", "depth_texture"}},
         {{"output_res", "depth_texture"}},

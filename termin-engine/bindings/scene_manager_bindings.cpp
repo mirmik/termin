@@ -358,7 +358,6 @@ void bind_scene_manager(nb::module_& m) {
             d["visible"] = tc_entity_pool_visible(c->pool, id);
             d["pickable"] = tc_entity_pool_pickable(c->pool, id);
             d["selectable"] = tc_entity_pool_selectable(c->pool, id);
-            d["serializable"] = tc_entity_pool_serializable(c->pool, id);
             d["priority"] = tc_entity_pool_priority(c->pool, id);
             d["layer"] = tc_entity_pool_layer(c->pool, id);
             d["flags"] = tc_entity_pool_flags(c->pool, id);
