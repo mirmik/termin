@@ -1574,6 +1574,69 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
 
 
 @full_runtime_package_exporter
+def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_path: Path) -> None:
+    from termin.bootstrap import bootstrap_player
+    from termin.render_components import LineRenderMode, LineRenderer
+    from termin.render_framework import RenderPipeline
+    from termin.render_passes import ColorPass
+    from termin.scene import TcScene
+
+    bootstrap_player()
+
+    project = tmp_path / "PipelineShaderUsageGame"
+    project.mkdir()
+    pipeline_uuid = "pipeline-shader-usage-uuid"
+
+    scene = TcScene.create("pipeline-shader-usage-scene")
+    pipeline = RenderPipeline("LinePipeline")
+    try:
+        entity = scene.create_entity("line")
+        entity.add_component(
+            LineRenderer(
+                points=[(0, 0, 0), (1, 0, 0)],
+                render_mode=LineRenderMode.WorldTube,
+            )
+        )
+        scene_data = scene.serialize()
+        scene_data["uuid"] = "scene-uuid"
+        scene_data["render_mount"] = {
+            "render_target_configs": [
+                {
+                    "name": "MainTarget",
+                    "kind": "window",
+                    "pipeline_uuid": pipeline_uuid,
+                    "pipeline_name": "LinePipeline",
+                    "enabled": True,
+                }
+            ],
+        }
+        _write_json(project / "Main.scene", scene_data)
+
+        pipeline.add_pass(ColorPass(phase_mark="opaque"))
+        _write_json(project / "LinePipeline.pipeline", pipeline.serialize())
+        _write_json(project / "LinePipeline.pipeline.meta", {"uuid": pipeline_uuid})
+    finally:
+        pipeline.destroy()
+        scene.destroy()
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    shader_names = {
+        json.loads(path.read_text(encoding="utf-8"))["name"]
+        for path in (result.package_dir / "shaders").glob("*.shader.json")
+    }
+    assert "termin-engine-line-default" in shader_names
+    assert "termin-engine-line-default_LineTubeBody" in shader_names
+    assert "termin-engine-line-default_LineTubeCap" in shader_names
+    assert not [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"]
+
+
+@full_runtime_package_exporter
 def test_export_runtime_package_reports_malformed_pipeline_meta(tmp_path: Path) -> None:
     project = tmp_path / "MalformedPipelineMetaGame"
     project.mkdir()

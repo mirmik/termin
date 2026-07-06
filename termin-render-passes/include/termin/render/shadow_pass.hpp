@@ -130,6 +130,10 @@ public:
 
     // Override from CxxFramePass
     void execute(ExecuteContext& ctx) override;
+    void collect_shader_usages(
+        tc_scene_handle scene,
+        const std::function<void(TcShader)>& emit
+    ) const override;
 
     // Execute shadow pass, rendering shadow maps for all lights
     // through a tgfx2 RenderContext2. Requires ctx.ctx2 to be non-null.
@@ -161,7 +165,7 @@ private:
     // owned — they live on the tc_shader global registry so repeated pass
     // construction/destruction doesn't re-run shaderc.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
+    mutable tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();

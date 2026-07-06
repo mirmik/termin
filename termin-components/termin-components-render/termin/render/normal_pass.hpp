@@ -15,7 +15,7 @@ private:
     // on the tc_shader registry (hash-based dedup) so Play/Stop doesn't
     // re-run shaderc — see ShadowPass for the pattern + rationale.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle normal_shader_handle_ = tc_shader_handle_invalid();
+    mutable tc_shader_handle normal_shader_handle_ = tc_shader_handle_invalid();
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
@@ -63,6 +63,7 @@ protected:
     }
     bool uses_material_phase_shader_override() const override { return true; }
     MaterialPipelinePassContract shader_pass_contract() const override;
+    tc_shader_handle shader_usage_base_shader() const override;
 };
 
 } // namespace termin

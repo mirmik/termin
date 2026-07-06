@@ -21,7 +21,7 @@ private:
     // so Play/Stop doesn't re-run shaderc — see ShadowPass for the same
     // pattern.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle depth_shader_handle_ = tc_shader_handle_invalid();
+    mutable tc_shader_handle depth_shader_handle_ = tc_shader_handle_invalid();
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
@@ -82,6 +82,7 @@ protected:
     }
     bool uses_material_phase_shader_override() const override { return true; }
     MaterialPipelinePassContract shader_pass_contract() const override;
+    tc_shader_handle shader_usage_base_shader() const override;
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };
 
@@ -119,7 +120,7 @@ private:
     float _near_plane = 0.1f;
     float _far_plane = 1000.0f;
     tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle depth_shader_handle_ = tc_shader_handle_invalid();
+    mutable tc_shader_handle depth_shader_handle_ = tc_shader_handle_invalid();
     mutable std::vector<DrawCall> cached_draw_calls_;
 
 public:
@@ -176,6 +177,10 @@ public:
         return entity_names;
     }
 
+    void collect_shader_usages(
+        tc_scene_handle scene,
+        const std::function<void(TcShader)>& emit
+    ) const override;
     void execute(ExecuteContext& ctx) override;
 
 private:

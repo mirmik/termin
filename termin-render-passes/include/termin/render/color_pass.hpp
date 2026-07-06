@@ -149,6 +149,10 @@ public:
 
     // Override from CxxFramePass
     void execute(ExecuteContext& ctx) override;
+    void collect_shader_usages(
+        tc_scene_handle scene,
+        const std::function<void(TcShader)>& emit
+    ) const override;
 
     std::vector<ResourceSpec> get_resource_specs() const override;
 

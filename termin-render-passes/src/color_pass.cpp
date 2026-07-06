@@ -266,6 +266,12 @@ struct CollectDrawCallsData {
     MaterialPipelinePassContract pass_contract;
 };
 
+struct CollectShaderUsagesData {
+    const char* phase_mark = nullptr;
+    MaterialPipelinePassContract pass_contract;
+    const std::function<void(TcShader)>* emit = nullptr;
+};
+
 const char* safe_component_type(const tc_component* component) {
     const char* type_name = component ? tc_component_type_name(component) : nullptr;
     return type_name ? type_name : "<unknown>";
@@ -324,6 +330,40 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
             dc.phase_index = gd.phase_index;
             data->draw_calls->push_back(dc);
         }
+    }
+
+    return true;
+}
+
+bool collect_color_drawable_shader_usages(tc_component* tc, void* user_data) {
+    auto* data = static_cast<CollectShaderUsagesData*>(user_data);
+    if (!tc || !data || !data->phase_mark || !data->emit) {
+        tc::Log::error("[ColorPass] collect_color_drawable_shader_usages: invalid callback data");
+        return true;
+    }
+
+    if (data->phase_mark[0] != '\0' && !tc_component_has_phase(tc, data->phase_mark)) {
+        return true;
+    }
+
+    void* draws_ptr = tc_component_get_geometry_draws(tc, data->phase_mark);
+    if (!draws_ptr) {
+        return true;
+    }
+
+    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+    for (const auto& gd : *geometry_draws) {
+        tc_material_phase* phase = gd.resolve_phase();
+        if (!phase) {
+            continue;
+        }
+
+        ShaderOverrideContext override_context;
+        override_context.phase_mark = data->phase_mark;
+        override_context.geometry_id = gd.geometry_id;
+        override_context.original_shader = TcShader(phase->shader);
+        override_context.pass_contract = data->pass_contract;
+        collect_drawable_shader_usages_with_context(tc, override_context, *data->emit);
     }
 
     return true;
@@ -406,6 +446,37 @@ void ColorPass::collect_draw_calls(
                      | TC_SCENE_FILTER_VISIBLE
                      | TC_SCENE_FILTER_ENTITY_ENABLED;
     tc_scene_foreach_drawable(scene, collect_drawable_draw_calls, &data, filter_flags, layer_mask);
+}
+
+void ColorPass::collect_shader_usages(
+    tc_scene_handle scene,
+    const std::function<void(TcShader)>& emit
+) const {
+    if (!emit) {
+        return;
+    }
+    if (!tc_scene_handle_valid(scene)) {
+        tc::Log::error("[ColorPass] cannot collect shader usages for invalid scene");
+        return;
+    }
+    if (phase_mark.empty()) {
+        tc::Log::error(
+            "[ColorPass] pass '%s' has empty phase mark; shader usage collection requires an explicit phase",
+            get_pass_name().c_str());
+        return;
+    }
+
+    CollectShaderUsagesData data;
+    data.phase_mark = phase_mark.c_str();
+    data.pass_contract = color_material_pass_contract();
+    data.emit = &emit;
+
+    tc_scene_foreach_drawable(
+        scene,
+        collect_color_drawable_shader_usages,
+        &data,
+        TC_SCENE_FILTER_NONE,
+        0);
 }
 
 void ColorPass::compute_sort_keys(const Vec3& camera_position) {

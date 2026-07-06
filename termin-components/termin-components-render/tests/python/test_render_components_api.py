@@ -161,6 +161,40 @@ def test_line_renderer_world_mesh_fallback_builds_cpu_mesh():
     assert bool(renderer.get_mesh()) is True
 
 
+def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
+    from termin.render_framework import RenderPipeline, collect_shader_usages_for_pipeline
+    from termin.render_passes import ColorPass
+    from termin.scene import TcScene
+
+    scene = TcScene.create("pipeline-shader-usage-test")
+    pipeline = RenderPipeline("pipeline-shader-usage-test")
+    empty_phase_pipeline = RenderPipeline("pipeline-shader-usage-empty-phase-test")
+    try:
+        entity = scene.create_entity("line")
+        entity.add_component(
+            LineRenderer(
+                points=[(0, 0, 0), (1, 0, 0)],
+                render_mode=LineRenderMode.WorldTube,
+            )
+        )
+
+        pipeline.add_pass(ColorPass(phase_mark="opaque"))
+        shaders = collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline)
+        shader_names = {shader.name for shader in shaders}
+
+        assert "termin-engine-line-default" in shader_names
+        assert "termin-engine-line-default_LineTubeBody" in shader_names
+        assert "termin-engine-line-default_LineTubeCap" in shader_names
+        assert len({shader.uuid for shader in shaders}) == len(shaders)
+
+        empty_phase_pipeline.add_pass(ColorPass(phase_mark=""))
+        assert len(collect_shader_usages_for_pipeline(scene.scene_handle(), empty_phase_pipeline)) == 0
+    finally:
+        empty_phase_pipeline.destroy()
+        pipeline.destroy()
+        scene.destroy()
+
+
 def test_line_renderer_direct_modes_skip_shadow_material_phase():
     material = create_line_test_material()
 

@@ -83,6 +83,13 @@ MaterialPipelinePassContract IdPass::shader_pass_contract() const {
     return id_material_pass_contract();
 }
 
+tc_shader_handle IdPass::shader_usage_base_shader() const {
+    if (tc_shader_handle_is_invalid(id_shader_handle_)) {
+        id_shader_handle_ = tgfx::register_builtin_shader_from_catalog(ID_ENGINE_SHADER_UUID);
+    }
+    return id_shader_handle_;
+}
+
 void IdPass::id_to_rgb(int id, float& r, float& g, float& b) {
     tc_picking_id_to_rgb_float(id, &r, &g, &b);
 }

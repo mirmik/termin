@@ -46,6 +46,7 @@ protected:
     std::array<float, 4> clear_color() const override { return {0.0f, 0.0f, 0.0f, 0.0f}; }
     const char* phase_mark() const override { return "pick"; }
     MaterialPipelinePassContract shader_pass_contract() const override;
+    tc_shader_handle shader_usage_base_shader() const override;
 
     bool entity_filter(const Entity& ent) const override {
         return ent.pickable();
@@ -63,7 +64,7 @@ private:
     // so Play/Stop doesn't re-run shaderc — see ShadowPass for the same
     // pattern + extended rationale.
     tgfx::IRenderDevice* device2_ = nullptr;
-    tc_shader_handle id_shader_handle_ = tc_shader_handle_invalid();
+    mutable tc_shader_handle id_shader_handle_ = tc_shader_handle_invalid();
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();

@@ -114,6 +114,14 @@ MaterialPipelinePassContract DepthPass::shader_pass_contract() const {
     return depth_material_pass_contract("depth");
 }
 
+tc_shader_handle DepthPass::shader_usage_base_shader() const {
+    if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
+        depth_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(DEPTH_ENGINE_SHADER_UUID);
+    }
+    return depth_shader_handle_;
+}
+
 void DepthPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
 
@@ -542,6 +550,93 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
                      | TC_SCENE_FILTER_VISIBLE
                      | TC_SCENE_FILTER_ENTITY_ENABLED;
     tc_scene_foreach_drawable(scene, callback, &collect_ctx, filter_flags, layer_mask);
+}
+
+void DepthOnlyPass::collect_shader_usages(
+    tc_scene_handle scene,
+    const std::function<void(TcShader)>& emit
+) const {
+    if (!emit) {
+        return;
+    }
+    if (!tc_scene_handle_valid(scene)) {
+        tc::Log::error("[DepthOnlyPass] cannot collect shader usages for invalid scene");
+        return;
+    }
+    if (pass_phase_mark.empty()) {
+        tc::Log::error(
+            "[DepthOnlyPass] pass '%s' has empty phase mark; shader usage collection requires an explicit phase",
+            get_pass_name().c_str());
+        return;
+    }
+
+    if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
+        depth_shader_handle_ =
+            tgfx::register_builtin_shader_from_catalog(DEPTH_ONLY_ENGINE_SHADER_UUID);
+    }
+    if (tc_shader_handle_is_invalid(depth_shader_handle_)) {
+        tc::Log::error("[DepthOnlyPass] cannot collect shader usages without a valid base shader");
+        return;
+    }
+
+    struct UsageContext {
+    public:
+        const DepthOnlyPass* pass = nullptr;
+        const std::function<void(TcShader)>* emit = nullptr;
+        MaterialPipelinePassContract pass_contract;
+    };
+
+    auto callback = [](tc_component* c, void* user_data) -> bool {
+        auto* collect_ctx = static_cast<UsageContext*>(user_data);
+        if (!collect_ctx || !collect_ctx->pass || !collect_ctx->emit || !c) {
+            return true;
+        }
+
+        std::vector<int> geometry_ids;
+        std::vector<GeometryDrawCall> material_phase_draws;
+        if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
+            auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
+            if (drawable) {
+                geometry_ids = drawable->get_geometry_ids_for_phase(
+                    collect_ctx->pass->pass_phase_mark);
+                material_phase_draws = drawable->get_geometry_draws(
+                    &collect_ctx->pass->pass_phase_mark);
+            }
+        }
+        if (geometry_ids.empty()) {
+            geometry_ids.push_back(0);
+        }
+
+        for (int geometry_id : geometry_ids) {
+            tc_shader_handle original_shader =
+                collect_ctx->pass->depth_shader_handle_;
+            for (const GeometryDrawCall& draw : material_phase_draws) {
+                tc_material_phase* phase = draw.resolve_phase();
+                if (draw.geometry_id == geometry_id &&
+                    phase &&
+                    !tc_shader_handle_is_invalid(phase->shader)) {
+                    original_shader = phase->shader;
+                    break;
+                }
+            }
+
+            ShaderOverrideContext override_context;
+            override_context.phase_mark = collect_ctx->pass->pass_phase_mark;
+            override_context.geometry_id = geometry_id;
+            override_context.original_shader = TcShader(original_shader);
+            override_context.pass_contract = collect_ctx->pass_contract;
+            collect_drawable_shader_usages_with_context(c, override_context, *collect_ctx->emit);
+        }
+
+        return true;
+    };
+
+    UsageContext collect_ctx{
+        this,
+        &emit,
+        depth_material_pass_contract("depth_only")};
+
+    tc_scene_foreach_drawable(scene, callback, &collect_ctx, TC_SCENE_FILTER_NONE, 0);
 }
 
 void DepthOnlyPass::sort_draw_calls_by_shader() const {
