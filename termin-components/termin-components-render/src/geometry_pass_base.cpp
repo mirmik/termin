@@ -81,6 +81,14 @@ void GeometryPassBase::collect_draw_calls(
         return;
     }
 
+    const char* routing_phase = phase_name();
+    if (!routing_phase || routing_phase[0] == '\0') {
+        tc::Log::error(
+            "[%s] cannot collect geometry with empty phase mark",
+            get_pass_name().c_str());
+        return;
+    }
+
     struct CollectContext {
     public:
         const GeometryPassBase* pass = nullptr;
@@ -105,8 +113,8 @@ void GeometryPassBase::collect_draw_calls(
         if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
             auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
             if (drawable) {
-                const char* routing_phase = ctx->pass->phase_name();
-                geometry_ids = drawable->get_geometry_ids_for_phase(routing_phase);
+                geometry_ids = drawable->get_geometry_ids_for_phase(
+                    ctx->pass->phase_name());
 
                 if (use_material_phase) {
                     std::string mark = material_phase;
