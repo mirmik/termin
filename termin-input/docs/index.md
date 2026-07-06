@@ -27,6 +27,14 @@ native registration lives in `termin-display` because these event objects carry
 `TcViewport` handles and moving that binding into `termin-input` would create a
 C++ dependency cycle.
 
+Input events carry a source flag. Runtime/game displays emit
+`INPUT_SOURCE_RUNTIME`; editor viewports emit `INPUT_SOURCE_EDITOR`.
+`InputComponent.input_source_mask` controls which sources a component accepts
+and defaults to runtime input only. `active_in_editor` does not opt a component
+into editor input; components that intentionally handle editor viewport input
+must set the source mask explicitly, for example with
+`INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR`.
+
 ## Input device registry
 
 `termin-input` owns the common device identity layer:

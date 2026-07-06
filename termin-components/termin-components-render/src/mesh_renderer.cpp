@@ -579,7 +579,11 @@ bool MeshRenderer::resolve_mesh_geometry(
     return true;
 }
 
-std::vector<int> MeshRenderer::get_geometry_ids_for_phase(const std::string& phase_mark) {
+std::vector<int> MeshRenderer::get_geometry_ids_for_phase(
+    const RenderContext& context,
+    const std::string& phase_mark
+) {
+    (void)context;
     (void)phase_mark;
     std::vector<int> ids;
     tc_mesh* mesh = current_mesh_ptr();
@@ -646,7 +650,11 @@ static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
     return phases;
 }
 
-std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(const std::string* phase_mark) {
+std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(
+    const RenderContext& context,
+    const std::string* phase_mark
+) {
+    (void)context;
     std::vector<GeometryDrawCall> draws;
     tc_mesh* m = current_mesh_ptr();
     if (!m) return draws;

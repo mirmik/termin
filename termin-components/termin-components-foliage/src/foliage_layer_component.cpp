@@ -427,7 +427,11 @@ void FoliageLayerComponent::draw_geometry(const RenderContext& context, int geom
     // Foliage is rendered through draw_tgfx2() as a single instanced batch.
 }
 
-std::vector<GeometryDrawCall> FoliageLayerComponent::get_geometry_draws(const std::string* phase_mark) {
+std::vector<GeometryDrawCall> FoliageLayerComponent::get_geometry_draws(
+    const RenderContext& context,
+    const std::string* phase_mark
+) {
+    (void)context;
     std::vector<GeometryDrawCall> draws;
     if (!enabled || foliage_uuid.empty() || !prototype_mesh.is_valid() || !material.is_valid()) {
         return draws;

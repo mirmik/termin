@@ -615,7 +615,11 @@ tc_mesh* WorldTextComponent::get_mesh_for_phase(const std::string& draw_phase_ma
     return nullptr;
 }
 
-std::vector<GeometryDrawCall> WorldTextComponent::get_geometry_draws(const std::string* draw_phase_mark) {
+std::vector<GeometryDrawCall> WorldTextComponent::get_geometry_draws(
+    const RenderContext& context,
+    const std::string* draw_phase_mark
+) {
+    (void)context;
     std::vector<GeometryDrawCall> draws;
     if (text.empty()) {
         return draws;

@@ -32,7 +32,7 @@ bool draw_camera_frustum_callback(tc_component* component, void* user_data)
         return true;
     }
 
-    tc_camera_data camera_data;
+    tc_camera_data camera_data = {};
     if (!capability->vtable->get_camera_data(component, ctx->aspect_override, &camera_data)) {
         tc_log(TC_LOG_ERROR, "[CameraFrustumDebug] get_camera_data failed for camera component");
         return true;

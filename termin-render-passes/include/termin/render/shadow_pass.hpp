@@ -187,7 +187,11 @@ private:
         tgfx::IRenderDevice& device, int resolution, int index);
 
     // Collect shadow caster draw calls
-    void collect_shadow_casters(tc_scene_handle scene, uint64_t layer_mask);
+    void collect_shadow_casters(
+        tc_scene_handle scene,
+        uint64_t layer_mask,
+        uint64_t render_category_mask
+    );
 
     // Sort draw calls by shader
     void sort_draw_calls_by_shader();

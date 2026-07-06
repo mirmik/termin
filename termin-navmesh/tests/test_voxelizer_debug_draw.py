@@ -72,7 +72,7 @@ def test_voxelizer_debug_draw_service_collects_enabled_layers(monkeypatch):
 
     assert service.phase_marks(component) == {"opaque", "line"}
 
-    draws = service.get_geometry_draws(component)
+    draws = service.get_geometry_draws(component, object())
     assert [draw.geometry_id for draw in draws] == [
         component.GEOMETRY_REGIONS,
         component.GEOMETRY_SIMPLIFIED_CONTOURS,
@@ -87,7 +87,7 @@ def test_voxelizer_debug_draw_service_filters_phase_marks(monkeypatch):
     component = _Component()
     service = VoxelizerDebugDrawService()
 
-    draws = service.get_geometry_draws(component, phase_mark="line")
+    draws = service.get_geometry_draws(component, object(), phase_mark="line")
 
     assert [draw.geometry_id for draw in draws] == [
         component.GEOMETRY_SIMPLIFIED_CONTOURS,

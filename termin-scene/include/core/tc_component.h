@@ -134,6 +134,7 @@ struct tc_component {
     // Generic component capabilities (slot-based fast path)
     uint64_t capability_mask;
     void* capability_ptrs[TC_COMPONENT_MAX_CAPABILITIES];
+    int capability_priorities[TC_COMPONENT_MAX_CAPABILITIES];
     tc_component* capability_prev[TC_COMPONENT_MAX_CAPABILITIES];
     tc_component* capability_next[TC_COMPONENT_MAX_CAPABILITIES];
 
@@ -170,6 +171,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     tc_runtime_type_instance_link_init(&c->runtime_type_link);
     c->capability_mask = 0;
     memset(c->capability_ptrs, 0, sizeof(c->capability_ptrs));
+    memset(c->capability_priorities, 0, sizeof(c->capability_priorities));
     memset(c->capability_prev, 0, sizeof(c->capability_prev));
     memset(c->capability_next, 0, sizeof(c->capability_next));
     tc_dlist_init_node(&c->registry_node);

@@ -341,9 +341,12 @@ void SkinnedMeshRenderer::collect_shader_usages(
     collect_shader_usages_with_context(context, emit);
 }
 
-std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(const std::string* phase_mark) {
+std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(
+    const RenderContext& context,
+    const std::string* phase_mark
+) {
     // Use parent implementation - shader override happens in override_shader()
-    return MeshRenderer::get_geometry_draws(phase_mark);
+    return MeshRenderer::get_geometry_draws(context, phase_mark);
 }
 
 void SkinnedMeshRenderer::start() {

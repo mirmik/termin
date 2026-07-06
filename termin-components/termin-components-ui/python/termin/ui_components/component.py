@@ -32,11 +32,12 @@ class UIComponent(InputComponent):
         ),
     }
 
-    def __init__(self, priority: int = 0):
+    def __init__(self, priority: int = 1000):
         super().__init__(enabled=True, active_in_editor=False)
         self._ui: UI | None = None
         self._font: FontTextureAtlas | None = None
-        self._priority = priority
+        self._priority = 0
+        self.priority = priority
         self._ui_handle: UIHandle | None = None
         self._ui_layout_name: str = ""
         self._viewport_w: int = 0
@@ -51,7 +52,8 @@ class UIComponent(InputComponent):
 
     @priority.setter
     def priority(self, value: int):
-        self._priority = value
+        self._priority = int(value)
+        self.input_priority = self._priority
 
     @property
     def ui(self) -> UI | None:
@@ -224,9 +226,9 @@ class UIComponent(InputComponent):
             self._viewport_h = ph
 
         if event.action == Action.PRESS.value:
-            self.mouse_down(event.x, event.y)
+            event.handled = event.handled or self.mouse_down(event.x, event.y)
         elif event.action == Action.RELEASE.value:
-            self.mouse_up(event.x, event.y)
+            event.handled = event.handled or self.mouse_up(event.x, event.y)
 
     def on_mouse_move(self, event: MouseMoveEvent):
         """Handle mouse move events from the input system."""
@@ -239,4 +241,4 @@ class UIComponent(InputComponent):
             self._viewport_w = pw
             self._viewport_h = ph
 
-        self.mouse_move(event.x, event.y)
+        event.handled = event.handled or self.mouse_move(event.x, event.y)

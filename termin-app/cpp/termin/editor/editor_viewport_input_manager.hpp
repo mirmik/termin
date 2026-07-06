@@ -41,7 +41,7 @@ public:
     void on_key(int key, int scancode, int action, int mods);
 
 private:
-    // Dispatch to scene's editor components (active_in_editor=true)
+    // Dispatch to scene components opted into editor input source.
     void _dispatch_to_editor_components(tc_mouse_button_event* ev);
     void _dispatch_to_editor_components(tc_mouse_move_event* ev);
     void _dispatch_to_editor_components(tc_scroll_event* ev);
