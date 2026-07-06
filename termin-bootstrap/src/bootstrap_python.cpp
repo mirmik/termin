@@ -157,38 +157,43 @@ void py_drawable_cb_draw_geometry(void* py_self, void* render_context, int geome
 
 std::unordered_map<void*, std::vector<GeometryDrawCall>> g_py_geometry_draw_cache;
 
-void* py_drawable_cb_get_geometry_draws(void* py_self, const char* phase_mark) {
+void* py_drawable_cb_get_geometry_draws(void* py_self, void* render_context, const char* phase_mark) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     void* result = nullptr;
     try {
-        nb::handle self((PyObject*)py_self);
-        if (nb::hasattr(self, "get_geometry_draws")) {
-            std::string pm = phase_mark ? phase_mark : "";
-            nb::object py_draws = self.attr("get_geometry_draws")(pm.empty() ? nb::none() : nb::cast(pm));
-
-            auto& cached = g_py_geometry_draw_cache[py_self];
-            cached.clear();
-
-            if (!py_draws.is_none()) {
-                for (auto item : py_draws) {
-                    GeometryDrawCall dc;
-                    nb::object phase_obj = item.attr("phase");
-                    if (!phase_obj.is_none()) {
-                        try {
-                            dc.bind_phase_ref(nb::cast<tc_material_phase*>(phase_obj));
-                        } catch (const nb::cast_error&) {
-                            continue;
-                        }
-                    }
-                    nb::object gid_obj = item.attr("geometry_id");
-                    if (!gid_obj.is_none()) {
-                        dc.geometry_id = nb::cast<int>(gid_obj);
-                    }
-                    cached.push_back(dc);
-                }
-            }
-            result = &cached;
+        RenderContext* ctx = static_cast<RenderContext*>(render_context);
+        if (!ctx) {
+            tc::Log::error("Drawable::get_geometry_draws: render_context is null");
+            PyGILState_Release(gstate);
+            return nullptr;
         }
+        nb::handle self((PyObject*)py_self);
+        std::string pm = phase_mark ? phase_mark : "";
+        nb::object py_ctx = nb::cast(ctx, nb::rv_policy::reference);
+        nb::object py_draws = self.attr("get_geometry_draws")(py_ctx, pm.empty() ? nb::none() : nb::cast(pm));
+
+        auto& cached = g_py_geometry_draw_cache[py_self];
+        cached.clear();
+
+        if (!py_draws.is_none()) {
+            for (auto item : py_draws) {
+                GeometryDrawCall dc;
+                nb::object phase_obj = item.attr("phase");
+                if (!phase_obj.is_none()) {
+                    try {
+                        dc.bind_phase_ref(nb::cast<tc_material_phase*>(phase_obj));
+                    } catch (const nb::cast_error&) {
+                        continue;
+                    }
+                }
+                nb::object gid_obj = item.attr("geometry_id");
+                if (!gid_obj.is_none()) {
+                    dc.geometry_id = nb::cast<int>(gid_obj);
+                }
+                cached.push_back(dc);
+            }
+        }
+        result = &cached;
     } catch (const std::exception& e) {
         tc::Log::error(e, "Drawable::get_geometry_draws");
         PyErr_Print();

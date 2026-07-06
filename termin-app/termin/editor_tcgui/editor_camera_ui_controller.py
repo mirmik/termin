@@ -2,8 +2,8 @@
 EditorCameraUIController - контроллер для UI редакторской камеры.
 
 Подписывается на кнопки в editor_camera_ui.uiscript и управляет:
-- Отображением коллайдеров (ColliderGizmoPass.enabled)
-- Отображением editor debug navmesh overlay (EditorDebug.passthrough)
+- Отображением коллайдеров (render category mask)
+- Отображением navmesh overlay (render category mask)
 - Режимом wireframe
 - Ортографической камерой
 - Ориентацией transform gizmo: local / global
@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from termin.scene import PythonComponent
 from termin.render_components.camera import CameraComponent
+from termin.render import RENDER_CATEGORY_COLLIDERS, RENDER_CATEGORY_NAVMESH
 from termin.ui_components import UIComponent
 from tcgui.widgets.basic import IconButton
 from termin.inspect import InspectField
@@ -158,14 +159,12 @@ class EditorCameraUIController(PythonComponent):
     def _sync_button_states(self) -> None:
         """Применяет сохранённые состояния к кнопкам и пассам."""
         # Colliders
-        collider_pass = self._find_pass_by_name("ColliderGizmo")
-        if collider_pass is not None:
-            collider_pass.passthrough = not self.colliders_enabled
+        self._set_render_category_enabled(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
         if self._colliders_btn is not None:
             self._colliders_btn.active = self.colliders_enabled
 
         # NavMesh / editor debug overlay
-        self._set_editor_debug_passthrough(not self.navmesh_enabled)
+        self._set_render_category_enabled(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
         if self._navmesh_btn is not None:
             self._navmesh_btn.active = self.navmesh_enabled
 
@@ -202,15 +201,16 @@ class EditorCameraUIController(PythonComponent):
                 return p
         return None
 
-    def _set_editor_debug_passthrough(self, passthrough: bool) -> None:
-        """Переключает все editor debug ColorPass'ы."""
-        editor_debug_pass = self._find_pass_by_name("EditorDebug")
-        if editor_debug_pass is not None:
-            editor_debug_pass.passthrough = passthrough
-
-        editor_debug_transparent_pass = self._find_pass_by_name("EditorDebugTransparent")
-        if editor_debug_transparent_pass is not None:
-            editor_debug_transparent_pass.passthrough = passthrough
+    def _set_render_category_enabled(self, category: int, enabled: bool) -> None:
+        """Переключает категорию отрисовки на редакторской камере."""
+        if self._camera_component is None:
+            return
+        mask = int(self._camera_component.render_category_mask)
+        if enabled:
+            mask |= int(category)
+        else:
+            mask &= ~int(category)
+        self._camera_component.render_category_mask = mask
 
     def _apply_gizmo_orientation(self, *, request_update: bool = False) -> None:
         """Переключает ориентацию transform gizmo между local и global."""
@@ -249,9 +249,7 @@ class EditorCameraUIController(PythonComponent):
         """Переключает отображение коллайдеров."""
         self.colliders_enabled = not self.colliders_enabled
 
-        collider_pass = self._find_pass_by_name("ColliderGizmo")
-        if collider_pass is not None:
-            collider_pass.passthrough = not self.colliders_enabled
+        self._set_render_category_enabled(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
         if self._colliders_btn is not None:
             self._colliders_btn.active = self.colliders_enabled
 
@@ -259,7 +257,7 @@ class EditorCameraUIController(PythonComponent):
         """Переключает отображение navmesh/editor debug overlay."""
         self.navmesh_enabled = not self.navmesh_enabled
 
-        self._set_editor_debug_passthrough(not self.navmesh_enabled)
+        self._set_render_category_enabled(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
         if self._navmesh_btn is not None:
             self._navmesh_btn.active = self.navmesh_enabled
 

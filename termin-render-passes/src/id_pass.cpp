@@ -147,7 +147,7 @@ void IdPass::execute_with_data_tgfx2(
 
     // Use the UBO-based engine shader as base_shader for skinning override
     // (see DepthPass / ShadowPass for rationale).
-    collect_draw_calls(scene, layer_mask, id_shader_handle_);
+    collect_draw_calls(scene, layer_mask, ctx.render_category_mask, id_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -260,6 +260,7 @@ void IdPass::execute_with_data_tgfx2(
             direct_context.pass_contract = id_material_pass_contract();
             direct_context.current_tc_shader = TcShader(dc.final_shader);
             direct_context.layer_mask = layer_mask;
+            direct_context.render_category_mask = ctx.render_category_mask;
             direct_context.camera_position = camera_position;
             direct_context.viewport_width = rect.width;
             direct_context.viewport_height = rect.height;

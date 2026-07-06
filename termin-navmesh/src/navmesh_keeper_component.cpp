@@ -7,6 +7,10 @@
 #include <utility>
 #include <tcbase/tc_log.hpp>
 
+extern "C" {
+#include <render/tc_render_category_flags.h>
+}
+
 namespace termin {
 
 namespace {
@@ -96,8 +100,14 @@ void NavMeshKeeperComponent::draw_geometry(const RenderContext& context, int geo
     ensure_debug_mesh_loaded();
 }
 
-std::vector<GeometryDrawCall> NavMeshKeeperComponent::get_geometry_draws(const std::string* phase_mark) {
+std::vector<GeometryDrawCall> NavMeshKeeperComponent::get_geometry_draws(
+    const RenderContext& context,
+    const std::string* phase_mark
+) {
     std::vector<GeometryDrawCall> result;
+    if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
+        return result;
+    }
     if (phase_mark && *phase_mark != NAVMESH_DEBUG_PHASE) {
         return result;
     }

@@ -230,6 +230,7 @@ private:
     void collect_draw_calls(
         tc_scene_handle scene,
         const std::string& phase_mark,
+        const RenderContext& render_context,
         uint64_t layer_mask
     );
 

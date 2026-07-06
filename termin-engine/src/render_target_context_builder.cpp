@@ -178,7 +178,8 @@ static bool get_render_camera(
     tc_component* cam_comp,
     double aspect,
     RenderCamera* out,
-    uint64_t* layer_mask
+    uint64_t* layer_mask,
+    uint64_t* render_category_mask
 ) {
     const tc_camera_capability* cap = tc_camera_capability_get(cam_comp);
     if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return false;
@@ -187,6 +188,9 @@ static bool get_render_camera(
     *out = render_camera_from_cap(cd);
     if (layer_mask) {
         *layer_mask = cd.layer_mask;
+    }
+    if (render_category_mask) {
+        *render_category_mask = cd.render_category_mask;
     }
     return true;
 }
@@ -262,7 +266,13 @@ bool build_render_target_contexts(
     double aspect = static_cast<double>(render_width) / std::max(1, render_height);
     RenderCamera render_camera;
     uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-    if (!get_render_camera(camera_comp, aspect, &render_camera, &camera_layer_mask)) {
+    uint64_t camera_render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
+    if (!get_render_camera(
+            camera_comp,
+            aspect,
+            &render_camera,
+            &camera_layer_mask,
+            &camera_render_category_mask)) {
         tc_log(
             TC_LOG_WARN,
             "[RenderingManager] render target '%s': no camera capability",
@@ -295,6 +305,7 @@ bool build_render_target_contexts(
     ctx.render_rect = {0, 0, render_width, render_height};
     ctx.internal_entities = internal_entities;
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
+    ctx.render_category_mask = camera_render_category_mask;
     ctx.output_color_tex = out_color;
     ctx.output_depth_tex = out_depth;
     ctx.output_color_format = render_target_format_to_tgfx2(
