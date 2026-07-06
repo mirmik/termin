@@ -134,8 +134,10 @@ class VoxelizerDebugDrawService:
     def get_geometry_draws(
         self,
         component,
+        context,
         phase_mark: str | None = None,
     ) -> list[GeometryDrawCall]:
+        del context
         result: list[GeometryDrawCall] = []
         for layer in VOXELIZER_DEBUG_LAYERS:
             if not layer.enabled(component):

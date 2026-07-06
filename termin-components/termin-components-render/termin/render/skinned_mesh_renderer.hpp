@@ -81,7 +81,10 @@ public:
      * Get geometry draw calls.
      * Uses parent implementation - shader override happens in override_shader().
      */
-    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
+    std::vector<GeometryDrawCall> get_geometry_draws(
+        const RenderContext& context,
+        const std::string* phase_mark = nullptr
+    ) override;
 
     /**
      * Override shader to inject skinning if needed.

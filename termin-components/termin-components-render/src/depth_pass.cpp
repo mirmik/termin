@@ -190,7 +190,7 @@ void DepthPass::execute_with_data_tgfx2(
     // Use the UBO-based engine shader as base_shader for skinning override.
     // The old source-based GeometryPassBase shader path has been removed;
     // this handle is the only base shader key for depth overrides.
-    collect_draw_calls(scene, layer_mask, depth_shader_handle_);
+    collect_draw_calls(scene, layer_mask, ctx.render_category_mask, depth_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -463,7 +463,11 @@ CameraComponent* DepthOnlyPass::find_camera_by_name(
     return ent.get_component<CameraComponent>();
 }
 
-void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mask) const {
+void DepthOnlyPass::collect_draw_calls(
+    tc_scene_handle scene,
+    uint64_t layer_mask,
+    uint64_t render_category_mask
+) const {
     cached_draw_calls_.clear();
 
     if (!tc_scene_handle_valid(scene)) {
@@ -482,31 +486,26 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         const DepthOnlyPass* pass = nullptr;
         std::vector<DepthOnlyPass::DrawCall>* draw_calls = nullptr;
         MaterialPipelinePassContract pass_contract;
+        RenderContext* render_context = nullptr;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
         auto* collect_ctx = static_cast<CollectContext*>(user_data);
         Entity ent(c->owner);
 
-        std::vector<int> geometry_ids;
         std::vector<GeometryDrawCall> material_phase_draws;
-        const bool use_material_phase = true;
-        if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
-            auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
-            if (drawable) {
-                geometry_ids = drawable->get_geometry_ids_for_phase(
-                    collect_ctx->pass->pass_phase_mark);
-                if (use_material_phase) {
-                    material_phase_draws = drawable->get_geometry_draws(
-                        &collect_ctx->pass->pass_phase_mark);
-                }
-            }
+        void* draws_ptr = tc_component_get_geometry_draws(
+            c,
+            collect_ctx->render_context,
+            collect_ctx->pass->pass_phase_mark.c_str());
+        if (!draws_ptr) {
+            return true;
         }
-        if (geometry_ids.empty()) {
-            geometry_ids.push_back(0);
-        }
+        auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+        material_phase_draws = *geometry_draws;
 
-        for (int geometry_id : geometry_ids) {
+        for (const GeometryDrawCall& geometry_draw : *geometry_draws) {
+            int geometry_id = geometry_draw.geometry_id;
             tc_shader_handle original_shader =
                 collect_ctx->pass->depth_shader_handle_;
             const GeometryDrawCall* selected_material_draw = nullptr;
@@ -541,10 +540,18 @@ void DepthOnlyPass::collect_draw_calls(tc_scene_handle scene, uint64_t layer_mas
         return true;
     };
 
+    RenderContext render_context;
+    render_context.phase = pass_phase_mark;
+    render_context.pass_contract = depth_material_pass_contract("depth_only");
+    render_context.layer_mask = layer_mask;
+    render_context.render_category_mask = render_category_mask;
+    render_context.scene = TcSceneRef(scene);
+
     CollectContext collect_ctx{
         this,
         &cached_draw_calls_,
-        depth_material_pass_contract("depth_only")};
+        depth_material_pass_contract("depth_only"),
+        &render_context};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
@@ -597,9 +604,14 @@ void DepthOnlyPass::collect_shader_usages(
         if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
             auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
             if (drawable) {
+                RenderContext render_context;
+                render_context.phase = collect_ctx->pass->pass_phase_mark;
+                render_context.pass_contract = collect_ctx->pass_contract;
                 geometry_ids = drawable->get_geometry_ids_for_phase(
+                    render_context,
                     collect_ctx->pass->pass_phase_mark);
                 material_phase_draws = drawable->get_geometry_draws(
+                    render_context,
                     &collect_ctx->pass->pass_phase_mark);
             }
         }
@@ -716,7 +728,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
     auto& device = ctx.ctx2->device();
     ensure_tgfx2_resources(device);
-    collect_draw_calls(scene, ctx.layer_mask);
+    collect_draw_calls(scene, ctx.layer_mask, ctx.render_category_mask);
     sort_draw_calls_by_shader();
 
     entity_names.clear();

@@ -31,28 +31,28 @@ static inline const tc_input_vtable* tc_component_get_input_vtable(const tc_comp
 
 static inline void tc_component_on_mouse_button(tc_component* c, tc_mouse_button_event* event) {
     const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_mouse_button) {
+    if (c && c->enabled && event && vt && vt->on_mouse_button) {
         vt->on_mouse_button(c, event);
     }
 }
 
 static inline void tc_component_on_mouse_move(tc_component* c, tc_mouse_move_event* event) {
     const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_mouse_move) {
+    if (c && c->enabled && event && vt && vt->on_mouse_move) {
         vt->on_mouse_move(c, event);
     }
 }
 
 static inline void tc_component_on_scroll(tc_component* c, tc_scroll_event* event) {
     const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_scroll) {
+    if (c && c->enabled && event && vt && vt->on_scroll) {
         vt->on_scroll(c, event);
     }
 }
 
 static inline void tc_component_on_key(tc_component* c, tc_key_event* event) {
     const tc_input_vtable* vt = tc_component_get_input_vtable(c);
-    if (c && c->enabled && vt && vt->on_key) {
+    if (c && c->enabled && event && vt && vt->on_key) {
         vt->on_key(c, event);
     }
 }

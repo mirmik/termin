@@ -7,6 +7,7 @@
 extern "C" {
 #include "core/tc_input_capability.h"
 #include "core/tc_input_component.h"
+#include "core/tc_input_source.h"
 #include "tc_component_python_input.h"
 #include "core/tc_component.h"
 }
@@ -63,6 +64,9 @@ NB_MODULE(_input_native, m) {
             return nb::cast(state, nb::rv_policy::reference);
         });
 
+    m.attr("INPUT_SOURCE_RUNTIME") = nb::int_(static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME));
+    m.attr("INPUT_SOURCE_EDITOR") = nb::int_(static_cast<uint32_t>(TC_INPUT_SOURCE_EDITOR));
+
     m.def("xr_hand_to_string", &termin::xr::xr_hand_to_string, nb::arg("hand"));
     m.def("xr_hand_from_string", &termin::xr::xr_hand_from_string, nb::arg("value"));
 
@@ -83,4 +87,34 @@ NB_MODULE(_input_native, m) {
         return c && tc_component_is_input_handler(c);
     }, nb::arg("c_ptr"),
        "Check if component is an input handler");
+
+    m.def("get_input_priority", [](uintptr_t c_ptr) -> int {
+        auto* c = reinterpret_cast<tc_component*>(c_ptr);
+        return c ? tc_component_get_input_priority(c) : 0;
+    }, nb::arg("c_ptr"),
+       "Get an input component dispatch priority");
+
+    m.def("set_input_priority", [](uintptr_t c_ptr, int priority) -> bool {
+        auto* c = reinterpret_cast<tc_component*>(c_ptr);
+        return c && tc_component_set_input_priority(c, priority);
+    }, nb::arg("c_ptr"), nb::arg("priority"),
+       "Set an input component dispatch priority");
+
+    m.def("get_input_source_mask", [](uintptr_t c_ptr) -> uint32_t {
+        auto* c = reinterpret_cast<tc_component*>(c_ptr);
+        return c ? tc_component_get_input_source_mask(c) : 0;
+    }, nb::arg("c_ptr"),
+       "Get input source flags accepted by a component");
+
+    m.def("set_input_source_mask", [](uintptr_t c_ptr, uint32_t source_mask) -> bool {
+        auto* c = reinterpret_cast<tc_component*>(c_ptr);
+        return c && tc_component_set_input_source_mask(c, source_mask);
+    }, nb::arg("c_ptr"), nb::arg("source_mask"),
+       "Set input source flags accepted by a component");
+
+    m.def("accepts_input_source", [](uintptr_t c_ptr, uint32_t source) -> bool {
+        auto* c = reinterpret_cast<tc_component*>(c_ptr);
+        return c && tc_component_accepts_input_source(c, source);
+    }, nb::arg("c_ptr"), nb::arg("source"),
+       "Check whether an input component accepts a source flag");
 }

@@ -29,6 +29,18 @@ protected:
         }
     }
 
+    void set_input_priority(tc_component* c, int priority) {
+        if (c) {
+            tc_component_set_input_priority(c, priority);
+        }
+    }
+
+    void set_input_source_mask(tc_component* c, uint32_t source_mask) {
+        if (c) {
+            tc_component_set_input_source_mask(c, source_mask);
+        }
+    }
+
 private:
     static void _cb_on_mouse_button(tc_component* c, tc_mouse_button_event* event);
     static void _cb_on_mouse_move(tc_component* c, tc_mouse_move_event* event);
