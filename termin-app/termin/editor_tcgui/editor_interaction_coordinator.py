@@ -26,11 +26,8 @@ class EditorInteractionCoordinator:
         get_menu_bar_controller: Callable[[], object | None],
         get_editor_display: Callable[[], object | None],
         get_active_viewport_tool_count: Callable[[], int],
-        dispatch_viewport_click: Callable[..., bool],
-        dispatch_viewport_pointer: Callable[
-            [str, float, float, float, float, int, int, int],
-            bool,
-        ],
+        dispatch_viewport_click: Callable[[object], bool],
+        dispatch_viewport_pointer: Callable[[object], bool],
         dispatch_viewport_key: Callable[[object], bool],
         request_viewport_update: Callable[[], None],
     ) -> None:
@@ -151,21 +148,11 @@ class EditorInteractionCoordinator:
     def on_hover_changed(self, entity) -> None:
         self._request_viewport_update()
 
-    def on_editor_viewport_click(self, *args) -> bool:
-        return self._dispatch_viewport_click(*args)
+    def on_editor_viewport_click(self, event) -> bool:
+        return self._dispatch_viewport_click(event)
 
-    def dispatch_viewport_pointer(
-        self,
-        phase: str,
-        x: float,
-        y: float,
-        dx: float,
-        dy: float,
-        button: int,
-        action: int,
-        mods: int,
-    ) -> bool:
-        return self._dispatch_viewport_pointer(phase, x, y, dx, dy, button, action, mods)
+    def dispatch_viewport_pointer(self, event) -> bool:
+        return self._dispatch_viewport_pointer(event)
 
     def on_editor_key(self, event) -> bool:
         return self._dispatch_viewport_key(event)

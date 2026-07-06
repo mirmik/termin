@@ -158,8 +158,7 @@ void EditorViewportInputManager::on_key(int key, int scancode, int action, int m
         KeyEvent key_event(_viewport, key, scancode, action, mods, TC_INPUT_SOURCE_EDITOR);
         handled_by_editor = sys->handle_key_event(
             key_event,
-            static_cast<float>(_last_cursor_x),
-            static_cast<float>(_last_cursor_y),
+            Vec2f{static_cast<float>(_last_cursor_x), static_cast<float>(_last_cursor_y)},
             _viewport,
             _display);
     } else if (key == TC_KEY_T || key == 't' || key == 292) {

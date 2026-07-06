@@ -20,11 +20,11 @@ _COLOR_NORMAL = (0.35, 1.00, 0.25, 1.00)
 @dataclass
 class _SurfaceEdgeDebugHit:
     entity_name: str
-    click_point: tuple[float, float, float]
-    edge_point: tuple[float, float, float]
-    edge_a: tuple[float, float, float]
-    edge_b: tuple[float, float, float]
-    normal_end: tuple[float, float, float]
+    click_point: Vec3
+    edge_point: Vec3
+    edge_a: Vec3
+    edge_b: Vec3
+    normal_end: Vec3
     triangle_index: int
     edge_indices: tuple[int, int]
     distance: float
@@ -61,53 +61,31 @@ class SurfaceEdgeDebugTool:
     def toggle(self) -> None:
         self.set_enabled(not self._enabled)
 
-    def _on_viewport_click(
-        self,
-        entity,
-        x: float,
-        y: float,
-        has_world_point: bool,
-        world_x: float,
-        world_y: float,
-        world_z: float,
-        depth: float,
-        view_depth: float,
-        reproject_screen_error: float,
-        reproject_depth_error: float,
-        has_mesh_hit: bool,
-        mesh_x: float,
-        mesh_y: float,
-        mesh_z: float,
-        normal_x: float,
-        normal_y: float,
-        normal_z: float,
-        triangle_index: int,
-        index0: int,
-        index1: int,
-        index2: int,
-    ) -> bool:
+    def _on_viewport_click(self, event) -> bool:
         if not self._enabled:
             return False
-        if not has_mesh_hit:
+        surface = event.surface
+        entity = event.entity
+        if not surface.has_mesh_hit:
             log.error("[SurfaceEdgeDebugTool] click ignored: no mesh hit")
             self._last_hit = None
             return True
-        if not entity.valid():
+        if entity is None or not entity.valid():
             log.error("[SurfaceEdgeDebugTool] click ignored: picked entity is invalid")
             self._last_hit = None
             return True
 
         self._last_hit = self._find_edge_hit(
             entity,
-            (float(mesh_x), float(mesh_y), float(mesh_z)),
-            (float(normal_x), float(normal_y), float(normal_z)),
-            int(triangle_index),
+            surface.mesh_point,
+            surface.mesh_normal,
+            int(surface.mesh_triangle_index),
         )
         if self._last_hit is None:
             log.error(
                 "[SurfaceEdgeDebugTool] surface edge not found: "
-                f"screen=({x:.1f}, {y:.1f}) picked='{entity.name}' "
-                f"tri={int(triangle_index)}"
+                f"screen=({event.screen.x:.1f}, {event.screen.y:.1f}) picked='{entity.name}' "
+                f"tri={int(surface.mesh_triangle_index)}"
             )
             return True
 
@@ -115,8 +93,8 @@ class SurfaceEdgeDebugTool:
         log.info(
             "[SurfaceEdgeDebugTool] surface edge: "
             f"picked='{hit.entity_name}' "
-            f"click=({hit.click_point[0]:.3f}, {hit.click_point[1]:.3f}, {hit.click_point[2]:.3f}) "
-            f"edge=({hit.edge_point[0]:.3f}, {hit.edge_point[1]:.3f}, {hit.edge_point[2]:.3f}) "
+            f"click={_format_vec3(hit.click_point)} "
+            f"edge={_format_vec3(hit.edge_point)} "
             f"tri={hit.triangle_index} edge_indices=({hit.edge_indices[0]}, {hit.edge_indices[1]}) "
             f"distance={hit.distance:.3f} side={hit.side}"
         )
@@ -125,8 +103,8 @@ class SurfaceEdgeDebugTool:
     def _find_edge_hit(
         self,
         entity,
-        mesh_point: tuple[float, float, float],
-        mesh_normal: tuple[float, float, float],
+        mesh_point: Vec3,
+        mesh_normal: Vec3,
         triangle_index: int,
     ) -> _SurfaceEdgeDebugHit | None:
         from termin.mesh.mesh_component import MeshComponent
@@ -162,23 +140,22 @@ class SurfaceEdgeDebugTool:
         pose = entity.transform.global_pose()
         mesh_offset = mesh_component.get_mesh_offset_matrix()
         inverse_mesh_offset = mesh_offset.inverse()
-        local_edge_point = inverse_mesh_offset.transform_point(pose.point_to_local(_vec3(edge.point)))
+        local_edge_point = inverse_mesh_offset.transform_point(pose.point_to_local(edge.point))
         local_edge_a = np.asarray(vertices[index_a], dtype=float)
         local_edge_b = np.asarray(vertices[index_b], dtype=float)
-        local_normal = inverse_mesh_offset.transform_direction(pose.vector_to_local(_vec3(mesh_normal)))
-        local_normal_vec = np.asarray(local_normal, dtype=float)
-        normal_length = np.linalg.norm(local_normal_vec)
+        local_normal = inverse_mesh_offset.transform_direction(pose.vector_to_local(mesh_normal))
+        normal_length = local_normal.norm()
         if normal_length > 0.000001:
-            local_normal_vec = local_normal_vec / normal_length
-        local_normal_end = local_edge_point + local_normal_vec * 0.5
+            local_normal = local_normal / normal_length
+        local_normal_end = local_edge_point + local_normal * 0.5
 
         return _SurfaceEdgeDebugHit(
             entity_name=entity.name,
             click_point=mesh_point,
-            edge_point=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_edge_point)),
-            edge_a=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_edge_a)),
-            edge_b=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_edge_b)),
-            normal_end=_tuple3(_mesh_point_to_world(pose, mesh_offset, local_normal_end)),
+            edge_point=_mesh_point_to_world(pose, mesh_offset, local_edge_point),
+            edge_a=_mesh_point_to_world(pose, mesh_offset, _array_vec3(local_edge_a)),
+            edge_b=_mesh_point_to_world(pose, mesh_offset, _array_vec3(local_edge_b)),
+            normal_end=_mesh_point_to_world(pose, mesh_offset, local_normal_end),
             triangle_index=triangle_index,
             edge_indices=(index_a, index_b),
             distance=float(edge.distance),
@@ -195,23 +172,23 @@ class SurfaceEdgeDebugTool:
 
         renderer = ImmediateRenderer.instance()
         hit = self._last_hit
-        renderer.line(_vec3(hit.edge_a), _vec3(hit.edge_b), _color(_COLOR_EDGE), False)
-        renderer.line(_vec3(hit.edge_point), _vec3(hit.normal_end), _color(_COLOR_NORMAL), False)
-        renderer.sphere_wireframe(_vec3(hit.click_point), 0.055, _color(_COLOR_CLICK), 8, False)
-        renderer.sphere_wireframe(_vec3(hit.edge_point), 0.075, _color(_COLOR_EDGE_POINT), 8, False)
+        renderer.line(hit.edge_a, hit.edge_b, _color(_COLOR_EDGE), False)
+        renderer.line(hit.edge_point, hit.normal_end, _color(_COLOR_NORMAL), False)
+        renderer.sphere_wireframe(hit.click_point, 0.055, _color(_COLOR_CLICK), 8, False)
+        renderer.sphere_wireframe(hit.edge_point, 0.075, _color(_COLOR_EDGE_POINT), 8, False)
 
 
-def _tuple3(v) -> tuple[float, float, float]:
-    return (float(v[0]), float(v[1]), float(v[2]))
+def _format_vec3(v: Vec3) -> str:
+    return f"({v.x:.3f}, {v.y:.3f}, {v.z:.3f})"
 
 
-def _vec3(point: tuple[float, float, float]) -> Vec3:
-    return Vec3(point[0], point[1], point[2])
+def _array_vec3(point) -> Vec3:
+    return Vec3(float(point[0]), float(point[1]), float(point[2]))
 
 
 def _color(value: tuple[float, float, float, float]) -> Color4:
     return Color4(value[0], value[1], value[2], value[3])
 
 
-def _mesh_point_to_world(pose, mesh_offset, point) -> Vec3:
-    return pose.transform_point(mesh_offset.transform_point(_vec3(_tuple3(point))))
+def _mesh_point_to_world(pose, mesh_offset, point: Vec3) -> Vec3:
+    return pose.transform_point(mesh_offset.transform_point(point))

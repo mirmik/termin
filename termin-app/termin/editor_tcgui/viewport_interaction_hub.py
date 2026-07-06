@@ -7,7 +7,8 @@ from typing import Callable
 from tcbase import log
 
 
-ViewportPointerHandler = Callable[[str, float, float, float, float, int, int, int], bool]
+ViewportClickHandler = Callable[[object], bool]
+ViewportPointerHandler = Callable[[object], bool]
 ViewportKeyHandler = Callable[[object], bool]
 ViewportOverlayDrawer = Callable[[], None]
 
@@ -22,8 +23,8 @@ class ViewportInteractionHub:
         self._request_viewport_update = request_viewport_update
         self._on_tool_activity_changed = on_tool_activity_changed
 
-        self._click_interceptor: Callable | None = None
-        self._click_interceptors: list[Callable] = []
+        self._click_interceptor: ViewportClickHandler | None = None
+        self._click_interceptors: list[ViewportClickHandler] = []
         self._pointer_handlers: list[ViewportPointerHandler] = []
         self._key_handlers: list[ViewportKeyHandler] = []
         self._overlay_drawers: list[ViewportOverlayDrawer] = []
@@ -33,14 +34,14 @@ class ViewportInteractionHub:
     def active_tool_count(self) -> int:
         return self._active_tool_count
 
-    def set_click_interceptor(self, callback: Callable | None) -> None:
+    def set_click_interceptor(self, callback: ViewportClickHandler | None) -> None:
         self._click_interceptor = callback
 
-    def add_click_interceptor(self, callback: Callable) -> None:
+    def add_click_interceptor(self, callback: ViewportClickHandler) -> None:
         if callback not in self._click_interceptors:
             self._click_interceptors.append(callback)
 
-    def remove_click_interceptor(self, callback: Callable) -> None:
+    def remove_click_interceptor(self, callback: ViewportClickHandler) -> None:
         self._click_interceptors = [
             existing for existing in self._click_interceptors
             if existing != callback
@@ -94,39 +95,29 @@ class ViewportInteractionHub:
         if self._active_tool_count == 0:
             self._on_tool_activity_changed()
 
-    def dispatch_click(self, *args) -> bool:
+    def dispatch_click(self, event) -> bool:
         if self._click_interceptor is not None:
             try:
-                if bool(self._click_interceptor(*args)):
+                if bool(self._click_interceptor(event)):
                     return True
             except Exception as e:
                 log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
                 return False
         for callback in self._click_interceptors:
             try:
-                if bool(callback(*args)):
+                if bool(callback(event)):
                     return True
             except Exception as e:
                 log.error(f"[EditorWindowTcgui] viewport click interceptor failed: {e}")
                 return False
         return False
 
-    def dispatch_pointer(
-        self,
-        phase: str,
-        x: float,
-        y: float,
-        dx: float,
-        dy: float,
-        button: int,
-        action: int,
-        mods: int,
-    ) -> bool:
+    def dispatch_pointer(self, event) -> bool:
         handlers = list(self._pointer_handlers)
         handlers.reverse()
         for callback in handlers:
             try:
-                if bool(callback(phase, x, y, dx, dy, button, action, mods)):
+                if bool(callback(event)):
                     return True
             except Exception as e:
                 log.error(f"[EditorWindowTcgui] viewport pointer handler failed: {e}")

@@ -7,6 +7,8 @@
 #include "termin/editor/transform_gizmo.hpp"
 #include "termin/editor/camera_frustum_debug_gizmo.hpp"
 #include <termin/geom/general_pose3.hpp>
+#include <termin/geom/vec2.hpp>
+#include <termin/geom/vec3.hpp>
 #include "termin/input/input_events.hpp"
 #include "core/tc_scene.h"
 #include "render/tc_display.h"
@@ -15,7 +17,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <array>
 #include <chrono>
 #include <cstdint>
 #include <vector>
@@ -25,16 +26,31 @@ namespace termin {
 struct SurfacePickResult {
     Entity entity;
     bool has_world_point = false;
-    std::array<double, 3> world_point = {0.0, 0.0, 0.0};
+    Vec3 world_point{0.0, 0.0, 0.0};
     float depth = 1.0f;
     double view_depth = 0.0;
     double reproject_screen_error = 0.0;
     double reproject_depth_error = 0.0;
     bool has_mesh_hit = false;
-    std::array<double, 3> mesh_point = {0.0, 0.0, 0.0};
-    std::array<double, 3> mesh_normal = {0.0, 0.0, 0.0};
+    Vec3 mesh_point{0.0, 0.0, 0.0};
+    Vec3 mesh_normal{0.0, 0.0, 0.0};
     uint32_t mesh_triangle_index = 0;
-    std::array<uint32_t, 3> mesh_indices = {0, 0, 0};
+    Vec3i mesh_indices{0, 0, 0};
+};
+
+struct EditorEntityClickEvent {
+    Entity entity;
+    Vec2f screen{0.0f, 0.0f};
+    SurfacePickResult surface;
+};
+
+struct ViewportPointerEvent {
+    std::string phase;
+    Vec2f screen{0.0f, 0.0f};
+    Vec2f delta{0.0f, 0.0f};
+    int button = -1;
+    int action = -1;
+    int mods = 0;
 };
 
 class EditorInteractionSystem {
@@ -61,8 +77,7 @@ private:
 
     // Pending events (processed after render when ID buffer is ready)
     struct PendingEvent {
-        float x = 0.0f;
-        float y = 0.0f;
+        Vec2f screen{0.0f, 0.0f};
         tc_viewport_handle vp = TC_VIEWPORT_HANDLE_INVALID;
         tc_display* display = nullptr;
         bool valid = false;
@@ -73,15 +88,13 @@ private:
 
     struct PendingEntityPick {
         PendingEvent event;
-        int fx = 0;
-        int fy = 0;
+        Vec2i fbo{0, 0};
         uint64_t color_request = 0;
         bool valid = false;
     };
     struct PendingSurfacePick {
         PendingEvent event;
-        int fx = 0;
-        int fy = 0;
+        Vec2i fbo{0, 0};
         uint64_t color_request = 0;
         uint64_t depth_request = 0;
         bool color_ready = false;
@@ -103,8 +116,8 @@ public:
     std::function<void()> on_request_update;
     std::function<void(const GeneralPose3&, const GeneralPose3&)> on_transform_end;
     std::function<void(const KeyEvent&)> on_key;
-    std::function<bool(Entity, float, float, bool, double, double, double, float, double, double, double, bool, double, double, double, double, double, double, uint32_t, uint32_t, uint32_t, uint32_t)> on_entity_click;
-    std::function<bool(const std::string&, float, float, float, float, int, int, int)> on_viewport_pointer_event;
+    std::function<bool(const EditorEntityClickEvent&)> on_entity_click;
+    std::function<bool(const ViewportPointerEvent&)> on_viewport_pointer_event;
 
 public:
     EditorInteractionSystem();
@@ -124,14 +137,13 @@ public:
     double camera_frustum_aspect_override() const;
 
     // Picking (reads from ID buffer)
-    Entity pick_entity_at(float x, float y, tc_viewport_handle viewport, tc_display* display);
-    SurfacePickResult pick_surface_at(float x, float y, tc_viewport_handle viewport, tc_display* display);
+    Entity pick_entity_at(Vec2f screen, tc_viewport_handle viewport, tc_display* display);
+    SurfacePickResult pick_surface_at(Vec2f screen, tc_viewport_handle viewport, tc_display* display);
 
     // Post-render processing - call once per frame after rendering
     void after_render();
     bool handle_key_event(const KeyEvent& event,
-                          float cursor_x,
-                          float cursor_y,
+                          Vec2f cursor,
                           tc_viewport_handle viewport,
                           tc_display* display);
 
@@ -145,27 +157,28 @@ private:
     void _process_pending_press();
     void _process_pending_release();
     void _process_pending_hover();
-    bool _start_async_entity_pick(float x, float y, tc_viewport_handle vp, tc_display* display);
-    bool _start_async_surface_pick(float x, float y, tc_viewport_handle vp, tc_display* display);
+    bool _dispatch_entity_click(Vec2f screen, const SurfacePickResult& pick);
+    bool _dispatch_viewport_pointer(const ViewportPointerEvent& event);
+    bool _start_async_entity_pick(Vec2f screen, tc_viewport_handle vp, tc_display* display);
+    bool _start_async_surface_pick(Vec2f screen, tc_viewport_handle vp, tc_display* display);
     void _poll_async_hover_pick();
     void _poll_async_release_pick();
-    void _handle_double_click(float x, float y, tc_viewport_handle vp, tc_display* display);
+    void _handle_double_click(Vec2f screen, tc_viewport_handle vp, tc_display* display);
     void _rebuild_component_visual_gizmos(Entity entity);
     void _clear_component_visual_gizmos();
-    bool _snap_transform_gizmo_target(float cursor_x,
-                                      float cursor_y,
+    bool _snap_transform_gizmo_target(Vec2f cursor,
                                       tc_viewport_handle viewport,
                                       tc_display* display);
 
-    bool _window_to_fbo_coords(float x, float y, tc_viewport_handle vp,
-                               tc_display* display, int& fx, int& fy);
+    bool _window_to_fbo_coords(Vec2f screen, tc_viewport_handle vp,
+                               tc_display* display, Vec2i& fbo);
     Entity _entity_from_pick_color(const float color[4], tc_viewport_handle viewport);
     SurfacePickResult _surface_from_pick_color_depth(const float color[4], float depth,
-                                                     int fx, int fy,
+                                                     Vec2i fbo,
                                                      tc_viewport_handle viewport);
 
     // Get ray from screen coordinates
-    bool _screen_to_ray(float x, float y, tc_viewport_handle vp, tc_display* display,
+    bool _screen_to_ray(Vec2f screen, tc_viewport_handle vp, tc_display* display,
                         Vec3f& origin, Vec3f& direction);
 
     void _request_update();

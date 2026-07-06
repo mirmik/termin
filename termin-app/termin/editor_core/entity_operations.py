@@ -238,7 +238,7 @@ class EntityOperations:
         self,
         glb_path: str,
         parent: Entity | None,
-        world_position: tuple[float, float, float] | None = None,
+        world_position: Vec3 | None = None,
     ) -> None:
         from termin.glb.instantiator import instantiate_glb
         from termin.editor_core.resource_manager import ResourceManager
@@ -264,7 +264,7 @@ class EntityOperations:
             pose = entity.transform.local_pose()
             entity.transform.relocate(GeneralPose3(
                 ang=pose.ang.copy(),
-                lin=Vec3(float(world_position[0]), float(world_position[1]), float(world_position[2])),
+                lin=world_position,
                 scale=pose.scale.copy(),
             ))
         parent_transform = parent.transform if parent else None
