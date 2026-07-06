@@ -61,6 +61,41 @@ tc_value make_mesh_renderer_inspector_metadata() {
     return inspector;
 }
 
+tc_value serialize_mesh_renderer_material_slots(const MeshRenderer* self) {
+    tc_value result = tc_value_list_new();
+    if (!self) {
+        return result;
+    }
+
+    for (const TcMaterial& material_slot : self->materials) {
+        tc_value_list_push(&result, material_slot.serialize_to_value());
+    }
+    return result;
+}
+
+void deserialize_mesh_renderer_material_slots(MeshRenderer* self, const tc_value* value) {
+    if (!self) {
+        return;
+    }
+
+    self->materials.clear();
+    if (!value) {
+        return;
+    }
+    if (value->type != TC_VALUE_LIST) {
+        tc::Log::error("[MeshRenderer] 'materials' serialized field must be a list");
+        return;
+    }
+
+    size_t count = tc_value_list_size(value);
+    self->materials.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        TcMaterial material_slot;
+        material_slot.deserialize_from(tc_value_list_get(const_cast<tc_value*>(value), i));
+        self->materials.push_back(material_slot);
+    }
+}
+
 void register_mesh_renderer_inspect_fields() {
     auto& inspect = tc::InspectRegistry::instance();
     if (!inspect.find_field("MeshRenderer", "material")) {
@@ -92,6 +127,18 @@ void register_mesh_renderer_inspect_fields() {
                 if (self) {
                     self->set_override_material(value);
                 }
+            }
+        );
+    }
+    if (!inspect.find_field("MeshRenderer", "materials")) {
+        tc::SerializableFieldRegistrar<MeshRenderer>(
+            "MeshRenderer",
+            "materials",
+            [](MeshRenderer* self) -> tc_value {
+                return serialize_mesh_renderer_material_slots(self);
+            },
+            [](MeshRenderer* self, const tc_value* val) {
+                deserialize_mesh_renderer_material_slots(self, val);
             }
         );
     }
@@ -652,6 +699,9 @@ void MeshRenderer::on_render_attach() {
 
 void MeshRenderer::deserialize_data(const tc_value* data, tc_scene_handle scene) {
     Component::deserialize_data(data, scene);
+    if (!data || data->type != TC_VALUE_DICT || !tc_value_dict_has(data, "materials")) {
+        materials.clear();
+    }
     bind_mesh_component();
 }
 
