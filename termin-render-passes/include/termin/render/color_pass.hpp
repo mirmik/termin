@@ -45,6 +45,9 @@ public:
     std::string input_res = "empty";
     std::string output_res = "color";
     std::string shadow_res = "shadow_maps";  // Shadow map resource name (empty = no shadows)
+    // Drawable/material representation requested by this pass. This filters
+    // drawables and material phases; shader layout comes from the explicit
+    // color/material pipeline contract built by the pass.
     std::string phase_mark = "opaque";
     std::string sort_mode = "none";  // "none", "near_to_far", "far_to_near"
     std::string camera_name;  // Override camera by entity name (empty = use context camera)

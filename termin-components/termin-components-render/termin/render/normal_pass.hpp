@@ -21,6 +21,8 @@ private:
     void release_tgfx2_resources();
 
 public:
+    // Drawable/material representation requested by NormalPass. Normal output
+    // resources and vertex requirements are declared by shader_pass_contract().
     std::string pass_phase_mark = "normal";
 
     INSPECT_FIELD_ACCESSORS(NormalPass, std::string, phase_mark, "Phase Mark", "string",
