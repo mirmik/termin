@@ -219,6 +219,7 @@ struct CollectShadowDrawCallsData {
     std::vector<ShadowDrawCall>* draw_calls;
     tc_shader_handle base_shader;
     MaterialPipelinePassContract pass_contract;
+    RenderContext* render_context;
 };
 
 bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
@@ -228,7 +229,7 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
         return true;
     }
 
-    void* draws_ptr = tc_component_get_geometry_draws(tc, "shadow");
+    void* draws_ptr = tc_component_get_geometry_draws(tc, data->render_context, "shadow");
     if (!draws_ptr) {
         return true;
     }
@@ -265,12 +266,23 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
 
 } // anonymous namespace
 
-void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_mask) {
+void ShadowPass::collect_shadow_casters(
+    tc_scene_handle scene,
+    uint64_t layer_mask,
+    uint64_t render_category_mask
+) {
     cached_draw_calls_.clear();
 
     if (!tc_scene_handle_valid(scene)) {
         return;
     }
+
+    RenderContext render_context;
+    render_context.phase = "shadow";
+    render_context.pass_contract = shadow_material_pass_contract();
+    render_context.layer_mask = layer_mask;
+    render_context.render_category_mask = render_category_mask;
+    render_context.scene = TcSceneRef(scene);
 
     CollectShadowDrawCallsData data;
     data.draw_calls = &cached_draw_calls_;
@@ -279,6 +291,7 @@ void ShadowPass::collect_shadow_casters(tc_scene_handle scene, uint64_t layer_ma
     // the same draw/per-frame resource contract as the base path.
     data.base_shader = shadow_shader_handle_;
     data.pass_contract = shadow_material_pass_contract();
+    data.render_context = &render_context;
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
@@ -363,7 +376,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    collect_shadow_casters(scene, layer_mask);
+    collect_shadow_casters(scene, layer_mask, ctx.render_category_mask);
     sort_draw_calls_by_shader();
 
     entity_names.clear();

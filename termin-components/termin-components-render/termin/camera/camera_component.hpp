@@ -38,6 +38,7 @@ public:
     double aspect = 1.0;
     double ortho_size = 5.0;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+    uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
 
 private:
     std::vector<TcViewport> viewports_;

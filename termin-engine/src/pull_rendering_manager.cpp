@@ -234,6 +234,7 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     double aspect = static_cast<double>(pw) / std::max(1, ph);
     RenderCamera render_camera;
     uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+    uint64_t camera_render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
     {
         const tc_camera_capability* cap = tc_camera_capability_get(camera_comp);
         if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return;
@@ -245,6 +246,7 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
         render_camera.near_clip = cd.near_clip;
         render_camera.far_clip = cd.far_clip;
         camera_layer_mask = cd.layer_mask;
+        camera_render_category_mask = cd.render_category_mask;
     }
 
     ViewportRenderState* state = get_or_create_viewport_state(viewport);
@@ -269,6 +271,7 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     ctx.render_rect = {0, 0, pw, ph};
     ctx.internal_entities = internal_entities;
     ctx.layer_mask = camera_layer_mask & tc_render_target_get_layer_mask(rt);
+    ctx.render_category_mask = camera_render_category_mask;
     ctx.output_color_tex = state->output_color_tex;
     ctx.output_depth_tex = state->output_depth_tex;
     ctx.output_color_format = render_target_format_to_tgfx2(

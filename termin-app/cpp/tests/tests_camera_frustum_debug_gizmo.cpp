@@ -15,7 +15,7 @@ namespace {
 
 tc_camera_data camera_data_from(CameraComponent& camera)
 {
-    tc_camera_data data;
+    tc_camera_data data = {};
     termin::Mat44 view = camera.get_view_matrix();
     termin::Mat44 projection = camera.get_projection_matrix();
     for (int i = 0; i < 16; ++i) {
@@ -29,6 +29,7 @@ tc_camera_data camera_data_from(CameraComponent& camera)
     data.near_clip = camera.near_clip;
     data.far_clip = camera.far_clip;
     data.layer_mask = camera.layer_mask;
+    data.render_category_mask = camera.render_category_mask;
     return data;
 }
 

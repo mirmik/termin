@@ -124,7 +124,9 @@ public:
 
     std::set<std::string> get_phase_marks() const override;
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
-    std::vector<GeometryDrawCall> get_geometry_draws(const std::string* phase_mark = nullptr) override;
+    std::vector<GeometryDrawCall> get_geometry_draws(
+        const RenderContext& context,
+        const std::string* phase_mark = nullptr) override;
     tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
 
 private:

@@ -73,6 +73,7 @@ int GeometryPassBase::get_pick_id(const Entity& ent) const {
 void GeometryPassBase::collect_draw_calls(
     tc_scene_handle scene,
     uint64_t layer_mask,
+    uint64_t render_category_mask,
     tc_shader_handle base_shader
 ) const {
     cached_draw_calls_.clear();
@@ -96,6 +97,7 @@ void GeometryPassBase::collect_draw_calls(
         tc_shader_handle base_shader = tc_shader_handle_invalid();
         MaterialPipelinePassContract pass_contract;
         const char* phase_mark = nullptr;
+        RenderContext* render_context = nullptr;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
@@ -106,27 +108,22 @@ void GeometryPassBase::collect_draw_calls(
             return true;
         }
 
-        std::vector<int> geometry_ids;
         std::vector<GeometryDrawCall> material_phase_draws;
-        const bool use_material_phase =
-            ctx->pass->uses_material_phase_shader_override();
-        if (tc_component_get_drawable_vtable(c) == &Drawable::cxx_drawable_vtable()) {
-            auto* drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(c));
-            if (drawable) {
-                geometry_ids = drawable->get_geometry_ids_for_phase(ctx->phase_mark);
-
-                if (use_material_phase) {
-                    std::string mark = ctx->phase_mark;
-                    material_phase_draws = drawable->get_geometry_draws(&mark);
-                }
-            }
+        void* draws_ptr = tc_component_get_geometry_draws(
+            c,
+            ctx->render_context,
+            ctx->phase_mark);
+        if (!draws_ptr) {
+            return true;
         }
-        if (geometry_ids.empty()) {
-            geometry_ids.push_back(0);
+        auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
+        if (ctx->pass->uses_material_phase_shader_override()) {
+            material_phase_draws = *geometry_draws;
         }
 
         const int pick_id = ctx->pass->get_pick_id(ent);
-        for (int geometry_id : geometry_ids) {
+        for (const GeometryDrawCall& geometry_draw : *geometry_draws) {
+            int geometry_id = geometry_draw.geometry_id;
             tc_shader_handle original_shader = ctx->base_shader;
             const GeometryDrawCall* selected_material_draw = nullptr;
             for (const GeometryDrawCall& draw : material_phase_draws) {
@@ -164,12 +161,20 @@ void GeometryPassBase::collect_draw_calls(
         return true;
     };
 
+    RenderContext render_context;
+    render_context.phase = collect_phase_mark;
+    render_context.pass_contract = shader_pass_contract();
+    render_context.layer_mask = layer_mask;
+    render_context.render_category_mask = render_category_mask;
+    render_context.scene = TcSceneRef(scene);
+
     CollectContext context{
         this,
         &cached_draw_calls_,
         base_shader,
         shader_pass_contract(),
-        collect_phase_mark};
+        collect_phase_mark,
+        &render_context};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE

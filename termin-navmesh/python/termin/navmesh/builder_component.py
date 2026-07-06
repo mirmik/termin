@@ -323,8 +323,13 @@ class NavMeshBuilderComponent(DrawableComponent):
         """Draw debug geometry."""
         pass
 
-    def get_geometry_draws(self, phase_mark: str | None = None) -> List[GeometryDrawCall]:
+    def get_geometry_draws(
+        self,
+        context: "RenderContext",
+        phase_mark: str | None = None,
+    ) -> List[GeometryDrawCall]:
         """Return GeometryDrawCalls for debug rendering."""
+        del context
         result: List[GeometryDrawCall] = []
 
         # Region voxels

@@ -1007,7 +1007,11 @@ tc_mesh* LineRenderer::get_mesh_for_phase(const std::string& phase_mark, int geo
     return current_mesh_ptr();
 }
 
-std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(const std::string* phase_mark) {
+std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(
+    const RenderContext& context,
+    const std::string* phase_mark
+) {
+    (void)context;
     std::vector<GeometryDrawCall> draws;
     if (points_.size() < 2) {
         return draws;
