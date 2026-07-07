@@ -15,7 +15,6 @@
 #include <tgfx2/tc_shader_bridge.hpp>
 
 #include <tgfx/resources/tc_shader_registry.h>
-#include <core/tc_drawable_protocol.h>
 
 #include <tcbase/tc_log.hpp>
 
@@ -117,29 +116,19 @@ bool collect_depth_mesh_render_item_for_draw(
     const char* entity_name,
     tc_render_item& out_item)
 {
-    std::vector<tc_render_item> items;
+    (void)pass_name;
+    (void)entity_name;
+
+    RenderItemCollection items;
     if (!collect_drawable_render_items(component, context, items)) {
         return false;
     }
-    for (const tc_render_item& item : items) {
+    for (const tc_render_item& item : items.items) {
         if (item.kind == TC_RENDER_ITEM_KIND_MESH &&
             item.geometry_id == geometry_id) {
             out_item = item;
             return true;
         }
-    }
-
-    Drawable* drawable = nullptr;
-    if (tc_component_get_drawable_vtable(component) == &Drawable::cxx_drawable_vtable()) {
-        drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(component));
-    }
-    MeshDrawGeometry mesh_geometry{};
-    if (drawable && drawable->resolve_mesh_geometry(context.phase_mark, geometry_id, mesh_geometry)) {
-        tc::Log::error(
-            "[%s] mesh drawable reached non-RenderItem path after migration for entity '%s' geometry=%d",
-            pass_name ? pass_name : "DepthPass",
-            entity_name ? entity_name : "<unnamed>",
-            geometry_id);
     }
     return false;
 }

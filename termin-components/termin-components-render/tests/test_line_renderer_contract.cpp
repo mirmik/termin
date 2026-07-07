@@ -364,12 +364,13 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
     collect_context.phase_mark = "opaque";
     collect_context.debug_pass_name = "test";
 
-    std::vector<tc_render_item> items;
+    termin::RenderItemCollection collection;
     REQUIRE(termin::collect_drawable_render_items(
         renderer->tc_component_ptr(),
         collect_context,
-        items));
+        collection));
 
+    const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 1u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_LINE_BATCH);
     CHECK(items[0].component == renderer->tc_component_ptr());
@@ -381,6 +382,12 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
           static_cast<uint32_t>(termin::LineRenderMode::WorldBillboard));
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
     CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
+
+    const tc_render_item_vec3* collected_points = items[0].payload.line_batch.points;
+    renderer->set_points({tc_vec3{5, 0, 0}, tc_vec3{6, 0, 0}});
+    REQUIRE(items[0].payload.line_batch.points == collected_points);
+    CHECK(items[0].payload.line_batch.points[0].x == 0.0);
+    CHECK(items[0].payload.line_batch.points[1].x == 1.0);
 
     tc_shader_shutdown();
     tc_material_shutdown();

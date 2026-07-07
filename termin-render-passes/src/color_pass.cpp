@@ -147,13 +147,14 @@ bool collect_color_render_item_for_draw(
     const tc_render_item_collect_context& context,
     int geometry_id,
     const char* entity_name,
+    RenderItemCollection& items,
     tc_render_item& out_item)
 {
-    std::vector<tc_render_item> items;
+    items.clear();
     if (!collect_drawable_render_items(component, context, items)) {
         return false;
     }
-    for (const tc_render_item& item : items) {
+    for (const tc_render_item& item : items.items) {
         if (item.geometry_id == geometry_id) {
             out_item = item;
             return true;
@@ -881,11 +882,13 @@ void ColorPass::execute_with_data(
         item_context.pass_contract = &collect_context.pass_contract;
 
         tc_render_item item{};
+        RenderItemCollection item_collection;
         if (!collect_color_render_item_for_draw(
                 dc.component,
                 item_context,
                 dc.geometry_id,
                 ename,
+                item_collection,
                 item)) {
             MeshDrawGeometry old_mesh_geometry{};
             if (drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, old_mesh_geometry)) {
