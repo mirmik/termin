@@ -660,7 +660,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 continue;
             }
 
-            tc_shader_handle last_shader = tc_shader_handle_invalid();
             const std::string& debug_symbol = get_debug_internal_point();
             auto capture_debug_symbol = [&](const char* entity_name) {
                 if (debug_symbol.empty() || !entity_name || debug_symbol != entity_name) {
@@ -775,9 +774,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     continue;
                 }
 
-                bool override_is_base =
-                    tc_shader_handle_eq(dc.final_shader, shadow_shader_handle_);
-
                 // Both paths share the same draw-scope model matrix + PerFrame UBO
                 // layout. Mesh encoder binds payload-specific resources such
                 // as BoneBlock. Bias is applied receiver-side while sampling
@@ -794,78 +790,24 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     {"shadow_draw", &push, static_cast<uint32_t>(sizeof(push))},
                 }};
                 MaterialPipelineResourceContext draw_resources{};
-
-                if (override_is_base) {
-                    draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                        draw_uniforms.data(),
-                        draw_uniforms.size());
-                    prepare_material_pipeline_resources(
-                        *ctx.ctx2,
-                        device,
-                        shadow_shader.shader,
-                        nullptr,
-                        draw_resources);
-                    RenderItemDrawSubmitRequest encode_request{};
-                    encode_request.shader = shadow_shader.shader;
-                    encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-                    encode_request.debug_pass_name = "ShadowPass";
-                    encode_request.debug_entity_name = dc.entity.name();
-                    if (!submit_render_item_draw(
-                        *ctx.ctx2,
-                        item,
-                        encode_request)) {
-                        continue;
-                    }
-                    capture_debug_symbol(dc.entity.name());
-                } else {
-                    // Variant path: bind the material-pipeline shader and let
-                    // the mesh encoder upload payload-specific resources.
-                    MaterialPipelineShaderBinding skinned_shader{};
-                    if (!ensure_material_pipeline_shader(
-                            *ctx.ctx2,
-                            device,
-                            dc.final_shader,
-                            "ShadowPass/skinned",
-                            skinned_shader)) {
-                        continue;
-                    }
-                    draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                        draw_uniforms.data(),
-                        draw_uniforms.size());
-                    prepare_material_pipeline_resources(
-                        *ctx.ctx2,
-                        device,
-                        skinned_shader.shader,
-                        nullptr,
-                        draw_resources);
-
-                    RenderItemDrawSubmitRequest encode_request{};
-                    encode_request.shader = skinned_shader.shader;
-                    encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-                    encode_request.debug_pass_name = "ShadowPass";
-                    encode_request.debug_entity_name = dc.entity.name();
-                    if (!submit_render_item_draw(
-                        *ctx.ctx2,
-                        item,
-                        encode_request)) {
-                        continue;
-                    }
-                    capture_debug_symbol(dc.entity.name());
-
-                    // Next mesh-backed draw must re-bind the base shadow
-                    // shader; the variant left its own program bound.
-                    last_shader = dc.final_shader;
-                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
-                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
-                    prepare_material_pipeline_resources(
-                        *ctx.ctx2,
-                        device,
-                        shadow_shader.shader,
-                        nullptr,
-                        shadow_resources);
+                draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+                    draw_uniforms.data(),
+                    draw_uniforms.size());
+                RenderItemDrawSubmitRequest encode_request{};
+                encode_request.shader_handle = dc.final_shader;
+                encode_request.device = &device;
+                encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+                encode_request.material_resources = &draw_resources;
+                encode_request.debug_pass_name = "ShadowPass";
+                encode_request.debug_entity_name = dc.entity.name();
+                if (!submit_render_item_draw(
+                    *ctx.ctx2,
+                    item,
+                    encode_request)) {
+                    continue;
                 }
+                capture_debug_symbol(dc.entity.name());
             }
-            (void)last_shader;
 
             end_shadow_pass();
 

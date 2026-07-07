@@ -227,9 +227,9 @@ void DepthPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    // Use the UBO-based engine shader as base_shader for skinning override.
-    // The old source-based GeometryPassBase shader path has been removed;
-    // this handle is the only base shader key for depth overrides.
+    // Use the UBO-based engine shader as the base shader key for RenderItem
+    // shader overrides. The old source-based GeometryPassBase shader path has
+    // been removed.
     collect_draw_calls(data.scene, data.layer_mask, ctx.render_category_mask, depth_shader_handle_);
     sort_draw_calls_by_shader();
 
@@ -347,13 +347,14 @@ void DepthPass::execute_with_data_tgfx2(
             entity_names.push_back(name);
         }
 
-        bool override_is_base =
-            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
-        tc_material_phase* material_phase = dc.resolve_material_phase();
+        tc_material_phase* material_phase =
+            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_)
+                ? nullptr
+                : dc.resolve_material_phase();
 
-        // Base, skinned, and material-phase override shaders share the same
-        // pass-owned draw-scope model matrix + PerFrame UBO. Mesh encoder
-        // binds payload-specific resources such as BoneBlock.
+        // All depth shader variants share the same pass-owned draw-scope model
+        // matrix + PerFrame UBO. The mesh submit path binds payload-specific
+        // resources such as BoneBlock.
         DepthDrawStd140 draw{};
         fill_depth_draw_model(draw, item);
         std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
@@ -361,73 +362,24 @@ void DepthPass::execute_with_data_tgfx2(
             {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
         }};
         MaterialPipelineResourceContext draw_resources{};
-
-        if (override_is_base) {
-            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                draw_uniforms.data(),
-                draw_uniforms.size());
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                depth_shader.shader,
-                nullptr,
-                draw_resources);
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = depth_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-            encode_request.debug_pass_name = "DepthPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                item,
-                encode_request)) {
-                continue;
-            }
-            capture_debug_symbol(name);
-        } else {
-            // Non-base shader: compile via bridge, bind reflected resources,
-            // and let the mesh encoder upload payload-specific data such as BoneBlock.
-            MaterialPipelineShaderBinding skinned_shader{};
-            if (!ensure_material_pipeline_shader(
-                    *ctx.ctx2,
-                    device,
-                    dc.final_shader,
-                    "DepthPass/skinned",
-                    skinned_shader)) {
-                continue;
-            }
-            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                draw_uniforms.data(),
-                draw_uniforms.size());
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                skinned_shader.shader,
-                material_phase,
-                draw_resources);
-
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = skinned_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-            encode_request.debug_pass_name = "DepthPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                item,
-                encode_request)) {
-                continue;
-            }
-            capture_debug_symbol(name);
-
-            ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
-            ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                depth_shader.shader,
-                nullptr,
-                depth_resources);
+        draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+            draw_uniforms.data(),
+            draw_uniforms.size());
+        RenderItemDrawSubmitRequest encode_request{};
+        encode_request.shader_handle = dc.final_shader;
+        encode_request.device = &device;
+        encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+        encode_request.material_phase = material_phase;
+        encode_request.material_resources = &draw_resources;
+        encode_request.debug_pass_name = "DepthPass";
+        encode_request.debug_entity_name = name;
+        if (!submit_render_item_draw(
+            *ctx.ctx2,
+            item,
+            encode_request)) {
+            continue;
         }
+        capture_debug_symbol(name);
     }
 
     ctx.ctx2->end_pass();
@@ -894,9 +846,10 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
             entity_names.push_back(name);
         }
 
-        bool override_is_base =
-            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_);
-        tc_material_phase* material_phase = dc.resolve_material_phase();
+        tc_material_phase* material_phase =
+            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_)
+                ? nullptr
+                : dc.resolve_material_phase();
 
         DepthDrawStd140 draw{};
         fill_depth_draw_model(draw, item);
@@ -905,71 +858,24 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
             {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
         }};
         MaterialPipelineResourceContext draw_resources{};
-
-        if (override_is_base) {
-            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                draw_uniforms.data(),
-                draw_uniforms.size());
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                depth_shader.shader,
-                nullptr,
-                draw_resources);
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = depth_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-            encode_request.debug_pass_name = "DepthOnlyPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                item,
-                encode_request)) {
-                continue;
-            }
-            capture_debug_symbol(name);
-        } else {
-            MaterialPipelineShaderBinding skinned_shader{};
-            if (!ensure_material_pipeline_shader(
-                    *ctx.ctx2,
-                    device,
-                    dc.final_shader,
-                    "DepthOnlyPass/skinned",
-                    skinned_shader)) {
-                continue;
-            }
-            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                draw_uniforms.data(),
-                draw_uniforms.size());
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                skinned_shader.shader,
-                material_phase,
-                draw_resources);
-
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = skinned_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-            encode_request.debug_pass_name = "DepthOnlyPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                item,
-                encode_request)) {
-                continue;
-            }
-            capture_debug_symbol(name);
-
-            ctx.ctx2->bind_shader(depth_shader.vertex, depth_shader.fragment);
-            ctx.ctx2->use_shader_resource_layout(depth_shader.shader);
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                depth_shader.shader,
-                nullptr,
-                depth_resources);
+        draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+            draw_uniforms.data(),
+            draw_uniforms.size());
+        RenderItemDrawSubmitRequest encode_request{};
+        encode_request.shader_handle = dc.final_shader;
+        encode_request.device = &device;
+        encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+        encode_request.material_phase = material_phase;
+        encode_request.material_resources = &draw_resources;
+        encode_request.debug_pass_name = "DepthOnlyPass";
+        encode_request.debug_entity_name = name;
+        if (!submit_render_item_draw(
+            *ctx.ctx2,
+            item,
+            encode_request)) {
+            continue;
         }
+        capture_debug_symbol(name);
     }
 
     ctx.ctx2->end_pass();
