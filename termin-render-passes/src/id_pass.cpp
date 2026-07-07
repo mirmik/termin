@@ -5,7 +5,7 @@
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/material_pipeline.hpp"
-#include "termin/render/shader_abi.hpp"
+#include "termin/render/render_item_mesh.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
@@ -58,10 +58,6 @@ struct IdPushStd140 {
 static_assert(sizeof(IdPushStd140) == 80,
               "IdPushStd140 must be mat4 + vec4");
 
-static constexpr uint32_t ID_BONE_BLOCK_MAX_BONES = 128;
-static constexpr uint64_t ID_BONE_BLOCK_SIZE =
-    ID_BONE_BLOCK_MAX_BONES * 16u * sizeof(float) + 16u;
-
 struct IdMeshTask {
     Entity entity;
     tc_render_item item{};
@@ -108,87 +104,6 @@ bool has_mesh_task_for(
         [component, geometry_id](const IdMeshTask& task) {
             return same_drawable_geometry(component, geometry_id, task);
         });
-}
-
-std::vector<uint8_t> pack_id_bone_block(const tc_render_item& item) {
-    std::vector<uint8_t> staging(ID_BONE_BLOCK_SIZE, 0);
-    const uint32_t matrix_count = std::min<uint32_t>(
-        item.payload.mesh.skinning_matrix_count,
-        ID_BONE_BLOCK_MAX_BONES);
-    if (matrix_count > 0 && item.payload.mesh.skinning_matrices) {
-        std::memcpy(
-            staging.data(),
-            item.payload.mesh.skinning_matrices,
-            matrix_count * 16u * sizeof(float));
-    }
-    int32_t count = static_cast<int32_t>(matrix_count);
-    std::memcpy(
-        staging.data() + ID_BONE_BLOCK_MAX_BONES * 16u * sizeof(float),
-        &count,
-        sizeof(int32_t));
-    return staging;
-}
-
-tc_mesh* id_mesh_task_mesh(const IdMeshTask& task) {
-    const tc_mesh_handle mesh_handle = task.item.payload.mesh.mesh_handle;
-    if (tc_mesh_handle_is_invalid(mesh_handle)) {
-        return nullptr;
-    }
-    return tc_mesh_get(mesh_handle);
-}
-
-bool validate_id_mesh_item_for_draw(const IdMeshTask& task, tc_mesh** out_mesh) {
-    if (out_mesh) {
-        *out_mesh = nullptr;
-    }
-    const char* entity_name = task.entity.name() ? task.entity.name() : "<unnamed>";
-    const tc_mesh_handle mesh_handle = task.item.payload.mesh.mesh_handle;
-    if (tc_mesh_handle_is_invalid(mesh_handle)) {
-        tc::Log::error(
-            "[IdPass] skip RenderItem mesh draw for '%s': mesh payload has no stable handle",
-            entity_name);
-        return false;
-    }
-
-    tc_mesh* mesh = id_mesh_task_mesh(task);
-    if (!mesh) {
-        tc::Log::error(
-            "[IdPass] skip RenderItem mesh draw for '%s': mesh handle is stale or invalid",
-            entity_name);
-        return false;
-    }
-    if (mesh->submesh_count == 0) {
-        tc::Log::error(
-            "[IdPass] skip RenderItem mesh draw for '%s': mesh has no submeshes",
-            entity_name);
-        return false;
-    }
-    const tc_submesh* submesh = tc_mesh_get_submesh(mesh, task.item.payload.mesh.submesh_index);
-    if (!submesh) {
-        tc::Log::error(
-            "[IdPass] skip RenderItem mesh draw for '%s': mesh has no submesh %zu (count=%zu)",
-            entity_name,
-            task.item.payload.mesh.submesh_index,
-            mesh->submesh_count);
-        return false;
-    }
-    if (submesh->index_count == 0 ||
-        static_cast<size_t>(submesh->first_index) > mesh->index_count ||
-        static_cast<size_t>(submesh->index_count) >
-            mesh->index_count - static_cast<size_t>(submesh->first_index)) {
-        tc::Log::error(
-            "[IdPass] skip RenderItem mesh draw for '%s': invalid submesh %zu first=%u count=%u mesh_indices=%zu",
-            entity_name,
-            task.item.payload.mesh.submesh_index,
-            submesh->first_index,
-            submesh->index_count,
-            mesh->index_count);
-        return false;
-    }
-    if (out_mesh) {
-        *out_mesh = mesh;
-    }
-    return true;
 }
 
 } // anonymous namespace
@@ -435,11 +350,6 @@ void IdPass::execute_with_data_tgfx2(
     };
 
     auto draw_mesh_task = [&](const IdMeshTask& task) {
-        tc_mesh* mesh = nullptr;
-        if (!validate_id_mesh_item_for_draw(task, &mesh)) {
-            return;
-        }
-
         const char* name = task.entity.name();
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);
@@ -482,13 +392,17 @@ void IdPass::execute_with_data_tgfx2(
                 id_shader.shader,
                 nullptr,
                 draw_resources);
-            draw_material_pipeline_submesh(
+            MeshRenderItemEncodeRequest encode_request{};
+            encode_request.shader = id_shader.shader;
+            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.debug_pass_name = "IdPass";
+            encode_request.debug_entity_name = name;
+            if (!encode_mesh_render_item_draw(
                 *ctx.ctx2,
-                mesh,
-                task.item.payload.mesh.submesh_index,
-                material_mesh_vertex_input_for_shader(
-                    id_shader.shader,
-                    MaterialMeshVertexInput::Position));
+                task.item,
+                encode_request)) {
+                return;
+            }
             capture_debug_symbol(name);
         } else {
             MaterialPipelineShaderBinding skinned_shader{};
@@ -501,34 +415,14 @@ void IdPass::execute_with_data_tgfx2(
                 return;
             }
 
-            std::array<MaterialPipelineUniformData, 3> skinned_draw_uniforms{{
+            std::array<MaterialPipelineUniformData, 2> skinned_draw_uniforms{{
                 base_draw_uniforms[0],
                 base_draw_uniforms[1],
-                {},
             }};
-            size_t skinned_draw_uniform_count = 2;
-            std::vector<uint8_t> bone_block;
-            if (task.item.flags & TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES) {
-                if (!find_shader_abi_resource_binding(skinned_shader.shader, ShaderAbiResourceId::BoneBlock)) {
-                    tc::Log::error(
-                        "[IdPass] skip skinned RenderItem mesh draw for '%s': shader '%s' has no bone_block resource",
-                        name ? name : "<unnamed>",
-                        skinned_shader.shader && skinned_shader.shader->name
-                            ? skinned_shader.shader->name
-                            : "<unnamed>");
-                    return;
-                }
-                bone_block = pack_id_bone_block(task.item);
-                skinned_draw_uniforms[skinned_draw_uniform_count++] = {
-                    TC_SHADER_RESOURCE_BONE_BLOCK,
-                    bone_block.data(),
-                    static_cast<uint32_t>(bone_block.size()),
-                };
-            }
             MaterialPipelineResourceContext draw_resources{};
             draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
                 skinned_draw_uniforms.data(),
-                skinned_draw_uniform_count);
+                skinned_draw_uniforms.size());
             prepare_material_pipeline_resources(
                 *ctx.ctx2,
                 device,
@@ -536,13 +430,17 @@ void IdPass::execute_with_data_tgfx2(
                 nullptr,
                 draw_resources);
 
-            draw_material_pipeline_submesh(
+            MeshRenderItemEncodeRequest encode_request{};
+            encode_request.shader = skinned_shader.shader;
+            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.debug_pass_name = "IdPass";
+            encode_request.debug_entity_name = name;
+            if (!encode_mesh_render_item_draw(
                 *ctx.ctx2,
-                mesh,
-                task.item.payload.mesh.submesh_index,
-                material_mesh_vertex_input_for_shader(
-                    skinned_shader.shader,
-                    MaterialMeshVertexInput::Position));
+                task.item,
+                encode_request)) {
+                return;
+            }
             capture_debug_symbol(name);
 
             ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);

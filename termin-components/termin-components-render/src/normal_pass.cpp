@@ -3,6 +3,7 @@
 #include <termin/camera/camera_component.hpp>
 #include <termin/camera/render_camera_utils.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/render_item_mesh.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -21,6 +22,7 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <vector>
 
 namespace termin {
 
@@ -66,6 +68,39 @@ MaterialPipelinePassContract normal_material_pass_contract()
             "termin-engine-skinned-normal",
             material_pipeline_skinned_position_normal_mesh_input());
     return contract;
+}
+
+bool collect_mesh_render_item_for_draw(
+    tc_component* component,
+    const tc_render_item_collect_context& context,
+    int geometry_id,
+    const char* entity_name,
+    tc_render_item& out_item)
+{
+    std::vector<tc_render_item> items;
+    if (!collect_drawable_render_items(component, context, items)) {
+        return false;
+    }
+    for (const tc_render_item& item : items) {
+        if (item.kind == TC_RENDER_ITEM_KIND_MESH &&
+            item.geometry_id == geometry_id) {
+            out_item = item;
+            return true;
+        }
+    }
+
+    Drawable* drawable = nullptr;
+    if (tc_component_get_drawable_vtable(component) == &Drawable::cxx_drawable_vtable()) {
+        drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(component));
+    }
+    MeshDrawGeometry mesh_geometry{};
+    if (drawable && drawable->resolve_mesh_geometry(context.phase_mark, geometry_id, mesh_geometry)) {
+        tc::Log::error(
+            "[NormalPass] mesh drawable reached non-RenderItem path after migration for entity '%s' geometry=%d",
+            entity_name ? entity_name : "<unnamed>",
+            geometry_id);
+    }
+    return false;
 }
 
 } // anonymous namespace
@@ -178,22 +213,30 @@ void NormalPass::execute_with_data_tgfx2(
         normal_resources);
 
     const std::string& debug_symbol = get_debug_internal_point();
+    const MaterialPipelinePassContract pass_contract = normal_material_pass_contract();
+    const char* normal_phase = phase_mark();
 
     for (const auto& dc : cached_draw_calls_) {
-        Drawable* drawable = nullptr;
-        if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
-            drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        }
-        if (!drawable) continue;
-
-        MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry(phase_mark(), dc.geometry_id, mesh_geometry)) {
-            continue;  // non-mesh drawables skipped
-        }
-
-        Mat44f model = drawable->get_model_matrix(dc.entity);
-
         const char* name = dc.entity.name();
+
+        tc_render_item_collect_context item_context{};
+        item_context.phase_mark = normal_phase;
+        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        item_context.layer_mask = layer_mask;
+        item_context.render_category_mask = ctx.render_category_mask;
+        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.pass_contract = &pass_contract;
+
+        tc_render_item item{};
+        if (!collect_mesh_render_item_for_draw(
+                dc.component,
+                item_context,
+                dc.geometry_id,
+                name,
+                item)) {
+            continue;
+        }
+
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);
         }
@@ -203,31 +246,42 @@ void NormalPass::execute_with_data_tgfx2(
         tc_material_phase* material_phase = dc.resolve_material_phase();
 
         NormalDrawStd140 draw{};
-        std::memcpy(draw.u_model, model.data, sizeof(float) * 16);
+        if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(draw.u_model, item.model_matrix, sizeof(float) * 16);
+        } else {
+            Mat44f identity = Mat44f::identity();
+            std::memcpy(draw.u_model, identity.data, sizeof(float) * 16);
+        }
         std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
             {"normal_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
         }};
         MaterialPipelineResourceContext draw_resources{};
-        draw_resources.uniforms = draw_uniforms;
 
         if (override_is_base) {
+            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+                draw_uniforms.data(),
+                draw_uniforms.size());
             prepare_material_pipeline_resources(
                 *ctx.ctx2,
                 device,
                 normal_shader.shader,
                 nullptr,
                 draw_resources);
-            draw_material_pipeline_submesh(
+            MeshRenderItemEncodeRequest encode_request{};
+            encode_request.shader = normal_shader.shader;
+            encode_request.vertex_input = MaterialMeshVertexInput::PositionNormal;
+            encode_request.debug_pass_name = "NormalPass";
+            encode_request.debug_entity_name = name;
+            if (!encode_mesh_render_item_draw(
                 *ctx.ctx2,
-                mesh_geometry.mesh,
-                mesh_geometry.submesh_index,
-                material_mesh_vertex_input_for_shader(
-                    normal_shader.shader,
-                    MaterialMeshVertexInput::PositionNormal));
+                item,
+                encode_request)) {
+                continue;
+            }
         } else {
             // Non-base shader: compile via bridge, bind reflected resources,
-            // and let the drawable upload optional per-draw data such as BoneBlock.
+            // and let the mesh encoder upload payload-specific data such as BoneBlock.
             MaterialPipelineShaderBinding skinned_shader{};
             if (!ensure_material_pipeline_shader(
                     *ctx.ctx2,
@@ -237,6 +291,9 @@ void NormalPass::execute_with_data_tgfx2(
                     skinned_shader)) {
                 continue;
             }
+            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+                draw_uniforms.data(),
+                draw_uniforms.size());
             prepare_material_pipeline_resources(
                 *ctx.ctx2,
                 device,
@@ -244,15 +301,17 @@ void NormalPass::execute_with_data_tgfx2(
                 material_phase,
                 draw_resources);
 
-            drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
-
-            draw_material_pipeline_submesh(
+            MeshRenderItemEncodeRequest encode_request{};
+            encode_request.shader = skinned_shader.shader;
+            encode_request.vertex_input = MaterialMeshVertexInput::PositionNormal;
+            encode_request.debug_pass_name = "NormalPass";
+            encode_request.debug_entity_name = name;
+            if (!encode_mesh_render_item_draw(
                 *ctx.ctx2,
-                mesh_geometry.mesh,
-                mesh_geometry.submesh_index,
-                material_mesh_vertex_input_for_shader(
-                    skinned_shader.shader,
-                    MaterialMeshVertexInput::PositionNormal));
+                item,
+                encode_request)) {
+                continue;
+            }
 
             ctx.ctx2->bind_shader(normal_shader.vertex, normal_shader.fragment);
             ctx.ctx2->use_shader_resource_layout(normal_shader.shader);
