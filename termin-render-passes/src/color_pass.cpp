@@ -130,7 +130,7 @@ void bind_draw_data_for_shader(
     const tc_shader_resource_binding* rb =
         find_shader_abi_resource_binding(shader, ShaderAbiResourceId::DrawData);
     if (rb) {
-        ctx.bind_uniform_data(rb->name, &payload, sizeof(payload));
+        ctx.bind_uniform_data(rb, &payload, sizeof(payload));
         return;
     }
     if (shader && tc_shader_has_resource_layout(shader)) {
