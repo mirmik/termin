@@ -986,7 +986,7 @@ bool RenderingManager::build_render_target_contexts(
     std::unordered_map<std::string, RenderTargetContext>& contexts,
     std::string& default_context_name
 ) {
-    return rendering_manager_detail::build_render_target_contexts(
+    rendering_manager_detail::RenderTargetContextBuildRequest request{
         *this,
         render_engine(),
         rt,
@@ -999,7 +999,8 @@ bool RenderingManager::build_render_target_contexts(
         missing_render_target_provider_warnings_,
         contexts,
         default_context_name
-    );
+    };
+    return rendering_manager_detail::build_render_target_contexts(request);
 }
 
 void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
