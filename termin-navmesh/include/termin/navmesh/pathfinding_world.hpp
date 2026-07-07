@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <cstddef>
 #include <limits>
 #include <string>
@@ -69,24 +68,24 @@ public:
     size_t size() const;
 
     std::vector<PathfindingWorldPointCandidate> candidates_for_world_point(
-        const std::array<float, 3>& point);
+        const Vec3f& point);
 
     bool find_best_candidate_world_point(
-        const std::array<float, 3>& point,
+        const Vec3f& point,
         PathfindingWorldPointCandidate& out_candidate);
 
     std::vector<PathfindingWorldCandidate> candidates_for_world_points(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     bool find_best_candidate_world(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end,
+        const Vec3f& start,
+        const Vec3f& end,
         PathfindingWorldCandidate& out_candidate);
 
     PathfindingWorldPathResult find_detailed_path_world(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end,
+        const Vec3f& start,
+        const Vec3f& end,
         const PathfindingWorldQueryOptions& options = {});
 
 private:
@@ -99,7 +98,7 @@ private:
     std::vector<Entry> entries_;
 
     void prune_invalid_entries();
-    static double distance_sq(const std::array<float, 3>& a, const std::array<float, 3>& b);
+    static double distance_sq(const Vec3f& a, const Vec3f& b);
     static bool same_owner_scene(const Entity& entity, tc_scene_handle scene);
 };
 

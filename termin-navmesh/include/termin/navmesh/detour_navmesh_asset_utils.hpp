@@ -1,11 +1,11 @@
 #pragma once
 
-#include <array>
 #include <filesystem>
 #include <string>
 #include <vector>
 
 #include <termin/entity/entity.hpp>
+#include <termin/geom/vec3.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <termin/navmesh/tc_navmesh_handle.hpp>
@@ -36,7 +36,7 @@ TERMIN_NAVMESH_COMPONENTS_API TcMesh build_detour_debug_mesh(const TcNavMesh& na
 TERMIN_NAVMESH_COMPONENTS_API bool load_detour_tile_blobs(const std::filesystem::path& asset_path, std::vector<std::vector<unsigned char>>& blobs);
 TERMIN_NAVMESH_COMPONENTS_API bool load_detour_tile_blobs_from_navmesh(const TcNavMesh& navmesh,
                                                                        std::vector<std::vector<unsigned char>>& blobs);
-TERMIN_NAVMESH_COMPONENTS_API std::array<float, 3> termin_to_recast(const std::array<float, 3>& p);
-TERMIN_NAVMESH_COMPONENTS_API std::array<float, 3> recast_to_termin(const float p[3]);
+TERMIN_NAVMESH_COMPONENTS_API Vec3f termin_to_recast(const Vec3f& p);
+TERMIN_NAVMESH_COMPONENTS_API Vec3f recast_to_termin(const float p[3]);
 
 } // namespace termin

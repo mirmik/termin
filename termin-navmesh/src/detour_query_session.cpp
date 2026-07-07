@@ -93,11 +93,15 @@ std::string straight_path_flags_to_string(unsigned char flags) {
     return out.str();
 }
 
-float point_distance(const std::array<float, 3>& a, const std::array<float, 3>& b) {
+float point_distance(const Vec3f& a, const Vec3f& b) {
     const float dx = a[0] - b[0];
     const float dy = a[1] - b[1];
     const float dz = a[2] - b[2];
     return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+const float* vec3_ptr(const Vec3f& value) {
+    return &value.x;
 }
 
 void log_detour_poly_info(dtNavMesh* navmesh, const char* prefix, int index, dtPolyRef ref) {
@@ -242,7 +246,7 @@ bool DetourQuerySession::load_single_tile_data(const std::vector<unsigned char>&
     return load_single_tile_data(data.data(), static_cast<int>(data.size()), asset_name);
 }
 
-bool DetourQuerySession::find_nearest_poly(const std::array<float, 3>& point,
+bool DetourQuerySession::find_nearest_poly(const Vec3f& point,
                                            unsigned long long& poly_ref,
                                            float nearest[3],
                                            bool* over_poly) {
@@ -251,7 +255,7 @@ bool DetourQuerySession::find_nearest_poly(const std::array<float, 3>& point,
         return false;
     }
 
-    const std::array<float, 3> rc_point = termin_to_recast(point);
+    const Vec3f rc_point = termin_to_recast(point);
     const float extents[3] = {query_extent_x, query_extent_z, query_extent_y};
     dtQueryFilter filter;
     filter.setIncludeFlags(0xffff);
@@ -259,8 +263,8 @@ bool DetourQuerySession::find_nearest_poly(const std::array<float, 3>& point,
 
     dtPolyRef ref = 0;
     dtStatus status = over_poly
-        ? _query->findNearestPoly(rc_point.data(), extents, &filter, &ref, nearest, over_poly)
-        : _query->findNearestPoly(rc_point.data(), extents, &filter, &ref, nearest);
+        ? _query->findNearestPoly(vec3_ptr(rc_point), extents, &filter, &ref, nearest, over_poly)
+        : _query->findNearestPoly(vec3_ptr(rc_point), extents, &filter, &ref, nearest);
     if (!dtStatusSucceed(status) || ref == 0) {
         return false;
     }
@@ -269,7 +273,7 @@ bool DetourQuerySession::find_nearest_poly(const std::array<float, 3>& point,
     return true;
 }
 
-DetourClosestPointResult DetourQuerySession::closest_point(const std::array<float, 3>& point) {
+DetourClosestPointResult DetourQuerySession::closest_point(const Vec3f& point) {
     DetourClosestPointResult result;
     float nearest[3] = {0.0f, 0.0f, 0.0f};
     bool over_poly = false;
@@ -287,7 +291,7 @@ DetourClosestPointResult DetourQuerySession::closest_point(const std::array<floa
 
 DetourClosestPointResult DetourQuerySession::closest_point_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& point)
+    const Vec3f& point)
 {
     DetourClosestPointResult result = closest_point(navmesh_world_to_bake_point(bake_frame, point));
     if (result.success) {
@@ -296,11 +300,11 @@ DetourClosestPointResult DetourQuerySession::closest_point_world(
     return result;
 }
 
-std::vector<std::array<float, 3>> DetourQuerySession::find_path(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+std::vector<Vec3f> DetourQuerySession::find_path(
+    const Vec3f& start,
+    const Vec3f& end
 ) {
-    std::vector<std::array<float, 3>> result;
+    std::vector<Vec3f> result;
     DetourPathResult detailed = find_detailed_path(start, end);
     if (!detailed.success) {
         return result;
@@ -312,12 +316,12 @@ std::vector<std::array<float, 3>> DetourQuerySession::find_path(
     return result;
 }
 
-std::vector<std::array<float, 3>> DetourQuerySession::find_path_world(
+std::vector<Vec3f> DetourQuerySession::find_path_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end)
+    const Vec3f& start,
+    const Vec3f& end)
 {
-    std::vector<std::array<float, 3>> result;
+    std::vector<Vec3f> result;
     DetourPathResult detailed = find_detailed_path_world(bake_frame, start, end);
     if (!detailed.success) {
         return result;
@@ -330,8 +334,8 @@ std::vector<std::array<float, 3>> DetourQuerySession::find_path_world(
 }
 
 DetourPathResult DetourQuerySession::find_detailed_path(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     DetourPathResult result;
     if (!is_ready()) {
@@ -367,8 +371,8 @@ DetourPathResult DetourQuerySession::find_detailed_path(
         return result;
     }
 
-    const std::array<float, 3> nearest_start_term = recast_to_termin(nearest_start);
-    const std::array<float, 3> nearest_end_term = recast_to_termin(nearest_end);
+    const Vec3f nearest_start_term = recast_to_termin(nearest_start);
+    const Vec3f nearest_end_term = recast_to_termin(nearest_end);
     tc_log_info("[DetourQuerySession] nearest start ref=%llu over=%d "
                 "point=(%.3f, %.3f, %.3f) snap_dist=%.3f",
                 start_ref_raw,
@@ -446,7 +450,7 @@ DetourPathResult DetourQuerySession::find_detailed_path(
     result.success = true;
     result.points.reserve(static_cast<size_t>(straight_count));
     float total_straight_length = 0.0f;
-    std::array<float, 3> previous_point{0.0f, 0.0f, 0.0f};
+    Vec3f previous_point{0.0f, 0.0f, 0.0f};
     for (int i = 0; i < straight_count; ++i) {
         const dtPolyRef ref = refs[static_cast<size_t>(i)];
 
@@ -514,8 +518,8 @@ DetourPathResult DetourQuerySession::find_detailed_path(
 
 DetourPathResult DetourQuerySession::find_detailed_path_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end)
+    const Vec3f& start,
+    const Vec3f& end)
 {
     DetourPathResult result = find_detailed_path(
         navmesh_world_to_bake_point(bake_frame, start),
@@ -530,8 +534,8 @@ DetourPathResult DetourQuerySession::find_detailed_path_world(
 }
 
 DetourRaycastResult DetourQuerySession::raycast(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     DetourRaycastResult result;
     if (!is_ready()) {
@@ -544,7 +548,7 @@ DetourRaycastResult DetourQuerySession::raycast(
         return result;
     }
 
-    const std::array<float, 3> rc_end = termin_to_recast(end);
+    const Vec3f rc_end = termin_to_recast(end);
     const int max_path = std::max(1, max_polys);
     std::vector<dtPolyRef> visited(static_cast<size_t>(max_path));
     int visited_count = 0;
@@ -557,7 +561,7 @@ DetourRaycastResult DetourQuerySession::raycast(
     if (!dtStatusSucceed(_query->raycast(
             static_cast<dtPolyRef>(start_ref_raw),
             nearest_start,
-            rc_end.data(),
+            vec3_ptr(rc_end),
             &filter,
             &t,
             hit_normal,
@@ -587,8 +591,8 @@ DetourRaycastResult DetourQuerySession::raycast(
 
 DetourRaycastResult DetourQuerySession::raycast_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end)
+    const Vec3f& start,
+    const Vec3f& end)
 {
     DetourRaycastResult result = raycast(
         navmesh_world_to_bake_point(bake_frame, start),
