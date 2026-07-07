@@ -16,7 +16,7 @@ rg -l "^\s*(import numpy\b|from numpy\b)" \
   --glob '!termin-thirdparty/**' | sort
 ```
 
-Total files: 163
+Total files: 159
 
 ## Reading Notes
 
@@ -24,6 +24,13 @@ Total files: 163
 - `heavy linalg`: NumPy is doing linear algebra where replacement needs a real math backend decision.
 - `Vec3/Quat/Mat44 candidate`: mostly small 2D/3D geometry that can likely move to native geometry types.
 - `tests only` and `examples only`: lower priority for runtime dependency reduction.
+
+## Resolved Quick Wins
+
+- `termin-components/termin-components-physics/python/termin/physics_components/rigid_body_component.py`: collider extents moved to `Vec3`.
+- `termin-components/termin-components-tween/python/termin/tween/component.py`: annotation-only NumPy import removed.
+- `termin-pga/python/termin/ga201/convex_body.py`: `np.argmin` replaced by list/min selection.
+- `termin-tween/python/termin/tween/manager.py`: annotation-only NumPy import removed.
 
 ## Annotated Files
 
@@ -68,11 +75,9 @@ Total files: 163
 | `termin-components/termin-components-kinematic/tests/test_general_transform3.py` | transform assertion arrays | tests only |
 | `termin-components/termin-components-kinematic/tests/transform_test.py` | pose test vectors | tests only |
 | `termin-components/termin-components-mesh/python/termin/mesh/mesh.py` | mesh arrays | keep ndarray mesh buffers |
-| `termin-components/termin-components-physics/python/termin/physics_components/rigid_body_component.py` | collider extent vectors | Vec3 candidate |
 | `termin-components/termin-components-render/python/termin/render_components/camera.py` | camera target annotation | Vec3 candidate |
 | `termin-components/termin-components-render/python/termin/render_components/skybox_renderer.py` | view matrix copy | Mat44 candidate |
 | `termin-components/termin-components-render/tests/python/test_screen_point_to_ray.py` | ray assertion arrays | tests only |
-| `termin-components/termin-components-tween/python/termin/tween/component.py` | tween target annotations | Vec3/Quat candidate |
 | `termin-components/termin-components-voxels/python/termin_voxel_components/display_component.py` | voxel display buffers | keep ndarray mesh buffers |
 | `termin-components/termin-components-voxels/python/termin_voxel_components/visualization.py` | voxel visualizer buffers | keep ndarray mesh buffers |
 | `termin-components/termin-components-voxels/python/termin_voxel_components/voxelizer_actions.py` | root matrix inverse | Mat44 candidate |
@@ -130,7 +135,6 @@ Total files: 163
 | `termin-navmesh/tests/test_voxelizer_debug_draw.py` | debug bounds arrays | tests only |
 | `termin-pga/python/termin/algeom.py` | quadric fitting linalg | heavy linalg |
 | `termin-pga/python/termin/closest.py` | segment distance math | Vec3 candidate |
-| `termin-pga/python/termin/ga201/convex_body.py` | argmin candidate selection | easy list replacement |
 | `termin-pga/python/termin/ga201/motor.py` | motor vector arrays | Vec2 candidate |
 | `termin-pga/python/termin/ga201/screw.py` | screw vector arrays | Vec2 candidate |
 | `termin-pga/python/termin/geomalgo/baricenter.py` | barycentric linear solve | heavy linalg |
@@ -183,7 +187,6 @@ Total files: 163
 | `termin-render-passes/tests/test_shadow_camera_api.py` | shadow vector fixture | tests only |
 | `termin-render/python/termin/render/texture.py` | texture image buffers | keep ndarray boundary |
 | `termin-render/python/termin/render/texture_handle.py` | 1x1 texture pixels | tiny ndarray boundary |
-| `termin-tween/python/termin/tween/manager.py` | NumPy type annotations | remove via Protocol/list |
 | `termin-tween/python/termin/tween/tween.py` | Vec3/quaternion interpolation | Vec3/Quat candidate |
 | `termin-tween/tests/test_tween_core.py` | tween vector fixtures | tests only |
 | `termin-voxels/python/termin/voxels/chunk.py` | voxel chunk storage | keep ndarray dense grid |

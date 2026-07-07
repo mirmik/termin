@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
-
-import numpy as np
 
 from termin.scene.python_component import PythonComponent
 from termin.tween.manager import TweenManager
@@ -62,7 +61,7 @@ class TweenManagerComponent(PythonComponent):
     def move(
         self,
         transform: "GeneralTransform3",
-        target: np.ndarray,
+        target: Sequence[float],
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
@@ -73,7 +72,7 @@ class TweenManagerComponent(PythonComponent):
     def rotate(
         self,
         transform: "GeneralTransform3",
-        target: np.ndarray,
+        target: Sequence[float],
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
@@ -84,7 +83,7 @@ class TweenManagerComponent(PythonComponent):
     def scale(
         self,
         transform: "GeneralTransform3",
-        target: np.ndarray | float,
+        target: Sequence[float] | float,
         duration: float,
         ease: Ease = Ease.LINEAR,
         delay: float = 0.0,
