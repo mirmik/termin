@@ -546,6 +546,15 @@ void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) 
     (void)geometry_id;
 }
 
+static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
+    tc_material* mat,
+    const std::string* phase_mark
+);
+
+void MeshRenderer::populate_mesh_render_item(tc_render_item& item) {
+    (void)item;
+}
+
 bool MeshRenderer::resolve_mesh_geometry(
     const std::string& phase_mark,
     int geometry_id,
@@ -606,6 +615,78 @@ std::vector<int> MeshRenderer::get_geometry_ids_for_phase(
         ids.push_back(static_cast<int>(i));
     }
     return ids;
+}
+
+bool MeshRenderer::collect_render_items(
+    const tc_render_item_collect_context& context,
+    tc_render_item_sink& sink
+) {
+    if (!sink.emit) {
+        tc::Log::error("[MeshRenderer] cannot emit render items: sink callback is null");
+        return false;
+    }
+    if (!context.phase_mark || context.phase_mark[0] == '\0') {
+        tc::Log::error("[MeshRenderer] cannot emit render items: phase_mark is empty");
+        return false;
+    }
+
+    tc_mesh* mesh = current_mesh_ptr();
+    if (!mesh) {
+        return true;
+    }
+
+    if (mesh->submesh_count == 0) {
+        tc_mesh_ensure_default_submesh(mesh);
+    }
+
+    size_t submesh_count = mesh->submesh_count;
+    if (submesh_count == 0 && mesh->index_count > 0) {
+        submesh_count = 1;
+    }
+
+    Mat44f model = get_model_matrix(entity());
+    for (size_t submesh_index = 0; submesh_index < submesh_count; ++submesh_index) {
+        if (submesh_index > static_cast<size_t>(std::numeric_limits<int>::max())) {
+            tc::Log::error(
+                "[MeshRenderer] mesh '%s' has too many submeshes for RenderItem geometry_id",
+                mesh->header.name ? mesh->header.name : mesh->header.uuid);
+            return false;
+        }
+
+        const tc_submesh* submesh = tc_mesh_get_submesh(mesh, submesh_index);
+        uint32_t material_slot = submesh ? submesh->material_slot : 0;
+        tc_material* mat = get_material_ptr_for_slot(material_slot);
+        if (!mat) {
+            continue;
+        }
+
+        std::string phase_mark = context.phase_mark;
+        std::vector<tc_material_phase*> phases =
+            mesh_renderer_phases_for_mark(mat, &phase_mark);
+        for (tc_material_phase* phase : phases) {
+            tc_render_item item{};
+            item.kind = TC_RENDER_ITEM_KIND_MESH;
+            item.flags =
+                TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX |
+                TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+            item.component = tc_component_ptr();
+            item.geometry_id = static_cast<int>(submesh_index);
+            item.material_phase = phase;
+            item.material = tc_material_handle_invalid();
+            item.material_phase_index = SIZE_MAX;
+            tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+            std::copy(model.data, model.data + 16, item.model_matrix);
+            item.payload.mesh.mesh = mesh;
+            item.payload.mesh.submesh_index = submesh_index;
+
+            populate_mesh_render_item(item);
+            if (!sink.emit(&item, sink.user_data)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::string& phase_mark) {

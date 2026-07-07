@@ -14,6 +14,13 @@ passes, and shared render submission code. It should guide the migration away
 from the current mixed model before the exact C ABI and C++ convenience wrappers
 are finalized.
 
+Implementation progress:
+
+- 2026-07-07: first additive ABI slice landed with `tc_render_item`,
+  `tc_render_item_collect_context`, sink-based collection, C++ vector collector,
+  and mesh item emission from `MeshRenderer` / `SkinnedMeshRenderer`. The legacy
+  `GeometryDrawCall` path remains live while passes are migrated.
+
 ## Problem
 
 Current rendering has several overlapping draw ownership models:

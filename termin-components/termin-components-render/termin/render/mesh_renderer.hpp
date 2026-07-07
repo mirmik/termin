@@ -35,6 +35,9 @@ private:
     void recreate_overridden_material();
     void apply_pending_override_data();
 
+protected:
+    virtual void populate_mesh_render_item(tc_render_item& item);
+
 public:
     explicit MeshRenderer(const char* type_name = "MeshRenderer");
     virtual ~MeshRenderer();
@@ -86,6 +89,10 @@ public:
         const std::string& phase_mark
     ) override;
     Mat44f get_model_matrix(const Entity& entity) const override;
+    bool collect_render_items(
+        const tc_render_item_collect_context& context,
+        tc_render_item_sink& sink
+    ) override;
     std::vector<tc_material_phase*> get_phases_for_mark(const std::string& phase_mark);
     std::vector<GeometryDrawCall> get_geometry_draws(
         const RenderContext& context,

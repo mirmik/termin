@@ -14,6 +14,7 @@ GUARD_TEST_MAIN();
 
 extern "C" {
 #include <core/tc_drawable_protocol.h>
+#include <tgfx/resources/tc_material_registry.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_shader_registry.h>
 }
@@ -228,4 +229,66 @@ TEST_CASE("MeshRenderer geometry ids are permissive for pass phase labels") {
     CHECK((*ids)[1] == 1);
 
     tc_mesh_shutdown();
+}
+
+TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
+    tc_material_init();
+    tc_mesh_init();
+
+    tc_material_handle material_handle = tc_material_create(
+        "mesh-renderer-render-item-material",
+        "mesh-renderer-render-item-material");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    tc_material_phase* phase = tc_material_add_phase(
+        material,
+        tc_shader_handle_invalid(),
+        "opaque",
+        11);
+    REQUIRE(phase != nullptr);
+
+    termin::TcMesh mesh = make_two_submesh_mesh();
+    REQUIRE(mesh.is_valid());
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("mesh-renderer-render-items");
+    termin::Entity entity = scene.create_entity("mesh");
+
+    auto* mesh_component = new termin::MeshComponent();
+    mesh_component->set_mesh(mesh);
+    entity.add_component(mesh_component);
+
+    auto* renderer = new termin::MeshRenderer();
+    renderer->set_material(termin::TcMaterial(material_handle));
+    renderer->set_material_slot(1, termin::TcMaterial(material_handle));
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "opaque";
+    collect_context.debug_pass_name = "test";
+
+    std::vector<tc_render_item> items;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        items));
+
+    REQUIRE(items.size() == 2u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(items[0].geometry_id == 0);
+    CHECK(items[0].material_phase == phase);
+    CHECK(items[0].payload.mesh.mesh == mesh.get());
+    CHECK(items[0].payload.mesh.submesh_index == 0u);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
+
+    CHECK(items[1].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[1].geometry_id == 1);
+    CHECK(items[1].material_phase == phase);
+    CHECK(items[1].payload.mesh.mesh == mesh.get());
+    CHECK(items[1].payload.mesh.submesh_index == 1u);
+
+    tc_mesh_shutdown();
+    tc_material_shutdown();
 }

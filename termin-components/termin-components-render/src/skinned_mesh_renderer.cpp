@@ -341,6 +341,17 @@ void SkinnedMeshRenderer::collect_shader_usages(
     collect_shader_usages_with_context(context, emit);
 }
 
+void SkinnedMeshRenderer::populate_mesh_render_item(tc_render_item& item) {
+    update_bone_matrices();
+    if (_bone_count <= 0 || _bone_matrices_flat.empty()) {
+        return;
+    }
+
+    item.flags |= TC_RENDER_ITEM_FLAG_HAS_SKINNING_MATRICES;
+    item.payload.mesh.skinning_matrices = _bone_matrices_flat.data();
+    item.payload.mesh.skinning_matrix_count = static_cast<uint32_t>(_bone_count);
+}
+
 std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(
     const RenderContext& context,
     const std::string* phase_mark
