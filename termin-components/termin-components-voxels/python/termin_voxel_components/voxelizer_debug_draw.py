@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from termin.render.drawable import GeometryDrawCall
+from termin.render.drawable import RenderItem
 
 
 @dataclass(frozen=True)
@@ -131,14 +131,12 @@ class VoxelizerDebugDrawService:
                 marks.update(p.phase_mark for p in mat.phases)
         return marks
 
-    def get_geometry_draws(
+    def collect_render_items(
         self,
         component,
-        context,
-        phase_mark: str | None = None,
-    ) -> list[GeometryDrawCall]:
-        del context
-        result: list[GeometryDrawCall] = []
+        phase_mark: str,
+    ) -> list[RenderItem]:
+        result: list[RenderItem] = []
         for layer in VOXELIZER_DEBUG_LAYERS:
             if not layer.enabled(component):
                 continue
@@ -147,7 +145,7 @@ class VoxelizerDebugDrawService:
                 continue
 
             mat = layer.material(component)
-            if phase_mark is None:
+            if phase_mark == "":
                 phases = list(mat.phases)
             else:
                 phases = [p for p in mat.phases if p.phase_mark == phase_mark]
@@ -156,6 +154,9 @@ class VoxelizerDebugDrawService:
 
             phases.sort(key=lambda p: p.priority)
             geometry_id = layer.geometry_id(component)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=geometry_id) for p in phases)
+            result.extend(
+                RenderItem.mesh(mesh=mesh, phase=p, geometry_id=geometry_id)
+                for p in phases
+            )
 
         return result

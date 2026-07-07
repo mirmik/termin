@@ -1,5 +1,7 @@
 #include <termin/bootstrap/bootstrap.hpp>
 
+#include <algorithm>
+
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 
@@ -11,6 +13,7 @@
 #include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/render/drawable.hpp>
 #include <termin/render/frame_pass.hpp>
+#include <termin/render/python_render_item.hpp>
 #include <termin/render/render_context.hpp>
 #include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/voxels/tc_voxel_grid_handle.hpp>
@@ -129,6 +132,70 @@ bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
         result = nb::cast<bool>(marks.attr("__contains__")(pm));
     } catch (const std::exception& e) {
         tc::Log::error(e, "Drawable::has_phase");
+        PyErr_Print();
+    }
+    PyGILState_Release(gstate);
+    return result;
+}
+
+bool py_drawable_cb_collect_render_items(
+    void* py_self,
+    tc_component* component,
+    const tc_render_item_collect_context* context,
+    tc_render_item_sink* sink)
+{
+    PyGILState_STATE gstate = PyGILState_Ensure();
+    bool result = false;
+    try {
+        if (!component || !context || !sink || !sink->emit) {
+            tc::Log::error("Drawable::collect_render_items: invalid callback arguments");
+            PyGILState_Release(gstate);
+            return false;
+        }
+
+        Mat44f model = Mat44f::identity();
+        Entity owner(component->owner);
+        if (owner.valid()) {
+            double world[16]{};
+            owner.transform().world_matrix(world);
+            for (int i = 0; i < 16; ++i) {
+                model.data[i] = static_cast<float>(world[i]);
+            }
+        }
+
+        nb::handle self((PyObject*)py_self);
+        nb::object context_type =
+            nb::module_::import_("termin.render.drawable").attr("RenderItemCollectContext");
+        nb::object py_context = context_type(
+            context->phase_mark ? context->phase_mark : "",
+            context->flags,
+            context->layer_mask,
+            context->render_category_mask,
+            context->debug_pass_name ? context->debug_pass_name : "");
+        nb::object py_items = self.attr("collect_render_items")(py_context);
+        if (py_items.is_none()) {
+            result = true;
+            PyGILState_Release(gstate);
+            return result;
+        }
+
+        for (auto py_item : py_items) {
+            PythonRenderItem& render_item = nb::cast<PythonRenderItem&>(py_item);
+            tc_render_item item = render_item.item;
+            item.component = component;
+            if ((item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) == 0u) {
+                item.flags |= TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
+                std::copy(model.data, model.data + 16, item.model_matrix);
+            }
+            if (!sink->emit(&item, sink->user_data)) {
+                result = false;
+                PyGILState_Release(gstate);
+                return result;
+            }
+        }
+        result = true;
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "Drawable::collect_render_items");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -308,7 +375,7 @@ void init_python_component_callbacks() {
 
     tc_python_drawable_callbacks drawable_callbacks = {
         .has_phase = py_drawable_cb_has_phase,
-        .collect_render_items = nullptr,
+        .collect_render_items = py_drawable_cb_collect_render_items,
     };
     tc_component_set_python_drawable_callbacks(&drawable_callbacks);
 
