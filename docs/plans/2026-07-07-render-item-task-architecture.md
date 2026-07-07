@@ -18,8 +18,7 @@ Implementation progress:
 
 - 2026-07-07: first additive ABI slice landed with `tc_render_item`,
   `tc_render_item_collect_context`, sink-based collection, C++ vector collector,
-  and mesh item emission from `MeshRenderer` / `SkinnedMeshRenderer`. The old
-  `GeometryDrawCall` path remains live while passes are migrated.
+  and mesh item emission from `MeshRenderer` / `SkinnedMeshRenderer`.
 - 2026-07-07: `IdPass` now builds mesh draw tasks from RenderItems and uses the
   direct `Drawable` path only for non-mesh drawables that do not have a
   typed item encoder yet.
@@ -29,28 +28,29 @@ Implementation progress:
   `FOLIAGE_BATCH` RenderItems through registered encoders. `ColorPass`,
   `ShadowPass`, and `IdPass` no longer use C++ `Drawable` casts in their
   draw-time submit paths.
-- Remaining live migration work: remove `GeometryDrawCall` discovery from
-  converted passes, finish Python-facing RenderItem ergonomics/tests, and
-  retire the legacy geometry-side-channel methods once all pass collection is
-  RenderItem-first.
+- 2026-07-08: legacy `GeometryDrawCall`, `get_geometry_draws()`,
+  `draw_geometry()`, `get_mesh_for_phase()`, and `resolve_mesh_geometry()`
+  were removed from the live C++/Python API. Mesh, line, world text, foliage,
+  and Python drawable components now submit through `collect_render_items()`.
+- Remaining live migration work: finish Python-facing RenderItem integration
+  tests and continue replacing any historical docs/examples that still describe
+  the retired geometry-side-channel model.
 
 ## Problem
 
 Current rendering has several overlapping draw ownership models:
 
-- `GeometryDrawCall` returns material-phase draw records, but it does not carry
-  enough structured backend payload to be the single render protocol.
-- `GeometryPassBase`, `DepthPass`, and `NormalPass` still lean on
-  `GeometryDrawCall` / geometry-id discovery before submitting RenderItems.
-- `resolve_mesh_geometry()`, `get_geometry_ids_for_phase()`,
-  `upload_per_draw_uniforms_tgfx2()`, and related geometry-side-channel methods
-  still expose transitional ways for passes to ask drawable implementations how
-  to draw.
+- Historical `GeometryDrawCall` and geometry-id discovery paths did not carry
+  enough structured backend payload to be the single render protocol and have
+  now been retired from live code.
+- `upload_per_draw_uniforms_tgfx2()` still exists for narrow per-draw renderer
+  data such as skinned mesh bone matrices; it should not grow into a replacement
+  draw ownership channel.
 - Direct `draw_tgfx2()` and `RenderContext::prepare_tgfx2_material_resources`
   have been removed from the live code, but old design references may still
   exist in historical notes.
-- The C drawable ABI currently returns `void*` for geometry draws, with C++
-  drawables caching a `std::vector<GeometryDrawCall>` behind that pointer.
+- The C drawable ABI exposes `collect_render_items()` and no longer has a
+  geometry-draw side channel.
 
 The result is unclear ownership: drawables sometimes publish data, sometimes
 execute backend drawing, and sometimes receive pass-owned callbacks. Passes
@@ -360,8 +360,7 @@ custom drawables from becoming backend submit owners.
    existing drawable protocol.
 2. Add C++ wrappers for collecting into pass-owned vectors, implemented on top
    of the sink ABI.
-3. Teach `MeshRenderer` and `SkinnedMeshRenderer` to emit mesh items while
-   keeping the old `GeometryDrawCall` path temporarily.
+3. Teach `MeshRenderer` and `SkinnedMeshRenderer` to emit mesh items.
 4. Add a shared mesh task submission path in `termin-render`.
 5. Convert `GeometryPassBase` and the core geometry passes to collect items,
    build tasks, order tasks, and submit them one at a time.
@@ -370,11 +369,14 @@ custom drawables from becoming backend submit owners.
    `WorldTextComponent`, to a typed item and encoder.
 8. Remove `RenderContext::prepare_tgfx2_material_resources` once direct paths no
    longer need pass-owned callbacks. Done for the live C++ render path.
-9. Deprecate and then remove `resolve_mesh_geometry()`,
-   `get_geometry_ids_for_phase()`, and `upload_per_draw_uniforms_tgfx2()` as
-   public draw ownership APIs. `supports_direct_tgfx2_draw()` and
-   `draw_tgfx2()` have already been removed from the live C++ API.
-10. Update `docs/render-phase-semantics.md` after the live contract changes.
+9. Remove legacy geometry-side-channel APIs. `GeometryDrawCall`,
+   `get_geometry_draws()`, `draw_geometry()`, `get_mesh_for_phase()`,
+   `resolve_mesh_geometry()`, `get_geometry_ids_for_phase()`,
+   `supports_direct_tgfx2_draw()`, and `draw_tgfx2()` have been removed from
+   the live C++/Python render API.
+10. Keep `upload_per_draw_uniforms_tgfx2()` narrow and renderer-owned until
+    skinned mesh bone data has a typed RenderItem payload/resource path.
+11. Update `docs/render-phase-semantics.md` after the live contract changes.
 
 ## Diagnostics And Tests
 
@@ -395,7 +397,7 @@ Required tests:
 - C++ `MeshRenderer` emits mesh items and renders through Color/Id/Shadow-style
   pass tasks;
 - Python/non-C++ drawable emits render items without a C++ `Drawable` cast;
-- at least one typed non-mesh item path renders without `draw_tgfx2()`;
+- typed line, text, and foliage item paths render without `draw_tgfx2()`;
 - pass ordering remains pass-owned;
 - material phase shader override still works through the task submission path;
 - unsupported item/contract combinations log useful errors and do not silently
@@ -413,8 +415,8 @@ Required tests:
   interned ids with debug string lookup.
 - How encoder registration participates in module hot-reload without relying on
   static initialization.
-- Which non-mesh direct path should be migrated first as the proof that the new
-  model actually replaces `draw_tgfx2()`.
+- How skinned mesh bone data should move from `upload_per_draw_uniforms_tgfx2()`
+  into an explicit typed payload/resource path.
 
 ## Invariants
 

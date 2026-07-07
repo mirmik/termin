@@ -350,7 +350,6 @@ def test_line_renderer_direct_modes_skip_shadow_material_phase():
     renderer = LineRenderer(points=_line_points(), material=material)
 
     assert renderer.phase_marks == {"opaque"}
-    assert renderer.get_geometry_draws(_render_context(), "shadow") == []
 
 
 def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
@@ -363,8 +362,7 @@ def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
     )
 
     assert renderer.phase_marks == {"opaque", "id"}
-    assert len(renderer.get_geometry_draws(_render_context(), "id")) == 1
-    assert renderer.get_geometry_draws(_render_context(), "pick") == []
+    assert "pick" not in renderer.phase_marks
 
 
 def test_line_renderer_cast_shadow_enables_shadow_material_phase():
@@ -582,22 +580,16 @@ def test_world_text_component_defaults_to_transparent_direct_draw():
     assert text.depth_write is False
     assert text.blend is True
     assert text.phase_marks == {"transparent"}
-    context = _render_context()
-    assert text.get_geometry_draws(context, "opaque") == []
-    assert len(text.get_geometry_draws(context, "transparent")) == 1
 
 
 def test_world_text_component_hides_empty_text_from_draw_contract():
     text = WorldTextComponent()
 
     assert text.phase_marks == set()
-    context = _render_context()
-    assert text.get_geometry_draws(context) == []
 
     text.text = "A"
     text.phase_mark = "overlay"
     assert text.phase_marks == {"overlay"}
-    assert len(text.get_geometry_draws(context)) == 1
 
 
 def test_world_text_component_is_inspectable():

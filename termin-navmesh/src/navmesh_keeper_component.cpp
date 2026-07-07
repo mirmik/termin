@@ -4,6 +4,7 @@
 #include <termin/navmesh/navmesh_query_space.hpp>
 #include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <cstring>
 #include <utility>
 #include <tcbase/tc_log.hpp>
 
@@ -94,53 +95,58 @@ std::set<std::string> NavMeshKeeperComponent::get_phase_marks() const {
     return {NAVMESH_DEBUG_PHASE};
 }
 
-void NavMeshKeeperComponent::draw_geometry(const RenderContext& context, int geometry_id) {
-    (void)context;
-    (void)geometry_id;
-    ensure_debug_mesh_loaded();
-}
-
-std::vector<GeometryDrawCall> NavMeshKeeperComponent::get_geometry_draws(
-    const RenderContext& context,
-    const std::string* phase_mark
-) {
-    std::vector<GeometryDrawCall> result;
+bool NavMeshKeeperComponent::collect_render_items(
+    const tc_render_item_collect_context& context,
+    tc_render_item_sink& sink)
+{
+    if (!sink.emit) {
+        tc_log_error("[NavMeshKeeperComponent] cannot emit render items: sink callback is null");
+        return false;
+    }
+    if (!context.phase_mark || std::string(context.phase_mark) != NAVMESH_DEBUG_PHASE) {
+        return true;
+    }
     if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
-        return result;
+        return true;
     }
-    if (phase_mark && *phase_mark != NAVMESH_DEBUG_PHASE) {
-        return result;
-    }
-    if (!ensure_debug_mesh_loaded()) {
-        return result;
+    if (!ensure_debug_mesh_loaded() || !_navmesh_debug_mesh.is_valid()) {
+        return true;
     }
 
     TcMaterial mat = get_or_create_navmesh_debug_material(_navmesh_debug_material);
-    if (!mat.is_valid()) {
-        return result;
-    }
-
     tc_material* material = mat.get();
-    if (!material) {
-        return result;
+    tc_mesh* mesh = _navmesh_debug_mesh.get();
+    if (!material || !mesh) {
+        return true;
     }
 
-    for (size_t i = 0; i < material->phase_count; ++i) {
-        tc_material_phase* phase = &material->phases[i];
-        if (phase_mark && phase->phase_mark != *phase_mark) {
-            continue;
+    tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
+    const size_t count = tc_material_get_phases_for_mark(
+        material,
+        context.phase_mark,
+        phases,
+        TC_MATERIAL_MAX_PHASES);
+    Mat44f model = get_model_matrix(entity());
+    for (size_t i = 0; i < count; ++i) {
+        tc_material_phase* phase = phases[i];
+        tc_render_item item{};
+        item.kind = TC_RENDER_ITEM_KIND_MESH;
+        item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+        item.component = tc_component_ptr();
+        item.geometry_id = 0;
+        item.material_phase = phase;
+        item.material = tc_material_handle_invalid();
+        item.material_phase_index = SIZE_MAX;
+        tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+        std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
+        item.payload.mesh.mesh = mesh;
+        item.payload.mesh.mesh_handle = _navmesh_debug_mesh.handle;
+        item.payload.mesh.submesh_index = 0;
+        if (!sink.emit(&item, sink.user_data)) {
+            return false;
         }
-        result.emplace_back(phase, 0);
     }
-    return result;
-}
-
-tc_mesh* NavMeshKeeperComponent::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
-    (void)geometry_id;
-    if (phase_mark != NAVMESH_DEBUG_PHASE) {
-        return nullptr;
-    }
-    return ensure_debug_mesh_loaded() && _navmesh_debug_mesh.is_valid() ? _navmesh_debug_mesh.get() : nullptr;
+    return true;
 }
 
 Mat44f NavMeshKeeperComponent::get_model_matrix(const Entity& entity) const {

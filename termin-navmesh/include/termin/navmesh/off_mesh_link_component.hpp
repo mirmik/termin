@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <set>
 #include <string>
 #include <vector>
@@ -79,59 +80,89 @@ public:
     }
 
     std::set<std::string> get_phase_marks() const override {
-        return {OFF_MESH_LINK_DEBUG_PHASE};
+        return {OFF_MESH_LINK_DEBUG_PHASE, "pick"};
     }
 
-    void draw_geometry(const RenderContext& context, int geometry_id = 0) override {
-        (void)context;
-        (void)geometry_id;
-        ensure_debug_resources();
-    }
+    bool collect_render_items(
+        const tc_render_item_collect_context& context,
+        tc_render_item_sink& sink) override {
+        if (!sink.emit) {
+            tc_log(TC_LOG_ERROR, "[OffMeshLinkComponent] cannot emit render items: sink callback is null");
+            return false;
+        }
+        if (!context.phase_mark) {
+            return true;
+        }
+        const std::string phase_mark = context.phase_mark;
+        const bool is_pick = phase_mark == "pick";
+        if (!is_pick && (context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
+            return true;
+        }
+        if (!enabled && !is_pick) {
+            return true;
+        }
+        if (is_pick) {
+            if (!ensure_debug_mesh() || !_debug_mesh.is_valid()) {
+                return true;
+            }
+        } else if (phase_mark == OFF_MESH_LINK_DEBUG_PHASE) {
+            if (!ensure_debug_resources()) {
+                return true;
+            }
+        } else {
+            return true;
+        }
 
-    std::vector<GeometryDrawCall> get_geometry_draws(
-        const RenderContext& context,
-        const std::string* phase_mark = nullptr) override {
-        std::vector<GeometryDrawCall> result;
-        if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
-            return result;
+        tc_mesh* mesh = _debug_mesh.get();
+        if (!mesh) {
+            return true;
         }
-        if (!enabled) {
-            return result;
-        }
-        if (phase_mark && *phase_mark != OFF_MESH_LINK_DEBUG_PHASE) {
-            return result;
-        }
-        if (!ensure_debug_resources()) {
-            return result;
+
+        auto emit_phase = [&](tc_material_phase* phase) -> bool {
+            if (!phase && (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) == 0u) {
+                return true;
+            }
+
+            tc_render_item item{};
+            item.kind = TC_RENDER_ITEM_KIND_MESH;
+            item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
+            item.component = tc_component_ptr();
+            item.geometry_id = 0;
+            item.material_phase = phase;
+            item.material = tc_material_handle_invalid();
+            item.material_phase_index = SIZE_MAX;
+            if (phase) {
+                item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+                tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+            }
+            Mat44f model = get_model_matrix(entity());
+            std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
+            item.payload.mesh.mesh = mesh;
+            item.payload.mesh.mesh_handle = _debug_mesh.handle;
+            item.payload.mesh.submesh_index = 0;
+            return sink.emit(&item, sink.user_data);
+        };
+
+        if (is_pick) {
+            return emit_phase(nullptr);
         }
 
         tc_material* material = _debug_material.get();
         if (!material) {
-            return result;
+            return true;
         }
-
-        for (size_t i = 0; i < material->phase_count; ++i) {
-            tc_material_phase* phase = &material->phases[i];
-            if (phase_mark && phase->phase_mark != *phase_mark) {
-                continue;
+        tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
+        const size_t count = tc_material_get_phases_for_mark(
+            material,
+            context.phase_mark,
+            phases,
+            TC_MATERIAL_MAX_PHASES);
+        for (size_t i = 0; i < count; ++i) {
+            if (!emit_phase(phases[i])) {
+                return false;
             }
-            result.emplace_back(phase, 0);
         }
-        return result;
-    }
-
-    tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override {
-        (void)geometry_id;
-        if (!enabled && phase_mark != "pick") {
-            return nullptr;
-        }
-        if (phase_mark == "pick") {
-            return ensure_debug_mesh() && _debug_mesh.is_valid() ? _debug_mesh.get() : nullptr;
-        }
-        if (phase_mark != OFF_MESH_LINK_DEBUG_PHASE) {
-            return nullptr;
-        }
-        return ensure_debug_resources() && _debug_mesh.is_valid() ? _debug_mesh.get() : nullptr;
+        return true;
     }
 
 private:
