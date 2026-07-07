@@ -153,8 +153,8 @@ void NormalPass::execute_with_data_tgfx2(
     auto& device = ctx.ctx2->device();
     ensure_tgfx2_resources(device);
 
-    // Use the UBO-based engine shader as base_shader for skinning override
-    // (see DepthPass / ShadowPass for rationale).
+    // Use the UBO-based engine shader as the base shader key for RenderItem
+    // shader overrides.
     collect_draw_calls(scene, layer_mask, ctx.render_category_mask, normal_shader_handle_);
     sort_draw_calls_by_shader();
 
@@ -230,9 +230,10 @@ void NormalPass::execute_with_data_tgfx2(
             entity_names.push_back(name);
         }
 
-        bool override_is_base =
-            tc_shader_handle_eq(dc.final_shader, normal_shader_handle_);
-        tc_material_phase* material_phase = dc.resolve_material_phase();
+        tc_material_phase* material_phase =
+            tc_shader_handle_eq(dc.final_shader, normal_shader_handle_)
+                ? nullptr
+                : dc.resolve_material_phase();
 
         NormalDrawStd140 draw{};
         if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
@@ -246,70 +247,22 @@ void NormalPass::execute_with_data_tgfx2(
             {"normal_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
         }};
         MaterialPipelineResourceContext draw_resources{};
-
-        if (override_is_base) {
-            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                draw_uniforms.data(),
-                draw_uniforms.size());
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                normal_shader.shader,
-                nullptr,
-                draw_resources);
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = normal_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::PositionNormal;
-            encode_request.debug_pass_name = "NormalPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                item,
-                encode_request)) {
-                continue;
-            }
-        } else {
-            // Non-base shader: compile via bridge, bind reflected resources,
-            // and let the mesh encoder upload payload-specific data such as BoneBlock.
-            MaterialPipelineShaderBinding skinned_shader{};
-            if (!ensure_material_pipeline_shader(
-                    *ctx.ctx2,
-                    device,
-                    dc.final_shader,
-                    "NormalPass/skinned",
-                    skinned_shader)) {
-                continue;
-            }
-            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                draw_uniforms.data(),
-                draw_uniforms.size());
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                skinned_shader.shader,
-                material_phase,
-                draw_resources);
-
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = skinned_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::PositionNormal;
-            encode_request.debug_pass_name = "NormalPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                item,
-                encode_request)) {
-                continue;
-            }
-
-            ctx.ctx2->bind_shader(normal_shader.vertex, normal_shader.fragment);
-            ctx.ctx2->use_shader_resource_layout(normal_shader.shader);
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                normal_shader.shader,
-                nullptr,
-                normal_resources);
+        draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+            draw_uniforms.data(),
+            draw_uniforms.size());
+        RenderItemDrawSubmitRequest encode_request{};
+        encode_request.shader_handle = dc.final_shader;
+        encode_request.device = &device;
+        encode_request.mesh_vertex_input = MaterialMeshVertexInput::PositionNormal;
+        encode_request.material_phase = material_phase;
+        encode_request.material_resources = &draw_resources;
+        encode_request.debug_pass_name = "NormalPass";
+        encode_request.debug_entity_name = name;
+        if (!submit_render_item_draw(
+            *ctx.ctx2,
+            item,
+            encode_request)) {
+            continue;
         }
     }
 

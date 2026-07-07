@@ -358,12 +358,6 @@ void IdPass::execute_with_data_tgfx2(
             id_to_rgb(task.pick_id, pick_r, pick_g, pick_b);
         }
 
-        bool override_is_base =
-            tc_shader_handle_eq(task.final_shader, id_shader_handle_);
-
-        // Push constants (u_model + u_pickColor) are shared between the
-        // base and skinned paths. The skinned variant uses the same id shader
-        // interface plus a reflected BoneBlock resource.
         IdPushStd140 push{};
         if (task.item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
             std::memcpy(push.u_model, task.item.model_matrix, sizeof(float) * 16);
@@ -381,76 +375,22 @@ void IdPass::execute_with_data_tgfx2(
             {"id_draw", &push, static_cast<uint32_t>(sizeof(push))},
         }};
 
-        if (override_is_base) {
-            MaterialPipelineResourceContext draw_resources{};
-            draw_resources.uniforms = base_draw_uniforms;
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                id_shader.shader,
-                nullptr,
-                draw_resources);
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = id_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-            encode_request.debug_pass_name = "IdPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                task.item,
-                encode_request)) {
-                return;
-            }
-            capture_debug_symbol(name);
-        } else {
-            MaterialPipelineShaderBinding skinned_shader{};
-            if (!ensure_material_pipeline_shader(
-                    *ctx.ctx2,
-                    device,
-                    task.final_shader,
-                    "IdPass/skinned",
-                    skinned_shader)) {
-                return;
-            }
-
-            std::array<MaterialPipelineUniformData, 2> skinned_draw_uniforms{{
-                base_draw_uniforms[0],
-                base_draw_uniforms[1],
-            }};
-            MaterialPipelineResourceContext draw_resources{};
-            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                skinned_draw_uniforms.data(),
-                skinned_draw_uniforms.size());
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                skinned_shader.shader,
-                nullptr,
-                draw_resources);
-
-            RenderItemDrawSubmitRequest encode_request{};
-            encode_request.shader = skinned_shader.shader;
-            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-            encode_request.debug_pass_name = "IdPass";
-            encode_request.debug_entity_name = name;
-            if (!submit_render_item_draw(
-                *ctx.ctx2,
-                task.item,
-                encode_request)) {
-                return;
-            }
-            capture_debug_symbol(name);
-
-            ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);
-            ctx.ctx2->use_shader_resource_layout(id_shader.shader);
-            ctx.ctx2->clear_resource_bindings();
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                id_shader.shader,
-                nullptr,
-                id_resources);
+        MaterialPipelineResourceContext draw_resources{};
+        draw_resources.uniforms = base_draw_uniforms;
+        RenderItemDrawSubmitRequest encode_request{};
+        encode_request.shader_handle = task.final_shader;
+        encode_request.device = &device;
+        encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+        encode_request.material_resources = &draw_resources;
+        encode_request.debug_pass_name = "IdPass";
+        encode_request.debug_entity_name = name;
+        if (!submit_render_item_draw(
+            *ctx.ctx2,
+            task.item,
+            encode_request)) {
+            return;
         }
+        capture_debug_symbol(name);
     };
 
     for (const IdMeshTask& task : mesh_tasks) {
