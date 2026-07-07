@@ -19,8 +19,9 @@ not enable `PLR0913`.
   units.
 - After the first C++ cleanup, geometry type rename, `tcplot` API cleanup,
   Canvas2D quad cleanup, immediate solid primitive cleanup, texture/FBO
-  descriptor cleanup, text draw options cleanup, and indexed-instanced draw
-  command cleanup on 2026-07-07, the current C/C++ baseline is 20
+  descriptor cleanup, text draw options cleanup, indexed-instanced draw
+  command cleanup, and mesh interleaved create-info cleanup on 2026-07-07,
+  the current C/C++ baseline is 17
   repository-owned diagnostics with the tightened third-party header filter.
 
 The result is small enough to enable eventually, but not as a drive-by config
@@ -61,7 +62,10 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   compatible.
 - Updated `tgfx2::RenderContext2::draw_indexed_instanced` to take a typed
   `IndexedInstancedDraw` command struct.
-- C++ repository-owned diagnostics dropped from 64 to 20.
+- Updated `TcMesh::from_interleaved` to take a typed `TcMeshCreateInfo`, kept
+  the Python binding call shape compatible, and collapsed the primitive mesh
+  vertex helper to a typed local vertex value.
+- C++ repository-owned diagnostics dropped from 64 to 17.
 
 ## Reproduction
 
@@ -145,9 +149,9 @@ Current diagnostics by repository-owned area:
 
 | Count | Area |
 |---:|---|
-| 6 | `termin-mesh` |
 | 5 | `termin-graphics` |
 | 4 | `termin-render-passes` |
+| 3 | `termin-mesh` |
 | 2 | `termin-engine` |
 | 2 | `termin-render` |
 | 1 | `termin-components/termin-components-render` |
@@ -166,9 +170,6 @@ termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_st
 termin-mesh/src/resources/tc_mesh.c:653:13: tc_mesh_find_surface_edge_filtered: 10 parameters
 termin-mesh/src/resources/tc_mesh.c:955:6: tc_mesh_find_surface_edge_aligned: 8 parameters
 termin-mesh/src/resources/tc_mesh.c:979:6: tc_mesh_find_surface_edge_aligned_metric: 9 parameters
-termin-mesh/src/resources/tc_primitive_mesh.c:37:13: set_vertex: 10 parameters
-termin-mesh/src/tgfx_mesh_handle.cpp:175:16: from_interleaved: 8 parameters
-termin-mesh/src/tgfx_mesh_handle.cpp:225:16: from_interleaved_with_submeshes: 9 parameters
 termin-render-passes/src/color_pass.cpp:146:12: ColorPass: 8 parameters
 termin-render-passes/src/color_pass.cpp:582:17: execute_with_data: 12 parameters
 termin-render-passes/src/shadow_camera.cpp:385:20: fit_shadow_frustum_for_cascade: 9 parameters
