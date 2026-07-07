@@ -388,19 +388,22 @@ TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_varian
         fragment_entry = "main";
     }
 
-    tc_shader_handle handle = tc_shader_from_sources_with_entries_ex(
-        vertex_source.c_str(),
-        fragment_source,
-        nullptr,
-        variant_name.c_str(),
-        original_shader.source_path(),
+    const tc_shader_create_desc shader_desc = {
+        {
+            vertex_source.c_str(),
+            fragment_source,
+            nullptr,
+            variant_name.c_str(),
+            original_shader.source_path(),
+            cap_variant ? "vs_cap_main" : "vs_main",
+            fragment_entry,
+            nullptr
+        },
         variant_uuid,
         TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED,
-        cap_variant ? "vs_cap_main" : "vs_main",
-        fragment_entry,
-        nullptr
-    );
+        TC_SHADER_ARTIFACT_REQUIRED
+    };
+    tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
     if (tc_shader_handle_is_invalid(handle)) {
         tc::Log::error(
             "[LineRenderer] failed to create line tube material shader variant for '%s'",

@@ -23,8 +23,12 @@ not enable `PLR0913`.
   command cleanup, mesh interleaved create-info cleanup, frame graph presenter
   draw command cleanup, scene mount request cleanup, render-pass execute
   data/config cleanup, and shadow-pass request cleanup on 2026-07-07,
-  the current C/C++ baseline is 9
-  repository-owned diagnostics with the tightened third-party header filter.
+  the C/C++ source baseline dropped to 9 repository-owned diagnostics with the
+  tightened third-party header filter.
+- Follow-up cleanup on 2026-07-08 resolved those 9 source diagnostics in
+  engine/graphics/mesh. Targeted checks over the touched translation units now
+  report no remaining source diagnostics; the visible repeated diagnostics are
+  header-only `termin-inspect` registration helpers.
 
 The result is small enough to enable eventually, but not as a drive-by config
 change. The editor menu/controller constructors and several rendering/graphics
@@ -85,6 +89,24 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
 - Updated `ShadowPass::execute_shadow_pass_tgfx2` to take a typed
   `ShadowPassExecuteData` with non-owning light views.
 - C++ repository-owned diagnostics dropped from 64 to 9.
+
+2026-07-08:
+
+- Updated mesh query/raycast APIs so points, directions, normals, and hit
+  locations use `Vec3f`/`tc_vec3f` instead of domain `float[3]` arrays.
+- Updated shader registry APIs to use `tc_shader_source_desc` and
+  `tc_shader_create_desc` instead of flat source/name/path/entry/language
+  argument lists.
+- Updated `termin::TcShader` to use `TcShaderSources` and
+  `TcShaderCreateInfo`; Python bindings keep the old call shape as a
+  compatibility adapter.
+- Updated `tc_shader_bridge` stage artifact compilation to take an
+  `EngineShaderStageCompileRequest`.
+- Updated `TcMaterial::add_phase_from_sources` to take
+  `TcMaterialPhaseFromSourcesInfo` and moved material binding internals to
+  option/descriptor structs.
+- Rebuilt SDK with `./build-sdk.sh --no-wheels` and refreshed the editable test
+  venv with `./setup-test-venv.sh --force`.
 
 ## Reproduction
 
@@ -164,26 +186,29 @@ Lower-count Python diagnostics are mostly:
 
 ## C/C++ Results
 
-Current diagnostics by repository-owned area:
-
-| Count | Area |
-|---:|---|
-| 5 | `termin-graphics` |
-| 3 | `termin-mesh` |
-| 1 | `termin-engine` |
-
-Current repository-owned C/C++ diagnostics:
+The 9 source diagnostics listed in the previous baseline were resolved by the
+2026-07-08 cleanup. Targeted clang-tidy checks over the touched translation
+units report no remaining source diagnostics in:
 
 ```text
-termin-engine/src/render_target_context_builder.cpp:198:6: build_render_target_contexts: 12 parameters
-termin-graphics/src/resources/tc_shader_registry.c:231:13: tc_shader_compute_identity_hash: 9 parameters
-termin-graphics/src/resources/tc_shader_registry.c:595:6: tc_shader_set_sources_with_entries: 9 parameters
-termin-graphics/src/resources/tc_shader_registry.c:668:18: tc_shader_from_sources_ex: 8 parameters
-termin-graphics/src/resources/tc_shader_registry.c:692:18: tc_shader_from_sources_with_entries_ex: 11 parameters
-termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_stage_artifact: 8 parameters
-termin-mesh/src/resources/tc_mesh.c:653:13: tc_mesh_find_surface_edge_filtered: 10 parameters
-termin-mesh/src/resources/tc_mesh.c:955:6: tc_mesh_find_surface_edge_aligned: 8 parameters
-termin-mesh/src/resources/tc_mesh.c:979:6: tc_mesh_find_surface_edge_aligned_metric: 9 parameters
+termin-graphics/src/resources/tc_shader_registry.c
+termin-graphics/src/tgfx2/tc_shader_bridge.cpp
+termin-materials/python/bindings/material_bindings.cpp
+termin-navmesh/src/detour_navmesh_asset_utils.cpp
+termin-runtime/src/runtime_package.cpp
+```
+
+The remaining repeated repository-owned diagnostics visible through the touched
+translation units are header-only `termin-inspect` registration helpers:
+
+```text
+termin-inspect/include/tc_inspect_cpp.hpp:490:10: add: 8 parameters
+termin-inspect/include/tc_inspect_cpp.hpp:530:10: add_with_callbacks: 9 parameters
+termin-inspect/include/tc_inspect_cpp.hpp:826:6: register_inspect_field: 8 parameters
+termin-inspect/include/tc_inspect_cpp.hpp:932:5: InspectFieldRegistrar<C, T>: 8 parameters
+termin-inspect/include/tc_inspect_cpp.hpp:950:5: InspectFieldCallbackRegistrar<C, T>: 9 parameters
+termin-inspect/include/tc_inspect_cpp.hpp:969:5: InspectAccessorFieldRegistrar<C, T>: 8 parameters
+termin-inspect/include/tc_inspect_cpp.hpp:1015:5: InspectAccessorFieldChoicesRegistrar<C, T>: 9 parameters
 ```
 
 Third-party header diagnostics observed during the same run:
