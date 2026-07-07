@@ -674,7 +674,7 @@ struct OpenXRRuntimeScene {
 
         termin::RenderTargetContext target;
         target.name = name;
-        target.render_rect = termin::Rect4i{
+        target.render_rect = termin::Rect2i{
             0,
             0,
             static_cast<int>(eye.width),

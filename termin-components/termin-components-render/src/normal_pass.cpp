@@ -103,7 +103,7 @@ void NormalPass::release_tgfx2_resources() {
 // ----------------------------------------------------------------------------
 void NormalPass::execute_with_data_tgfx2(
     ExecuteContext& ctx,
-    const Rect4i& rect,
+    const Rect2i& rect,
     tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
@@ -272,7 +272,7 @@ void NormalPass::execute_with_data_tgfx2(
 void NormalPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
-    Rect4i rect = ctx.render_rect;
+    Rect2i rect = ctx.render_rect;
     std::optional<RenderCamera> named_camera_snapshot;
 
     if (!camera_name.empty()) {
@@ -295,7 +295,7 @@ void NormalPass::execute(ExecuteContext& ctx) {
             int w = static_cast<int>(desc.width);
             int h = static_cast<int>(desc.height);
             if (w > 0 && h > 0) {
-                rect = Rect4i(0, 0, w, h);
+                rect = Rect2i(0, 0, w, h);
                 if (!camera_name.empty()) {
                     CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
                     if (named_camera) {
