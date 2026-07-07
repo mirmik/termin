@@ -98,7 +98,6 @@ public:
         TcShader original_shader,
         const std::function<void(TcShader)>& emit
     ) override;
-    void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
     bool collect_render_items(
         const tc_render_item_collect_context& context,
         tc_render_item_sink& sink
@@ -107,11 +106,6 @@ public:
         tgfx::RenderContext2& ctx2,
         const tc_render_item& item,
         const RenderItemDrawSubmitRequest& request);
-    tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
-    std::vector<GeometryDrawCall> get_geometry_draws(
-        const RenderContext& context,
-        const std::string* phase_mark = nullptr
-    ) override;
 };
 
 } // namespace termin

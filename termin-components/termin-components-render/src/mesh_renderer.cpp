@@ -549,11 +549,6 @@ Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
     return model;
 }
 
-void MeshRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
-    (void)context;
-    (void)geometry_id;
-}
-
 static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
     tc_material* mat,
     const std::string* phase_mark
@@ -561,39 +556,6 @@ static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
 
 void MeshRenderer::populate_mesh_render_item(tc_render_item& item) {
     (void)item;
-}
-
-bool MeshRenderer::resolve_mesh_geometry(
-    const std::string& phase_mark,
-    int geometry_id,
-    MeshDrawGeometry& out
-) const {
-    (void)phase_mark;
-    if (geometry_id < 0) {
-        return false;
-    }
-
-    tc_mesh* mesh = current_mesh_ptr();
-    if (!mesh) {
-        return false;
-    }
-
-    if (mesh->submesh_count == 0) {
-        tc_mesh_ensure_default_submesh(mesh);
-    }
-
-    const size_t submesh_index = static_cast<size_t>(geometry_id);
-    if (!tc_mesh_get_submesh(mesh, submesh_index)) {
-        tc::Log::warn(
-            "[MeshRenderer] geometry_id %d does not resolve to a submesh for mesh '%s'",
-            geometry_id,
-            mesh->header.name ? mesh->header.name : mesh->header.uuid);
-        return false;
-    }
-
-    out.mesh = mesh;
-    out.submesh_index = submesh_index;
-    return true;
 }
 
 bool MeshRenderer::collect_render_items(
@@ -724,39 +686,6 @@ static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
         phases.push_back(&mat->phases[i]);
     }
     return phases;
-}
-
-std::vector<GeometryDrawCall> MeshRenderer::get_geometry_draws(
-    const RenderContext& context,
-    const std::string* phase_mark
-) {
-    (void)context;
-    std::vector<GeometryDrawCall> draws;
-    tc_mesh* m = current_mesh_ptr();
-    if (!m) return draws;
-
-    if (m->submesh_count == 0) {
-        tc_mesh_ensure_default_submesh(m);
-    }
-
-    size_t submesh_count = m->submesh_count;
-    if (submesh_count == 0 && m->index_count > 0) {
-        submesh_count = 1;
-    }
-
-    for (size_t submesh_index = 0; submesh_index < submesh_count; ++submesh_index) {
-        const tc_submesh* submesh = tc_mesh_get_submesh(m, submesh_index);
-        uint32_t material_slot = submesh ? submesh->material_slot : 0;
-        tc_material* mat = get_material_ptr_for_slot(material_slot);
-        if (!mat) continue;
-
-        std::vector<tc_material_phase*> phases =
-            mesh_renderer_phases_for_mark(mat, phase_mark);
-        for (auto* phase : phases) {
-            draws.emplace_back(phase, static_cast<int>(submesh_index));
-        }
-    }
-    return draws;
 }
 
 void MeshRenderer::on_added() {

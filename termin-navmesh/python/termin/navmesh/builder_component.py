@@ -19,7 +19,7 @@ from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
 from termin.voxels import VoxelizeSource
-from termin.render.drawable import GeometryDrawCall
+from termin.render.drawable import RenderItem, RenderItemCollectContext
 from termin.inspect import InspectField
 from termin.navmesh.inspect_fields import (
     make_button_field,
@@ -31,7 +31,6 @@ from termin.navmesh.settings import NavigationSettingsManager
 from tcbase import log
 
 if TYPE_CHECKING:
-    from termin.render_framework import RenderContext
     from termin.voxels.grid import VoxelGrid
     from termin.navmesh.types import NavMesh
     from termin.navmesh.polygon_builder import PolygonBuilder
@@ -319,26 +318,17 @@ class NavMeshBuilderComponent(DrawableComponent):
             marks.update(p.phase_mark for p in mat.phases)
         return marks
 
-    def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
-        """Draw debug geometry."""
-        pass
-
-    def get_geometry_draws(
-        self,
-        context: "RenderContext",
-        phase_mark: str | None = None,
-    ) -> List[GeometryDrawCall]:
-        """Return GeometryDrawCalls for debug rendering."""
-        del context
-        result: List[GeometryDrawCall] = []
+    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
+        """Return RenderItems for debug rendering."""
+        result: list[RenderItem] = []
 
         # Region voxels
         if self.show_region_voxels and self._debug_region_voxels_mesh is not None and self._debug_region_voxels_mesh.is_valid:
             mat = self._get_or_create_debug_material()
-            if phase_mark is None:
+            if context.phase_mark == "":
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
 
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
             for phase in phases:
@@ -353,29 +343,50 @@ class NavMeshBuilderComponent(DrawableComponent):
                 phase.set_param("u_ambient_intensity", 0.5)
 
             phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_REGIONS) for p in phases)
+            result.extend(
+                RenderItem.mesh(
+                    mesh=self._debug_region_voxels_mesh,
+                    phase=p,
+                    geometry_id=self.GEOMETRY_REGIONS,
+                )
+                for p in phases
+            )
 
         # Simplified contours
         if self.show_simplified_contours and self._debug_simplified_contours_mesh is not None and self._debug_simplified_contours_mesh.is_valid:
             mat = self._get_or_create_line_material()
-            if phase_mark is None:
+            if context.phase_mark == "":
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
 
             phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_SIMPLIFIED_CONTOURS) for p in phases)
+            result.extend(
+                RenderItem.mesh(
+                    mesh=self._debug_simplified_contours_mesh,
+                    phase=p,
+                    geometry_id=self.GEOMETRY_SIMPLIFIED_CONTOURS,
+                )
+                for p in phases
+            )
 
         # Triangulated mesh
         if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
             mat = self._get_or_create_line_material()
-            if phase_mark is None:
+            if context.phase_mark == "":
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
 
             phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_TRIANGULATED) for p in phases)
+            result.extend(
+                RenderItem.mesh(
+                    mesh=self._debug_triangulated_mesh,
+                    phase=p,
+                    geometry_id=self.GEOMETRY_TRIANGULATED,
+                )
+                for p in phases
+            )
 
         # Distance field
         if self.show_distance_field:
@@ -386,10 +397,10 @@ class NavMeshBuilderComponent(DrawableComponent):
 
         if self.show_distance_field and self._debug_distance_field_mesh is not None and self._debug_distance_field_mesh.is_valid:
             mat = self._get_or_create_debug_material()
-            if phase_mark is None:
+            if context.phase_mark == "":
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
 
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
             for phase in phases:
@@ -404,15 +415,22 @@ class NavMeshBuilderComponent(DrawableComponent):
                 phase.set_param("u_ambient_intensity", 0.5)
 
             phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_DISTANCE_FIELD) for p in phases)
+            result.extend(
+                RenderItem.mesh(
+                    mesh=self._debug_distance_field_mesh,
+                    phase=p,
+                    geometry_id=self.GEOMETRY_DISTANCE_FIELD,
+                )
+                for p in phases
+            )
 
         # Watershed regions
         if self.show_watershed_regions and self._debug_watershed_mesh is not None and self._debug_watershed_mesh.is_valid:
             mat = self._get_or_create_debug_material()
-            if phase_mark is None:
+            if context.phase_mark == "":
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
 
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
             for phase in phases:
@@ -427,7 +445,14 @@ class NavMeshBuilderComponent(DrawableComponent):
                 phase.set_param("u_ambient_intensity", 0.5)
 
             phases.sort(key=lambda p: p.priority)
-            result.extend(GeometryDrawCall(phase=p, geometry_id=self.GEOMETRY_WATERSHED) for p in phases)
+            result.extend(
+                RenderItem.mesh(
+                    mesh=self._debug_watershed_mesh,
+                    phase=p,
+                    geometry_id=self.GEOMETRY_WATERSHED,
+                )
+                for p in phases
+            )
 
         return result
 

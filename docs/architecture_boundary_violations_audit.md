@@ -182,14 +182,9 @@ from termin.display import _input_manager_on_key
 Архитектурный риск здесь другой: `tgfx`/`tgfx2` не должен незаметно расползаться в scene/asset/build/editor policy contracts, где вызывающий код не должен думать о backend placement, device handles или transient GPU resources. При ревью новых API нужно проверять, является ли конкретный API render-facing. Если да, `tgfx` допустим; если нет, нужен более высокий domain contract или отдельный bridge.
 
 **tc_mesh* в публичном API:**
-`termin-render/include/termin/render/drawable.hpp`:
-```cpp
-virtual tc_mesh* get_mesh_for_phase(
-    const std::string& phase_mark,
-    int geometry_id
-) const;
-```
-`tc_mesh` — тип из termin-mesh, возвращаемый как сырой указатель из интерфейса Drawable. Это допустимо как render-facing escape hatch для прямого draw path, но такие API должны оставаться явно помеченными как bridge/migration surface и не становиться общим scene/component контрактом.
+Устаревший `Drawable::get_mesh_for_phase()` удалён вместе с
+`GeometryDrawCall`/`get_geometry_draws()`. Mesh payload теперь передаётся как
+часть `tc_render_item`, а draw policy остаётся на стороне pass/encoder layer.
 
 ---
 

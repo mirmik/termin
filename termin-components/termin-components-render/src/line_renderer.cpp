@@ -924,10 +924,6 @@ bool LineRenderer::collect_render_items(
     if (!effective_render_mode(mode)) {
         return true;
     }
-    if (!is_direct_line_mode(mode)) {
-        return Drawable::collect_render_items(context, sink);
-    }
-
     TcMaterial mat = effective_material();
     tc_material* raw = mat.get();
     if (!raw) {
@@ -937,6 +933,82 @@ bool LineRenderer::collect_render_items(
     const bool allow_missing_material_phase =
         (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u;
     bool emitted = false;
+
+    if (!is_direct_line_mode(mode)) {
+        tc_mesh* mesh = current_mesh_ptr();
+        if (!mesh) {
+            return true;
+        }
+        if (mesh->submesh_count == 0 && !tc_mesh_ensure_default_submesh(mesh)) {
+            tc::Log::error("[LineRenderer] cannot emit mesh RenderItem: failed to create default submesh");
+            return false;
+        }
+        const tc_submesh* submesh = tc_mesh_get_submesh(mesh, 0);
+        if (!submesh || submesh->index_count == 0) {
+            return true;
+        }
+
+        auto emit_mesh_phase = [&](tc_material_phase* phase) -> bool {
+            if (!phase && !allow_missing_material_phase) {
+                return true;
+            }
+
+            tc_render_item item{};
+            item.kind = TC_RENDER_ITEM_KIND_MESH;
+            item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
+            item.component = this->tc_component_ptr();
+            item.geometry_id = 0;
+            item.material_phase = phase;
+            item.material = tc_material_handle_invalid();
+            item.material_phase_index = SIZE_MAX;
+            if (phase) {
+                item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+                tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+            }
+            Mat44f model = get_model_matrix(entity());
+            std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
+            item.payload.mesh.mesh = mesh;
+            item.payload.mesh.mesh_handle = mesh_.handle;
+            if (tc_mesh_handle_is_invalid(item.payload.mesh.mesh_handle)) {
+                item.payload.mesh.mesh_handle = tc_mesh_find(mesh->header.uuid);
+            }
+            if (tc_mesh_handle_is_invalid(item.payload.mesh.mesh_handle)) {
+                tc::Log::error("[LineRenderer] cannot emit mesh RenderItem: mesh has no stable registry handle");
+                return false;
+            }
+            item.payload.mesh.submesh_index = 0;
+            emitted = true;
+            return sink.emit(&item, sink.user_data);
+        };
+
+        bool found_shadow_phase = false;
+        for (size_t i = 0; i < raw->phase_count; ++i) {
+            tc_material_phase* phase = &raw->phases[i];
+            const std::string draw_phase_mark = phase->phase_mark;
+            if (!accepts_phase(draw_phase_mark, cast_shadow)) {
+                continue;
+            }
+            if (draw_phase_mark == "shadow") {
+                found_shadow_phase = true;
+            }
+            if (phase_mark == draw_phase_mark && !emit_mesh_phase(phase)) {
+                return false;
+            }
+        }
+
+        if (cast_shadow && phase_mark == "shadow" && !found_shadow_phase) {
+            TcMaterial fallback = default_material();
+            if (!emit_mesh_phase(find_phase(fallback.get(), "shadow"))) {
+                return false;
+            }
+        }
+
+        if (!emitted && allow_missing_material_phase) {
+            return emit_mesh_phase(nullptr);
+        }
+
+        return true;
+    }
 
     auto emit_phase = [&](tc_material_phase* phase) -> bool {
         if (!phase && !allow_missing_material_phase) {
@@ -1001,11 +1073,6 @@ bool LineRenderer::collect_render_items(
     }
 
     return true;
-}
-
-void LineRenderer::draw_geometry(const RenderContext& context, int geometry_id) {
-    (void)context;
-    (void)geometry_id;
 }
 
 bool LineRenderer::encode_render_item_tgfx2(
@@ -1219,75 +1286,6 @@ bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int g
         return false;
     }
     return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
-}
-
-tc_mesh* LineRenderer::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
-    (void)phase_mark;
-    (void)geometry_id;
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        return nullptr;
-    }
-    if (is_direct_line_mode(mode)) {
-        return nullptr;
-    }
-    return current_mesh_ptr();
-}
-
-std::vector<GeometryDrawCall> LineRenderer::get_geometry_draws(
-    const RenderContext& context,
-    const std::string* phase_mark
-) {
-    (void)context;
-    std::vector<GeometryDrawCall> draws;
-    if (points_.size() < 2) {
-        return draws;
-    }
-
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        return draws;
-    }
-    if (phase_mark && !accepts_phase(*phase_mark, cast_shadow)) {
-        return draws;
-    }
-
-    if (mode == LineRenderMode::WorldMesh || mode == LineRenderMode::RawLines) {
-        tc_mesh* mesh = current_mesh_ptr();
-        if (!mesh) {
-            return draws;
-        }
-    }
-
-    TcMaterial mat = effective_material();
-    tc_material* raw = mat.get();
-    if (!raw) {
-        return draws;
-    }
-
-    bool found_shadow_phase = false;
-    for (size_t i = 0; i < raw->phase_count; ++i) {
-        tc_material_phase* phase = &raw->phases[i];
-        const std::string draw_phase_mark = phase->phase_mark;
-        if (!accepts_phase(draw_phase_mark, cast_shadow)) {
-            continue;
-        }
-        if (draw_phase_mark == "shadow") {
-            found_shadow_phase = true;
-        }
-        if (!phase_mark || *phase_mark == draw_phase_mark) {
-            draws.emplace_back(phase, 0);
-        }
-    }
-    if (cast_shadow
-        && (!phase_mark || *phase_mark == "shadow")
-        && !found_shadow_phase) {
-        TcMaterial fallback = default_material();
-        if (tc_material_phase* phase = find_phase(fallback.get(), "shadow")) {
-            draws.emplace_back(phase, 0);
-        }
-    }
-    return draws;
 }
 
 TcMesh LineRenderer::get_mesh() {

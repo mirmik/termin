@@ -8,7 +8,7 @@ NavMeshDisplayComponent — компонент для отображения н�
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Optional, Set, Tuple
 
 import numpy as np
 
@@ -16,11 +16,10 @@ from termin.render import DrawableComponent
 from termin.materials import TcMaterial as Material
 from termin.mesh import TcMesh
 from termin.navmesh._navmesh_native import TcNavMesh
-from termin.render.drawable import GeometryDrawCall
+from termin.render.drawable import RenderItem, RenderItemCollectContext
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.render_framework import RenderContext
     from termin.navmesh.types import NavMesh
 
 
@@ -305,10 +304,6 @@ void main() {
     GEOMETRY_MESH = 1
     GEOMETRY_CONTOURS = 2
 
-    def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
-        """Рисует геометрию NavMesh."""
-        self._check_hot_reload()
-
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли navmesh в keeper (hot-reload)."""
         current_version = self.navmesh.version
@@ -317,22 +312,18 @@ void main() {
             self._last_navmesh_version = current_version
             self._rebuild_mesh()
 
-    def get_geometry_draws(
-        self,
-        context: "RenderContext",
-        phase_mark: str | None = None,
-    ) -> List[GeometryDrawCall]:
-        """Возвращает GeometryDrawCalls для рендеринга."""
-        del context
-        result: List[GeometryDrawCall] = []
+    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
+        """Возвращает RenderItems для рендеринга."""
+        self._check_hot_reload()
+        result: list[RenderItem] = []
 
         # Основной меш
         mat = self._get_or_create_material()
 
-        if phase_mark is None:
+        if context.phase_mark == "":
             phases = list(mat.phases)
         else:
-            phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+            phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
 
         # Обновляем цвет
         for phase in phases:
@@ -341,20 +332,31 @@ void main() {
         phases.sort(key=lambda p: p.priority)
 
         # Добавляем основной меш
-        for phase in phases:
-            result.append(GeometryDrawCall(phase=phase, geometry_id=self.GEOMETRY_MESH))
+        if self._mesh is not None and self._mesh.is_valid:
+            for phase in phases:
+                result.append(RenderItem.mesh(
+                    mesh=self._mesh,
+                    phase=phase,
+                    geometry_id=self.GEOMETRY_MESH,
+                ))
 
         # Контуры (если включены и есть контурный mesh)
         if self.show_contours and self._contour_mesh is not None and self._contour_mesh.is_valid:
             contour_material = self._get_or_create_contour_material()
-            if phase_mark is None:
+            if context.phase_mark == "":
                 contour_phases = list(contour_material.phases)
             else:
-                contour_phases = [p for p in contour_material.phases if p.phase_mark == phase_mark]
+                contour_phases = [
+                    p for p in contour_material.phases if p.phase_mark == context.phase_mark
+                ]
 
             contour_phases.sort(key=lambda p: p.priority)
             for phase in contour_phases:
-                result.append(GeometryDrawCall(phase=phase, geometry_id=self.GEOMETRY_CONTOURS))
+                result.append(RenderItem.mesh(
+                    mesh=self._contour_mesh,
+                    phase=phase,
+                    geometry_id=self.GEOMETRY_CONTOURS,
+                ))
 
         return result
 

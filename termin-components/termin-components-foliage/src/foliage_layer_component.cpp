@@ -460,56 +460,6 @@ std::set<std::string> FoliageLayerComponent::get_phase_marks() const {
     return marks;
 }
 
-void FoliageLayerComponent::draw_geometry(const RenderContext& context, int geometry_id) {
-    (void)context;
-    (void)geometry_id;
-    // Foliage is rendered through FOLIAGE_BATCH RenderItems.
-}
-
-std::vector<GeometryDrawCall> FoliageLayerComponent::get_geometry_draws(
-    const RenderContext& context,
-    const std::string* phase_mark
-) {
-    (void)context;
-    std::vector<GeometryDrawCall> draws;
-    if (!enabled || foliage_uuid.empty() || !prototype_mesh.is_valid() || !material.is_valid()) {
-        return draws;
-    }
-
-    TcFoliageData foliage = TcFoliageData::from_uuid(foliage_uuid);
-    if (!foliage.is_valid() || !foliage.ensure_loaded() || foliage.instance_count() == 0) {
-        return draws;
-    }
-
-    tc_material* mat = material.get();
-    if (!mat) {
-        return draws;
-    }
-
-    if (phase_mark) {
-        tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
-        size_t count = tc_material_get_phases_for_mark(mat, phase_mark->c_str(), phases, TC_MATERIAL_MAX_PHASES);
-        draws.reserve(count);
-        for (size_t i = 0; i < count; i++) {
-            draws.emplace_back(phases[i], FOLIAGE_GEOMETRY_ID);
-        }
-        return draws;
-    }
-
-    draws.reserve(mat->phase_count);
-    for (size_t i = 0; i < mat->phase_count; i++) {
-        draws.emplace_back(&mat->phases[i], FOLIAGE_GEOMETRY_ID);
-    }
-    return draws;
-}
-
-tc_mesh* FoliageLayerComponent::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
-    (void)phase_mark;
-    (void)geometry_id;
-    // Instanced foliage has its own typed RenderItem payload.
-    return nullptr;
-}
-
 TcShader FoliageLayerComponent::override_shader(
     const std::string& phase_mark,
     int geometry_id,

@@ -74,27 +74,12 @@ public:
     void on_scene_active() override;
     void on_render_attach() override;
     void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
-    void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
-    tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override {
-        (void)phase_mark;
-        (void)geometry_id;
-        return current_mesh_ptr();
-    }
-    bool resolve_mesh_geometry(
-        const std::string& phase_mark,
-        int geometry_id,
-        MeshDrawGeometry& out
-    ) const override;
     Mat44f get_model_matrix(const Entity& entity) const override;
     bool collect_render_items(
         const tc_render_item_collect_context& context,
         tc_render_item_sink& sink
     ) override;
     std::vector<tc_material_phase*> get_phases_for_mark(const std::string& phase_mark);
-    std::vector<GeometryDrawCall> get_geometry_draws(
-        const RenderContext& context,
-        const std::string* phase_mark = nullptr
-    ) override;
     tc_value get_override_data() const;
     void set_override_data(const tc_value* val);
     void try_create_override_material();

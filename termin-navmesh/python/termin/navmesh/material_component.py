@@ -7,7 +7,7 @@ Implements Drawable protocol for integration with ColorPass.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional, Set
+from typing import TYPE_CHECKING, Optional, Set
 
 import numpy as np
 
@@ -15,11 +15,10 @@ from termin.render import DrawableComponent
 from termin.mesh import TcMesh
 from termin.navmesh._navmesh_native import TcNavMesh
 from termin.materials import TcMaterial
-from termin.render.drawable import GeometryDrawCall
+from termin.render.drawable import RenderItem, RenderItemCollectContext
 from termin.inspect import InspectField
 
 if TYPE_CHECKING:
-    from termin.render_framework import RenderContext
     from termin.navmesh.types import NavMesh
     from termin.materials import TcMaterialPhase
 
@@ -99,10 +98,6 @@ class NavMeshMaterialComponent(DrawableComponent):
                 marks.add(phase.phase_mark)
         return marks
 
-    def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
-        """Draw NavMesh geometry."""
-        self._check_hot_reload()
-
     def _check_hot_reload(self) -> None:
         """Check if navmesh changed (hot-reload)."""
         current_version = self.navmesh.version
@@ -111,28 +106,27 @@ class NavMeshMaterialComponent(DrawableComponent):
             self._last_navmesh_version = current_version
             self._rebuild_mesh()
 
-    def get_geometry_draws(
-        self,
-        context: "RenderContext",
-        phase_mark: str | None = None,
-    ) -> List[GeometryDrawCall]:
-        """Return GeometryDrawCalls for rendering."""
-        del context
+    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
+        """Return RenderItems for rendering."""
+        self._check_hot_reload()
+        if self._mesh is None or not self._mesh.is_valid:
+            return []
+
         mat = self._material
         if mat is None:
             return []
 
         # Collect phases from TcMaterial
-        phases: List["TcMaterialPhase"] = []
+        phases: list["TcMaterialPhase"] = []
         for i in range(mat.phase_count):
             phase = mat.get_phase(i)
             if phase is None:
                 continue
-            if phase_mark is None or phase.phase_mark == phase_mark:
+            if context.phase_mark == "" or phase.phase_mark == context.phase_mark:
                 phases.append(phase)
 
         phases.sort(key=lambda p: p.priority)
-        return [GeometryDrawCall(phase=phase, geometry_id=0) for phase in phases]
+        return [RenderItem.mesh(mesh=self._mesh, phase=phase, geometry_id=0) for phase in phases]
 
     # --- Mesh building ---
 

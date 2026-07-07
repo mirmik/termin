@@ -352,14 +352,6 @@ void SkinnedMeshRenderer::populate_mesh_render_item(tc_render_item& item) {
     item.payload.mesh.skinning_matrix_count = static_cast<uint32_t>(_bone_count);
 }
 
-std::vector<GeometryDrawCall> SkinnedMeshRenderer::get_geometry_draws(
-    const RenderContext& context,
-    const std::string* phase_mark
-) {
-    // Use parent implementation - shader override happens in override_shader()
-    return MeshRenderer::get_geometry_draws(context, phase_mark);
-}
-
 void SkinnedMeshRenderer::start() {
     Component::start();
     resolve_skeleton_controller();

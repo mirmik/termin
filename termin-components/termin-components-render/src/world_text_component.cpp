@@ -608,11 +608,6 @@ void WorldTextComponent::collect_shader_usages(
     }
 }
 
-void WorldTextComponent::draw_geometry(const RenderContext& context, int geometry_id) {
-    (void)context;
-    (void)geometry_id;
-}
-
 bool WorldTextComponent::collect_render_items(
     const tc_render_item_collect_context& context,
     tc_render_item_sink& sink)
@@ -759,31 +754,6 @@ bool WorldTextComponent::encode_render_item_tgfx2(
         });
     renderer_->end();
     return true;
-}
-
-tc_mesh* WorldTextComponent::get_mesh_for_phase(const std::string& draw_phase_mark, int geometry_id) const {
-    (void)draw_phase_mark;
-    (void)geometry_id;
-    return nullptr;
-}
-
-std::vector<GeometryDrawCall> WorldTextComponent::get_geometry_draws(
-    const RenderContext& context,
-    const std::string* draw_phase_mark
-) {
-    (void)context;
-    std::vector<GeometryDrawCall> draws;
-    if (text.empty()) {
-        return draws;
-    }
-    const std::string mark = sanitize_phase_mark(phase_mark);
-    if (draw_phase_mark && *draw_phase_mark != mark) {
-        return draws;
-    }
-    if (tc_material_phase* phase = sync_material_phase()) {
-        draws.emplace_back(phase, 0);
-    }
-    return draws;
 }
 
 } // namespace termin

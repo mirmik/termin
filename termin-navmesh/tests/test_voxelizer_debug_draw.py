@@ -23,10 +23,15 @@ class _Mesh:
     is_valid = True
 
 
-class _DrawCall:
-    def __init__(self, phase, geometry_id: int = 0):
+class _RenderItem:
+    def __init__(self, mesh, phase, geometry_id: int = 0):
+        self.mesh = mesh
         self.phase = phase
         self.geometry_id = geometry_id
+
+    @staticmethod
+    def mesh(mesh, phase, geometry_id: int = 0):
+        return _RenderItem(mesh, phase, geometry_id)
 
 
 class _Component:
@@ -66,13 +71,13 @@ class _Component:
 
 
 def test_voxelizer_debug_draw_service_collects_enabled_layers(monkeypatch):
-    monkeypatch.setattr(voxelizer_debug_draw, "GeometryDrawCall", _DrawCall)
+    monkeypatch.setattr(voxelizer_debug_draw, "RenderItem", _RenderItem)
     component = _Component()
     service = VoxelizerDebugDrawService()
 
     assert service.phase_marks(component) == {"opaque", "line"}
 
-    draws = service.get_geometry_draws(component, object())
+    draws = service.collect_render_items(component, "")
     assert [draw.geometry_id for draw in draws] == [
         component.GEOMETRY_REGIONS,
         component.GEOMETRY_SIMPLIFIED_CONTOURS,
@@ -83,11 +88,11 @@ def test_voxelizer_debug_draw_service_collects_enabled_layers(monkeypatch):
 
 
 def test_voxelizer_debug_draw_service_filters_phase_marks(monkeypatch):
-    monkeypatch.setattr(voxelizer_debug_draw, "GeometryDrawCall", _DrawCall)
+    monkeypatch.setattr(voxelizer_debug_draw, "RenderItem", _RenderItem)
     component = _Component()
     service = VoxelizerDebugDrawService()
 
-    draws = service.get_geometry_draws(component, object(), phase_mark="line")
+    draws = service.collect_render_items(component, "line")
 
     assert [draw.geometry_id for draw in draws] == [
         component.GEOMETRY_SIMPLIFIED_CONTOURS,

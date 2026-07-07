@@ -550,92 +550,83 @@ std::set<std::string> RecastNavMeshBuilderComponent::get_phase_marks() const {
     return marks;
 }
 
-void RecastNavMeshBuilderComponent::draw_geometry(const RenderContext& context, int geometry_id) {
-    (void)context;
-    (void)geometry_id;
-}
-
-std::vector<GeometryDrawCall> RecastNavMeshBuilderComponent::get_geometry_draws(
-    const RenderContext& context,
-    const std::string* phase_mark
-) {
-    std::vector<GeometryDrawCall> result;
-
-    if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
-        return result;
+bool RecastNavMeshBuilderComponent::collect_render_items(
+    const tc_render_item_collect_context& context,
+    tc_render_item_sink& sink)
+{
+    if (!sink.emit) {
+        tc_log_error("[RecastNavMeshBuilderComponent] cannot emit render items: sink callback is null");
+        return false;
     }
-
-    if (phase_mark && *phase_mark != NAVMESH_DEBUG_PHASE) {
-        return result;
+    if (!context.phase_mark || std::string(context.phase_mark) != NAVMESH_DEBUG_PHASE) {
+        return true;
+    }
+    if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
+        return true;
     }
 
     TcMaterial mat = get_debug_material();
-    if (!mat.is_valid()) {
-        return result;
+    tc_material* material = mat.get();
+    if (!material) {
+        return true;
     }
 
-    // Get phases from material
-    tc_material* m = mat.get();
-    if (!m) return result;
+    tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
+    const size_t count = tc_material_get_phases_for_mark(
+        material,
+        context.phase_mark,
+        phases,
+        TC_MATERIAL_MAX_PHASES);
+    if (count == 0) {
+        return true;
+    }
 
-    for (size_t i = 0; i < m->phase_count; ++i) {
-        tc_material_phase* phase = &m->phases[i];
-        if (phase_mark && phase->phase_mark != *phase_mark) {
+    struct Layer {
+        bool visible;
+        int geometry_id;
+        TcMesh* mesh;
+    };
+    Layer layers[] = {
+        {show_input_mesh, GEOMETRY_INPUT_MESH, &_input_mesh},
+        {show_heightfield, GEOMETRY_HEIGHTFIELD, &_heightfield_mesh},
+        {show_regions, GEOMETRY_REGIONS, &_regions_mesh},
+        {show_distance_field, GEOMETRY_DISTANCE_FIELD, &_distance_field_mesh},
+        {show_contours, GEOMETRY_CONTOURS, &_contours_mesh},
+        {show_poly_mesh, GEOMETRY_POLY_MESH, &_poly_mesh_debug},
+        {show_detail_mesh, GEOMETRY_DETAIL_MESH, &_detail_mesh_debug},
+    };
+
+    Mat44f model = get_model_matrix(entity());
+    for (const Layer& layer : layers) {
+        if (!layer.visible || !layer.mesh || !layer.mesh->is_valid()) {
             continue;
         }
-
-        if (show_input_mesh && _input_mesh.is_valid()) {
-            result.emplace_back(phase, GEOMETRY_INPUT_MESH);
+        tc_mesh* mesh = layer.mesh->get();
+        if (!mesh) {
+            continue;
         }
-        if (show_heightfield && _heightfield_mesh.is_valid()) {
-            result.emplace_back(phase, GEOMETRY_HEIGHTFIELD);
-        }
-        if (show_regions && _regions_mesh.is_valid()) {
-            result.emplace_back(phase, GEOMETRY_REGIONS);
-        }
-        if (show_distance_field && _distance_field_mesh.is_valid()) {
-            result.emplace_back(phase, GEOMETRY_DISTANCE_FIELD);
-        }
-        if (show_contours && _contours_mesh.is_valid()) {
-            result.emplace_back(phase, GEOMETRY_CONTOURS);
-        }
-        if (show_poly_mesh && _poly_mesh_debug.is_valid()) {
-            result.emplace_back(phase, GEOMETRY_POLY_MESH);
-        }
-        if (show_detail_mesh && _detail_mesh_debug.is_valid()) {
-            result.emplace_back(phase, GEOMETRY_DETAIL_MESH);
+        for (size_t i = 0; i < count; ++i) {
+            tc_material_phase* phase = phases[i];
+            tc_render_item item{};
+            item.kind = TC_RENDER_ITEM_KIND_MESH;
+            item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+            item.component = tc_component_ptr();
+            item.geometry_id = layer.geometry_id;
+            item.material_phase = phase;
+            item.material = tc_material_handle_invalid();
+            item.material_phase_index = SIZE_MAX;
+            tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+            std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
+            item.payload.mesh.mesh = mesh;
+            item.payload.mesh.mesh_handle = layer.mesh->handle;
+            item.payload.mesh.submesh_index = 0;
+            if (!sink.emit(&item, sink.user_data)) {
+                return false;
+            }
         }
     }
 
-    return result;
-}
-
-tc_mesh* RecastNavMeshBuilderComponent::get_mesh_for_phase(
-    const std::string& phase_mark,
-    int geometry_id
-) const {
-    if (phase_mark != NAVMESH_DEBUG_PHASE) {
-        return nullptr;
-    }
-
-    switch (geometry_id) {
-        case GEOMETRY_INPUT_MESH:
-            return (show_input_mesh && _input_mesh.is_valid()) ? _input_mesh.get() : nullptr;
-        case GEOMETRY_HEIGHTFIELD:
-            return (show_heightfield && _heightfield_mesh.is_valid()) ? _heightfield_mesh.get() : nullptr;
-        case GEOMETRY_REGIONS:
-            return (show_regions && _regions_mesh.is_valid()) ? _regions_mesh.get() : nullptr;
-        case GEOMETRY_DISTANCE_FIELD:
-            return (show_distance_field && _distance_field_mesh.is_valid()) ? _distance_field_mesh.get() : nullptr;
-        case GEOMETRY_CONTOURS:
-            return (show_contours && _contours_mesh.is_valid()) ? _contours_mesh.get() : nullptr;
-        case GEOMETRY_POLY_MESH:
-            return (show_poly_mesh && _poly_mesh_debug.is_valid()) ? _poly_mesh_debug.get() : nullptr;
-        case GEOMETRY_DETAIL_MESH:
-            return (show_detail_mesh && _detail_mesh_debug.is_valid()) ? _detail_mesh_debug.get() : nullptr;
-        default:
-            return nullptr;
-    }
+    return true;
 }
 
 // --- Mesh generation ---

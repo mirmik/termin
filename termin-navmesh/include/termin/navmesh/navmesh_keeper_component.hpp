@@ -25,11 +25,9 @@ public:
     static void register_type();
 
     std::set<std::string> get_phase_marks() const override;
-    void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
-    std::vector<GeometryDrawCall> get_geometry_draws(
-        const RenderContext& context,
-        const std::string* phase_mark = nullptr) override;
-    tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
+    bool collect_render_items(
+        const tc_render_item_collect_context& context,
+        tc_render_item_sink& sink) override;
     Mat44f get_model_matrix(const Entity& entity) const override;
 
 private:

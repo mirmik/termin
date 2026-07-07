@@ -568,15 +568,7 @@ NB_MODULE(_components_render_native, m) {
                 marks.add(nb::str(mark.c_str()));
             }
             return marks;
-        })
-        .def("draw_geometry", &MeshRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
-        .def("get_geometry_draws", [](MeshRenderer& self, RenderContext& context, nb::object phase_mark) {
-            if (phase_mark.is_none()) {
-                return self.get_geometry_draws(context, nullptr);
-            }
-            std::string pm = nb::cast<std::string>(phase_mark);
-            return self.get_geometry_draws(context, &pm);
-        }, nb::arg("context"), nb::arg("phase_mark") = nb::none());
+        });
 
     nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
         .def("__init__", [](nb::handle self) {
@@ -721,15 +713,7 @@ NB_MODULE(_components_render_native, m) {
                 marks.add(nb::str(mark.c_str()));
             }
             return marks;
-        })
-        .def("draw_geometry", &LineRenderer::draw_geometry, nb::arg("context"), nb::arg("geometry_id") = 0)
-        .def("get_geometry_draws", [](LineRenderer& self, RenderContext& context, nb::object phase_mark) {
-            if (phase_mark.is_none()) {
-                return self.get_geometry_draws(context, nullptr);
-            }
-            std::string pm = nb::cast<std::string>(phase_mark);
-            return self.get_geometry_draws(context, &pm);
-        }, nb::arg("context"), nb::arg("phase_mark") = nb::none());
+        });
 
     nb::enum_<WorldTextAnchor>(m, "WorldTextAnchor")
         .value("Left", WorldTextAnchor::Left)
@@ -825,14 +809,7 @@ NB_MODULE(_components_render_native, m) {
                 marks.add(nb::str(mark.c_str()));
             }
             return marks;
-        })
-        .def("get_geometry_draws", [](WorldTextComponent& self, RenderContext& context, nb::object phase_mark) {
-            if (phase_mark.is_none()) {
-                return self.get_geometry_draws(context, nullptr);
-            }
-            std::string pm = nb::cast<std::string>(phase_mark);
-            return self.get_geometry_draws(context, &pm);
-        }, nb::arg("context"), nb::arg("phase_mark") = nb::none());
+        });
 
     nb::class_<LightComponent, CxxComponent>(m, "LightComponent")
         .def("__init__", [](nb::handle self) {
