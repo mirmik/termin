@@ -136,8 +136,10 @@ Extend data creation APIs conservatively:
   default submesh;
 - add an extended setter only if needed by C++/Python call sites, for example
   `tc_mesh_set_data_with_submeshes(...)`;
-- keep `TcMesh::from_interleaved(...)` as a single-submesh constructor;
-- add `TcMesh::from_interleaved_with_submeshes(...)` for importers.
+- keep C++ mesh creation on `TcMesh::from_interleaved(TcMeshCreateInfo)`, with
+  optional submesh data in the create-info object;
+- keep Python importers on the Python-facing
+  `TcMesh.from_interleaved_with_submeshes(...)` binding helper.
 
 Python bindings should expose enough for tests and GLB import:
 

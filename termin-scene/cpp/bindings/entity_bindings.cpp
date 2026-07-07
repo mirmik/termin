@@ -6,7 +6,6 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/tuple.h>
-#include <nanobind/ndarray.h>
 #include <functional>
 #include <cstring>
 #include <cstdint>
@@ -95,27 +94,18 @@ void bind_entity_class(nb::module_& m) {
         .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
             new (self) Entity(Entity::create(get_standalone_pool(), name));
         }, nb::arg("name") = "entity", nb::arg("uuid") = "")
-        .def("__init__", [](Entity* self, nb::object pose, const std::string& name, int priority,
+        .def("__init__", [](Entity* self, const GeneralPose3& pose, const std::string& name, int priority,
                         bool pickable, bool selectable,
                         int layer, uint64_t flags, const std::string& uuid) {
             new (self) Entity(Entity::create(get_standalone_pool(), name));
 
-            if (!pose.is_none()) {
-                if (!nb::isinstance<GeneralPose3>(pose)) {
-                    throw std::runtime_error(
-                        "Entity pose must be termin.geombase.GeneralPose3 or None; "
-                        "Pose3 compatibility fallback has been removed"
-                    );
-                }
-                GeneralPose3 gpose = nb::cast<GeneralPose3>(pose);
-                self->transform().set_local_pose(gpose);
-            }
+            self->transform().set_local_pose(pose);
             self->set_priority(priority);
             self->set_pickable(pickable);
             self->set_selectable(selectable);
             self->set_layer(static_cast<uint64_t>(layer));
             self->set_flags(flags);
-        }, nb::arg("pose") = nb::none(), nb::arg("name") = "entity",
+        }, nb::arg("pose"), nb::arg("name") = "entity",
             nb::arg("priority") = 0, nb::arg("pickable") = true,
             nb::arg("selectable") = true,
             nb::arg("layer") = 0, nb::arg("flags") = 0, nb::arg("uuid") = "")
@@ -196,38 +186,29 @@ void bind_entity_class(nb::module_& m) {
         .def("global_pose", [](Entity& e) {
             GeneralPose3 gp = e.transform().global_pose();
             nb::dict result;
-            result["lin"] = vec3_to_numpy(gp.lin);
-            double* ang_buf = new double[4];
-            ang_buf[0] = gp.ang.x; ang_buf[1] = gp.ang.y;
-            ang_buf[2] = gp.ang.z; ang_buf[3] = gp.ang.w;
-            nb::capsule owner(ang_buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-            size_t shape[1] = {4};
-            result["ang"] = nb::ndarray<nb::numpy, double>(ang_buf, 1, shape, owner);
-            result["scale"] = vec3_to_numpy(gp.scale);
+            result["lin"] = gp.lin;
+            result["ang"] = gp.ang;
+            result["scale"] = gp.scale;
             return result;
         })
 
         .def("model_matrix", [](Entity& e) {
             double m[16];
             e.transform().world_matrix(m);
-            double* buf = new double[16];
+            double buf[16];
             for (int row = 0; row < 4; ++row)
                 for (int col = 0; col < 4; ++col)
                     buf[row * 4 + col] = m[col * 4 + row];
-            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-            size_t shape[2] = {4, 4};
-            return nb::ndarray<nb::numpy, double>(buf, 2, shape, owner);
+            return mat44_row_tuple(buf);
         })
 
         .def("inverse_model_matrix", [](Entity& e) {
             GeneralPose3 gp = e.transform().global_pose();
             double m[16];
             gp.inverse_matrix4(m);
-            double* buf = new double[16];
+            double buf[16];
             for (int i = 0; i < 16; ++i) buf[i] = m[i];
-            nb::capsule owner(buf, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-            size_t shape[2] = {4, 4};
-            return nb::ndarray<nb::numpy, double>(buf, 2, shape, owner);
+            return mat44_row_tuple(buf);
         })
 
         .def("set_visible", [](Entity& e, bool flag) {

@@ -32,6 +32,10 @@ def _rebuild_graph_action(component: "PathfindingWorldComponent") -> None:
     component.rebuild()
 
 
+def _entity_pose_matrix(entity: "Entity") -> np.ndarray:
+    return np.asarray(entity.transform.global_pose().as_matrix(), dtype=np.float64)
+
+
 class PathfindingWorldComponent(PythonComponent):
     """
     Глобальный компонент для поиска пути по NavMesh.
@@ -442,7 +446,7 @@ class PathfindingWorldComponent(PythonComponent):
 
         # Получаем entity для трансформации
         entity = self._region_entities.get(region_id)
-        transform = entity.transform.global_pose().as_matrix() if entity else None
+        transform = _entity_pose_matrix(entity) if entity else None
         inverse = np.linalg.inv(transform) if transform is not None else None
 
         # Трансформируем start/end в локальные координаты
@@ -584,7 +588,7 @@ class PathfindingWorldComponent(PythonComponent):
 
                 portal = self._portals[portal_idx]
                 entity = self._region_entities.get(region_id)
-                transform = entity.transform.global_pose().as_matrix() if entity else None
+                transform = _entity_pose_matrix(entity) if entity else None
 
                 # Трансформируем концы портала в мировые координаты
                 if transform is not None:
@@ -671,7 +675,7 @@ class PathfindingWorldComponent(PythonComponent):
         # Трансформируем точку в локальные координаты региона
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            inverse = np.linalg.inv(entity.transform.global_pose().as_matrix())
+            inverse = np.linalg.inv(_entity_pose_matrix(entity))
             local_point = self._transform_point(point, inverse)
         else:
             local_point = point
@@ -701,7 +705,7 @@ class PathfindingWorldComponent(PythonComponent):
         # Трансформируем точку в локальные координаты региона
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            inverse = np.linalg.inv(entity.transform.global_pose().as_matrix())
+            inverse = np.linalg.inv(_entity_pose_matrix(entity))
             local_point = self._transform_point(point, inverse)
         else:
             local_point = point
@@ -834,7 +838,7 @@ class PathfindingWorldComponent(PythonComponent):
         local_centroid = region.centroids[triangle_id]
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            transform = entity.transform.global_pose().as_matrix()
+            transform = _entity_pose_matrix(entity)
             return self._transform_point(local_centroid, transform)
         return local_centroid.copy()
 
@@ -853,7 +857,7 @@ class PathfindingWorldComponent(PythonComponent):
             # Трансформируем точку в локальные координаты региона
             entity = self._region_entities.get(region_id)
             if entity is not None:
-                inverse = np.linalg.inv(entity.transform.global_pose().as_matrix())
+                inverse = np.linalg.inv(_entity_pose_matrix(entity))
                 local_point = self._transform_point(point, inverse)
             else:
                 local_point = point
@@ -893,7 +897,7 @@ class PathfindingWorldComponent(PythonComponent):
                 continue
 
             # Трансформируем луч в локальное пространство entity
-            transform_matrix = entity.transform.global_pose().as_matrix()
+            transform_matrix = _entity_pose_matrix(entity)
             inverse_matrix = np.linalg.inv(transform_matrix)
 
             local_origin = self._transform_point(origin, inverse_matrix)
@@ -1051,7 +1055,7 @@ class PathfindingWorldComponent(PythonComponent):
                 entity = self._region_entities.get(portal.region_a)
                 transform = None
                 if entity is not None:
-                    transform = entity.transform.global_pose().as_matrix()
+                    transform = _entity_pose_matrix(entity)
 
                 # Рисуем центр портала как крестик
                 center = portal.center.copy()
@@ -1136,7 +1140,7 @@ class PathfindingWorldComponent(PythonComponent):
             entity = self._region_entities.get(region_id)
             transform = None
             if entity is not None:
-                transform = entity.transform.global_pose().as_matrix()
+                transform = _entity_pose_matrix(entity)
 
             # Получаем нормаль региона для смещения
             region_normal = np.array([0.0, 1.0, 0.0], dtype=np.float32)

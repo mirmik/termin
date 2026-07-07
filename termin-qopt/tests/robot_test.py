@@ -1,6 +1,6 @@
 import numpy as np
 
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Vec3
 from termin.kinematic.kinematic import Rotator3
 from termin.kinematic.transform import Transform3
 from termin.robot.robot import Robot
@@ -11,14 +11,14 @@ from termin.kinematic.kinchain import KinematicChain3
 def _build_two_link_tree():
     base = Transform3(name="base")
 
-    j0 = Rotator3(axis=np.array([0.0, 0.0, 1.0]), parent=base, name="j0")
+    j0 = Rotator3(axis=Vec3(0.0, 0.0, 1.0), parent=base, name="j0")
     link0 = Transform3(parent=j0.output, local_pose=Pose3.translation(0.0, 0.0, 0.4), name="link0")
 
-    j1 = Rotator3(axis=np.array([0.0, 1.0, 0.0]), parent=link0, name="j1")
+    j1 = Rotator3(axis=Vec3(0.0, 1.0, 0.0), parent=link0, name="j1")
     ee = Transform3(parent=j1.output, local_pose=Pose3.translation(0.0, 0.0, 0.2), name="ee")
 
     # Дополнительная ветвь для проверки, что лишние пары индексируются, но не влияют
-    j_branch = Rotator3(axis=np.array([1.0, 0.0, 0.0]), parent=base, name="j_branch")
+    j_branch = Rotator3(axis=Vec3(1.0, 0.0, 0.0), parent=base, name="j_branch")
     Transform3(parent=j_branch.output, local_pose=Pose3.translation(0.3, 0.0, 0.0), name="branch_tip")
 
     return base, ee, j0, j1, j_branch
@@ -27,10 +27,10 @@ def _build_two_link_tree():
 def _build_two_link_tree_2():
     base = Transform3(name="base")
 
-    j0 = Rotator3(axis=np.array([0.0, 0.0, 1.0]), parent=base, name="j0")
+    j0 = Rotator3(axis=Vec3(0.0, 0.0, 1.0), parent=base, name="j0")
     link0 = Transform3(parent=j0.output, local_pose=Pose3.translation(1.0, 0.0, 0.0), name="link0")
 
-    j1 = Rotator3(axis=np.array([0.0, 0.0, 1.0]), parent=link0, name="j1")
+    j1 = Rotator3(axis=Vec3(0.0, 0.0, 1.0), parent=link0, name="j1")
     ee = Transform3(parent=j1.output, local_pose=Pose3.translation(1.0, 0.0, 0.0), name="ee")
 
     # Уводим конфигурацию от сингулярного положения, чтобы Якобиан был полноранговым.
@@ -43,21 +43,21 @@ def _build_two_link_tree_2():
 def _build_multi_branch_tree():
     base = Transform3(name="base")
 
-    waist = Rotator3(axis=np.array([0.0, 0.0, 1.0]), parent=base, name="waist")
+    waist = Rotator3(axis=Vec3(0.0, 0.0, 1.0), parent=base, name="waist")
     torso = Transform3(parent=waist.output, local_pose=Pose3.translation(0.0, 0.0, 0.3), name="torso")
 
     left_mount = Transform3(parent=torso, local_pose=Pose3.translation(-0.15, 0.0, 0.0), name="left_mount")
-    j_left_shoulder = Rotator3(axis=np.array([0.0, 1.0, 0.0]), parent=left_mount, name="l_sh")
-    j_left_elbow = Rotator3(axis=np.array([0.0, 1.0, 0.0]), parent=j_left_shoulder.output, name="l_el")
+    j_left_shoulder = Rotator3(axis=Vec3(0.0, 1.0, 0.0), parent=left_mount, name="l_sh")
+    j_left_elbow = Rotator3(axis=Vec3(0.0, 1.0, 0.0), parent=j_left_shoulder.output, name="l_el")
     left_ee = Transform3(parent=j_left_elbow.output, local_pose=Pose3.translation(0.0, 0.0, 0.25), name="left_ee")
 
     right_mount = Transform3(parent=torso, local_pose=Pose3.translation(0.15, 0.0, 0.0), name="right_mount")
-    j_right_shoulder = Rotator3(axis=np.array([0.0, 1.0, 0.0]), parent=right_mount, name="r_sh")
-    j_right_elbow = Rotator3(axis=np.array([0.0, 1.0, 0.0]), parent=j_right_shoulder.output, name="r_el")
+    j_right_shoulder = Rotator3(axis=Vec3(0.0, 1.0, 0.0), parent=right_mount, name="r_sh")
+    j_right_elbow = Rotator3(axis=Vec3(0.0, 1.0, 0.0), parent=j_right_shoulder.output, name="r_el")
     right_ee = Transform3(parent=j_right_elbow.output, local_pose=Pose3.translation(0.0, 0.0, 0.25), name="right_ee")
 
     leg_mount = Transform3(parent=base, local_pose=Pose3.translation(0.0, 0.0, -0.2), name="leg_mount")
-    j_leg = Rotator3(axis=np.array([1.0, 0.0, 0.0]), parent=leg_mount, name="leg_joint")
+    j_leg = Rotator3(axis=Vec3(1.0, 0.0, 0.0), parent=leg_mount, name="leg_joint")
     Transform3(parent=j_leg.output, local_pose=Pose3.translation(0.0, 0.0, -0.4), name="leg_tip")
 
     joints = {

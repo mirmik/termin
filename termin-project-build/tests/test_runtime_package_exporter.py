@@ -1576,6 +1576,7 @@ def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Pa
 @full_runtime_package_exporter
 def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_path: Path) -> None:
     from termin.bootstrap import bootstrap_player
+    from termin.geombase import Vec3
     from termin.render_components import LineRenderMode, LineRenderer
     from termin.render_framework import RenderPipeline
     from termin.render_passes import ColorPass
@@ -1593,7 +1594,7 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
         entity = scene.create_entity("line")
         entity.add_component(
             LineRenderer(
-                points=[(0, 0, 0), (1, 0, 0)],
+                points=[Vec3(0, 0, 0), Vec3(1, 0, 0)],
                 render_mode=LineRenderMode.WorldTube,
             )
         )

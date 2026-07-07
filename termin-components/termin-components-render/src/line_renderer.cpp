@@ -691,15 +691,16 @@ void LineRenderer::rebuild_geometry() {
             indices.push_back(i);
         }
 
-        mesh_ = TcMesh::from_interleaved(
+        TcMeshCreateInfo create_info;
+        create_info.data = TcMeshInterleavedDataView{
             vertices.data(),
             points_.size(),
             indices.data(),
             indices.size(),
-            layout,
-            "line_renderer_raw",
-            "",
-            TC_DRAW_LINES);
+            &layout};
+        create_info.name = "line_renderer_raw";
+        create_info.draw_mode = TC_DRAW_LINES;
+        mesh_ = TcMesh::from_interleaved(create_info);
     } else {
         std::vector<tgfx::LinePoint3> line_points;
         line_points.reserve(points_.size());
@@ -727,15 +728,16 @@ void LineRenderer::rebuild_geometry() {
             vertices.push_back(vertex.position.z);
         }
 
-        mesh_ = TcMesh::from_interleaved(
+        TcMeshCreateInfo create_info;
+        create_info.data = TcMeshInterleavedDataView{
             vertices.data(),
             line_mesh.vertices.size(),
             line_mesh.indices.data(),
             line_mesh.indices.size(),
-            layout,
-            "line_renderer",
-            "",
-            TC_DRAW_TRIANGLES);
+            &layout};
+        create_info.name = "line_renderer";
+        create_info.draw_mode = TC_DRAW_TRIANGLES;
+        mesh_ = TcMesh::from_interleaved(create_info);
     }
 
     if (!mesh_.is_valid()) {

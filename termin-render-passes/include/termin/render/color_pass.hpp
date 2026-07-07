@@ -137,7 +137,7 @@ public:
     // pass ordering until the remaining passes collect RenderItems directly.
     void execute_with_data(
         ExecuteContext& ctx,
-        const Rect4i& rect,
+        const Rect2i& rect,
         tc_scene_handle scene,
         const Mat44f& view,
         const Mat44f& projection,

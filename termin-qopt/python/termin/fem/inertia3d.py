@@ -10,7 +10,7 @@
 """
 
 import numpy as np
-from termin.geombase import Pose3, Vec3
+from termin.geombase import Pose3, Quat, Vec3
 from termin.geombase.screw import Screw3
 
 
@@ -104,7 +104,7 @@ class SpatialInertia3D:
         quat = np.array([x, y, z, w], dtype=np.float64)
         quat /= np.linalg.norm(quat)
 
-        frame = Pose3(ang=quat, lin=_vec3(com))
+        frame = Pose3(ang=Quat(quat), lin=_vec3(com))
 
         return SpatialInertia3D(mass=mass, I_diag=eigenvalues, frame=frame)
 
@@ -123,7 +123,7 @@ class SpatialInertia3D:
     @property
     def Ic(self) -> np.ndarray:
         """Матрица инерции 3x3 (для совместимости)."""
-        R = self.frame.rotation_matrix()
+        R = np.asarray(self.frame.rotation_matrix(), dtype=np.float64)
         return R @ np.diag(self.I_diag) @ R.T
 
     # ----------------------------------------------------------------
@@ -171,7 +171,7 @@ class SpatialInertia3D:
         """
         # Поворачиваем frame эллипсоида
         new_frame = Pose3(
-            ang=(pose * Pose3(ang=self.frame.ang, lin=np.zeros(3))).ang,
+            ang=(pose * Pose3(ang=self.frame.ang, lin=Vec3.zero())).ang,
             lin=pose.rotate_point(self.frame.lin),
         )
         return SpatialInertia3D(mass=self.m, I_diag=self.I_diag.copy(), frame=new_frame)

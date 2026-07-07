@@ -14,6 +14,7 @@
 #pragma once
 
 #include "termin/engine/termin_engine_api.hpp"
+#include "termin/geom/rect2.hpp"
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
@@ -58,6 +59,15 @@ using RenderTargetContextProvider = std::function<bool(
     std::unordered_map<std::string, RenderTargetContext>& contexts,
     std::string& default_context_name
 )>;
+
+struct SceneMountRequest {
+    tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+    tc_display* display = nullptr;
+    tc_component* camera = nullptr;
+    Rect2f region;
+    tc_pipeline_handle pipeline = TC_PIPELINE_HANDLE_INVALID;
+    std::string name;
+};
 
 // RenderingManager - manages displays and rendering
 //
@@ -225,14 +235,7 @@ public:
 
     // Mount scene to display region, creating a viewport
     // Returns viewport handle (invalid if failed)
-    tc_viewport_handle mount_scene(
-        tc_scene_handle scene,
-        tc_display* display,
-        tc_component* camera,
-        float region_x, float region_y, float region_w, float region_h,
-        tc_pipeline_handle pipeline,
-        const std::string& name
-    );
+    tc_viewport_handle mount_scene(const SceneMountRequest& request);
 
     // Unmount scene from display (removes all viewports showing this scene)
     void unmount_scene(tc_scene_handle scene, tc_display* display);

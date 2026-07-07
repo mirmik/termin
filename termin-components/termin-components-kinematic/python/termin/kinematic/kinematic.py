@@ -1,10 +1,5 @@
 from .transform import Transform3
 from tcbase._geom_native import Pose3, Screw3, Vec3
-import numpy
-
-
-def _vec3(value) -> Vec3:
-    return Vec3(float(value[0]), float(value[1]), float(value[2]))
 
 class KinematicTransform3(Transform3):
     """A Transform3 specialized for kinematic chains."""
@@ -79,7 +74,7 @@ class KinematicTransform3OneScrew(KinematicTransform3):
         self._sens = None  # To be defined in subclasses
         self._coord = 0.0  # Current coordinate value
 
-    def sensitivity_for_basis(self, basis: numpy.ndarray) -> Screw3:
+    def sensitivity_for_basis(self, basis: Pose3) -> Screw3:
         """Описывает, как влияет изменение координаты влияет на тело связанное с системой basis в системе отсчета самого basis."""
         my_pose = self.global_pose()
         my_pose_in_basis = basis.inverse() * my_pose
@@ -88,7 +83,7 @@ class KinematicTransform3OneScrew(KinematicTransform3):
     def senses(self) -> [Screw3]:
         return [self._sens]
 
-    def senses_for_basis(self, basis: numpy.ndarray) -> [Screw3]:
+    def senses_for_basis(self, basis: Pose3) -> [Screw3]:
         return [self.sensitivity_for_basis(basis)]
 
     def sensivity(self) -> Screw3:
@@ -110,10 +105,10 @@ class KinematicTransform3OneScrew(KinematicTransform3):
     
 
 class Rotator3(KinematicTransform3OneScrew):
-    def __init__(self, axis: numpy.ndarray, parent: Transform3 = None, manual_output: bool = False, name="rotator", local_pose=None):
+    def __init__(self, axis: Vec3, parent: Transform3 = None, manual_output: bool = False, name="rotator", local_pose=None):
         """Initialize a Rotator that rotates around a given axis by angle_rad."""
         super().__init__(parent=parent, manual_output=manual_output, name=name, local_pose=local_pose)
-        self._sens = Screw3(ang=_vec3(axis), lin=Vec3(0.0, 0.0, 0.0))
+        self._sens = Screw3(ang=axis, lin=Vec3(0.0, 0.0, 0.0))
 
     def to_trent_with_children(self):
         dct = super().to_trent_with_children()
@@ -122,10 +117,10 @@ class Rotator3(KinematicTransform3OneScrew):
         return dct
 
 class Actuator3(KinematicTransform3OneScrew):
-    def __init__(self, axis: numpy.ndarray, parent: Transform3 = None, manual_output: bool = False, name="actuator", local_pose=None):
+    def __init__(self, axis: Vec3, parent: Transform3 = None, manual_output: bool = False, name="actuator", local_pose=None):
         """Initialize an Actuator that moves along a given screw."""
         super().__init__(parent=parent, manual_output=manual_output, name=name, local_pose=local_pose)
-        self._sens = Screw3(lin=_vec3(axis), ang=Vec3(0.0, 0.0, 0.0))
+        self._sens = Screw3(lin=axis, ang=Vec3(0.0, 0.0, 0.0))
 
     def to_trent_with_children(self):
         dct = super().to_trent_with_children()

@@ -148,10 +148,10 @@ Mat44f build_shadow_projection_matrix(const ShadowCameraParams& params) {
 
     if (params.ortho_bounds.has_value()) {
         const auto& bounds = *params.ortho_bounds;
-        left = bounds[0];
-        right_bound = bounds[1];
-        bottom = bounds[2];
-        top = bounds[3];
+        left = bounds.x0;
+        bottom = bounds.y0;
+        right_bound = bounds.x1;
+        top = bounds.y1;
     } else {
         float size = params.ortho_size;
         left = -size;
@@ -333,7 +333,7 @@ ShadowCameraParams fit_shadow_frustum_to_camera(
 
     return ShadowCameraParams(
         light_dir,
-        std::array<float, 4>{left, right, bottom, top},
+        Bounds2f{left, bottom, right, top},
         20.0f,  // ortho_size (not used when ortho_bounds is set)
         near,
         far,
@@ -504,7 +504,7 @@ ShadowCameraParams fit_shadow_frustum_for_cascade(
 
     return ShadowCameraParams(
         light_dir,
-        std::array<float, 4>{left, right, bottom, top},
+        Bounds2f{left, bottom, right, top},
         20.0f,
         near,
         far,

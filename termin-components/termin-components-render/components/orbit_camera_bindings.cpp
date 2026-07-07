@@ -9,7 +9,6 @@
 #include <termin/bindings/entity_helpers.hpp>
 
 namespace nb = nanobind;
-using namespace nb::literals;
 
 namespace termin {
 
@@ -38,19 +37,8 @@ void bind_orbit_camera_controller(nb::module_& m) {
         .def("zoom", &OrbitCameraController::zoom,
             nb::arg("delta"),
             "Zoom camera (change radius or ortho_size)")
-        .def("center_on", [](OrbitCameraController& c, nb::object position) {
-            // Accept numpy array, list, tuple, or Vec3
-            Vec3 pos;
-            if (nb::hasattr(position, "__len__")) {
-                auto seq = nb::cast<nb::sequence>(position);
-                pos.x = nb::cast<double>(seq[0]);
-                pos.y = nb::cast<double>(seq[1]);
-                pos.z = nb::cast<double>(seq[2]);
-            } else {
-                pos = nb::cast<Vec3>(position);
-            }
-            c.center_on(pos);
-        }, nb::arg("position"), "Center camera on position")
+        .def("center_on", &OrbitCameraController::center_on,
+            nb::arg("position"), "Center camera on position")
         .def("fly_move", &OrbitCameraController::fly_move,
             nb::arg("right"), nb::arg("forward"), nb::arg("up"),
             "Translate camera along local axes")
@@ -63,35 +51,17 @@ void bind_orbit_camera_controller(nb::module_& m) {
         .def_rw("horizon_lock", &OrbitCameraController::horizon_lock)
 
         // State accessors
-        .def_prop_ro("target", [](OrbitCameraController& c) {
-            Vec3 t = c.target();
-            // Return as numpy array for compatibility
-            nb::module_ np = nb::module_::import_("numpy");
-            return np.attr("array")(nb::make_tuple(t.x, t.y, t.z), "dtype"_a = "float32");
-        })
+        .def_prop_ro("target", &OrbitCameraController::target)
         .def_prop_ro("azimuth", &OrbitCameraController::azimuth)
         .def_prop_ro("elevation", &OrbitCameraController::elevation)
 
         // For internal state access (Python used _azimuth, _elevation, _target)
         .def_prop_ro("_azimuth", &OrbitCameraController::azimuth)
         .def_prop_ro("_elevation", &OrbitCameraController::elevation)
-        .def_prop_rw("_target", 
-            [](OrbitCameraController& c) {
-                Vec3 t = c.target();
-                nb::module_ np = nb::module_::import_("numpy");
-                return np.attr("array")(nb::make_tuple(t.x, t.y, t.z), "dtype"_a = "float32");
-            },
-            [](OrbitCameraController& c, nb::object position) {
-                Vec3 pos;
-                if (nb::hasattr(position, "__len__")) {
-                    auto seq = nb::cast<nb::sequence>(position);
-                    pos.x = nb::cast<double>(seq[0]);
-                    pos.y = nb::cast<double>(seq[1]);
-                    pos.z = nb::cast<double>(seq[2]);
-                } else {
-                    pos = nb::cast<Vec3>(position);
-                }
-                c.center_on(pos);  // center_on updates target and pose
+        .def_prop_rw("_target",
+            &OrbitCameraController::target,
+            [](OrbitCameraController& c, const Vec3& position) {
+                c.center_on(position);  // center_on updates target and pose
             })
 
         // Movement control

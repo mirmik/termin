@@ -3,8 +3,6 @@ from __future__ import annotations
 import struct
 from typing import Any, Callable, Set
 
-import numpy as np
-
 from termin.inspect import InspectField
 from termin.render_framework.python_pass import PythonFramePass
 from tgfx import TcShader
@@ -167,8 +165,6 @@ class HighlightPass(PythonFramePass):
         else:
             log.error("[HighlightPass] no u_params layout metadata from shader")
             return
-        push_buf = np.asarray(bytearray(params_bytes), dtype=np.uint8)
-
         ctx2.begin_pass(target_tex2)
         ctx2.set_viewport(0, 0, int(w), int(h))
         ctx2.set_depth_test(False)
@@ -181,7 +177,7 @@ class HighlightPass(PythonFramePass):
             ctx2.bind_texture_by_name("u_color", color_tex2)
             id_bind = tex_id2 if tex_id2 is not None else color_tex2
             ctx2.bind_texture_by_name("u_id", id_bind)
-            ctx2.bind_uniform_by_name("u_params", push_buf)
+            ctx2.bind_uniform_by_name("u_params", params_bytes)
             ctx2.draw_fullscreen_quad()
         finally:
             ctx2.end_pass()
