@@ -1070,26 +1070,28 @@ SurfacePickResult EditorInteractionSystem::_surface_from_pick_color_depth(
         Vec3 local_direction = inverse_mesh_offset.transform_direction(entity_local_direction).normalized();
 
         tc_mesh_ray ray;
-        ray.origin[0] = static_cast<float>(local_origin.x);
-        ray.origin[1] = static_cast<float>(local_origin.y);
-        ray.origin[2] = static_cast<float>(local_origin.z);
-        ray.direction[0] = static_cast<float>(local_direction.x);
-        ray.direction[1] = static_cast<float>(local_direction.y);
-        ray.direction[2] = static_cast<float>(local_direction.z);
+        ray.origin = tc_vec3f{
+            static_cast<float>(local_origin.x),
+            static_cast<float>(local_origin.y),
+            static_cast<float>(local_origin.z)};
+        ray.direction = tc_vec3f{
+            static_cast<float>(local_direction.x),
+            static_cast<float>(local_direction.y),
+            static_cast<float>(local_direction.z)};
         ray.t_min = 0.0f;
         ray.t_max = 1000000.0f;
 
         tc_mesh_hit hit;
         if (tc_mesh_raycast(mesh, &ray, &hit)) {
             Vec3 local_hit(
-                static_cast<double>(hit.position[0]),
-                static_cast<double>(hit.position[1]),
-                static_cast<double>(hit.position[2])
+                static_cast<double>(hit.position.x),
+                static_cast<double>(hit.position.y),
+                static_cast<double>(hit.position.z)
             );
             Vec3 local_normal(
-                static_cast<double>(hit.normal[0]),
-                static_cast<double>(hit.normal[1]),
-                static_cast<double>(hit.normal[2])
+                static_cast<double>(hit.normal.x),
+                static_cast<double>(hit.normal.y),
+                static_cast<double>(hit.normal.z)
             );
             Vec3 entity_local_hit = mesh_offset.transform_point(local_hit);
             Vec3 entity_local_normal = mesh_offset.transform_direction(local_normal).normalized();
