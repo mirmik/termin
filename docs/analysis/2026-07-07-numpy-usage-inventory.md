@@ -17,7 +17,7 @@ rg -l "^\s*(import numpy\b|from numpy\b)" \
   --glob '!termin-thirdparty/**' | sort
 ```
 
-Total files: 146
+Total files: 145
 
 ## Reading Notes
 
@@ -60,6 +60,14 @@ Total files: 146
   vector fields and `fit_shadow_frustum_to_camera(light_direction)` now use native
   `Vec3`; `ShadowCameraParams.ortho_bounds` now uses `Bounds2f` instead of a tuple
   parsed through Python objects; matrix/frustum/debug buffer APIs remain `nb::ndarray`.
+- `termin-skeleton/cpp/bindings/skeleton_module.cpp`: bone transform inputs now use
+  `Vec3`/`Quat` instead of Python object parsing with NumPy/sequence fallback; bone
+  matrix bulk outputs remain `nb::ndarray`.
+- `termin-animation/python/termin/animation/channel.py` and
+  `termin-animation/cpp/bindings/animation_module.cpp`: animation translation/rotation
+  key values now flow as `Vec3`/`Quat`; NumPy import removed from channel helpers.
+- `termin-app/tests/editor_commands_test.py`: stale `GeneralPose3(lin=np.array(...))`
+  test fixture moved to `Vec3`; remaining NumPy use is render-state color assertion data.
 - `termin-components/termin-components-physics/python/termin/physics_components/rigid_body_component.py`: collider extents moved to `Vec3`.
 - `termin-components/termin-components-render/python/termin/render_components/camera.py`: annotation-only NumPy import removed.
 - `termin-components/termin-components-tween/python/termin/tween/component.py`: annotation-only NumPy import removed.
@@ -79,6 +87,7 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 - `termin-scene/cpp/bindings/transform_bindings.cpp` and `termin-scene/include/termin/bindings/entity_helpers.hpp`: resolved for geometry APIs; remaining `nb::object` usage is Python object plumbing, not NumPy geometry.
 - `termin-collision/cpp/bindings/colliders_bindings.cpp`: `Ray3` moved to base geometry; corner/axis bulk returns are buffer-like and lower priority.
 - `termin-render-passes/python/render_passes_bindings.cpp`: resolved for `ShadowCameraParams` vector fields and `ortho_bounds` (`Vec3`/`Bounds2f`); matrix helpers are still `Mat44` candidates, while pass/debug buffer outputs should stay ndarray for now.
+- `termin-skeleton/cpp/bindings/skeleton_module.cpp`: resolved for bone transform inputs; keep `nb::ndarray` for bone matrix bulk outputs until replacement buffer APIs exist.
 - `termin-app/cpp/termin/bindings/{editor/gizmo_bindings.cpp,render/solid_primitive.cpp}`: resolved for geometry helper APIs.
 - `termin-components/termin-components-render/components/orbit_camera_bindings.cpp`: resolved for camera target geometry; remaining `nb::object` is Python object plumbing.
 - `termin-components/termin-components-render/components/render_components_bindings.cpp`: keep `nb::ndarray` for skinned bone matrix bulk output; geometry fields have moved to `Vec3`/`Vec4`.
@@ -96,7 +105,6 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `tcplot/examples/demo_scatter.py` | random plot arrays | examples only |
 | `tcplot/examples/demo_sin.py` | trigonometric plot arrays | examples only |
 | `tcplot/python/tcplot/plot3d.py` | surface buffer flattening | keep ndarray boundary |
-| `termin-animation/python/termin/animation/channel.py` | animation key arrays | Vec3/Quat candidate |
 | `termin-app/termin/editor_core/editor_commands.py` | undo snapshot arrays | keep copy boundary |
 | `termin-app/termin/editor_core/gizmo/base.py` | ray collider math | Vec3 candidate |
 | `termin-app/termin/editor_core/prefab_persistence.py` | JSON numpy encoding | serialization boundary |
@@ -104,7 +112,7 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-app/termin/editor_tcgui/surface_edge_debug_tool.py` | mesh vertex conversion | Vec3 candidate |
 | `termin-app/termin/editor_tcgui/texture_inspector.py` | texture preview buffers | keep ndarray |
 | `termin-app/termin/editor_tcgui/widgets/texture_picker.py` | texture preview buffers | keep ndarray |
-| `termin-app/tests/editor_commands_test.py` | undo expected arrays | tests only |
+| `termin-app/tests/editor_commands_test.py` | render-state color assertions | tests only |
 | `termin-base/tests/python/pose2_test.py` | Pose2 expected arrays | tests only |
 | `termin-base/tests/python/pose_test.py` | Pose3 matrix assertions | tests only |
 | `termin-base/tests/python/test_general_pose3.py` | GeneralPose3 matrix tests | tests only |
