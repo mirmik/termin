@@ -248,7 +248,7 @@ void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
     // declare the draw-scope bone block explicitly.
     const tc_shader* active_shader = ctx2.active_shader_resource_layout();
     if (const tc_shader_resource_binding* rb = find_bone_block_resource(active_shader)) {
-        ctx2.bind_uniform_data(rb->name, staging.data(), static_cast<uint32_t>(staging.size()));
+        ctx2.bind_uniform_data(rb, staging.data(), static_cast<uint32_t>(staging.size()));
         return;
     }
 
