@@ -28,12 +28,17 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
 
 2026-07-07:
 
-- Moved `Color4`, `Size2i`, and `Rect2i` from `termin-graphics/include/tgfx/types.hpp`
+- Moved `Color4` and `Size2i` from `termin-graphics/include/tgfx/types.hpp`
   to `termin-base/include/termin/geom`.
+- Renamed the min/max `Rect2i` shape to `Bounds2i` and kept it in
+  `termin-base/include/termin/geom`.
+- Renamed the render x/y/width/height rectangle shape to `Rect2i` and moved it from
+  `termin-render/include/termin/render/frame_pass.hpp` into
+  `termin-base/include/termin/geom`.
 - Kept `tgfx/types.hpp` as a compatibility include for existing graphics users.
 - Updated `tgfx2::IRenderDevice::blit_to_texture` to take source/destination
-  `Rect2i` values.
-- Updated `tgfx2::IRenderDevice::clear_texture` to take `Color4` and `Rect2i`.
+  `Bounds2i` values.
+- Updated `tgfx2::IRenderDevice::clear_texture` to take `Color4` and `Bounds2i`.
 - Updated OpenGL, Vulkan, D3D11 declarations/implementations and current call
   sites.
 - C++ repository-owned diagnostics dropped from 64 to 58.

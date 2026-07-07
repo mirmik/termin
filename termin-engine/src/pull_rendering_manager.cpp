@@ -163,7 +163,7 @@ void PullRenderingManager::render_display(tc_display* display) {
     dev->clear_texture(
         display_color_tex,
         Color4{0.1f, 0.1f, 0.1f, 1.0f},
-        Rect2i::from_size(width, height)
+        Bounds2i::from_size(width, height)
     );
 
     // Collect viewports sorted by depth
@@ -206,8 +206,8 @@ void PullRenderingManager::render_display(tc_display* display) {
 
         dev->blit_to_texture(
             display_color_tex, state->output_color_tex,
-            Rect2i::from_size(src_w, src_h),
-            Rect2i{px, py, px + pw, py + ph}
+            Bounds2i::from_size(src_w, src_h),
+            Bounds2i{px, py, px + pw, py + ph}
         );
     }
 }

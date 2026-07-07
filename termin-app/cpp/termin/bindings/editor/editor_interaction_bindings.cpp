@@ -136,7 +136,7 @@ void bind_editor_interaction(nb::module_& m) {
         .def("set_camera_frustums_visible", &EditorInteractionSystem::set_camera_frustums_visible,
             nb::arg("visible"))
         .def("set_camera_frustum_render_context",
-            [](EditorInteractionSystem& s, const TcSceneRef& scene, const Rect4i& rect) {
+            [](EditorInteractionSystem& s, const TcSceneRef& scene, const Rect2i& rect) {
                 s.set_camera_frustum_render_context(scene.handle(), rect.width, rect.height);
             },
             nb::arg("scene"),

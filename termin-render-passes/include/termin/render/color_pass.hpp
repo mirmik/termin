@@ -137,7 +137,7 @@ public:
     // drawables expose geometry_id through resolve_mesh_geometry().
     void execute_with_data(
         ExecuteContext& ctx,
-        const Rect4i& rect,
+        const Rect2i& rect,
         tc_scene_handle scene,
         const Mat44f& view,
         const Mat44f& projection,

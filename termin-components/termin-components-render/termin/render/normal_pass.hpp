@@ -45,7 +45,7 @@ public:
     // tgfx2-native NormalPass entry — requires ctx.ctx2 to be non-null.
     void execute_with_data_tgfx2(
         ExecuteContext& ctx,
-        const Rect4i& rect,
+        const Rect2i& rect,
         tc_scene_handle scene,
         const Mat44f& view,
         const Mat44f& projection,
