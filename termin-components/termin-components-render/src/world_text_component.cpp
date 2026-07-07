@@ -578,22 +578,22 @@ bool WorldTextComponent::draw_tgfx2(tgfx::RenderContext2& ctx2,
     }
 
     Vec3 world_pos = context.model.transform_point(local_offset);
-    float position[3] = {
-        static_cast<float>(world_pos.x),
-        static_cast<float>(world_pos.y),
-        static_cast<float>(world_pos.z),
-    };
-
     renderer_->begin(&ctx2, mvp.data, text_right, text_up_basis, font);
-    renderer_->draw(
-        text,
-        position,
-        static_cast<float>(color.x),
-        static_cast<float>(color.y),
-        static_cast<float>(color.z),
-        static_cast<float>(color.w),
+    renderer_->draw(text, tgfx::Text3DRenderer::DrawOptions{
+        Vec3f{
+            static_cast<float>(world_pos.x),
+            static_cast<float>(world_pos.y),
+            static_cast<float>(world_pos.z),
+        },
+        Color4{
+            static_cast<float>(color.x),
+            static_cast<float>(color.y),
+            static_cast<float>(color.z),
+            static_cast<float>(color.w),
+        },
         size,
-        to_tgfx_anchor(anchor));
+        to_tgfx_anchor(anchor)
+    });
     renderer_->end();
     return true;
 }
