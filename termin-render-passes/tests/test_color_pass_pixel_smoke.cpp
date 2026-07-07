@@ -217,17 +217,15 @@ struct ScopedTempDirectory {
 };
 
 termin::TcShader create_color_shader() {
-    termin::TcShader shader = termin::TcShader::from_sources(
-        kColorPassSmokeShader,
-        kColorPassSmokeShader,
-        "",
-        "ColorPassPixelSmokeMaterialShader",
-        "",
-        TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED,
-        "vs_main",
-        "fs_main");
-    return shader;
+    termin::TcShaderCreateInfo create_info{};
+    create_info.sources.vertex = kColorPassSmokeShader;
+    create_info.sources.fragment = kColorPassSmokeShader;
+    create_info.sources.name = "ColorPassPixelSmokeMaterialShader";
+    create_info.sources.vertex_entry = "vs_main";
+    create_info.sources.fragment_entry = "fs_main";
+    create_info.language = TC_SHADER_LANGUAGE_SLANG;
+    create_info.artifact_policy = TC_SHADER_ARTIFACT_REQUIRED;
+    return termin::TcShader::from_sources(create_info);
 }
 
 termin::TcMaterial create_color_material(const termin::TcShader& shader) {

@@ -21,9 +21,18 @@ not enable `PLR0913`.
   Canvas2D quad cleanup, immediate solid primitive cleanup, texture/FBO
   descriptor cleanup, text draw options cleanup, indexed-instanced draw
   command cleanup, mesh interleaved create-info cleanup, frame graph presenter
-  draw command cleanup, scene mount request cleanup, and render-pass execute
-  data/config cleanup on 2026-07-07, the current C/C++ baseline is 11
-  repository-owned diagnostics with the tightened third-party header filter.
+  draw command cleanup, scene mount request cleanup, render-pass execute
+  data/config cleanup, and shadow-pass request cleanup on 2026-07-07,
+  the C/C++ source baseline dropped to 9 repository-owned diagnostics with the
+  tightened third-party header filter.
+- Follow-up cleanup on 2026-07-08 resolved those 9 source diagnostics in
+  engine/graphics/mesh. Targeted checks over the touched translation units now
+  report no remaining source diagnostics; the visible repeated diagnostics are
+  header-only `termin-inspect` registration helpers.
+- A later 2026-07-08 pass resolved the `termin-inspect` header helpers plus
+  the newly visible repository-owned `termin-display` input-event and
+  `termin-render` shadow-array helpers. The C/C++ repository-owned parameter
+  baseline is now zero with this check; remaining output is third-party noise.
 
 The result is small enough to enable eventually, but not as a drive-by config
 change. The editor menu/controller constructors and several rendering/graphics
@@ -79,7 +88,34 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   Python and C# binding call shapes compatible.
 - Updated `LightingUBO::update_from_lights` to take `std::span<const Light>` so
   render-pass execute data can carry non-owning light views.
-- C++ repository-owned diagnostics dropped from 64 to 11.
+- Updated `fit_shadow_frustum_for_cascade` to take a typed
+  `ShadowCascadeFitRequest`.
+- Updated `ShadowPass::execute_shadow_pass_tgfx2` to take a typed
+  `ShadowPassExecuteData` with non-owning light views.
+- C++ repository-owned diagnostics dropped from 64 to 9.
+
+2026-07-08:
+
+- Updated mesh query/raycast APIs so points, directions, normals, and hit
+  locations use `Vec3f`/`tc_vec3f` instead of domain `float[3]` arrays.
+- Updated shader registry APIs to use `tc_shader_source_desc` and
+  `tc_shader_create_desc` instead of flat source/name/path/entry/language
+  argument lists.
+- Updated `termin::TcShader` to use `TcShaderSources` and
+  `TcShaderCreateInfo`; Python bindings keep the old call shape as a
+  compatibility adapter.
+- Updated `tc_shader_bridge` stage artifact compilation to take an
+  `EngineShaderStageCompileRequest`.
+- Updated `TcMaterial::add_phase_from_sources` to take
+  `TcMaterialPhaseFromSourcesInfo` and moved material binding internals to
+  option/descriptor structs.
+- Updated `termin-inspect` C++ field registration helpers to use
+  `InspectFieldSpec` descriptors while keeping macro/direct-call compatibility.
+- Updated input event source initializers to take event init descriptor structs.
+- Updated `ShadowMapArrayResource::add_entry` to take a `ShadowMapArrayEntry`
+  value instead of a flat shadow entry argument list.
+- Rebuilt SDK with `./build-sdk.sh --no-wheels` and refreshed the editable test
+  venv with `./setup-test-venv.sh --force`.
 
 ## Reproduction
 
@@ -159,32 +195,41 @@ Lower-count Python diagnostics are mostly:
 
 ## C/C++ Results
 
-Current diagnostics by repository-owned area:
+Current result: zero repository-owned C/C++ parameter-count diagnostics.
 
-| Count | Area |
-|---:|---|
-| 5 | `termin-graphics` |
-| 3 | `termin-mesh` |
-| 2 | `termin-render-passes` |
-| 1 | `termin-engine` |
+The full check was rerun over the `build/Release-lint/compile_commands.json`
+repository translation units on 2026-07-08. Filtering out `/termin-thirdparty/`
+from the resulting `warning: function` lines leaves no diagnostics.
 
-Current repository-owned C/C++ diagnostics:
+The default `./run-lint-cpp.sh` clang-tidy baseline now includes
+`readability-function-size` with only `ParameterThreshold = 7` enabled. The
+script also passes `--exclude-header-filter` for `termin-thirdparty`, so the
+rule applies to repository-owned C/C++ code without turning third-party headers
+into lint failures.
+
+After enabling the rule, the full default C/C++ lint command
+`./run-lint-cpp.sh --no-configure --jobs 4` passed over all 282 matched
+translation units.
+
+The 9 source diagnostics listed in the previous baseline were resolved by the
+2026-07-08 cleanup. Targeted clang-tidy checks over the touched translation
+units reported no remaining source diagnostics in:
 
 ```text
-termin-engine/src/render_target_context_builder.cpp:198:6: build_render_target_contexts: 12 parameters
-termin-graphics/src/resources/tc_shader_registry.c:231:13: tc_shader_compute_identity_hash: 9 parameters
-termin-graphics/src/resources/tc_shader_registry.c:595:6: tc_shader_set_sources_with_entries: 9 parameters
-termin-graphics/src/resources/tc_shader_registry.c:668:18: tc_shader_from_sources_ex: 8 parameters
-termin-graphics/src/resources/tc_shader_registry.c:692:18: tc_shader_from_sources_with_entries_ex: 11 parameters
-termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_stage_artifact: 8 parameters
-termin-mesh/src/resources/tc_mesh.c:653:13: tc_mesh_find_surface_edge_filtered: 10 parameters
-termin-mesh/src/resources/tc_mesh.c:955:6: tc_mesh_find_surface_edge_aligned: 8 parameters
-termin-mesh/src/resources/tc_mesh.c:979:6: tc_mesh_find_surface_edge_aligned_metric: 9 parameters
-termin-render-passes/src/shadow_camera.cpp:385:20: fit_shadow_frustum_for_cascade: 9 parameters
-termin-render-passes/src/shadow_pass.cpp:438:42: execute_shadow_pass_tgfx2: 8 parameters
+termin-graphics/src/resources/tc_shader_registry.c
+termin-graphics/src/tgfx2/tc_shader_bridge.cpp
+termin-materials/python/bindings/material_bindings.cpp
+termin-navmesh/src/detour_navmesh_asset_utils.cpp
+termin-runtime/src/runtime_package.cpp
+termin-display/src/tc_viewport_input_manager.c
+termin-render-passes/src/shadow_pass.cpp
+termin-components/termin-components-render/src/depth_pass.cpp
+termin-components/termin-components-render/src/normal_pass.cpp
 ```
 
-Third-party header diagnostics observed during the same run:
+The one-off exploratory audit command used before the script change still let
+some `termin-thirdparty` headers and sources through. That run found 67
+third-party `warning: function` lines. Earlier examples included:
 
 ```text
 termin-thirdparty/manifold/include/manifold/linalg.h:2581:30: frustum_matrix: 8 parameters
@@ -215,11 +260,8 @@ termin-thirdparty/stb/stb_truetype.h:3018:16: stbtt_GetPackedQuad: 8 parameters
   `[lint.pylint] max-args = 7`.
 - clang-tidy can enforce the C/C++ rule through
   `readability-function-size.ParameterThreshold`.
-- The current `run-lint-cpp.sh` translation-unit filter excludes
-  `termin-thirdparty`, but the `HEADER_FILTER` still matches
-  `termin-thirdparty` because it starts with `termin-`. If this check is added
-  to the normal C/C++ lint flow, the header filter should be tightened or an
-  exclude filter should be introduced first.
+- The normal `run-lint-cpp.sh` flow now excludes `termin-thirdparty` both from
+  translation units and from header diagnostics.
 - Header diagnostics from template/header-only helpers repeat once per
   translation unit. The current C/C++ table above intentionally reports unique
   repository-owned `.c`/`.cpp` source diagnostics, not repeated header hits.
@@ -232,12 +274,8 @@ termin-thirdparty/stb/stb_truetype.h:3018:16: stbtt_GetPackedQuad: 8 parameters
 
 ## Suggested Cleanup Order
 
-1. Fix the C/C++ header filter so future exploratory checks do not report
-   third-party headers.
-2. Refactor the Python editor menu/controller callback bundles. This removes
+1. Refactor the Python editor menu/controller callback bundles. This removes
    the largest outliers and gives the rule a cleaner baseline.
-3. Convert build pipeline functions to typed option/context objects.
-4. Audit graphics/rendering APIs separately, because many are public wrapper or
+2. Convert build pipeline functions to typed option/context objects.
+3. Audit graphics/rendering APIs separately, because many are public wrapper or
    backend interfaces and may need compatibility planning.
-5. Enable the rule only after the baseline is close to zero, or add a narrow
-   per-file ignore list with explicit cleanup tasks.

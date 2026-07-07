@@ -22,6 +22,7 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 extern "C" {
@@ -182,25 +183,27 @@ void IdPass::execute_with_data_tgfx2(
 
     const MaterialPipelinePassContract pass_contract = id_material_pass_contract();
     const char* pick_phase = phase_mark();
+    const std::string debug_pass_name = get_pass_name();
+    const char* debug_pass_name_c = debug_pass_name.c_str();
 
     std::vector<IdMeshTask> mesh_tasks;
     if (tc_scene_handle_valid(scene)) {
         struct CollectItemsContext {
-            IdPass* pass = nullptr;
             std::vector<IdMeshTask>* tasks = nullptr;
             MaterialPipelinePassContract pass_contract;
             tc_shader_handle base_shader = tc_shader_handle_invalid();
             const char* phase_mark = nullptr;
+            const char* debug_pass_name = "IdPass";
             uint64_t layer_mask = 0;
             uint64_t render_category_mask = 0;
         };
 
         CollectItemsContext collect_context{
-            this,
             &mesh_tasks,
             pass_contract,
             id_shader_handle_,
             pick_phase,
+            debug_pass_name_c,
             layer_mask,
             ctx.render_category_mask};
 
@@ -221,7 +224,7 @@ void IdPass::execute_with_data_tgfx2(
             item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
             item_context.layer_mask = data->layer_mask;
             item_context.render_category_mask = data->render_category_mask;
-            item_context.debug_pass_name = data->pass ? data->pass->get_pass_name().c_str() : "IdPass";
+            item_context.debug_pass_name = data->debug_pass_name;
             item_context.pass_contract = &data->pass_contract;
 
             RenderItemCollection items;
@@ -417,7 +420,7 @@ void IdPass::execute_with_data_tgfx2(
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = layer_mask;
         item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.debug_pass_name = debug_pass_name_c;
         item_context.pass_contract = &pass_contract;
 
         RenderItemCollection direct_items;
@@ -451,7 +454,7 @@ void IdPass::execute_with_data_tgfx2(
                 submit_request.draw_context = &direct_context;
                 submit_request.material_phase = item.material_phase;
                 submit_request.phase_mark = pick_phase;
-                submit_request.debug_pass_name = get_pass_name().c_str();
+                submit_request.debug_pass_name = debug_pass_name_c;
                 submit_request.debug_entity_name = name;
                 submit_render_item_draw(*ctx.ctx2, item, submit_request);
                 capture_debug_symbol(name);

@@ -223,15 +223,22 @@ TEST_CASE("synthesize: empty layout yields empty string")
 
 TEST_CASE("tc_shader: material UBO layout stores pack metadata without resource binding")
 {
-    tc_shader_handle handle = tc_shader_from_sources_ex(
-        "#version 450 core\nvoid main() { gl_Position = vec4(0.0); }\n",
-        "#version 450 core\nlayout(location=0) out vec4 FragColor; void main() { FragColor = vec4(1.0); }\n",
-        nullptr,
-        "resource-layout-test",
-        nullptr,
+    const tc_shader_create_desc shader_desc = {
+        {
+            "#version 450 core\nvoid main() { gl_Position = vec4(0.0); }\n",
+            "#version 450 core\nlayout(location=0) out vec4 FragColor; void main() { FragColor = vec4(1.0); }\n",
+            nullptr,
+            "resource-layout-test",
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr
+        },
         "00000000-0000-0000-0001-000000000099",
         TC_SHADER_LANGUAGE_GLSL,
-        TC_SHADER_ARTIFACT_OPTIONAL);
+        TC_SHADER_ARTIFACT_OPTIONAL
+    };
+    tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
     CHECK(!tc_shader_handle_is_invalid(handle));
 
     tc_shader* shader = tc_shader_get(handle);
@@ -426,15 +433,22 @@ TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection")
         "out vec4 FragColor;\n"
         "void main() { FragColor = vec4(1.0); }\n";
 
-    tc_shader_handle original_handle = tc_shader_from_sources_ex(
-        vertex.c_str(),
-        fragment.c_str(),
-        nullptr,
-        "CookTorrancePBR/opaque",
-        nullptr,
+    const tc_shader_create_desc original_desc = {
+        {
+            vertex.c_str(),
+            fragment.c_str(),
+            nullptr,
+            "CookTorrancePBR/opaque",
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr
+        },
         "skinning-rewrite-original",
         TC_SHADER_LANGUAGE_GLSL,
-        TC_SHADER_ARTIFACT_OPTIONAL);
+        TC_SHADER_ARTIFACT_OPTIONAL
+    };
+    tc_shader_handle original_handle = tc_shader_from_sources_desc(&original_desc);
     CHECK(!tc_shader_handle_is_invalid(original_handle));
 
     tc_shader_handle skinned_handle = tc_shader_handle_invalid();
@@ -471,15 +485,22 @@ TEST_CASE("skinned shader variants create shader-contract assembler output")
         "    return output;\n"
         "}\n";
 
-    tc_shader_handle original_handle = tc_shader_from_sources_ex(
-        vertex.c_str(),
-        fragment.c_str(),
-        nullptr,
-        "SlangPBR/opaque",
-        nullptr,
+    const tc_shader_create_desc original_desc = {
+        {
+            vertex.c_str(),
+            fragment.c_str(),
+            nullptr,
+            "SlangPBR/opaque",
+            nullptr,
+            nullptr,
+            nullptr,
+            nullptr
+        },
         "skinning-rewrite-slang-original",
         TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED);
+        TC_SHADER_ARTIFACT_REQUIRED
+    };
+    tc_shader_handle original_handle = tc_shader_from_sources_desc(&original_desc);
     CHECK(!tc_shader_handle_is_invalid(original_handle));
     tc_shader* original_raw = tc_shader_get(original_handle);
     REQUIRE(original_raw != nullptr);

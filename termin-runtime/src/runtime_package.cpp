@@ -595,15 +595,16 @@ bool load_shader_resource(
         language == TC_SHADER_LANGUAGE_SLANG
             ? TC_SHADER_ARTIFACT_REQUIRED
             : TC_SHADER_ARTIFACT_OPTIONAL);
-    shader.set_sources_with_entries(
-        vertex_source,
-        fragment_source,
-        geometry_source,
-        name,
-        source_path,
-        vertex_entry,
-        fragment_entry,
-        geometry_entry);
+    TcShaderSources sources;
+    sources.vertex = vertex_source;
+    sources.fragment = fragment_source;
+    sources.geometry = geometry_source;
+    sources.name = name;
+    sources.source_path = source_path;
+    sources.vertex_entry = vertex_entry;
+    sources.fragment_entry = fragment_entry;
+    sources.geometry_entry = geometry_entry;
+    shader.set_sources(sources);
     tc_shader* raw = shader.get();
     if (!raw || !raw->fragment_source) {
         error = "shader '" + uuid + "' has no registered fragment source";

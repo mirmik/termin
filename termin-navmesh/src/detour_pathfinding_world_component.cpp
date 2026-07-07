@@ -120,7 +120,7 @@ bool DetourPathfindingWorldComponent::ensure_query_loaded() {
 }
 
 DetourClosestPointResult DetourPathfindingWorldComponent::closest_point(
-    const std::array<float, 3>& point
+    const Vec3f& point
 ) {
     if (!ensure_query_loaded()) {
         return {};
@@ -131,7 +131,7 @@ DetourClosestPointResult DetourPathfindingWorldComponent::closest_point(
 
 DetourClosestPointResult DetourPathfindingWorldComponent::closest_point_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& point
+    const Vec3f& point
 ) {
     if (!ensure_query_loaded()) {
         return {};
@@ -140,9 +140,9 @@ DetourClosestPointResult DetourPathfindingWorldComponent::closest_point_world(
     return _query_session.closest_point_world(bake_frame, point);
 }
 
-std::vector<std::array<float, 3>> DetourPathfindingWorldComponent::find_path(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+std::vector<Vec3f> DetourPathfindingWorldComponent::find_path(
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     if (!ensure_query_loaded()) {
         return {};
@@ -151,10 +151,10 @@ std::vector<std::array<float, 3>> DetourPathfindingWorldComponent::find_path(
     return _query_session.find_path(start, end);
 }
 
-std::vector<std::array<float, 3>> DetourPathfindingWorldComponent::find_path_world(
+std::vector<Vec3f> DetourPathfindingWorldComponent::find_path_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     if (!ensure_query_loaded()) {
         return {};
@@ -164,8 +164,8 @@ std::vector<std::array<float, 3>> DetourPathfindingWorldComponent::find_path_wor
 }
 
 DetourPathResult DetourPathfindingWorldComponent::find_detailed_path(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     if (!ensure_query_loaded()) {
         tc_log_warn("[DetourPathfindingWorldComponent] path query failed: navmesh is not ready "
@@ -180,8 +180,8 @@ DetourPathResult DetourPathfindingWorldComponent::find_detailed_path(
 
 DetourPathResult DetourPathfindingWorldComponent::find_detailed_path_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     if (!ensure_query_loaded()) {
         tc_log_warn("[DetourPathfindingWorldComponent] world-space path query failed: navmesh is not ready "
@@ -195,8 +195,8 @@ DetourPathResult DetourPathfindingWorldComponent::find_detailed_path_world(
 }
 
 DetourRaycastResult DetourPathfindingWorldComponent::raycast(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     if (!ensure_query_loaded()) {
         return {};
@@ -207,8 +207,8 @@ DetourRaycastResult DetourPathfindingWorldComponent::raycast(
 
 DetourRaycastResult DetourPathfindingWorldComponent::raycast_world(
     const Pose3& bake_frame,
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end
+    const Vec3f& start,
+    const Vec3f& end
 ) {
     if (!ensure_query_loaded()) {
         return {};

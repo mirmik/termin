@@ -89,7 +89,7 @@ bool python_navmesh_load_callback(tc_navmesh* navmesh, void* user_data) {
     }
 }
 
-std::array<float, 3> py_vec3(nb::handle value) {
+Vec3f py_vec3(nb::handle value) {
     nb::sequence seq = nb::cast<nb::sequence>(value);
     return {
         nb::cast<float>(seq[0]),
@@ -98,7 +98,7 @@ std::array<float, 3> py_vec3(nb::handle value) {
     };
 }
 
-nb::list path_to_python(const std::vector<std::array<float, 3>>& path) {
+nb::list path_to_python(const std::vector<Vec3f>& path) {
     nb::list result;
     for (const auto& p : path) {
         nb::list item;
@@ -110,7 +110,7 @@ nb::list path_to_python(const std::vector<std::array<float, 3>>& path) {
     return result;
 }
 
-nb::list point_to_python(const std::array<float, 3>& point) {
+nb::list point_to_python(const Vec3f& point) {
     nb::list result;
     result.append(point[0]);
     result.append(point[1]);

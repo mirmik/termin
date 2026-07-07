@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include <span>
 #include <unordered_map>
 
 #include "termin/render/frame_pass.hpp"
@@ -74,6 +75,16 @@ struct TERMIN_RENDER_PASSES_API ShadowMapResult {
           cascade_split_far(split_far) {}
 };
 
+struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
+    tc_scene_handle scene = {};
+    std::span<const Light> lights;
+    Mat44f camera_view;
+    Mat44f camera_projection;
+    float camera_near = 0.1f;
+    float camera_far = 100.0f;
+    uint64_t layer_mask = 0;
+};
+
 /**
  * Shadow pass - renders shadow maps for directional lights.
  *
@@ -139,13 +150,7 @@ public:
     // through a tgfx2 RenderContext2. Requires ctx.ctx2 to be non-null.
     std::vector<ShadowMapResult> execute_shadow_pass_tgfx2(
         ExecuteContext& ctx,
-        tc_scene_handle scene,
-        const std::vector<Light>& lights,
-        const Mat44f& camera_view,
-        const Mat44f& camera_projection,
-        float camera_near,
-        float camera_far,
-        uint64_t layer_mask = 0
+        const ShadowPassExecuteData& data
     );
 
     std::vector<ResourceSpec> get_resource_specs() const override;
