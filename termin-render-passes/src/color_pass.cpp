@@ -1008,7 +1008,15 @@ void ColorPass::execute_with_data(
             direct_context.viewport_width = rect.width;
             direct_context.viewport_height = rect.height;
             direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
-            direct_context.prepare_tgfx2_material_resources =
+
+            RenderItemDrawSubmitRequest submit_request{};
+            submit_request.shader = tc_shader_get(final_shader);
+            submit_request.draw_context = &direct_context;
+            submit_request.material_phase = phase;
+            submit_request.phase_mark = phase_mark.c_str();
+            submit_request.debug_pass_name = get_pass_name().c_str();
+            submit_request.debug_entity_name = ename;
+            submit_request.prepare_material_resources =
                 [this,
                  &device,
                  &material_resources,
@@ -1035,14 +1043,6 @@ void ColorPass::execute_with_data(
                         bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
                     }
                 };
-
-            RenderItemDrawSubmitRequest submit_request{};
-            submit_request.shader = tc_shader_get(final_shader);
-            submit_request.draw_context = &direct_context;
-            submit_request.material_phase = phase;
-            submit_request.phase_mark = phase_mark.c_str();
-            submit_request.debug_pass_name = get_pass_name().c_str();
-            submit_request.debug_entity_name = ename;
             if (submit_render_item_draw(*ctx2, item, submit_request)) {
                 capture_debug_symbol(ename);
             }
