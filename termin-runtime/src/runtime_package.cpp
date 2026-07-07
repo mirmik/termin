@@ -812,29 +812,21 @@ bool load_mesh_resource(
         return false;
     }
 
-    TcMesh mesh;
-    if (submeshes.empty()) {
-        mesh = TcMesh::from_interleaved(
-            vertices.data(),
-            vertex_count,
-            indices.data(),
-            indices.size(),
-            layout,
-            name,
-            uuid,
-            draw_mode);
-    } else {
-        mesh = TcMesh::from_interleaved_with_submeshes(
-            vertices.data(),
-            vertex_count,
-            indices.data(),
-            indices.size(),
-            layout,
-            submeshes,
-            name,
-            uuid,
-            draw_mode);
+    TcMeshCreateInfo create_info;
+    create_info.data = TcMeshInterleavedDataView{
+        vertices.data(),
+        vertex_count,
+        indices.data(),
+        indices.size(),
+        &layout};
+    if (!submeshes.empty()) {
+        create_info.submeshes = submeshes.data();
+        create_info.submesh_count = submeshes.size();
     }
+    create_info.name = name;
+    create_info.uuid_hint = uuid;
+    create_info.draw_mode = draw_mode;
+    TcMesh mesh = TcMesh::from_interleaved(create_info);
     if (!mesh.is_valid()) {
         error = "failed to create mesh '" + uuid + "'";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());

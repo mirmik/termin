@@ -262,14 +262,16 @@ termin::TcMesh create_triangle_mesh() {
     const uint32_t indices[] = {0, 1, 2};
     tc_vertex_layout layout = tc_vertex_layout_pos_normal_uv_tangent();
 
-    return termin::TcMesh::from_interleaved(
+    termin::TcMeshCreateInfo create_info;
+    create_info.data = termin::TcMeshInterleavedDataView{
         vertices,
         3,
         indices,
         3,
-        layout,
-        "ColorPassPixelSmokeTriangle",
-        "termin-color-pass-pixel-smoke-triangle");
+        &layout};
+    create_info.name = "ColorPassPixelSmokeTriangle";
+    create_info.uuid_hint = "termin-color-pass-pixel-smoke-triangle";
+    return termin::TcMesh::from_interleaved(create_info);
 }
 
 termin::TcSceneRef create_scene(

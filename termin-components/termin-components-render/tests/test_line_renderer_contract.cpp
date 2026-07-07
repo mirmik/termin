@@ -122,15 +122,19 @@ termin::TcMesh make_two_submesh_mesh()
         make_submesh(0, 3, 0, "left"),
         make_submesh(3, 3, 1, "right"),
     };
-    return termin::TcMesh::from_interleaved_with_submeshes(
+    tc_vertex_layout layout = tc_vertex_layout_pos();
+    termin::TcMeshCreateInfo create_info;
+    create_info.data = termin::TcMeshInterleavedDataView{
         vertices,
         6,
         indices,
         6,
-        tc_vertex_layout_pos(),
-        submeshes,
-        "mesh-renderer-geometry-ids-test",
-        "mesh-renderer-geometry-ids-test");
+        &layout};
+    create_info.submeshes = submeshes.data();
+    create_info.submesh_count = submeshes.size();
+    create_info.name = "mesh-renderer-geometry-ids-test";
+    create_info.uuid_hint = "mesh-renderer-geometry-ids-test";
+    return termin::TcMesh::from_interleaved(create_info);
 }
 
 } // namespace
