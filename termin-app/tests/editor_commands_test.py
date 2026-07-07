@@ -15,7 +15,7 @@ from termin.editor_core.editor_commands import (
     TransformEditCommand,
 )
 from termin.editor_core.undo_stack import UndoStack
-from termin.geombase import GeneralPose3
+from termin.geombase import GeneralPose3, Vec3
 from termin.inspect import InspectField
 from termin.scene import PythonComponent, TcScene
 from termin.bootstrap import bootstrap_player, shutdown_player
@@ -42,7 +42,7 @@ class TestEditorUndoCommands(unittest.TestCase):
         uuid = entity.uuid
         old_pose = entity.transform.local_pose()
         new_pose = GeneralPose3(
-            lin=np.array([1.0, 2.0, 3.0]),
+            lin=Vec3(1.0, 2.0, 3.0),
             ang=old_pose.ang.copy(),
             scale=old_pose.scale.copy(),
         )
