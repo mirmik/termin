@@ -78,10 +78,12 @@ tgfx::Text3DRenderer::Anchor to_tgfx_anchor(WorldTextAnchor anchor) {
     }
 }
 
-void extract_view_row3(const Mat44f& view, int row, float out[3]) {
-    out[0] = view(0, row);
-    out[1] = view(1, row);
-    out[2] = view(2, row);
+Vec3f extract_view_row3(const Mat44f& view, int row) {
+    return Vec3f{
+        static_cast<float>(view(0, row)),
+        static_cast<float>(view(1, row)),
+        static_cast<float>(view(2, row)),
+    };
 }
 
 Vec3 normalized_or(const Vec3& value, const Vec3& fallback) {
@@ -92,18 +94,12 @@ Vec3 normalized_or(const Vec3& value, const Vec3& fallback) {
     return value / len;
 }
 
-void copy_basis_vec(const Vec3& value, float out[3]) {
-    out[0] = static_cast<float>(value.x);
-    out[1] = static_cast<float>(value.y);
-    out[2] = static_cast<float>(value.z);
-}
-
 bool make_fixed_text_basis(
     const Vec3& plane_normal,
     const Vec3& text_up_source,
     const Mat44f& model,
-    float text_right[3],
-    float text_up[3])
+    Vec3f& text_right,
+    Vec3f& text_up)
 {
     const Vec3 transformed_normal = model.transform_direction(plane_normal);
     Vec3 normal = normalized_or(transformed_normal, Vec3::unit_z());
@@ -127,8 +123,16 @@ bool make_fixed_text_basis(
     }
     right = right.normalized();
 
-    copy_basis_vec(right, text_right);
-    copy_basis_vec(up, text_up);
+    text_right = Vec3f{
+        static_cast<float>(right.x),
+        static_cast<float>(right.y),
+        static_cast<float>(right.z),
+    };
+    text_up = Vec3f{
+        static_cast<float>(up.x),
+        static_cast<float>(up.y),
+        static_cast<float>(up.z),
+    };
     return true;
 }
 
@@ -694,8 +698,8 @@ bool WorldTextComponent::encode_render_item_tgfx2(
 
     const RenderContext& context = *request.draw_context;
     Mat44f mvp = context.projection * context.view;
-    float text_right[3]{};
-    float text_up_basis[3]{};
+    Vec3f text_right{};
+    Vec3f text_up_basis{};
     WorldTextOrientation decoded_orientation = WorldTextOrientation::Billboard;
     if (!decode_text_orientation(
             item.payload.text_batch.orientation,
@@ -715,8 +719,8 @@ bool WorldTextComponent::encode_render_item_tgfx2(
             return true;
         }
     } else {
-        extract_view_row3(context.view, 0, text_right);
-        extract_view_row3(context.view, 2, text_up_basis);
+        text_right = extract_view_row3(context.view, 0);
+        text_up_basis = extract_view_row3(context.view, 2);
     }
 
     Vec3 world_pos = context.model.transform_point(
