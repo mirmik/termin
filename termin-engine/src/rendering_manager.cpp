@@ -354,35 +354,35 @@ tc_display* RenderingManager::get_or_create_display(const std::string& name) {
 // Scene Mounting
 // ============================================================================
 
-tc_viewport_handle RenderingManager::mount_scene(
-    tc_scene_handle scene,
-    tc_display* display,
-    tc_component* camera,
-    float region_x, float region_y, float region_w, float region_h,
-    tc_pipeline_handle pipeline,
-    const std::string& name
-) {
+tc_viewport_handle RenderingManager::mount_scene(const SceneMountRequest& request) {
+    tc_scene_handle scene = request.scene;
+    tc_display* display = request.display;
+    tc_component* camera = request.camera;
+
     if (!tc_scene_handle_valid(scene) || !display || !camera) {
         return TC_VIEWPORT_HANDLE_INVALID;
     }
 
-    tc_viewport_handle viewport = tc_viewport_pool_alloc(name.c_str());
+    tc_viewport_handle viewport = tc_viewport_pool_alloc(request.name.c_str());
     if (!tc_viewport_handle_valid(viewport)) {
-        tc_log(TC_LOG_ERROR, "[RenderingManager] Failed to create viewport '%s'", name.c_str());
+        tc_log(TC_LOG_ERROR,
+               "[RenderingManager] Failed to create viewport '%s'",
+               request.name.c_str());
         return TC_VIEWPORT_HANDLE_INVALID;
     }
 
-    tc_render_target_handle rt = tc_render_target_new(name.c_str());
+    tc_render_target_handle rt = tc_render_target_new(request.name.c_str());
     tc_render_target_set_scene(rt, scene);
     tc_render_target_set_camera(rt, camera);
-    tc_render_target_set_pipeline(rt, pipeline);
+    tc_render_target_set_pipeline(rt, request.pipeline);
     tc_render_target_set_dynamic_resolution(rt, true);
     register_managed_render_target(rt);
     tc_viewport_set_render_target(viewport, rt);
     tc_viewport_set_scene(viewport, scene);
 
     // Set rect
-    tc_viewport_set_rect(viewport, region_x, region_y, region_w, region_h);
+    const Rect2f& region = request.region;
+    tc_viewport_set_rect(viewport, region.x, region.y, region.width, region.height);
 
     // Add to display
     tc_display_add_viewport(display, viewport);
