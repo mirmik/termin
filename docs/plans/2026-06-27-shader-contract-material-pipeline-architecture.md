@@ -482,8 +482,9 @@ must be explicit:
   boundary.
 - Runtime vertex layout submission now has a C-like `VertexLayoutDesc`.
   `RenderContext2`, `PipelineCacheKey`, `PipelineDesc`, and backend pipeline
-  creation consume that compact form. `VertexBufferLayout` remains only as a
-  compatibility/authoring facade.
+  creation consume that compact form. Mesh bridge bindings and semantic
+  filters also use `VertexLayoutDesc`; `VertexBufferLayout` remains only as a
+  compatibility/authoring facade for older call sites.
 
 ## Validation
 

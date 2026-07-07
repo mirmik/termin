@@ -151,7 +151,7 @@ bool shader_contract_requires_foliage_instances(TcShader shader)
 }
 
 bool validate_foliage_vertex_layout(
-    const tgfx::VertexBufferLayout& layout,
+    const tgfx::VertexLayoutDesc& layout,
     std::initializer_list<std::string_view> required_semantics,
     const char* variant_name)
 {
@@ -173,26 +173,26 @@ bool validate_foliage_vertex_layout(
 bool build_foliage_vertex_layout(
     const termin::Tgfx2MeshBinding& binding,
     bool shadow_variant,
-    tgfx::VertexBufferLayout& out)
+    tgfx::VertexLayoutDesc& out)
 {
     if (shadow_variant) {
         const std::initializer_list<std::string_view> required = {"position"};
-        if (!validate_foliage_vertex_layout(binding.layout, required, "shadow")) {
+        if (!validate_foliage_vertex_layout(binding.layout_desc, required, "shadow")) {
             return false;
         }
-        out = termin::filter_vertex_layout_to_semantics(
-            binding.layout,
+        out = tgfx::filter_vertex_layout_to_semantics(
+            binding.layout_desc,
             required,
             true);
         return true;
     }
 
     const std::initializer_list<std::string_view> required = {"position", "normal", "uv"};
-    if (!validate_foliage_vertex_layout(binding.layout, required, "material")) {
+    if (!validate_foliage_vertex_layout(binding.layout_desc, required, "material")) {
         return false;
     }
-    out = termin::filter_vertex_layout_to_semantics(
-        binding.layout,
+    out = tgfx::filter_vertex_layout_to_semantics(
+        binding.layout_desc,
         required,
         true);
     return true;
@@ -625,7 +625,7 @@ bool FoliageLayerComponent::draw_tgfx2(
     }
     const bool shadow_variant =
         pass_contract.foliage_vertex_transform->kind == VertexTransformKind::FoliageShadow;
-    tgfx::VertexBufferLayout vertex_layout;
+    tgfx::VertexLayoutDesc vertex_layout;
     if (!build_foliage_vertex_layout(mesh_binding, shadow_variant, vertex_layout)) {
         return false;
     }
