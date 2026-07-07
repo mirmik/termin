@@ -281,11 +281,10 @@ void SkyBoxPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->bind_shader(sky_vs, sky_fs);
     ctx.ctx2->use_shader_resource_layout(raw);
 
-    tgfx::VertexBufferLayout cube_layout;
+    tgfx::VertexLayoutDesc cube_layout;
     cube_layout.stride = 3 * sizeof(float);
-    cube_layout.attributes = {
-        {0, tgfx::VertexFormat::Float3, 0},  // a_position
-    };
+    cube_layout.attribute_count = 1;
+    cube_layout.attributes[0] = {0, tgfx::VertexFormat::Float3, 0, tgfx::intern_vertex_semantic("position")};
     ctx.ctx2->set_vertex_layout(cube_layout);
 
     std::vector<uint8_t> material_data(skybox_layout_.block_size, 0);
