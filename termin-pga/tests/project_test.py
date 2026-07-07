@@ -5,7 +5,7 @@ from termin.geomalgo.project import (
     project_point_on_line
 )
 import unittest
-from termin.geombase import AABB
+from termin.geombase import AABB, Vec3
 from termin.geomalgo.project import closest_of_aabb_and_capsule
 import numpy as np
 
@@ -148,7 +148,7 @@ class TestProjectPointOnLine(unittest.TestCase):
 class TestClosestOfAABBAndCapsule(unittest.TestCase):
     """Тесты для функции closest_of_aabb_and_capsule"""
     def test_closest_of_aabb_and_capsule(self):
-        aabb = AABB(np.array([0.0, 0.0, 0.0]), np.array([1.0, 1.0, 1.0]))
+        aabb = AABB(Vec3(0.0, 0.0, 0.0), Vec3(1.0, 1.0, 1.0))
         capsule_start = np.array([2.0, 0.5, 0.5])
         capsule_end = np.array([3.0, 0.5, 0.5])
         capsule_radius = 0.2
