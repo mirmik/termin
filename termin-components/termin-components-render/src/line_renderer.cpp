@@ -1061,6 +1061,8 @@ bool LineRenderer::encode_render_item_tgfx2(
 
     Mat44f view_projection = context.projection * context.view;
     std::array<float, 4> color = phase_color(phase);
+    const bool has_item_override_color =
+        (item.flags & TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR) != 0u;
     if (context.has_override_color) {
         color = {
             static_cast<float>(context.override_color.x),
@@ -1068,14 +1070,22 @@ bool LineRenderer::encode_render_item_tgfx2(
             static_cast<float>(context.override_color.z),
             static_cast<float>(context.override_color.w),
         };
+    } else if (has_item_override_color) {
+        color = {
+            static_cast<float>(item.override_color.x),
+            static_cast<float>(item.override_color.y),
+            static_cast<float>(item.override_color.z),
+            static_cast<float>(item.override_color.w),
+        };
     }
+    const bool has_override_color = context.has_override_color || has_item_override_color;
 
     tgfx::ShaderHandle material_fragment_shader{};
     MaterialPipelineShaderBinding tube_body_shader{};
     MaterialPipelineShaderBinding tube_cap_shader{};
     const bool use_material_fragment =
         uses_material_fragment_variant_for_pass(mode, context.pass_contract);
-    if (!context.has_override_color && mode == LineRenderMode::WorldTube
+    if (!has_override_color && mode == LineRenderMode::WorldTube
         && use_material_fragment) {
         TcShader material_shader(phase ? phase->shader : tc_shader_handle_invalid());
         TcShader body_variant = get_line_tube_material_shader(material_shader, false);
@@ -1100,7 +1110,7 @@ bool LineRenderer::encode_render_item_tgfx2(
             tc::Log::error("[LineRenderer] failed to prepare line tube material shader variants");
             return false;
         }
-    } else if (!context.has_override_color && use_material_fragment) {
+    } else if (!has_override_color && use_material_fragment) {
         tc_shader* shader = context.current_tc_shader.get();
         if (!shader) {
             tc::Log::error(
@@ -1132,7 +1142,7 @@ bool LineRenderer::encode_render_item_tgfx2(
 
         tgfx::WorldTubeLineParams params;
         params.view_projection = to_tgfx_matrix(view_projection);
-        params.lighting_enabled = !context.has_override_color;
+        params.lighting_enabled = !has_override_color;
         params.fragment_shader = material_fragment_shader;
         if (tube_body_shader.shader && tube_cap_shader.shader) {
             params.body_vertex_shader = tube_body_shader.vertex;
@@ -1171,7 +1181,7 @@ bool LineRenderer::encode_render_item_tgfx2(
             static_cast<float>(context.camera_position.y),
             static_cast<float>(context.camera_position.z),
         };
-        params.lighting_enabled = !context.has_override_color;
+        params.lighting_enabled = !has_override_color;
         params.fragment_shader = material_fragment_shader;
 
         ctx2.set_cull(tgfx::CullMode::None);

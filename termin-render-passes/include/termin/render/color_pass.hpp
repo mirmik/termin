@@ -141,9 +141,9 @@ public:
     // per-draw vertex/index buffers, PerFrame UBOs and push constants
     // for engine-supplied state.
     //
-    // Non-mesh-backed drawables (SolidPrimitive, Immediate, ...) are handled
-    // only when they opt into the direct tgfx2 draw contract. Mesh-backed
-    // drawables expose geometry_id through resolve_mesh_geometry().
+    // Mesh-backed and typed non-mesh drawables are submitted through
+    // RenderItems. Legacy GeometryDrawCall discovery is still used to feed
+    // pass ordering until the remaining passes collect RenderItems directly.
     void execute_with_data(
         ExecuteContext& ctx,
         const ColorPassExecuteData& data

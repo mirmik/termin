@@ -433,8 +433,8 @@ ShadowCameraParams ShadowPass::build_shadow_params(
 // Draws shadow casters through RenderContext2. The pass owns tgfx2 depth
 // textures, opens a depth-only render pass for each cascade, and draws
 // mesh-backed drawables through the backend-neutral tc_mesh bridge.
-// Drawables that cannot expose a tc_mesh* may still cast shadows through
-// Drawable::draw_tgfx2(), using the pass' shadow shader contract.
+// Drawables that cannot expose a tc_mesh* cast shadows through typed
+// RenderItems and pass-specific encoders.
 std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     ExecuteContext& ctx,
     tc_scene_handle scene,
@@ -588,6 +588,14 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
             std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
+            EnginePerFrameStd140 typed_per_frame = make_engine_per_frame_uniforms(
+                view_matrix,
+                proj_matrix,
+                shadow_camera_position(params),
+                static_cast<float>(resolution),
+                static_cast<float>(resolution),
+                cascade_near,
+                cascade_far);
             std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
                 {
                     tc_shader_find_resource_binding(shadow_shader.shader, "per_frame"),
@@ -654,14 +662,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 tc_material_phase* phase = dc.resolve_phase();
                 if (!phase) continue;
 
-                Drawable* drawable = nullptr;
-                if (tc_component_get_drawable_vtable(dc.component)
-                    == &Drawable::cxx_drawable_vtable()) {
-                    drawable = static_cast<Drawable*>(
-                        tc_component_get_drawable_userdata(dc.component));
-                }
-                if (!drawable) continue;
-
                 tc_render_item_collect_context item_context{};
                 item_context.phase_mark = "shadow";
                 item_context.layer_mask = layer_mask;
@@ -677,35 +677,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         dc.geometry_id,
                         item_collection,
                         item)) {
-                    if (!drawable->supports_direct_tgfx2_draw(
-                            "shadow", dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
-                        continue;
-                    }
-
-                    RenderContext direct_context;
-                    direct_context.view = view_matrix;
-                    direct_context.projection = proj_matrix;
-                    direct_context.model = drawable->get_model_matrix(dc.entity);
-                    direct_context.phase = "shadow";
-                    direct_context.pass_contract = shadow_material_pass_contract();
-                    direct_context.current_tc_shader = TcShader(dc.final_shader);
-                    direct_context.layer_mask = layer_mask;
-                    direct_context.camera_position = shadow_camera_position(params);
-                    direct_context.viewport_width = resolution;
-                    direct_context.viewport_height = resolution;
-
-                    drawable->draw_tgfx2(
-                        *ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id);
-                    capture_debug_symbol(dc.entity.name());
-                    restore_shadow_raster_state();
-                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
-                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
-                    prepare_material_pipeline_resources(
-                        *ctx.ctx2,
-                        device,
-                        shadow_shader.shader,
-                        nullptr,
-                        shadow_resources);
                     continue;
                 }
 
@@ -713,7 +684,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     RenderContext direct_context;
                     direct_context.view = view_matrix;
                     direct_context.projection = proj_matrix;
-                    direct_context.model = drawable->get_model_matrix(dc.entity);
+                    if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                        std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
+                    }
                     direct_context.phase = "shadow";
                     direct_context.pass_contract = shadow_material_pass_contract();
                     direct_context.current_tc_shader = TcShader(dc.final_shader);
@@ -730,6 +703,25 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     submit_request.phase_mark = "shadow";
                     submit_request.debug_pass_name = "ShadowPass";
                     submit_request.debug_entity_name = dc.entity.name();
+                    submit_request.prepare_material_resources =
+                        [&device, &typed_per_frame](
+                            tgfx::RenderContext2& draw_ctx,
+                            const tc_shader* shader,
+                            tc_material_phase* live_phase) {
+                            if (!shader || !live_phase) {
+                                tc::Log::error(
+                                    "[ShadowPass/tgfx2] RenderItem resource callback called without shader or phase");
+                                return;
+                            }
+                            MaterialPipelineResourceView typed_resources{};
+                            typed_resources.per_frame = &typed_per_frame;
+                            prepare_material_pipeline_resources(
+                                draw_ctx,
+                                device,
+                                shader,
+                                live_phase,
+                                typed_resources);
+                        };
                     submit_render_item_draw(*ctx.ctx2, item, submit_request);
                     capture_debug_symbol(dc.entity.name());
                     restore_shadow_raster_state();

@@ -582,9 +582,9 @@ void ColorPass::sort_draw_calls() {
 // legacy-looking shader source are rewritten by shader_parser into PerFrame
 // UBOs, push constants, and explicit sampler bindings before tgfx2 sees them.
 //
-// Direct non-mesh drawables may still participate by implementing
-// Drawable::draw_tgfx2(). They bind their own geometry shaders, while this
-// pass owns material state, lighting UBO, shadow samplers, and phase ordering.
+// Non-mesh drawables participate through typed RenderItems and registered
+// encoders. This pass owns material state, lighting UBO, shadow samplers,
+// and phase ordering.
 //
 // Intentionally skipped for now:
 //   - shader variants where material pipeline preparation fails
@@ -803,20 +803,6 @@ void ColorPass::execute_with_data(
 
         tc_shader_handle final_shader = dc.final_shader;
 
-        // Only cast the drawable userdata to Drawable* when the component
-        // actually installed the C++ drawable vtable. Python drawables use
-        // the same capability slot with a PyObject* userdata and a
-        // different C vtable — casting that to Drawable* and calling
-        // virtual methods on it is undefined behaviour.
-        Drawable* drawable = nullptr;
-        if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
-            drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        }
-        if (!drawable) {
-            ++draw_index;
-            continue;
-        }
-
         auto refresh_phase = [&]() -> bool {
             ResolvedDrawPhase resolved = resolve_draw_phase(
                 dc.component,
@@ -862,93 +848,6 @@ void ColorPass::execute_with_data(
                 dc.geometry_id,
                 item_collection,
                 item)) {
-            if (!drawable->supports_direct_tgfx2_draw(
-                    phase_mark, dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
-                ++draw_index;
-                continue;
-            }
-
-            RenderState state = convert_render_state(phase->state);
-            if (wireframe) state.polygon_mode = PolygonMode::Line;
-
-            ctx2->clear_resource_bindings();
-
-
-            ctx2->set_depth_test(state.depth_test);
-            ctx2->set_depth_write(state.depth_write);
-            ctx2->set_blend(state.blend);
-            ctx2->set_blend_func(convert_blend_factor_tgfx2(state.blend_src),
-                                 convert_blend_factor_tgfx2(state.blend_dst));
-            ctx2->set_cull(state.cull ? tgfx::CullMode::Back : tgfx::CullMode::None);
-            ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
-                                   ? tgfx::PolygonMode::Line
-                                   : tgfx::PolygonMode::Fill);
-
-            if (!shadow_sampler_) {
-                tgfx::SamplerDesc sd;
-                sd.min_filter = tgfx::FilterMode::Nearest;
-                sd.mag_filter = tgfx::FilterMode::Nearest;
-                sd.mip_filter = tgfx::FilterMode::Nearest;
-                sd.address_u = tgfx::AddressMode::ClampToEdge;
-                sd.address_v = tgfx::AddressMode::ClampToEdge;
-                sd.address_w = tgfx::AddressMode::ClampToEdge;
-                sd.compare_enable = true;
-                sd.compare_op = tgfx::CompareOp::LessEqual;
-                shadow_sampler_ = device.create_sampler(sd);
-            }
-
-            RenderContext direct_context;
-            direct_context.view = data.view;
-            direct_context.projection = data.projection;
-            direct_context.model = drawable->get_model_matrix(dc.entity);
-            direct_context.phase = phase_mark;
-            direct_context.pass_contract = color_material_pass_contract();
-            direct_context.current_tc_shader = TcShader(final_shader);
-            direct_context.layer_mask = data.layer_mask;
-            direct_context.render_category_mask = ctx.render_category_mask;
-            direct_context.camera_position = data.camera_position;
-            direct_context.viewport_width = data.rect.width;
-            direct_context.viewport_height = data.rect.height;
-            direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
-            direct_context.prepare_tgfx2_material_resources =
-                [this,
-                 &device,
-                 &material_resources,
-                 &ctx](
-                    tgfx::RenderContext2& draw_ctx,
-                    const tc_shader* shader,
-                    tc_material_phase* live_phase) {
-                    if (!shader || !live_phase) {
-                        tc::Log::error(
-                            "[ColorPass/tgfx2] direct drawable resource callback called without shader or phase");
-                        return;
-                    }
-
-                    MaterialPipelineResourceView direct_resources = material_resources;
-                    direct_resources.shadow_sampler = shadow_sampler_;
-                    prepare_material_pipeline_resources(
-                        draw_ctx,
-                        device,
-                        shader,
-                        live_phase,
-                        direct_resources);
-
-                    if (!extra_textures.empty()) {
-                        bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
-                    }
-                };
-
-            if (drawable->draw_tgfx2(*ctx2, direct_context, phase_mark, phase, dc.geometry_id)) {
-                capture_debug_symbol(ename);
-                ++draw_index;
-                continue;
-            }
-
-            // Other non-mesh drawables (immediate gizmos, NavMesh debug,
-            // solid primitive helpers) belong in their own dedicated
-            // passes (UnifiedGizmoPass, ColliderGizmoPass, ...), not
-            // in ColorPass. Stage 8.1 removed the path that ran them
-            // through shader.use() + draw_geometry.
             ++draw_index;
             continue;
         }
@@ -984,7 +883,9 @@ void ColorPass::execute_with_data(
             RenderContext direct_context;
             direct_context.view = data.view;
             direct_context.projection = data.projection;
-            direct_context.model = drawable->get_model_matrix(dc.entity);
+            if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
+            }
             direct_context.phase = phase_mark;
             direct_context.pass_contract = color_material_pass_contract();
             direct_context.current_tc_shader = TcShader(final_shader);

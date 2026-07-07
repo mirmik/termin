@@ -23,6 +23,16 @@ Implementation progress:
 - 2026-07-07: `IdPass` now builds mesh draw tasks from RenderItems and uses the
   direct `Drawable` path only for non-mesh drawables that do not have a
   typed item encoder yet.
+- 2026-07-07: direct `draw_tgfx2()` ownership has been removed from the live
+  render path. `LineRenderer`, `WorldTextComponent`, and
+  `FoliageLayerComponent` now submit typed `LINE_BATCH`, `TEXT_BATCH`, and
+  `FOLIAGE_BATCH` RenderItems through registered encoders. `ColorPass`,
+  `ShadowPass`, and `IdPass` no longer use C++ `Drawable` casts in their
+  draw-time submit paths.
+- Remaining live migration work: remove `GeometryDrawCall` discovery from
+  converted passes, finish Python-facing RenderItem ergonomics/tests, and
+  retire the legacy geometry-side-channel methods once all pass collection is
+  RenderItem-first.
 
 ## Problem
 
@@ -30,15 +40,15 @@ Current rendering has several overlapping draw ownership models:
 
 - `GeometryDrawCall` returns material-phase draw records, but it does not carry
   enough structured backend payload to be the single render protocol.
-- `GeometryPassBase`, `ColorPass`, `ShadowPass`, `IdPass`, `DepthPass`, and
-  `NormalPass` still contain draw-time C++ `Drawable` casts for methods outside
-  the common `tc_drawable` protocol.
+- `GeometryPassBase`, `DepthPass`, and `NormalPass` still lean on
+  `GeometryDrawCall` / geometry-id discovery before submitting RenderItems.
 - `resolve_mesh_geometry()`, `get_geometry_ids_for_phase()`,
-  `supports_direct_tgfx2_draw()`, `upload_per_draw_uniforms_tgfx2()`, and
-  `draw_tgfx2()` expose several side channels for passes to ask drawable
-  implementations how to draw.
-- `RenderContext::prepare_tgfx2_material_resources` carries a pass-owned
-  resource binding service through the general drawable render context.
+  `upload_per_draw_uniforms_tgfx2()`, and related geometry-side-channel methods
+  still expose transitional ways for passes to ask drawable implementations how
+  to draw.
+- Direct `draw_tgfx2()` and `RenderContext::prepare_tgfx2_material_resources`
+  have been removed from the live code, but old design references may still
+  exist in historical notes.
 - The C drawable ABI currently returns `void*` for geometry draws, with C++
   drawables caching a `std::vector<GeometryDrawCall>` behind that pointer.
 
@@ -359,11 +369,11 @@ custom drawables from becoming backend submit owners.
 7. Convert one non-mesh direct path, preferably `LineRenderer` or
    `WorldTextComponent`, to a typed item and encoder.
 8. Remove `RenderContext::prepare_tgfx2_material_resources` once direct paths no
-   longer need pass-owned callbacks.
+   longer need pass-owned callbacks. Done for the live C++ render path.
 9. Deprecate and then remove `resolve_mesh_geometry()`,
-   `get_geometry_ids_for_phase()`, `supports_direct_tgfx2_draw()`,
-   `upload_per_draw_uniforms_tgfx2()`, and `draw_tgfx2()` as public draw
-   ownership APIs.
+   `get_geometry_ids_for_phase()`, and `upload_per_draw_uniforms_tgfx2()` as
+   public draw ownership APIs. `supports_direct_tgfx2_draw()` and
+   `draw_tgfx2()` have already been removed from the live C++ API.
 10. Update `docs/render-phase-semantics.md` after the live contract changes.
 
 ## Diagnostics And Tests
