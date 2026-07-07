@@ -3,6 +3,7 @@
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
+#include "termin/render/render_item_submission.hpp"
 #include "termin/render/shader_abi.hpp"
 #include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
@@ -139,6 +140,26 @@ void bind_draw_data_for_shader(
     tc::Log::error(
         "[ColorPass/tgfx2] shader '%s' is missing draw_data resource layout entry",
         shader && shader->name ? shader->name : "<unnamed>");
+}
+
+bool collect_color_render_item_for_draw(
+    tc_component* component,
+    const tc_render_item_collect_context& context,
+    int geometry_id,
+    RenderItemCollection& items,
+    tc_render_item& out_item)
+{
+    items.clear();
+    if (!collect_drawable_render_items(component, context, items)) {
+        return false;
+    }
+    for (const tc_render_item& item : items.items) {
+        if (item.geometry_id == geometry_id) {
+            out_item = item;
+            return true;
+        }
+    }
+    return false;
 }
 
 } // anonymous namespace
@@ -840,8 +861,21 @@ void ColorPass::execute_with_data(
             continue;
         }
 
-        MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, mesh_geometry)) {
+        tc_render_item_collect_context item_context{};
+        item_context.phase_mark = phase_mark.c_str();
+        item_context.layer_mask = layer_mask;
+        item_context.render_category_mask = ctx.render_category_mask;
+        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.pass_contract = &collect_context.pass_contract;
+
+        tc_render_item item{};
+        RenderItemCollection item_collection;
+        if (!collect_color_render_item_for_draw(
+                dc.component,
+                item_context,
+                dc.geometry_id,
+                item_collection,
+                item)) {
             if (!drawable->supports_direct_tgfx2_draw(
                     phase_mark, dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
                 ++draw_index;
@@ -933,7 +967,88 @@ void ColorPass::execute_with_data(
             continue;
         }
 
-        Mat44f model = drawable->get_model_matrix(dc.entity);
+        if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+            RenderState state = convert_render_state(phase->state);
+            if (wireframe) state.polygon_mode = PolygonMode::Line;
+
+            ctx2->clear_resource_bindings();
+            ctx2->set_depth_test(state.depth_test);
+            ctx2->set_depth_write(state.depth_write);
+            ctx2->set_blend(state.blend);
+            ctx2->set_blend_func(convert_blend_factor_tgfx2(state.blend_src),
+                                 convert_blend_factor_tgfx2(state.blend_dst));
+            ctx2->set_cull(state.cull ? tgfx::CullMode::Back : tgfx::CullMode::None);
+            ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
+                                   ? tgfx::PolygonMode::Line
+                                   : tgfx::PolygonMode::Fill);
+
+            if (!shadow_sampler_) {
+                tgfx::SamplerDesc sd;
+                sd.min_filter = tgfx::FilterMode::Nearest;
+                sd.mag_filter = tgfx::FilterMode::Nearest;
+                sd.mip_filter = tgfx::FilterMode::Nearest;
+                sd.address_u = tgfx::AddressMode::ClampToEdge;
+                sd.address_v = tgfx::AddressMode::ClampToEdge;
+                sd.address_w = tgfx::AddressMode::ClampToEdge;
+                sd.compare_enable = true;
+                sd.compare_op = tgfx::CompareOp::LessEqual;
+                shadow_sampler_ = device.create_sampler(sd);
+            }
+
+            RenderContext direct_context;
+            direct_context.view = view;
+            direct_context.projection = projection;
+            direct_context.model = drawable->get_model_matrix(dc.entity);
+            direct_context.phase = phase_mark;
+            direct_context.pass_contract = color_material_pass_contract();
+            direct_context.current_tc_shader = TcShader(final_shader);
+            direct_context.layer_mask = layer_mask;
+            direct_context.render_category_mask = ctx.render_category_mask;
+            direct_context.camera_position = camera_position;
+            direct_context.viewport_width = rect.width;
+            direct_context.viewport_height = rect.height;
+            direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
+
+            RenderItemDrawSubmitRequest submit_request{};
+            submit_request.shader = tc_shader_get(final_shader);
+            submit_request.draw_context = &direct_context;
+            submit_request.material_phase = phase;
+            submit_request.phase_mark = phase_mark.c_str();
+            submit_request.debug_pass_name = get_pass_name().c_str();
+            submit_request.debug_entity_name = ename;
+            submit_request.prepare_material_resources =
+                [this,
+                 &device,
+                 &material_resources,
+                 &ctx](
+                    tgfx::RenderContext2& draw_ctx,
+                    const tc_shader* shader,
+                    tc_material_phase* live_phase) {
+                    if (!shader || !live_phase) {
+                        tc::Log::error(
+                            "[ColorPass/tgfx2] RenderItem resource callback called without shader or phase");
+                        return;
+                    }
+
+                    MaterialPipelineResourceView direct_resources = material_resources;
+                    direct_resources.shadow_sampler = shadow_sampler_;
+                    prepare_material_pipeline_resources(
+                        draw_ctx,
+                        device,
+                        shader,
+                        live_phase,
+                        direct_resources);
+
+                    if (!extra_textures.empty()) {
+                        bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
+                    }
+                };
+            if (submit_render_item_draw(*ctx2, item, submit_request)) {
+                capture_debug_symbol(ename);
+            }
+            ++draw_index;
+            continue;
+        }
 
         // Prepare the shader through the shared material pipeline helper.
         // The helper owns artifact creation, shader binding, and active
@@ -1053,25 +1168,26 @@ void ColorPass::execute_with_data(
             float u_model[16];
         };
         ColorPushData push{};
-        std::memcpy(push.u_model, model.data, sizeof(push.u_model));
+        if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(push.u_model, item.model_matrix, sizeof(push.u_model));
+        } else {
+            Mat44f identity = Mat44f::identity();
+            std::memcpy(push.u_model, identity.data, sizeof(push.u_model));
+        }
         bind_draw_data_for_shader(*ctx2, raw_shader, push);
 
-        // Per-draw uniforms that can't live in push-constants or the
-        // material UBO yet — skinning bone matrices are the main case.
-        // Default implementation is a no-op for non-skinned drawables.
-        drawable->upload_per_draw_uniforms_tgfx2(*ctx2, dc.geometry_id);
-
-        // Issue the draw through the shared backend-neutral TcMesh path.
-        // It sets vertex layout/topology, wraps/uploads mesh buffers for the
-        // current backend, submits ctx2->draw(), then releases transient
-        // bindings.
-        draw_material_pipeline_submesh(
+        RenderItemDrawSubmitRequest encode_request{};
+        encode_request.shader = raw_shader;
+        encode_request.mesh_vertex_input = MaterialMeshVertexInput::FullMaterial;
+        encode_request.debug_pass_name = "ColorPass";
+        encode_request.debug_entity_name = ename;
+        if (!submit_render_item_draw(
             *ctx2,
-            mesh_geometry.mesh,
-            mesh_geometry.submesh_index,
-            material_mesh_vertex_input_for_shader(
-                raw_shader,
-                MaterialMeshVertexInput::FullMaterial));
+            item,
+            encode_request)) {
+            ++draw_index;
+            continue;
+        }
         capture_debug_symbol(ename);
         ++draw_index;
     }

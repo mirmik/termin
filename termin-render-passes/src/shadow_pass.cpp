@@ -7,6 +7,7 @@
 #include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
+#include "termin/render/render_item_submission.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -304,6 +305,26 @@ bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
     }
 
     return true;
+}
+
+bool collect_shadow_render_item_for_draw(
+    tc_component* component,
+    const tc_render_item_collect_context& context,
+    int geometry_id,
+    RenderItemCollection& items,
+    tc_render_item& out_item)
+{
+    items.clear();
+    if (!collect_drawable_render_items(component, context, items)) {
+        return false;
+    }
+    for (const tc_render_item& item : items.items) {
+        if (item.geometry_id == geometry_id) {
+            out_item = item;
+            return true;
+        }
+    }
+    return false;
 }
 
 } // anonymous namespace
@@ -627,6 +648,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     nullptr,
                     shadow_resources);
             };
+            const MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
 
             for (const auto& dc : cached_draw_calls_) {
                 tc_material_phase* phase = dc.resolve_phase();
@@ -640,8 +662,21 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 }
                 if (!drawable) continue;
 
-                MeshDrawGeometry mesh_geometry{};
-                if (!drawable->resolve_mesh_geometry("shadow", dc.geometry_id, mesh_geometry)) {
+                tc_render_item_collect_context item_context{};
+                item_context.phase_mark = "shadow";
+                item_context.layer_mask = layer_mask;
+                item_context.render_category_mask = ctx.render_category_mask;
+                item_context.debug_pass_name = get_pass_name().c_str();
+                item_context.pass_contract = &pass_contract;
+
+                tc_render_item item{};
+                RenderItemCollection item_collection;
+                if (!collect_shadow_render_item_for_draw(
+                        dc.component,
+                        item_context,
+                        dc.geometry_id,
+                        item_collection,
+                        item)) {
                     if (!drawable->supports_direct_tgfx2_draw(
                             "shadow", dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
                         continue;
@@ -674,43 +709,86 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     continue;
                 }
 
-                Mat44f model = drawable->get_model_matrix(dc.entity);
+                if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+                    RenderContext direct_context;
+                    direct_context.view = view_matrix;
+                    direct_context.projection = proj_matrix;
+                    direct_context.model = drawable->get_model_matrix(dc.entity);
+                    direct_context.phase = "shadow";
+                    direct_context.pass_contract = shadow_material_pass_contract();
+                    direct_context.current_tc_shader = TcShader(dc.final_shader);
+                    direct_context.layer_mask = layer_mask;
+                    direct_context.render_category_mask = ctx.render_category_mask;
+                    direct_context.camera_position = shadow_camera_position(params);
+                    direct_context.viewport_width = resolution;
+                    direct_context.viewport_height = resolution;
+
+                    RenderItemDrawSubmitRequest submit_request{};
+                    submit_request.shader = tc_shader_get(dc.final_shader);
+                    submit_request.draw_context = &direct_context;
+                    submit_request.material_phase = phase;
+                    submit_request.phase_mark = "shadow";
+                    submit_request.debug_pass_name = "ShadowPass";
+                    submit_request.debug_entity_name = dc.entity.name();
+                    submit_render_item_draw(*ctx.ctx2, item, submit_request);
+                    capture_debug_symbol(dc.entity.name());
+                    restore_shadow_raster_state();
+                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
+                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
+                    prepare_material_pipeline_resources(
+                        *ctx.ctx2,
+                        device,
+                        shadow_shader.shader,
+                        nullptr,
+                        shadow_resources);
+                    continue;
+                }
 
                 bool override_is_base =
                     tc_shader_handle_eq(dc.final_shader, shadow_shader_handle_);
 
                 // Both paths share the same draw-scope model matrix + PerFrame UBO
-                // layout. Bias is applied receiver-side while sampling so the
-                // caster's projected XY footprint stays stable.
+                // layout. Mesh encoder binds payload-specific resources such
+                // as BoneBlock. Bias is applied receiver-side while sampling
+                // so the caster's projected XY footprint stays stable.
                 ShadowPushStd140 push{};
-                std::memcpy(push.u_model, model.data, sizeof(float) * 16);
+                if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                    std::memcpy(push.u_model, item.model_matrix, sizeof(float) * 16);
+                } else {
+                    Mat44f identity = Mat44f::identity();
+                    std::memcpy(push.u_model, identity.data, sizeof(float) * 16);
+                }
                 std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
                     {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
                     {"shadow_draw", &push, static_cast<uint32_t>(sizeof(push))},
                 }};
                 MaterialPipelineResourceContext draw_resources{};
-                draw_resources.uniforms = draw_uniforms;
 
                 if (override_is_base) {
+                    draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+                        draw_uniforms.data(),
+                        draw_uniforms.size());
                     prepare_material_pipeline_resources(
                         *ctx.ctx2,
                         device,
                         shadow_shader.shader,
                         nullptr,
                         draw_resources);
-                    // Non-skinned fast path. Shadow VS only reads position.
-                    draw_material_pipeline_submesh(
+                    RenderItemDrawSubmitRequest encode_request{};
+                    encode_request.shader = shadow_shader.shader;
+                    encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+                    encode_request.debug_pass_name = "ShadowPass";
+                    encode_request.debug_entity_name = dc.entity.name();
+                    if (!submit_render_item_draw(
                         *ctx.ctx2,
-                        mesh_geometry.mesh,
-                        mesh_geometry.submesh_index,
-                        material_mesh_vertex_input_for_shader(
-                            shadow_shader.shader,
-                            MaterialMeshVertexInput::Position));
+                        item,
+                        encode_request)) {
+                        continue;
+                    }
                     capture_debug_symbol(dc.entity.name());
                 } else {
-                    // Skinning variant: bind the material-pipeline shader and
-                    // let SkinnedMeshRenderer upload BoneBlock through the
-                    // reflected draw-scope resource.
+                    // Variant path: bind the material-pipeline shader and let
+                    // the mesh encoder upload payload-specific resources.
                     MaterialPipelineShaderBinding skinned_shader{};
                     if (!ensure_material_pipeline_shader(
                             *ctx.ctx2,
@@ -720,6 +798,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                             skinned_shader)) {
                         continue;
                     }
+                    draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+                        draw_uniforms.data(),
+                        draw_uniforms.size());
                     prepare_material_pipeline_resources(
                         *ctx.ctx2,
                         device,
@@ -727,15 +808,17 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         nullptr,
                         draw_resources);
 
-                    drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
-
-                    draw_material_pipeline_submesh(
+                    RenderItemDrawSubmitRequest encode_request{};
+                    encode_request.shader = skinned_shader.shader;
+                    encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+                    encode_request.debug_pass_name = "ShadowPass";
+                    encode_request.debug_entity_name = dc.entity.name();
+                    if (!submit_render_item_draw(
                         *ctx.ctx2,
-                        mesh_geometry.mesh,
-                        mesh_geometry.submesh_index,
-                        material_mesh_vertex_input_for_shader(
-                            skinned_shader.shader,
-                            MaterialMeshVertexInput::Position));
+                        item,
+                        encode_request)) {
+                        continue;
+                    }
                     capture_debug_symbol(dc.entity.name());
 
                     // Next mesh-backed draw must re-bind the base shadow

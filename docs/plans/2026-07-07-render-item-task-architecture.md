@@ -14,6 +14,16 @@ passes, and shared render submission code. It should guide the migration away
 from the current mixed model before the exact C ABI and C++ convenience wrappers
 are finalized.
 
+Implementation progress:
+
+- 2026-07-07: first additive ABI slice landed with `tc_render_item`,
+  `tc_render_item_collect_context`, sink-based collection, C++ vector collector,
+  and mesh item emission from `MeshRenderer` / `SkinnedMeshRenderer`. The old
+  `GeometryDrawCall` path remains live while passes are migrated.
+- 2026-07-07: `IdPass` now builds mesh draw tasks from RenderItems and uses the
+  direct `Drawable` path only for non-mesh drawables that do not have a
+  typed item encoder yet.
+
 ## Problem
 
 Current rendering has several overlapping draw ownership models:
@@ -358,7 +368,7 @@ custom drawables from becoming backend submit owners.
 
 ## Diagnostics And Tests
 
-The migration should add logs and tests before old fallback paths disappear.
+The migration should add logs and tests before old direct draw paths disappear.
 
 Required diagnostics:
 
@@ -368,7 +378,7 @@ Required diagnostics:
 - invalid payload handle or expired payload reference;
 - missing material phase where a pass/task requires one;
 - empty `phase_mark` at a geometry collection boundary;
-- legacy draw path used after a pass has migrated.
+- mesh-backed drawable reaching a non-RenderItem path after a pass has migrated.
 
 Required tests:
 

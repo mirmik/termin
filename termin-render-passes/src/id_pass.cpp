@@ -5,6 +5,7 @@
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/material_pipeline.hpp"
+#include "termin/render/render_item_submission.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
@@ -14,15 +15,19 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 
-#include <cstdlib>
+#include <algorithm>
 #include <array>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <span>
+#include <vector>
 
 extern "C" {
 #include "tc_picking.h"
 #include <tgfx/resources/tc_shader_registry.h>
+#include <tgfx/resources/tc_mesh_registry.h>
 #include "core/tc_drawable_protocol.h"
 }
 
@@ -53,6 +58,13 @@ struct IdPushStd140 {
 static_assert(sizeof(IdPushStd140) == 80,
               "IdPushStd140 must be mat4 + vec4");
 
+struct IdMeshTask {
+    Entity entity;
+    tc_render_item item{};
+    tc_shader_handle final_shader = tc_shader_handle_invalid();
+    int pick_id = 0;
+};
+
 MaterialPipelinePassContract id_material_pass_contract()
 {
     MaterialPipelinePassContract contract;
@@ -75,6 +87,23 @@ MaterialPipelinePassContract id_material_pass_contract()
             "termin-engine-skinned-id",
             material_pipeline_skinned_position_mesh_input());
     return contract;
+}
+
+bool same_drawable_geometry(tc_component* component, int geometry_id, const IdMeshTask& task) {
+    return task.item.component == component && task.item.geometry_id == geometry_id;
+}
+
+bool has_mesh_task_for(
+    const std::vector<IdMeshTask>& tasks,
+    tc_component* component,
+    int geometry_id)
+{
+    return std::any_of(
+        tasks.begin(),
+        tasks.end(),
+        [component, geometry_id](const IdMeshTask& task) {
+            return same_drawable_geometry(component, geometry_id, task);
+        });
 }
 
 } // anonymous namespace
@@ -119,9 +148,9 @@ void IdPass::release_tgfx2_resources() {
 //
 // Writes a color attachment (RGBA-encoded pick IDs) and uses depth test +
 // write for occlusion. Parameter block is a single 208-byte std140 UBO
-// containing {model, view, projection, pickColor}. Non-mesh drawables
-// fall back to legacy tc_component_draw_geometry inside the same pass,
-// same pattern as ShadowPass.
+// containing {model, view, projection, pickColor}. Mesh-backed drawables are
+// submitted through RenderItems. Direct non-mesh drawables still use their
+// typed override-color draw hook until line/text/etc. gain RenderItem encoders.
 void IdPass::execute_with_data_tgfx2(
     ExecuteContext& ctx,
     const Rect2i& rect,
@@ -152,8 +181,89 @@ void IdPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    // Use the UBO-based engine shader as base_shader for skinning override
-    // (see DepthPass / ShadowPass for rationale).
+    const MaterialPipelinePassContract pass_contract = id_material_pass_contract();
+    const char* pick_phase = phase_mark();
+
+    std::vector<IdMeshTask> mesh_tasks;
+    if (tc_scene_handle_valid(scene)) {
+        struct CollectItemsContext {
+            IdPass* pass = nullptr;
+            std::vector<IdMeshTask>* tasks = nullptr;
+            MaterialPipelinePassContract pass_contract;
+            tc_shader_handle base_shader = tc_shader_handle_invalid();
+            const char* phase_mark = nullptr;
+            uint64_t layer_mask = 0;
+            uint64_t render_category_mask = 0;
+        };
+
+        CollectItemsContext collect_context{
+            this,
+            &mesh_tasks,
+            pass_contract,
+            id_shader_handle_,
+            pick_phase,
+            layer_mask,
+            ctx.render_category_mask};
+
+        auto collect_callback = [](tc_component* component, void* user_data) -> bool {
+            auto* data = static_cast<CollectItemsContext*>(user_data);
+            if (!component || !data || !data->tasks || !data->phase_mark) {
+                tc::Log::error("[IdPass] invalid RenderItem collection callback state");
+                return true;
+            }
+
+            Entity entity(component->owner);
+            if (!entity.valid() || !entity.pickable()) {
+                return true;
+            }
+
+            tc_render_item_collect_context item_context{};
+            item_context.phase_mark = data->phase_mark;
+            item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+            item_context.layer_mask = data->layer_mask;
+            item_context.render_category_mask = data->render_category_mask;
+            item_context.debug_pass_name = data->pass ? data->pass->get_pass_name().c_str() : "IdPass";
+            item_context.pass_contract = &data->pass_contract;
+
+            RenderItemCollection items;
+            if (!collect_drawable_render_items(component, item_context, items)) {
+                return true;
+            }
+
+            for (const tc_render_item& item : items.items) {
+                if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+                    continue;
+                }
+
+                ShaderOverrideContext override_context;
+                override_context.phase_mark = data->phase_mark;
+                override_context.geometry_id = item.geometry_id;
+                override_context.original_shader = TcShader(data->base_shader);
+                override_context.pass_contract = data->pass_contract;
+
+                IdMeshTask task;
+                task.entity = entity;
+                task.item = item;
+                task.final_shader = override_drawable_shader(component, override_context).handle;
+                task.pick_id = static_cast<int>(entity.pick_id());
+                data->tasks->push_back(task);
+            }
+            return true;
+        };
+
+        int filter_flags = TC_SCENE_FILTER_ENABLED
+                         | TC_SCENE_FILTER_VISIBLE
+                         | TC_SCENE_FILTER_ENTITY_ENABLED;
+        tc_scene_foreach_drawable(scene, collect_callback, &collect_context, filter_flags, layer_mask);
+        std::sort(mesh_tasks.begin(), mesh_tasks.end(),
+            [](const IdMeshTask& a, const IdMeshTask& b) {
+                return a.final_shader.index < b.final_shader.index;
+            });
+    }
+
+    // GeometryDrawCall collection is retained only to discover direct non-mesh
+    // drawables until they grow typed RenderItems. Mesh-backed work is
+    // submitted from mesh_tasks above.
     collect_draw_calls(scene, layer_mask, ctx.render_category_mask, id_shader_handle_);
     sort_draw_calls_by_shader();
 
@@ -239,7 +349,121 @@ void IdPass::execute_with_data_tgfx2(
             id_resources);
     };
 
+    auto draw_mesh_task = [&](const IdMeshTask& task) {
+        const char* name = task.entity.name();
+        if (name && seen_entities.insert(name).second) {
+            entity_names.push_back(name);
+        }
+
+        if (task.pick_id != current_pick_id) {
+            current_pick_id = task.pick_id;
+            id_to_rgb(task.pick_id, pick_r, pick_g, pick_b);
+        }
+
+        bool override_is_base =
+            tc_shader_handle_eq(task.final_shader, id_shader_handle_);
+
+        // Push constants (u_model + u_pickColor) are shared between the
+        // base and skinned paths. The skinned variant uses the same id shader
+        // interface plus a reflected BoneBlock resource.
+        IdPushStd140 push{};
+        if (task.item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(push.u_model, task.item.model_matrix, sizeof(float) * 16);
+        } else {
+            Mat44f identity = Mat44f::identity();
+            std::memcpy(push.u_model, identity.data, sizeof(float) * 16);
+        }
+        push.u_pickColor[0] = pick_r;
+        push.u_pickColor[1] = pick_g;
+        push.u_pickColor[2] = pick_b;
+        push.u_pickColor[3] = 1.0f;
+
+        std::array<MaterialPipelineUniformData, 2> base_draw_uniforms{{
+            {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            {"id_draw", &push, static_cast<uint32_t>(sizeof(push))},
+        }};
+
+        if (override_is_base) {
+            MaterialPipelineResourceContext draw_resources{};
+            draw_resources.uniforms = base_draw_uniforms;
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                id_shader.shader,
+                nullptr,
+                draw_resources);
+            RenderItemDrawSubmitRequest encode_request{};
+            encode_request.shader = id_shader.shader;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.debug_pass_name = "IdPass";
+            encode_request.debug_entity_name = name;
+            if (!submit_render_item_draw(
+                *ctx.ctx2,
+                task.item,
+                encode_request)) {
+                return;
+            }
+            capture_debug_symbol(name);
+        } else {
+            MaterialPipelineShaderBinding skinned_shader{};
+            if (!ensure_material_pipeline_shader(
+                    *ctx.ctx2,
+                    device,
+                    task.final_shader,
+                    "IdPass/skinned",
+                    skinned_shader)) {
+                return;
+            }
+
+            std::array<MaterialPipelineUniformData, 2> skinned_draw_uniforms{{
+                base_draw_uniforms[0],
+                base_draw_uniforms[1],
+            }};
+            MaterialPipelineResourceContext draw_resources{};
+            draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
+                skinned_draw_uniforms.data(),
+                skinned_draw_uniforms.size());
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                skinned_shader.shader,
+                nullptr,
+                draw_resources);
+
+            RenderItemDrawSubmitRequest encode_request{};
+            encode_request.shader = skinned_shader.shader;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.debug_pass_name = "IdPass";
+            encode_request.debug_entity_name = name;
+            if (!submit_render_item_draw(
+                *ctx.ctx2,
+                task.item,
+                encode_request)) {
+                return;
+            }
+            capture_debug_symbol(name);
+
+            ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);
+            ctx.ctx2->use_shader_resource_layout(id_shader.shader);
+            ctx.ctx2->clear_resource_bindings();
+            prepare_material_pipeline_resources(
+                *ctx.ctx2,
+                device,
+                id_shader.shader,
+                nullptr,
+                id_resources);
+        }
+    };
+
+    for (const IdMeshTask& task : mesh_tasks) {
+        draw_mesh_task(task);
+    }
+
     for (const auto& dc : cached_draw_calls_) {
+        if (has_mesh_task_for(mesh_tasks, dc.component, dc.geometry_id)) {
+            continue;
+        }
+
         Drawable* drawable = nullptr;
         if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
             drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
@@ -256,117 +480,93 @@ void IdPass::execute_with_data_tgfx2(
             id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
 
-        MeshDrawGeometry mesh_geometry{};
-        const char* pick_phase = phase_mark();
-        if (!drawable->resolve_mesh_geometry(pick_phase, dc.geometry_id, mesh_geometry)) {
-            if (!drawable->supports_direct_tgfx2_draw(
-                    pick_phase, dc.geometry_id, DirectTgfx2DrawKind::OverrideColor)) {
+        tc_render_item_collect_context item_context{};
+        item_context.phase_mark = pick_phase;
+        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        item_context.layer_mask = layer_mask;
+        item_context.render_category_mask = ctx.render_category_mask;
+        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.pass_contract = &pass_contract;
+
+        RenderItemCollection direct_items;
+        if (collect_drawable_render_items(dc.component, item_context, direct_items)) {
+            bool submitted_typed_item = false;
+            for (const tc_render_item& item : direct_items.items) {
+                if (item.geometry_id != dc.geometry_id ||
+                    item.kind == TC_RENDER_ITEM_KIND_MESH) {
+                    continue;
+                }
+
+                RenderContext direct_context;
+                direct_context.view = view;
+                direct_context.projection = projection;
+                direct_context.model = drawable->get_model_matrix(dc.entity);
+                direct_context.phase = pick_phase;
+                direct_context.pass_contract = pass_contract;
+                direct_context.current_tc_shader = TcShader(dc.final_shader);
+                direct_context.layer_mask = layer_mask;
+                direct_context.render_category_mask = ctx.render_category_mask;
+                direct_context.camera_position = camera_position;
+                direct_context.viewport_width = rect.width;
+                direct_context.viewport_height = rect.height;
+                direct_context.has_override_color = true;
+                direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
+
+                RenderItemDrawSubmitRequest submit_request{};
+                submit_request.shader = tc_shader_get(dc.final_shader);
+                submit_request.draw_context = &direct_context;
+                submit_request.material_phase = item.material_phase;
+                submit_request.phase_mark = pick_phase;
+                submit_request.debug_pass_name = get_pass_name().c_str();
+                submit_request.debug_entity_name = name;
+                submit_render_item_draw(*ctx.ctx2, item, submit_request);
+                capture_debug_symbol(name);
+                restore_id_raster_state();
+                ctx.ctx2->clear_resource_bindings();
+                prepare_material_pipeline_resources(
+                    *ctx.ctx2,
+                    device,
+                    id_shader.shader,
+                    nullptr,
+                    id_resources);
+                submitted_typed_item = true;
+                break;
+            }
+            if (submitted_typed_item) {
                 continue;
             }
+        }
 
-            RenderContext direct_context;
-            direct_context.view = view;
-            direct_context.projection = projection;
-            direct_context.model = drawable->get_model_matrix(dc.entity);
-            direct_context.phase = pick_phase;
-            direct_context.pass_contract = id_material_pass_contract();
-            direct_context.current_tc_shader = TcShader(dc.final_shader);
-            direct_context.layer_mask = layer_mask;
-            direct_context.render_category_mask = ctx.render_category_mask;
-            direct_context.camera_position = camera_position;
-            direct_context.viewport_width = rect.width;
-            direct_context.viewport_height = rect.height;
-            direct_context.has_override_color = true;
-            direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
-
-            drawable->draw_tgfx2(*ctx.ctx2, direct_context, pick_phase, nullptr, dc.geometry_id);
-            capture_debug_symbol(name);
-            restore_id_raster_state();
-            ctx.ctx2->clear_resource_bindings();
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                id_shader.shader,
-                nullptr,
-                id_resources);
+        if (!drawable->supports_direct_tgfx2_draw(
+                pick_phase, dc.geometry_id, DirectTgfx2DrawKind::OverrideColor)) {
             continue;
         }
 
-        Mat44f model = drawable->get_model_matrix(dc.entity);
+        RenderContext direct_context;
+        direct_context.view = view;
+        direct_context.projection = projection;
+        direct_context.model = drawable->get_model_matrix(dc.entity);
+        direct_context.phase = pick_phase;
+        direct_context.pass_contract = pass_contract;
+        direct_context.current_tc_shader = TcShader(dc.final_shader);
+        direct_context.layer_mask = layer_mask;
+        direct_context.render_category_mask = ctx.render_category_mask;
+        direct_context.camera_position = camera_position;
+        direct_context.viewport_width = rect.width;
+        direct_context.viewport_height = rect.height;
+        direct_context.has_override_color = true;
+        direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
 
-        bool override_is_base =
-            tc_shader_handle_eq(dc.final_shader, id_shader_handle_);
-
-        // Push constants (u_model + u_pickColor) are shared between the
-        // base and skinned paths. The skinned variant uses the same id shader
-        // interface plus a reflected BoneBlock resource.
-        IdPushStd140 push{};
-        std::memcpy(push.u_model, model.data, sizeof(float) * 16);
-        push.u_pickColor[0] = pick_r;
-        push.u_pickColor[1] = pick_g;
-        push.u_pickColor[2] = pick_b;
-        push.u_pickColor[3] = 1.0f;
-
-        std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
-            {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
-            {"id_draw", &push, static_cast<uint32_t>(sizeof(push))},
-        }};
-        MaterialPipelineResourceContext draw_resources{};
-        draw_resources.uniforms = draw_uniforms;
-
-        if (override_is_base) {
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                id_shader.shader,
-                nullptr,
-                draw_resources);
-            draw_material_pipeline_submesh(
-                *ctx.ctx2,
-                mesh_geometry.mesh,
-                mesh_geometry.submesh_index,
-                material_mesh_vertex_input_for_shader(
-                    id_shader.shader,
-                    MaterialMeshVertexInput::Position));
-            capture_debug_symbol(name);
-        } else {
-            MaterialPipelineShaderBinding skinned_shader{};
-            if (!ensure_material_pipeline_shader(
-                    *ctx.ctx2,
-                    device,
-                    dc.final_shader,
-                    "IdPass/skinned",
-                    skinned_shader)) {
-                continue;
-            }
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                skinned_shader.shader,
-                nullptr,
-                draw_resources);
-
-            drawable->upload_per_draw_uniforms_tgfx2(*ctx.ctx2, dc.geometry_id);
-
-            draw_material_pipeline_submesh(
-                *ctx.ctx2,
-                mesh_geometry.mesh,
-                mesh_geometry.submesh_index,
-                material_mesh_vertex_input_for_shader(
-                    skinned_shader.shader,
-                    MaterialMeshVertexInput::Position));
-            capture_debug_symbol(name);
-
-            ctx.ctx2->bind_shader(id_shader.vertex, id_shader.fragment);
-            ctx.ctx2->use_shader_resource_layout(id_shader.shader);
-            ctx.ctx2->clear_resource_bindings();
-            prepare_material_pipeline_resources(
-                *ctx.ctx2,
-                device,
-                id_shader.shader,
-                nullptr,
-                draw_resources);
-        }
+        drawable->draw_tgfx2(*ctx.ctx2, direct_context, pick_phase, nullptr, dc.geometry_id);
+        capture_debug_symbol(name);
+        restore_id_raster_state();
+        ctx.ctx2->clear_resource_bindings();
+        prepare_material_pipeline_resources(
+            *ctx.ctx2,
+            device,
+            id_shader.shader,
+            nullptr,
+            id_resources);
     }
 
     ctx.ctx2->end_pass();
