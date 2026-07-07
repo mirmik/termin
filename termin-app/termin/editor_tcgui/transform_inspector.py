@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+import math
 from typing import Callable, Optional
-
-import numpy as np
 
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.label import Label
@@ -14,7 +13,7 @@ from tcgui.widgets.units import px
 
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.scene import Entity
-from termin.geombase import GeneralPose3
+from termin.geombase import GeneralPose3, Quat, Vec3
 from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.editor_commands import TransformEditCommand
 
@@ -115,8 +114,7 @@ class TransformInspector(VStack):
             pose: GeneralPose3 = self._transform.local_pose()
 
             px, py, pz = pose.lin
-            x, y, z, w = pose.ang
-            az, ay, ax = self._quat_to_euler_zyx(np.array([x, y, z, w], dtype=float))
+            az, ay, ax = self._quat_to_euler_zyx(pose.ang)
 
             self._pos[0].value = float(px)
             self._pos[1].value = float(py)
@@ -139,16 +137,16 @@ class TransformInspector(VStack):
 
         old_pose: GeneralPose3 = self._transform.local_pose()
 
-        new_lin = np.array([
+        new_lin = Vec3(
             self._pos[0].value, self._pos[1].value, self._pos[2].value,
-        ], dtype=float)
+        )
 
         ax, ay, az = self._rot[0].value, self._rot[1].value, self._rot[2].value
-        new_ang = self._euler_zyx_to_quat(np.array([az, ay, ax], dtype=float))
+        new_ang = self._euler_zyx_to_quat(az, ay, ax)
 
-        new_scale = np.array([
+        new_scale = Vec3(
             self._scale[0].value, self._scale[1].value, self._scale[2].value,
-        ], dtype=float)
+        )
 
         new_pose = GeneralPose3(lin=new_lin, ang=new_ang, scale=new_scale)
 
@@ -169,41 +167,25 @@ class TransformInspector(VStack):
     # Math helpers
     # ------------------------------------------------------------------
 
-    def _euler_zyx_to_quat(self, zyx: np.ndarray) -> np.ndarray:
-        def axis_quat(axis: int, deg: float) -> np.ndarray:
-            q = np.zeros(4)
-            q[3] = np.cos(np.radians(deg) / 2)
-            q[axis] = np.sin(np.radians(deg) / 2)
-            return q
+    def _euler_zyx_to_quat(self, z_degrees: float, y_degrees: float, x_degrees: float) -> Quat:
+        qz = Quat.from_axis_angle(Vec3.unit_z(), math.radians(z_degrees))
+        qy = Quat.from_axis_angle(Vec3.unit_y(), math.radians(y_degrees))
+        qx = Quat.from_axis_angle(Vec3.unit_x(), math.radians(x_degrees))
+        return (qz * qy * qx).normalized()
 
-        qz = axis_quat(2, zyx[0])
-        qy = axis_quat(1, zyx[1])
-        qx = axis_quat(0, zyx[2])
-        return self._quat_mult(self._quat_mult(qz, qy), qx)
-
-    def _quat_mult(self, q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-        w1, x1, y1, z1 = q1[3], q1[0], q1[1], q1[2]
-        w2, x2, y2, z2 = q2[3], q2[0], q2[1], q2[2]
-        return np.array([
-            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-        ], dtype=float)
-
-    def _quat_to_euler_zyx(self, quat: np.ndarray) -> np.ndarray:
-        x, y, z, w = quat[0], quat[1], quat[2], quat[3]
+    def _quat_to_euler_zyx(self, quat: Quat) -> tuple[float, float, float]:
+        x, y, z, w = quat.x, quat.y, quat.z, quat.w
 
         t0 = 2.0 * (w * z + x * y)
         t1 = 1.0 - 2.0 * (y * y + z * z)
-        Z = np.degrees(np.arctan2(t0, t1))
+        Z = math.degrees(math.atan2(t0, t1))
 
         t2 = 2.0 * (w * y - z * x)
         t2 = max(-1.0, min(1.0, t2))
-        Y = np.degrees(np.arcsin(t2))
+        Y = math.degrees(math.asin(t2))
 
         t3 = 2.0 * (w * x + y * z)
         t4 = 1.0 - 2.0 * (x * x + y * y)
-        X = np.degrees(np.arctan2(t3, t4))
+        X = math.degrees(math.atan2(t3, t4))
 
-        return np.array([Z, Y, X], dtype=float)
+        return (Z, Y, X)

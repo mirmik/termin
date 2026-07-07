@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Callable
 
-import numpy as np
-
 from termin.editor_core.editor_commands import (
     AddEntityCommand,
     DeleteEntityCommand,
@@ -186,7 +184,7 @@ class EditorInteractionCoordinator:
             return
         camera_pos = camera.entity.transform.global_pose().lin
         gizmo_pos = tg.target.transform.global_pose().lin
-        distance = np.linalg.norm(np.array(camera_pos) - np.array(gizmo_pos))
+        distance = (camera_pos - gizmo_pos).norm()
         tg.set_screen_scale(max(0.1, distance * 0.1))
 
     def _select_object_after_undo(self, cmd):

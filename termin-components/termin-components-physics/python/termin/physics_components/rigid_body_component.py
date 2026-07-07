@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from termin.scene import PythonComponent
-from termin.geombase._geom_native import Pose3 as CppPose3, Vec3, Quat
+from termin.geombase._geom_native import Pose3 as CppPose3, Vec3
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import GeneralPose3
 from termin.inspect import InspectField
@@ -145,10 +145,7 @@ class RigidBodyComponent(PythonComponent):
         self._physics_world = world
 
         py_pose = self.entity.transform.global_pose()
-        cpp_pose = CppPose3(
-            Quat(py_pose.ang[0], py_pose.ang[1], py_pose.ang[2], py_pose.ang[3]),
-            Vec3(py_pose.lin[0], py_pose.lin[1], py_pose.lin[2])
-        )
+        cpp_pose = CppPose3(py_pose.ang.copy(), py_pose.lin.copy())
 
         sx, sy, sz = self._half_extents * 2.0
         body = RigidBody.create_box(sx, sy, sz, self.mass, cpp_pose, self.is_static)
@@ -169,8 +166,8 @@ class RigidBodyComponent(PythonComponent):
 
         current_global_scale = self.entity.transform.global_pose().scale.copy()
         global_pose = GeneralPose3(
-            ang=np.array([cpp_pose.ang.x, cpp_pose.ang.y, cpp_pose.ang.z, cpp_pose.ang.w]),
-            lin=np.array([cpp_pose.lin.x, cpp_pose.lin.y, cpp_pose.lin.z]),
+            ang=cpp_pose.ang.copy(),
+            lin=cpp_pose.lin.copy(),
             scale=current_global_scale
         )
 
@@ -183,10 +180,7 @@ class RigidBodyComponent(PythonComponent):
         py_pose = self.entity.transform.global_pose()
         cpp_body = self._physics_world.get_body(self._body_index)
 
-        cpp_body.pose = CppPose3(
-            Quat(py_pose.ang[0], py_pose.ang[1], py_pose.ang[2], py_pose.ang[3]),
-            Vec3(py_pose.lin[0], py_pose.lin[1], py_pose.lin[2])
-        )
+        cpp_body.pose = CppPose3(py_pose.ang.copy(), py_pose.lin.copy())
 
         cpp_body.linear_velocity = Vec3(0, 0, 0)
         cpp_body.angular_velocity = Vec3(0, 0, 0)

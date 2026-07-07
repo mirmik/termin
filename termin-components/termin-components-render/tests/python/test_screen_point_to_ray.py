@@ -3,7 +3,7 @@ import pytest
 
 from termin.scene import Entity
 from termin.render_components.camera import PerspectiveCameraComponent
-from termin.geombase import GeneralPose3, Pose3
+from termin.geombase import GeneralPose3, Pose3, Vec3
 
 
 VIEWPORT_WIDTH = 800
@@ -13,7 +13,7 @@ VIEWPORT = (0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)
 
 def build_basic_camera():
     cam_entity = Entity(
-        pose=GeneralPose3(lin=np.array([0.0, 0.0, 0.0])),
+        pose=GeneralPose3(lin=Vec3(0.0, 0.0, 0.0)),
         name="camera"
     )
     cam = PerspectiveCameraComponent()
