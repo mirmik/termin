@@ -1,19 +1,20 @@
 import unittest
 from termin.kinematic import Transform3
 from termin.kinematic.kinematic import Rotator3, Actuator3
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Quat, Vec3
 from termin.kinematic.from_trent import from_trent
 import numpy
 import math
 
 
-ROOT_POSE = Pose3(
-    ang=numpy.array([0.0, 0.0, 0.0, 1.0]),
-    lin=numpy.array([1.0, 2.0, 3.0])
-)
-CHILD_POSE = Pose3(
-    ang=numpy.array([0.0, 0.0, math.sin(math.pi/2), math.cos(math.pi/2)]),
-    lin=numpy.array([0.0, 0.0, 0.0])
+def _pose(ang, lin):
+    return Pose3(ang=Quat(ang), lin=Vec3(lin))
+
+
+ROOT_POSE = _pose([0.0, 0.0, 0.0, 1.0], [1.0, 2.0, 3.0])
+CHILD_POSE = _pose(
+    [0.0, 0.0, math.sin(math.pi / 2), math.cos(math.pi / 2)],
+    [0.0, 0.0, 0.0],
 )
 
 
@@ -62,9 +63,9 @@ class TestTransform3(unittest.TestCase):
     def test_relocate_and_global_pose(self):
         transform = Transform3()
 
-        pose = Pose3(
-            ang=numpy.array([0.0, 0.0, math.sin(math.pi/4), math.cos(math.pi/4)]),
-            lin=numpy.array([1.0, 2.0, 3.0])
+        pose = _pose(
+            [0.0, 0.0, math.sin(math.pi / 4), math.cos(math.pi / 4)],
+            [1.0, 2.0, 3.0],
         )
         transform.relocate(pose)
         global_pose = transform.global_pose()
@@ -76,13 +77,13 @@ class TestTransform3(unittest.TestCase):
         parent = Transform3()
         child = Transform3(parent=parent)
 
-        parent_pose = Pose3(
-            ang=numpy.array([0.0, 0.0, math.sin(math.pi/4), math.cos(math.pi/4)]),
-            lin=numpy.array([1.0, 0.0, 0.0])
+        parent_pose = _pose(
+            [0.0, 0.0, math.sin(math.pi / 4), math.cos(math.pi / 4)],
+            [1.0, 0.0, 0.0],
         )
-        child_pose = Pose3(
-            ang=numpy.array([0.0, 0.0, math.sin(math.pi/4), math.cos(math.pi/4)]),
-            lin=numpy.array([0.0, 1.0, 0.0])
+        child_pose = _pose(
+            [0.0, 0.0, math.sin(math.pi / 4), math.cos(math.pi / 4)],
+            [0.0, 1.0, 0.0],
         )
 
         parent.relocate(parent_pose)

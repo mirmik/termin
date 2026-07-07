@@ -7,7 +7,7 @@ from termin.fem.dynamic_assembler import DynamicMatrixAssembler
 from termin.fem.multibody3d_3 import (
     RigidBody3D, FixedRotationJoint3D #ForceOnBody3D, , RevoluteJoint3D
 )
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Vec3
 from numpy import linalg
 from termin.fem.inertia3d import SpatialInertia3D
 
@@ -123,7 +123,7 @@ class TestIntegrationMultibody3D(unittest.TestCase):
             gravity=np.array([0.0, 0.0, -10.00]),
             assembler=assembler)
 
-        body.set_pose(Pose3(lin=np.array([1.0, 0.0, 0.0])))
+        body.set_pose(Pose3(lin=Vec3([1.0, 0.0, 0.0])))
 
         joint = FixedRotationJoint3D(
             body=body,
@@ -162,7 +162,7 @@ class TestIntegrationMultibody3D(unittest.TestCase):
             gravity=np.array([0.0, 0.0, -10.00]),
             assembler=assembler)
 
-        body.set_pose(Pose3(lin=np.array([0.25, 0.0, 0.0])))
+        body.set_pose(Pose3(lin=Vec3([0.25, 0.0, 0.0])))
         #body.acceleration_var.set_value_by_rank(np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0]), rank=1)
 
         joint = FixedRotationJoint3D(
@@ -229,7 +229,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         )
 
         z0 = 10.0
-        body.set_pose(Pose3(lin=np.array([0.0, 0.0, z0])))
+        body.set_pose(Pose3(lin=Vec3([0.0, 0.0, z0])))
 
         t_total = 0.2
         n_steps = int(t_total / dt)
@@ -434,7 +434,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         theta0 = 0.1  # радианы
         x0 = L * np.sin(theta0)
         z0 = -L * np.cos(theta0)
-        body.set_pose(Pose3(lin=np.array([x0, 0.0, z0])))
+        body.set_pose(Pose3(lin=Vec3([x0, 0.0, z0])))
 
         _joint = FixedRotationJoint3D(
             body=body,
@@ -479,7 +479,7 @@ class TestIntegrationDynamics(unittest.TestCase):
         theta0 = 0.3
         x0 = L * np.sin(theta0)
         z0 = -L * np.cos(theta0)
-        body.set_pose(Pose3(lin=np.array([x0, 0.0, z0])))
+        body.set_pose(Pose3(lin=Vec3([x0, 0.0, z0])))
 
         _joint = FixedRotationJoint3D(
             body=body,
@@ -540,7 +540,7 @@ class TestRevoluteJoint(unittest.TestCase):
                 assembler=assembler,
                 name="bodyA"
             )
-            bodyA.set_pose(Pose3(lin=np.array([0.0, 0.0, 0.0])))
+            bodyA.set_pose(Pose3(lin=Vec3([0.0, 0.0, 0.0])))
 
             bodyB = RigidBody3D(
                 inertia=SpatialInertia3D.from_matrix(
@@ -550,7 +550,7 @@ class TestRevoluteJoint(unittest.TestCase):
                 assembler=assembler,
                 name="bodyB"
             )
-            bodyB.set_pose(Pose3(lin=np.array([1.0, 0.0, 0.0])))
+            bodyB.set_pose(Pose3(lin=Vec3([1.0, 0.0, 0.0])))
 
             # Фиксируем bodyA в начале координат
             _joint_fixed = FixedRotationJoint3D(
@@ -615,7 +615,7 @@ class TestRevoluteJoint(unittest.TestCase):
             name="body1"
         )
         theta1 = 0.2
-        body1.set_pose(Pose3(lin=np.array([L1 * np.sin(theta1), 0.0, -L1 * np.cos(theta1)])))
+        body1.set_pose(Pose3(lin=Vec3([L1 * np.sin(theta1), 0.0, -L1 * np.cos(theta1)])))
 
         # Второе тело (нижний маятник)
         body2 = RigidBody3D(
@@ -628,7 +628,7 @@ class TestRevoluteJoint(unittest.TestCase):
         )
         theta2 = 0.1
         pos2 = body1.pose().lin + np.array([L2 * np.sin(theta2), 0.0, -L2 * np.cos(theta2)])
-        body2.set_pose(Pose3(lin=pos2))
+        body2.set_pose(Pose3(lin=Vec3(pos2)))
 
         # Фиксируем первое тело в начале координат
         _joint_fixed = FixedRotationJoint3D(
@@ -692,7 +692,7 @@ class TestRevoluteJoint(unittest.TestCase):
             assembler=assembler,
             name="body1"
         )
-        body1.set_pose(Pose3(lin=pos1))
+        body1.set_pose(Pose3(lin=Vec3(pos1)))
 
         body2 = RigidBody3D(
             inertia=SpatialInertia3D.from_matrix(
@@ -702,7 +702,7 @@ class TestRevoluteJoint(unittest.TestCase):
             assembler=assembler,
             name="body2"
         )
-        body2.set_pose(Pose3(lin=pos2))
+        body2.set_pose(Pose3(lin=Vec3(pos2)))
 
         # Фиксируем body1 в (0, 0, 0)
         _joint_fixed = FixedRotationJoint3D(
@@ -766,7 +766,7 @@ class TestRevoluteJoint(unittest.TestCase):
             assembler=assembler,
             name="body1"
         )
-        body1.set_pose(Pose3(lin=pos1))
+        body1.set_pose(Pose3(lin=Vec3(pos1)))
 
         body2 = RigidBody3D(
             inertia=SpatialInertia3D.from_matrix(
@@ -776,7 +776,7 @@ class TestRevoluteJoint(unittest.TestCase):
             assembler=assembler,
             name="body2"
         )
-        body2.set_pose(Pose3(lin=pos2))
+        body2.set_pose(Pose3(lin=Vec3(pos2)))
 
         # Фиксируем первое тело в (0, 0, 0)
         _joint_fixed = FixedRotationJoint3D(
@@ -853,7 +853,7 @@ class TestRevoluteJoint(unittest.TestCase):
         # Начальное положение под углом
         theta1 = 0.2
         pos1 = np.array([L1 * np.sin(theta1), 0.0, -L1 * np.cos(theta1)])
-        body1.set_pose(Pose3(lin=pos1))
+        body1.set_pose(Pose3(lin=Vec3(pos1)))
 
         # Начальное вращение вдоль оси Y (ось подвеса) - высокая скорость
         omega_spin = 10.0
@@ -877,7 +877,7 @@ class TestRevoluteJoint(unittest.TestCase):
         )
         theta2 = 0.1
         pos2 = pos1 + np.array([L2 * np.sin(theta2), 0.0, -L2 * np.cos(theta2)])
-        body2.set_pose(Pose3(lin=pos2))
+        body2.set_pose(Pose3(lin=Vec3(pos2)))
 
         # Второе тело тоже вращается (та же угловая скорость для совместимости)
         omega2 = np.array([0.0, omega_spin, 0.0])

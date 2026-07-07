@@ -157,29 +157,16 @@ std::vector<unsigned char> bytes_to_vector(nb::handle value) {
     return std::vector<unsigned char>(begin, begin + size);
 }
 
-nb::list vec3_to_python(const Vec3& point) {
-    nb::list result;
-    result.append(point.x);
-    result.append(point.y);
-    result.append(point.z);
-    return result;
-}
-
-tc_vec3 tc_vec3_from_python(nb::handle value) {
-    nb::sequence seq = nb::cast<nb::sequence>(value);
+tc_vec3 tc_vec3_from_vec3(const Vec3& value) {
     return {
-        nb::cast<double>(seq[0]),
-        nb::cast<double>(seq[1]),
-        nb::cast<double>(seq[2]),
+        value.x,
+        value.y,
+        value.z,
     };
 }
 
-nb::list tc_vec3_to_python(const tc_vec3& point) {
-    nb::list result;
-    result.append(point.x);
-    result.append(point.y);
-    result.append(point.z);
-    return result;
+Vec3 tc_vec3_to_vec3(const tc_vec3& point) {
+    return Vec3{point.x, point.y, point.z};
 }
 
 tc_navmesh_tile tile_from_python(nb::handle tile) {
@@ -374,25 +361,25 @@ void bind_recast_navmesh_builder(nb::module_& m) {
         .def_rw("stable_user_id", &OffMeshLinkComponent::stable_user_id)
         .def_prop_rw("start_local",
             [](OffMeshLinkComponent& self) {
-                return tc_vec3_to_python(self.start_local);
+                return tc_vec3_to_vec3(self.start_local);
             },
-            [](OffMeshLinkComponent& self, nb::handle value) {
-                self.start_local = tc_vec3_from_python(value);
+            [](OffMeshLinkComponent& self, const Vec3& value) {
+                self.start_local = tc_vec3_from_vec3(value);
             })
         .def_prop_rw("end_local",
             [](OffMeshLinkComponent& self) {
-                return tc_vec3_to_python(self.end_local);
+                return tc_vec3_to_vec3(self.end_local);
             },
-            [](OffMeshLinkComponent& self, nb::handle value) {
-                self.end_local = tc_vec3_from_python(value);
+            [](OffMeshLinkComponent& self, const Vec3& value) {
+                self.end_local = tc_vec3_from_vec3(value);
             })
         .def_rw("radius", &OffMeshLinkComponent::radius)
         .def_rw("bidirectional", &OffMeshLinkComponent::bidirectional)
         .def("start_world", [](OffMeshLinkComponent& self) {
-            return vec3_to_python(self.start_world());
+            return self.start_world();
         })
         .def("end_world", [](OffMeshLinkComponent& self) {
-            return vec3_to_python(self.end_world());
+            return self.end_world();
         })
         .def("center_entity", &OffMeshLinkComponent::center_entity);
 

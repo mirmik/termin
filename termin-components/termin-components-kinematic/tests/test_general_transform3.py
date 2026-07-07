@@ -229,7 +229,7 @@ class TestGeneralTransform3TransformPoint:
         """transform_point applies scale."""
         t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
 
-        result = t.transform_point(Vec3(1, 1, 1).to_numpy())
+        result = t.transform_point(Vec3(1, 1, 1))
 
         assert abs(result[0] - 2) < 1e-9
         assert abs(result[1] - 3) < 1e-9
@@ -242,7 +242,7 @@ class TestGeneralTransform3TransformPoint:
         parent.add_child(child)
 
         # Transform point [1,0,0] through child
-        result = child.transform_point(Vec3(1, 0, 0).to_numpy())
+        result = child.transform_point(Vec3(1, 0, 0))
 
         # Child global: position [10,0,0] (5 * 2), scale [2,2,2]
         # Point [1,0,0] scaled by 2 -> [2,0,0], then translated by [10,0,0] -> [12,0,0]
@@ -257,8 +257,8 @@ class TestGeneralTransform3DirectionVectors:
     def test_transform_vector_applies_scale_but_transform_direction_does_not(self):
         t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
 
-        scaled_vector = t.transform_vector(Vec3(1, 1, 1).to_numpy())
-        direction = t.transform_direction(Vec3(1, 1, 1).to_numpy())
+        scaled_vector = t.transform_vector(Vec3(1, 1, 1))
+        direction = t.transform_direction(Vec3(1, 1, 1))
 
         assert_array_approx(scaled_vector, (2.0, 3.0, 4.0))
         assert_array_approx(direction, (1.0, 1.0, 1.0))
@@ -294,7 +294,7 @@ class TestGeneralTransform3WorldMatrix:
 
     def test_world_matrix_identity(self):
         t = GeneralTransform3()
-        mat = t.world_matrix()
+        mat = numpy.asarray(t.world_matrix())
         # Check diagonal is 1s
         assert abs(mat[0, 0] - 1) < 1e-9
         assert abs(mat[1, 1] - 1) < 1e-9
@@ -303,7 +303,7 @@ class TestGeneralTransform3WorldMatrix:
 
     def test_world_matrix_with_scale(self):
         t = GeneralTransform3(GeneralPose3(scale=Vec3(2, 3, 4)))
-        mat = t.world_matrix()
+        mat = numpy.asarray(t.world_matrix())
 
         # Diagonal should have scale values
         assert abs(mat[0, 0] - 2) < 1e-9
@@ -316,7 +316,7 @@ class TestGeneralTransform3WorldMatrix:
         child = GeneralTransform3(GeneralPose3(scale=Vec3(3, 3, 3)))
         parent.add_child(child)
 
-        mat = child.world_matrix()
+        mat = numpy.asarray(child.world_matrix())
 
         # Child global scale = 2 * 3 = 6
         assert abs(mat[0, 0] - 6) < 1e-9
@@ -332,14 +332,14 @@ class TestGeneralTransform3EdgeCases:
         t = GeneralTransform3(GeneralPose3(scale=Vec3(1, 0, 1)))
 
         # Should not crash
-        mat = t.world_matrix()
+        mat = numpy.asarray(t.world_matrix())
         assert abs(mat[1, 1] - 0) < 1e-9
 
     def test_very_small_scale(self):
         """Handle very small scale values."""
         t = GeneralTransform3(GeneralPose3(scale=Vec3(1e-10, 1e-10, 1e-10)))
 
-        result = t.transform_point(Vec3(1, 1, 1).to_numpy())
+        result = t.transform_point(Vec3(1, 1, 1))
         assert abs(result[0] - 1e-10) < 1e-15
         assert abs(result[1] - 1e-10) < 1e-15
         assert abs(result[2] - 1e-10) < 1e-15
@@ -348,7 +348,7 @@ class TestGeneralTransform3EdgeCases:
         """Handle very large scale values."""
         t = GeneralTransform3(GeneralPose3(scale=Vec3(1e10, 1e10, 1e10)))
 
-        result = t.transform_point(Vec3(1, 1, 1).to_numpy())
+        result = t.transform_point(Vec3(1, 1, 1))
         assert abs(result[0] - 1e10) < 1e5
         assert abs(result[1] - 1e10) < 1e5
         assert abs(result[2] - 1e10) < 1e5
@@ -357,7 +357,7 @@ class TestGeneralTransform3EdgeCases:
         """Handle negative scale (mirror)."""
         t = GeneralTransform3(GeneralPose3(scale=Vec3(-1, 1, 1)))
 
-        result = t.transform_point(Vec3(1, 0, 0).to_numpy())
+        result = t.transform_point(Vec3(1, 0, 0))
         assert abs(result[0] - (-1)) < 1e-9
         assert abs(result[1] - 0) < 1e-9
         assert abs(result[2] - 0) < 1e-9
