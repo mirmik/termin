@@ -183,15 +183,13 @@ bool line_render_item_draw_encoder(
             item.kind);
         return false;
     }
-    if (!item.component ||
-        tc_component_get_drawable_vtable(item.component) != &Drawable::cxx_drawable_vtable()) {
-        tc::Log::error("[LineRenderer] line RenderItem has no C++ drawable component");
-        return false;
-    }
-    auto* renderer = static_cast<LineRenderer*>(
-        tc_component_get_drawable_userdata(item.component));
+    CxxComponent* component = CxxComponent::from_tc(item.component);
+    auto* renderer = dynamic_cast<LineRenderer*>(component);
     if (!renderer) {
-        tc::Log::error("[LineRenderer] line RenderItem has null renderer userdata");
+        const char* type_name = component ? component->type_name() : "<null>";
+        tc::Log::error(
+            "[LineRenderer] line RenderItem component is not LineRenderer: type='%s'",
+            type_name ? type_name : "<unknown>");
         return false;
     }
     return renderer->encode_render_item_tgfx2(ctx, item, request);
