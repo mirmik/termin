@@ -748,14 +748,14 @@ void ColorPass::execute_with_data(
         ctx2->set_depth_bias(false);
     };
 
-    MaterialPipelineResourceContext material_resources{};
+    MaterialPipelineResourceView material_resources{};
     material_resources.per_frame = &pf;
     material_resources.shadow_block = &sb;
     material_resources.shadow_block_size = static_cast<uint32_t>(sizeof(sb));
     material_resources.lighting_ubo = lighting_ubo_tgfx2;
-    material_resources.shadow_maps =
-        std::span<const tgfx::TextureHandle>(shadow_tex2s.data(), shadow_tex2s.size());
-    material_resources.max_shadow_maps = MAX_SHADOW_MAPS;
+    material_resources.shadow_maps = shadow_tex2s.data();
+    material_resources.shadow_map_count = static_cast<uint32_t>(
+        std::min<size_t>(shadow_tex2s.size(), MAX_SHADOW_MAPS));
 
     size_t draw_index = 0;
     for (const auto& dc : cached_draw_calls_) {
@@ -904,7 +904,7 @@ void ColorPass::execute_with_data(
                         return;
                     }
 
-                    MaterialPipelineResourceContext direct_resources = material_resources;
+                    MaterialPipelineResourceView direct_resources = material_resources;
                     direct_resources.shadow_sampler = shadow_sampler_;
                     prepare_material_pipeline_resources(
                         draw_ctx,
@@ -1030,7 +1030,7 @@ void ColorPass::execute_with_data(
             shadow_sampler_ = device.create_sampler(sd);
         }
 
-        MaterialPipelineResourceContext draw_resources = material_resources;
+        MaterialPipelineResourceView draw_resources = material_resources;
         draw_resources.shadow_sampler = shadow_sampler_;
         prepare_material_pipeline_resources(
             *ctx2,

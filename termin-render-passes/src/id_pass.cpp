@@ -184,11 +184,16 @@ void IdPass::execute_with_data_tgfx2(
     IdPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
-        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
+        {
+            tc_shader_find_resource_binding(id_shader.shader, "per_frame"),
+            &per_frame,
+            static_cast<uint32_t>(sizeof(per_frame)),
+        },
     }};
-    MaterialPipelineResourceContext id_resources{};
-    id_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineResourceView id_resources{};
+    id_resources.uniforms = per_frame_uniforms.data();
+    id_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,

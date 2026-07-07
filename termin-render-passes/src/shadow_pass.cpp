@@ -567,11 +567,16 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             ShadowPerFrameStd140 per_frame{};
             std::memcpy(per_frame.u_view, view_matrix.data, sizeof(float) * 16);
             std::memcpy(per_frame.u_projection, proj_matrix.data, sizeof(float) * 16);
-            std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
-                {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+            std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
+                {
+                    tc_shader_find_resource_binding(shadow_shader.shader, "per_frame"),
+                    &per_frame,
+                    static_cast<uint32_t>(sizeof(per_frame)),
+                },
             }};
-            MaterialPipelineResourceContext shadow_resources{};
-            shadow_resources.uniforms = per_frame_uniforms;
+            MaterialPipelineResourceView shadow_resources{};
+            shadow_resources.uniforms = per_frame_uniforms.data();
+            shadow_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
             prepare_material_pipeline_resources(
                 *ctx.ctx2,
                 device,
