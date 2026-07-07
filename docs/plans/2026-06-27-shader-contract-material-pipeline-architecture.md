@@ -255,6 +255,10 @@ Runtime submit/resource data must use C-like views and packets:
 - migrated uniform and texture uploads carry resolved
   `tc_shader_resource_binding*` or a later compact binding id, not resource
   names;
+- vertex layout runtime identity uses compact `VertexLayoutDesc` packets with
+  fixed attribute arrays and interned `const char*` semantics. C++
+  `VertexBufferLayout` is a compatibility/authoring facade and should not be
+  the render-task or pipeline-cache data contract;
 - bind-by-name remains only a compatibility/debug/authoring path.
 
 Current bridge type:
@@ -476,6 +480,10 @@ must be explicit:
   `MaterialPipelineResourceView`. The old `MaterialPipelineResourceContext`
   remains as a compatibility wrapper and is not the target task/submit
   boundary.
+- Runtime vertex layout submission now has a C-like `VertexLayoutDesc`.
+  `RenderContext2` and `PipelineCacheKey` store that compact form; backend
+  pipeline creation still adapts to `VertexBufferLayout` on cache miss until
+  backend descriptors are migrated.
 
 ## Validation
 
