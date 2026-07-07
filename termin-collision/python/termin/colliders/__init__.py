@@ -9,6 +9,7 @@
 """
 
 from termin_nanobind.runtime import preload_sdk_libs
+from termin.geombase import Ray3
 
 preload_sdk_libs("termin_collision")
 
@@ -22,7 +23,6 @@ from ._colliders_native import (
     ColliderHit,
     RayHit,
     ColliderType,
-    Ray3,
     # Ground contact helpers
     SphereGroundContact,
     BoxGroundContact,
