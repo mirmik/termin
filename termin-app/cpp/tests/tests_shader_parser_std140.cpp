@@ -851,6 +851,26 @@ TEST_CASE("std140_pack: Int and Bool")
     CHECK_EQ(read_int_at(buf, 4), 1);  // Bool(true) → int 1
 }
 
+TEST_CASE("std140_pack: Bool accepts Int values as 0 or 1")
+{
+    std::vector<MaterialProperty> schema = {
+        mk("u_disabled", "Bool"),
+        mk("u_enabled", "Bool"),
+    };
+    std::vector<MaterialProperty> values = {
+        mk_int("u_disabled", 0),
+        mk_int("u_enabled", 7),
+    };
+    MaterialUboLayout layout = compute_std140_layout(schema);
+    CHECK_EQ(layout.block_size, 16u);
+
+    std::vector<uint8_t> buf(layout.block_size, 0xCD);
+    std140_pack(layout, values, buf.data());
+
+    CHECK_EQ(read_int_at(buf, 0), 0);
+    CHECK_EQ(read_int_at(buf, 4), 1);
+}
+
 TEST_CASE("std140_pack: realistic PBR material")
 {
     std::vector<MaterialProperty> schema = {
