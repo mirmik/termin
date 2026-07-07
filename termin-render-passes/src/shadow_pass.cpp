@@ -311,7 +311,6 @@ bool collect_shadow_render_item_for_draw(
     tc_component* component,
     const tc_render_item_collect_context& context,
     int geometry_id,
-    const char* entity_name,
     RenderItemCollection& items,
     tc_render_item& out_item)
 {
@@ -324,18 +323,6 @@ bool collect_shadow_render_item_for_draw(
             out_item = item;
             return true;
         }
-    }
-
-    Drawable* drawable = nullptr;
-    if (tc_component_get_drawable_vtable(component) == &Drawable::cxx_drawable_vtable()) {
-        drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(component));
-    }
-    MeshDrawGeometry mesh_geometry{};
-    if (drawable && drawable->resolve_mesh_geometry(context.phase_mark, geometry_id, mesh_geometry)) {
-        tc::Log::error(
-            "[ShadowPass] mesh drawable reached non-RenderItem path after migration for entity '%s' geometry=%d",
-            entity_name ? entity_name : "<unnamed>",
-            geometry_id);
     }
     return false;
 }
@@ -688,7 +675,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         dc.component,
                         item_context,
                         dc.geometry_id,
-                        dc.entity.name(),
                         item_collection,
                         item)) {
                     if (!drawable->supports_direct_tgfx2_draw(

@@ -146,7 +146,6 @@ bool collect_color_render_item_for_draw(
     tc_component* component,
     const tc_render_item_collect_context& context,
     int geometry_id,
-    const char* entity_name,
     RenderItemCollection& items,
     tc_render_item& out_item)
 {
@@ -159,18 +158,6 @@ bool collect_color_render_item_for_draw(
             out_item = item;
             return true;
         }
-    }
-
-    Drawable* drawable = nullptr;
-    if (tc_component_get_drawable_vtable(component) == &Drawable::cxx_drawable_vtable()) {
-        drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(component));
-    }
-    MeshDrawGeometry mesh_geometry{};
-    if (drawable && drawable->resolve_mesh_geometry(context.phase_mark, geometry_id, mesh_geometry)) {
-        tc::Log::error(
-            "[ColorPass/tgfx2] mesh drawable reached non-RenderItem path after migration for entity '%s' geometry=%d",
-            entity_name ? entity_name : "<unnamed>",
-            geometry_id);
     }
     return false;
 }
@@ -887,14 +874,8 @@ void ColorPass::execute_with_data(
                 dc.component,
                 item_context,
                 dc.geometry_id,
-                ename,
                 item_collection,
                 item)) {
-            MeshDrawGeometry old_mesh_geometry{};
-            if (drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, old_mesh_geometry)) {
-                ++draw_index;
-                continue;
-            }
             if (!drawable->supports_direct_tgfx2_draw(
                     phase_mark, dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
                 ++draw_index;

@@ -537,14 +537,6 @@ void IdPass::execute_with_data_tgfx2(
             }
         }
 
-        MeshDrawGeometry mesh_geometry{};
-        if (drawable->resolve_mesh_geometry(pick_phase, dc.geometry_id, mesh_geometry)) {
-            tc::Log::error(
-                "[IdPass] mesh drawable reached non-RenderItem path after migration for entity '%s' geometry=%d",
-                name ? name : "<unnamed>",
-                dc.geometry_id);
-            continue;
-        }
         if (!drawable->supports_direct_tgfx2_draw(
                 pick_phase, dc.geometry_id, DirectTgfx2DrawKind::OverrideColor)) {
             continue;
