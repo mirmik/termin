@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from termin.scene import PythonComponent
-from termin.geombase._geom_native import Pose3 as CppPose3, Vec3
 from termin.physics._physics_native import PhysicsWorld, RigidBody
-from termin.geombase import GeneralPose3
+from termin.geombase import GeneralPose3, Pose3, Vec3
 from termin.inspect import InspectField
 
 from typing import TYPE_CHECKING, Optional
@@ -145,7 +144,7 @@ class RigidBodyComponent(PythonComponent):
         self._physics_world = world
 
         py_pose = self.entity.transform.global_pose()
-        cpp_pose = CppPose3(py_pose.ang.copy(), py_pose.lin.copy())
+        cpp_pose = Pose3(py_pose.ang.copy(), py_pose.lin.copy())
 
         sx, sy, sz = self._half_extents * 2.0
         body = RigidBody.create_box(sx, sy, sz, self.mass, cpp_pose, self.is_static)
@@ -180,7 +179,7 @@ class RigidBodyComponent(PythonComponent):
         py_pose = self.entity.transform.global_pose()
         cpp_body = self._physics_world.get_body(self._body_index)
 
-        cpp_body.pose = CppPose3(py_pose.ang.copy(), py_pose.lin.copy())
+        cpp_body.pose = Pose3(py_pose.ang.copy(), py_pose.lin.copy())
 
         cpp_body.linear_velocity = Vec3(0, 0, 0)
         cpp_body.angular_velocity = Vec3(0, 0, 0)
