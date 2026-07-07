@@ -4,7 +4,7 @@
 #include <termin/camera/render_camera_utils.hpp>
 #include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/material_pipeline.hpp>
-#include <termin/render/render_item_mesh.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -378,12 +378,12 @@ void DepthPass::execute_with_data_tgfx2(
                 depth_shader.shader,
                 nullptr,
                 draw_resources);
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = depth_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
             encode_request.debug_pass_name = "DepthPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 item,
                 encode_request)) {
@@ -412,12 +412,12 @@ void DepthPass::execute_with_data_tgfx2(
                 material_phase,
                 draw_resources);
 
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = skinned_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
             encode_request.debug_pass_name = "DepthPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 item,
                 encode_request)) {
@@ -941,12 +941,12 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 depth_shader.shader,
                 nullptr,
                 draw_resources);
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = depth_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
             encode_request.debug_pass_name = "DepthOnlyPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 item,
                 encode_request)) {
@@ -973,12 +973,12 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
                 material_phase,
                 draw_resources);
 
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = skinned_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
             encode_request.debug_pass_name = "DepthOnlyPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 item,
                 encode_request)) {
