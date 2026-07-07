@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
-
-import numpy as np
 
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
@@ -249,7 +248,7 @@ class AudioSource(PythonComponent):
         listener_pos = listener.entity.world_transform.position
 
         to_source = source_pos - listener_pos
-        distance = np.linalg.norm(to_source)
+        distance = to_source.norm()
 
         if distance <= self.min_distance:
             sdl_distance = 0
@@ -262,10 +261,10 @@ class AudioSource(PythonComponent):
         if distance > 0.001:
             to_source_norm = to_source / distance
             listener_forward = listener.entity.world_transform.forward
-            angle_rad = np.arctan2(to_source_norm[0], to_source_norm[2])
-            listener_angle = np.arctan2(listener_forward[0], listener_forward[2])
+            angle_rad = math.atan2(to_source_norm.x, to_source_norm.z)
+            listener_angle = math.atan2(listener_forward.x, listener_forward.z)
             relative_angle = angle_rad - listener_angle
-            angle_deg = int(np.degrees(relative_angle)) % 360
+            angle_deg = int(math.degrees(relative_angle)) % 360
         else:
             angle_deg = 0
 

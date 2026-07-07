@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+from copy import copy
 from typing import TYPE_CHECKING, Callable
-
-import numpy as np
 
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.vstack import VStack
@@ -45,9 +44,9 @@ def _color_to_rgba255(value) -> tuple[int, int, int, int]:
         return (255, 255, 255, 255)
 
 
-def _rgba255_to_float3(rgba: tuple[int, int, int, int]) -> np.ndarray:
-    """Convert (R,G,B,A) 0-255 to float32 array [r,g,b]."""
-    return np.array([rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0], dtype=np.float32)
+def _rgba255_to_float3(rgba: tuple[int, int, int, int]) -> tuple[float, float, float]:
+    """Convert (R,G,B,A) 0-255 to float RGB tuple."""
+    return (rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0)
 
 
 def _make_color_button(color_rgba255: tuple[int, int, int, int]) -> Button:
@@ -114,11 +113,8 @@ def show_scene_properties_dialog(
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = rs.background_color.copy()
-            new_value = np.array(
-                [rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, float(current[3])],
-                dtype=np.float32,
-            )
+            old_value = copy(rs.background_color)
+            new_value = (rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, float(current[3]))
             if push_undo_command is not None:
                 cmd = ScenePropertyEditCommand(scene, "background_color", old_value, new_value)
                 push_undo_command(cmd, False)
@@ -153,7 +149,7 @@ def show_scene_properties_dialog(
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = rs.ambient_color.copy()
+            old_value = copy(rs.ambient_color)
             new_value = _rgba255_to_float3(rgba)
             if push_undo_command is not None:
                 cmd = ScenePropertyEditCommand(scene, "ambient_color", old_value, new_value)

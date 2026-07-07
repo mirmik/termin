@@ -16,7 +16,7 @@ rg -l "^\s*(import numpy\b|from numpy\b)" \
   --glob '!termin-thirdparty/**' | sort
 ```
 
-Total files: 159
+Total files: 156
 
 ## Reading Notes
 
@@ -28,9 +28,24 @@ Total files: 159
 ## Resolved Quick Wins
 
 - `termin-components/termin-components-physics/python/termin/physics_components/rigid_body_component.py`: collider extents moved to `Vec3`.
+- `termin-components/termin-components-render/python/termin/render_components/camera.py`: annotation-only NumPy import removed.
 - `termin-components/termin-components-tween/python/termin/tween/component.py`: annotation-only NumPy import removed.
+- `termin-app/termin/editor_tcgui/dialogs/scene_inspector.py`: scene color edits moved to plain float tuples.
+- `termin-audio/python/termin/audio/components/audio_source.py`: spatial audio math moved to `Vec3` and `math`.
 - `termin-pga/python/termin/ga201/convex_body.py`: `np.argmin` replaced by list/min selection.
 - `termin-tween/python/termin/tween/manager.py`: annotation-only NumPy import removed.
+
+## Binding Notes
+
+`nb::ndarray` also appears in native bindings. Geometry-shaped overloads are reduction
+candidates; dense buffers should stay until replacement buffer APIs exist.
+
+- `termin-base/python/bindings/geom/{vec3,quat,pose3,general_pose3,mat44,aabb,screw3}.cpp`: legacy ndarray constructors, setters, matrix returns, and homogeneous vector overloads; migrate call sites to `Vec3`, `Quat`, `Mat44` methods first.
+- `termin-scene/cpp/bindings/transform_bindings.cpp` and `termin-scene/include/termin/bindings/entity_helpers.hpp`: transform point/vector APIs return NumPy arrays; good candidate for `Vec3` returns after Python call sites are updated.
+- `termin-collision/cpp/bindings/colliders_bindings.cpp`: `Ray3` ndarray constructor is easy; corner/axis bulk returns are buffer-like and lower priority.
+- `termin-render-passes/python/render_passes_bindings.cpp`: `ShadowCameraParams` and matrix helpers are Mat44/Vec3 candidates; pass/debug buffer outputs should stay ndarray for now.
+- `termin-app/cpp/termin/bindings/{editor/gizmo_bindings.cpp,render/solid_primitive.cpp}`: editor/render helper APIs take Mat44/Vec3 ndarray arguments; migrate together with editor Python call sites.
+- `termin-graphics`, `termin-mesh`, `termin-voxels`, `termin-navmesh`, `tcplot`: mostly mesh, texture, plot, or dense voxel buffers; keep ndarray unless a non-NumPy buffer/list API is designed.
 
 ## Annotated Files
 
@@ -47,14 +62,12 @@ Total files: 159
 | `termin-app/termin/editor_core/editor_commands.py` | undo snapshot arrays | keep copy boundary |
 | `termin-app/termin/editor_core/gizmo/base.py` | ray collider math | Vec3 candidate |
 | `termin-app/termin/editor_core/prefab_persistence.py` | JSON numpy encoding | serialization boundary |
-| `termin-app/termin/editor_tcgui/dialogs/scene_inspector.py` | color value arrays | Color/Vec3 candidate |
 | `termin-app/termin/editor_tcgui/framegraph_debugger_service.py` | frame image buffers | keep ndarray |
 | `termin-app/termin/editor_tcgui/surface_edge_debug_tool.py` | mesh vertex conversion | Vec3 candidate |
 | `termin-app/termin/editor_tcgui/texture_inspector.py` | texture preview buffers | keep ndarray |
 | `termin-app/termin/editor_tcgui/viewport_geometry_controller.py` | projection matrix multiply | Mat44 candidate |
 | `termin-app/termin/editor_tcgui/widgets/texture_picker.py` | texture preview buffers | keep ndarray |
 | `termin-app/tests/editor_commands_test.py` | undo expected arrays | tests only |
-| `termin-audio/python/termin/audio/components/audio_source.py` | spatial audio vector math | Vec3 candidate |
 | `termin-base/python/termin/geombase/pose2.py` | Pose2 vector matrices | Vec2/Mat33 candidate |
 | `termin-base/python/termin/geombase/quaternion.py` | quaternion array math | Quat candidate |
 | `termin-base/python/termin/geombase/screw.py` | screw vector algebra | Vec3/Screw native candidate |
@@ -75,7 +88,6 @@ Total files: 159
 | `termin-components/termin-components-kinematic/tests/test_general_transform3.py` | transform assertion arrays | tests only |
 | `termin-components/termin-components-kinematic/tests/transform_test.py` | pose test vectors | tests only |
 | `termin-components/termin-components-mesh/python/termin/mesh/mesh.py` | mesh arrays | keep ndarray mesh buffers |
-| `termin-components/termin-components-render/python/termin/render_components/camera.py` | camera target annotation | Vec3 candidate |
 | `termin-components/termin-components-render/python/termin/render_components/skybox_renderer.py` | view matrix copy | Mat44 candidate |
 | `termin-components/termin-components-render/tests/python/test_screen_point_to_ray.py` | ray assertion arrays | tests only |
 | `termin-components/termin-components-voxels/python/termin_voxel_components/display_component.py` | voxel display buffers | keep ndarray mesh buffers |
