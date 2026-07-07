@@ -236,6 +236,14 @@ tc_mesh* MeshRenderer::current_mesh_ptr() const {
     return nullptr;
 }
 
+tc_mesh_handle MeshRenderer::current_mesh_handle() const {
+    const_cast<MeshRenderer*>(this)->bind_mesh_component();
+    if (_mesh_component) {
+        return _mesh_component->mesh.handle;
+    }
+    return tc_mesh_handle_invalid();
+}
+
 TcMaterial MeshRenderer::get_material() const {
     if (_override_material) {
         const_cast<MeshRenderer*>(this)->ensure_override_material_ready();
@@ -635,17 +643,15 @@ bool MeshRenderer::collect_render_items(
         return true;
     }
 
-    if (mesh->submesh_count == 0) {
-        tc_mesh_ensure_default_submesh(mesh);
-    }
-
-    size_t submesh_count = mesh->submesh_count;
-    if (submesh_count == 0 && mesh->index_count > 0) {
-        submesh_count = 1;
+    if (mesh->submesh_count == 0 && !tc_mesh_ensure_default_submesh(mesh)) {
+        tc::Log::error(
+            "[MeshRenderer] cannot emit RenderItems: failed to create default submesh for mesh '%s'",
+            mesh->header.name ? mesh->header.name : mesh->header.uuid);
+        return false;
     }
 
     Mat44f model = get_model_matrix(entity());
-    for (size_t submesh_index = 0; submesh_index < submesh_count; ++submesh_index) {
+    for (size_t submesh_index = 0; submesh_index < mesh->submesh_count; ++submesh_index) {
         if (submesh_index > static_cast<size_t>(std::numeric_limits<int>::max())) {
             tc::Log::error(
                 "[MeshRenderer] mesh '%s' has too many submeshes for RenderItem geometry_id",
@@ -654,7 +660,18 @@ bool MeshRenderer::collect_render_items(
         }
 
         const tc_submesh* submesh = tc_mesh_get_submesh(mesh, submesh_index);
-        uint32_t material_slot = submesh ? submesh->material_slot : 0;
+        if (!submesh) {
+            tc::Log::error(
+                "[MeshRenderer] cannot emit RenderItem: mesh '%s' has no submesh %zu (count=%zu)",
+                mesh->header.name ? mesh->header.name : mesh->header.uuid,
+                submesh_index,
+                mesh->submesh_count);
+            continue;
+        }
+        if (submesh->index_count == 0) {
+            continue;
+        }
+        uint32_t material_slot = submesh->material_slot;
         tc_material* mat = get_material_ptr_for_slot(material_slot);
         if (!mat) {
             continue;
@@ -663,20 +680,27 @@ bool MeshRenderer::collect_render_items(
         std::string phase_mark = context.phase_mark;
         std::vector<tc_material_phase*> phases =
             mesh_renderer_phases_for_mark(mat, &phase_mark);
-        for (tc_material_phase* phase : phases) {
+        const bool emit_without_material_phase =
+            phases.empty() &&
+            ((context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u);
+        const size_t item_count = emit_without_material_phase ? 1u : phases.size();
+        for (size_t phase_index = 0; phase_index < item_count; ++phase_index) {
+            tc_material_phase* phase = emit_without_material_phase ? nullptr : phases[phase_index];
             tc_render_item item{};
             item.kind = TC_RENDER_ITEM_KIND_MESH;
-            item.flags =
-                TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX |
-                TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+            item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
             item.component = tc_component_ptr();
             item.geometry_id = static_cast<int>(submesh_index);
             item.material_phase = phase;
             item.material = tc_material_handle_invalid();
             item.material_phase_index = SIZE_MAX;
-            tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+            if (phase) {
+                item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+                tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+            }
             std::copy(model.data, model.data + 16, item.model_matrix);
             item.payload.mesh.mesh = mesh;
+            item.payload.mesh.mesh_handle = current_mesh_handle();
             item.payload.mesh.submesh_index = submesh_index;
 
             populate_mesh_render_item(item);

@@ -31,6 +31,7 @@ private:
 
     void bind_mesh_component();
     tc_mesh* current_mesh_ptr() const;
+    tc_mesh_handle current_mesh_handle() const;
     void ensure_override_material_ready();
     void recreate_overridden_material();
     void apply_pending_override_data();

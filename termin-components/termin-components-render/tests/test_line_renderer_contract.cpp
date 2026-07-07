@@ -292,3 +292,57 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     tc_mesh_shutdown();
     tc_material_shutdown();
 }
+
+TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick passes") {
+    tc_material_init();
+    tc_mesh_init();
+
+    tc_material_handle material_handle = tc_material_create(
+        "mesh-renderer-render-item-opaque-only",
+        "mesh-renderer-render-item-opaque-only");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    REQUIRE(tc_material_add_phase(
+        material,
+        tc_shader_handle_invalid(),
+        "opaque",
+        0) != nullptr);
+
+    termin::TcMesh mesh = make_two_submesh_mesh();
+    REQUIRE(mesh.is_valid());
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("mesh-renderer-render-items-pick");
+    termin::Entity entity = scene.create_entity("mesh");
+
+    auto* mesh_component = new termin::MeshComponent();
+    mesh_component->set_mesh(mesh);
+    entity.add_component(mesh_component);
+
+    auto* renderer = new termin::MeshRenderer();
+    renderer->set_material(termin::TcMaterial(material_handle));
+    renderer->set_material_slot(1, termin::TcMaterial(material_handle));
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "pick";
+    collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+    collect_context.debug_pass_name = "IdPass";
+
+    std::vector<tc_render_item> items;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        items));
+
+    REQUIRE(items.size() == 2u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[0].material_phase == nullptr);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
+    CHECK(items[1].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[1].material_phase == nullptr);
+    CHECK((items[1].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
+
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+}

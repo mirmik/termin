@@ -405,6 +405,7 @@ void init_python_component_callbacks() {
         .draw_geometry = py_drawable_cb_draw_geometry,
         .get_geometry_draws = py_drawable_cb_get_geometry_draws,
         .get_geometry_ids_for_phase = py_drawable_cb_get_geometry_ids_for_phase,
+        .collect_render_items = nullptr,
     };
     tc_component_set_python_drawable_callbacks(&drawable_callbacks);
 
