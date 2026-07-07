@@ -70,6 +70,28 @@ if(MSVC)
     target_compile_options(termin_components_foliage PRIVATE /wd4251 /wd4275)
 endif()
 
+if(TERMIN_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_components_foliage_render_item_contract_test
+        tests/test_foliage_render_item_contract.cpp
+    )
+    target_include_directories(termin_components_foliage_render_item_contract_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_components_foliage_render_item_contract_test PRIVATE
+        termin_components_foliage
+    )
+    add_test(
+        NAME termin_components_foliage_render_item_contract_test
+        COMMAND termin_components_foliage_render_item_contract_test
+    )
+    set_target_properties(
+        termin_components_foliage_render_item_contract_test
+        PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
+
 if(TERMIN_BUILD_PYTHON)
     if(NOT Python_EXECUTABLE)
         if(WIN32)
