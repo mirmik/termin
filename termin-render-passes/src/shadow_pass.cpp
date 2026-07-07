@@ -662,14 +662,6 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 tc_material_phase* phase = dc.resolve_phase();
                 if (!phase) continue;
 
-                Drawable* drawable = nullptr;
-                if (tc_component_get_drawable_vtable(dc.component)
-                    == &Drawable::cxx_drawable_vtable()) {
-                    drawable = static_cast<Drawable*>(
-                        tc_component_get_drawable_userdata(dc.component));
-                }
-                if (!drawable) continue;
-
                 tc_render_item_collect_context item_context{};
                 item_context.phase_mark = "shadow";
                 item_context.layer_mask = layer_mask;
@@ -692,7 +684,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     RenderContext direct_context;
                     direct_context.view = view_matrix;
                     direct_context.projection = proj_matrix;
-                    direct_context.model = drawable->get_model_matrix(dc.entity);
+                    if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                        std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
+                    }
                     direct_context.phase = "shadow";
                     direct_context.pass_contract = shadow_material_pass_contract();
                     direct_context.current_tc_shader = TcShader(dc.final_shader);

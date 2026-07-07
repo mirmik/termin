@@ -148,9 +148,8 @@ void IdPass::release_tgfx2_resources() {
 //
 // Writes a color attachment (RGBA-encoded pick IDs) and uses depth test +
 // write for occlusion. Parameter block is a single 208-byte std140 UBO
-// containing {model, view, projection, pickColor}. Mesh-backed drawables are
-// submitted through RenderItems. Direct non-mesh drawables still use their
-// typed override-color draw hook until line/text/etc. gain RenderItem encoders.
+// containing {model, view, projection, pickColor}. Mesh-backed and typed
+// non-mesh drawables are submitted through RenderItems.
 void IdPass::execute_with_data_tgfx2(
     ExecuteContext& ctx,
     const Rect4i& rect,
@@ -261,9 +260,8 @@ void IdPass::execute_with_data_tgfx2(
             });
     }
 
-    // GeometryDrawCall collection is retained only to discover direct non-mesh
-    // drawables until they grow typed RenderItems. Mesh-backed work is
-    // submitted from mesh_tasks above.
+    // GeometryDrawCall collection is retained only to discover typed non-mesh
+    // drawable geometry. Mesh-backed work is submitted from mesh_tasks above.
     collect_draw_calls(scene, layer_mask, ctx.render_category_mask, id_shader_handle_);
     sort_draw_calls_by_shader();
 
@@ -464,12 +462,6 @@ void IdPass::execute_with_data_tgfx2(
             continue;
         }
 
-        Drawable* drawable = nullptr;
-        if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
-            drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        }
-        if (!drawable) continue;
-
         const char* name = dc.entity.name();
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);
@@ -500,7 +492,9 @@ void IdPass::execute_with_data_tgfx2(
                 RenderContext direct_context;
                 direct_context.view = view;
                 direct_context.projection = projection;
-                direct_context.model = drawable->get_model_matrix(dc.entity);
+                if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                    std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
+                }
                 direct_context.phase = pick_phase;
                 direct_context.pass_contract = pass_contract;
                 direct_context.current_tc_shader = TcShader(dc.final_shader);

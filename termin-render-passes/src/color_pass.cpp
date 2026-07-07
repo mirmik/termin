@@ -817,20 +817,6 @@ void ColorPass::execute_with_data(
 
         tc_shader_handle final_shader = dc.final_shader;
 
-        // Only cast the drawable userdata to Drawable* when the component
-        // actually installed the C++ drawable vtable. Python drawables use
-        // the same capability slot with a PyObject* userdata and a
-        // different C vtable — casting that to Drawable* and calling
-        // virtual methods on it is undefined behaviour.
-        Drawable* drawable = nullptr;
-        if (tc_component_get_drawable_vtable(dc.component) == &Drawable::cxx_drawable_vtable()) {
-            drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(dc.component));
-        }
-        if (!drawable) {
-            ++draw_index;
-            continue;
-        }
-
         auto refresh_phase = [&]() -> bool {
             ResolvedDrawPhase resolved = resolve_draw_phase(
                 dc.component,
@@ -911,7 +897,9 @@ void ColorPass::execute_with_data(
             RenderContext direct_context;
             direct_context.view = view;
             direct_context.projection = projection;
-            direct_context.model = drawable->get_model_matrix(dc.entity);
+            if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
+            }
             direct_context.phase = phase_mark;
             direct_context.pass_contract = color_material_pass_contract();
             direct_context.current_tc_shader = TcShader(final_shader);

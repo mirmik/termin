@@ -224,9 +224,11 @@ Target foliage shape:
   and reuse the same foliage transform model;
 - no foliage shader should depend on hard-coded backend bindings.
 
-The current direct `draw_tgfx2()` path can stay as the draw-call integration
-point, but it should prepare and bind resources through reflected shader layout
-metadata. The direct path should not invent a separate material ABI.
+The former direct `draw_tgfx2()` integration point has been retired. Foliage
+now submits a typed RenderItem and binds resources through the registered
+encoder path, so the pass owns pass resources and the encoder owns draw-scope
+foliage resources. This path should continue moving toward reflected shader
+layout metadata instead of reintroducing renderer-specific material ABI.
 
 Current checkpoint:
 
@@ -234,8 +236,8 @@ Current checkpoint:
   `get_material_vertex_variant()` using engine-authored foliage templates and
   the selected material/pass fragment stage;
 - `foliage_draw` and `foliage_instances` are still bound explicitly by logical
-  name in `FoliageLayerComponent`, because the component owns instance buffers
-  and direct draw submission;
+  name in the foliage encoder because the component owns instance buffers and
+  submits a typed RenderItem;
 - remaining work is to make foliage vertex input layout fully reflection-owned
   and to converge pass integration with static/skinned draw flows.
 
