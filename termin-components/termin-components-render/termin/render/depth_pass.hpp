@@ -44,9 +44,7 @@ public:
     std::string pass_phase_mark = "depth";
     bool clear = true;
 
-    INSPECT_FIELD_ACCESSORS(DepthPass, std::string, phase_mark, "Phase Mark", "string",
-        ([](DepthPass* self) { return self->pass_phase_mark; }),
-        ([](DepthPass* self, std::string value) { self->pass_phase_mark = value; }))
+    INSPECT_FIELD_NAMED(DepthPass, pass_phase_mark, "phase_mark", "Phase Mark", "string")
     INSPECT_FIELD_CHOICES(DepthPass, depth_encoding, "Depth Encoding", "string",
         {"linear", "Linear"},
         {"linear_inverse", "Linear Inverse"},
@@ -136,9 +134,7 @@ public:
     INSPECT_FIELD(DepthOnlyPass, output_res, "Output Resource", "string")
     INSPECT_FIELD(DepthOnlyPass, output_res_target, "Output Target", "string")
     INSPECT_FIELD(DepthOnlyPass, camera_name, "Camera Name", "string")
-    INSPECT_FIELD_ACCESSORS(DepthOnlyPass, std::string, phase_mark, "Phase Mark", "string",
-        ([](DepthOnlyPass* self) { return self->pass_phase_mark; }),
-        ([](DepthOnlyPass* self, std::string value) { self->pass_phase_mark = value; }))
+    INSPECT_FIELD_NAMED(DepthOnlyPass, pass_phase_mark, "phase_mark", "Phase Mark", "string")
     INSPECT_TYPE_METADATA(DepthOnlyPass, graph, make_pass_graph_metadata(
         {{"output_res_target", "depth_texture"}},
         {{"output_res", "depth_texture"}},
