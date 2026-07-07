@@ -1,7 +1,7 @@
 import unittest
 from termin.kinematic import KinematicChain3
 from termin.kinematic import Rotator3, Actuator3
-from termin.geombase import Pose3, Screw3
+from termin.geombase import Pose3, Screw3, Vec3
 from termin.kinematic import Transform3
 import numpy
 
@@ -11,8 +11,8 @@ def _build_rotator_actuator_chain(base_pose=None):
         base = Transform3()
     else:
         base = Transform3(base_pose)
-    rotator = Rotator3(axis=numpy.array([0, 0, 1]), parent=base)
-    actuator = Actuator3(axis=numpy.array([1, 0, 0]), parent=rotator)
+    rotator = Rotator3(axis=Vec3(0, 0, 1), parent=base)
+    actuator = Actuator3(axis=Vec3(1, 0, 0), parent=rotator)
     end_effector = Transform3(parent=actuator.output)
     chain = KinematicChain3(distal=end_effector)
     return base, rotator, actuator, end_effector, chain

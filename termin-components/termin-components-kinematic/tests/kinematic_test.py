@@ -1,19 +1,19 @@
 import unittest
 from termin.kinematic import Rotator3, Transform3
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Vec3
 import numpy
 import math
 
 class TestRotator3(unittest.TestCase):
     def test_rotation(self):
-        rotator = Rotator3(axis=numpy.array([0, 0, 1]))
+        rotator = Rotator3(axis=Vec3(0, 0, 1))
         trsf = Transform3(Pose3.translation(1.0, 0.0, 0.0))
         rotator.link(trsf)
 
         angle = math.pi / 2  # 90 degrees
         rotator.set_coord(angle)
 
-        rotated_point = trsf.transform_point(numpy.array([1.0, 0.0, 0.0]))
+        rotated_point = trsf.transform_point(Vec3(1.0, 0.0, 0.0))
         expected_point = numpy.array([0.0, 2.0, 0.0])
         numpy.testing.assert_array_almost_equal(rotated_point, expected_point)
 

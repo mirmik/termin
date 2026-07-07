@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
-
 from tcbase import log
 from tcbase._geom_native import Vec4
 from tcgui.widgets.file_dialog_overlay import show_open_file_dialog, show_save_file_dialog

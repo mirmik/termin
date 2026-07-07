@@ -100,7 +100,7 @@ class TestTransform3(unittest.TestCase):
         pose = Pose3.moveX(1.0) * Pose3.rotateZ(math.pi/2)
         transform.relocate(pose)
 
-        point = numpy.array([1.0, 0.0, 0.0])
+        point = Vec3(1.0, 0.0, 0.0)
         transformed_point = transform.transform_point(point)
         expected_point = numpy.array([1.0, 1.0, 0.0])  # After 90 deg rotation around Z and translation
 
@@ -119,8 +119,8 @@ class TestTransform3(unittest.TestCase):
     
     def test_trent_with_rotator_and_actuator(self):
         
-        rotator = Rotator3(axis=numpy.array([0.0, 0.0, 1.0]), name="rotator1")
-        actuator = Actuator3(axis=numpy.array([1.0, 0.0, 0.0]), name="actuator1")
+        rotator = Rotator3(axis=Vec3(0.0, 0.0, 1.0), name="rotator1")
+        actuator = Actuator3(axis=Vec3(1.0, 0.0, 0.0), name="actuator1")
         end_effector = Transform3(name="end_effector")
         
         rotator.link(actuator)
