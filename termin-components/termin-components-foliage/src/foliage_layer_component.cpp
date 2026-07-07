@@ -15,8 +15,8 @@
 
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/geom/general_pose3.hpp>
-#include <termin/render/frame_uniforms.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 #include <inspect/tc_kind_cpp.hpp>
 #include <tcbase/tc_log.hpp>
@@ -260,6 +260,44 @@ Mat44f layer_model_with_scale(const Entity& entity) {
     return Mat44f::compose(pose.lin, pose.ang, pose.scale);
 }
 
+bool foliage_render_item_draw_encoder(
+    tgfx::RenderContext2& ctx,
+    const tc_render_item& item,
+    const RenderItemDrawSubmitRequest& request,
+    void* user_data)
+{
+    (void)user_data;
+    if (item.kind != TC_RENDER_ITEM_KIND_FOLIAGE_BATCH) {
+        tc::Log::error(
+            "[FoliageLayerComponent] foliage encoder received unsupported item kind %u",
+            item.kind);
+        return false;
+    }
+    CxxComponent* component = CxxComponent::from_tc(item.component);
+    auto* foliage = dynamic_cast<FoliageLayerComponent*>(component);
+    if (!foliage) {
+        const char* type_name = component ? component->type_name() : "<null>";
+        tc::Log::error(
+            "[FoliageLayerComponent] foliage RenderItem component is not FoliageLayerComponent: type='%s'",
+            type_name ? type_name : "<unknown>");
+        return false;
+    }
+    return foliage->encode_render_item_tgfx2(ctx, item, request);
+}
+
+void ensure_foliage_render_item_encoder_registered()
+{
+    static bool registered = false;
+    if (registered) {
+        return;
+    }
+
+    RenderItemDrawEncoderDesc desc{};
+    desc.encode = foliage_render_item_draw_encoder;
+    desc.debug_name = "FoliageLayerComponent";
+    registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_FOLIAGE_BATCH, desc);
+}
+
 void register_foliage_data_handle_kind() {
     if (tc::KindRegistryCpp::instance().has("foliage_data_handle")) {
         return;
@@ -301,6 +339,7 @@ FoliageLayerComponent::FoliageLayerComponent()
 }
 
 void FoliageLayerComponent::register_type() {
+    ensure_foliage_render_item_encoder_registered();
     register_foliage_data_handle_kind();
 
     auto& component_registry = ComponentRegistry::instance();
@@ -424,7 +463,7 @@ std::set<std::string> FoliageLayerComponent::get_phase_marks() const {
 void FoliageLayerComponent::draw_geometry(const RenderContext& context, int geometry_id) {
     (void)context;
     (void)geometry_id;
-    // Foliage is rendered through draw_tgfx2() as a single instanced batch.
+    // Foliage is rendered through FOLIAGE_BATCH RenderItems.
 }
 
 std::vector<GeometryDrawCall> FoliageLayerComponent::get_geometry_draws(
@@ -467,18 +506,8 @@ std::vector<GeometryDrawCall> FoliageLayerComponent::get_geometry_draws(
 tc_mesh* FoliageLayerComponent::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
     (void)phase_mark;
     (void)geometry_id;
-    // Returning nullptr opts ColorPass into the direct draw_tgfx2 path.
+    // Instanced foliage has its own typed RenderItem payload.
     return nullptr;
-}
-
-bool FoliageLayerComponent::supports_direct_tgfx2_draw(
-    const std::string& phase_mark,
-    int geometry_id,
-    DirectTgfx2DrawKind kind
-) const {
-    (void)phase_mark;
-    return geometry_id == FOLIAGE_GEOMETRY_ID
-        && kind == DirectTgfx2DrawKind::MaterialPhase;
 }
 
 TcShader FoliageLayerComponent::override_shader(
@@ -545,49 +574,132 @@ void FoliageLayerComponent::collect_shader_usages(
     }
 }
 
-bool FoliageLayerComponent::draw_tgfx2(
-    tgfx::RenderContext2& ctx2,
-    const RenderContext& context,
-    const std::string& phase_mark,
-    tc_material_phase* phase,
-    int geometry_id
+bool FoliageLayerComponent::collect_render_items(
+    const tc_render_item_collect_context& context,
+    tc_render_item_sink& sink
 ) {
-    (void)phase_mark;
-    if (!enabled || geometry_id != FOLIAGE_GEOMETRY_ID) {
+    if (!sink.emit) {
+        tc::Log::error("[FoliageLayerComponent] cannot emit render items: sink callback is null");
         return false;
     }
-    if (foliage_uuid.empty()) {
-        return false;
+    if (!context.phase_mark || context.phase_mark[0] == '\0') {
+        return true;
+    }
+    if (!enabled || foliage_uuid.empty() || !prototype_mesh.is_valid() || !material.is_valid()) {
+        return true;
+    }
+
+    TcFoliageData foliage = TcFoliageData::from_uuid(foliage_uuid);
+    if (!foliage.is_valid() || !foliage.ensure_loaded() || foliage.instance_count() == 0) {
+        return true;
     }
 
     tc_mesh* mesh = prototype_mesh.get();
     if (!mesh) {
-        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: prototype mesh is missing");
+        tc::Log::error("[FoliageLayerComponent] cannot emit foliage RenderItem: prototype mesh is missing");
+        return false;
+    }
+    tc_mesh_handle mesh_handle = tc_mesh_find(mesh->header.uuid);
+    if (tc_mesh_handle_is_invalid(mesh_handle)) {
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot emit foliage RenderItem: prototype mesh has no stable registry handle");
         return false;
     }
 
     tc_material* mat = material.get();
     if (!mat) {
-        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: material is missing");
+        tc::Log::error("[FoliageLayerComponent] cannot emit foliage RenderItem: material is missing");
         return false;
     }
+
+    tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
+    size_t count = tc_material_get_phases_for_mark(
+        mat,
+        context.phase_mark,
+        phases,
+        TC_MATERIAL_MAX_PHASES);
+    for (size_t i = 0; i < count; ++i) {
+        tc_material_phase* phase = phases[i];
+        if (!phase) {
+            continue;
+        }
+
+        tc_render_item item{};
+        item.kind = TC_RENDER_ITEM_KIND_FOLIAGE_BATCH;
+        item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+        item.component = tc_component_ptr();
+        item.geometry_id = FOLIAGE_GEOMETRY_ID;
+        item.material_phase = phase;
+        item.material = tc_material_handle_invalid();
+        item.material_phase_index = SIZE_MAX;
+        tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+
+        Mat44f model = get_model_matrix(entity());
+        std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
+
+        item.payload.foliage_batch.prototype_mesh = mesh;
+        item.payload.foliage_batch.prototype_mesh_handle = mesh_handle;
+        item.payload.foliage_batch.foliage_uuid = foliage_uuid.c_str();
+
+        if (!sink.emit(&item, sink.user_data)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool FoliageLayerComponent::encode_render_item_tgfx2(
+    tgfx::RenderContext2& ctx2,
+    const tc_render_item& item,
+    const RenderItemDrawSubmitRequest& request
+) {
+    if (item.kind != TC_RENDER_ITEM_KIND_FOLIAGE_BATCH) {
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot encode item kind %u as foliage batch",
+            item.kind);
+        return false;
+    }
+    if (!request.draw_context) {
+        tc::Log::error("[FoliageLayerComponent] cannot encode foliage batch without draw context");
+        return false;
+    }
+    if (!enabled || item.geometry_id != FOLIAGE_GEOMETRY_ID) {
+        return false;
+    }
+
+    const RenderContext& context = *request.draw_context;
+    const char* item_foliage_uuid = item.payload.foliage_batch.foliage_uuid;
+    if (!item_foliage_uuid || item_foliage_uuid[0] == '\0') {
+        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: RenderItem has empty foliage asset");
+        return false;
+    }
+
+    tc_mesh* mesh = item.payload.foliage_batch.prototype_mesh;
+    if (!mesh) {
+        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: prototype mesh is missing");
+        return false;
+    }
+
+    tc_material_phase* phase = request.material_phase
+        ? request.material_phase
+        : item.material_phase;
     if (!phase) {
         tc::Log::error("[FoliageLayerComponent] cannot draw foliage: material phase is missing");
         return false;
     }
 
-    TcFoliageData foliage = TcFoliageData::from_uuid(foliage_uuid);
+    TcFoliageData foliage = TcFoliageData::from_uuid(item_foliage_uuid);
     if (!foliage.is_valid()) {
         tc::Log::error(
             "[FoliageLayerComponent] cannot draw foliage: asset '%s' is not declared",
-            foliage_uuid.c_str()
+            item_foliage_uuid
         );
         return false;
     }
     if (!foliage.ensure_loaded()) {
         tc::Log::error(
             "[FoliageLayerComponent] cannot draw foliage: asset '%s' failed to load",
-            foliage_uuid.c_str()
+            item_foliage_uuid
         );
         return false;
     }
@@ -680,27 +792,12 @@ bool FoliageLayerComponent::draw_tgfx2(
     ctx2.clear_resource_bindings();
     ctx2.use_shader_resource_layout(shader_binding.shader);
 
-    if (context.prepare_tgfx2_material_resources) {
-        context.prepare_tgfx2_material_resources(ctx2, shader_binding.shader, phase);
-    } else {
-        EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(
-            context.view,
-            context.projection,
-            context.camera_position,
-            static_cast<float>(context.viewport_width),
-            static_cast<float>(context.viewport_height),
-            context.camera ? static_cast<float>(context.camera->near_clip) : 0.1f,
-            context.camera ? static_cast<float>(context.camera->far_clip) : 100.0f);
-
-        MaterialPipelineResourceView material_resources{};
-        material_resources.per_frame = &per_frame;
-        prepare_material_pipeline_resources(
-            ctx2,
-            ctx2.device(),
-            shader_binding.shader,
-            phase,
-            material_resources);
+    if (!request.prepare_material_resources) {
+        tc::Log::error(
+            "[FoliageLayerComponent] cannot draw foliage: RenderItem submit request has no material resource callback");
+        return false;
     }
+    request.prepare_material_resources(ctx2, shader_binding.shader, phase);
 
     ctx2.bind_uniform_data("foliage_draw", &push, sizeof(push));
     ctx2.bind_storage_buffer(
