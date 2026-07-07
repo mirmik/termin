@@ -7,7 +7,7 @@ from typing import Callable
 import numpy as np
 
 from tcbase import log
-from tcbase._geom_native import Vec3
+from tcbase._geom_native import Vec3, Vec4
 
 
 _GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
@@ -102,12 +102,11 @@ class ViewportGeometryController:
             return Vec3(0.0, 0.0, 0.0)
         cam_pose = camera.entity.transform.global_pose()
         cam_pos = cam_pose.lin
-        rot = cam_pose.rotation_matrix()
-        forward = rot[:, 1]
+        forward = cam_pose.vector_to_global(Vec3(0.0, 1.0, 0.0))
         return Vec3(
-            float(cam_pos[0] + forward[0] * 5.0),
-            float(cam_pos[1] + forward[1] * 5.0),
-            float(cam_pos[2] + forward[2] * 5.0),
+            float(cam_pos.x + forward.x * 5.0),
+            float(cam_pos.y + forward.y * 5.0),
+            float(cam_pos.z + forward.z * 5.0),
         )
 
     def world_point_on_oxy_plane(
@@ -168,12 +167,10 @@ class ViewportGeometryController:
         previous_aspect = float(camera.aspect)
         try:
             camera.set_aspect(width / height)
-            view = camera.get_view_matrix().to_numpy()
-            projection = camera.get_projection_matrix().to_numpy()
-            clip = projection @ view @ np.array(
-                (float(point.x), float(point.y), float(point.z), 1.0),
-                dtype=np.float64,
+            view_point = camera.get_view_matrix().transform_vec4(
+                Vec4(float(point.x), float(point.y), float(point.z), 1.0)
             )
+            clip = camera.get_projection_matrix().transform_vec4(view_point)
         except Exception as e:
             log.error(f"[ViewportGeometryController] viewport projection failed: {e}")
             return None
@@ -185,13 +182,12 @@ class ViewportGeometryController:
                     "[ViewportGeometryController] viewport projection aspect "
                     f"restore failed: {e}"
                 )
-        w = float(clip[3])
+        w = float(clip.w)
         if abs(w) <= 1.0e-8:
             return None
-        ndc = clip[:3] / w
         return (
-            float((ndc[0] + 1.0) * 0.5 * width),
-            float((ndc[1] + 1.0) * 0.5 * height),
+            float((clip.x / w + 1.0) * 0.5 * width),
+            float((clip.y / w + 1.0) * 0.5 * height),
         )
 
     def world_point_on_plane(

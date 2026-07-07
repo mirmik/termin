@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from tcbase import log
+from tcbase._geom_native import Vec4
 from tcgui.widgets.file_dialog_overlay import show_open_file_dialog, show_save_file_dialog
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
@@ -632,14 +633,13 @@ class CadApp:
         height: int,
     ) -> tuple[float, float] | None:
         mvp = self.camera.view_projection(width, height)
-        clip = mvp @ np.array((point[0], point[1], point[2], 1.0), dtype=np.float32)
-        w = float(clip[3])
+        clip = mvp.transform_vec4(Vec4(float(point[0]), float(point[1]), float(point[2]), 1.0))
+        w = float(clip.w)
         if w <= 1.0e-8:
             return None
-        ndc = clip[:3] / w
         return (
-            float((ndc[0] + 1.0) * 0.5 * float(width)),
-            float((ndc[1] + 1.0) * 0.5 * float(height)),
+            float((clip.x / w + 1.0) * 0.5 * float(width)),
+            float((clip.y / w + 1.0) * 0.5 * float(height)),
         )
 
     def _refresh_labels(self) -> None:

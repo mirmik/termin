@@ -1,10 +1,7 @@
 #include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/operators.h>
-
-#include <tcbase/tc_log.hpp>
 
 #include <termin/lighting/lighting.hpp>
 #include <termin/geom/vec3.hpp>
@@ -13,24 +10,6 @@
 namespace nb = nanobind;
 using namespace termin;
 
-
-// Helper: numpy array to Vec3
-static Vec3 numpy_to_vec3(nb::object obj) {
-    if (nb::isinstance<Vec3>(obj)) {
-        return nb::cast<Vec3>(obj);
-    }
-    try {
-        auto arr = nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(obj);
-        double* ptr = arr.data();
-        return Vec3{ptr[0], ptr[1], ptr[2]};
-    } catch (const std::exception& e) {
-        tc::Log::debug(e, "numpy_to_vec3: ndarray cast failed, falling back to sequence");
-    } catch (...) {
-        tc::Log::debug("numpy_to_vec3: unknown exception during ndarray cast, falling back to sequence");
-    }
-    nb::sequence seq = nb::cast<nb::sequence>(obj);
-    return Vec3{nb::cast<double>(seq[0]), nb::cast<double>(seq[1]), nb::cast<double>(seq[2])};
-}
 
 NB_MODULE(_lighting_native, m) {
     m.doc() = "Native C++ lighting module for termin";
@@ -141,27 +120,27 @@ NB_MODULE(_lighting_native, m) {
     nb::class_<LightSample>(m, "LightSample")
         .def(nb::init<>())
         .def_prop_rw("L",
-            [](const LightSample& s) { return vec3_to_numpy(s.L); },
-            [](LightSample& s, nb::object v) { s.L = numpy_to_vec3(v); })
+            [](const LightSample& s) { return s.L; },
+            [](LightSample& s, const Vec3& v) { s.L = v; })
         .def_rw("distance", &LightSample::distance)
         .def_rw("attenuation", &LightSample::attenuation)
         .def_prop_rw("radiance",
-            [](const LightSample& s) { return vec3_to_numpy(s.radiance); },
-            [](LightSample& s, nb::object v) { s.radiance = numpy_to_vec3(v); });
+            [](const LightSample& s) { return s.radiance; },
+            [](LightSample& s, const Vec3& v) { s.radiance = v; });
 
     // Light
     nb::class_<Light>(m, "Light")
         .def(nb::init<>())
-        .def("__init__", [](Light* self, LightType type, nb::object color, double intensity,
-                         nb::object direction, nb::object position,
+        .def("__init__", [](Light* self, LightType type, const Vec3& color, double intensity,
+                         const Vec3& direction, const Vec3& position,
                          nb::object range, double inner_angle, double outer_angle,
                          nb::object attenuation, nb::object shadows, const std::string& name) {
             new (self) Light();
             self->type = type;
-            if (!color.is_none()) self->color = numpy_to_vec3(color);
+            self->color = color;
             self->intensity = intensity;
-            if (!direction.is_none()) self->direction = numpy_to_vec3(direction).normalized();
-            if (!position.is_none()) self->position = numpy_to_vec3(position);
+            self->direction = direction.normalized();
+            self->position = position;
             if (!range.is_none()) self->range = nb::cast<double>(range);
             self->inner_angle = inner_angle;
             self->outer_angle = outer_angle;
@@ -174,10 +153,10 @@ NB_MODULE(_lighting_native, m) {
             self->name = name;
         },
              nb::arg("type") = LightType::Directional,
-             nb::arg("color") = nb::none(),
+             nb::arg("color") = Vec3(1.0, 1.0, 1.0),
              nb::arg("intensity") = 1.0,
-             nb::arg("direction") = nb::none(),
-             nb::arg("position") = nb::none(),
+             nb::arg("direction") = Vec3(0.0, 1.0, 0.0),
+             nb::arg("position") = Vec3(0.0, 0.0, 0.0),
              nb::arg("range") = nb::none(),
              nb::arg("inner_angle") = 15.0 * M_PI / 180.0,
              nb::arg("outer_angle") = 30.0 * M_PI / 180.0,
@@ -186,15 +165,15 @@ NB_MODULE(_lighting_native, m) {
              nb::arg("name") = "")
         .def_rw("type", &Light::type)
         .def_prop_rw("color",
-            [](const Light& l) { return vec3_to_numpy(l.color); },
-            [](Light& l, nb::object v) { l.color = numpy_to_vec3(v); })
+            [](const Light& l) { return l.color; },
+            [](Light& l, const Vec3& v) { l.color = v; })
         .def_rw("intensity", &Light::intensity)
         .def_prop_rw("direction",
-            [](const Light& l) { return vec3_to_numpy(l.direction); },
-            [](Light& l, nb::object v) { l.direction = numpy_to_vec3(v).normalized(); })
+            [](const Light& l) { return l.direction; },
+            [](Light& l, const Vec3& v) { l.direction = v.normalized(); })
         .def_prop_rw("position",
-            [](const Light& l) { return vec3_to_numpy(l.position); },
-            [](Light& l, nb::object v) { l.position = numpy_to_vec3(v); })
+            [](const Light& l) { return l.position; },
+            [](Light& l, const Vec3& v) { l.position = v; })
         .def_prop_rw("range",
             [](const Light& l) -> nb::object {
                 if (l.range.has_value()) return nb::float_(l.range.value());
@@ -210,10 +189,10 @@ NB_MODULE(_lighting_native, m) {
         .def_rw("shadows", &Light::shadows)
         .def_rw("name", &Light::name)
         .def_prop_ro("intensity_rgb", [](const Light& l) {
-            return vec3_to_numpy(l.intensity_rgb());
+            return l.intensity_rgb();
         })
-        .def("sample", [](const Light& l, nb::object point) {
-            return l.sample(numpy_to_vec3(point));
+        .def("sample", [](const Light& l, const Vec3& point) {
+            return l.sample(point);
         }, nb::arg("point"), "Evaluate light contribution at a surface point")
         .def("to_uniform_dict", [](const Light& l) {
             nb::dict d;

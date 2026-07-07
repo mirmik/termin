@@ -1,5 +1,13 @@
 import numpy
-from tcbase._geom_native import Pose3
+from tcbase._geom_native import Pose3, Vec3
+
+
+def _vec3(value) -> Vec3:
+    return Vec3(float(value[0]), float(value[1]), float(value[2]))
+
+
+def _array3(value) -> numpy.ndarray:
+    return numpy.asarray((value.x, value.y, value.z), dtype=float)
 
 class Transform:
     """A class for 3D transformations tree using Pose3."""
@@ -84,7 +92,7 @@ class Transform:
 
     def world_matrix(self) -> numpy.ndarray:
         """Return 4x4 homogeneous transformation matrix in world coordinates."""
-        return self.global_pose().as_matrix()
+        return numpy.asarray(self.global_pose().as_matrix(), dtype=float)
 
     def _has_ancestor(self, possible_ancestor):
         current = self.parent
@@ -105,24 +113,24 @@ class Transform:
     def transform_point(self, point: numpy.ndarray) -> numpy.ndarray:
         """Transform a point from local to global coordinates."""
         global_pose = self.global_pose()
-        return global_pose.transform_point(point)
+        return _array3(global_pose.transform_point(_vec3(point)))
 
     def transform_point_inverse(self, point: numpy.ndarray) -> numpy.ndarray:
         """Transform a point from global to local coordinates."""
         global_pose = self.global_pose()
         inv_global_pose = global_pose.inverse()
-        return inv_global_pose.transform_point(point)
+        return _array3(inv_global_pose.transform_point(_vec3(point)))
 
     def transform_vector(self, vector: numpy.ndarray) -> numpy.ndarray:
         """Transform a vector from local to global coordinates."""
         global_pose = self.global_pose()
-        return global_pose.transform_vector(vector)
+        return _array3(global_pose.transform_vector(_vec3(vector)))
 
     def transform_vector_inverse(self, vector: numpy.ndarray) -> numpy.ndarray:
         """Transform a vector from global to local coordinates."""
         global_pose = self.global_pose()
         inv_global_pose = global_pose.inverse()
-        return inv_global_pose.transform_vector(vector)
+        return _array3(inv_global_pose.transform_vector(_vec3(vector)))
 
     def __repr__(self):
         return f"Transform({self.name}, local_pose={self._local_pose})"
@@ -184,4 +192,3 @@ class Transform3(Transform):
     def left(self, distance: float = 1.0) -> numpy.ndarray:
         """Get the left direction vector in global coordinates."""
         return -self.right(distance)
-

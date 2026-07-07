@@ -3,6 +3,7 @@
 #include <nanobind/stl/set.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
@@ -85,16 +86,6 @@ static tc_scene_handle object_to_scene_handle(nb::object scene_py) {
     return TC_SCENE_HANDLE_INVALID;
 }
 
-static Mat44f ndarray_to_mat44f(const nb::ndarray<nb::numpy, float, nb::shape<4, 4>>& src) {
-    Mat44f result;
-    for (int row = 0; row < 4; ++row) {
-        for (int col = 0; col < 4; ++col) {
-            result(col, row) = src(row, col);
-        }
-    }
-    return result;
-}
-
 static void set_material_from_python(MaterialPass& pass, nb::object material_obj) {
     if (material_obj.is_none()) {
         pass.material = TcMaterial();
@@ -172,20 +163,19 @@ static void set_material_from_python(MaterialPass& pass, nb::object material_obj
     }
 }
 
-static tc_vec3 tc_vec3_from_python(nb::handle value) {
-    nb::object obj = nb::borrow<nb::object>(value);
+static tc_vec3 tc_vec3_from_vec3(const Vec3& value) {
     return tc_vec3{
-        nb::cast<double>(obj[0]),
-        nb::cast<double>(obj[1]),
-        nb::cast<double>(obj[2]),
+        value.x,
+        value.y,
+        value.z,
     };
 }
 
-static std::vector<tc_vec3> tc_vec3_list_from_python(nb::handle value) {
+static std::vector<tc_vec3> tc_vec3_list_from_vec3_list(const std::vector<Vec3>& points) {
     std::vector<tc_vec3> result;
-    nb::iterable iterable = nb::cast<nb::iterable>(value);
-    for (nb::handle item : iterable) {
-        result.push_back(tc_vec3_from_python(item));
+    result.reserve(points.size());
+    for (const Vec3& point : points) {
+        result.push_back(tc_vec3_from_vec3(point));
     }
     return result;
 }
@@ -193,7 +183,7 @@ static std::vector<tc_vec3> tc_vec3_list_from_python(nb::handle value) {
 static nb::list tc_vec3_list_to_python(const std::vector<tc_vec3>& points) {
     nb::list result;
     for (const tc_vec3& point : points) {
-        result.append(nb::make_tuple(point.x, point.y, point.z));
+        result.append(Vec3{point.x, point.y, point.z});
     }
     return result;
 }
@@ -656,7 +646,7 @@ NB_MODULE(_components_render_native, m) {
             cxx_component_init<LineRenderer>(self);
         })
         .def("__init__", [](nb::handle self,
-                            nb::object points,
+                            const std::vector<Vec3>& points,
                             float width,
                             bool raw_lines,
                             nb::object material_arg,
@@ -665,9 +655,7 @@ NB_MODULE(_components_render_native, m) {
                             int tube_sides) {
             cxx_component_init<LineRenderer>(self);
             auto* cpp = nb::inst_ptr<LineRenderer>(self);
-            if (!points.is_none()) {
-                cpp->set_points(tc_vec3_list_from_python(points));
-            }
+            cpp->set_points(tc_vec3_list_from_vec3_list(points));
             cpp->set_width(width);
             cpp->set_render_mode(render_mode);
             cpp->set_raw_lines(raw_lines);
@@ -681,7 +669,7 @@ NB_MODULE(_components_render_native, m) {
                 }
             }
         },
-        nb::arg("points") = nb::none(),
+        nb::arg("points") = std::vector<Vec3>{},
         nb::arg("width") = 0.1f,
         nb::arg("raw_lines") = false,
         nb::arg("material") = nb::none(),
@@ -690,8 +678,8 @@ NB_MODULE(_components_render_native, m) {
         nb::arg("tube_sides") = 6)
         .def_prop_rw("points",
             [](LineRenderer& self) { return tc_vec3_list_to_python(self.points()); },
-            [](LineRenderer& self, nb::object value) {
-                self.set_points(tc_vec3_list_from_python(value));
+            [](LineRenderer& self, const std::vector<Vec3>& value) {
+                self.set_points(tc_vec3_list_from_vec3_list(value));
             })
         .def_prop_rw("width", [](LineRenderer& self) { return self.width; }, &LineRenderer::set_width)
         .def_prop_rw("render_mode",
@@ -705,19 +693,19 @@ NB_MODULE(_components_render_native, m) {
             nb::rv_policy::reference_internal)
         .def_prop_rw("up_hint",
             [](LineRenderer& self) {
-                return nb::make_tuple(self.up_hint.x, self.up_hint.y, self.up_hint.z);
+                return Vec3{self.up_hint.x, self.up_hint.y, self.up_hint.z};
             },
-            [](LineRenderer& self, nb::object value) {
-                self.set_up_hint(tc_vec3_from_python(value));
+            [](LineRenderer& self, const Vec3& value) {
+                self.set_up_hint(tc_vec3_from_vec3(value));
             })
         .def_prop_rw("tube_sides", [](LineRenderer& self) { return self.tube_sides; }, &LineRenderer::set_tube_sides)
         .def_prop_ro("is_drawable", [](LineRenderer&) { return true; })
-        .def("set_points", [](LineRenderer& self, nb::object value) {
-            self.set_points(tc_vec3_list_from_python(value));
+        .def("set_points", [](LineRenderer& self, const std::vector<Vec3>& value) {
+            self.set_points(tc_vec3_list_from_vec3_list(value));
         })
         .def("clear_points", &LineRenderer::clear_points)
-        .def("add_point", [](LineRenderer& self, nb::object value) {
-            self.add_point(tc_vec3_from_python(value));
+        .def("add_point", [](LineRenderer& self, const Vec3& value) {
+            self.add_point(tc_vec3_from_vec3(value));
         })
         .def("set_width", &LineRenderer::set_width)
         .def("set_render_mode", &LineRenderer::set_render_mode)
@@ -763,7 +751,7 @@ NB_MODULE(_components_render_native, m) {
         .def("__init__", [](nb::handle self,
                             const std::string& text,
                             float size,
-                            nb::object color,
+                            std::optional<Vec4> color,
                             WorldTextAnchor anchor,
                             WorldTextOrientation orientation,
                             const std::string& phase_mark,
@@ -776,14 +764,8 @@ NB_MODULE(_components_render_native, m) {
             cpp->set_orientation(orientation);
             cpp->set_phase_mark(phase_mark);
             cpp->set_font_path(font_path);
-            if (!color.is_none()) {
-                auto tuple = nb::cast<std::tuple<double, double, double, double>>(color);
-                cpp->set_color(Vec4{
-                    std::get<0>(tuple),
-                    std::get<1>(tuple),
-                    std::get<2>(tuple),
-                    std::get<3>(tuple),
-                });
+            if (color.has_value()) {
+                cpp->set_color(*color);
             }
         },
         nb::arg("text") = "",
@@ -798,35 +780,31 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw("phase_mark", [](WorldTextComponent& self) { return self.phase_mark; }, &WorldTextComponent::set_phase_mark)
         .def_prop_rw("local_offset",
             [](WorldTextComponent& self) {
-                return nb::make_tuple(self.local_offset.x, self.local_offset.y, self.local_offset.z);
+                return self.local_offset;
             },
-            [](WorldTextComponent& self, nb::object value) {
-                auto tuple = nb::cast<std::tuple<double, double, double>>(value);
-                self.set_local_offset(Vec3{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple)});
+            [](WorldTextComponent& self, const Vec3& value) {
+                self.set_local_offset(value);
             })
         .def_prop_rw("plane_normal",
             [](WorldTextComponent& self) {
-                return nb::make_tuple(self.plane_normal.x, self.plane_normal.y, self.plane_normal.z);
+                return self.plane_normal;
             },
-            [](WorldTextComponent& self, nb::object value) {
-                auto tuple = nb::cast<std::tuple<double, double, double>>(value);
-                self.set_plane_normal(Vec3{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple)});
+            [](WorldTextComponent& self, const Vec3& value) {
+                self.set_plane_normal(value);
             })
         .def_prop_rw("text_up",
             [](WorldTextComponent& self) {
-                return nb::make_tuple(self.text_up.x, self.text_up.y, self.text_up.z);
+                return self.text_up;
             },
-            [](WorldTextComponent& self, nb::object value) {
-                auto tuple = nb::cast<std::tuple<double, double, double>>(value);
-                self.set_text_up(Vec3{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple)});
+            [](WorldTextComponent& self, const Vec3& value) {
+                self.set_text_up(value);
             })
         .def_prop_rw("color",
             [](WorldTextComponent& self) {
-                return nb::make_tuple(self.color.x, self.color.y, self.color.z, self.color.w);
+                return self.color;
             },
-            [](WorldTextComponent& self, nb::object value) {
-                auto tuple = nb::cast<std::tuple<double, double, double, double>>(value);
-                self.set_color(Vec4{std::get<0>(tuple), std::get<1>(tuple), std::get<2>(tuple), std::get<3>(tuple)});
+            [](WorldTextComponent& self, const Vec4& value) {
+                self.set_color(value);
             })
         .def_prop_rw("size", [](WorldTextComponent& self) { return self.size; }, &WorldTextComponent::set_size)
         .def_prop_rw("anchor", [](WorldTextComponent& self) { return self.anchor; }, &WorldTextComponent::set_anchor)
@@ -866,9 +844,9 @@ NB_MODULE(_components_render_native, m) {
             &LightComponent::get_light_type_str,
             &LightComponent::set_light_type_str)
         .def_prop_rw("color",
-            [](const LightComponent& c) { return vec3_to_numpy(c.color); },
-            [](LightComponent& c, nb::object v) {
-                c.color = numpy_to_vec3(nb::cast<nb::ndarray<double, nb::c_contig, nb::device::cpu>>(v));
+            [](const LightComponent& c) { return c.color; },
+            [](LightComponent& c, const Vec3& v) {
+                c.color = v;
             })
         .def_rw("intensity", &LightComponent::intensity)
         .def_prop_rw("shadows_enabled",

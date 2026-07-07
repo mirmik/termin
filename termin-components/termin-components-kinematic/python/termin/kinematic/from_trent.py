@@ -1,14 +1,14 @@
 from .transform import Transform3
 from .kinematic import Rotator3, Actuator3
-from tcbase._geom_native import Pose3
+from tcbase._geom_native import Pose3, Quat, Vec3
 import numpy
 
 def from_trent(dct: dict) -> Transform3:
     """Create a Transform3 or KinematicTransform3 from a Trent dictionary representation."""
     ttype = dct.get("type", "transform")
     local_pose_dict = dct.get("pose", {})
-    position = numpy.array(local_pose_dict.get("position", [0.0, 0.0, 0.0]))
-    orientation = numpy.array(local_pose_dict.get("orientation", [0.0, 0.0, 0.0, 1.0]))
+    position = Vec3(local_pose_dict.get("position", [0.0, 0.0, 0.0]))
+    orientation = Quat(local_pose_dict.get("orientation", [0.0, 0.0, 0.0, 1.0]))
     local_pose = Pose3(lin=position, ang=orientation)
     name = dct.get("name", "")
     

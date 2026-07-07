@@ -3,13 +3,13 @@
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/function.h>
-#include <nanobind/ndarray.h>
 #include <nanobind/trampoline.h>
 
 #include "termin/editor/gizmo.hpp"
 #include "termin/editor/gizmo_manager.hpp"
 #include "termin/editor/transform_gizmo.hpp"
 #include <termin/entity/entity.hpp>
+#include <termin/geom/mat44.hpp>
 #include <tgfx2/immediate_renderer.hpp>
 #include "termin/render/solid_primitive_renderer.hpp"
 #include <tgfx2/render_context.hpp>
@@ -20,36 +20,20 @@ namespace termin {
 
 namespace {
 
-Vec3f ndarray_to_vec3f(nb::ndarray<nb::numpy, float, nb::shape<3>> arr) {
-    return Vec3f{arr(0), arr(1), arr(2)};
+Mat44f mat44_to_mat44f(const Mat44& src) {
+    Mat44f mat;
+    for (int i = 0; i < 16; ++i) {
+        mat.data[i] = static_cast<float>(src.data[i]);
+    }
+    return mat;
 }
 
-Vec3f ndarray_to_vec3f_double(nb::ndarray<nb::numpy, double, nb::shape<3>> arr) {
+Vec3f vec3_to_vec3f(const Vec3& v) {
     return Vec3f{
-        static_cast<float>(arr(0)),
-        static_cast<float>(arr(1)),
-        static_cast<float>(arr(2))
+        static_cast<float>(v.x),
+        static_cast<float>(v.y),
+        static_cast<float>(v.z)
     };
-}
-
-Mat44f ndarray_to_mat44f(nb::ndarray<nb::numpy, double, nb::shape<4, 4>> arr) {
-    Mat44f mat;
-    for (int row = 0; row < 4; ++row) {
-        for (int col = 0; col < 4; ++col) {
-            mat(col, row) = static_cast<float>(arr(row, col));
-        }
-    }
-    return mat;
-}
-
-Mat44f ndarray_to_mat44f_float(nb::ndarray<nb::numpy, float, nb::shape<4, 4>> arr) {
-    Mat44f mat;
-    for (int row = 0; row < 4; ++row) {
-        for (int col = 0; col < 4; ++col) {
-            mat(col, row) = arr(row, col);
-        }
-    }
-    return mat;
 }
 
 // Trampoline class for Gizmo to allow Python subclassing
@@ -157,51 +141,34 @@ void bind_gizmo(nb::module_& m) {
         .def("add_gizmo", &GizmoManager::add_gizmo, nb::arg("gizmo"))
         .def("remove_gizmo", &GizmoManager::remove_gizmo, nb::arg("gizmo"))
         .def("clear", &GizmoManager::clear)
-        // render with float64 matrices (from camera)
         .def("render", [](GizmoManager& self,
                           ImmediateRenderer* renderer,
                           tgfx::RenderContext2* ctx2,
-                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
-                          nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj) {
-            self.render(renderer, ctx2, ndarray_to_mat44f(view), ndarray_to_mat44f(proj));
+                          const Mat44f& view,
+                          const Mat44f& proj) {
+            self.render(renderer, ctx2, view, proj);
         }, nb::arg("renderer"), nb::arg("ctx2"), nb::arg("view"), nb::arg("proj"))
-        // render with Mat44 (double)
         .def("render", [](GizmoManager& self,
                           ImmediateRenderer* renderer,
                           tgfx::RenderContext2* ctx2,
                           const Mat44& view,
                           const Mat44& proj) {
-            Mat44f view_f, proj_f;
-            for (int i = 0; i < 16; ++i) {
-                view_f.data[i] = static_cast<float>(view.data[i]);
-                proj_f.data[i] = static_cast<float>(proj.data[i]);
-            }
-            self.render(renderer, ctx2, view_f, proj_f);
+            self.render(renderer, ctx2, mat44_to_mat44f(view), mat44_to_mat44f(proj));
         }, nb::arg("renderer"), nb::arg("ctx2"), nb::arg("view"), nb::arg("proj"))
-        // raycast
         .def("raycast", [](GizmoManager& self,
-                           nb::ndarray<nb::numpy, float, nb::shape<3>> ray_origin,
-                           nb::ndarray<nb::numpy, float, nb::shape<3>> ray_dir) {
-            return self.raycast(ndarray_to_vec3f(ray_origin), ndarray_to_vec3f(ray_dir));
+                           const Vec3& ray_origin,
+                           const Vec3& ray_dir) {
+            return self.raycast(vec3_to_vec3f(ray_origin), vec3_to_vec3f(ray_dir));
         }, nb::arg("ray_origin"), nb::arg("ray_dir"))
-        // mouse events with float arrays
         .def("on_mouse_move", [](GizmoManager& self,
-                                 nb::ndarray<nb::numpy, float, nb::shape<3>> ray_origin,
-                                 nb::ndarray<nb::numpy, float, nb::shape<3>> ray_dir) {
-            return self.on_mouse_move(ndarray_to_vec3f(ray_origin), ndarray_to_vec3f(ray_dir));
-        }, nb::arg("ray_origin"), nb::arg("ray_dir"))
-        // mouse events with Vec3f
-        .def("on_mouse_move", [](GizmoManager& self, const Vec3f& ray_origin, const Vec3f& ray_dir) {
-            return self.on_mouse_move(ray_origin, ray_dir);
+                                 const Vec3& ray_origin,
+                                 const Vec3& ray_dir) {
+            return self.on_mouse_move(vec3_to_vec3f(ray_origin), vec3_to_vec3f(ray_dir));
         }, nb::arg("ray_origin"), nb::arg("ray_dir"))
         .def("on_mouse_down", [](GizmoManager& self,
-                                 nb::ndarray<nb::numpy, float, nb::shape<3>> ray_origin,
-                                 nb::ndarray<nb::numpy, float, nb::shape<3>> ray_dir) {
-            return self.on_mouse_down(ndarray_to_vec3f(ray_origin), ndarray_to_vec3f(ray_dir));
-        }, nb::arg("ray_origin"), nb::arg("ray_dir"))
-        // mouse events with Vec3f
-        .def("on_mouse_down", [](GizmoManager& self, const Vec3f& ray_origin, const Vec3f& ray_dir) {
-            return self.on_mouse_down(ray_origin, ray_dir);
+                                 const Vec3& ray_origin,
+                                 const Vec3& ray_dir) {
+            return self.on_mouse_down(vec3_to_vec3f(ray_origin), vec3_to_vec3f(ray_dir));
         }, nb::arg("ray_origin"), nb::arg("ray_dir"))
         .def("on_mouse_up", &GizmoManager::on_mouse_up);
 

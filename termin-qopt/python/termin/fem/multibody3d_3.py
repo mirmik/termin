@@ -2,7 +2,7 @@ from typing import List, Dict
 import numpy as np
 
 from termin.fem.assembler import Variable, Contribution
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Quat, Vec3
 from termin.geombase.screw import Screw3
 from termin.fem.inertia3d import SpatialInertia3D
 
@@ -25,6 +25,14 @@ def _skew(r: np.ndarray) -> np.ndarray:
         [   rz,  0.0, -rx],
         [  -ry,  rx,  0.0],
     ], dtype=float)
+
+
+def _vec3(value) -> Vec3:
+    return Vec3(float(value[0]), float(value[1]), float(value[2]))
+
+
+def _array3(value) -> np.ndarray:
+    return np.asarray((value[0], value[1], value[2]), dtype=float)
 
 def quat_normalize(q):
     return q / np.linalg.norm(q)
@@ -77,7 +85,7 @@ class RigidBody3D(Contribution):
         self.local_pose_var = Variable(name + "_pos", size=6, tag="position")
 
         # глобальная поза тела
-        self.global_pose = Pose3(lin=np.zeros(3), ang=np.array([0.0, 0.0, 0.0, 1.0]))  # единичный кватернион
+        self.global_pose = Pose3(lin=Vec3.zero(), ang=Quat.identity())
 
         self.inertia = inertia
         self.angle_normalize = angle_normalize
@@ -114,7 +122,7 @@ class RigidBody3D(Contribution):
         bias = self.inertia.bias_wrench(v_local)
 
         # гравитация в локальной СК тела
-        g_local = self.global_pose.inverse().rotate_vector(self.gravity)
+        g_local = _array3(self.global_pose.inverse().rotate_vector(_vec3(self.gravity)))
         grav = self.inertia.gravity_wrench(g_local)
 
         b[a_idx] += -np.asarray(bias.to_vector_vw_order()) + np.asarray(grav.to_vector_vw_order())
@@ -150,8 +158,8 @@ class RigidBody3D(Contribution):
         # pose.lin += R * dp_lin   (делает Pose3 оператор @)
         # pose.ang = pose.ang * q_delta
         delta_pose_local = Pose3(
-            lin=dp_lin,
-            ang=q_delta,
+            lin=Vec3(dp_lin),
+            ang=Quat(q_delta),
         )
 
         self.global_pose = self.global_pose @ delta_pose_local
@@ -160,9 +168,9 @@ class RigidBody3D(Contribution):
         self.local_pose_var.value[:] = 0.0
 
         if self.angle_normalize is not None:
-            self.global_pose.ang = self.angle_normalize(self.global_pose.ang)
+            self.global_pose.ang = Quat(self.angle_normalize(self.global_pose.ang))
         else:
-            self.global_pose.ang = quat_normalize(self.global_pose.ang)
+            self.global_pose.ang = Quat(quat_normalize(self.global_pose.ang))
 
     def finish_correction_step(self):
         dp = self.local_pose_var.value
@@ -175,13 +183,13 @@ class RigidBody3D(Contribution):
         q_delta = quat_from_small_angle(dθ)
 
         delta_pose_local = Pose3(
-            lin=dp_lin,
-            ang=q_delta,
+            lin=Vec3(dp_lin),
+            ang=Quat(q_delta),
         )
 
         self.global_pose = self.global_pose @ delta_pose_local
         self.local_pose_var.value[:] = 0.0
-        self.global_pose.ang = quat_normalize(self.global_pose.ang)
+        self.global_pose.ang = Quat(quat_normalize(self.global_pose.ang))
 
 
 class ForceOnBody3D(Contribution):
@@ -221,9 +229,9 @@ class FixedRotationJoint3D(Contribution):
         self.internal_force = Variable("F_joint", size=3, tag="force")
 
         pose = self.body.pose()
-        self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else pose.lin.copy()
+        self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else _array3(pose.lin)
         # фиксируем локальные координаты точки шарнира на теле
-        self.r_local = np.asarray(pose.inverse_transform_point(self.coords_of_joint))
+        self.r_local = _array3(pose.inverse_transform_point(_vec3(self.coords_of_joint)))
 
         super().__init__([body.acceleration_var, self.internal_force], assembler=assembler)
 
@@ -243,7 +251,7 @@ class FixedRotationJoint3D(Contribution):
     def radius(self) -> np.ndarray:
         """Радиус-вектор точки шарнира в глобальной СК."""
         pose = self.body.pose()
-        return pose.rotate_vector(self.r_local)
+        return _array3(pose.rotate_vector(_vec3(self.r_local)))
 
     def contribute_to_holonomic_matrix(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):
         """
@@ -279,7 +287,7 @@ class FixedRotationJoint3D(Contribution):
 
         pose = self.body.pose()
         # предполагается, что Pose3 умеет выдавать матрицу поворота
-        R = pose.rotation_matrix()
+        R = np.asarray(pose.rotation_matrix(), dtype=np.float64)
         R_T = R.T
 
         perr = R_T @ (pose.lin - self.coords_of_joint) + self.r_local
@@ -300,7 +308,7 @@ class RevoluteJoint3D(Contribution):
                  coords_of_joint: np.ndarray = None,
                  assembler=None):
 
-        cW = coords_of_joint.copy() if coords_of_joint is not None else bodyA.pose().lin.copy()
+        cW = coords_of_joint.copy() if coords_of_joint is not None else _array3(bodyA.pose().lin)
 
         self.bodyA = bodyA
         self.bodyB = bodyB
@@ -312,8 +320,8 @@ class RevoluteJoint3D(Contribution):
         poseB = self.bodyB.pose()
 
         # локальные координаты точки шарнира на каждом теле
-        self.rA_local = np.asarray(poseA.inverse_transform_point(cW))  # в СК A
-        self.rB_local = np.asarray(poseB.inverse_transform_point(cW))  # в СК B
+        self.rA_local = _array3(poseA.inverse_transform_point(_vec3(cW)))  # в СК A
+        self.rB_local = _array3(poseB.inverse_transform_point(_vec3(cW)))  # в СК B
 
         # кэш для rB, выраженного в СК A, и для R_AB
         self.R_AB = np.eye(3)
@@ -329,8 +337,8 @@ class RevoluteJoint3D(Contribution):
         poseA = self.bodyA.pose()
         poseB = self.bodyB.pose()
 
-        R_A = poseA.rotation_matrix()
-        R_B = poseB.rotation_matrix()
+        R_A = np.asarray(poseA.rotation_matrix(), dtype=np.float64)
+        R_B = np.asarray(poseB.rotation_matrix(), dtype=np.float64)
 
         self.R_AB = R_A.T @ R_B
         self.rB_in_A = self.R_AB @ self.rB_local
@@ -407,11 +415,11 @@ class RevoluteJoint3D(Contribution):
         poserr = matrices["position_error"]
         F = index_maps["force"][self.internal_force]
 
-        pA = self.bodyA.pose().lin
-        pB = self.bodyB.pose().lin
+        pA = _array3(self.bodyA.pose().lin)
+        pB = _array3(self.bodyB.pose().lin)
 
         poseA = self.bodyA.pose()
-        R_A = poseA.rotation_matrix()
+        R_A = np.asarray(poseA.rotation_matrix(), dtype=np.float64)
         R_A_T = R_A.T
 
         delta_p_A = R_A_T @ (pA - pB)

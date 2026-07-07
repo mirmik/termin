@@ -7,6 +7,7 @@ from termin.bootstrap import bootstrap_player
 
 bootstrap_player()
 
+from termin.geombase import Vec3
 from termin.materials import TcMaterial
 from termin.render_components import (
     Camera,
@@ -44,6 +45,10 @@ void main() { out_color = vec4(1.0); }
 
 def _render_context() -> RenderContext:
     return RenderContext()
+
+
+def _line_points() -> list[Vec3]:
+    return [Vec3(0, 0, 0), Vec3(1, 0, 0)]
 
 
 def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMaterial:
@@ -268,7 +273,7 @@ def test_depth_and_normal_passes_deserialize_legacy_material_phase_mark():
 
 
 def test_line_renderer_defaults_to_world_billboard_mode():
-    renderer = LineRenderer(points=[(0, 0, 0), (1, 0, 0)])
+    renderer = LineRenderer(points=_line_points())
 
     assert renderer.render_mode == LineRenderMode.WorldBillboard
     assert renderer.raw_lines is False
@@ -276,7 +281,7 @@ def test_line_renderer_defaults_to_world_billboard_mode():
 
 
 def test_line_renderer_world_mesh_fallback_builds_cpu_mesh():
-    renderer = LineRenderer(points=[(0, 0, 0), (1, 0, 0)], render_mode=LineRenderMode.WorldMesh)
+    renderer = LineRenderer(points=_line_points(), render_mode=LineRenderMode.WorldMesh)
 
     assert renderer.render_mode == LineRenderMode.WorldMesh
     assert bool(renderer.get_mesh()) is True
@@ -295,7 +300,7 @@ def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
         entity = scene.create_entity("line")
         entity.add_component(
             LineRenderer(
-                points=[(0, 0, 0), (1, 0, 0)],
+                points=_line_points(),
                 render_mode=LineRenderMode.WorldTube,
             )
         )
@@ -329,7 +334,7 @@ def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
 def test_line_renderer_direct_modes_skip_shadow_material_phase():
     material = create_line_test_material()
 
-    renderer = LineRenderer(points=[(0, 0, 0), (1, 0, 0)], material=material)
+    renderer = LineRenderer(points=_line_points(), material=material)
 
     assert renderer.phase_marks == {"opaque"}
     assert renderer.get_geometry_draws(_render_context(), "shadow") == []
@@ -339,7 +344,7 @@ def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
     material = create_line_test_material(extra_phase_marks=("id",))
 
     renderer = LineRenderer(
-        points=[(0, 0, 0), (1, 0, 0)],
+        points=_line_points(),
         material=material,
         render_mode=LineRenderMode.WorldTube,
     )
@@ -353,14 +358,14 @@ def test_line_renderer_cast_shadow_enables_shadow_material_phase():
     material = create_line_test_material()
 
     billboard = LineRenderer(
-        points=[(0, 0, 0), (1, 0, 0)],
+        points=_line_points(),
         material=material,
         cast_shadow=True,
     )
     assert billboard.phase_marks == {"opaque", "shadow"}
 
     renderer = LineRenderer(
-        points=[(0, 0, 0), (1, 0, 0)],
+        points=_line_points(),
         material=material,
         render_mode=LineRenderMode.WorldMesh,
         cast_shadow=True,
@@ -369,7 +374,7 @@ def test_line_renderer_cast_shadow_enables_shadow_material_phase():
 
 
 def test_line_renderer_cast_shadow_uses_default_shadow_phase_when_material_lacks_one():
-    renderer = LineRenderer(points=[(0, 0, 0), (1, 0, 0)], cast_shadow=True)
+    renderer = LineRenderer(points=_line_points(), cast_shadow=True)
 
     assert renderer.phase_marks == {"opaque", "shadow"}
 
@@ -487,7 +492,7 @@ def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():
     material = create_line_test_material()
 
     renderer = LineRenderer(
-        points=[(0, 0, 0), (1, 0, 0)],
+        points=_line_points(),
         material=material,
         render_mode=LineRenderMode.WorldMesh,
     )
@@ -497,7 +502,7 @@ def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():
 
 def test_line_renderer_world_tube_is_gpu_direct_mode():
     renderer = LineRenderer(
-        points=[(0, 0, 0), (1, 0, 0)],
+        points=_line_points(),
         render_mode=LineRenderMode.WorldTube,
         tube_sides=6,
     )
@@ -508,7 +513,7 @@ def test_line_renderer_world_tube_is_gpu_direct_mode():
 
 
 def test_line_renderer_keeps_legacy_raw_lines_constructor_position():
-    renderer = LineRenderer([(0, 0, 0), (1, 0, 0)], 0.25, True)
+    renderer = LineRenderer(_line_points(), 0.25, True)
 
     assert renderer.raw_lines is True
     assert bool(renderer.get_mesh()) is True
@@ -544,7 +549,8 @@ def test_line_renderer_points_are_inspectable():
 
     assert component.get_field("points") == [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
     assert component.get_field("render_mode") == 4
-    assert component.to_python().points == [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
+    points = component.to_python().points
+    assert [(p.x, p.y, p.z) for p in points] == [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)]
     assert component.to_python().render_mode == LineRenderMode.WorldTube
 
 
@@ -557,8 +563,8 @@ def test_world_text_component_defaults_to_transparent_direct_draw():
     assert text.anchor_name == "center"
     assert text.orientation == WorldTextOrientation.Billboard
     assert text.orientation_name == "billboard"
-    assert text.plane_normal == (0.0, 0.0, 1.0)
-    assert text.text_up == (0.0, 1.0, 0.0)
+    assert (text.plane_normal.x, text.plane_normal.y, text.plane_normal.z) == (0.0, 0.0, 1.0)
+    assert (text.text_up.x, text.text_up.y, text.text_up.z) == (0.0, 1.0, 0.0)
     assert text.depth_test is True
     assert text.depth_write is False
     assert text.blend is True
