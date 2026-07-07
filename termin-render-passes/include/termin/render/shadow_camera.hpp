@@ -1,6 +1,7 @@
 #pragma once
 
 #include <termin/render_passes/export.h>
+#include <termin/geom/bounds2.hpp>
 #include <termin/geom/mat44.hpp>
 #include <termin/geom/vec3.hpp>
 
@@ -17,7 +18,7 @@ namespace termin {
  */
 struct TERMIN_RENDER_PASSES_API ShadowCameraParams {
     Vec3 light_direction{0.0, 1.0, 0.0};  // Normalized direction from light into scene
-    std::optional<std::array<float, 4>> ortho_bounds;  // (left, right, bottom, top)
+    std::optional<Bounds2f> ortho_bounds;  // x0=left, y0=bottom, x1=right, y1=top
     float ortho_size = 20.0f;  // Half-size of symmetric ortho box (fallback)
     float near = 0.1f;
     float far = 100.0f;
@@ -27,7 +28,7 @@ struct TERMIN_RENDER_PASSES_API ShadowCameraParams {
 
     ShadowCameraParams(
         const Vec3& light_dir,
-        std::optional<std::array<float, 4>> bounds = std::nullopt,
+        std::optional<Bounds2f> bounds = std::nullopt,
         float ortho_sz = 20.0f,
         float n = 0.1f,
         float f = 100.0f,

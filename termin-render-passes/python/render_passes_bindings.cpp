@@ -65,7 +65,7 @@ void bind_shadow_camera_helpers(nb::module_& m) {
         .def(nb::init<>())
         .def("__init__", [](ShadowCameraParams* self,
             const Vec3& light_direction,
-            std::optional<std::array<float, 4>> ortho_bounds,
+            std::optional<Bounds2f> ortho_bounds,
             double ortho_size,
             double near,
             double far,
@@ -96,25 +96,11 @@ void bind_shadow_camera_helpers(nb::module_& m) {
             }
         )
         .def_prop_rw("ortho_bounds",
-            [](const ShadowCameraParams& self) -> nb::object {
-                if (self.ortho_bounds) {
-                    const auto& b = *self.ortho_bounds;
-                    return nb::make_tuple(b[0], b[1], b[2], b[3]);
-                }
-                return nb::none();
+            [](const ShadowCameraParams& self) {
+                return self.ortho_bounds;
             },
-            [](ShadowCameraParams& self, nb::object val) {
-                if (val.is_none()) {
-                    self.ortho_bounds = std::nullopt;
-                    return;
-                }
-                nb::tuple t = nb::cast<nb::tuple>(val);
-                self.ortho_bounds = std::array<float, 4>{
-                    static_cast<float>(nb::cast<double>(t[0])),
-                    static_cast<float>(nb::cast<double>(t[1])),
-                    static_cast<float>(nb::cast<double>(t[2])),
-                    static_cast<float>(nb::cast<double>(t[3]))
-                };
+            [](ShadowCameraParams& self, std::optional<Bounds2f> bounds) {
+                self.ortho_bounds = bounds;
             }
         )
         .def_rw("ortho_size", &ShadowCameraParams::ortho_size)
