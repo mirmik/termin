@@ -162,6 +162,17 @@ bool collect_color_render_item_for_draw(
     return false;
 }
 
+tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item) {
+    if (!tc_material_handle_is_invalid(item.material) &&
+        item.material_phase_index != SIZE_MAX) {
+        tc_material* material = tc_material_get(item.material);
+        if (material && item.material_phase_index < material->phase_count) {
+            return &material->phases[item.material_phase_index];
+        }
+    }
+    return item.material_phase;
+}
+
 } // anonymous namespace
 
 ColorPass::ColorPass(const ColorPassConfig& config)
@@ -304,14 +315,24 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
         return true;
     }
 
-    void* draws_ptr = tc_component_get_geometry_draws(
-        tc,
-        const_cast<RenderContext*>(data->render_context),
-        data->phase_mark);
-    if (!draws_ptr) {
+    tc_render_item_collect_context item_context{};
+    item_context.phase_mark = data->phase_mark;
+    item_context.layer_mask = data->render_context
+        ? data->render_context->layer_mask
+        : UINT64_MAX;
+    item_context.render_category_mask = data->render_context
+        ? data->render_context->render_category_mask
+        : UINT64_MAX;
+    item_context.debug_pass_name = "ColorPass";
+    item_context.pass_contract = &data->pass_contract;
+    item_context.camera = data->render_context
+        ? data->render_context->camera
+        : nullptr;
+
+    RenderItemCollection items;
+    if (!collect_drawable_render_items(tc, item_context, items)) {
         return true;
     }
-    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
 
     // Build Entity from component's owner
     Entity ent(tc->owner);
@@ -322,14 +343,14 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
         return true;
     }
 
-    for (const auto& gd : *geometry_draws) {
-        tc_material_phase* phase = gd.resolve_phase();
+    for (const tc_render_item& item : items.items) {
+        tc_material_phase* phase = resolve_render_item_material_phase(item);
         if (phase) {
             // Get final shader with overrides (skinning, etc.) applied
             tc_shader_handle base_shader = phase->shader;
             ShaderOverrideContext override_context;
             override_context.phase_mark = data->phase_mark;
-            override_context.geometry_id = gd.geometry_id;
+            override_context.geometry_id = item.geometry_id;
             override_context.original_shader = TcShader(base_shader);
             override_context.pass_contract = data->pass_contract;
             tc_shader_handle final_shader =
@@ -341,9 +362,9 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
             dc.phase = phase;
             dc.final_shader = final_shader;
             dc.priority = phase->priority;
-            dc.geometry_id = gd.geometry_id;
-            dc.material = gd.material;
-            dc.phase_index = gd.phase_index;
+            dc.geometry_id = item.geometry_id;
+            dc.material = item.material;
+            dc.phase_index = item.material_phase_index;
             data->draw_calls->push_back(dc);
         }
     }
@@ -365,24 +386,27 @@ bool collect_color_drawable_shader_usages(tc_component* tc, void* user_data) {
     RenderContext render_context;
     render_context.phase = data->phase_mark;
     render_context.pass_contract = data->pass_contract;
-    void* draws_ptr = tc_component_get_geometry_draws(
-        tc,
-        &render_context,
-        data->phase_mark);
-    if (!draws_ptr) {
+    tc_render_item_collect_context item_context{};
+    item_context.phase_mark = data->phase_mark;
+    item_context.layer_mask = UINT64_MAX;
+    item_context.render_category_mask = UINT64_MAX;
+    item_context.debug_pass_name = "ColorPass/ShaderUsage";
+    item_context.pass_contract = &data->pass_contract;
+
+    RenderItemCollection items;
+    if (!collect_drawable_render_items(tc, item_context, items)) {
         return true;
     }
 
-    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-    for (const auto& gd : *geometry_draws) {
-        tc_material_phase* phase = gd.resolve_phase();
+    for (const tc_render_item& item : items.items) {
+        tc_material_phase* phase = resolve_render_item_material_phase(item);
         if (!phase) {
             continue;
         }
 
         ShaderOverrideContext override_context;
         override_context.phase_mark = data->phase_mark;
-        override_context.geometry_id = gd.geometry_id;
+        override_context.geometry_id = item.geometry_id;
         override_context.original_shader = TcShader(phase->shader);
         override_context.pass_contract = data->pass_contract;
         collect_drawable_shader_usages_with_context(tc, override_context, *data->emit);
@@ -414,22 +438,26 @@ ResolvedDrawPhase resolve_draw_phase(
         return resolved;
     }
 
-    void* draws_ptr = tc_component_get_geometry_draws(
-        component,
-        const_cast<RenderContext*>(&render_context),
-        phase_mark.c_str());
-    if (!draws_ptr) {
+    tc_render_item_collect_context item_context{};
+    item_context.phase_mark = phase_mark.c_str();
+    item_context.layer_mask = render_context.layer_mask;
+    item_context.render_category_mask = render_context.render_category_mask;
+    item_context.debug_pass_name = "ColorPass/ResolvePhase";
+    item_context.pass_contract = &pass_contract;
+    item_context.camera = render_context.camera;
+
+    RenderItemCollection items;
+    if (!collect_drawable_render_items(component, item_context, items)) {
         return resolved;
     }
-    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-    for (const GeometryDrawCall& gd : *geometry_draws) {
-        tc_material_phase* phase = gd.resolve_phase();
-        if (!phase || gd.geometry_id != geometry_id) {
+    for (const tc_render_item& item : items.items) {
+        tc_material_phase* phase = resolve_render_item_material_phase(item);
+        if (!phase || item.geometry_id != geometry_id) {
             continue;
         }
         if (!tc_material_handle_is_invalid(expected_material) &&
-            (!tc_material_handle_eq(gd.material, expected_material) ||
-             gd.phase_index != expected_phase_index)) {
+            (!tc_material_handle_eq(item.material, expected_material) ||
+             item.material_phase_index != expected_phase_index)) {
             continue;
         }
 

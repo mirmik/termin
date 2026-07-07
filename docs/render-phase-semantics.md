@@ -141,9 +141,9 @@ When adding a drawable:
 
 - return only the labels the drawable actually supports from
   `get_phase_marks()`;
-- treat `get_geometry_draws(&phase_mark)`, `get_geometry_ids_for_phase()`,
-  and `resolve_mesh_geometry()` as legacy representation/material discovery
-  APIs while migration to RenderItem collection is in progress;
+- submit renderable work through RenderItems from `collect_render_items()`;
+- treat `get_geometry_draws(&phase_mark)` and `resolve_mesh_geometry()` as
+  legacy C++ helper APIs while migration cleanup is in progress;
 - submit actual draw work through RenderItems and registered encoders, not
   drawable-owned backend draw calls;
 - use `ShaderOverrideContext::pass_contract` for shader variants when the

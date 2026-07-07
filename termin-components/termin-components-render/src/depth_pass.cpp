@@ -133,6 +133,17 @@ bool collect_depth_mesh_render_item_for_draw(
     return false;
 }
 
+tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item) {
+    if (!tc_material_handle_is_invalid(item.material) &&
+        item.material_phase_index != SIZE_MAX) {
+        tc_material* material = tc_material_get(item.material);
+        if (material && item.material_phase_index < material->phase_count) {
+            return &material->phases[item.material_phase_index];
+        }
+    }
+    return item.material_phase;
+}
+
 void fill_depth_draw_model(DepthDrawStd140& draw, const tc_render_item& item)
 {
     if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
@@ -546,41 +557,37 @@ void DepthOnlyPass::collect_draw_calls(
         auto* collect_ctx = static_cast<CollectContext*>(user_data);
         Entity ent(c->owner);
 
-        void* ids_ptr = tc_component_get_geometry_ids_for_phase(
-            c,
-            collect_ctx->render_context,
-            collect_ctx->pass->pass_phase_mark.c_str());
-        if (!ids_ptr) {
-            return true;
-        }
-        auto* geometry_ids = static_cast<std::vector<int>*>(ids_ptr);
-        if (geometry_ids->empty()) {
+        tc_render_item_collect_context item_context{};
+        item_context.phase_mark = collect_ctx->pass->pass_phase_mark.c_str();
+        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        item_context.layer_mask = collect_ctx->render_context
+            ? collect_ctx->render_context->layer_mask
+            : UINT64_MAX;
+        item_context.render_category_mask = collect_ctx->render_context
+            ? collect_ctx->render_context->render_category_mask
+            : UINT64_MAX;
+        item_context.debug_pass_name = collect_ctx->pass->get_pass_name().c_str();
+        item_context.pass_contract = &collect_ctx->pass_contract;
+        item_context.camera = collect_ctx->render_context
+            ? collect_ctx->render_context->camera
+            : nullptr;
+
+        RenderItemCollection items;
+        if (!collect_drawable_render_items(c, item_context, items)) {
             return true;
         }
 
-        std::vector<GeometryDrawCall> material_phase_draws;
-        void* draws_ptr = tc_component_get_geometry_draws(
-            c,
-            collect_ctx->render_context,
-            collect_ctx->pass->pass_phase_mark.c_str());
-        if (draws_ptr) {
-            auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-            material_phase_draws = *geometry_draws;
-        }
+        for (const tc_render_item& item : items.items) {
+            if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+                continue;
+            }
 
-        for (int geometry_id : *geometry_ids) {
             tc_shader_handle original_shader =
                 collect_ctx->pass->depth_shader_handle_;
-            const GeometryDrawCall* selected_material_draw = nullptr;
-            for (const GeometryDrawCall& draw : material_phase_draws) {
-                tc_material_phase* phase = draw.resolve_phase();
-                if (draw.geometry_id == geometry_id &&
-                    phase &&
-                    !tc_shader_handle_is_invalid(phase->shader)) {
-                    original_shader = phase->shader;
-                    selected_material_draw = &draw;
-                    break;
-                }
+            tc_material_phase* selected_phase = resolve_render_item_material_phase(item);
+            if (selected_phase &&
+                !tc_shader_handle_is_invalid(selected_phase->shader)) {
+                original_shader = selected_phase->shader;
             }
 
             DrawCall dc;
@@ -588,15 +595,15 @@ void DepthOnlyPass::collect_draw_calls(
             dc.component = c;
             ShaderOverrideContext override_context;
             override_context.phase_mark = collect_ctx->pass->pass_phase_mark;
-            override_context.geometry_id = geometry_id;
+            override_context.geometry_id = item.geometry_id;
             override_context.original_shader = TcShader(original_shader);
             override_context.pass_contract = collect_ctx->pass_contract;
             dc.final_shader = override_drawable_shader(c, override_context).handle;
-            dc.geometry_id = geometry_id;
-            if (selected_material_draw) {
-                dc.material_phase = selected_material_draw->phase;
-                dc.material = selected_material_draw->material;
-                dc.phase_index = selected_material_draw->phase_index;
+            dc.geometry_id = item.geometry_id;
+            if (selected_phase) {
+                dc.material_phase = selected_phase;
+                dc.material = item.material;
+                dc.phase_index = item.material_phase_index;
             }
             collect_ctx->draw_calls->push_back(dc);
         }
@@ -662,48 +669,34 @@ void DepthOnlyPass::collect_shader_usages(
             return true;
         }
 
-        RenderContext render_context;
-        render_context.phase = collect_ctx->pass->pass_phase_mark;
-        render_context.pass_contract = collect_ctx->pass_contract;
+        tc_render_item_collect_context item_context{};
+        item_context.phase_mark = collect_ctx->pass->pass_phase_mark.c_str();
+        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        item_context.layer_mask = UINT64_MAX;
+        item_context.render_category_mask = UINT64_MAX;
+        item_context.debug_pass_name = "DepthOnlyPass/ShaderUsage";
+        item_context.pass_contract = &collect_ctx->pass_contract;
 
-        void* ids_ptr = tc_component_get_geometry_ids_for_phase(
-            c,
-            &render_context,
-            collect_ctx->pass->pass_phase_mark.c_str());
-        if (!ids_ptr) {
-            return true;
-        }
-        auto* geometry_ids = static_cast<std::vector<int>*>(ids_ptr);
-        if (geometry_ids->empty()) {
+        RenderItemCollection items;
+        if (!collect_drawable_render_items(c, item_context, items)) {
             return true;
         }
 
-        std::vector<GeometryDrawCall> material_phase_draws;
-        void* draws_ptr = tc_component_get_geometry_draws(
-            c,
-            &render_context,
-            collect_ctx->pass->pass_phase_mark.c_str());
-        if (draws_ptr) {
-            auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-            material_phase_draws = *geometry_draws;
-        }
+        for (const tc_render_item& item : items.items) {
+            if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+                continue;
+            }
 
-        for (int geometry_id : *geometry_ids) {
             tc_shader_handle original_shader =
                 collect_ctx->pass->depth_shader_handle_;
-            for (const GeometryDrawCall& draw : material_phase_draws) {
-                tc_material_phase* phase = draw.resolve_phase();
-                if (draw.geometry_id == geometry_id &&
-                    phase &&
-                    !tc_shader_handle_is_invalid(phase->shader)) {
-                    original_shader = phase->shader;
-                    break;
-                }
+            tc_material_phase* phase = resolve_render_item_material_phase(item);
+            if (phase && !tc_shader_handle_is_invalid(phase->shader)) {
+                original_shader = phase->shader;
             }
 
             ShaderOverrideContext override_context;
             override_context.phase_mark = collect_ctx->pass->pass_phase_mark;
-            override_context.geometry_id = geometry_id;
+            override_context.geometry_id = item.geometry_id;
             override_context.original_shader = TcShader(original_shader);
             override_context.pass_contract = collect_ctx->pass_contract;
             collect_drawable_shader_usages_with_context(c, override_context, *collect_ctx->emit);

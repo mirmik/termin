@@ -2,8 +2,6 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
-#include <unordered_map>
 
 #include <inspect/tc_inspect_python.hpp>
 #include <inspect/tc_kind_python.hpp>
@@ -131,98 +129,6 @@ bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
         result = nb::cast<bool>(marks.attr("__contains__")(pm));
     } catch (const std::exception& e) {
         tc::Log::error(e, "Drawable::has_phase");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-    return result;
-}
-
-void py_drawable_cb_draw_geometry(void* py_self, void* render_context, int geometry_id) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    try {
-        nb::handle self((PyObject*)py_self);
-        RenderContext* ctx = static_cast<RenderContext*>(render_context);
-        nb::object py_ctx = nb::cast(ctx, nb::rv_policy::reference);
-        self.attr("draw_geometry")(py_ctx, geometry_id);
-    } catch (const std::exception& e) {
-        tc::Log::warn(e, "Drawable::draw_geometry");
-    }
-    PyGILState_Release(gstate);
-}
-
-std::unordered_map<void*, std::vector<GeometryDrawCall>> g_py_geometry_draw_cache;
-std::unordered_map<void*, std::vector<int>> g_py_geometry_id_cache;
-
-void* py_drawable_cb_get_geometry_draws(void* py_self, void* render_context, const char* phase_mark) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    void* result = nullptr;
-    try {
-        RenderContext* ctx = static_cast<RenderContext*>(render_context);
-        if (!ctx) {
-            tc::Log::error("Drawable::get_geometry_draws: render_context is null");
-            PyGILState_Release(gstate);
-            return nullptr;
-        }
-        nb::handle self((PyObject*)py_self);
-        std::string pm = phase_mark ? phase_mark : "";
-        nb::object py_ctx = nb::cast(ctx, nb::rv_policy::reference);
-        nb::object py_draws = self.attr("get_geometry_draws")(py_ctx, pm.empty() ? nb::none() : nb::cast(pm));
-
-        auto& cached = g_py_geometry_draw_cache[py_self];
-        cached.clear();
-
-        if (!py_draws.is_none()) {
-            for (auto item : py_draws) {
-                GeometryDrawCall dc;
-                nb::object phase_obj = item.attr("phase");
-                if (!phase_obj.is_none()) {
-                    try {
-                        dc.bind_phase_ref(nb::cast<tc_material_phase*>(phase_obj));
-                    } catch (const nb::cast_error&) {
-                        continue;
-                    }
-                }
-                nb::object gid_obj = item.attr("geometry_id");
-                if (!gid_obj.is_none()) {
-                    dc.geometry_id = nb::cast<int>(gid_obj);
-                }
-                cached.push_back(dc);
-            }
-        }
-        result = &cached;
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "Drawable::get_geometry_draws");
-        PyErr_Print();
-    }
-    PyGILState_Release(gstate);
-    return result;
-}
-
-void* py_drawable_cb_get_geometry_ids_for_phase(void* py_self, void* render_context, const char* phase_mark) {
-    PyGILState_STATE gstate = PyGILState_Ensure();
-    void* result = nullptr;
-    try {
-        RenderContext* ctx = static_cast<RenderContext*>(render_context);
-        if (!ctx) {
-            tc::Log::error("Drawable::get_geometry_ids_for_phase: render_context is null");
-            PyGILState_Release(gstate);
-            return nullptr;
-        }
-
-        nb::handle self((PyObject*)py_self);
-        std::string pm = phase_mark ? phase_mark : "";
-        nb::object py_ctx = nb::cast(ctx, nb::rv_policy::reference);
-
-        auto& cached = g_py_geometry_id_cache[py_self];
-        cached.clear();
-
-        nb::object py_ids = self.attr("get_geometry_ids_for_phase")(py_ctx, pm);
-        if (!py_ids.is_none()) {
-            cached = nb::cast<std::vector<int>>(py_ids);
-        }
-        result = &cached;
-    } catch (const std::exception& e) {
-        tc::Log::error(e, "Drawable::get_geometry_ids_for_phase");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -402,9 +308,6 @@ void init_python_component_callbacks() {
 
     tc_python_drawable_callbacks drawable_callbacks = {
         .has_phase = py_drawable_cb_has_phase,
-        .draw_geometry = py_drawable_cb_draw_geometry,
-        .get_geometry_draws = py_drawable_cb_get_geometry_draws,
-        .get_geometry_ids_for_phase = py_drawable_cb_get_geometry_ids_for_phase,
         .collect_render_items = nullptr,
     };
     tc_component_set_python_drawable_callbacks(&drawable_callbacks);
@@ -439,8 +342,6 @@ void reset_python_bootstrap_state() {
     g_voxel_grid_python_kind_initialized = false;
     g_navmesh_python_kind_initialized = false;
     g_entity_python_kind_initialized = false;
-
-    g_py_geometry_draw_cache.clear();
 
     tc_python_drawable_callbacks drawable_callbacks = {};
     tc_component_set_python_drawable_callbacks(&drawable_callbacks);
