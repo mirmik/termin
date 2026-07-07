@@ -58,7 +58,8 @@ Total files: 146
   NumPy compatibility arrays were removed from this binding.
 - `termin-render-passes/python/render_passes_bindings.cpp`: `ShadowCameraParams`
   vector fields and `fit_shadow_frustum_to_camera(light_direction)` now use native
-  `Vec3`; matrix/frustum/debug buffer APIs remain `nb::ndarray`.
+  `Vec3`; `ShadowCameraParams.ortho_bounds` now uses `Bounds2f` instead of a tuple
+  parsed through Python objects; matrix/frustum/debug buffer APIs remain `nb::ndarray`.
 - `termin-components/termin-components-physics/python/termin/physics_components/rigid_body_component.py`: collider extents moved to `Vec3`.
 - `termin-components/termin-components-render/python/termin/render_components/camera.py`: annotation-only NumPy import removed.
 - `termin-components/termin-components-tween/python/termin/tween/component.py`: annotation-only NumPy import removed.
@@ -77,7 +78,7 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
   remaining base NumPy imports are tests only.
 - `termin-scene/cpp/bindings/transform_bindings.cpp` and `termin-scene/include/termin/bindings/entity_helpers.hpp`: resolved for geometry APIs; remaining `nb::object` usage is Python object plumbing, not NumPy geometry.
 - `termin-collision/cpp/bindings/colliders_bindings.cpp`: `Ray3` moved to base geometry; corner/axis bulk returns are buffer-like and lower priority.
-- `termin-render-passes/python/render_passes_bindings.cpp`: resolved for `ShadowCameraParams` vector fields; matrix helpers are still `Mat44` candidates, while pass/debug buffer outputs should stay ndarray for now.
+- `termin-render-passes/python/render_passes_bindings.cpp`: resolved for `ShadowCameraParams` vector fields and `ortho_bounds` (`Vec3`/`Bounds2f`); matrix helpers are still `Mat44` candidates, while pass/debug buffer outputs should stay ndarray for now.
 - `termin-app/cpp/termin/bindings/{editor/gizmo_bindings.cpp,render/solid_primitive.cpp}`: resolved for geometry helper APIs.
 - `termin-components/termin-components-render/components/orbit_camera_bindings.cpp`: resolved for camera target geometry; remaining `nb::object` is Python object plumbing.
 - `termin-components/termin-components-render/components/render_components_bindings.cpp`: keep `nb::ndarray` for skinned bone matrix bulk output; geometry fields have moved to `Vec3`/`Vec4`.
