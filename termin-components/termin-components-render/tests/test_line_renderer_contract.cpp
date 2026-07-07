@@ -267,12 +267,13 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     collect_context.phase_mark = "opaque";
     collect_context.debug_pass_name = "test";
 
-    std::vector<tc_render_item> items;
+    termin::RenderItemCollection collection;
     REQUIRE(termin::collect_drawable_render_items(
         renderer->tc_component_ptr(),
         collect_context,
-        items));
+        collection));
 
+    const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 2u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
     CHECK(items[0].component == renderer->tc_component_ptr());
@@ -329,12 +330,13 @@ TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick p
     collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
     collect_context.debug_pass_name = "IdPass";
 
-    std::vector<tc_render_item> items;
+    termin::RenderItemCollection collection;
     REQUIRE(termin::collect_drawable_render_items(
         renderer->tc_component_ptr(),
         collect_context,
-        items));
+        collection));
 
+    const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 2u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
     CHECK(items[0].material_phase == nullptr);
@@ -410,12 +412,13 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     collect_context.phase_mark = "opaque";
     collect_context.debug_pass_name = "test";
 
-    std::vector<tc_render_item> items;
+    termin::RenderItemCollection collection;
     REQUIRE(termin::collect_drawable_render_items(
         renderer->tc_component_ptr(),
         collect_context,
-        items));
+        collection));
 
+    const std::vector<tc_render_item>& items = collection.items;
     REQUIRE(items.size() == 1u);
     CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
     CHECK(items[0].component == renderer->tc_component_ptr());
