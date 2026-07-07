@@ -1,6 +1,7 @@
 # NumPy Usage Inventory
 
 Date: 2026-07-07
+Last updated: 2026-07-07 after geometry nanobind API migration
 
 This inventory lists project Python files that import NumPy directly. It excludes
 virtual environments, build outputs, the SDK bundle, and third-party sources.
@@ -16,7 +17,7 @@ rg -l "^\s*(import numpy\b|from numpy\b)" \
   --glob '!termin-thirdparty/**' | sort
 ```
 
-Total files: 156
+Total files: 146
 
 ## Reading Notes
 
@@ -27,6 +28,37 @@ Total files: 156
 
 ## Resolved Quick Wins
 
+- `termin-base/python/bindings/geom/*`: base geometry nanobind API no longer
+  includes NumPy/`nb::ndarray` constructors, setters, matrix returns, or helpers.
+- `termin-scene/cpp/bindings/transform_bindings.cpp` and
+  `termin-scene/include/termin/bindings/entity_helpers.hpp`: transform point/vector
+  APIs and matrix accessors now use native `Vec3`/row tuples rather than NumPy arrays.
+- `termin-app/cpp/termin/bindings/editor/gizmo_bindings.cpp` and
+  `termin-app/cpp/termin/bindings/render/solid_primitive.cpp`: helper APIs now take
+  `Vec3`/`Mat44`/`Mat44f` instead of NumPy geometry arrays.
+- `termin-app/termin/editor_tcgui/viewport_geometry_controller.py`: projection math
+  moved to `Vec3`/`Vec4`/`Mat44.transform_vec4`; NumPy import removed.
+- `termin-csg/python/termin/csg/cad_app.py`: screen projection moved to
+  `Vec4`/`Mat44.transform_vec4`; NumPy import removed.
+- `termin-components/termin-components-kinematic/python/termin/kinematic/from_trent.py`:
+  Trent axes moved to `Vec3`; NumPy import removed.
+- `termin-components/termin-components-kinematic/python/termin/kinematic/kinematic.py`:
+  `Rotator3`/`Actuator3` axes moved to `Vec3`; NumPy import removed.
+- `termin-components/termin-components-kinematic/python/termin/kinematic/transform.py`:
+  public transform point/vector and direction helpers moved to `Vec3`; NumPy import
+  removed.
+- `termin-navmesh/python/bindings/navmesh_module.cpp`: off-mesh link endpoint
+  properties and world endpoint accessors now use `Vec3`; bulk navmesh build arrays
+  remain `nb::ndarray`.
+- `termin-components/termin-components-render/components/render_components_bindings.cpp`:
+  `LineRenderer` point elements and `WorldTextComponent` vector/color fields now use
+  `Vec3`/`Vec4`; skinned bone matrix bulk output remains `nb::ndarray`.
+- `termin-components/termin-components-render/components/orbit_camera_bindings.cpp`:
+  `OrbitCameraController.center_on`, `target`, and `_target` now use native `Vec3`;
+  NumPy compatibility arrays were removed from this binding.
+- `termin-render-passes/python/render_passes_bindings.cpp`: `ShadowCameraParams`
+  vector fields and `fit_shadow_frustum_to_camera(light_direction)` now use native
+  `Vec3`; matrix/frustum/debug buffer APIs remain `nb::ndarray`.
 - `termin-components/termin-components-physics/python/termin/physics_components/rigid_body_component.py`: collider extents moved to `Vec3`.
 - `termin-components/termin-components-render/python/termin/render_components/camera.py`: annotation-only NumPy import removed.
 - `termin-components/termin-components-tween/python/termin/tween/component.py`: annotation-only NumPy import removed.
@@ -40,11 +72,16 @@ Total files: 156
 `nb::ndarray` also appears in native bindings. Geometry-shaped overloads are reduction
 candidates; dense buffers should stay until replacement buffer APIs exist.
 
-- `termin-base/python/bindings/geom/{vec3,quat,pose3,general_pose3,mat44,aabb,screw3}.cpp`: legacy ndarray constructors, setters, matrix returns, and homogeneous vector overloads; migrate call sites to `Vec3`, `Quat`, `Mat44` methods first.
-- `termin-scene/cpp/bindings/transform_bindings.cpp` and `termin-scene/include/termin/bindings/entity_helpers.hpp`: transform point/vector APIs return NumPy arrays; good candidate for `Vec3` returns after Python call sites are updated.
+- `termin-base/python/bindings/geom/*`: resolved. Current grep for
+  `numpy|ndarray|to_numpy|nanobind/ndarray|nb::ndarray` in base bindings/source is clean;
+  remaining base NumPy imports are tests only.
+- `termin-scene/cpp/bindings/transform_bindings.cpp` and `termin-scene/include/termin/bindings/entity_helpers.hpp`: resolved for geometry APIs; remaining `nb::object` usage is Python object plumbing, not NumPy geometry.
 - `termin-collision/cpp/bindings/colliders_bindings.cpp`: `Ray3` moved to base geometry; corner/axis bulk returns are buffer-like and lower priority.
-- `termin-render-passes/python/render_passes_bindings.cpp`: `ShadowCameraParams` and matrix helpers are Mat44/Vec3 candidates; pass/debug buffer outputs should stay ndarray for now.
-- `termin-app/cpp/termin/bindings/{editor/gizmo_bindings.cpp,render/solid_primitive.cpp}`: editor/render helper APIs take Mat44/Vec3 ndarray arguments; migrate together with editor Python call sites.
+- `termin-render-passes/python/render_passes_bindings.cpp`: resolved for `ShadowCameraParams` vector fields; matrix helpers are still `Mat44` candidates, while pass/debug buffer outputs should stay ndarray for now.
+- `termin-app/cpp/termin/bindings/{editor/gizmo_bindings.cpp,render/solid_primitive.cpp}`: resolved for geometry helper APIs.
+- `termin-components/termin-components-render/components/orbit_camera_bindings.cpp`: resolved for camera target geometry; remaining `nb::object` is Python object plumbing.
+- `termin-components/termin-components-render/components/render_components_bindings.cpp`: keep `nb::ndarray` for skinned bone matrix bulk output; geometry fields have moved to `Vec3`/`Vec4`.
+- `termin-navmesh/python/bindings/navmesh_module.cpp`: keep `nb::ndarray` for Detour build vertex/index/area buffers; off-mesh link endpoints have moved to `Vec3`.
 - `termin-graphics`, `termin-mesh`, `termin-voxels`, `termin-navmesh`, `tcplot`: mostly mesh, texture, plot, or dense voxel buffers; keep ndarray unless a non-NumPy buffer/list API is designed.
 
 ## Annotated Files
@@ -65,23 +102,15 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-app/termin/editor_tcgui/framegraph_debugger_service.py` | frame image buffers | keep ndarray |
 | `termin-app/termin/editor_tcgui/surface_edge_debug_tool.py` | mesh vertex conversion | Vec3 candidate |
 | `termin-app/termin/editor_tcgui/texture_inspector.py` | texture preview buffers | keep ndarray |
-| `termin-app/termin/editor_tcgui/viewport_geometry_controller.py` | projection matrix multiply | Mat44 candidate |
 | `termin-app/termin/editor_tcgui/widgets/texture_picker.py` | texture preview buffers | keep ndarray |
 | `termin-app/tests/editor_commands_test.py` | undo expected arrays | tests only |
-| `termin-base/python/termin/geombase/pose2.py` | Pose2 vector matrices | Vec2/Mat33 candidate |
-| `termin-base/python/termin/geombase/quaternion.py` | quaternion array math | Quat candidate |
-| `termin-base/python/termin/geombase/screw.py` | screw vector algebra | Vec3/Screw native candidate |
-| `termin-base/python/termin/geombase/transform_aabb.py` | AABB corner transform | Mat34 candidate |
 | `termin-base/tests/python/pose2_test.py` | Pose2 expected arrays | tests only |
 | `termin-base/tests/python/pose_test.py` | Pose3 matrix assertions | tests only |
 | `termin-base/tests/python/test_general_pose3.py` | GeneralPose3 matrix tests | tests only |
 | `termin-base/tests/python/util_test.py` | quaternion slerp assertions | tests only |
 | `termin-collision/tests/collider_test.py` | collider point assertions | tests only |
 | `termin-components/termin-components-kinematic/python/termin/kinematic/conditions.py` | normal equation matrices | heavy linalg |
-| `termin-components/termin-components-kinematic/python/termin/kinematic/from_trent.py` | Trent pose arrays | Vec3/Quat candidate |
 | `termin-components/termin-components-kinematic/python/termin/kinematic/kinchain.py` | Jacobian matrix assembly | keep ndarray |
-| `termin-components/termin-components-kinematic/python/termin/kinematic/kinematic.py` | kinematic axis arrays | Vec3 candidate |
-| `termin-components/termin-components-kinematic/python/termin/kinematic/transform.py` | transform direction arrays | Vec3 candidate |
 | `termin-components/termin-components-kinematic/tests/aabb_test.py` | AABB expected arrays | tests only |
 | `termin-components/termin-components-kinematic/tests/kinematic_chain_test.py` | kinematic test vectors | tests only |
 | `termin-components/termin-components-kinematic/tests/kinematic_test.py` | transform test vectors | tests only |
@@ -96,7 +125,6 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-components/termin-components-voxels/python/termin_voxel_components/voxelizer_component.py` | voxel mesh generation | keep ndarray mesh buffers |
 | `termin-components/termin-components-voxels/python/termin_voxel_components/voxelizer_debug_draw.py` | shader uniform vectors | keep ndarray uniforms |
 | `termin-csg/examples/demo_csg_wireframe.py` | wireframe plot arrays | examples only |
-| `termin-csg/python/termin/csg/cad_app.py` | screen projection vector | Mat44 candidate |
 | `termin-csg/python/termin/csg/cad_viewer.py` | preview mesh buffers | keep ndarray GPU buffers |
 | `termin-csg/python/termin/csg/document_eval.py` | CSG mesh evaluation | keep ndarray geometry core |
 | `termin-csg/python/termin/csg/document_mesh.py` | document mesh assembly | keep ndarray geometry core |
@@ -196,7 +224,6 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-qopt/tests/robot_test.py` | robot Jacobian fixtures | tests only |
 | `termin-qopt/tests/subspaces_test.py` | subspace linalg fixtures | tests only |
 | `termin-render-passes/python/termin/render_passes/highlight.py` | uniform byte buffer | replaceable bytearray view |
-| `termin-render-passes/tests/test_shadow_camera_api.py` | shadow vector fixture | tests only |
 | `termin-render/python/termin/render/texture.py` | texture image buffers | keep ndarray boundary |
 | `termin-render/python/termin/render/texture_handle.py` | 1x1 texture pixels | tiny ndarray boundary |
 | `termin-tween/python/termin/tween/tween.py` | Vec3/quaternion interpolation | Vec3/Quat candidate |

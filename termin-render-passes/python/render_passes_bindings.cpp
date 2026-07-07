@@ -64,43 +64,20 @@ void bind_shadow_camera_helpers(nb::module_& m) {
     nb::class_<ShadowCameraParams>(m, "ShadowCameraParams")
         .def(nb::init<>())
         .def("__init__", [](ShadowCameraParams* self,
-            nb::ndarray<nb::numpy, double, nb::shape<3>> light_direction,
-            nb::object ortho_bounds,
+            const Vec3& light_direction,
+            std::optional<std::array<float, 4>> ortho_bounds,
             double ortho_size,
             double near,
             double far,
-            nb::object center
+            std::optional<Vec3> center
         ) {
-            Vec3 light_dir{
-                light_direction(0),
-                light_direction(1),
-                light_direction(2)
-            };
-
-            std::optional<std::array<float, 4>> bounds;
-            if (!ortho_bounds.is_none()) {
-                nb::tuple t = nb::cast<nb::tuple>(ortho_bounds);
-                bounds = std::array<float, 4>{
-                    static_cast<float>(nb::cast<double>(t[0])),
-                    static_cast<float>(nb::cast<double>(t[1])),
-                    static_cast<float>(nb::cast<double>(t[2])),
-                    static_cast<float>(nb::cast<double>(t[3]))
-                };
-            }
-
-            Vec3 c{0, 0, 0};
-            if (!center.is_none()) {
-                auto arr = nb::cast<nb::ndarray<nb::numpy, double, nb::shape<3>>>(center);
-                c = Vec3{arr(0), arr(1), arr(2)};
-            }
-
             new (self) ShadowCameraParams(
-                light_dir,
-                bounds,
+                light_direction,
+                ortho_bounds,
                 static_cast<float>(ortho_size),
                 static_cast<float>(near),
                 static_cast<float>(far),
-                c
+                center.value_or(Vec3{0.0, 0.0, 0.0})
             );
         },
             nb::arg("light_direction"),
@@ -112,16 +89,10 @@ void bind_shadow_camera_helpers(nb::module_& m) {
         )
         .def_prop_rw("light_direction",
             [](const ShadowCameraParams& self) {
-                double* data = new double[3]{
-                    self.light_direction.x,
-                    self.light_direction.y,
-                    self.light_direction.z
-                };
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-                return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
+                return self.light_direction;
             },
-            [](ShadowCameraParams& self, nb::ndarray<nb::numpy, double, nb::shape<3>> arr) {
-                self.light_direction = Vec3{arr(0), arr(1), arr(2)}.normalized();
+            [](ShadowCameraParams& self, const Vec3& light_direction) {
+                self.light_direction = light_direction.normalized();
             }
         )
         .def_prop_rw("ortho_bounds",
@@ -151,12 +122,10 @@ void bind_shadow_camera_helpers(nb::module_& m) {
         .def_rw("far", &ShadowCameraParams::far)
         .def_prop_rw("center",
             [](const ShadowCameraParams& self) {
-                double* data = new double[3]{self.center.x, self.center.y, self.center.z};
-                nb::capsule owner(data, [](void* p) noexcept { delete[] static_cast<double*>(p); });
-                return nb::ndarray<nb::numpy, double, nb::shape<3>>(data, {3}, owner);
+                return self.center;
             },
-            [](ShadowCameraParams& self, nb::ndarray<nb::numpy, double, nb::shape<3>> arr) {
-                self.center = Vec3{arr(0), arr(1), arr(2)};
+            [](ShadowCameraParams& self, const Vec3& center) {
+                self.center = center;
             }
         );
 
@@ -224,7 +193,7 @@ void bind_shadow_camera_helpers(nb::module_& m) {
     m.def("fit_shadow_frustum_to_camera", [](
         nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
         nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
-        nb::ndarray<nb::numpy, double, nb::shape<3>> light_direction,
+        const Vec3& light_direction,
         double padding,
         int shadow_map_resolution,
         bool stabilize,
@@ -238,12 +207,10 @@ void bind_shadow_camera_helpers(nb::module_& m) {
             }
         }
 
-        Vec3 light_dir{light_direction(0), light_direction(1), light_direction(2)};
-
         return fit_shadow_frustum_to_camera(
             view_mat,
             proj_mat,
-            light_dir,
+            light_direction,
             static_cast<float>(padding),
             shadow_map_resolution,
             stabilize,
