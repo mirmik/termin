@@ -481,9 +481,9 @@ must be explicit:
   remains as a compatibility wrapper and is not the target task/submit
   boundary.
 - Runtime vertex layout submission now has a C-like `VertexLayoutDesc`.
-  `RenderContext2` and `PipelineCacheKey` store that compact form; backend
-  pipeline creation still adapts to `VertexBufferLayout` on cache miss until
-  backend descriptors are migrated.
+  `RenderContext2`, `PipelineCacheKey`, `PipelineDesc`, and backend pipeline
+  creation consume that compact form. `VertexBufferLayout` remains only as a
+  compatibility/authoring facade.
 
 ## Validation
 
