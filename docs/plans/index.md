@@ -52,3 +52,4 @@
 - [Phase contract decoupling](2026-07-04-phase-contract-decoupling-plan.md)
 - [NavMesh bake visitors and ledge ribbon sources](2026-07-05-navmesh-bake-visitors-ledge-ribbon.md)
 - [Detour 1D linear paths](2026-07-05-detour-1d-linear-paths.md)
+- [Render item and task architecture](2026-07-07-render-item-task-architecture.md)
