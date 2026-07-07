@@ -1,9 +1,8 @@
 #pragma once
 
-#include <array>
-
 #include <termin/geom/general_pose3.hpp>
 #include <termin/geom/pose3.hpp>
+#include <termin/geom/vec3.hpp>
 #include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 namespace termin {
@@ -24,9 +23,9 @@ inline Vec3 navmesh_bake_to_world_vector(const Pose3& bake_frame, const Vec3& ba
     return bake_frame.transform_vector(bake_vector);
 }
 
-inline std::array<float, 3> navmesh_world_to_bake_point(
+inline Vec3f navmesh_world_to_bake_point(
     const Pose3& bake_frame,
-    const std::array<float, 3>& world_point)
+    const Vec3f& world_point)
 {
     const Vec3 bake = navmesh_world_to_bake_point(
         bake_frame,
@@ -38,9 +37,9 @@ inline std::array<float, 3> navmesh_world_to_bake_point(
     };
 }
 
-inline std::array<float, 3> navmesh_bake_to_world_point(
+inline Vec3f navmesh_bake_to_world_point(
     const Pose3& bake_frame,
-    const std::array<float, 3>& bake_point)
+    const Vec3f& bake_point)
 {
     const Vec3 world = navmesh_bake_to_world_point(
         bake_frame,
@@ -52,9 +51,9 @@ inline std::array<float, 3> navmesh_bake_to_world_point(
     };
 }
 
-inline std::array<float, 3> navmesh_bake_to_world_vector(
+inline Vec3f navmesh_bake_to_world_vector(
     const Pose3& bake_frame,
-    const std::array<float, 3>& bake_vector)
+    const Vec3f& bake_vector)
 {
     const Vec3 world = navmesh_bake_to_world_vector(
         bake_frame,

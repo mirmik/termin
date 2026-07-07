@@ -383,29 +383,21 @@ std::vector<float> compute_cascade_splits(
 
 
 ShadowCameraParams fit_shadow_frustum_for_cascade(
-    const Mat44f& view_matrix,
-    const Mat44f& projection_matrix,
-    float camera_near,
-    float camera_far,
-    const Vec3& light_direction,
-    float cascade_near,
-    float cascade_far,
-    int shadow_map_resolution,
-    float caster_offset
+    const ShadowCascadeFitRequest& request
 ) {
-    Vec3 light_dir = safe_normalize(light_direction, Vec3{0, 1, 0});
+    Vec3 light_dir = safe_normalize(request.light_direction, Vec3{0, 1, 0});
 
     // Use the real camera frustum and slice it along its rays. Rebuilding a
     // symmetric projection from FOV/aspect loses asymmetric XR projection
     // offsets and clips visible shadow coverage near the view edges.
     std::array<Vec3, 8> full_frustum_corners =
-        compute_frustum_corners(view_matrix, projection_matrix);
+        compute_frustum_corners(request.view_matrix, request.projection_matrix);
     std::array<Vec3, 8> frustum_corners = slice_frustum_corners(
         full_frustum_corners,
-        camera_near,
-        camera_far,
-        cascade_near,
-        cascade_far
+        request.camera_near,
+        request.camera_far,
+        request.cascade_near,
+        request.cascade_far
     );
 
     // Compute frustum center
@@ -457,9 +449,9 @@ ShadowCameraParams fit_shadow_frustum_for_cascade(
     float top = static_cast<float>(max_bounds.y) + padding;
 
     // Texel snapping for cascade stability
-    if (shadow_map_resolution > 0) {
-        float world_units_per_texel_x = (right - left) / shadow_map_resolution;
-        float world_units_per_texel_y = (top - bottom) / shadow_map_resolution;
+    if (request.shadow_map_resolution > 0) {
+        float world_units_per_texel_x = (right - left) / request.shadow_map_resolution;
+        float world_units_per_texel_y = (top - bottom) / request.shadow_map_resolution;
 
         left = std::floor(left / world_units_per_texel_x) * world_units_per_texel_x;
         right = std::ceil(right / world_units_per_texel_x) * world_units_per_texel_x;
@@ -493,7 +485,7 @@ ShadowCameraParams fit_shadow_frustum_for_cascade(
     }
 
     // Compute near/far for shadow ortho
-    float z_near = static_cast<float>(min_bounds.z) - caster_offset;
+    float z_near = static_cast<float>(min_bounds.z) - request.caster_offset;
     float z_far = static_cast<float>(max_bounds.z) + padding;
 
     float near = -z_far;

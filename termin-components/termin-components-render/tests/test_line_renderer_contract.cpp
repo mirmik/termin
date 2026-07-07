@@ -54,18 +54,22 @@ FragmentOutput fs_main(FragmentInput input)
 
 termin::TcShader make_test_material_shader(const char* uuid)
 {
-    tc_shader_handle handle = tc_shader_from_sources_with_entries_ex(
-        kVertexSource,
-        kFragmentSource,
-        nullptr,
-        "LineRendererContractMaterial",
-        nullptr,
+    const tc_shader_create_desc shader_desc = {
+        {
+            kVertexSource,
+            kFragmentSource,
+            nullptr,
+            "LineRendererContractMaterial",
+            nullptr,
+            "vs_main",
+            "fs_main",
+            nullptr
+        },
         uuid,
         TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_OPTIONAL,
-        "vs_main",
-        "fs_main",
-        nullptr);
+        TC_SHADER_ARTIFACT_OPTIONAL
+    };
+    tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
     return termin::TcShader(handle);
 }
 

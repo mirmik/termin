@@ -1,11 +1,11 @@
 #pragma once
 
-#include <array>
 #include <string>
 #include <vector>
 
-#include <termin/navmesh/termin_navmesh_components_api.hpp>
 #include <termin/geom/pose3.hpp>
+#include <termin/geom/vec3.hpp>
+#include <termin/navmesh/termin_navmesh_components_api.hpp>
 
 class dtNavMesh;
 class dtNavMeshQuery;
@@ -16,8 +16,8 @@ struct TERMIN_NAVMESH_COMPONENTS_API DetourRaycastResult {
     bool success = false;
     bool hit = false;
     float t = 0.0f;
-    std::array<float, 3> hit_position{0.0f, 0.0f, 0.0f};
-    std::array<float, 3> hit_normal{0.0f, 0.0f, 0.0f};
+    Vec3f hit_position{0.0f, 0.0f, 0.0f};
+    Vec3f hit_normal{0.0f, 0.0f, 0.0f};
     std::vector<unsigned long long> visited;
 };
 
@@ -25,11 +25,11 @@ struct TERMIN_NAVMESH_COMPONENTS_API DetourClosestPointResult {
     bool success = false;
     bool over_poly = false;
     unsigned long long poly_ref = 0;
-    std::array<float, 3> point{0.0f, 0.0f, 0.0f};
+    Vec3f point{0.0f, 0.0f, 0.0f};
 };
 
 struct TERMIN_NAVMESH_COMPONENTS_API DetourPathPoint {
-    std::array<float, 3> point{0.0f, 0.0f, 0.0f};
+    Vec3f point{0.0f, 0.0f, 0.0f};
     unsigned char flags = 0;
     unsigned long long poly_ref = 0;
     unsigned char poly_type = 0;
@@ -64,38 +64,38 @@ public:
     void clear();
     bool is_ready() const;
 
-    std::vector<std::array<float, 3>> find_path(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+    std::vector<Vec3f> find_path(
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourPathResult find_detailed_path(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourRaycastResult raycast(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
-    DetourClosestPointResult closest_point(const std::array<float, 3>& point);
+    DetourClosestPointResult closest_point(const Vec3f& point);
 
-    std::vector<std::array<float, 3>> find_path_world(
+    std::vector<Vec3f> find_path_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourPathResult find_detailed_path_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourRaycastResult raycast_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourClosestPointResult closest_point_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& point);
+        const Vec3f& point);
 
 private:
     std::string _asset_name;
@@ -103,7 +103,7 @@ private:
     dtNavMeshQuery* _query = nullptr;
     std::vector<unsigned char> _tile_blob;
 
-    bool find_nearest_poly(const std::array<float, 3>& point,
+    bool find_nearest_poly(const Vec3f& point,
                            unsigned long long& poly_ref,
                            float nearest[3],
                            bool* over_poly = nullptr);

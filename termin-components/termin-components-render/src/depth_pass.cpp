@@ -24,6 +24,7 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <string>
 
 namespace termin {
 
@@ -320,6 +321,8 @@ void DepthPass::execute_with_data_tgfx2(
     };
     const MaterialPipelinePassContract pass_contract = depth_material_pass_contract("depth");
     const char* depth_phase = phase_mark();
+    const std::string debug_pass_name = get_pass_name();
+    const char* debug_pass_name_c = debug_pass_name.c_str();
 
     for (const auto& dc : cached_draw_calls_) {
         const char* name = dc.entity.name();
@@ -329,7 +332,7 @@ void DepthPass::execute_with_data_tgfx2(
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = data.layer_mask;
         item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.debug_pass_name = debug_pass_name_c;
         item_context.pass_contract = &pass_contract;
 
         tc_render_item item{};
@@ -819,6 +822,8 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
             depth_resources);
     };
     const MaterialPipelinePassContract pass_contract = depth_material_pass_contract("depth_only");
+    const std::string debug_pass_name = get_pass_name();
+    const char* debug_pass_name_c = debug_pass_name.c_str();
 
     for (const auto& dc : cached_draw_calls_) {
         const char* name = dc.entity.name();
@@ -828,7 +833,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = ctx.layer_mask;
         item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.debug_pass_name = debug_pass_name_c;
         item_context.pass_contract = &pass_contract;
 
         tc_render_item item{};

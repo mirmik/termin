@@ -124,24 +124,41 @@ typedef struct tc_key_event {
     bool handled;
 } tc_key_event;
 
+typedef struct tc_mouse_button_event_init_info {
+    tc_viewport_handle viewport;
+    double x;
+    double y;
+    int button;
+    int action;
+    int mods;
+    uint32_t source;
+} tc_mouse_button_event_init_info;
+
+typedef struct tc_scroll_event_init_info {
+    tc_viewport_handle viewport;
+    double x;
+    double y;
+    double xoffset;
+    double yoffset;
+    int mods;
+    uint32_t source;
+} tc_scroll_event_init_info;
+
 // ============================================================================
 // Initialization helpers
 // ============================================================================
 
 static inline void tc_mouse_button_event_init_source(
     tc_mouse_button_event* e,
-    tc_viewport_handle viewport,
-    double x, double y,
-    int button, int action, int mods,
-    uint32_t source
+    const tc_mouse_button_event_init_info* info
 ) {
-    e->viewport = viewport;
-    e->x = x;
-    e->y = y;
-    e->button = button;
-    e->action = action;
-    e->mods = mods;
-    e->source = source;
+    e->viewport = info->viewport;
+    e->x = info->x;
+    e->y = info->y;
+    e->button = info->button;
+    e->action = info->action;
+    e->mods = info->mods;
+    e->source = info->source;
     e->handled = false;
 }
 
@@ -151,7 +168,16 @@ static inline void tc_mouse_button_event_init(
     double x, double y,
     int button, int action, int mods
 ) {
-    tc_mouse_button_event_init_source(e, viewport, x, y, button, action, mods, TC_INPUT_SOURCE_RUNTIME);
+    const tc_mouse_button_event_init_info info = {
+        viewport,
+        x,
+        y,
+        button,
+        action,
+        mods,
+        TC_INPUT_SOURCE_RUNTIME
+    };
+    tc_mouse_button_event_init_source(e, &info);
 }
 
 static inline void tc_mouse_move_event_init_source(
@@ -181,19 +207,15 @@ static inline void tc_mouse_move_event_init(
 
 static inline void tc_scroll_event_init_source(
     tc_scroll_event* e,
-    tc_viewport_handle viewport,
-    double x, double y,
-    double xoffset, double yoffset,
-    int mods,
-    uint32_t source
+    const tc_scroll_event_init_info* info
 ) {
-    e->viewport = viewport;
-    e->x = x;
-    e->y = y;
-    e->xoffset = xoffset;
-    e->yoffset = yoffset;
-    e->mods = mods;
-    e->source = source;
+    e->viewport = info->viewport;
+    e->x = info->x;
+    e->y = info->y;
+    e->xoffset = info->xoffset;
+    e->yoffset = info->yoffset;
+    e->mods = info->mods;
+    e->source = info->source;
     e->handled = false;
 }
 
@@ -204,7 +226,16 @@ static inline void tc_scroll_event_init(
     double xoffset, double yoffset,
     int mods
 ) {
-    tc_scroll_event_init_source(e, viewport, x, y, xoffset, yoffset, mods, TC_INPUT_SOURCE_RUNTIME);
+    const tc_scroll_event_init_info info = {
+        viewport,
+        x,
+        y,
+        xoffset,
+        yoffset,
+        mods,
+        TC_INPUT_SOURCE_RUNTIME
+    };
+    tc_scroll_event_init_source(e, &info);
 }
 
 static inline void tc_key_event_init_source(

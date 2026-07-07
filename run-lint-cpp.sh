@@ -22,10 +22,13 @@ CONFIGURE_ONLY=0
 NO_CONFIGURE=0
 CMAKE_GENERATOR_NAME="${CMAKE_GENERATOR_NAME:-${TERMIN_CMAKE_GENERATOR:-}}"
 CLANG_TIDY_BIN="${CLANG_TIDY_BIN:-clang-tidy}"
-CHECKS="${CLANG_TIDY_CHECKS:--*,clang-diagnostic-*,clang-analyzer-*,-clang-analyzer-deadcode.*,-clang-analyzer-optin.*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling}"
+CHECKS="${CLANG_TIDY_CHECKS:--*,clang-diagnostic-*,clang-analyzer-*,-clang-analyzer-deadcode.*,-clang-analyzer-optin.*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,readability-function-size}"
 CHECKS_OVERRIDDEN=0
 WARNINGS_AS_ERRORS="${CLANG_TIDY_WARNINGS_AS_ERRORS:-*}"
 HEADER_FILTER="^$SCRIPT_DIR/(termin-|tcplot|cmake|scripts|tools|CMakeLists\.txt)"
+EXCLUDE_HEADER_FILTER="${CLANG_TIDY_EXCLUDE_HEADER_FILTER:-^$SCRIPT_DIR/(.*/)?termin-thirdparty/}"
+DEFAULT_CLANG_TIDY_CONFIG="{CheckOptions: [{key: readability-function-size.ParameterThreshold, value: 7}, {key: readability-function-size.StatementThreshold, value: none}, {key: readability-function-size.LineThreshold, value: none}, {key: readability-function-size.BranchThreshold, value: none}, {key: readability-function-size.VariableThreshold, value: none}, {key: readability-function-size.NestingThreshold, value: none}]}"
+CLANG_TIDY_CONFIG="${CLANG_TIDY_CONFIG:-$DEFAULT_CLANG_TIDY_CONFIG}"
 PATH_FILTERS=()
 
 print_usage() {
@@ -68,6 +71,9 @@ Environment:
   CLANG_TIDY_CHECKS    clang-tidy checks string
   CLANG_TIDY_WARNINGS_AS_ERRORS
                        clang-tidy warnings-as-errors string
+  CLANG_TIDY_CONFIG    clang-tidy YAML/JSON config overlay
+  CLANG_TIDY_EXCLUDE_HEADER_FILTER
+                       clang-tidy exclude-header-filter regex
 EOF
 }
 
@@ -184,6 +190,7 @@ echo "Build dir:   $BUILD_DIR"
 echo "SDK prefix:  $SDK_PREFIX"
 echo "Checks:      $CHECKS"
 echo "Werror:      $WARNINGS_AS_ERRORS"
+echo "Header skip: $EXCLUDE_HEADER_FILTER"
 echo "clang-tidy:  $CLANG_TIDY_BIN"
 echo "Vulkan:      $TERMIN_ENABLE_VULKAN"
 echo "SDL2:        $TERMIN_ENABLE_SDL"
@@ -272,6 +279,8 @@ export TERMIN_CLANG_TIDY_BIN="$CLANG_TIDY_BIN"
 export TERMIN_CLANG_TIDY_CHECKS="$CHECKS"
 export TERMIN_CLANG_TIDY_WARNINGS_AS_ERRORS="$WARNINGS_AS_ERRORS"
 export TERMIN_CLANG_TIDY_HEADER_FILTER="$HEADER_FILTER"
+export TERMIN_CLANG_TIDY_EXCLUDE_HEADER_FILTER="$EXCLUDE_HEADER_FILTER"
+export TERMIN_CLANG_TIDY_CONFIG="$CLANG_TIDY_CONFIG"
 export TERMIN_CLANG_TIDY_JOBS="$BUILD_JOBS"
 export TERMIN_LINT_PATH_FILTERS="$(printf '%s\n' "${PATH_FILTERS[@]}")"
 
@@ -291,6 +300,8 @@ clang_tidy = os.environ["TERMIN_CLANG_TIDY_BIN"]
 checks = os.environ["TERMIN_CLANG_TIDY_CHECKS"]
 warnings_as_errors = os.environ["TERMIN_CLANG_TIDY_WARNINGS_AS_ERRORS"]
 header_filter = os.environ["TERMIN_CLANG_TIDY_HEADER_FILTER"]
+exclude_header_filter = os.environ.get("TERMIN_CLANG_TIDY_EXCLUDE_HEADER_FILTER", "")
+config = os.environ.get("TERMIN_CLANG_TIDY_CONFIG", "")
 jobs = int(os.environ.get("TERMIN_CLANG_TIDY_JOBS", "1"))
 filters_raw = os.environ.get("TERMIN_LINT_PATH_FILTERS", "")
 path_filters = [item for item in filters_raw.splitlines() if item]
@@ -399,6 +410,10 @@ def run_one(path: str) -> tuple[str, int, str]:
         f"--warnings-as-errors={warnings_as_errors}",
         f"--header-filter={header_filter}",
     ]
+    if exclude_header_filter:
+        cmd.append(f"--exclude-header-filter={exclude_header_filter}")
+    if config:
+        cmd.append(f"--config={config}")
     proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return path, proc.returncode, proc.stdout
 

@@ -21,6 +21,7 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace termin {
@@ -204,6 +205,8 @@ void NormalPass::execute_with_data_tgfx2(
     const std::string& debug_symbol = get_debug_internal_point();
     const MaterialPipelinePassContract pass_contract = normal_material_pass_contract();
     const char* normal_phase = phase_mark();
+    const std::string debug_pass_name = get_pass_name();
+    const char* debug_pass_name_c = debug_pass_name.c_str();
 
     for (const auto& dc : cached_draw_calls_) {
         const char* name = dc.entity.name();
@@ -213,7 +216,7 @@ void NormalPass::execute_with_data_tgfx2(
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = layer_mask;
         item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.debug_pass_name = debug_pass_name_c;
         item_context.pass_contract = &pass_contract;
 
         tc_render_item item{};

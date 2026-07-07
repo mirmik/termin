@@ -30,6 +30,7 @@ extern "C" {
 #include <cstring>
 #include <set>
 #include <span>
+#include <string>
 
 namespace termin {
 
@@ -476,13 +477,7 @@ ShadowCameraParams ShadowPass::build_shadow_params(
 // RenderItems and pass-specific encoders.
 std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
     ExecuteContext& ctx,
-    tc_scene_handle scene,
-    const std::vector<Light>& lights,
-    const Mat44f& camera_view,
-    const Mat44f& camera_projection,
-    float camera_near,
-    float camera_far,
-    uint64_t layer_mask
+    const ShadowPassExecuteData& data
 ) {
     std::vector<ShadowMapResult> results;
 
@@ -502,8 +497,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
     // Find directional lights that cast shadows.
     std::vector<std::pair<int, const Light*>> shadow_lights;
-    for (size_t i = 0; i < lights.size(); ++i) {
-        const Light& light = lights[i];
+    for (size_t i = 0; i < data.lights.size(); ++i) {
+        const Light& light = data.lights[i];
         if (light.type == LightType::Directional && light.shadows.enabled) {
             shadow_lights.push_back({static_cast<int>(i), &light});
         }
@@ -512,7 +507,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    collect_shadow_casters(scene, layer_mask, ctx.render_category_mask);
+    collect_shadow_casters(data.scene, data.layer_mask, ctx.render_category_mask);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -525,6 +520,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         }
     }
 
+    float camera_near = data.camera_near;
+    float camera_far = data.camera_far;
     if (camera_near < 0.001f) {
         camera_near = 0.1f;
     }
@@ -560,10 +557,17 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 continue;
             }
 
-            ShadowCameraParams params = fit_shadow_frustum_for_cascade(
-                camera_view, camera_projection, camera_near, camera_far, light_dir,
-                cascade_near, cascade_far, resolution, caster_offset
-            );
+            ShadowCascadeFitRequest fit_request;
+            fit_request.view_matrix = data.camera_view;
+            fit_request.projection_matrix = data.camera_projection;
+            fit_request.camera_near = camera_near;
+            fit_request.camera_far = camera_far;
+            fit_request.light_direction = light_dir;
+            fit_request.cascade_near = cascade_near;
+            fit_request.cascade_far = cascade_far;
+            fit_request.shadow_map_resolution = resolution;
+            fit_request.caster_offset = caster_offset;
+            ShadowCameraParams params = fit_shadow_frustum_for_cascade(fit_request);
             Mat44f view_matrix = build_shadow_view_matrix(params);
             Mat44f proj_matrix = build_shadow_projection_matrix(params);
             Mat44f light_space_matrix = compute_light_space_matrix(params);
@@ -695,6 +699,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     shadow_resources);
             };
             const MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
+            const std::string debug_pass_name = get_pass_name();
+            const char* debug_pass_name_c = debug_pass_name.c_str();
 
             for (const auto& dc : cached_draw_calls_) {
                 tc_material_phase* phase = dc.resolve_phase();
@@ -702,9 +708,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                 tc_render_item_collect_context item_context{};
                 item_context.phase_mark = "shadow";
-                item_context.layer_mask = layer_mask;
+                item_context.layer_mask = data.layer_mask;
                 item_context.render_category_mask = ctx.render_category_mask;
-                item_context.debug_pass_name = get_pass_name().c_str();
+                item_context.debug_pass_name = debug_pass_name_c;
                 item_context.pass_contract = &pass_contract;
 
                 tc_render_item item{};
@@ -728,7 +734,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     direct_context.phase = "shadow";
                     direct_context.pass_contract = shadow_material_pass_contract();
                     direct_context.current_tc_shader = TcShader(dc.final_shader);
-                    direct_context.layer_mask = layer_mask;
+                    direct_context.layer_mask = data.layer_mask;
                     direct_context.render_category_mask = ctx.render_category_mask;
                     direct_context.camera_position = shadow_camera_position(params);
                     direct_context.viewport_width = resolution;
@@ -858,29 +864,28 @@ void ShadowPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    std::vector<ShadowMapResult> results = execute_shadow_pass_tgfx2(
-        ctx,
-        ctx.scene.handle(),
-        ctx.lights,
-        camera_view,
-        camera_projection,
-        camera_near,
-        camera_far,
-        ctx.layer_mask
-    );
+    ShadowPassExecuteData data;
+    data.scene = ctx.scene.handle();
+    data.lights = ctx.lights;
+    data.camera_view = camera_view;
+    data.camera_projection = camera_projection;
+    data.camera_near = camera_near;
+    data.camera_far = camera_far;
+    data.layer_mask = ctx.layer_mask;
+    std::vector<ShadowMapResult> results = execute_shadow_pass_tgfx2(ctx, data);
 
     // Add results to shadow array
     for (const auto& result : results) {
-        shadow_array->add_entry(
-            result.depth_tex2,
-            result.width,
-            result.height,
-            result.light_space_matrix,
-            result.light_index,
-            result.cascade_index,
-            result.cascade_split_near,
-            result.cascade_split_far
-        );
+        ShadowMapArrayEntry entry;
+        entry.depth_tex2 = result.depth_tex2;
+        entry.width = result.width;
+        entry.height = result.height;
+        entry.light_space_matrix = result.light_space_matrix;
+        entry.light_index = result.light_index;
+        entry.cascade_index = result.cascade_index;
+        entry.cascade_split_near = result.cascade_split_near;
+        entry.cascade_split_far = result.cascade_split_far;
+        shadow_array->add_entry(entry);
     }
 
     if (profile) tc_profiler_end_section();

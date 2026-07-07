@@ -195,20 +195,8 @@ static bool get_render_camera(
     return true;
 }
 
-bool build_render_target_contexts(
-    RenderingManager& manager,
-    RenderEngine* engine,
-    tc_render_target_handle rt,
-    const std::string& base_context_name,
-    tc_entity_handle internal_entities,
-    int render_width,
-    int render_height,
-    const std::vector<tc_render_target_handle>& managed_render_targets,
-    std::unordered_map<int, RenderTargetContextProvider>& providers,
-    std::unordered_set<uint64_t>& missing_provider_warnings,
-    std::unordered_map<std::string, RenderTargetContext>& contexts,
-    std::string& default_context_name
-) {
+bool build_render_target_contexts(const RenderTargetContextBuildRequest& request) {
+    tc_render_target_handle rt = request.rt;
     if (!tc_render_target_handle_valid(rt)) {
         return false;
     }
@@ -218,11 +206,11 @@ bool build_render_target_contexts(
 
     const tc_render_target_kind kind = tc_render_target_get_kind(rt);
     if (kind != TC_RENDER_TARGET_TEXTURE_2D) {
-        auto it = providers.find((int)kind);
-        if (it == providers.end() || !it->second) {
+        auto it = request.providers.find((int)kind);
+        if (it == request.providers.end() || !it->second) {
             const char* rt_name = tc_render_target_get_name(rt);
             const uint64_t warning_key = render_target_key(rt);
-            if (missing_provider_warnings.insert(warning_key).second) {
+            if (request.missing_provider_warnings.insert(warning_key).second) {
                 tc_log(
                     TC_LOG_WARN,
                     "[RenderingManager] render target '%s' kind '%s' has no context provider",
@@ -233,15 +221,15 @@ bool build_render_target_contexts(
             return false;
         }
         const bool ok = it->second(
-            manager,
+            request.manager,
             rt,
-            base_context_name,
-            internal_entities,
-            contexts,
-            default_context_name
+            request.base_context_name,
+            request.internal_entities,
+            request.contexts,
+            request.default_context_name
         );
-        if (ok && default_context_name.empty() && !contexts.empty()) {
-            default_context_name = contexts.begin()->first;
+        if (ok && request.default_context_name.empty() && !request.contexts.empty()) {
+            request.default_context_name = request.contexts.begin()->first;
         }
         return ok;
     }
@@ -252,18 +240,19 @@ bool build_render_target_contexts(
         return false;
     }
 
-    if (render_width <= 0 || render_height <= 0) {
+    if (request.render_width <= 0 || request.render_height <= 0) {
         tc_log(
             TC_LOG_WARN,
             "[RenderingManager] RT '%s': invalid size %dx%d",
             rt_name ? rt_name : "?",
-            render_width,
-            render_height
+            request.render_width,
+            request.render_height
         );
         return false;
     }
 
-    double aspect = static_cast<double>(render_width) / std::max(1, render_height);
+    double aspect =
+        static_cast<double>(request.render_width) / std::max(1, request.render_height);
     RenderCamera render_camera;
     uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
     uint64_t camera_render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
@@ -281,8 +270,9 @@ bool build_render_target_contexts(
         return false;
     }
 
-    if (engine) engine->ensure_tgfx2();
-    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
+    if (request.engine) request.engine->ensure_tgfx2();
+    tgfx::IRenderDevice* device =
+        request.engine ? request.engine->tgfx2_device() : nullptr;
     if (!device) {
         tc_log(TC_LOG_WARN, "[RenderingManager] RT '%s': tgfx2 device unavailable",
                rt_name ? rt_name : "?");
@@ -295,15 +285,15 @@ bool build_render_target_contexts(
     tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
         *device, tc_render_target_get_depth_texture(rt));
 
-    const std::string context_name = base_context_name.empty()
+    const std::string context_name = request.base_context_name.empty()
         ? (rt_name ? rt_name : "")
-        : base_context_name;
+        : request.base_context_name;
 
     RenderTargetContext ctx;
     ctx.name = context_name;
     ctx.camera = render_camera;
-    ctx.render_rect = {0, 0, render_width, render_height};
-    ctx.internal_entities = internal_entities;
+    ctx.render_rect = {0, 0, request.render_width, request.render_height};
+    ctx.internal_entities = request.internal_entities;
     ctx.layer_mask = effective_layer_mask(camera_layer_mask, rt);
     ctx.render_category_mask = camera_render_category_mask;
     ctx.output_color_tex = out_color;
@@ -313,11 +303,15 @@ bool build_render_target_contexts(
     ctx.output_depth_format = render_target_format_to_tgfx2(
         tc_render_target_get_depth_format(rt));
     fill_render_target_clear_settings(ctx, rt);
-    fill_external_textures_from_render_target(ctx, rt, *device, managed_render_targets);
-    contexts[context_name] = std::move(ctx);
+    fill_external_textures_from_render_target(
+        ctx,
+        rt,
+        *device,
+        request.managed_render_targets);
+    request.contexts[context_name] = std::move(ctx);
 
-    if (default_context_name.empty()) {
-        default_context_name = context_name;
+    if (request.default_context_name.empty()) {
+        request.default_context_name = context_name;
     }
     return true;
 }

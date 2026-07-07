@@ -30,6 +30,7 @@ extern "C" {
 #include <cmath>
 #include <cstring>
 #include <span>
+#include <string>
 #include <algorithm>
 #include <numeric>
 #include <chrono>
@@ -793,6 +794,9 @@ void ColorPass::execute_with_data(
         std::min<size_t>(shadow_tex2s.size(), MAX_SHADOW_MAPS));
 
     size_t draw_index = 0;
+    const std::string debug_pass_name = get_pass_name();
+    const char* debug_pass_name_c = debug_pass_name.c_str();
+
     for (const auto& dc : cached_draw_calls_) {
         if (!dc.component) {
             tc::Log::error(
@@ -865,7 +869,7 @@ void ColorPass::execute_with_data(
         item_context.phase_mark = phase_mark.c_str();
         item_context.layer_mask = data.layer_mask;
         item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.debug_pass_name = debug_pass_name_c;
         item_context.pass_contract = &collect_context.pass_contract;
 
         tc_render_item item{};
@@ -929,7 +933,7 @@ void ColorPass::execute_with_data(
             submit_request.draw_context = &direct_context;
             submit_request.material_phase = phase;
             submit_request.phase_mark = phase_mark.c_str();
-            submit_request.debug_pass_name = get_pass_name().c_str();
+            submit_request.debug_pass_name = debug_pass_name_c;
             submit_request.debug_entity_name = ename;
             submit_request.prepare_material_resources =
                 [this,
