@@ -30,38 +30,38 @@ public:
     void clear();
     bool is_ready() const;
 
-    std::vector<std::array<float, 3>> find_path(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+    std::vector<Vec3f> find_path(
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourPathResult find_detailed_path(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourRaycastResult raycast(
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
-    DetourClosestPointResult closest_point(const std::array<float, 3>& point);
+    DetourClosestPointResult closest_point(const Vec3f& point);
 
-    std::vector<std::array<float, 3>> find_path_world(
+    std::vector<Vec3f> find_path_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourPathResult find_detailed_path_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourRaycastResult raycast_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& start,
-        const std::array<float, 3>& end);
+        const Vec3f& start,
+        const Vec3f& end);
 
     DetourClosestPointResult closest_point_world(
         const Pose3& bake_frame,
-        const std::array<float, 3>& point);
+        const Vec3f& point);
 
 private:
     mutable std::string _loaded_navmesh_uuid;

@@ -144,7 +144,7 @@ size_t PathfindingWorld::size() const {
 }
 
 std::vector<PathfindingWorldPointCandidate> PathfindingWorld::candidates_for_world_point(
-    const std::array<float, 3>& point)
+    const Vec3f& point)
 {
     prune_invalid_entries();
 
@@ -197,7 +197,7 @@ std::vector<PathfindingWorldPointCandidate> PathfindingWorld::candidates_for_wor
 }
 
 bool PathfindingWorld::find_best_candidate_world_point(
-    const std::array<float, 3>& point,
+    const Vec3f& point,
     PathfindingWorldPointCandidate& out_candidate)
 {
     std::vector<PathfindingWorldPointCandidate> candidates = candidates_for_world_point(point);
@@ -210,8 +210,8 @@ bool PathfindingWorld::find_best_candidate_world_point(
 }
 
 std::vector<PathfindingWorldCandidate> PathfindingWorld::candidates_for_world_points(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end)
+    const Vec3f& start,
+    const Vec3f& end)
 {
     prune_invalid_entries();
 
@@ -269,8 +269,8 @@ std::vector<PathfindingWorldCandidate> PathfindingWorld::candidates_for_world_po
 }
 
 bool PathfindingWorld::find_best_candidate_world(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end,
+    const Vec3f& start,
+    const Vec3f& end,
     PathfindingWorldCandidate& out_candidate)
 {
     std::vector<PathfindingWorldCandidate> candidates = candidates_for_world_points(start, end);
@@ -283,8 +283,8 @@ bool PathfindingWorld::find_best_candidate_world(
 }
 
 PathfindingWorldPathResult PathfindingWorld::find_detailed_path_world(
-    const std::array<float, 3>& start,
-    const std::array<float, 3>& end,
+    const Vec3f& start,
+    const Vec3f& end,
     const PathfindingWorldQueryOptions& options)
 {
     PathfindingWorldPathResult result;
@@ -300,7 +300,7 @@ PathfindingWorldPathResult PathfindingWorld::find_detailed_path_world(
             continue;
         }
 
-        const std::array<float, 3>& query_end =
+        const Vec3f& query_end =
             options.navmesh_precast ? candidate.end_closest.point : end;
         DetourPathResult path = candidate.component->find_detailed_path_world(
             candidate.bake_frame,
@@ -340,7 +340,7 @@ void PathfindingWorld::prune_invalid_entries() {
         entries_.end());
 }
 
-double PathfindingWorld::distance_sq(const std::array<float, 3>& a, const std::array<float, 3>& b) {
+double PathfindingWorld::distance_sq(const Vec3f& a, const Vec3f& b) {
     const double dx = static_cast<double>(a[0]) - static_cast<double>(b[0]);
     const double dy = static_cast<double>(a[1]) - static_cast<double>(b[1]);
     const double dz = static_cast<double>(a[2]) - static_cast<double>(b[2]);

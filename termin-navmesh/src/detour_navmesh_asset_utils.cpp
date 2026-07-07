@@ -569,11 +569,11 @@ bool load_detour_tile_blobs_from_navmesh(const TcNavMesh& navmesh,
     return true;
 }
 
-std::array<float, 3> termin_to_recast(const std::array<float, 3>& p) {
+Vec3f termin_to_recast(const Vec3f& p) {
     return {p[0], p[2], p[1]};
 }
 
-std::array<float, 3> recast_to_termin(const float p[3]) {
+Vec3f recast_to_termin(const float p[3]) {
     return {p[0], p[2], p[1]};
 }
 
