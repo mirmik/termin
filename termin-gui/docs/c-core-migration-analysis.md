@@ -1,5 +1,10 @@
 # Анализ: перенос ядра tcgui в C (по модели tc_component)
 
+> Исторический набросок. Текущая целевая модель владения уточнена в
+> [UI storage and plot annotations](../../docs/architecture/2026-07-07-ui-storage-and-plot-annotations.md):
+> основной путь — native C++ UI storage/document с `WidgetHandle`, а не
+> language-owned `body` как финальная модель lifetime.
+
 ## Мотивация
 
 tcgui сейчас — чисто Python-фреймворк. В tc_component ядро живёт в C (`tc_component` struct),

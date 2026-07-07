@@ -130,12 +130,11 @@ void GrayscalePass::execute(ExecuteContext& ctx) {
     }
     ctx.ctx2->bind_shader(ctx.ctx2->fsq_vertex_shader(), gs_fs);
 
-    tgfx::VertexBufferLayout fsq_layout;
+    tgfx::VertexLayoutDesc fsq_layout;
     fsq_layout.stride = 4 * sizeof(float);
-    fsq_layout.attributes = {
-        {0, tgfx::VertexFormat::Float2, 0},
-        {1, tgfx::VertexFormat::Float2, 2 * sizeof(float)},
-    };
+    fsq_layout.attribute_count = 2;
+    fsq_layout.attributes[0] = {0, tgfx::VertexFormat::Float2, 0, tgfx::intern_vertex_semantic("position")};
+    fsq_layout.attributes[1] = {1, tgfx::VertexFormat::Float2, 2 * sizeof(float), tgfx::intern_vertex_semantic("uv")};
     ctx.ctx2->set_vertex_layout(fsq_layout);
 
     ctx.ctx2->use_shader_resource_layout(raw);
