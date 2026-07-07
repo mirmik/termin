@@ -108,7 +108,7 @@ class Screw2Tests(unittest.TestCase):
         arm = numpy.array([1.0, 0.0])
         carried = screw.force_carry(arm)
         self.assertAlmostEqual(carried.moment(), 1.0, places=5)
-        self.assertTrue((carried.vector() == numpy.array([1.0, 0.0])).all())
+        numpy.testing.assert_array_equal(list(carried.vector()), numpy.array([1.0, 0.0]))
 
     def test_screw2_transform_by_pose(self):
         screw = Screw2(ang=numpy.array([1.0]), lin=numpy.array([1.0, 0.0]))
