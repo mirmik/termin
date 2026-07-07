@@ -30,6 +30,7 @@ extern "C" {
 #include <cstring>
 #include <set>
 #include <span>
+#include <string>
 
 namespace termin {
 
@@ -660,6 +661,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     shadow_resources);
             };
             const MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
+            const std::string debug_pass_name = get_pass_name();
+            const char* debug_pass_name_c = debug_pass_name.c_str();
 
             for (const auto& dc : cached_draw_calls_) {
                 tc_material_phase* phase = dc.resolve_phase();
@@ -669,7 +672,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 item_context.phase_mark = "shadow";
                 item_context.layer_mask = data.layer_mask;
                 item_context.render_category_mask = ctx.render_category_mask;
-                item_context.debug_pass_name = get_pass_name().c_str();
+                item_context.debug_pass_name = debug_pass_name_c;
                 item_context.pass_contract = &pass_contract;
 
                 tc_render_item item{};
