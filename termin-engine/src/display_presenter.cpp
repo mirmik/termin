@@ -66,8 +66,8 @@ void present_display(RenderingManager& manager, tc_display* display) {
     if (profile) tc_profiler_begin_section("Present Clear");
     dev->clear_texture(
         display_color_tex,
-        0.1f, 0.1f, 0.1f, 1.0f,
-        0, 0, width, height
+        Color4{0.1f, 0.1f, 0.1f, 1.0f},
+        Rect2i::from_size(width, height)
     );
     if (profile) tc_profiler_end_section();
 
@@ -124,8 +124,8 @@ void present_display(RenderingManager& manager, tc_display* display) {
 
         dev->blit_to_texture(
             display_color_tex, src_color,
-            0, 0, src_w, src_h,
-            px, py, pw, ph
+            Rect2i::from_size(src_w, src_h),
+            Rect2i{px, py, px + pw, py + ph}
         );
     }
     if (profile) tc_profiler_end_section();

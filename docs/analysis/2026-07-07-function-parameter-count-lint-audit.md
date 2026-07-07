@@ -12,14 +12,31 @@ not enable `PLR0913`.
 ## Summary
 
 - Python/Ruff `PLR0913` with `lint.pylint.max-args = 7`: 54 diagnostics.
-- C/C++/clang-tidy `readability-function-size.ParameterThreshold = 7`: 84
-  diagnostics total.
-- Of the C/C++ diagnostics, 64 are in repository-owned code and 20 are in
-  `termin-thirdparty` headers included through repository translation units.
+- Original C/C++/clang-tidy `readability-function-size.ParameterThreshold = 7`
+  baseline: 84 diagnostics total.
+- Of the original C/C++ diagnostics, 64 were in repository-owned code and 20
+  were in `termin-thirdparty` headers included through repository translation
+  units.
+- After the first C++ cleanup on 2026-07-07, the C/C++ baseline is 78
+  diagnostics total, 58 in repository-owned code.
 
 The result is small enough to enable eventually, but not as a drive-by config
 change. The editor menu/controller constructors and several rendering/graphics
 APIs need deliberate API shape work before this becomes a clean CI rule.
+
+## Cleanup Progress
+
+2026-07-07:
+
+- Moved `Color4`, `Size2i`, and `Rect2i` from `termin-graphics/include/tgfx/types.hpp`
+  to `termin-base/include/termin/geom`.
+- Kept `tgfx/types.hpp` as a compatibility include for existing graphics users.
+- Updated `tgfx2::IRenderDevice::blit_to_texture` to take source/destination
+  `Rect2i` values.
+- Updated `tgfx2::IRenderDevice::clear_texture` to take `Color4` and `Rect2i`.
+- Updated OpenGL, Vulkan, D3D11 declarations/implementations and current call
+  sites.
+- C++ repository-owned diagnostics dropped from 64 to 58.
 
 ## Reproduction
 
