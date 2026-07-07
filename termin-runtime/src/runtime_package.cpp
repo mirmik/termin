@@ -331,18 +331,13 @@ void ensure_runtime_builtin_textures() {
     // Match the editor's built-in texture UUIDs. They are content-hash UUIDs,
     // not the legacy "__white_1x1__" literal UUID used by TcTexture::white_1x1().
     const uint8_t white_pixel[4] = {255, 255, 255, 255};
-    TcTexture white = TcTexture::from_data(
-        white_pixel,
-        1,
-        1,
-        4,
-        false,
-        true,
-        false,
+    TcTexture white = TcTexture::from_data(TcTextureCreateInfo{
+        TexturePixelDataView{white_pixel, 1, 1, 4},
+        TextureTransformFlags{false, true, false},
         "__white_1x1__",
         "__white_1x1__",
         ""
-    );
+    });
     if (white.is_valid()) {
         keepalive.push_back(std::move(white));
     } else {
@@ -350,18 +345,13 @@ void ensure_runtime_builtin_textures() {
     }
 
     const uint8_t normal_pixel[4] = {128, 128, 255, 255};
-    TcTexture normal = TcTexture::from_data(
-        normal_pixel,
-        1,
-        1,
-        4,
-        false,
-        true,
-        false,
+    TcTexture normal = TcTexture::from_data(TcTextureCreateInfo{
+        TexturePixelDataView{normal_pixel, 1, 1, 4},
+        TextureTransformFlags{false, true, false},
         "__normal_1x1__",
         "__normal_1x1__",
         ""
-    );
+    });
     if (normal.is_valid()) {
         keepalive.push_back(std::move(normal));
     } else {
@@ -822,29 +812,21 @@ bool load_mesh_resource(
         return false;
     }
 
-    TcMesh mesh;
-    if (submeshes.empty()) {
-        mesh = TcMesh::from_interleaved(
-            vertices.data(),
-            vertex_count,
-            indices.data(),
-            indices.size(),
-            layout,
-            name,
-            uuid,
-            draw_mode);
-    } else {
-        mesh = TcMesh::from_interleaved_with_submeshes(
-            vertices.data(),
-            vertex_count,
-            indices.data(),
-            indices.size(),
-            layout,
-            submeshes,
-            name,
-            uuid,
-            draw_mode);
+    TcMeshCreateInfo create_info;
+    create_info.data = TcMeshInterleavedDataView{
+        vertices.data(),
+        vertex_count,
+        indices.data(),
+        indices.size(),
+        &layout};
+    if (!submeshes.empty()) {
+        create_info.submeshes = submeshes.data();
+        create_info.submesh_count = submeshes.size();
     }
+    create_info.name = name;
+    create_info.uuid_hint = uuid;
+    create_info.draw_mode = draw_mode;
+    TcMesh mesh = TcMesh::from_interleaved(create_info);
     if (!mesh.is_valid()) {
         error = "failed to create mesh '" + uuid + "'";
         tc_log_error("RuntimePackageLoader: %s", error.c_str());

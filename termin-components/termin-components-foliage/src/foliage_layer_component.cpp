@@ -807,7 +807,7 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
         static_cast<uint32_t>(instances.size() * sizeof(FoliageGpuInstance)));
     ctx2.set_topology(mesh_binding.topology);
     ctx2.set_vertex_layout(vertex_layout);
-    ctx2.draw_indexed_instanced(
+    ctx2.draw_indexed_instanced(tgfx::RenderContext2::IndexedInstancedDraw{
         mesh_binding.vertex_buffer,
         0,
         mesh_binding.index_buffer,
@@ -816,7 +816,7 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
         0,
         mesh_binding.index_count,
         static_cast<uint32_t>(instances.size())
-    );
+    });
     return true;
 }
 

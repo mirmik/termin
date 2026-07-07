@@ -721,11 +721,6 @@ bool WorldTextComponent::encode_render_item_tgfx2(
 
     Vec3 world_pos = context.model.transform_point(
         vec3_from_payload(item.payload.text_batch.local_offset));
-    float position[3] = {
-        static_cast<float>(world_pos.x),
-        static_cast<float>(world_pos.y),
-        static_cast<float>(world_pos.z),
-    };
 
     tc_render_item_vec4 payload_color = item.payload.text_batch.color;
     if (context.has_override_color) {
@@ -747,13 +742,21 @@ bool WorldTextComponent::encode_render_item_tgfx2(
     renderer_->begin(&ctx2, mvp.data, text_right, text_up_basis, font);
     renderer_->draw(
         item.payload.text_batch.text,
-        position,
-        static_cast<float>(payload_color.x),
-        static_cast<float>(payload_color.y),
-        static_cast<float>(payload_color.z),
-        static_cast<float>(payload_color.w),
-        item.payload.text_batch.size,
-        to_tgfx_anchor(decoded_anchor));
+        tgfx::Text3DRenderer::DrawOptions{
+            Vec3f{
+                static_cast<float>(world_pos.x),
+                static_cast<float>(world_pos.y),
+                static_cast<float>(world_pos.z),
+            },
+            Color4{
+                static_cast<float>(payload_color.x),
+                static_cast<float>(payload_color.y),
+                static_cast<float>(payload_color.z),
+                static_cast<float>(payload_color.w),
+            },
+            item.payload.text_batch.size,
+            to_tgfx_anchor(decoded_anchor),
+        });
     renderer_->end();
     return true;
 }

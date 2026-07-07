@@ -1,4 +1,4 @@
-from termin.geombase import Pose3, AABB, TransformAABB, Vec3
+from termin.geombase import Pose3, AABB, TransformAABB, Quat, Vec3
 from termin.kinematic import Transform
 import unittest
 import numpy
@@ -10,8 +10,8 @@ def _vec3(value) -> Vec3:
 
 def _pose_at(x: float, y: float = 0.0, z: float = 0.0) -> Pose3:
     return Pose3(
-        ang=numpy.array([0.0, 0.0, 0.0, 1.0]),
-        lin=numpy.array([x, y, z]),
+        ang=Quat.identity(),
+        lin=Vec3(x, y, z),
     )
 
 

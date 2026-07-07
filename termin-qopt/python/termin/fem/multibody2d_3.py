@@ -70,7 +70,7 @@ class RigidBody2D(Contribution):
         g_local = self.global_pose.inverse().rotate_vector(self.gravity)
         grav = self.inertia.gravity_wrench(g_local)
 
-        b[a_idx] += bias.to_vector_vw_order() + grav.to_vector_vw_order()
+        b[a_idx] += np.asarray(bias.to_vector_vw_order()) + np.asarray(grav.to_vector_vw_order())
 
     def contribute_for_constraints_correction(self, matrices, index_maps):
         self.contribute_to_mass_matrix(matrices, index_maps)
@@ -132,7 +132,7 @@ class ForceOnBody2D(Contribution):
     def contribute(self, matrices, index_maps):
         b = matrices["load"]
         a_indices = index_maps["acceleration"][self.acceleration]
-        b[a_indices] += self.wrench_local.to_vector_vw_order()
+        b[a_indices] += np.asarray(self.wrench_local.to_vector_vw_order())
 
 
 class FixedRotationJoint2D(Contribution):
@@ -292,7 +292,7 @@ class RevoluteJoint2D(Contribution):
         F  = index_maps["force"][self.internal_force]  # 2 строки
 
         rA = self.rA_local
-        R = self.poseAB.rotation_matrix()
+        R = np.asarray(self.poseAB.rotation_matrix())
 
         # блок по aA (в СК A)
         H[np.ix_(F, aA)] += np.array([
@@ -324,7 +324,7 @@ class RevoluteJoint2D(Contribution):
         pB = self.bodyB.pose().lin
 
         poseA = self.bodyA.pose()
-        R_A_T = poseA.inverse().rotation_matrix()
+        R_A_T = np.asarray(poseA.inverse().rotation_matrix())
 
         delta_p_A = R_A_T @ (pA - pB)
         rA = self.rA_local

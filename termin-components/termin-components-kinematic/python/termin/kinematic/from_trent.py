@@ -1,24 +1,23 @@
 from .transform import Transform3
 from .kinematic import Rotator3, Actuator3
-from tcbase._geom_native import Pose3
-import numpy
+from tcbase._geom_native import Pose3, Quat, Vec3
 
 def from_trent(dct: dict) -> Transform3:
     """Create a Transform3 or KinematicTransform3 from a Trent dictionary representation."""
     ttype = dct.get("type", "transform")
     local_pose_dict = dct.get("pose", {})
-    position = numpy.array(local_pose_dict.get("position", [0.0, 0.0, 0.0]))
-    orientation = numpy.array(local_pose_dict.get("orientation", [0.0, 0.0, 0.0, 1.0]))
+    position = Vec3(local_pose_dict.get("position", [0.0, 0.0, 0.0]))
+    orientation = Quat(local_pose_dict.get("orientation", [0.0, 0.0, 0.0, 1.0]))
     local_pose = Pose3(lin=position, ang=orientation)
     name = dct.get("name", "")
     
     if ttype == "transform":
         transform = Transform3(local_pose=local_pose, name=name)
     elif ttype == "rotator":
-        axis = numpy.array(dct.get("axis", [0.0, 0.0, 1.0]))
+        axis = Vec3(dct.get("axis", [0.0, 0.0, 1.0]))
         transform = Rotator3(axis=axis, parent=None, name=name, local_pose=local_pose, manual_output=True)
     elif ttype == "actuator":
-        axis = numpy.array(dct.get("axis", [0.0, 0.0, 1.0]))
+        axis = Vec3(dct.get("axis", [0.0, 0.0, 1.0]))
         transform = Actuator3(axis=axis, parent=None, name=name, local_pose=local_pose, manual_output=True)
     else:
         raise ValueError(f"Unknown transform type: {ttype}")
