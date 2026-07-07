@@ -21,8 +21,9 @@ not enable `PLR0913`.
   Canvas2D quad cleanup, immediate solid primitive cleanup, texture/FBO
   descriptor cleanup, text draw options cleanup, indexed-instanced draw
   command cleanup, mesh interleaved create-info cleanup, frame graph presenter
-  draw command cleanup, scene mount request cleanup, and render-pass execute
-  data/config cleanup on 2026-07-07, the current C/C++ baseline is 11
+  draw command cleanup, scene mount request cleanup, render-pass execute
+  data/config cleanup, and shadow-pass request cleanup on 2026-07-07,
+  the current C/C++ baseline is 9
   repository-owned diagnostics with the tightened third-party header filter.
 
 The result is small enough to enable eventually, but not as a drive-by config
@@ -79,7 +80,11 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   Python and C# binding call shapes compatible.
 - Updated `LightingUBO::update_from_lights` to take `std::span<const Light>` so
   render-pass execute data can carry non-owning light views.
-- C++ repository-owned diagnostics dropped from 64 to 11.
+- Updated `fit_shadow_frustum_for_cascade` to take a typed
+  `ShadowCascadeFitRequest`.
+- Updated `ShadowPass::execute_shadow_pass_tgfx2` to take a typed
+  `ShadowPassExecuteData` with non-owning light views.
+- C++ repository-owned diagnostics dropped from 64 to 9.
 
 ## Reproduction
 
@@ -165,7 +170,6 @@ Current diagnostics by repository-owned area:
 |---:|---|
 | 5 | `termin-graphics` |
 | 3 | `termin-mesh` |
-| 2 | `termin-render-passes` |
 | 1 | `termin-engine` |
 
 Current repository-owned C/C++ diagnostics:
@@ -180,8 +184,6 @@ termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_st
 termin-mesh/src/resources/tc_mesh.c:653:13: tc_mesh_find_surface_edge_filtered: 10 parameters
 termin-mesh/src/resources/tc_mesh.c:955:6: tc_mesh_find_surface_edge_aligned: 8 parameters
 termin-mesh/src/resources/tc_mesh.c:979:6: tc_mesh_find_surface_edge_aligned_metric: 9 parameters
-termin-render-passes/src/shadow_camera.cpp:385:20: fit_shadow_frustum_for_cascade: 9 parameters
-termin-render-passes/src/shadow_pass.cpp:438:42: execute_shadow_pass_tgfx2: 8 parameters
 ```
 
 Third-party header diagnostics observed during the same run:
