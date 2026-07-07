@@ -298,9 +298,9 @@ virtual tc_mesh* get_mesh_for_phase(
 **Где смотреть:**
 - `termin-skeleton/CMakeLists.txt` (строки 42-44)
 - `termin-skeleton/src/tc_skeleton_registry.c:10` — **Исправлено 2026-05-21:** теперь `#include <tcbase/tc_registry_utils.h>`
-- `termin-skeleton/include/termin/skeleton/tc_skeleton_handle.hpp:12` — `#include <tcbase/tgfx_intern_string.h>`
+- `termin-skeleton/include/termin/skeleton/tc_skeleton_handle.hpp:12` — `#include <tcbase/tc_string.h>`
 
-`tgfx_intern_string.h` лежит в termin-base (уже зависит). `tc_registry_utils.h` и `tc_resource.h` были продублированы в termin-graphics и termin-mesh.
+`tc_string.h` лежит в termin-base (уже зависит). `tc_registry_utils.h` и `tc_resource.h` были продублированы в termin-graphics и termin-mesh.
 
 **Статус 2026-05-21:** исправлено. `tc_registry_utils.h` и `tc_resource.h` вынесены в `termin-base/include/tcbase/`, C geometry headers перенесены в `termin-base/include/geom`, `tc_skeleton.h`/`tc_animation.h` принадлежат `termin-skeleton`/`termin-animation` и используют `tcbase/tc_binding_types.h`, старые resource includes в `termin-render` переведены на `tcbase`, а `termin-skeleton` больше не линкуется с `termin_graphics`.
 

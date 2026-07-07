@@ -5,7 +5,7 @@
 #include <tcbase/tc_pool.h>
 #include <tcbase/tc_resource.h>
 #include <tcbase/tc_resource_map.h>
-#include <tcbase/tgfx_intern_string.h>
+#include <tcbase/tc_string.h>
 
 #include <cstdio>
 #include <cstring>
@@ -157,7 +157,7 @@ tc_voxel_grid_handle tc_voxel_grid_declare(const char* uuid, const char* name) {
     tc_voxel_grid* grid = static_cast<tc_voxel_grid*>(tc_pool_get(&g_voxel_grid_pool, h));
     voxel_grid_init_slot(grid, h, uuid, false);
     if (name && name[0] != '\0') {
-        grid->name = tgfx_intern_string(name);
+        grid->name = tc_intern_string(name);
     }
 
     if (!tc_resource_map_add(g_uuid_to_index, grid->uuid, voxel_grid_pack_index(h.index))) {
@@ -225,8 +225,8 @@ bool tc_voxel_grid_ensure_loaded(tc_voxel_grid_handle h) {
 
 bool tc_voxel_grid_set_metadata(tc_voxel_grid* grid, const char* name, const char* source_path) {
     if (!grid) return false;
-    if (name && name[0] != '\0') grid->name = tgfx_intern_string(name);
-    if (source_path && source_path[0] != '\0') grid->source_path = tgfx_intern_string(source_path);
+    if (name && name[0] != '\0') grid->name = tc_intern_string(name);
+    if (source_path && source_path[0] != '\0') grid->source_path = tc_intern_string(source_path);
     voxel_grid_bump_version(grid);
     return true;
 }
@@ -253,12 +253,12 @@ bool tc_voxel_grid_set_payload_copy(tc_voxel_grid_handle h, const VoxelGrid& pay
     if (grid->name == nullptr || grid->name[0] == '\0') {
         const std::string& payload_name = payload.name();
         if (!payload_name.empty()) {
-            grid->name = tgfx_intern_string(payload_name.c_str());
+            grid->name = tc_intern_string(payload_name.c_str());
         }
     }
     const std::string& payload_source_path = payload.source_path();
     if (!payload_source_path.empty()) {
-        grid->source_path = tgfx_intern_string(payload_source_path.c_str());
+        grid->source_path = tc_intern_string(payload_source_path.c_str());
     }
     voxel_grid_bump_version(grid);
     return true;
