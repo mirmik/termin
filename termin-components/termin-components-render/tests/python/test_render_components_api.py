@@ -20,6 +20,7 @@ from termin.render_components import (
     MaterialPass,
     MeshRenderer,
     NormalPass,
+    OrbitCameraController,
     SkinnedMeshRenderer,
     WorldTextAnchor,
     WorldTextComponent,
@@ -97,6 +98,18 @@ def test_render_components_exports_camera_controller_and_material_pass_helpers()
     assert MaterialPass.inspect_fields["material"].kind == "tc_material"
     assert MaterialPass.get_texture_inputs_for_material is not None
     assert get_texture_inputs_for_material("(None)") == []
+
+
+def test_orbit_camera_controller_exposes_target_as_vec3():
+    controller = OrbitCameraController()
+
+    assert isinstance(controller.target, Vec3)
+
+    controller.center_on(Vec3(1.0, 2.0, 3.0))
+    assert controller.target == Vec3(1.0, 2.0, 3.0)
+
+    controller._target = Vec3(4.0, 5.0, 6.0)
+    assert controller._target == Vec3(4.0, 5.0, 6.0)
 
 
 def test_skinned_mesh_renderer_computes_bones_in_renderer_space():
