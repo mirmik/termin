@@ -37,6 +37,9 @@ public:
 private:
     void resolve_skeleton_controller();
 
+protected:
+    void populate_mesh_render_item(tc_render_item& item) override;
+
 public:
     // Note: material and cast_shadow are inherited from MeshRenderer;
     // mesh data lives on the required MeshComponent.
