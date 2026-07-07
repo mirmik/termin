@@ -17,8 +17,9 @@ not enable `PLR0913`.
 - Of the original C/C++ diagnostics, 64 were in repository-owned code and 20
   were in `termin-thirdparty` headers included through repository translation
   units.
-- After the first C++ cleanup on 2026-07-07, the C/C++ baseline is 78
-  diagnostics total, 58 in repository-owned code.
+- After the first C++ cleanup, geometry type rename, and `tcplot` API cleanup
+  on 2026-07-07, the current C/C++ baseline is 30 repository-owned diagnostics
+  with the tightened third-party header filter.
 
 The result is small enough to enable eventually, but not as a drive-by config
 change. The editor menu/controller constructors and several rendering/graphics
@@ -41,7 +42,9 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
 - Updated `tgfx2::IRenderDevice::clear_texture` to take `Color4` and `Bounds2i`.
 - Updated OpenGL, Vulkan, D3D11 declarations/implementations and current call
   sites.
-- C++ repository-owned diagnostics dropped from 64 to 58.
+- Updated `tcplot` C++ APIs and helpers to use series/surface option structs
+  instead of flat scalar style arguments.
+- C++ repository-owned diagnostics dropped from 64 to 30.
 
 ## Reproduction
 
@@ -121,48 +124,23 @@ Lower-count Python diagnostics are mostly:
 
 ## C/C++ Results
 
-Diagnostics by repository-owned area:
+Current diagnostics by repository-owned area:
 
 | Count | Area |
 |---:|---|
-| 23 | `termin-graphics` |
-| 15 | `tcplot` |
-| 7 | `termin-inspect` |
+| 14 | `termin-graphics` |
 | 6 | `termin-mesh` |
-| 4 | `termin-render` |
 | 4 | `termin-render-passes` |
-| 2 | `termin-display` |
+| 3 | `termin-render` |
 | 2 | `termin-engine` |
 | 1 | `termin-components/termin-components-render` |
 
-Repository-owned C/C++ diagnostics:
+Current repository-owned C/C++ diagnostics:
 
 ```text
-tcplot/src/engine2d.cpp:117:20: plot_colormap: 9 parameters
-tcplot/src/engine3d.cpp:180:13: push_surface_vertex: 14 parameters
-tcplot/src/engine3d.cpp:276:20: surface: 10 parameters
-tcplot/src/engine3d.cpp:90:6: bind_plot3d_draw_data: 9 parameters
-tcplot/src/plot_view2d.cpp:101:18: scatter: 9 parameters
-tcplot/src/plot_view2d.cpp:77:18: plot: 9 parameters
-tcplot/src/plot_view2d.cpp:86:18: plot_colormap: 10 parameters
-tcplot/src/plot_view2d_multi.cpp:125:22: add_line_colormap: 11 parameters
-tcplot/src/plot_view2d_multi.cpp:154:22: add_scatter: 10 parameters
-tcplot/src/plot_view2d_multi.cpp:98:22: add_line: 10 parameters
-tcplot/src/plot_view3d.cpp:111:18: plot: 10 parameters
-tcplot/src/plot_view3d.cpp:122:18: scatter: 10 parameters
-tcplot/src/plot_view3d.cpp:133:18: surface: 11 parameters
-tcplot/src/plot_view3d.cpp:142:18: surface_colormap: 13 parameters
-tcplot/src/plot_view3d.cpp:193:18: set_surface_grid: 9 parameters
 termin-components/termin-components-render/src/depth_pass.cpp:152:17: execute_with_data_tgfx2: 8 parameters
-termin-display/include/tc_input_event.h:131:20: tc_mouse_button_event_init_source: 8 parameters
-termin-display/include/tc_input_event.h:182:20: tc_scroll_event_init_source: 8 parameters
 termin-engine/src/render_target_context_builder.cpp:198:6: build_render_target_contexts: 12 parameters
 termin-engine/src/rendering_manager.cpp:357:38: mount_scene: 9 parameters
-termin-graphics/include/tgfx/tgfx_material_handle.hpp:186:24: add_phase_from_sources: 13 parameters
-termin-graphics/include/tgfx/tgfx_shader_handle.hpp:250:10: set_sources_with_entries: 8 parameters
-termin-graphics/include/tgfx/tgfx_shader_handle.hpp:286:21: from_sources: 10 parameters
-termin-graphics/include/tgfx2/i_render_device.hpp:168:18: blit_to_texture: 10 parameters
-termin-graphics/include/tgfx2/i_render_device.hpp:181:18: clear_texture: 9 parameters
 termin-graphics/src/resources/tc_shader_registry.c:231:13: tc_shader_compute_identity_hash: 9 parameters
 termin-graphics/src/resources/tc_shader_registry.c:595:6: tc_shader_set_sources_with_entries: 9 parameters
 termin-graphics/src/resources/tc_shader_registry.c:668:18: tc_shader_from_sources_ex: 8 parameters
@@ -171,23 +149,12 @@ termin-graphics/src/tgfx2/canvas2d_renderer.cpp:442:24: push_quad_: 8 parameters
 termin-graphics/src/tgfx2/canvas2d_renderer.cpp:467:24: append_textured_quad_: 10 parameters
 termin-graphics/src/tgfx2/immediate_renderer.cpp:423:25: torus_solid: 8 parameters
 termin-graphics/src/tgfx2/immediate_renderer.cpp:467:25: arrow_solid: 9 parameters
-termin-graphics/src/tgfx2/opengl/opengl_render_device.cpp:1396:26: blit_to_texture: 10 parameters
-termin-graphics/src/tgfx2/opengl/opengl_render_device.cpp:1465:26: clear_texture: 9 parameters
 termin-graphics/src/tgfx2/render_context.cpp:1442:22: draw_indexed_instanced: 9 parameters
 termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_stage_artifact: 8 parameters
 termin-graphics/src/tgfx2/text2d_renderer.cpp:178:22: draw: 9 parameters
 termin-graphics/src/tgfx2/text3d_renderer.cpp:142:22: draw: 8 parameters
 termin-graphics/src/tgfx2/texture_pool.cpp:119:24: ensure: 8 parameters
-termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp:1505:26: blit_to_texture: 10 parameters
-termin-graphics/src/tgfx2/vulkan/vulkan_render_device.cpp:1642:26: clear_texture: 9 parameters
 termin-graphics/src/tgfx_texture_handle.cpp:9:22: from_data: 10 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:1015:5: InspectAccessorFieldChoicesRegistrar<C, T>: 9 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:490:10: add: 8 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:530:10: add_with_callbacks: 9 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:826:6: register_inspect_field: 8 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:932:5: InspectFieldRegistrar<C, T>: 8 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:950:5: InspectFieldCallbackRegistrar<C, T>: 9 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:969:5: InspectAccessorFieldRegistrar<C, T>: 8 parameters
 termin-mesh/src/resources/tc_mesh.c:653:13: tc_mesh_find_surface_edge_filtered: 10 parameters
 termin-mesh/src/resources/tc_mesh.c:955:6: tc_mesh_find_surface_edge_aligned: 8 parameters
 termin-mesh/src/resources/tc_mesh.c:979:6: tc_mesh_find_surface_edge_aligned_metric: 9 parameters
@@ -198,7 +165,6 @@ termin-render-passes/src/color_pass.cpp:146:12: ColorPass: 8 parameters
 termin-render-passes/src/color_pass.cpp:582:17: execute_with_data: 12 parameters
 termin-render-passes/src/shadow_camera.cpp:385:20: fit_shadow_frustum_for_cascade: 9 parameters
 termin-render-passes/src/shadow_pass.cpp:417:42: execute_shadow_pass_tgfx2: 8 parameters
-termin-render/include/termin/lighting/shadow.hpp:65:10: add_entry: 8 parameters
 termin-render/src/fbo_pool.cpp:6:15: ensure_native: 8 parameters
 termin-render/src/frame_graph_debugger_core.cpp:222:27: render_in_current_pass: 8 parameters
 termin-render/src/frame_graph_debugger_core.cpp:267:27: render: 9 parameters

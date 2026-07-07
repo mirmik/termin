@@ -107,31 +107,6 @@ public:
     PlotView3D(GpuHost& host);
     ~PlotView3D();
 
-    void plot(const double* x, const double* y, const double* z,
-              size_t n,
-              float cr, float cg, float cb, float ca,
-              double thickness = 1.5,
-              const char* label = "");
-
-    void scatter(const double* x, const double* y, const double* z,
-                 size_t n,
-                 float cr, float cg, float cb, float ca,
-                 double size = 4.0,
-                 const char* label = "");
-
-    void surface(const double* X, const double* Y, const double* Z,
-                 unsigned int rows, unsigned int cols,
-                 float cr, float cg, float cb, float ca,
-                 bool wireframe = false,
-                 const char* label = "");
-    void surface_colormap(const double* X, const double* Y, const double* Z,
-                          unsigned int rows, unsigned int cols,
-                          SurfaceColorMap colormap,
-                          float cr, float cg, float cb, float ca,
-                          bool wireframe = false,
-                          const char* label = "",
-                          bool colormap_reversed = false);
-
     void clear();
     void set_title(const char* title);
     void set_x_label(const char* label);
@@ -143,10 +118,6 @@ public:
     bool set_surface_colormap(int surface_idx, SurfaceColorMap colormap);
     bool set_surface_colormap_reversed(int surface_idx, bool reversed);
     bool set_surface_color(int surface_idx, float r, float g, float b, float a);
-    bool set_surface_grid(int surface_idx, bool visible,
-                          unsigned int row_step, unsigned int col_step,
-                          float r, float g, float b, float a,
-                          float width_px = 1.5f);
     void toggle_wireframe();
     void toggle_marker_mode();
     void set_z_scale(float s);
@@ -181,25 +152,6 @@ public:
     PlotView2D(GpuHost& host);
     ~PlotView2D();
 
-    void plot(const double* x, const double* y, size_t n,
-              float cr, float cg, float cb, float ca,
-              double thickness = 1.5,
-              const char* label = "");
-
-    void plot_colormap(const double* x, const double* y, const double* scalar,
-                       size_t n,
-                       SurfaceColorMap colormap = SurfaceColorMap::Jet,
-                       double scalar_min = 0.0,
-                       double scalar_max = 1.0,
-                       double thickness = 1.5,
-                       const char* label = "",
-                       bool colormap_reversed = false);
-
-    void scatter(const double* x, const double* y, size_t n,
-                 float cr, float cg, float cb, float ca,
-                 double size = 4.0,
-                 const char* label = "");
-
     void clear();
     void fit();
     void set_view(double x_min, double x_max, double y_min, double y_max);
@@ -229,18 +181,170 @@ public:
 %apply double INPUT[] { const double* x, const double* y }
 
 %extend PlotView3D {
+    void plot(const double* x, const double* y, const double* z,
+              size_t n,
+              float cr, float cg, float cb, float ca,
+              double thickness = 1.5,
+              const char* label = "") {
+        tcplot::LinePlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.thickness = thickness;
+        options.label = label ? label : "";
+        $self->plot(tcplot::SeriesData3DView{x, y, z, n}, options);
+    }
+
+    void scatter(const double* x, const double* y, const double* z,
+                 size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double size = 4.0,
+                 const char* label = "") {
+        tcplot::ScatterPlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.size = size;
+        options.label = label ? label : "";
+        $self->scatter(tcplot::SeriesData3DView{x, y, z, n}, options);
+    }
+
+    void surface(const double* X, const double* Y, const double* Z,
+                 unsigned int rows, unsigned int cols,
+                 float cr, float cg, float cb, float ca,
+                 bool wireframe = false,
+                 const char* label = "") {
+        tcplot::SurfacePlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.wireframe = wireframe;
+        options.label = label ? label : "";
+        $self->surface(tcplot::SurfaceDataView{X, Y, Z, rows, cols}, options);
+    }
+
+    void surface_colormap(const double* X, const double* Y, const double* Z,
+                          unsigned int rows, unsigned int cols,
+                          SurfaceColorMap colormap,
+                          float cr, float cg, float cb, float ca,
+                          bool wireframe = false,
+                          const char* label = "",
+                          bool colormap_reversed = false) {
+        tcplot::SurfacePlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.colormap = colormap;
+        options.wireframe = wireframe;
+        options.label = label ? label : "";
+        options.colormap_reversed = colormap_reversed;
+        $self->surface_colormap(tcplot::SurfaceDataView{X, Y, Z, rows, cols}, options);
+    }
+
+    bool set_surface_grid(int surface_idx, bool visible,
+                          unsigned int row_step, unsigned int col_step,
+                          float r, float g, float b, float a,
+                          float width_px = 1.5f) {
+        tcplot::SurfaceGridOptions options;
+        options.visible = visible;
+        options.row_step = row_step;
+        options.col_step = col_step;
+        options.color = tcplot::Color4{r, g, b, a};
+        options.width_px = width_px;
+        return $self->set_surface_grid(surface_idx, options);
+    }
+
     unsigned int render_to_texture_handle_id(int width, int height) {
         return $self->render_to_texture(width, height).id;
     }
 }
 
 %extend PlotView2D {
+    void plot(const double* x, const double* y, size_t n,
+              float cr, float cg, float cb, float ca,
+              double thickness = 1.5,
+              const char* label = "") {
+        tcplot::LinePlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.thickness = thickness;
+        options.label = label ? label : "";
+        $self->plot(tcplot::SeriesData2DView{x, y, n}, options);
+    }
+
+    void plot_colormap(const double* x, const double* y, const double* scalar,
+                       size_t n,
+                       SurfaceColorMap colormap = SurfaceColorMap::Jet,
+                       double scalar_min = 0.0,
+                       double scalar_max = 1.0,
+                       double thickness = 1.5,
+                       const char* label = "",
+                       bool colormap_reversed = false) {
+        tcplot::LineColormapOptions options;
+        options.colormap = colormap;
+        options.scalar_min = scalar_min;
+        options.scalar_max = scalar_max;
+        options.thickness = thickness;
+        options.label = label ? label : "";
+        options.colormap_reversed = colormap_reversed;
+        $self->plot_colormap(tcplot::SeriesData2DView{x, y, n}, scalar, options);
+    }
+
+    void scatter(const double* x, const double* y, size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double size = 4.0,
+                 const char* label = "") {
+        tcplot::ScatterPlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.size = size;
+        options.label = label ? label : "";
+        $self->scatter(tcplot::SeriesData2DView{x, y, n}, options);
+    }
+
     unsigned int render_to_texture_handle_id(int width, int height) {
         return $self->render_to_texture(width, height).id;
     }
 }
 
 %extend PlotView2DMulti {
+    int add_line(int panel_idx,
+                 const double* x, const double* y, size_t n,
+                 float cr, float cg, float cb, float ca,
+                 double thickness = 1.5,
+                 const char* label = "") {
+        tcplot::LinePlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.thickness = thickness;
+        options.label = label ? label : "";
+        return $self->add_line(panel_idx, tcplot::SeriesData2DView{x, y, n}, options);
+    }
+
+    int add_line_colormap(int panel_idx,
+                          const double* x, const double* y,
+                          const double* scalar, size_t n,
+                          SurfaceColorMap colormap = SurfaceColorMap::Jet,
+                          double scalar_min = 0.0,
+                          double scalar_max = 1.0,
+                          double thickness = 1.5,
+                          const char* label = "",
+                          bool colormap_reversed = false) {
+        tcplot::LineColormapOptions options;
+        options.colormap = colormap;
+        options.scalar_min = scalar_min;
+        options.scalar_max = scalar_max;
+        options.thickness = thickness;
+        options.label = label ? label : "";
+        options.colormap_reversed = colormap_reversed;
+        return $self->add_line_colormap(
+            panel_idx,
+            tcplot::SeriesData2DView{x, y, n},
+            scalar,
+            options);
+    }
+
+    int add_scatter(int panel_idx,
+                    const double* x, const double* y, size_t n,
+                    float cr, float cg, float cb, float ca,
+                    double size = 4.0,
+                    const char* label = "") {
+        tcplot::ScatterPlotOptions options;
+        options.color = tcplot::Color4{cr, cg, cb, ca};
+        options.size = size;
+        options.label = label ? label : "";
+        return $self->add_scatter(panel_idx, tcplot::SeriesData2DView{x, y, n}, options);
+    }
+
     unsigned int render_to_texture_handle_id(int width, int height) {
         return $self->render_to_texture(width, height).id;
     }
@@ -253,28 +357,6 @@ public:
 
     void set_panel_count(int n);
     int panel_count() const;
-
-    int add_line(int panel_idx,
-                 const double* x, const double* y, size_t n,
-                 float cr, float cg, float cb, float ca,
-                 double thickness = 1.5,
-                 const char* label = "");
-
-    int add_line_colormap(int panel_idx,
-                          const double* x, const double* y,
-                          const double* scalar, size_t n,
-                          SurfaceColorMap colormap = SurfaceColorMap::Jet,
-                          double scalar_min = 0.0,
-                          double scalar_max = 1.0,
-                          double thickness = 1.5,
-                          const char* label = "",
-                          bool colormap_reversed = false);
-
-    int add_scatter(int panel_idx,
-                    const double* x, const double* y, size_t n,
-                    float cr, float cg, float cb, float ca,
-                    double size = 4.0,
-                    const char* label = "");
 
     void append_to_line(int panel_idx, int series_idx,
                         const double* x, const double* y, size_t n);
