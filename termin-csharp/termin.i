@@ -899,6 +899,14 @@ public:
     bool wireframe;
     bool use_ubo;
 
+    virtual ~ColorPass();
+
+    // Get tc_pass pointer for adding to pipeline
+    tc_pass* tc_pass_ptr();
+
+};
+
+%extend ColorPass {
     ColorPass(
         const std::string& input_res = "empty",
         const std::string& output_res = "color",
@@ -908,13 +916,19 @@ public:
         const std::string& sort_mode = "none",
         bool clear_depth = false,
         const std::string& camera_name = ""
-    );
-    virtual ~ColorPass();
-
-    // Get tc_pass pointer for adding to pipeline
-    tc_pass* tc_pass_ptr();
-
-};
+    ) {
+        termin::ColorPassConfig config;
+        config.input_res = input_res;
+        config.output_res = output_res;
+        config.shadow_res = shadow_res;
+        config.phase_mark = phase_mark;
+        config.pass_name = pass_name;
+        config.sort_mode = sort_mode;
+        config.clear_depth = clear_depth;
+        config.camera_name = camera_name;
+        return new termin::ColorPass(config);
+    }
+}
 
 // ============================================================================
 // DepthPass - depth-only rendering pass

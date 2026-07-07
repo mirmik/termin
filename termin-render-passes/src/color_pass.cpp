@@ -164,24 +164,16 @@ bool collect_color_render_item_for_draw(
 
 } // anonymous namespace
 
-ColorPass::ColorPass(
-    const std::string& input_res,
-    const std::string& output_res,
-    const std::string& shadow_res,
-    const std::string& phase_mark,
-    const std::string& pass_name,
-    const std::string& sort_mode,
-    bool clear_depth,
-    const std::string& camera_name
-) : input_res(input_res),
-    output_res(output_res),
-    shadow_res(shadow_res),
-    phase_mark(phase_mark),
-    sort_mode(sort_mode),
-    camera_name(camera_name),
-    clear_depth(clear_depth)
+ColorPass::ColorPass(const ColorPassConfig& config)
+    : input_res(config.input_res),
+      output_res(config.output_res),
+      shadow_res(config.shadow_res),
+      phase_mark(config.phase_mark),
+      sort_mode(config.sort_mode),
+      camera_name(config.camera_name),
+      clear_depth(config.clear_depth)
 {
-    set_pass_name(pass_name);
+    set_pass_name(config.pass_name);
 }
 
 std::set<const char*> ColorPass::compute_reads() const {
@@ -602,17 +594,7 @@ void ColorPass::sort_draw_calls() {
 
 void ColorPass::execute_with_data(
     ExecuteContext& ctx,
-    const Rect2i& rect,
-    tc_scene_handle scene,
-    const Mat44f& view,
-    const Mat44f& projection,
-    const Vec3& camera_position,
-    const std::vector<Light>& lights,
-    const Vec3& ambient_color,
-    float ambient_intensity,
-    const std::vector<ShadowMapArrayEntry>& shadow_maps,
-    const ShadowSettings& shadow_settings,
-    uint64_t layer_mask)
+    const ColorPassExecuteData& data)
 {
     auto* ctx2 = ctx.ctx2;
     if (!ctx2) {
@@ -637,11 +619,11 @@ void ColorPass::execute_with_data(
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
     EnginePerFrameStd140 pf = make_engine_per_frame_uniforms(
-        view,
-        projection,
-        camera_position,
-        static_cast<float>(rect.width),
-        static_cast<float>(rect.height),
+        data.view,
+        data.projection,
+        data.camera_position,
+        static_cast<float>(data.rect.width),
+        static_cast<float>(data.rect.height),
         ctx.camera ? static_cast<float>(ctx.camera->near_clip) : 0.1f,
         ctx.camera ? static_cast<float>(ctx.camera->far_clip) : 100.0f);
 
@@ -673,10 +655,10 @@ void ColorPass::execute_with_data(
     ShadowBlockStd140 sb{};
     {
         int sm_count = static_cast<int>(
-            std::min(shadow_maps.size(), static_cast<size_t>(SHADOW_UBO_MAX)));
+            std::min(data.shadow_maps.size(), static_cast<size_t>(SHADOW_UBO_MAX)));
         sb.u_shadow_map_count = sm_count;
         for (int i = 0; i < sm_count; ++i) {
-            const ShadowMapArrayEntry& e = shadow_maps[i];
+            const ShadowMapArrayEntry& e = data.shadow_maps[i];
             std::memcpy(sb.u_light_space_matrix[i],
                         e.light_space_matrix.data,
                         sizeof(sb.u_light_space_matrix[i]));
@@ -691,27 +673,27 @@ void ColorPass::execute_with_data(
                      /*clear_color=*/nullptr,
                      /*clear_depth=*/1.0f,
                      /*clear_depth_enabled=*/clear_depth);
-    ctx2->set_viewport(0, 0, rect.width, rect.height);
+    ctx2->set_viewport(0, 0, data.rect.width, data.rect.height);
     ctx2->set_depth_bias(false);
 
     // Collect + sort draw calls. Gathering logic is backend-agnostic.
     RenderContext collect_context;
-    collect_context.view = view;
-    collect_context.projection = projection;
+    collect_context.view = data.view;
+    collect_context.projection = data.projection;
     collect_context.phase = phase_mark;
     collect_context.pass_contract = color_material_pass_contract();
-    collect_context.layer_mask = layer_mask;
+    collect_context.layer_mask = data.layer_mask;
     collect_context.render_category_mask = ctx.render_category_mask;
-    collect_context.camera_position = camera_position;
-    collect_context.viewport_width = rect.width;
-    collect_context.viewport_height = rect.height;
-    collect_context.scene = TcSceneRef(scene);
+    collect_context.camera_position = data.camera_position;
+    collect_context.viewport_width = data.rect.width;
+    collect_context.viewport_height = data.rect.height;
+    collect_context.scene = TcSceneRef(data.scene);
     collect_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
-    collect_draw_calls(scene, phase_mark, collect_context, layer_mask);
+    collect_draw_calls(data.scene, phase_mark, collect_context, data.layer_mask);
 
     if (sort_mode != "none" && !cached_draw_calls_.empty()) {
-        compute_sort_keys(camera_position);
+        compute_sort_keys(data.camera_position);
         sort_draw_calls();
     } else if (!cached_draw_calls_.empty()) {
         std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
@@ -727,8 +709,12 @@ void ColorPass::execute_with_data(
     tgfx::BufferHandle lighting_ubo_tgfx2{};
     if (!cached_draw_calls_.empty()) {
         lighting_ubo_.create(device);
-        lighting_ubo_.update_from_lights(lights, ambient_color, ambient_intensity,
-                                         camera_position, shadow_settings);
+        lighting_ubo_.update_from_lights(
+            data.lights,
+            data.ambient_color,
+            data.ambient_intensity,
+            data.camera_position,
+            data.shadow_settings);
         lighting_ubo_.upload();
         lighting_ubo_tgfx2 = lighting_ubo_.buffer;
     }
@@ -736,8 +722,8 @@ void ColorPass::execute_with_data(
     // Shadow maps are now native tgfx2 depth textures owned by
     // ShadowPass; no per-frame wrap needed.
     std::vector<tgfx::TextureHandle> shadow_tex2s;
-    shadow_tex2s.reserve(shadow_maps.size());
-    for (const auto& smap : shadow_maps) {
+    shadow_tex2s.reserve(data.shadow_maps.size());
+    for (const auto& smap : data.shadow_maps) {
         shadow_tex2s.push_back(smap.depth_tex2);
     }
 
@@ -757,7 +743,7 @@ void ColorPass::execute_with_data(
         }
 
         ctx2->end_pass();
-        capture->capture_direct_via_ctx2(ctx2, color_tex2, rect.width, rect.height);
+        capture->capture_direct_via_ctx2(ctx2, color_tex2, data.rect.width, data.rect.height);
         selected_symbol_timing = {};
         selected_symbol_timing.name = debug_symbol;
 
@@ -765,7 +751,7 @@ void ColorPass::execute_with_data(
                          /*clear_color=*/nullptr,
                          /*clear_depth=*/1.0f,
                          /*clear_depth_enabled=*/false);
-        ctx2->set_viewport(0, 0, rect.width, rect.height);
+        ctx2->set_viewport(0, 0, data.rect.width, data.rect.height);
         ctx2->set_depth_bias(false);
     };
 
@@ -863,7 +849,7 @@ void ColorPass::execute_with_data(
 
         tc_render_item_collect_context item_context{};
         item_context.phase_mark = phase_mark.c_str();
-        item_context.layer_mask = layer_mask;
+        item_context.layer_mask = data.layer_mask;
         item_context.render_category_mask = ctx.render_category_mask;
         item_context.debug_pass_name = get_pass_name().c_str();
         item_context.pass_contract = &collect_context.pass_contract;
@@ -912,17 +898,17 @@ void ColorPass::execute_with_data(
             }
 
             RenderContext direct_context;
-            direct_context.view = view;
-            direct_context.projection = projection;
+            direct_context.view = data.view;
+            direct_context.projection = data.projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
             direct_context.phase = phase_mark;
             direct_context.pass_contract = color_material_pass_contract();
             direct_context.current_tc_shader = TcShader(final_shader);
-            direct_context.layer_mask = layer_mask;
+            direct_context.layer_mask = data.layer_mask;
             direct_context.render_category_mask = ctx.render_category_mask;
-            direct_context.camera_position = camera_position;
-            direct_context.viewport_width = rect.width;
-            direct_context.viewport_height = rect.height;
+            direct_context.camera_position = data.camera_position;
+            direct_context.viewport_width = data.rect.width;
+            direct_context.viewport_height = data.rect.height;
             direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
             direct_context.prepare_tgfx2_material_resources =
                 [this,
@@ -996,17 +982,17 @@ void ColorPass::execute_with_data(
             }
 
             RenderContext direct_context;
-            direct_context.view = view;
-            direct_context.projection = projection;
+            direct_context.view = data.view;
+            direct_context.projection = data.projection;
             direct_context.model = drawable->get_model_matrix(dc.entity);
             direct_context.phase = phase_mark;
             direct_context.pass_contract = color_material_pass_contract();
             direct_context.current_tc_shader = TcShader(final_shader);
-            direct_context.layer_mask = layer_mask;
+            direct_context.layer_mask = data.layer_mask;
             direct_context.render_category_mask = ctx.render_category_mask;
-            direct_context.camera_position = camera_position;
-            direct_context.viewport_width = rect.width;
-            direct_context.viewport_height = rect.height;
+            direct_context.camera_position = data.camera_position;
+            direct_context.viewport_width = data.rect.width;
+            direct_context.viewport_height = data.rect.height;
             direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
             RenderItemDrawSubmitRequest submit_request{};
@@ -1293,20 +1279,19 @@ void ColorPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    execute_with_data(
-        ctx,
-        rect,
-        scene,
-        view,
-        projection,
-        camera_position,
-        ctx.lights,
-        ambient_color,
-        ambient_intensity,
-        shadow_maps,
-        shadow_settings,
-        ctx.layer_mask
-    );
+    ColorPassExecuteData data;
+    data.rect = rect;
+    data.scene = scene;
+    data.view = view;
+    data.projection = projection;
+    data.camera_position = camera_position;
+    data.lights = ctx.lights;
+    data.ambient_color = ambient_color;
+    data.ambient_intensity = ambient_intensity;
+    data.shadow_maps = shadow_maps;
+    data.shadow_settings = shadow_settings;
+    data.layer_mask = ctx.layer_mask;
+    execute_with_data(ctx, data);
 
     if (profile) tc_profiler_end_section();
 }

@@ -351,12 +351,13 @@ int run_smoke(const char* argv0) {
 
     tgfx::PipelineCache cache(*device);
     tgfx::RenderContext2 render_ctx(*device, cache);
-    termin::ColorPass pass(
-        "empty",
-        "color",
-        "",
-        "opaque",
-        "ColorPassPixelSmoke");
+    termin::ColorPassConfig pass_config;
+    pass_config.input_res = "empty";
+    pass_config.output_res = "color";
+    pass_config.shadow_res = "";
+    pass_config.phase_mark = "opaque";
+    pass_config.pass_name = "ColorPassPixelSmoke";
+    termin::ColorPass pass(pass_config);
 
     termin::ExecuteContext exec_ctx;
     exec_ctx.ctx2 = &render_ctx;
@@ -369,19 +370,15 @@ int run_smoke(const char* argv0) {
     render_ctx.begin_pass(target, {}, clear_color, 1.0f, false);
     render_ctx.end_pass();
 
-    pass.execute_with_data(
-        exec_ctx,
-        exec_ctx.render_rect,
-        scene.handle(),
-        termin::Mat44f::identity(),
-        termin::Mat44f::identity(),
-        termin::Vec3{0.0, 0.0, 1.0},
-        {},
-        termin::Vec3{1.0, 1.0, 1.0},
-        0.0f,
-        {},
-        termin::ShadowSettings{},
-        0xFFFFFFFFFFFFFFFFULL);
+    termin::ColorPassExecuteData pass_data;
+    pass_data.rect = exec_ctx.render_rect;
+    pass_data.scene = scene.handle();
+    pass_data.view = termin::Mat44f::identity();
+    pass_data.projection = termin::Mat44f::identity();
+    pass_data.camera_position = termin::Vec3{0.0, 0.0, 1.0};
+    pass_data.ambient_color = termin::Vec3{1.0, 1.0, 1.0};
+    pass_data.ambient_intensity = 0.0f;
+    pass.execute_with_data(exec_ctx, pass_data);
 
     render_ctx.end_frame();
     device->wait_idle();
