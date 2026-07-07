@@ -3,7 +3,7 @@ from termin.ga201.motor import Motor2
 from termin.ga201.screw import Screw2 as GA201_Screw2
 from termin.geombase.screw import Screw2, Screw3
 from termin.geombase.pose2 import Pose2
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Vec3
 import math
 import numpy
 
@@ -187,41 +187,46 @@ class Screw2Tests(unittest.TestCase):
 
 class Screw3Tests(unittest.TestCase):
     """Tests for geombase.Screw3"""
+
+    def assertVec3AlmostEqual(self, value, expected, places=5):
+        self.assertAlmostEqual(value[0], expected[0], places=places)
+        self.assertAlmostEqual(value[1], expected[1], places=places)
+        self.assertAlmostEqual(value[2], expected[2], places=places)
     
     def test_screw3_basic_api(self):
-        screw = Screw3(ang=numpy.array([1.0, 0.0, 0.0]), lin=numpy.array([0.0, 1.0, 0.0]))
-        numpy.testing.assert_array_equal(screw.moment(), numpy.array([1.0, 0.0, 0.0]))
-        numpy.testing.assert_array_equal(screw.vector(), numpy.array([0.0, 1.0, 0.0]))
+        screw = Screw3(ang=Vec3(1.0, 0.0, 0.0), lin=Vec3(0.0, 1.0, 0.0))
+        self.assertVec3AlmostEqual(screw.moment(), (1.0, 0.0, 0.0))
+        self.assertVec3AlmostEqual(screw.vector(), (0.0, 1.0, 0.0))
 
-        scaled = Screw3(ang=numpy.array([1.0, 2.0, 3.0]), lin=numpy.array([4.0, 5.0, 6.0])) * 2.0
-        numpy.testing.assert_array_equal(scaled.moment(), numpy.array([2.0, 4.0, 6.0]))
-        numpy.testing.assert_array_equal(scaled.vector(), numpy.array([8.0, 10.0, 12.0]))
+        scaled = Screw3(ang=Vec3(1.0, 2.0, 3.0), lin=Vec3(4.0, 5.0, 6.0)) * 2.0
+        self.assertVec3AlmostEqual(scaled.moment(), (2.0, 4.0, 6.0))
+        self.assertVec3AlmostEqual(scaled.vector(), (8.0, 10.0, 12.0))
 
     def test_screw3_kinematic_carry(self):
         # Твист с чистой угловой скоростью вокруг Z
-        screw = Screw3(ang=numpy.array([0.0, 0.0, 1.0]), lin=numpy.array([0.0, 0.0, 0.0]))
+        screw = Screw3(ang=Vec3(0.0, 0.0, 1.0), lin=Vec3(0.0, 0.0, 0.0))
         arm = numpy.array([1.0, 0.0, 0.0])
         carried = screw.kinematic_carry(arm)
         # v' = v + ω × r = [0,0,0] + [0,0,1] × [1,0,0] = [0, 1, 0]
-        self.assertTrue((carried.moment() == numpy.array([0.0, 0.0, 1.0])).all())
+        self.assertVec3AlmostEqual(carried.moment(), (0.0, 0.0, 1.0))
         self.assertAlmostEqual(carried.vector()[0], 0.0, places=5)
         self.assertAlmostEqual(carried.vector()[1], 1.0, places=5)
         self.assertAlmostEqual(carried.vector()[2], 0.0, places=5)
 
     def test_screw3_force_carry(self):
         # Ренч с чистой силой
-        screw = Screw3(ang=numpy.array([0.0, 0.0, 0.0]), lin=numpy.array([0.0, 0.0, 1.0]))
+        screw = Screw3(ang=Vec3(0.0, 0.0, 0.0), lin=Vec3(0.0, 0.0, 1.0))
         arm = numpy.array([1.0, 0.0, 0.0])
         carried = screw.force_carry(arm)
         # M' = M - r × F = [0,0,0] - [1,0,0] × [0,0,1] = [0, 1, 0]
         self.assertAlmostEqual(carried.moment()[0], 0.0, places=5)
         self.assertAlmostEqual(carried.moment()[1], 1.0, places=5)
         self.assertAlmostEqual(carried.moment()[2], 0.0, places=5)
-        self.assertTrue((carried.vector() == numpy.array([0.0, 0.0, 1.0])).all())
+        self.assertVec3AlmostEqual(carried.vector(), (0.0, 0.0, 1.0))
 
     def test_screw3_transform_by_pose(self):
         # Поворот вокруг Z на 90 градусов
-        screw = Screw3(ang=numpy.array([1.0, 0.0, 0.0]), lin=numpy.array([1.0, 0.0, 0.0]))
+        screw = Screw3(ang=Vec3(1.0, 0.0, 0.0), lin=Vec3(1.0, 0.0, 0.0))
         pose = Pose3.rotateZ(math.pi/2)
         transformed = screw.transform_by(pose)
         self.assertAlmostEqual(transformed.moment()[0], 0.0, places=5)
@@ -233,18 +238,18 @@ class Screw3Tests(unittest.TestCase):
 
     def test_screw3_transform_as_wrench(self):
         # Ренч с чистой силой по Z
-        screw = Screw3(ang=numpy.array([0.0, 0.0, 0.0]), lin=numpy.array([0.0, 0.0, 1.0]))
+        screw = Screw3(ang=Vec3(0.0, 0.0, 0.0), lin=Vec3(0.0, 0.0, 1.0))
         pose = Pose3.translation(1.0, 0.0, 0.0)
         transformed = screw.transform_as_wrench_by(pose)
         # M' = M + p × F = [0,0,0] + [1,0,0] × [0,0,1] = [0, -1, 0]
         self.assertAlmostEqual(transformed.moment()[0], 0.0, places=5)
         self.assertAlmostEqual(transformed.moment()[1], -1.0, places=5)
         self.assertAlmostEqual(transformed.moment()[2], 0.0, places=5)
-        self.assertTrue((transformed.vector() == numpy.array([0.0, 0.0, 1.0])).all())
+        self.assertVec3AlmostEqual(transformed.vector(), (0.0, 0.0, 1.0))
 
     def test_screw3_as_pose3(self):
         # Малый твист -> Pose3
-        screw = Screw3(ang=numpy.array([0.0, 0.0, 0.1]), lin=numpy.array([1.0, 0.0, 0.0]))
+        screw = Screw3(ang=Vec3(0.0, 0.0, 0.1), lin=Vec3(1.0, 0.0, 0.0))
         pose = screw.as_pose3()
         self.assertIsInstance(pose, Pose3)
         # Проверяем, что линейная часть сохранилась
@@ -253,7 +258,7 @@ class Screw3Tests(unittest.TestCase):
         self.assertAlmostEqual(pose.lin[2], 0.0, places=5)
 
     def test_screw3_inverse_transform(self):
-        screw = Screw3(ang=numpy.array([1.0, 0.0, 0.0]), lin=numpy.array([0.0, 1.0, 0.0]))
+        screw = Screw3(ang=Vec3(1.0, 0.0, 0.0), lin=Vec3(0.0, 1.0, 0.0))
         pose = Pose3.rotateZ(math.pi/2)
         transformed = screw.transform_by(pose)
         back = transformed.inverse_transform_by(pose)
@@ -275,7 +280,7 @@ class Screw3Tests(unittest.TestCase):
         - линейная скорость: v_global = R*v + p × ω = [0,0,0] + [1,0,0] × [0,0,1]
           = [0,-1,0]
         """
-        local_twist = Screw3(ang=numpy.array([0.0, 0.0, 1.0]), lin=numpy.array([0.0, 0.0, 0.0]))
+        local_twist = Screw3(ang=Vec3(0.0, 0.0, 1.0), lin=Vec3(0.0, 0.0, 0.0))
         body_pose = Pose3.translation(1.0, 0.0, 0.0)
         global_twist = local_twist.transform_as_twist_by(body_pose)
         
@@ -291,7 +296,7 @@ class Screw3Tests(unittest.TestCase):
     def test_screw3_twist_with_rotation(self):
         """Твист с поворотом тела: проверяем, что угловая скорость поворачивается."""
         # Локальный твист: вращение вокруг локальной оси X
-        local_twist = Screw3(ang=numpy.array([1.0, 0.0, 0.0]), lin=numpy.array([0.0, 0.0, 0.0]))
+        local_twist = Screw3(ang=Vec3(1.0, 0.0, 0.0), lin=Vec3(0.0, 0.0, 0.0))
         # Тело повернуто на 90° вокруг Z
         body_pose = Pose3.rotateZ(math.pi/2)
         global_twist = local_twist.transform_as_twist_by(body_pose)

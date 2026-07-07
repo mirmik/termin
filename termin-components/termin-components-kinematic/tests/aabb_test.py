@@ -1,7 +1,11 @@
-from termin.geombase import Pose3, AABB, TransformAABB
+from termin.geombase import Pose3, AABB, TransformAABB, Vec3
 from termin.kinematic import Transform
 import unittest
 import numpy
+
+
+def _vec3(value) -> Vec3:
+    return Vec3(float(value[0]), float(value[1]), float(value[2]))
 
 
 def _pose_at(x: float, y: float = 0.0, z: float = 0.0) -> Pose3:
@@ -12,7 +16,7 @@ def _pose_at(x: float, y: float = 0.0, z: float = 0.0) -> Pose3:
 
 
 def _aabb(min_point, max_point) -> AABB:
-    return AABB(numpy.array(min_point), numpy.array(max_point))
+    return AABB(_vec3(min_point), _vec3(max_point))
 
 
 def _assert_aabb(testcase: unittest.TestCase, aabb: AABB, min_point, max_point):
@@ -28,7 +32,7 @@ class AABBTest(unittest.TestCase):
             [4.0, 5.0, 6.0],
             [-1.0, -2.0, -3.0]
         ])
-        aabb = AABB.from_points(points)
+        aabb = AABB.from_points([_vec3(point) for point in points])
         expected_min = numpy.array([-1.0, -2.0, -3.0])
         expected_max = numpy.array([4.0, 5.0, 6.0])
 

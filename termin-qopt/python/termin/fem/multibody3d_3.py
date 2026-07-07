@@ -117,7 +117,7 @@ class RigidBody3D(Contribution):
         g_local = self.global_pose.inverse().rotate_vector(self.gravity)
         grav = self.inertia.gravity_wrench(g_local)
 
-        b[a_idx] += - bias.to_vector_vw_order() + grav.to_vector_vw_order()
+        b[a_idx] += -np.asarray(bias.to_vector_vw_order()) + np.asarray(grav.to_vector_vw_order())
 
     def contribute_for_constraints_correction(self, matrices, index_maps):
         self.contribute_to_mass_matrix(matrices, index_maps)
@@ -200,7 +200,7 @@ class ForceOnBody3D(Contribution):
     def contribute(self, matrices, index_maps):
         b = matrices["load"]
         a_indices = index_maps["acceleration"][self.acceleration]
-        b[a_indices] += self.wrench_local.to_vector_vw_order()
+        b[a_indices] += np.asarray(self.wrench_local.to_vector_vw_order())
 
 
 class FixedRotationJoint3D(Contribution):

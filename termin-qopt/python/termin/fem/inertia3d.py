@@ -10,8 +10,16 @@
 """
 
 import numpy as np
-from termin.geombase import Pose3
+from termin.geombase import Pose3, Vec3
 from termin.geombase.screw import Screw3
+
+
+def _vec3(value) -> Vec3:
+    return Vec3(float(value[0]), float(value[1]), float(value[2]))
+
+
+def _array3(value) -> np.ndarray:
+    return np.array([value[0], value[1], value[2]], dtype=np.float64)
 
 
 class SpatialInertia3D:
@@ -96,7 +104,7 @@ class SpatialInertia3D:
         quat = np.array([x, y, z, w], dtype=np.float64)
         quat /= np.linalg.norm(quat)
 
-        frame = Pose3(ang=quat, lin=np.asarray(com, dtype=np.float64))
+        frame = Pose3(ang=quat, lin=_vec3(com))
 
         return SpatialInertia3D(mass=mass, I_diag=eigenvalues, frame=frame)
 
@@ -190,10 +198,10 @@ class SpatialInertia3D:
         t_local = twist.inverse_transform_by(self.frame)
 
         # h = I @ v (диагональное умножение)
-        h_lin = self.m * t_local.lin
-        h_ang = self.I_diag * t_local.ang
+        h_lin = self.m * _array3(t_local.lin)
+        h_ang = self.I_diag * _array3(t_local.ang)
 
-        h_local = Screw3(ang=h_ang, lin=h_lin)
+        h_local = Screw3(ang=_vec3(h_ang), lin=_vec3(h_lin))
 
         # Обратно в исходную СК
         return h_local.transform_by(self.frame)
@@ -217,10 +225,10 @@ class SpatialInertia3D:
         w_local = wrench.inverse_transform_by(self.frame)
 
         # a = I⁻¹ @ f (диагональное деление)
-        a_lin = w_local.lin / self.m if self.m > 0 else np.zeros(3)
-        a_ang = w_local.ang / self.I_diag
+        a_lin = _array3(w_local.lin) / self.m if self.m > 0 else np.zeros(3)
+        a_ang = _array3(w_local.ang) / self.I_diag
 
-        a_local = Screw3(ang=a_ang, lin=a_lin)
+        a_local = Screw3(ang=_vec3(a_ang), lin=_vec3(a_lin))
 
         # Обратно в исходную СК
         return a_local.transform_by(self.frame)
@@ -235,8 +243,8 @@ class SpatialInertia3D:
         """
         c = self.frame.lin  # COM
         F = self.m * g_local
-        τ = np.cross(c, F)
-        return Screw3(ang=τ, lin=F)
+        τ = np.cross(_array3(c), F)
+        return Screw3(ang=_vec3(τ), lin=_vec3(F))
 
     # ----------------------------------------------------------------
     #  Bias wrench
