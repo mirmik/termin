@@ -312,13 +312,14 @@ bool collect_shadow_render_item_for_draw(
     const tc_render_item_collect_context& context,
     int geometry_id,
     const char* entity_name,
+    RenderItemCollection& items,
     tc_render_item& out_item)
 {
-    std::vector<tc_render_item> items;
+    items.clear();
     if (!collect_drawable_render_items(component, context, items)) {
         return false;
     }
-    for (const tc_render_item& item : items) {
+    for (const tc_render_item& item : items.items) {
         if (item.geometry_id == geometry_id) {
             out_item = item;
             return true;
@@ -682,11 +683,13 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 item_context.pass_contract = &pass_contract;
 
                 tc_render_item item{};
+                RenderItemCollection item_collection;
                 if (!collect_shadow_render_item_for_draw(
                         dc.component,
                         item_context,
                         dc.geometry_id,
                         dc.entity.name(),
+                        item_collection,
                         item)) {
                     if (!drawable->supports_direct_tgfx2_draw(
                             "shadow", dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {

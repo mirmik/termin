@@ -225,12 +225,12 @@ void IdPass::execute_with_data_tgfx2(
             item_context.debug_pass_name = data->pass ? data->pass->get_pass_name().c_str() : "IdPass";
             item_context.pass_contract = &data->pass_contract;
 
-            std::vector<tc_render_item> items;
+            RenderItemCollection items;
             if (!collect_drawable_render_items(component, item_context, items)) {
                 return true;
             }
 
-            for (const tc_render_item& item : items) {
+            for (const tc_render_item& item : items.items) {
                 if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
                     continue;
                 }
@@ -488,10 +488,10 @@ void IdPass::execute_with_data_tgfx2(
         item_context.debug_pass_name = get_pass_name().c_str();
         item_context.pass_contract = &pass_contract;
 
-        std::vector<tc_render_item> direct_items;
+        RenderItemCollection direct_items;
         if (collect_drawable_render_items(dc.component, item_context, direct_items)) {
             bool submitted_typed_item = false;
-            for (const tc_render_item& item : direct_items) {
+            for (const tc_render_item& item : direct_items.items) {
                 if (item.geometry_id != dc.geometry_id ||
                     item.kind == TC_RENDER_ITEM_KIND_MESH) {
                     continue;
