@@ -1,7 +1,7 @@
 // tc_type_registry.c - Unified type registry implementation
 #include "tc_type_registry.h"
 #include <tcbase/tc_resource_map.h>
-#include <tcbase/tgfx_intern_string.h>
+#include <tcbase/tc_string.h>
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
 #include <string.h>
@@ -135,7 +135,7 @@ tc_type_entry* tc_type_registry_register_with_parent(
     entry = (tc_type_entry*)calloc(1, sizeof(tc_type_entry));
     if (!entry) return NULL;
 
-    entry->type_name = tgfx_intern_string(type_name);
+    entry->type_name = tc_intern_string(type_name);
     entry->factory = factory;
     entry->factory_userdata = factory_userdata;
     entry->owner = NULL;

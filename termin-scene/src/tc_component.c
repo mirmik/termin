@@ -3,7 +3,7 @@
 #include "inspect/tc_runtime_type_registry.h"
 #include "tc_type_registry.h"
 #include <tcbase/tc_log.h>
-#include <tcbase/tgfx_intern_string.h>
+#include <tcbase/tc_string.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>
@@ -187,7 +187,7 @@ static tc_component_facet_payload* ensure_component_facet(
         tc_log(TC_LOG_ERROR, "[ComponentRegistry] failed to allocate component facet for '%s'", type_name);
         return NULL;
     }
-    facet->type_name = tgfx_intern_string(type_name);
+    facet->type_name = tc_intern_string(type_name);
     facet->entry = entry;
     facet->kind = TC_CXX_COMPONENT;
 
@@ -346,7 +346,7 @@ bool tc_component_registry_has(const char* type_name) {
 }
 
 void tc_component_registry_set_registration_owner(const char* owner) {
-    g_component_registration_owner = owner && owner[0] ? tgfx_intern_string(owner) : NULL;
+    g_component_registration_owner = owner && owner[0] ? tc_intern_string(owner) : NULL;
     tc_runtime_type_registry_set_registration_owner(g_component_registration_owner);
 }
 
@@ -401,7 +401,7 @@ size_t tc_component_registry_unregister_owner(const char* owner) {
     if (!owner || !owner[0] || !g_component_registry) return 0;
 
     component_type_collect_ctx ctx = {
-        tgfx_intern_string(owner),
+        tc_intern_string(owner),
         NULL,
         0,
         0,
@@ -559,7 +559,7 @@ void tc_component_registry_add_requirement(
         facet->requirement_capacity = new_cap;
     }
 
-    facet->requirements[facet->requirement_count++] = tgfx_intern_string(required_type_name);
+    facet->requirements[facet->requirement_count++] = tc_intern_string(required_type_name);
 }
 
 size_t tc_component_registry_requirement_count(const char* type_name) {
@@ -747,7 +747,7 @@ void tc_component_set_display_name(tc_component* c, const char* display_name) {
         c->display_name = NULL;
         return;
     }
-    c->display_name = tgfx_intern_string(display_name);
+    c->display_name = tc_intern_string(display_name);
 }
 
 bool tc_component_get_enabled(const tc_component* c) {
