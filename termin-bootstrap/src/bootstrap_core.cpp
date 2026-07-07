@@ -14,7 +14,7 @@
 #include <termin/navmesh/tc_navmesh_handle.hpp>
 #include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/voxels/tc_voxel_grid_handle.hpp>
-#include <tcbase/tgfx_intern_string.h>
+#include <tcbase/tc_string.h>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
@@ -134,7 +134,7 @@ void tc_shutdown(void) {
     tc::reset_kind_registry_cpp();
     tc_kind_cleanup();
     tc_scene_ext_registry_shutdown();
-    tgfx_intern_cleanup();
+    tc_intern_cleanup();
 
     g_c_runtime_initialized = false;
     termin::bootstrap::reset_bootstrap_state();

@@ -4,7 +4,7 @@
 #include "core/tc_scene_extension.h"
 #include <tcbase/tc_event.h>
 #include <tcbase/tc_resource_map.h>
-#include <tcbase/tgfx_intern_string.h>
+#include <tcbase/tc_string.h>
 #include <tcbase/tc_log.h>
 #include "core/tc_entity_pool_registry.h"
 #include <stdlib.h>
@@ -254,7 +254,7 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     g_pool->slots[idx].type_heads = tc_resource_map_new(NULL);
     g_pool->slots[idx].event_bus = tc_event_bus_create();
     g_pool->slots[idx].metadata = tc_value_dict_new();
-    g_pool->slots[idx].name = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
+    g_pool->slots[idx].name = name ? tc_intern_string(name) : tc_intern_string("(unnamed)");
     g_pool->slots[idx].source_path = NULL;
     memset(g_pool->slots[idx].ext_instances, 0, sizeof(g_pool->slots[idx].ext_instances));
 
@@ -370,7 +370,7 @@ const char* tc_scene_pool_get_name(tc_scene_handle h) {
 
 void tc_scene_pool_set_name(tc_scene_handle h, const char* name) {
     if (!handle_alive(h)) return;
-    g_pool->slots[h.index].name = name ? tgfx_intern_string(name) : tgfx_intern_string("(unnamed)");
+    g_pool->slots[h.index].name = name ? tc_intern_string(name) : tc_intern_string("(unnamed)");
 }
 
 const char* tc_scene_get_name(tc_scene_handle h) {
@@ -388,7 +388,7 @@ const char* tc_scene_get_source_path(tc_scene_handle h) {
 
 void tc_scene_set_source_path(tc_scene_handle h, const char* path) {
     if (!handle_alive(h)) return;
-    g_pool->slots[h.index].source_path = (path && path[0]) ? tgfx_intern_string(path) : NULL;
+    g_pool->slots[h.index].source_path = (path && path[0]) ? tc_intern_string(path) : NULL;
 }
 
 // ============================================================================
@@ -402,7 +402,7 @@ const char* tc_scene_get_uuid(tc_scene_handle h) {
 
 void tc_scene_set_uuid(tc_scene_handle h, const char* uuid) {
     if (!handle_alive(h)) return;
-    g_pool->slots[h.index].uuid = uuid ? tgfx_intern_string(uuid) : NULL;
+    g_pool->slots[h.index].uuid = uuid ? tc_intern_string(uuid) : NULL;
 }
 
 // ============================================================================
@@ -418,7 +418,7 @@ const char* tc_scene_get_layer_name(tc_scene_handle h, int index) {
 void tc_scene_set_layer_name(tc_scene_handle h, int index, const char* name) {
     if (!handle_alive(h)) return;
     if (index < 0 || index >= 64) return;
-    g_pool->slots[h.index].layer_names[index] = (name && name[0]) ? tgfx_intern_string(name) : NULL;
+    g_pool->slots[h.index].layer_names[index] = (name && name[0]) ? tc_intern_string(name) : NULL;
 }
 
 const char* tc_scene_get_flag_name(tc_scene_handle h, int index) {
@@ -430,7 +430,7 @@ const char* tc_scene_get_flag_name(tc_scene_handle h, int index) {
 void tc_scene_set_flag_name(tc_scene_handle h, int index, const char* name) {
     if (!handle_alive(h)) return;
     if (index < 0 || index >= 64) return;
-    g_pool->slots[h.index].flag_names[index] = (name && name[0]) ? tgfx_intern_string(name) : NULL;
+    g_pool->slots[h.index].flag_names[index] = (name && name[0]) ? tc_intern_string(name) : NULL;
 }
 
 // ============================================================================

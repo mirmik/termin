@@ -3,7 +3,7 @@
 #include "core/tc_entity_pool.h"
 #include "core/tc_entity_pool_registry.h"
 #include "core/tc_scene.h"
-#include <tcbase/tgfx_intern_string.h>
+#include <tcbase/tc_string.h>
 #include <tcbase/tc_log.h>
 #include <string.h>
 
@@ -50,7 +50,7 @@ tc_component_cap_id tc_component_capability_register_with_destructor(
     }
 
     size_t slot = g_component_capability_registry.count++;
-    g_component_capability_registry.names[slot] = tgfx_intern_string(debug_name);
+    g_component_capability_registry.names[slot] = tc_intern_string(debug_name);
     g_component_capability_registry.destroy_fns[slot] = destroy_fn;
     return (tc_component_cap_id)(slot + 1);
 }
