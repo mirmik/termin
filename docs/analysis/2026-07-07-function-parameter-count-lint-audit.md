@@ -17,8 +17,9 @@ not enable `PLR0913`.
 - Of the original C/C++ diagnostics, 64 were in repository-owned code and 20
   were in `termin-thirdparty` headers included through repository translation
   units.
-- After the first C++ cleanup, geometry type rename, `tcplot` API cleanup, and
-  Canvas2D quad cleanup on 2026-07-07, the current C/C++ baseline is 28
+- After the first C++ cleanup, geometry type rename, `tcplot` API cleanup,
+  Canvas2D quad cleanup, and immediate solid primitive cleanup on 2026-07-07,
+  the current C/C++ baseline is 26
   repository-owned diagnostics with the tightened third-party header filter.
 
 The result is small enough to enable eventually, but not as a drive-by config
@@ -46,7 +47,10 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   instead of flat scalar style arguments.
 - Added `Bounds2f` and `Rect2f` to `termin-base` geometry types and used them
   to collapse `Canvas2DRenderer` quad/UV helper parameters.
-- C++ repository-owned diagnostics dropped from 64 to 28.
+- Updated `tgfx2::ImmediateRenderer::torus_solid` and `arrow_solid` to take
+  typed `TorusSolidSpec`/`ArrowSolidSpec` values while keeping the Python
+  binding call shape compatible.
+- C++ repository-owned diagnostics dropped from 64 to 26.
 
 ## Reproduction
 
@@ -130,7 +134,7 @@ Current diagnostics by repository-owned area:
 
 | Count | Area |
 |---:|---|
-| 12 | `termin-graphics` |
+| 10 | `termin-graphics` |
 | 6 | `termin-mesh` |
 | 4 | `termin-render-passes` |
 | 3 | `termin-render` |
@@ -147,8 +151,6 @@ termin-graphics/src/resources/tc_shader_registry.c:231:13: tc_shader_compute_ide
 termin-graphics/src/resources/tc_shader_registry.c:595:6: tc_shader_set_sources_with_entries: 9 parameters
 termin-graphics/src/resources/tc_shader_registry.c:668:18: tc_shader_from_sources_ex: 8 parameters
 termin-graphics/src/resources/tc_shader_registry.c:692:18: tc_shader_from_sources_with_entries_ex: 11 parameters
-termin-graphics/src/tgfx2/immediate_renderer.cpp:423:25: torus_solid: 8 parameters
-termin-graphics/src/tgfx2/immediate_renderer.cpp:467:25: arrow_solid: 9 parameters
 termin-graphics/src/tgfx2/render_context.cpp:1442:22: draw_indexed_instanced: 9 parameters
 termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_stage_artifact: 8 parameters
 termin-graphics/src/tgfx2/text2d_renderer.cpp:178:22: draw: 9 parameters
@@ -206,6 +208,9 @@ termin-thirdparty/stb/stb_truetype.h:3018:16: stbtt_GetPackedQuad: 8 parameters
   `termin-thirdparty` because it starts with `termin-`. If this check is added
   to the normal C/C++ lint flow, the header filter should be tightened or an
   exclude filter should be introduced first.
+- Header diagnostics from template/header-only helpers repeat once per
+  translation unit. The current C/C++ table above intentionally reports unique
+  repository-owned `.c`/`.cpp` source diagnostics, not repeated header hits.
 - Several findings are public or semi-public C/C++ APIs where immediate
   signature changes would be breaking. Those should probably move toward typed
   parameter objects or option structs rather than local suppressions.
