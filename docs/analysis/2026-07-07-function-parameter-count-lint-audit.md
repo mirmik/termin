@@ -201,6 +201,16 @@ The full check was rerun over the `build/Release-lint/compile_commands.json`
 repository translation units on 2026-07-08. Filtering out `/termin-thirdparty/`
 from the resulting `warning: function` lines leaves no diagnostics.
 
+The default `./run-lint-cpp.sh` clang-tidy baseline now includes
+`readability-function-size` with only `ParameterThreshold = 7` enabled. The
+script also passes `--exclude-header-filter` for `termin-thirdparty`, so the
+rule applies to repository-owned C/C++ code without turning third-party headers
+into lint failures.
+
+After enabling the rule, the full default C/C++ lint command
+`./run-lint-cpp.sh --no-configure --jobs 4` passed over all 282 matched
+translation units.
+
 The 9 source diagnostics listed in the previous baseline were resolved by the
 2026-07-08 cleanup. Targeted clang-tidy checks over the touched translation
 units reported no remaining source diagnostics in:
@@ -217,9 +227,9 @@ termin-components/termin-components-render/src/depth_pass.cpp
 termin-components/termin-components-render/src/normal_pass.cpp
 ```
 
-Third-party diagnostics are still present because the current filter still lets
-some `termin-thirdparty` headers and sources through. The latest full run found
-67 third-party `warning: function` lines. Earlier examples included:
+The one-off exploratory audit command used before the script change still let
+some `termin-thirdparty` headers and sources through. That run found 67
+third-party `warning: function` lines. Earlier examples included:
 
 ```text
 termin-thirdparty/manifold/include/manifold/linalg.h:2581:30: frustum_matrix: 8 parameters
@@ -250,11 +260,8 @@ termin-thirdparty/stb/stb_truetype.h:3018:16: stbtt_GetPackedQuad: 8 parameters
   `[lint.pylint] max-args = 7`.
 - clang-tidy can enforce the C/C++ rule through
   `readability-function-size.ParameterThreshold`.
-- The current `run-lint-cpp.sh` translation-unit filter excludes
-  `termin-thirdparty`, but the `HEADER_FILTER` still matches
-  `termin-thirdparty` because it starts with `termin-`. If this check is added
-  to the normal C/C++ lint flow, the header filter should be tightened or an
-  exclude filter should be introduced first.
+- The normal `run-lint-cpp.sh` flow now excludes `termin-thirdparty` both from
+  translation units and from header diagnostics.
 - Header diagnostics from template/header-only helpers repeat once per
   translation unit. The current C/C++ table above intentionally reports unique
   repository-owned `.c`/`.cpp` source diagnostics, not repeated header hits.
@@ -267,12 +274,8 @@ termin-thirdparty/stb/stb_truetype.h:3018:16: stbtt_GetPackedQuad: 8 parameters
 
 ## Suggested Cleanup Order
 
-1. Fix the C/C++ header filter so future exploratory checks do not report
-   third-party headers.
-2. Refactor the Python editor menu/controller callback bundles. This removes
+1. Refactor the Python editor menu/controller callback bundles. This removes
    the largest outliers and gives the rule a cleaner baseline.
-3. Convert build pipeline functions to typed option/context objects.
-4. Audit graphics/rendering APIs separately, because many are public wrapper or
+2. Convert build pipeline functions to typed option/context objects.
+3. Audit graphics/rendering APIs separately, because many are public wrapper or
    backend interfaces and may need compatibility planning.
-5. Enable the rule only after the baseline is close to zero, or add a narrow
-   per-file ignore list with explicit cleanup tasks.
