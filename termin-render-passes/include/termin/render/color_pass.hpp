@@ -4,6 +4,7 @@
 #include <string>
 #include <set>
 #include <algorithm>
+#include <span>
 #include <unordered_map>
 
 #include "termin/render/frame_pass.hpp"
@@ -32,6 +33,31 @@ class RenderContext2;
 #include "core/tc_scene_pool.h"
 
 namespace termin {
+
+struct ColorPassConfig {
+    std::string input_res = "empty";
+    std::string output_res = "color";
+    std::string shadow_res = "shadow_maps";
+    std::string phase_mark = "opaque";
+    std::string pass_name = "Color";
+    std::string sort_mode = "none";
+    std::string camera_name;
+    bool clear_depth = false;
+};
+
+struct ColorPassExecuteData {
+    Rect2i rect;
+    tc_scene_handle scene = {};
+    Mat44f view;
+    Mat44f projection;
+    Vec3 camera_position;
+    std::span<const Light> lights;
+    Vec3 ambient_color{1.0, 1.0, 1.0};
+    float ambient_intensity = 0.1f;
+    std::span<const ShadowMapArrayEntry> shadow_maps;
+    ShadowSettings shadow_settings;
+    uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+};
 
 /**
  * Color pass - main rendering pass for opaque/transparent objects.
@@ -87,16 +113,7 @@ public:
         {{"input_res", "output_res"}}
     ))
 
-    ColorPass(
-        const std::string& input_res = "empty",
-        const std::string& output_res = "color",
-        const std::string& shadow_res = "shadow_maps",
-        const std::string& phase_mark = "opaque",
-        const std::string& pass_name = "Color",
-        const std::string& sort_mode = "none",
-        bool clear_depth = false,
-        const std::string& camera_name = ""
-    );
+    explicit ColorPass(const ColorPassConfig& config = {});
 
     virtual ~ColorPass() = default;
 
@@ -114,15 +131,7 @@ public:
      * @param graphics Graphics backend
      * @param reads_fbos Input FBOs
      * @param writes_fbos Output FBOs
-     * @param rect Viewport rectangle
-     * @param scene Scene containing entities to render
-     * @param view View matrix
-     * @param projection Projection matrix
-     * @param camera_position Camera world position (for distance sorting)
-     * @param lights Light sources
-     * @param ambient_color Ambient light color
-     * @param ambient_intensity Ambient light intensity
-     * @param layer_mask Layer mask for filtering entities
+     * @param data Pass-specific draw data for this frame.
      */
     // Draw the opaque/transparent geometry through a tgfx2 render
     // context. Requires ctx.ctx2 to be non-null — ColorPass is a
@@ -137,17 +146,7 @@ public:
     // drawables expose geometry_id through resolve_mesh_geometry().
     void execute_with_data(
         ExecuteContext& ctx,
-        const Rect2i& rect,
-        tc_scene_handle scene,
-        const Mat44f& view,
-        const Mat44f& projection,
-        const Vec3& camera_position,
-        const std::vector<Light>& lights,
-        const Vec3& ambient_color,
-        float ambient_intensity,
-        const std::vector<ShadowMapArrayEntry>& shadow_maps,
-        const ShadowSettings& shadow_settings,
-        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
+        const ColorPassExecuteData& data
     );
 
     // Override from CxxFramePass

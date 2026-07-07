@@ -21,8 +21,8 @@ not enable `PLR0913`.
   Canvas2D quad cleanup, immediate solid primitive cleanup, texture/FBO
   descriptor cleanup, text draw options cleanup, indexed-instanced draw
   command cleanup, mesh interleaved create-info cleanup, frame graph presenter
-  draw command cleanup, and scene mount request cleanup on 2026-07-07,
-  the current C/C++ baseline is 14
+  draw command cleanup, scene mount request cleanup, and render-pass execute
+  data/config cleanup on 2026-07-07, the current C/C++ baseline is 11
   repository-owned diagnostics with the tightened third-party header filter.
 
 The result is small enough to enable eventually, but not as a drive-by config
@@ -70,7 +70,16 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   typed `FrameGraphPresenterDraw` command while keeping the Python binding call
   shape compatible.
 - Updated `RenderingManager::mount_scene` to take a typed `SceneMountRequest`.
-- C++ repository-owned diagnostics dropped from 64 to 14.
+- Re-ran the C++ baseline after merging the neighboring render-pass changes;
+  the count stayed at 14 and line numbers were refreshed.
+- Updated `DepthPass::execute_with_data_tgfx2` to take a typed
+  `DepthPassExecuteData` value.
+- Updated `ColorPass` construction to take `ColorPassConfig` and
+  `ColorPass::execute_with_data` to take `ColorPassExecuteData`, while keeping
+  Python and C# binding call shapes compatible.
+- Updated `LightingUBO::update_from_lights` to take `std::span<const Light>` so
+  render-pass execute data can carry non-owning light views.
+- C++ repository-owned diagnostics dropped from 64 to 11.
 
 ## Reproduction
 
@@ -155,15 +164,13 @@ Current diagnostics by repository-owned area:
 | Count | Area |
 |---:|---|
 | 5 | `termin-graphics` |
-| 4 | `termin-render-passes` |
 | 3 | `termin-mesh` |
+| 2 | `termin-render-passes` |
 | 1 | `termin-engine` |
-| 1 | `termin-components/termin-components-render` |
 
 Current repository-owned C/C++ diagnostics:
 
 ```text
-termin-components/termin-components-render/src/depth_pass.cpp:152:17: execute_with_data_tgfx2: 8 parameters
 termin-engine/src/render_target_context_builder.cpp:198:6: build_render_target_contexts: 12 parameters
 termin-graphics/src/resources/tc_shader_registry.c:231:13: tc_shader_compute_identity_hash: 9 parameters
 termin-graphics/src/resources/tc_shader_registry.c:595:6: tc_shader_set_sources_with_entries: 9 parameters
@@ -173,10 +180,8 @@ termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_st
 termin-mesh/src/resources/tc_mesh.c:653:13: tc_mesh_find_surface_edge_filtered: 10 parameters
 termin-mesh/src/resources/tc_mesh.c:955:6: tc_mesh_find_surface_edge_aligned: 8 parameters
 termin-mesh/src/resources/tc_mesh.c:979:6: tc_mesh_find_surface_edge_aligned_metric: 9 parameters
-termin-render-passes/src/color_pass.cpp:146:12: ColorPass: 8 parameters
-termin-render-passes/src/color_pass.cpp:582:17: execute_with_data: 12 parameters
 termin-render-passes/src/shadow_camera.cpp:385:20: fit_shadow_frustum_for_cascade: 9 parameters
-termin-render-passes/src/shadow_pass.cpp:417:42: execute_shadow_pass_tgfx2: 8 parameters
+termin-render-passes/src/shadow_pass.cpp:438:42: execute_shadow_pass_tgfx2: 8 parameters
 ```
 
 Third-party header diagnostics observed during the same run:

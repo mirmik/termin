@@ -115,9 +115,9 @@ private:
 
 public:
 
-    // Update UBO from lights vector
+    // Update UBO from a non-owning lights view.
     void update_from_lights(
-        const std::vector<Light>& lights,
+        std::span<const Light> lights,
         const Vec3& ambient_color,
         float ambient_intensity,
         const Vec3& camera_position,

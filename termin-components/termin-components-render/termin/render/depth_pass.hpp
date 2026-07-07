@@ -11,6 +11,16 @@ extern "C" {
 
 namespace termin {
 
+struct DepthPassExecuteData {
+    Rect2i rect;
+    tc_scene_handle scene = {};
+    Mat44f view;
+    Mat44f projection;
+    float near_plane = 0.1f;
+    float far_plane = 1000.0f;
+    uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+};
+
 class ENTITY_API DepthPass : public GeometryPassBase {
 private:
     float _near_plane = 0.1f;
@@ -63,13 +73,7 @@ public:
     // tgfx2-native DepthPass entry — requires ctx.ctx2 to be non-null.
     void execute_with_data_tgfx2(
         ExecuteContext& ctx,
-        const Rect2i& rect,
-        tc_scene_handle scene,
-        const Mat44f& view,
-        const Mat44f& projection,
-        float near_plane,
-        float far_plane,
-        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
+        const DepthPassExecuteData& data
     );
 
     void execute(ExecuteContext& ctx) override;

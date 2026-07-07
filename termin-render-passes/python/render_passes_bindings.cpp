@@ -447,7 +447,16 @@ void bind_render_passes(nb::module_& m) {
             } else {
                 shadow_res = "";
             }
-            new (self) ColorPass(input_res, output_res, shadow_res, phase_mark, pass_name, sort_mode, clear_depth, camera_name);
+            ColorPassConfig config;
+            config.input_res = std::move(input_res);
+            config.output_res = std::move(output_res);
+            config.shadow_res = std::move(shadow_res);
+            config.phase_mark = std::move(phase_mark);
+            config.pass_name = std::move(pass_name);
+            config.sort_mode = std::move(sort_mode);
+            config.clear_depth = clear_depth;
+            config.camera_name = std::move(camera_name);
+            new (self) ColorPass(config);
             init_pass_from_python(self, "ColorPass");
         },
              nb::arg("input_res") = "empty",

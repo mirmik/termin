@@ -186,21 +186,15 @@ std::array<float, 4> DepthPass::clear_color() const {
 // ----------------------------------------------------------------------------
 void DepthPass::execute_with_data_tgfx2(
     ExecuteContext& ctx,
-    const Rect2i& rect,
-    tc_scene_handle scene,
-    const Mat44f& view,
-    const Mat44f& projection,
-    float near_plane,
-    float far_plane,
-    uint64_t layer_mask
+    const DepthPassExecuteData& data
 ) {
     if (!ctx.ctx2) {
         tc::Log::error("DepthPass/tgfx2: ctx2 is null");
         return;
     }
 
-    _near_plane = near_plane;
-    _far_plane = far_plane;
+    _near_plane = data.near_plane;
+    _far_plane = data.far_plane;
 
     auto depth_it = ctx.tex2_depth_writes.find(output_res);
     tgfx::TextureHandle depth_tex2 =
@@ -225,7 +219,7 @@ void DepthPass::execute_with_data_tgfx2(
     // Use the UBO-based engine shader as base_shader for skinning override.
     // The old source-based GeometryPassBase shader path has been removed;
     // this handle is the only base shader key for depth overrides.
-    collect_draw_calls(scene, layer_mask, ctx.render_category_mask, depth_shader_handle_);
+    collect_draw_calls(data.scene, data.layer_mask, ctx.render_category_mask, depth_shader_handle_);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -235,7 +229,7 @@ void DepthPass::execute_with_data_tgfx2(
     float clear_rgba[4] = {cc[0], cc[1], cc[2], cc[3]};
 
     ctx.ctx2->begin_pass(color_tex2, depth_tex2, clear_rgba, 1.0f, clear);
-    ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
+    ctx.ctx2->set_viewport(0, 0, data.rect.width, data.rect.height);
     ctx.ctx2->set_depth_test(true);
     ctx.ctx2->set_depth_write(true);
     ctx.ctx2->set_blend(false);
@@ -255,10 +249,10 @@ void DepthPass::execute_with_data_tgfx2(
     // near/far plane. Bound by shader resource name so Slang scope metadata
     // owns the physical binding.
     DepthPerFrameStd140 per_frame{};
-    std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
-    std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    per_frame.u_near = near_plane;
-    per_frame.u_far = far_plane;
+    std::memcpy(per_frame.u_view, data.view.data, sizeof(float) * 16);
+    std::memcpy(per_frame.u_projection, data.projection.data, sizeof(float) * 16);
+    per_frame.u_near = data.near_plane;
+    per_frame.u_far = data.far_plane;
     per_frame.u_depth_encoding = depth_encoding_mode(depth_encoding);
     std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
         {
@@ -296,10 +290,10 @@ void DepthPass::execute_with_data_tgfx2(
         capture->capture_direct_via_ctx2(
             ctx.ctx2,
             capture_tex,
-            rect.width,
-            rect.height);
+            data.rect.width,
+            data.rect.height);
         ctx.ctx2->begin_pass(color_tex2, depth_tex2, clear_rgba, 1.0f, false);
-        ctx.ctx2->set_viewport(0, 0, rect.width, rect.height);
+        ctx.ctx2->set_viewport(0, 0, data.rect.width, data.rect.height);
         ctx.ctx2->set_depth_test(true);
         ctx.ctx2->set_depth_write(true);
         ctx.ctx2->set_blend(false);
@@ -322,7 +316,7 @@ void DepthPass::execute_with_data_tgfx2(
         tc_render_item_collect_context item_context{};
         item_context.phase_mark = depth_phase;
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-        item_context.layer_mask = layer_mask;
+        item_context.layer_mask = data.layer_mask;
         item_context.render_category_mask = ctx.render_category_mask;
         item_context.debug_pass_name = get_pass_name().c_str();
         item_context.pass_contract = &pass_contract;
@@ -481,16 +475,15 @@ void DepthPass::execute(ExecuteContext& ctx) {
         return;
     }
 
-    execute_with_data_tgfx2(
-        ctx,
-        rect,
-        scene,
-        view,
-        projection,
-        near_plane,
-        far_plane,
-        ctx.layer_mask
-    );
+    DepthPassExecuteData data;
+    data.rect = rect;
+    data.scene = scene;
+    data.view = view;
+    data.projection = projection;
+    data.near_plane = near_plane;
+    data.far_plane = far_plane;
+    data.layer_mask = ctx.layer_mask;
+    execute_with_data_tgfx2(ctx, data);
 }
 
 void DepthOnlyPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
