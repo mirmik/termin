@@ -1006,45 +1006,6 @@ void LineRenderer::draw_geometry(const RenderContext& context, int geometry_id) 
     (void)geometry_id;
 }
 
-bool LineRenderer::draw_tgfx2(tgfx::RenderContext2& ctx2,
-                              const RenderContext& context,
-                              const std::string& phase_mark,
-                              tc_material_phase* phase,
-                              int geometry_id) {
-    (void)geometry_id;
-
-    tc_render_item item{};
-    item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
-    item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-    item.component = tc_component_ptr();
-    item.geometry_id = 0;
-    item.material_phase = phase;
-    item.payload.line_batch.points =
-        reinterpret_cast<const tc_render_item_vec3*>(points_.data());
-    item.payload.line_batch.point_count = points_.size();
-    item.payload.line_batch.width = width;
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        return false;
-    }
-    item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
-    item.payload.line_batch.up_hint = {
-        up_hint.x,
-        up_hint.y,
-        up_hint.z,
-    };
-    item.payload.line_batch.tube_sides = tube_sides;
-    std::memcpy(item.model_matrix, context.model.data, sizeof(float) * 16);
-
-    RenderItemDrawSubmitRequest request{};
-    request.draw_context = &context;
-    request.material_phase = phase;
-    request.phase_mark = phase_mark.c_str();
-    request.debug_pass_name = "LineRenderer/legacy";
-    request.debug_entity_name = entity().name();
-    return encode_render_item_tgfx2(ctx2, item, request);
-}
-
 bool LineRenderer::encode_render_item_tgfx2(
     tgfx::RenderContext2& ctx2,
     const tc_render_item& item,
@@ -1179,9 +1140,9 @@ bool LineRenderer::encode_render_item_tgfx2(
             params.cap_fragment_shader = tube_cap_shader.fragment;
             params.cap_shader_layout = tube_cap_shader.shader;
             params.bind_resources =
-                [&context, phase](tgfx::RenderContext2& line_ctx, const tc_shader* shader_layout) {
-                    if (context.prepare_tgfx2_material_resources) {
-                        context.prepare_tgfx2_material_resources(line_ctx, shader_layout, phase);
+                [&request, phase](tgfx::RenderContext2& line_ctx, const tc_shader* shader_layout) {
+                    if (request.prepare_material_resources) {
+                        request.prepare_material_resources(line_ctx, shader_layout, phase);
                     }
                 };
         }
@@ -1246,20 +1207,6 @@ bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int g
         return false;
     }
     return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
-}
-
-bool LineRenderer::supports_direct_tgfx2_draw(
-    const std::string& phase_mark,
-    int geometry_id,
-    DirectTgfx2DrawKind kind
-) const {
-    (void)geometry_id;
-    (void)kind;
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        return false;
-    }
-    return is_direct_line_mode(mode) && accepts_phase(phase_mark, cast_shadow);
 }
 
 tc_mesh* LineRenderer::get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const {
