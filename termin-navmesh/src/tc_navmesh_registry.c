@@ -4,7 +4,7 @@
 #include <tcbase/tc_resource.h>
 #include <tcbase/tc_resource_map.h>
 #include <tcbase/tc_log.h>
-#include <tcbase/tgfx_intern_string.h>
+#include <tcbase/tc_string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -163,7 +163,7 @@ tc_navmesh_handle tc_navmesh_declare(const char* uuid, const char* name) {
     tc_navmesh* navmesh = (tc_navmesh*)tc_pool_get(&g_navmesh_pool, h);
     navmesh_init_slot(navmesh, h, uuid, false);
     if (name && name[0] != '\0') {
-        navmesh->name = tgfx_intern_string(name);
+        navmesh->name = tc_intern_string(name);
     }
 
     if (!tc_resource_map_add(g_uuid_to_index, navmesh->uuid, navmesh_pack_index(h.index))) {
@@ -226,9 +226,9 @@ bool tc_navmesh_ensure_loaded(tc_navmesh_handle h) {
 
 bool tc_navmesh_set_metadata(tc_navmesh* navmesh, const char* name, const char* agent_type, const char* coordinate_system) {
     if (!navmesh) return false;
-    if (name && name[0] != '\0') navmesh->name = tgfx_intern_string(name);
-    navmesh->agent_type = (agent_type && agent_type[0] != '\0') ? tgfx_intern_string(agent_type) : NULL;
-    navmesh->coordinate_system = (coordinate_system && coordinate_system[0] != '\0') ? tgfx_intern_string(coordinate_system) : NULL;
+    if (name && name[0] != '\0') navmesh->name = tc_intern_string(name);
+    navmesh->agent_type = (agent_type && agent_type[0] != '\0') ? tc_intern_string(agent_type) : NULL;
+    navmesh->coordinate_system = (coordinate_system && coordinate_system[0] != '\0') ? tc_intern_string(coordinate_system) : NULL;
     navmesh_bump_version(navmesh);
     return true;
 }
