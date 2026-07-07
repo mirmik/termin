@@ -11,6 +11,7 @@
 #include <termin/geom/vec3.hpp>
 #include <termin/geom/vec4.hpp>
 #include <termin/render/drawable.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 
 namespace tgfx {
@@ -98,16 +99,14 @@ public:
         const std::function<void(TcShader)>& emit
     ) override;
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
-    bool draw_tgfx2(tgfx::RenderContext2& ctx2,
-                    const RenderContext& context,
-                    const std::string& phase_mark,
-                    tc_material_phase* phase,
-                    int geometry_id = 0) override;
-    bool supports_direct_tgfx2_draw(
-        const std::string& phase_mark,
-        int geometry_id,
-        DirectTgfx2DrawKind kind
-    ) const override;
+    bool collect_render_items(
+        const tc_render_item_collect_context& context,
+        tc_render_item_sink& sink
+    ) override;
+    bool encode_render_item_tgfx2(
+        tgfx::RenderContext2& ctx2,
+        const tc_render_item& item,
+        const RenderItemDrawSubmitRequest& request);
     tc_mesh* get_mesh_for_phase(const std::string& phase_mark, int geometry_id) const override;
     std::vector<GeometryDrawCall> get_geometry_draws(
         const RenderContext& context,

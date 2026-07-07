@@ -9,6 +9,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/world_text_component.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
@@ -425,6 +426,58 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     CHECK(items[0].payload.mesh.mesh != nullptr);
 
     tc_mesh_shutdown();
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("WorldTextComponent emits text batch render items with owned text payload") {
+    tc_material_init();
+    tc_shader_init();
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("world-text-render-items");
+    termin::Entity entity = scene.create_entity("label");
+
+    auto* text = new termin::WorldTextComponent();
+    text->set_text("hello");
+    text->set_phase_mark("transparent");
+    text->set_size(0.75f);
+    text->set_anchor(termin::WorldTextAnchor::Right);
+    text->set_orientation(termin::WorldTextOrientation::Fixed);
+    text->set_local_offset(termin::Vec3{1.0, 2.0, 3.0});
+    entity.add_component(text);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "transparent";
+    collect_context.debug_pass_name = "ColorPass";
+
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        text->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    REQUIRE(collection.items.size() == 1u);
+    const tc_render_item& item = collection.items[0];
+    CHECK(item.kind == TC_RENDER_ITEM_KIND_TEXT_BATCH);
+    CHECK(item.component == text->tc_component_ptr());
+    CHECK(item.geometry_id == 0);
+    CHECK(item.material_phase != nullptr);
+    REQUIRE(item.payload.text_batch.text != nullptr);
+    CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
+    CHECK(item.payload.text_batch.size == 0.75f);
+    CHECK(item.payload.text_batch.anchor ==
+          static_cast<uint32_t>(termin::WorldTextAnchor::Right));
+    CHECK(item.payload.text_batch.orientation ==
+          static_cast<uint32_t>(termin::WorldTextOrientation::Fixed));
+    CHECK(item.payload.text_batch.local_offset.x == 1.0);
+    CHECK(item.payload.text_batch.local_offset.y == 2.0);
+    CHECK(item.payload.text_batch.local_offset.z == 3.0);
+
+    const char* collected_text = item.payload.text_batch.text;
+    text->set_text("changed");
+    REQUIRE(item.payload.text_batch.text == collected_text);
+    CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
+
     tc_shader_shutdown();
     tc_material_shutdown();
 }
