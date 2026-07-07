@@ -17,9 +17,9 @@ not enable `PLR0913`.
 - Of the original C/C++ diagnostics, 64 were in repository-owned code and 20
   were in `termin-thirdparty` headers included through repository translation
   units.
-- After the first C++ cleanup, geometry type rename, and `tcplot` API cleanup
-  on 2026-07-07, the current C/C++ baseline is 30 repository-owned diagnostics
-  with the tightened third-party header filter.
+- After the first C++ cleanup, geometry type rename, `tcplot` API cleanup, and
+  Canvas2D quad cleanup on 2026-07-07, the current C/C++ baseline is 28
+  repository-owned diagnostics with the tightened third-party header filter.
 
 The result is small enough to enable eventually, but not as a drive-by config
 change. The editor menu/controller constructors and several rendering/graphics
@@ -44,7 +44,9 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   sites.
 - Updated `tcplot` C++ APIs and helpers to use series/surface option structs
   instead of flat scalar style arguments.
-- C++ repository-owned diagnostics dropped from 64 to 30.
+- Added `Bounds2f` and `Rect2f` to `termin-base` geometry types and used them
+  to collapse `Canvas2DRenderer` quad/UV helper parameters.
+- C++ repository-owned diagnostics dropped from 64 to 28.
 
 ## Reproduction
 
@@ -128,7 +130,7 @@ Current diagnostics by repository-owned area:
 
 | Count | Area |
 |---:|---|
-| 14 | `termin-graphics` |
+| 12 | `termin-graphics` |
 | 6 | `termin-mesh` |
 | 4 | `termin-render-passes` |
 | 3 | `termin-render` |
@@ -145,8 +147,6 @@ termin-graphics/src/resources/tc_shader_registry.c:231:13: tc_shader_compute_ide
 termin-graphics/src/resources/tc_shader_registry.c:595:6: tc_shader_set_sources_with_entries: 9 parameters
 termin-graphics/src/resources/tc_shader_registry.c:668:18: tc_shader_from_sources_ex: 8 parameters
 termin-graphics/src/resources/tc_shader_registry.c:692:18: tc_shader_from_sources_with_entries_ex: 11 parameters
-termin-graphics/src/tgfx2/canvas2d_renderer.cpp:442:24: push_quad_: 8 parameters
-termin-graphics/src/tgfx2/canvas2d_renderer.cpp:467:24: append_textured_quad_: 10 parameters
 termin-graphics/src/tgfx2/immediate_renderer.cpp:423:25: torus_solid: 8 parameters
 termin-graphics/src/tgfx2/immediate_renderer.cpp:467:25: arrow_solid: 9 parameters
 termin-graphics/src/tgfx2/render_context.cpp:1442:22: draw_indexed_instanced: 9 parameters
