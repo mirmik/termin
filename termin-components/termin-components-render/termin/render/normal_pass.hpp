@@ -25,9 +25,7 @@ public:
     // resources and vertex requirements are declared by shader_pass_contract().
     std::string pass_phase_mark = "normal";
 
-    INSPECT_FIELD_ACCESSORS(NormalPass, std::string, phase_mark, "Phase Mark", "string",
-        ([](NormalPass* self) { return self->pass_phase_mark; }),
-        ([](NormalPass* self, std::string value) { self->pass_phase_mark = value; }))
+    INSPECT_FIELD_NAMED(NormalPass, pass_phase_mark, "phase_mark", "Phase Mark", "string")
 
     NormalPass(
         const std::string& input_res = "empty_normal",

@@ -29,6 +29,10 @@ not enable `PLR0913`.
   engine/graphics/mesh. Targeted checks over the touched translation units now
   report no remaining source diagnostics; the visible repeated diagnostics are
   header-only `termin-inspect` registration helpers.
+- A later 2026-07-08 pass resolved the `termin-inspect` header helpers plus
+  the newly visible repository-owned `termin-display` input-event and
+  `termin-render` shadow-array helpers. The C/C++ repository-owned parameter
+  baseline is now zero with this check; remaining output is third-party noise.
 
 The result is small enough to enable eventually, but not as a drive-by config
 change. The editor menu/controller constructors and several rendering/graphics
@@ -105,6 +109,11 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
 - Updated `TcMaterial::add_phase_from_sources` to take
   `TcMaterialPhaseFromSourcesInfo` and moved material binding internals to
   option/descriptor structs.
+- Updated `termin-inspect` C++ field registration helpers to use
+  `InspectFieldSpec` descriptors while keeping macro/direct-call compatibility.
+- Updated input event source initializers to take event init descriptor structs.
+- Updated `ShadowMapArrayResource::add_entry` to take a `ShadowMapArrayEntry`
+  value instead of a flat shadow entry argument list.
 - Rebuilt SDK with `./build-sdk.sh --no-wheels` and refreshed the editable test
   venv with `./setup-test-venv.sh --force`.
 
@@ -186,9 +195,15 @@ Lower-count Python diagnostics are mostly:
 
 ## C/C++ Results
 
+Current result: zero repository-owned C/C++ parameter-count diagnostics.
+
+The full check was rerun over the `build/Release-lint/compile_commands.json`
+repository translation units on 2026-07-08. Filtering out `/termin-thirdparty/`
+from the resulting `warning: function` lines leaves no diagnostics.
+
 The 9 source diagnostics listed in the previous baseline were resolved by the
 2026-07-08 cleanup. Targeted clang-tidy checks over the touched translation
-units report no remaining source diagnostics in:
+units reported no remaining source diagnostics in:
 
 ```text
 termin-graphics/src/resources/tc_shader_registry.c
@@ -196,22 +211,15 @@ termin-graphics/src/tgfx2/tc_shader_bridge.cpp
 termin-materials/python/bindings/material_bindings.cpp
 termin-navmesh/src/detour_navmesh_asset_utils.cpp
 termin-runtime/src/runtime_package.cpp
+termin-display/src/tc_viewport_input_manager.c
+termin-render-passes/src/shadow_pass.cpp
+termin-components/termin-components-render/src/depth_pass.cpp
+termin-components/termin-components-render/src/normal_pass.cpp
 ```
 
-The remaining repeated repository-owned diagnostics visible through the touched
-translation units are header-only `termin-inspect` registration helpers:
-
-```text
-termin-inspect/include/tc_inspect_cpp.hpp:490:10: add: 8 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:530:10: add_with_callbacks: 9 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:826:6: register_inspect_field: 8 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:932:5: InspectFieldRegistrar<C, T>: 8 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:950:5: InspectFieldCallbackRegistrar<C, T>: 9 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:969:5: InspectAccessorFieldRegistrar<C, T>: 8 parameters
-termin-inspect/include/tc_inspect_cpp.hpp:1015:5: InspectAccessorFieldChoicesRegistrar<C, T>: 9 parameters
-```
-
-Third-party header diagnostics observed during the same run:
+Third-party diagnostics are still present because the current filter still lets
+some `termin-thirdparty` headers and sources through. The latest full run found
+67 third-party `warning: function` lines. Earlier examples included:
 
 ```text
 termin-thirdparty/manifold/include/manifold/linalg.h:2581:30: frustum_matrix: 8 parameters

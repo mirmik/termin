@@ -892,16 +892,16 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 
     // Add results to shadow array
     for (const auto& result : results) {
-        shadow_array->add_entry(
-            result.depth_tex2,
-            result.width,
-            result.height,
-            result.light_space_matrix,
-            result.light_index,
-            result.cascade_index,
-            result.cascade_split_near,
-            result.cascade_split_far
-        );
+        ShadowMapArrayEntry entry;
+        entry.depth_tex2 = result.depth_tex2;
+        entry.width = result.width;
+        entry.height = result.height;
+        entry.light_space_matrix = result.light_space_matrix;
+        entry.light_index = result.light_index;
+        entry.cascade_index = result.cascade_index;
+        entry.cascade_split_near = result.cascade_split_near;
+        entry.cascade_split_far = result.cascade_split_far;
+        shadow_array->add_entry(entry);
     }
 
     if (profile) tc_profiler_end_section();
