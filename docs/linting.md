@@ -12,8 +12,8 @@ coverage once the baseline is stable.
 - The Python baseline is defect-oriented and documented in
   `docs/python-linting.md`; full Bugbear `B` and full Pyflakes `F` are enabled.
 - CI runs Python lint as a separate job before the heavier build jobs.
-- C/C++ has an opt-in clang-tidy entry point through `./run-lint-cpp.sh`.
-  It is not a mandatory CI gate yet.
+- C/C++ uses clang-tidy through `./run-lint-cpp.sh`; the default baseline runs
+  in PR CI.
 
 ## Python Next Steps
 
@@ -68,6 +68,9 @@ The script:
   directories.
 - starts with `clang-diagnostic-*` and a narrow non-`optin`
   `clang-analyzer-*` baseline;
+- enables `readability-function-size` only as a function-parameter-count gate:
+  repository-owned C/C++ functions must have at most 7 parameters. The other
+  `readability-function-size` thresholds stay disabled.
 - treats matched clang-tidy warnings as errors;
 - excludes the noisy C11 `*_s` replacement warning for ordinary
   `memcpy` / `memset` calls and `clang-analyzer-deadcode.*` until local and
@@ -90,6 +93,8 @@ Useful options:
 - `./run-lint-cpp.sh --checks 'CHECKS'` to test broader local rule sets.
 - `./run-lint-cpp.sh --warnings-as-errors ''` to run an exploratory audit
   without failing on warnings.
+- `CLANG_TIDY_CONFIG='{...}' ./run-lint-cpp.sh` to override clang-tidy check
+  options, including the default parameter-count threshold.
 - `CLANG_TIDY_BIN=/path/to/clang-tidy ./run-lint-cpp.sh` when multiple LLVM
   versions are installed.
 
@@ -100,7 +105,8 @@ Recommended next `clang-tidy` additions after the baseline is understood:
   handled;
 - `clang-analyzer-deadcode.*` after third-party header diagnostics are filtered
   or otherwise isolated;
-- no broad `readability-*` family until the signal/noise level is known.
+- no broad `readability-*` family beyond the parameter-count gate until the
+  signal/noise level is known.
 
 Possible later additions:
 

@@ -87,18 +87,17 @@ tc_material_phase* add_builtin_slang_debug_phase(
         return nullptr;
     }
 
-    tc_material_phase* phase = material.add_phase_from_sources(
-        vertex_source.c_str(),
-        fragment_source.c_str(),
-        nullptr,
-        shader_name,
-        phase_mark,
-        priority,
-        state,
-        nullptr,
-        TC_SHADER_LANGUAGE_SLANG,
-        TC_SHADER_ARTIFACT_REQUIRED
-    );
+    TcMaterialPhaseFromSourcesInfo phase_info;
+    phase_info.shader.sources.vertex = vertex_source;
+    phase_info.shader.sources.fragment = fragment_source;
+    phase_info.shader.sources.name = shader_name;
+    phase_info.shader.language = TC_SHADER_LANGUAGE_SLANG;
+    phase_info.shader.artifact_policy = TC_SHADER_ARTIFACT_REQUIRED;
+    phase_info.phase_mark = phase_mark;
+    phase_info.priority = priority;
+    phase_info.state = state;
+
+    tc_material_phase* phase = material.add_phase_from_sources(phase_info);
 
     if (!phase) {
         tc_log_error("[NavMesh] Failed to add phase to debug material for shader '%s'", shader_name);

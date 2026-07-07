@@ -30,6 +30,7 @@ extern "C" {
 #include <cstring>
 #include <set>
 #include <span>
+#include <string>
 
 namespace termin {
 
@@ -660,6 +661,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     shadow_resources);
             };
             const MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
+            const std::string debug_pass_name = get_pass_name();
+            const char* debug_pass_name_c = debug_pass_name.c_str();
 
             for (const auto& dc : cached_draw_calls_) {
                 tc_material_phase* phase = dc.resolve_phase();
@@ -669,7 +672,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 item_context.phase_mark = "shadow";
                 item_context.layer_mask = data.layer_mask;
                 item_context.render_category_mask = ctx.render_category_mask;
-                item_context.debug_pass_name = get_pass_name().c_str();
+                item_context.debug_pass_name = debug_pass_name_c;
                 item_context.pass_contract = &pass_contract;
 
                 tc_render_item item{};
@@ -892,16 +895,16 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 
     // Add results to shadow array
     for (const auto& result : results) {
-        shadow_array->add_entry(
-            result.depth_tex2,
-            result.width,
-            result.height,
-            result.light_space_matrix,
-            result.light_index,
-            result.cascade_index,
-            result.cascade_split_near,
-            result.cascade_split_far
-        );
+        ShadowMapArrayEntry entry;
+        entry.depth_tex2 = result.depth_tex2;
+        entry.width = result.width;
+        entry.height = result.height;
+        entry.light_space_matrix = result.light_space_matrix;
+        entry.light_index = result.light_index;
+        entry.cascade_index = result.cascade_index;
+        entry.cascade_split_near = result.cascade_split_near;
+        entry.cascade_split_far = result.cascade_split_far;
+        shadow_array->add_entry(entry);
     }
 
     if (profile) tc_profiler_end_section();
