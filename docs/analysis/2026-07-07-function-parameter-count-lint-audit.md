@@ -19,8 +19,8 @@ not enable `PLR0913`.
   units.
 - After the first C++ cleanup, geometry type rename, `tcplot` API cleanup,
   Canvas2D quad cleanup, immediate solid primitive cleanup, texture/FBO
-  descriptor cleanup, and text draw options cleanup on 2026-07-07, the current
-  C/C++ baseline is 21
+  descriptor cleanup, text draw options cleanup, and indexed-instanced draw
+  command cleanup on 2026-07-07, the current C/C++ baseline is 20
   repository-owned diagnostics with the tightened third-party header filter.
 
 The result is small enough to enable eventually, but not as a drive-by config
@@ -59,7 +59,9 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
 - Updated `tgfx2::Text2DRenderer::draw` and `Text3DRenderer::draw` to take
   typed draw option structs while keeping the Python binding call shape
   compatible.
-- C++ repository-owned diagnostics dropped from 64 to 21.
+- Updated `tgfx2::RenderContext2::draw_indexed_instanced` to take a typed
+  `IndexedInstancedDraw` command struct.
+- C++ repository-owned diagnostics dropped from 64 to 20.
 
 ## Reproduction
 
@@ -144,7 +146,7 @@ Current diagnostics by repository-owned area:
 | Count | Area |
 |---:|---|
 | 6 | `termin-mesh` |
-| 6 | `termin-graphics` |
+| 5 | `termin-graphics` |
 | 4 | `termin-render-passes` |
 | 2 | `termin-engine` |
 | 2 | `termin-render` |
@@ -160,7 +162,6 @@ termin-graphics/src/resources/tc_shader_registry.c:231:13: tc_shader_compute_ide
 termin-graphics/src/resources/tc_shader_registry.c:595:6: tc_shader_set_sources_with_entries: 9 parameters
 termin-graphics/src/resources/tc_shader_registry.c:668:18: tc_shader_from_sources_ex: 8 parameters
 termin-graphics/src/resources/tc_shader_registry.c:692:18: tc_shader_from_sources_with_entries_ex: 11 parameters
-termin-graphics/src/tgfx2/render_context.cpp:1442:22: draw_indexed_instanced: 9 parameters
 termin-graphics/src/tgfx2/tc_shader_bridge.cpp:1107:13: compile_engine_shader_stage_artifact: 8 parameters
 termin-mesh/src/resources/tc_mesh.c:653:13: tc_mesh_find_surface_edge_filtered: 10 parameters
 termin-mesh/src/resources/tc_mesh.c:955:6: tc_mesh_find_surface_edge_aligned: 8 parameters
