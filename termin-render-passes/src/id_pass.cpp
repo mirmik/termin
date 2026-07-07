@@ -5,7 +5,7 @@
 #include "termin/camera/render_camera_utils.hpp"
 #include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/material_pipeline.hpp"
-#include "termin/render/render_item_mesh.hpp"
+#include "termin/render/render_item_submission.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include "tgfx2/builtin_shader_sources.hpp"
@@ -392,12 +392,12 @@ void IdPass::execute_with_data_tgfx2(
                 id_shader.shader,
                 nullptr,
                 draw_resources);
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = id_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
             encode_request.debug_pass_name = "IdPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 task.item,
                 encode_request)) {
@@ -430,12 +430,12 @@ void IdPass::execute_with_data_tgfx2(
                 nullptr,
                 draw_resources);
 
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = skinned_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::Position;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
             encode_request.debug_pass_name = "IdPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 task.item,
                 encode_request)) {

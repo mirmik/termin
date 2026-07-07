@@ -7,7 +7,7 @@
 #include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
-#include "termin/render/render_item_mesh.hpp"
+#include "termin/render/render_item_submission.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -751,12 +751,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         shadow_shader.shader,
                         nullptr,
                         draw_resources);
-                    MeshRenderItemEncodeRequest encode_request{};
+                    RenderItemDrawSubmitRequest encode_request{};
                     encode_request.shader = shadow_shader.shader;
-                    encode_request.vertex_input = MaterialMeshVertexInput::Position;
+                    encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
                     encode_request.debug_pass_name = "ShadowPass";
                     encode_request.debug_entity_name = dc.entity.name();
-                    if (!encode_mesh_render_item_draw(
+                    if (!submit_render_item_draw(
                         *ctx.ctx2,
                         item,
                         encode_request)) {
@@ -785,12 +785,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                         nullptr,
                         draw_resources);
 
-                    MeshRenderItemEncodeRequest encode_request{};
+                    RenderItemDrawSubmitRequest encode_request{};
                     encode_request.shader = skinned_shader.shader;
-                    encode_request.vertex_input = MaterialMeshVertexInput::Position;
+                    encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
                     encode_request.debug_pass_name = "ShadowPass";
                     encode_request.debug_entity_name = dc.entity.name();
-                    if (!encode_mesh_render_item_draw(
+                    if (!submit_render_item_draw(
                         *ctx.ctx2,
                         item,
                         encode_request)) {

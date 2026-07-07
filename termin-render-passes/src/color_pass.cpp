@@ -3,7 +3,7 @@
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
-#include "termin/render/render_item_mesh.hpp"
+#include "termin/render/render_item_submission.hpp"
 #include "termin/render/shader_abi.hpp"
 #include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
@@ -1110,12 +1110,12 @@ void ColorPass::execute_with_data(
         }
         bind_draw_data_for_shader(*ctx2, raw_shader, push);
 
-        MeshRenderItemEncodeRequest encode_request{};
+        RenderItemDrawSubmitRequest encode_request{};
         encode_request.shader = raw_shader;
-        encode_request.vertex_input = MaterialMeshVertexInput::FullMaterial;
+        encode_request.mesh_vertex_input = MaterialMeshVertexInput::FullMaterial;
         encode_request.debug_pass_name = "ColorPass";
         encode_request.debug_entity_name = ename;
-        if (!encode_mesh_render_item_draw(
+        if (!submit_render_item_draw(
             *ctx2,
             item,
             encode_request)) {

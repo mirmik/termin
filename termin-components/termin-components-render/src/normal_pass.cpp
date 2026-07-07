@@ -3,7 +3,7 @@
 #include <termin/camera/camera_component.hpp>
 #include <termin/camera/render_camera_utils.hpp>
 #include <termin/render/material_pipeline.hpp>
-#include <termin/render/render_item_mesh.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -268,12 +268,12 @@ void NormalPass::execute_with_data_tgfx2(
                 normal_shader.shader,
                 nullptr,
                 draw_resources);
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = normal_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::PositionNormal;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::PositionNormal;
             encode_request.debug_pass_name = "NormalPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 item,
                 encode_request)) {
@@ -301,12 +301,12 @@ void NormalPass::execute_with_data_tgfx2(
                 material_phase,
                 draw_resources);
 
-            MeshRenderItemEncodeRequest encode_request{};
+            RenderItemDrawSubmitRequest encode_request{};
             encode_request.shader = skinned_shader.shader;
-            encode_request.vertex_input = MaterialMeshVertexInput::PositionNormal;
+            encode_request.mesh_vertex_input = MaterialMeshVertexInput::PositionNormal;
             encode_request.debug_pass_name = "NormalPass";
             encode_request.debug_entity_name = name;
-            if (!encode_mesh_render_item_draw(
+            if (!submit_render_item_draw(
                 *ctx.ctx2,
                 item,
                 encode_request)) {
