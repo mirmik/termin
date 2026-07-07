@@ -3,6 +3,7 @@
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
+#include "termin/render/render_item_mesh.hpp"
 #include "termin/render/shader_abi.hpp"
 #include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
@@ -139,6 +140,39 @@ void bind_draw_data_for_shader(
     tc::Log::error(
         "[ColorPass/tgfx2] shader '%s' is missing draw_data resource layout entry",
         shader && shader->name ? shader->name : "<unnamed>");
+}
+
+bool collect_color_mesh_render_item_for_draw(
+    tc_component* component,
+    const tc_render_item_collect_context& context,
+    int geometry_id,
+    const char* entity_name,
+    tc_render_item& out_item)
+{
+    std::vector<tc_render_item> items;
+    if (!collect_drawable_render_items(component, context, items)) {
+        return false;
+    }
+    for (const tc_render_item& item : items) {
+        if (item.kind == TC_RENDER_ITEM_KIND_MESH &&
+            item.geometry_id == geometry_id) {
+            out_item = item;
+            return true;
+        }
+    }
+
+    Drawable* drawable = nullptr;
+    if (tc_component_get_drawable_vtable(component) == &Drawable::cxx_drawable_vtable()) {
+        drawable = static_cast<Drawable*>(tc_component_get_drawable_userdata(component));
+    }
+    MeshDrawGeometry mesh_geometry{};
+    if (drawable && drawable->resolve_mesh_geometry(context.phase_mark, geometry_id, mesh_geometry)) {
+        tc::Log::error(
+            "[ColorPass/tgfx2] mesh drawable reached non-RenderItem path after migration for entity '%s' geometry=%d",
+            entity_name ? entity_name : "<unnamed>",
+            geometry_id);
+    }
+    return false;
 }
 
 } // anonymous namespace
@@ -840,8 +874,25 @@ void ColorPass::execute_with_data(
             continue;
         }
 
-        MeshDrawGeometry mesh_geometry{};
-        if (!drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, mesh_geometry)) {
+        tc_render_item_collect_context item_context{};
+        item_context.phase_mark = phase_mark.c_str();
+        item_context.layer_mask = layer_mask;
+        item_context.render_category_mask = ctx.render_category_mask;
+        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.pass_contract = &collect_context.pass_contract;
+
+        tc_render_item item{};
+        if (!collect_color_mesh_render_item_for_draw(
+                dc.component,
+                item_context,
+                dc.geometry_id,
+                ename,
+                item)) {
+            MeshDrawGeometry old_mesh_geometry{};
+            if (drawable->resolve_mesh_geometry(phase_mark, dc.geometry_id, old_mesh_geometry)) {
+                ++draw_index;
+                continue;
+            }
             if (!drawable->supports_direct_tgfx2_draw(
                     phase_mark, dc.geometry_id, DirectTgfx2DrawKind::MaterialPhase)) {
                 ++draw_index;
@@ -932,8 +983,6 @@ void ColorPass::execute_with_data(
             ++draw_index;
             continue;
         }
-
-        Mat44f model = drawable->get_model_matrix(dc.entity);
 
         // Prepare the shader through the shared material pipeline helper.
         // The helper owns artifact creation, shader binding, and active
@@ -1053,25 +1102,26 @@ void ColorPass::execute_with_data(
             float u_model[16];
         };
         ColorPushData push{};
-        std::memcpy(push.u_model, model.data, sizeof(push.u_model));
+        if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(push.u_model, item.model_matrix, sizeof(push.u_model));
+        } else {
+            Mat44f identity = Mat44f::identity();
+            std::memcpy(push.u_model, identity.data, sizeof(push.u_model));
+        }
         bind_draw_data_for_shader(*ctx2, raw_shader, push);
 
-        // Per-draw uniforms that can't live in push-constants or the
-        // material UBO yet — skinning bone matrices are the main case.
-        // Default implementation is a no-op for non-skinned drawables.
-        drawable->upload_per_draw_uniforms_tgfx2(*ctx2, dc.geometry_id);
-
-        // Issue the draw through the shared backend-neutral TcMesh path.
-        // It sets vertex layout/topology, wraps/uploads mesh buffers for the
-        // current backend, submits ctx2->draw(), then releases transient
-        // bindings.
-        draw_material_pipeline_submesh(
+        MeshRenderItemEncodeRequest encode_request{};
+        encode_request.shader = raw_shader;
+        encode_request.vertex_input = MaterialMeshVertexInput::FullMaterial;
+        encode_request.debug_pass_name = "ColorPass";
+        encode_request.debug_entity_name = ename;
+        if (!encode_mesh_render_item_draw(
             *ctx2,
-            mesh_geometry.mesh,
-            mesh_geometry.submesh_index,
-            material_mesh_vertex_input_for_shader(
-                raw_shader,
-                MaterialMeshVertexInput::FullMaterial));
+            item,
+            encode_request)) {
+            ++draw_index;
+            continue;
+        }
         capture_debug_symbol(ename);
         ++draw_index;
     }
