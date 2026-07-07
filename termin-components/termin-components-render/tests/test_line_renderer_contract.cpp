@@ -346,3 +346,75 @@ TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick p
     tc_mesh_shutdown();
     tc_material_shutdown();
 }
+
+TEST_CASE("LineRenderer emits direct modes as line batch render items") {
+    tc_material_init();
+    tc_shader_init();
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-render-items");
+    termin::Entity entity = scene.create_entity("line");
+
+    auto* renderer = new termin::LineRenderer();
+    renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
+    renderer->set_render_mode(termin::LineRenderMode::WorldBillboard);
+    renderer->set_width(0.25f);
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "opaque";
+    collect_context.debug_pass_name = "test";
+
+    std::vector<tc_render_item> items;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        items));
+
+    REQUIRE(items.size() == 1u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_LINE_BATCH);
+    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(items[0].geometry_id == 0);
+    CHECK(items[0].payload.line_batch.points != nullptr);
+    CHECK(items[0].payload.line_batch.point_count == 2u);
+    CHECK(items[0].payload.line_batch.width == 0.25f);
+    CHECK(items[0].payload.line_batch.render_mode ==
+          static_cast<uint32_t>(termin::LineRenderMode::WorldBillboard));
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
+
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
+    tc_material_init();
+    tc_shader_init();
+    tc_mesh_init();
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-mesh-render-items");
+    termin::Entity entity = scene.create_entity("line");
+
+    auto* renderer = new termin::LineRenderer();
+    renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
+    renderer->set_render_mode(termin::LineRenderMode::WorldMesh);
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "opaque";
+    collect_context.debug_pass_name = "test";
+
+    std::vector<tc_render_item> items;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        items));
+
+    REQUIRE(items.size() == 1u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(items[0].payload.mesh.mesh != nullptr);
+
+    tc_mesh_shutdown();
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}

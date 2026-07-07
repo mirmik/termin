@@ -142,7 +142,7 @@ void bind_draw_data_for_shader(
         shader && shader->name ? shader->name : "<unnamed>");
 }
 
-bool collect_color_mesh_render_item_for_draw(
+bool collect_color_render_item_for_draw(
     tc_component* component,
     const tc_render_item_collect_context& context,
     int geometry_id,
@@ -154,8 +154,7 @@ bool collect_color_mesh_render_item_for_draw(
         return false;
     }
     for (const tc_render_item& item : items) {
-        if (item.kind == TC_RENDER_ITEM_KIND_MESH &&
-            item.geometry_id == geometry_id) {
+        if (item.geometry_id == geometry_id) {
             out_item = item;
             return true;
         }
@@ -882,7 +881,7 @@ void ColorPass::execute_with_data(
         item_context.pass_contract = &collect_context.pass_contract;
 
         tc_render_item item{};
-        if (!collect_color_mesh_render_item_for_draw(
+        if (!collect_color_render_item_for_draw(
                 dc.component,
                 item_context,
                 dc.geometry_id,
@@ -980,6 +979,89 @@ void ColorPass::execute_with_data(
             // passes (UnifiedGizmoPass, ColliderGizmoPass, ...), not
             // in ColorPass. Stage 8.1 removed the path that ran them
             // through shader.use() + draw_geometry.
+            ++draw_index;
+            continue;
+        }
+
+        if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+            RenderState state = convert_render_state(phase->state);
+            if (wireframe) state.polygon_mode = PolygonMode::Line;
+
+            ctx2->clear_resource_bindings();
+            ctx2->set_depth_test(state.depth_test);
+            ctx2->set_depth_write(state.depth_write);
+            ctx2->set_blend(state.blend);
+            ctx2->set_blend_func(convert_blend_factor_tgfx2(state.blend_src),
+                                 convert_blend_factor_tgfx2(state.blend_dst));
+            ctx2->set_cull(state.cull ? tgfx::CullMode::Back : tgfx::CullMode::None);
+            ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
+                                   ? tgfx::PolygonMode::Line
+                                   : tgfx::PolygonMode::Fill);
+
+            if (!shadow_sampler_) {
+                tgfx::SamplerDesc sd;
+                sd.min_filter = tgfx::FilterMode::Nearest;
+                sd.mag_filter = tgfx::FilterMode::Nearest;
+                sd.mip_filter = tgfx::FilterMode::Nearest;
+                sd.address_u = tgfx::AddressMode::ClampToEdge;
+                sd.address_v = tgfx::AddressMode::ClampToEdge;
+                sd.address_w = tgfx::AddressMode::ClampToEdge;
+                sd.compare_enable = true;
+                sd.compare_op = tgfx::CompareOp::LessEqual;
+                shadow_sampler_ = device.create_sampler(sd);
+            }
+
+            RenderContext direct_context;
+            direct_context.view = view;
+            direct_context.projection = projection;
+            direct_context.model = drawable->get_model_matrix(dc.entity);
+            direct_context.phase = phase_mark;
+            direct_context.pass_contract = color_material_pass_contract();
+            direct_context.current_tc_shader = TcShader(final_shader);
+            direct_context.layer_mask = layer_mask;
+            direct_context.render_category_mask = ctx.render_category_mask;
+            direct_context.camera_position = camera_position;
+            direct_context.viewport_width = rect.width;
+            direct_context.viewport_height = rect.height;
+            direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
+            direct_context.prepare_tgfx2_material_resources =
+                [this,
+                 &device,
+                 &material_resources,
+                 &ctx](
+                    tgfx::RenderContext2& draw_ctx,
+                    const tc_shader* shader,
+                    tc_material_phase* live_phase) {
+                    if (!shader || !live_phase) {
+                        tc::Log::error(
+                            "[ColorPass/tgfx2] RenderItem resource callback called without shader or phase");
+                        return;
+                    }
+
+                    MaterialPipelineResourceView direct_resources = material_resources;
+                    direct_resources.shadow_sampler = shadow_sampler_;
+                    prepare_material_pipeline_resources(
+                        draw_ctx,
+                        device,
+                        shader,
+                        live_phase,
+                        direct_resources);
+
+                    if (!extra_textures.empty()) {
+                        bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
+                    }
+                };
+
+            RenderItemDrawSubmitRequest submit_request{};
+            submit_request.shader = tc_shader_get(final_shader);
+            submit_request.draw_context = &direct_context;
+            submit_request.material_phase = phase;
+            submit_request.phase_mark = phase_mark.c_str();
+            submit_request.debug_pass_name = get_pass_name().c_str();
+            submit_request.debug_entity_name = ename;
+            if (submit_render_item_draw(*ctx2, item, submit_request)) {
+                capture_debug_symbol(ename);
+            }
             ++draw_index;
             continue;
         }

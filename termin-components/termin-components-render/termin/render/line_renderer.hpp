@@ -10,6 +10,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/render/drawable.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
@@ -53,7 +54,7 @@ private:
 
     static TcMaterial default_material();
     TcMaterial effective_material() const;
-    LineRenderMode effective_render_mode() const;
+    bool effective_render_mode(LineRenderMode& mode) const;
     void rebuild_geometry();
     void ensure_geometry();
     tc_mesh* current_mesh_ptr() const;
@@ -104,11 +105,19 @@ public:
         const std::function<void(TcShader)>& emit
     ) override;
     void draw_geometry(const RenderContext& context, int geometry_id = 0) override;
+    bool collect_render_items(
+        const tc_render_item_collect_context& context,
+        tc_render_item_sink& sink
+    ) override;
     bool draw_tgfx2(tgfx::RenderContext2& ctx2,
                     const RenderContext& context,
                     const std::string& phase_mark,
                     tc_material_phase* phase,
                     int geometry_id = 0) override;
+    bool encode_render_item_tgfx2(
+        tgfx::RenderContext2& ctx2,
+        const tc_render_item& item,
+        const RenderItemDrawSubmitRequest& request);
     bool needs_lighting_ubo_tgfx2(const std::string& phase_mark, int geometry_id) const override;
     bool supports_direct_tgfx2_draw(
         const std::string& phase_mark,
