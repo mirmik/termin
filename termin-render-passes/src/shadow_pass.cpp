@@ -307,7 +307,7 @@ bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
     return true;
 }
 
-bool collect_shadow_mesh_render_item_for_draw(
+bool collect_shadow_render_item_for_draw(
     tc_component* component,
     const tc_render_item_collect_context& context,
     int geometry_id,
@@ -319,8 +319,7 @@ bool collect_shadow_mesh_render_item_for_draw(
         return false;
     }
     for (const tc_render_item& item : items) {
-        if (item.kind == TC_RENDER_ITEM_KIND_MESH &&
-            item.geometry_id == geometry_id) {
+        if (item.geometry_id == geometry_id) {
             out_item = item;
             return true;
         }
@@ -683,7 +682,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 item_context.pass_contract = &pass_contract;
 
                 tc_render_item item{};
-                if (!collect_shadow_mesh_render_item_for_draw(
+                if (!collect_shadow_render_item_for_draw(
                         dc.component,
                         item_context,
                         dc.geometry_id,
@@ -708,6 +707,41 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
                     drawable->draw_tgfx2(
                         *ctx.ctx2, direct_context, "shadow", phase, dc.geometry_id);
+                    capture_debug_symbol(dc.entity.name());
+                    restore_shadow_raster_state();
+                    ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
+                    ctx.ctx2->use_shader_resource_layout(shadow_shader.shader);
+                    prepare_material_pipeline_resources(
+                        *ctx.ctx2,
+                        device,
+                        shadow_shader.shader,
+                        nullptr,
+                        shadow_resources);
+                    continue;
+                }
+
+                if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+                    RenderContext direct_context;
+                    direct_context.view = view_matrix;
+                    direct_context.projection = proj_matrix;
+                    direct_context.model = drawable->get_model_matrix(dc.entity);
+                    direct_context.phase = "shadow";
+                    direct_context.pass_contract = shadow_material_pass_contract();
+                    direct_context.current_tc_shader = TcShader(dc.final_shader);
+                    direct_context.layer_mask = layer_mask;
+                    direct_context.render_category_mask = ctx.render_category_mask;
+                    direct_context.camera_position = shadow_camera_position(params);
+                    direct_context.viewport_width = resolution;
+                    direct_context.viewport_height = resolution;
+
+                    RenderItemDrawSubmitRequest submit_request{};
+                    submit_request.shader = tc_shader_get(dc.final_shader);
+                    submit_request.draw_context = &direct_context;
+                    submit_request.material_phase = phase;
+                    submit_request.phase_mark = "shadow";
+                    submit_request.debug_pass_name = "ShadowPass";
+                    submit_request.debug_entity_name = dc.entity.name();
+                    submit_render_item_draw(*ctx.ctx2, item, submit_request);
                     capture_debug_symbol(dc.entity.name());
                     restore_shadow_raster_state();
                     ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);

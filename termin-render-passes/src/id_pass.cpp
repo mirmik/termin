@@ -480,6 +480,63 @@ void IdPass::execute_with_data_tgfx2(
             id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
 
+        tc_render_item_collect_context item_context{};
+        item_context.phase_mark = pick_phase;
+        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+        item_context.layer_mask = layer_mask;
+        item_context.render_category_mask = ctx.render_category_mask;
+        item_context.debug_pass_name = get_pass_name().c_str();
+        item_context.pass_contract = &pass_contract;
+
+        std::vector<tc_render_item> direct_items;
+        if (collect_drawable_render_items(dc.component, item_context, direct_items)) {
+            bool submitted_typed_item = false;
+            for (const tc_render_item& item : direct_items) {
+                if (item.geometry_id != dc.geometry_id ||
+                    item.kind == TC_RENDER_ITEM_KIND_MESH) {
+                    continue;
+                }
+
+                RenderContext direct_context;
+                direct_context.view = view;
+                direct_context.projection = projection;
+                direct_context.model = drawable->get_model_matrix(dc.entity);
+                direct_context.phase = pick_phase;
+                direct_context.pass_contract = pass_contract;
+                direct_context.current_tc_shader = TcShader(dc.final_shader);
+                direct_context.layer_mask = layer_mask;
+                direct_context.render_category_mask = ctx.render_category_mask;
+                direct_context.camera_position = camera_position;
+                direct_context.viewport_width = rect.width;
+                direct_context.viewport_height = rect.height;
+                direct_context.has_override_color = true;
+                direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
+
+                RenderItemDrawSubmitRequest submit_request{};
+                submit_request.shader = tc_shader_get(dc.final_shader);
+                submit_request.draw_context = &direct_context;
+                submit_request.material_phase = item.material_phase;
+                submit_request.phase_mark = pick_phase;
+                submit_request.debug_pass_name = get_pass_name().c_str();
+                submit_request.debug_entity_name = name;
+                submit_render_item_draw(*ctx.ctx2, item, submit_request);
+                capture_debug_symbol(name);
+                restore_id_raster_state();
+                ctx.ctx2->clear_resource_bindings();
+                prepare_material_pipeline_resources(
+                    *ctx.ctx2,
+                    device,
+                    id_shader.shader,
+                    nullptr,
+                    id_resources);
+                submitted_typed_item = true;
+                break;
+            }
+            if (submitted_typed_item) {
+                continue;
+            }
+        }
+
         MeshDrawGeometry mesh_geometry{};
         if (drawable->resolve_mesh_geometry(pick_phase, dc.geometry_id, mesh_geometry)) {
             tc::Log::error(
