@@ -9,11 +9,13 @@ GUARD_TEST_MAIN();
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/world_text_component.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
 
 extern "C" {
 #include <core/tc_drawable_protocol.h>
+#include <tgfx/resources/tc_material_registry.h>
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_shader_registry.h>
 }
@@ -232,4 +234,254 @@ TEST_CASE("MeshRenderer geometry ids are permissive for pass phase labels") {
     CHECK((*ids)[1] == 1);
 
     tc_mesh_shutdown();
+}
+
+TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
+    tc_material_init();
+    tc_mesh_init();
+
+    tc_material_handle material_handle = tc_material_create(
+        "mesh-renderer-render-item-material",
+        "mesh-renderer-render-item-material");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    tc_material_phase* phase = tc_material_add_phase(
+        material,
+        tc_shader_handle_invalid(),
+        "opaque",
+        11);
+    REQUIRE(phase != nullptr);
+
+    termin::TcMesh mesh = make_two_submesh_mesh();
+    REQUIRE(mesh.is_valid());
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("mesh-renderer-render-items");
+    termin::Entity entity = scene.create_entity("mesh");
+
+    auto* mesh_component = new termin::MeshComponent();
+    mesh_component->set_mesh(mesh);
+    entity.add_component(mesh_component);
+
+    auto* renderer = new termin::MeshRenderer();
+    renderer->set_material(termin::TcMaterial(material_handle));
+    renderer->set_material_slot(1, termin::TcMaterial(material_handle));
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "opaque";
+    collect_context.debug_pass_name = "test";
+
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    const std::vector<tc_render_item>& items = collection.items;
+    REQUIRE(items.size() == 2u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(items[0].geometry_id == 0);
+    CHECK(items[0].material_phase == phase);
+    CHECK(items[0].payload.mesh.mesh == mesh.get());
+    CHECK(items[0].payload.mesh.submesh_index == 0u);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
+
+    CHECK(items[1].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[1].geometry_id == 1);
+    CHECK(items[1].material_phase == phase);
+    CHECK(items[1].payload.mesh.mesh == mesh.get());
+    CHECK(items[1].payload.mesh.submesh_index == 1u);
+
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick passes") {
+    tc_material_init();
+    tc_mesh_init();
+
+    tc_material_handle material_handle = tc_material_create(
+        "mesh-renderer-render-item-opaque-only",
+        "mesh-renderer-render-item-opaque-only");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    REQUIRE(tc_material_add_phase(
+        material,
+        tc_shader_handle_invalid(),
+        "opaque",
+        0) != nullptr);
+
+    termin::TcMesh mesh = make_two_submesh_mesh();
+    REQUIRE(mesh.is_valid());
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("mesh-renderer-render-items-pick");
+    termin::Entity entity = scene.create_entity("mesh");
+
+    auto* mesh_component = new termin::MeshComponent();
+    mesh_component->set_mesh(mesh);
+    entity.add_component(mesh_component);
+
+    auto* renderer = new termin::MeshRenderer();
+    renderer->set_material(termin::TcMaterial(material_handle));
+    renderer->set_material_slot(1, termin::TcMaterial(material_handle));
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "pick";
+    collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+    collect_context.debug_pass_name = "IdPass";
+
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    const std::vector<tc_render_item>& items = collection.items;
+    REQUIRE(items.size() == 2u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[0].material_phase == nullptr);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
+    CHECK(items[1].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[1].material_phase == nullptr);
+    CHECK((items[1].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
+
+    tc_mesh_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("LineRenderer emits direct modes as line batch render items") {
+    tc_material_init();
+    tc_shader_init();
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-render-items");
+    termin::Entity entity = scene.create_entity("line");
+
+    auto* renderer = new termin::LineRenderer();
+    renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
+    renderer->set_render_mode(termin::LineRenderMode::WorldBillboard);
+    renderer->set_width(0.25f);
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "opaque";
+    collect_context.debug_pass_name = "test";
+
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    const std::vector<tc_render_item>& items = collection.items;
+    REQUIRE(items.size() == 1u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_LINE_BATCH);
+    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(items[0].geometry_id == 0);
+    CHECK(items[0].payload.line_batch.points != nullptr);
+    CHECK(items[0].payload.line_batch.point_count == 2u);
+    CHECK(items[0].payload.line_batch.width == 0.25f);
+    CHECK(items[0].payload.line_batch.render_mode ==
+          static_cast<uint32_t>(termin::LineRenderMode::WorldBillboard));
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) != 0u);
+
+    const tc_render_item_vec3* collected_points = items[0].payload.line_batch.points;
+    renderer->set_points({tc_vec3{5, 0, 0}, tc_vec3{6, 0, 0}});
+    REQUIRE(items[0].payload.line_batch.points == collected_points);
+    CHECK(items[0].payload.line_batch.points[0].x == 0.0);
+    CHECK(items[0].payload.line_batch.points[1].x == 1.0);
+
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
+    tc_material_init();
+    tc_shader_init();
+    tc_mesh_init();
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-mesh-render-items");
+    termin::Entity entity = scene.create_entity("line");
+
+    auto* renderer = new termin::LineRenderer();
+    renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
+    renderer->set_render_mode(termin::LineRenderMode::WorldMesh);
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "opaque";
+    collect_context.debug_pass_name = "test";
+
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    const std::vector<tc_render_item>& items = collection.items;
+    REQUIRE(items.size() == 1u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(items[0].component == renderer->tc_component_ptr());
+    CHECK(items[0].payload.mesh.mesh != nullptr);
+
+    tc_mesh_shutdown();
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("WorldTextComponent emits text batch render items with owned text payload") {
+    tc_material_init();
+    tc_shader_init();
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("world-text-render-items");
+    termin::Entity entity = scene.create_entity("label");
+
+    auto* text = new termin::WorldTextComponent();
+    text->set_text("hello");
+    text->set_phase_mark("transparent");
+    text->set_size(0.75f);
+    text->set_anchor(termin::WorldTextAnchor::Right);
+    text->set_orientation(termin::WorldTextOrientation::Fixed);
+    text->set_local_offset(termin::Vec3{1.0, 2.0, 3.0});
+    entity.add_component(text);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "transparent";
+    collect_context.debug_pass_name = "ColorPass";
+
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        text->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    REQUIRE(collection.items.size() == 1u);
+    const tc_render_item& item = collection.items[0];
+    CHECK(item.kind == TC_RENDER_ITEM_KIND_TEXT_BATCH);
+    CHECK(item.component == text->tc_component_ptr());
+    CHECK(item.geometry_id == 0);
+    CHECK(item.material_phase != nullptr);
+    REQUIRE(item.payload.text_batch.text != nullptr);
+    CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
+    CHECK(item.payload.text_batch.size == 0.75f);
+    CHECK(item.payload.text_batch.anchor ==
+          static_cast<uint32_t>(termin::WorldTextAnchor::Right));
+    CHECK(item.payload.text_batch.orientation ==
+          static_cast<uint32_t>(termin::WorldTextOrientation::Fixed));
+    CHECK(item.payload.text_batch.local_offset.x == 1.0);
+    CHECK(item.payload.text_batch.local_offset.y == 2.0);
+    CHECK(item.payload.text_batch.local_offset.z == 3.0);
+
+    const char* collected_text = item.payload.text_batch.text;
+    text->set_text("changed");
+    REQUIRE(item.payload.text_batch.text == collected_text);
+    CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
+
+    tc_shader_shutdown();
+    tc_material_shutdown();
 }
