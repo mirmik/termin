@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Callable
 
-import numpy as np
-
 from tcbase import log
 from tcbase._geom_native import Vec3, Vec4
 
