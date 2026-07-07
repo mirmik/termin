@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import numpy as np
-
+from termin.geombase import Vec3
 from termin.input import InputComponent
 from termin.render_components import (
     CameraComponent,
@@ -41,6 +40,6 @@ class CameraController(InputComponent):
     def zoom(self, delta: float):
         return
 
-    def center_on(self, position: np.ndarray) -> None:
+    def center_on(self, position: Vec3) -> None:
         """Center camera on position."""
         return
