@@ -15,7 +15,7 @@ from termin.materials import TcMaterial as Material
 from termin.mesh import TcMesh
 from termin.mesh.mesh import Mesh3
 from termin.voxels.voxel_mesh import create_voxel_mesh
-from termin.render.drawable import GeometryDrawCall
+from termin.render.drawable import RenderItem, RenderItemCollectContext
 from termin.inspect import InspectField
 from termin.navmesh.inspect_fields import (
     make_button_field,
@@ -30,7 +30,6 @@ from tcbase import log
 
 if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
-    from termin.render_framework import RenderContext
     from termin.voxels.grid import VoxelGrid
 
 
@@ -197,17 +196,9 @@ class VoxelizerComponent(DrawableComponent):
         """Фазы рендеринга для отладочной визуализации."""
         return self._debug_draw.phase_marks(self)
 
-    def draw_geometry(self, context: "RenderContext", _geometry_id: int = 0) -> None:
-        """Рисует отладочную геометрию."""
-        pass
-
-    def get_geometry_draws(
-        self,
-        context: "RenderContext",
-        phase_mark: str | None = None,
-    ) -> List[GeometryDrawCall]:
-        """Возвращает GeometryDrawCalls для отладочного рендеринга."""
-        return self._debug_draw.get_geometry_draws(self, context, phase_mark)
+    def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
+        """Возвращает RenderItems для отладочного рендеринга."""
+        return self._debug_draw.collect_render_items(self, context.phase_mark)
 
     def _get_or_create_debug_material(self) -> Material:
         """Создаёт материал для отладочной визуализации."""
