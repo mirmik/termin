@@ -581,7 +581,7 @@ void ColorPass::sort_draw_calls() {
 
 void ColorPass::execute_with_data(
     ExecuteContext& ctx,
-    const Rect4i& rect,
+    const Rect2i& rect,
     tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
@@ -1113,7 +1113,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
     // shader is bound so the active pass owns the texture bindings.
 
     // Get output size from the tgfx2 color texture and update rect.
-    Rect4i rect = ctx.render_rect;
+    Rect2i rect = ctx.render_rect;
     if (ctx.ctx2) {
         auto it = ctx.tex2_writes.find(output_res);
         if (it != ctx.tex2_writes.end() && it->second) {
@@ -1121,7 +1121,7 @@ void ColorPass::execute(ExecuteContext& ctx) {
             int w = static_cast<int>(desc.width);
             int h = static_cast<int>(desc.height);
             if (w > 0 && h > 0) {
-                rect = Rect4i{0, 0, w, h};
+                rect = Rect2i{0, 0, w, h};
                 if (!camera_name.empty()) {
                     CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
                     if (named_camera) {

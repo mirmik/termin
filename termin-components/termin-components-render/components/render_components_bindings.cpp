@@ -70,8 +70,8 @@ nb::object init_pass_from_deserialize(T* pass, const char* type_name) {
     return wrapper;
 }
 
-static Rect4i tuple_to_rect(nb::tuple rect_py) {
-    Rect4i rect;
+static Rect2i tuple_to_rect(nb::tuple rect_py) {
+    Rect2i rect;
     rect.x = nb::cast<int>(rect_py[0]);
     rect.y = nb::cast<int>(rect_py[1]);
     rect.width = nb::cast<int>(rect_py[2]);
