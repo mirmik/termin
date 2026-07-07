@@ -299,7 +299,7 @@ class DollLink2D:
         if not self.inertia or self.twist is None:
             return None
 
-        ω = float(self.twist.ang.flatten()[0])
+        ω = float(self.twist.ang)
         v = self.twist.lin
 
         # если скорости нулевые — можно не считать
@@ -307,7 +307,7 @@ class DollLink2D:
             return None
 
         # Центр масс в мировой СК
-        r_c = self.pose.rotation_matrix() @ self.inertia.com  # com — в локальной СК
+        r_c = np.asarray(self.pose.rotation_matrix()) @ self.inertia.com  # com — в локальной СК
 
         # Скорость центра масс
         v_c = v + ω * np.array([-r_c[1], r_c[0]])
@@ -465,7 +465,7 @@ class DollRotatorJoint2D(DollJoint2D):
         S = np.array([1.0, 0.0, 0.0])  # [ω, vx, vy]
 
         # Преобразуем ось в систему родителя
-        R = self.joint_pose_in_parent.rotation_matrix()
+        R = np.asarray(self.joint_pose_in_parent.rotation_matrix())
         S_world = np.array([S[0], *(R @ S[1:])])  # [ω, vx, vy]
 
         # Spatial inertia в матричном виде
