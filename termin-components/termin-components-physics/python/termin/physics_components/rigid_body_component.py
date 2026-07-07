@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from termin.scene import PythonComponent
 from termin.physics._physics_native import PhysicsWorld, RigidBody
 from termin.geombase import GeneralPose3, Pose3, Vec3
@@ -9,7 +10,6 @@ from termin.inspect import InspectField
 
 from typing import TYPE_CHECKING, Optional
 import warnings
-import numpy as np
 
 if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
@@ -68,7 +68,7 @@ class RigidBodyComponent(PythonComponent):
         self.friction = friction
         self._body_index: int = -1
         self._physics_world: Optional[PhysicsWorld] = None
-        self._half_extents: np.ndarray = np.array([0.5, 0.5, 0.5])
+        self._half_extents = Vec3(0.5, 0.5, 0.5)
 
     def start(self):
         super().start()
@@ -90,7 +90,7 @@ class RigidBodyComponent(PythonComponent):
         t = self.entity.transform.parent
         while t is not None:
             scale = t.local_pose().scale
-            if not np.allclose(scale, [1.0, 1.0, 1.0], atol=1e-6):
+            if not scale.approx_eq(Vec3(1.0, 1.0, 1.0), 1e-6):
                 warnings.warn(
                     f"RigidBodyComponent on '{self.entity.name}' has ancestor "
                     f"'{t.name}' with scale {scale}. Physics may behave incorrectly.",
@@ -100,11 +100,11 @@ class RigidBodyComponent(PythonComponent):
                 break
             t = t.parent
 
-    def _compute_half_extents(self) -> np.ndarray:
+    def _compute_half_extents(self) -> Vec3:
         if self.entity is None:
-            return np.array([0.5, 0.5, 0.5])
+            return Vec3(0.5, 0.5, 0.5)
 
-        global_scale = np.asarray(self.entity.transform.global_pose().scale)
+        global_scale = self.entity.transform.global_pose().scale
 
         from termin.colliders.collider_component import ColliderComponent
         from termin.colliders import BoxCollider, SphereCollider
@@ -114,13 +114,13 @@ class RigidBodyComponent(PythonComponent):
             collider = collider_comp.collider
             if isinstance(collider, BoxCollider):
                 hs = collider.half_size
-                return np.array([hs.x, hs.y, hs.z]) * global_scale
+                return _componentwise_mul(hs, global_scale)
             if isinstance(collider, SphereCollider):
                 r = collider.radius
-                max_scale = np.max(global_scale)
-                return np.array([r, r, r]) * max_scale
+                max_scale = max(global_scale.x, global_scale.y, global_scale.z)
+                return Vec3(r * max_scale, r * max_scale, r * max_scale)
 
-        return np.array([0.5, 0.5, 0.5]) * global_scale
+        return _componentwise_mul(Vec3(0.5, 0.5, 0.5), global_scale)
 
     def _find_and_register_with_physics_world(self, scene: "Scene"):
         if self._body_index >= 0:
@@ -184,7 +184,7 @@ class RigidBodyComponent(PythonComponent):
         cpp_body.linear_velocity = Vec3(0, 0, 0)
         cpp_body.angular_velocity = Vec3(0, 0, 0)
 
-    def apply_impulse(self, impulse: np.ndarray, point: Optional[np.ndarray] = None):
+    def apply_impulse(self, impulse: Sequence[float], point: Optional[Sequence[float]] = None):
         if self._body_index < 0 or self._physics_world is None:
             return
 
@@ -205,3 +205,7 @@ class RigidBodyComponent(PythonComponent):
 
     def update(self, dt: float):
         self._sync_from_physics()
+
+
+def _componentwise_mul(a: Vec3, b: Vec3) -> Vec3:
+    return Vec3(a.x * b.x, a.y * b.y, a.z * b.z)

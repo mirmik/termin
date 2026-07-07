@@ -1,5 +1,4 @@
 import termin.ga201.join as join
-import numpy as np
 from itertools import combinations
 from scipy.spatial import ConvexHull
 
@@ -104,8 +103,7 @@ class ConvexBody2:
                 if self.is_internal_point(proj):
                     candidates.append(proj)
 
-        distances = [join.distance_point_point(point, candidate).to_float() for candidate in candidates]
-        min_distance_index = np.argmin(distances)
+        min_distance_index = _index_of_min_distance(point, candidates)
         return candidates[min_distance_index]
 
 
@@ -118,6 +116,14 @@ class ConvexWorld2:
         for body in self.bodies:
             candidates.append(body.point_projection(point))
 
-        distances = [join.distance_point_point(point, candidate).to_float() for candidate in candidates]
-        min_distance_index = np.argmin(distances)
+        min_distance_index = _index_of_min_distance(point, candidates)
         return candidates[min_distance_index]
+
+
+def _index_of_min_distance(point, candidates):
+    if not candidates:
+        raise ValueError("No projection candidates")
+    return min(
+        range(len(candidates)),
+        key=lambda i: join.distance_point_point(point, candidates[i]).to_float(),
+    )
