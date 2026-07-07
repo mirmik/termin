@@ -42,7 +42,7 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 
 - `termin-base/python/bindings/geom/{vec3,quat,pose3,general_pose3,mat44,aabb,screw3}.cpp`: legacy ndarray constructors, setters, matrix returns, and homogeneous vector overloads; migrate call sites to `Vec3`, `Quat`, `Mat44` methods first.
 - `termin-scene/cpp/bindings/transform_bindings.cpp` and `termin-scene/include/termin/bindings/entity_helpers.hpp`: transform point/vector APIs return NumPy arrays; good candidate for `Vec3` returns after Python call sites are updated.
-- `termin-collision/cpp/bindings/colliders_bindings.cpp`: `Ray3` ndarray constructor is easy; corner/axis bulk returns are buffer-like and lower priority.
+- `termin-collision/cpp/bindings/colliders_bindings.cpp`: `Ray3` moved to base geometry; corner/axis bulk returns are buffer-like and lower priority.
 - `termin-render-passes/python/render_passes_bindings.cpp`: `ShadowCameraParams` and matrix helpers are Mat44/Vec3 candidates; pass/debug buffer outputs should stay ndarray for now.
 - `termin-app/cpp/termin/bindings/{editor/gizmo_bindings.cpp,render/solid_primitive.cpp}`: editor/render helper APIs take Mat44/Vec3 ndarray arguments; migrate together with editor Python call sites.
 - `termin-graphics`, `termin-mesh`, `termin-voxels`, `termin-navmesh`, `tcplot`: mostly mesh, texture, plot, or dense voxel buffers; keep ndarray unless a non-NumPy buffer/list API is designed.

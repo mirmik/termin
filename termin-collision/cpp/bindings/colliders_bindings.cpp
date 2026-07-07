@@ -13,32 +13,11 @@ namespace nb = nanobind;
 using namespace termin;
 using namespace termin::colliders;
 
-// Helper to create Vec3 from numpy array
-static Vec3 numpy_to_vec3(nb::ndarray<double, nb::c_contig, nb::device::cpu> arr) {
-    double* ptr = arr.data();
-    return Vec3{ptr[0], ptr[1], ptr[2]};
-}
-
 NB_MODULE(_colliders_native, m) {
     m.doc() = "Native C++ colliders module for termin";
 
-    // Import _geom_native for Vec3, Quat, Pose3, GeneralPose3
+    // Import _geom_native for Vec3, Quat, Pose3, GeneralPose3, Ray3
     nb::module_::import_("tcbase._geom_native");
-
-    // ==================== Ray3 ====================
-
-    nb::class_<Ray3>(m, "Ray3")
-        .def(nb::init<>())
-        .def(nb::init<const Vec3&, const Vec3&>(),
-             nb::arg("origin"), nb::arg("direction"))
-        .def("__init__", [](Ray3* self,
-                           nb::ndarray<double, nb::c_contig, nb::device::cpu> origin,
-                           nb::ndarray<double, nb::c_contig, nb::device::cpu> direction) {
-            new (self) Ray3(numpy_to_vec3(origin), numpy_to_vec3(direction));
-        }, nb::arg("origin"), nb::arg("direction"))
-        .def_rw("origin", &Ray3::origin)
-        .def_rw("direction", &Ray3::direction)
-        .def("point_at", &Ray3::point_at, nb::arg("t"));
 
     // ==================== Результаты запросов ====================
 
