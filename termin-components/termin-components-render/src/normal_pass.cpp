@@ -160,11 +160,16 @@ void NormalPass::execute_with_data_tgfx2(
     NormalPerFrameStd140 per_frame{};
     std::memcpy(per_frame.u_view, view.data, sizeof(float) * 16);
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
-    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
-        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
+        {
+            tc_shader_find_resource_binding(normal_shader.shader, "per_frame"),
+            &per_frame,
+            static_cast<uint32_t>(sizeof(per_frame)),
+        },
     }};
-    MaterialPipelineResourceContext normal_resources{};
-    normal_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineResourceView normal_resources{};
+    normal_resources.uniforms = per_frame_uniforms.data();
+    normal_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,

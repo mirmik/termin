@@ -240,6 +240,37 @@ The pass still owns:
 
 The contract declares requirements. It does not own the data.
 
+## Runtime Resource Views
+
+Material-pipeline assembly contracts may remain C++ convenience objects. They
+are authoring/assembly data used to build `tc_shader_contract`, validate
+interfaces, and report diagnostics.
+
+Runtime submit/resource data must use C-like views and packets:
+
+- no `std::string`, `std::vector`, `std::optional`, or `std::span` in the
+  pass/task/material submit boundary;
+- arrays are passed as `ptr + count`;
+- optional fields use null handles/pointers plus explicit counts/sizes;
+- migrated uniform and texture uploads carry resolved
+  `tc_shader_resource_binding*` or a later compact binding id, not resource
+  names;
+- bind-by-name remains only a compatibility/debug/authoring path.
+
+Current bridge type:
+
+```cpp
+MaterialPipelineResourceView
+  per_frame pointer
+  uniform uploads: tc_shader_resource_binding* + data + size
+  texture uploads: tc_shader_resource_binding* + texture/sampler + array index
+  shadow/lighting/material phase views
+```
+
+`MaterialPipelineResourceContext` is transitional C++ convenience around this
+view. New `RenderTask` and shared submission APIs should be designed directly
+around the C-like view shape, not around the compatibility context.
+
 ## Material Pipeline Assembly
 
 The assembler flow:
@@ -441,6 +472,10 @@ must be explicit:
   that into resolved shader layout metadata, propagates it into
   `BackendBindingPlanEntry`, and D3D11 binding uses the flag instead of
   resource names.
+- Runtime material resource submission now has a C-like
+  `MaterialPipelineResourceView`. The old `MaterialPipelineResourceContext`
+  remains as a compatibility wrapper and is not the target task/submit
+  boundary.
 
 ## Validation
 

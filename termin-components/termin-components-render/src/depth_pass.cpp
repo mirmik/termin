@@ -225,11 +225,16 @@ void DepthPass::execute_with_data_tgfx2(
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
     per_frame.u_depth_encoding = depth_encoding_mode(depth_encoding);
-    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
-        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
+        {
+            tc_shader_find_resource_binding(depth_shader.shader, "per_frame"),
+            &per_frame,
+            static_cast<uint32_t>(sizeof(per_frame)),
+        },
     }};
-    MaterialPipelineResourceContext depth_resources{};
-    depth_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineResourceView depth_resources{};
+    depth_resources.uniforms = per_frame_uniforms.data();
+    depth_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,
@@ -772,11 +777,16 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
     std::memcpy(per_frame.u_projection, projection.data, sizeof(float) * 16);
     per_frame.u_near = near_plane;
     per_frame.u_far = far_plane;
-    std::array<MaterialPipelineUniformData, 1> per_frame_uniforms{{
-        {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
+    std::array<MaterialPipelineUniformUpload, 1> per_frame_uniforms{{
+        {
+            tc_shader_find_resource_binding(depth_shader.shader, "per_frame"),
+            &per_frame,
+            static_cast<uint32_t>(sizeof(per_frame)),
+        },
     }};
-    MaterialPipelineResourceContext depth_resources{};
-    depth_resources.uniforms = per_frame_uniforms;
+    MaterialPipelineResourceView depth_resources{};
+    depth_resources.uniforms = per_frame_uniforms.data();
+    depth_resources.uniform_count = static_cast<uint32_t>(per_frame_uniforms.size());
     prepare_material_pipeline_resources(
         *ctx.ctx2,
         device,

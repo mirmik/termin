@@ -692,7 +692,7 @@ bool FoliageLayerComponent::draw_tgfx2(
             context.camera ? static_cast<float>(context.camera->near_clip) : 0.1f,
             context.camera ? static_cast<float>(context.camera->far_clip) : 100.0f);
 
-        MaterialPipelineResourceContext material_resources{};
+        MaterialPipelineResourceView material_resources{};
         material_resources.per_frame = &per_frame;
         prepare_material_pipeline_resources(
             ctx2,

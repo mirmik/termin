@@ -239,7 +239,7 @@ void MaterialPass::execute(ExecuteContext& ctx) {
     ctx2->use_shader_resource_layout(shader_binding.shader);
 
     EnginePerFrameStd140 per_frame = make_engine_per_frame_uniforms(ctx);
-    MaterialPipelineResourceContext material_resources{};
+    MaterialPipelineResourceView material_resources{};
     material_resources.per_frame = &per_frame;
     prepare_material_pipeline_resources(
         *ctx2,
