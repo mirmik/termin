@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, List
-import numpy as np
 
 from termin.scene import PythonComponent
 from termin.geombase._geom_native import Vec3
@@ -73,7 +73,7 @@ class PhysicsWorldComponent(PythonComponent):
 
     def __init__(
         self,
-        gravity: np.ndarray | None = None,
+        gravity: Vec3 | Sequence[float] | None = None,
         iterations: int = 10,
         restitution: float = 0.3,
         friction: float = 0.5,
@@ -83,10 +83,10 @@ class PhysicsWorldComponent(PythonComponent):
         super().__init__(enabled=True)
 
         if gravity is None:
-            gravity = np.array([0, 0, -9.81], dtype=np.float64)
+            gravity = Vec3(0.0, 0.0, -9.81)
 
         self._physics_world = PhysicsWorld()
-        self._physics_world.gravity = Vec3(gravity[0], gravity[1], gravity[2])
+        self._physics_world.gravity = _to_vec3(gravity)
         self._physics_world.solver_iterations = iterations
         self._physics_world.restitution = restitution
         self._physics_world.friction = friction
@@ -101,13 +101,12 @@ class PhysicsWorldComponent(PythonComponent):
         return self._physics_world
 
     @property
-    def gravity(self) -> np.ndarray:
-        g = self._physics_world.gravity
-        return np.array([g.x, g.y, g.z], dtype=np.float64)
+    def gravity(self) -> Vec3:
+        return self._physics_world.gravity.copy()
 
     @gravity.setter
-    def gravity(self, value: np.ndarray):
-        self._physics_world.gravity = Vec3(value[0], value[1], value[2])
+    def gravity(self, value: Vec3 | Sequence[float]):
+        self._physics_world.gravity = _to_vec3(value)
 
     @property
     def iterations(self) -> int:
@@ -205,3 +204,9 @@ class PhysicsWorldComponent(PythonComponent):
 
         for rb_comp in self._rigid_body_components:
             rb_comp._sync_from_physics()
+
+
+def _to_vec3(value: Vec3 | Sequence[float]) -> Vec3:
+    if isinstance(value, Vec3):
+        return value.copy()
+    return Vec3(float(value[0]), float(value[1]), float(value[2]))
