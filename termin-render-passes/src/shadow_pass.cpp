@@ -236,23 +236,46 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
         return true;
     }
 
-    void* draws_ptr = tc_component_get_geometry_draws(tc, data->render_context, "shadow");
-    if (!draws_ptr) {
+    tc_render_item_collect_context item_context{};
+    item_context.phase_mark = "shadow";
+    item_context.layer_mask = data->render_context
+        ? data->render_context->layer_mask
+        : UINT64_MAX;
+    item_context.render_category_mask = data->render_context
+        ? data->render_context->render_category_mask
+        : UINT64_MAX;
+    item_context.debug_pass_name = "ShadowPass";
+    item_context.pass_contract = &data->pass_contract;
+    item_context.camera = data->render_context
+        ? data->render_context->camera
+        : nullptr;
+
+    RenderItemCollection items;
+    if (!collect_drawable_render_items(tc, item_context, items)) {
         return true;
     }
 
     Entity ent(tc->owner);
 
-    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-    for (const auto& gd : *geometry_draws) {
-        tc_material_phase* phase = gd.resolve_phase();
+    for (const tc_render_item& item : items.items) {
+        tc_material_phase* phase = nullptr;
+        if (!tc_material_handle_is_invalid(item.material) &&
+            item.material_phase_index != SIZE_MAX) {
+            tc_material* material = tc_material_get(item.material);
+            if (material && item.material_phase_index < material->phase_count) {
+                phase = &material->phases[item.material_phase_index];
+            }
+        }
+        if (!phase) {
+            phase = item.material_phase;
+        }
         if (!phase) {
             continue;
         }
         // Get final shader with overrides (skinning, alpha-test, etc.)
         ShaderOverrideContext override_context;
         override_context.phase_mark = "shadow";
-        override_context.geometry_id = gd.geometry_id;
+        override_context.geometry_id = item.geometry_id;
         override_context.original_shader = TcShader(data->base_shader);
         override_context.pass_contract = data->pass_contract;
         tc_shader_handle final_shader =
@@ -262,9 +285,9 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
         dc.component = tc;
         dc.phase = phase;
         dc.final_shader = final_shader;
-        dc.geometry_id = gd.geometry_id;
-        dc.material = gd.material;
-        dc.phase_index = gd.phase_index;
+        dc.geometry_id = item.geometry_id;
+        dc.material = item.material;
+        dc.phase_index = item.material_phase_index;
         data->draw_calls->push_back(dc);
     }
 
@@ -284,21 +307,37 @@ bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
     RenderContext render_context;
     render_context.phase = "shadow";
     render_context.pass_contract = data->pass_contract;
-    void* draws_ptr = tc_component_get_geometry_draws(tc, &render_context, "shadow");
-    if (!draws_ptr) {
+    tc_render_item_collect_context item_context{};
+    item_context.phase_mark = "shadow";
+    item_context.layer_mask = UINT64_MAX;
+    item_context.render_category_mask = UINT64_MAX;
+    item_context.debug_pass_name = "ShadowPass/ShaderUsage";
+    item_context.pass_contract = &data->pass_contract;
+
+    RenderItemCollection items;
+    if (!collect_drawable_render_items(tc, item_context, items)) {
         return true;
     }
 
-    auto* geometry_draws = static_cast<std::vector<GeometryDrawCall>*>(draws_ptr);
-    for (const auto& gd : *geometry_draws) {
-        tc_material_phase* phase = gd.resolve_phase();
+    for (const tc_render_item& item : items.items) {
+        tc_material_phase* phase = nullptr;
+        if (!tc_material_handle_is_invalid(item.material) &&
+            item.material_phase_index != SIZE_MAX) {
+            tc_material* material = tc_material_get(item.material);
+            if (material && item.material_phase_index < material->phase_count) {
+                phase = &material->phases[item.material_phase_index];
+            }
+        }
+        if (!phase) {
+            phase = item.material_phase;
+        }
         if (!phase) {
             continue;
         }
 
         ShaderOverrideContext override_context;
         override_context.phase_mark = "shadow";
-        override_context.geometry_id = gd.geometry_id;
+        override_context.geometry_id = item.geometry_id;
         override_context.original_shader = TcShader(data->base_shader);
         override_context.pass_contract = data->pass_contract;
         collect_drawable_shader_usages_with_context(tc, override_context, *data->emit);

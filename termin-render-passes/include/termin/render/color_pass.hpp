@@ -142,8 +142,8 @@ public:
     // for engine-supplied state.
     //
     // Mesh-backed and typed non-mesh drawables are submitted through
-    // RenderItems. Legacy GeometryDrawCall discovery is still used to feed
-    // pass ordering until the remaining passes collect RenderItems directly.
+    // RenderItems. Pass ordering is derived from material phase priority on
+    // the collected items.
     void execute_with_data(
         ExecuteContext& ctx,
         const ColorPassExecuteData& data

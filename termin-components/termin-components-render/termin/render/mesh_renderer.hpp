@@ -85,10 +85,6 @@ public:
         int geometry_id,
         MeshDrawGeometry& out
     ) const override;
-    std::vector<int> get_geometry_ids_for_phase(
-        const RenderContext& context,
-        const std::string& phase_mark
-    ) override;
     Mat44f get_model_matrix(const Entity& entity) const override;
     bool collect_render_items(
         const tc_render_item_collect_context& context,

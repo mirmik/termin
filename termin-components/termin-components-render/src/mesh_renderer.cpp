@@ -596,35 +596,6 @@ bool MeshRenderer::resolve_mesh_geometry(
     return true;
 }
 
-std::vector<int> MeshRenderer::get_geometry_ids_for_phase(
-    const RenderContext& context,
-    const std::string& phase_mark
-) {
-    (void)context;
-    (void)phase_mark;
-    std::vector<int> ids;
-    tc_mesh* mesh = current_mesh_ptr();
-    if (!mesh) {
-        return ids;
-    }
-
-    if (mesh->submesh_count == 0) {
-        tc_mesh_ensure_default_submesh(mesh);
-    }
-
-    ids.reserve(mesh->submesh_count);
-    for (size_t i = 0; i < mesh->submesh_count; ++i) {
-        if (i > static_cast<size_t>(std::numeric_limits<int>::max())) {
-            tc::Log::error(
-                "[MeshRenderer] mesh '%s' has too many submeshes for geometry_id",
-                mesh->header.name ? mesh->header.name : mesh->header.uuid);
-            break;
-        }
-        ids.push_back(static_cast<int>(i));
-    }
-    return ids;
-}
-
 bool MeshRenderer::collect_render_items(
     const tc_render_item_collect_context& context,
     tc_render_item_sink& sink

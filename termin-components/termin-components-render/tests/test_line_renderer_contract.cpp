@@ -204,7 +204,7 @@ TEST_CASE("LineRenderer context-aware usage collection follows explicit pass con
     tc_shader_shutdown();
 }
 
-TEST_CASE("MeshRenderer geometry ids are permissive for pass phase labels") {
+TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
     tc_mesh_init();
 
     termin::TcMesh mesh = make_two_submesh_mesh();
@@ -220,18 +220,22 @@ TEST_CASE("MeshRenderer geometry ids are permissive for pass phase labels") {
     auto* renderer = new termin::MeshRenderer();
     entity.add_component(renderer);
 
-    termin::RenderContext context;
-    context.phase = "custom_depth";
-    void* ids_ptr = tc_component_get_geometry_ids_for_phase(
-        renderer->tc_component_ptr(),
-        &context,
-        "custom_depth");
-    REQUIRE(ids_ptr != nullptr);
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "custom_depth";
+    collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+    collect_context.debug_pass_name = "test";
 
-    auto* ids = static_cast<std::vector<int>*>(ids_ptr);
-    REQUIRE(ids->size() == 2u);
-    CHECK((*ids)[0] == 0);
-    CHECK((*ids)[1] == 1);
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    REQUIRE(collection.items.size() == 2u);
+    CHECK(collection.items[0].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(collection.items[0].geometry_id == 0);
+    CHECK(collection.items[1].kind == TC_RENDER_ITEM_KIND_MESH);
+    CHECK(collection.items[1].geometry_id == 1);
 
     tc_mesh_shutdown();
 }

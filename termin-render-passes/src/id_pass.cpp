@@ -260,8 +260,8 @@ void IdPass::execute_with_data_tgfx2(
             });
     }
 
-    // GeometryDrawCall collection is retained only to discover typed non-mesh
-    // drawable geometry. Mesh-backed work is submitted from mesh_tasks above.
+    // Non-mesh IdPass work is still collected by the pass-owned draw-call path
+    // below and submitted through typed RenderItem encoders.
     collect_draw_calls(scene, layer_mask, ctx.render_category_mask, id_shader_handle_);
     sort_draw_calls_by_shader();
 
