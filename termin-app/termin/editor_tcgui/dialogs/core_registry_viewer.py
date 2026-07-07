@@ -26,6 +26,10 @@ def show_core_registry_viewer(ui) -> None:
             tc_pass_registry_get_all_instance_info,
             tc_pass_registry_get_all_types,
         )
+        from tcbase import (
+            intern_string_get_all_info,
+            intern_string_get_stats,
+        )
         from termin.scene._scene_native import (
             component_registry_get_all_info,
             component_registry_type_count,
@@ -81,6 +85,11 @@ def show_core_registry_viewer(ui) -> None:
         ],
         "Pipelines": [TableColumn("Name"), TableColumn("Pass Count", 80)],
         "Passes": [TableColumn("Type Name"), TableColumn("Language", 80)],
+        "Intern Strings": [
+            TableColumn("String"),
+            TableColumn("Bucket", 80),
+            TableColumn("Chain Pos", 80),
+        ],
     }
 
     viewer = RegistryViewerDialog("Core Registry", tab_columns)
@@ -215,6 +224,20 @@ def show_core_registry_viewer(ui) -> None:
             ])
         tab_lists["Passes"].set_rows(rows, _make_tab_data("Passes", infos))
 
+    def _refresh_intern_strings():
+        infos = intern_string_get_all_info()
+        stats = intern_string_get_stats()
+        all_infos["Intern Strings"] = infos
+        all_infos["Intern String Stats"] = stats
+        rows = []
+        for info in infos:
+            rows.append([
+                info.get("string", ""),
+                str(info.get("bucket", 0)),
+                str(info.get("depth", 0)),
+            ])
+        tab_lists["Intern Strings"].set_rows(rows, _make_tab_data("Intern Strings", infos))
+
     def _refresh_scenes():
         infos = tc_scene_registry_get_all_info()
         all_infos["Scenes"] = infos
@@ -248,6 +271,7 @@ def show_core_registry_viewer(ui) -> None:
         _refresh_soa_types()
         _refresh_pipelines()
         _refresh_passes()
+        _refresh_intern_strings()
         _refresh_scenes()
         _update_status()
 
@@ -264,6 +288,8 @@ def show_core_registry_viewer(ui) -> None:
         parts.append(f"Shaders: {shader_count()}")
         parts.append(f"Mat: {tc_material_count()}")
         parts.append(f"Comp: {component_registry_type_count()}")
+        intern_stats = all_infos.get("Intern String Stats", {})
+        parts.append(f"Intern: {intern_stats.get('entry_count', 0)}")
         parts.append(f"Mem: {_fmt_mem(total_mem)}")
         status_lbl.text = "  |  ".join(parts)
 
@@ -310,6 +336,8 @@ def show_core_registry_viewer(ui) -> None:
             _show_pipeline_details(info)
         elif tab == "Passes":
             _show_pass_details(info)
+        elif tab == "Intern Strings":
+            _show_intern_string_details(info)
         elif tab == "Scenes":
             _show_scene_details(info)
 
@@ -439,6 +467,21 @@ def show_core_registry_viewer(ui) -> None:
     def _show_pass_details(info: dict):
         lines = [f"=== Pass Type: {info['type_name']} ===", ""]
         lines.append(f"Language: {info.get('language', '?')}")
+        details.text = "\n".join(lines)
+
+    def _show_intern_string_details(info: dict):
+        stats = all_infos.get("Intern String Stats", {})
+        lines = ["=== Intern String ===", ""]
+        lines.append(f"String: {info.get('string', '')}")
+        lines.append(f"Bucket: {info.get('bucket', 0)}")
+        lines.append(f"Chain position: {info.get('depth', 0)}")
+        lines.append("")
+        lines.append("--- Table ---")
+        lines.append(f"Entries:           {stats.get('entry_count', 0)}")
+        lines.append(f"Buckets:           {stats.get('bucket_count', 0)}")
+        lines.append(f"Non-empty buckets: {stats.get('non_empty_bucket_count', 0)}")
+        lines.append(f"Max bucket depth:  {stats.get('max_bucket_depth', 0)}")
+        lines.append(f"Load factor:       {stats.get('load_factor', 0.0):.3f}")
         details.text = "\n".join(lines)
 
     def _show_scene_details(info: dict):
