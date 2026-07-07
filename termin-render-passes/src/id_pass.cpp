@@ -537,36 +537,6 @@ void IdPass::execute_with_data_tgfx2(
             }
         }
 
-        if (!drawable->supports_direct_tgfx2_draw(
-                pick_phase, dc.geometry_id, DirectTgfx2DrawKind::OverrideColor)) {
-            continue;
-        }
-
-        RenderContext direct_context;
-        direct_context.view = view;
-        direct_context.projection = projection;
-        direct_context.model = drawable->get_model_matrix(dc.entity);
-        direct_context.phase = pick_phase;
-        direct_context.pass_contract = pass_contract;
-        direct_context.current_tc_shader = TcShader(dc.final_shader);
-        direct_context.layer_mask = layer_mask;
-        direct_context.render_category_mask = ctx.render_category_mask;
-        direct_context.camera_position = camera_position;
-        direct_context.viewport_width = rect.width;
-        direct_context.viewport_height = rect.height;
-        direct_context.has_override_color = true;
-        direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
-
-        drawable->draw_tgfx2(*ctx.ctx2, direct_context, pick_phase, nullptr, dc.geometry_id);
-        capture_debug_symbol(name);
-        restore_id_raster_state();
-        ctx.ctx2->clear_resource_bindings();
-        prepare_material_pipeline_resources(
-            *ctx.ctx2,
-            device,
-            id_shader.shader,
-            nullptr,
-            id_resources);
     }
 
     ctx.ctx2->end_pass();

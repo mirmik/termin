@@ -9,6 +9,7 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/export.hpp>
 #include <termin/render/drawable.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <termin/render/render_context.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -53,18 +54,14 @@ public:
         TcShader original_shader,
         const std::function<void(TcShader)>& emit
     ) override;
-    bool draw_tgfx2(
-        tgfx::RenderContext2& ctx2,
-        const RenderContext& context,
-        const std::string& phase_mark,
-        tc_material_phase* phase,
-        int geometry_id
+    bool collect_render_items(
+        const tc_render_item_collect_context& context,
+        tc_render_item_sink& sink
     ) override;
-    bool supports_direct_tgfx2_draw(
-        const std::string& phase_mark,
-        int geometry_id,
-        DirectTgfx2DrawKind kind
-    ) const override;
+    bool encode_render_item_tgfx2(
+        tgfx::RenderContext2& ctx2,
+        const tc_render_item& item,
+        const RenderItemDrawSubmitRequest& request);
 };
 
 } // namespace termin
