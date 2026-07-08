@@ -747,120 +747,12 @@ void ColorPass::execute_with_data(
             continue;
         }
 
-        if (item->kind != TC_RENDER_ITEM_KIND_MESH) {
-            RenderState state = convert_render_state(phase->state);
-            if (wireframe) state.polygon_mode = PolygonMode::Line;
-
-            ctx2->clear_resource_bindings();
-            ctx2->set_depth_test(state.depth_test);
-            ctx2->set_depth_write(state.depth_write);
-            ctx2->set_blend(state.blend);
-            ctx2->set_blend_func(convert_blend_factor_tgfx2(state.blend_src),
-                                 convert_blend_factor_tgfx2(state.blend_dst));
-            ctx2->set_cull(state.cull ? tgfx::CullMode::Back : tgfx::CullMode::None);
-            ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
-                                   ? tgfx::PolygonMode::Line
-                                   : tgfx::PolygonMode::Fill);
-
-            if (!shadow_sampler_) {
-                tgfx::SamplerDesc sd;
-                sd.min_filter = tgfx::FilterMode::Nearest;
-                sd.mag_filter = tgfx::FilterMode::Nearest;
-                sd.mip_filter = tgfx::FilterMode::Nearest;
-                sd.address_u = tgfx::AddressMode::ClampToEdge;
-                sd.address_v = tgfx::AddressMode::ClampToEdge;
-                sd.address_w = tgfx::AddressMode::ClampToEdge;
-                sd.compare_enable = true;
-                sd.compare_op = tgfx::CompareOp::LessEqual;
-                shadow_sampler_ = device.create_sampler(sd);
-            }
-
-            RenderContext direct_context;
-            direct_context.view = data.view;
-            direct_context.projection = data.projection;
-            if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-                std::memcpy(direct_context.model.data, item->model_matrix, sizeof(float) * 16);
-            }
-            direct_context.phase = phase_mark;
-            direct_context.pass_contract = color_material_pass_contract();
-            direct_context.current_tc_shader = TcShader(final_shader);
-            direct_context.layer_mask = data.layer_mask;
-            direct_context.render_category_mask = ctx.render_category_mask;
-            direct_context.camera_position = data.camera_position;
-            direct_context.viewport_width = data.rect.width;
-            direct_context.viewport_height = data.rect.height;
-            direct_context.camera = const_cast<RenderCamera*>(ctx.camera);
-
-            RenderItemDrawSubmitRequest submit_request{};
-            submit_request.shader = tc_shader_get(final_shader);
-            submit_request.draw_context = &direct_context;
-            submit_request.material_phase = phase;
-            submit_request.phase_mark = phase_mark.c_str();
-            submit_request.debug_pass_name = debug_pass_name_c;
-            submit_request.debug_entity_name = ename;
-            submit_request.prepare_material_resources =
-                [this,
-                 &device,
-                 &material_resources,
-                 &ctx](
-                    tgfx::RenderContext2& draw_ctx,
-                    const tc_shader* shader,
-                    tc_material_phase* live_phase) {
-                    if (!shader || !live_phase) {
-                        tc::Log::error(
-                            "[ColorPass/tgfx2] RenderItem resource callback called without shader or phase");
-                        return;
-                    }
-
-                    MaterialPipelineResourceView direct_resources = material_resources;
-                    direct_resources.shadow_sampler = shadow_sampler_;
-                    prepare_material_pipeline_resources(
-                        draw_ctx,
-                        device,
-                        shader,
-                        live_phase,
-                        direct_resources);
-
-                    if (!extra_textures.empty()) {
-                        bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
-                    }
-                };
-            if (submit_render_item_draw(*ctx2, *item, submit_request)) {
-                capture_debug_symbol(ename);
-            }
-            ++draw_index;
-            continue;
-        }
-
-        // Prepare the shader through the shared material pipeline helper.
-        // The helper owns artifact creation, shader binding, and active
-        // resource-layout selection for the draw.
-        tc_shader* raw_shader = tc_shader_get(final_shader);
-        if (!raw_shader) {
-            ++draw_index;
-            continue;
-        }
-        MaterialPipelineShaderBinding shader_binding;
-        if (!ensure_material_pipeline_shader(
-                *ctx2,
-                device,
-                final_shader,
-                "ColorPass",
-                shader_binding)) {
-            ++draw_index;
-            continue;
-        }
-        tgfx::ShaderHandle vs2 = shader_binding.vertex;
-        tgfx::ShaderHandle fs2 = shader_binding.fragment;
-        raw_shader = shader_binding.shader;
-
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
         // that slot with its default texture. Without this reset, a missing
         // slot kept the previous draw/pass texture bound and produced
         // striped materials after resize/post-processing passes.
         ctx2->clear_resource_bindings();
-        ctx2->use_shader_resource_layout(raw_shader);
 
         // Render state from the material phase.
         RenderState state = convert_render_state(phase->state);
@@ -875,9 +767,6 @@ void ColorPass::execute_with_data(
         ctx2->set_polygon_mode(state.polygon_mode == PolygonMode::Line
                                ? tgfx::PolygonMode::Line
                                : tgfx::PolygonMode::Fill);
-
-        ctx2->bind_shader(vs2, fs2);
-        ctx2->use_shader_resource_layout(raw_shader);
 
         if (!shadow_sampler_) {
             tgfx::SamplerDesc sd;
@@ -897,25 +786,6 @@ void ColorPass::execute_with_data(
             shadow_sampler_ = device.create_sampler(sd);
         }
 
-        MaterialPipelineResourceView draw_resources = material_resources;
-        draw_resources.shadow_sampler = shadow_sampler_;
-        prepare_material_pipeline_resources(
-            *ctx2,
-            device,
-            raw_shader,
-            phase,
-            draw_resources);
-
-        // Extra textures (nodegraph inputs) bind into the currently active
-        // pipeline after material textures are in place.
-        if (!extra_textures.empty()) {
-            bind_extra_textures(ctx.tex2_reads, ctx2, raw_shader);
-        }
-
-        // --- Per-draw data ---
-        //
-        // Layout-only shaders receive the model matrix through their draw
-        // scope resource.
         struct ColorPushData {
             float u_model[16];
         };
@@ -926,13 +796,61 @@ void ColorPass::execute_with_data(
             Mat44f identity = Mat44f::identity();
             std::memcpy(push.u_model, identity.data, sizeof(push.u_model));
         }
-        bind_draw_data_for_shader(*ctx2, raw_shader, push);
+
+        RenderContext draw_context;
+        draw_context.view = data.view;
+        draw_context.projection = data.projection;
+        std::memcpy(draw_context.model.data, push.u_model, sizeof(push.u_model));
+        draw_context.phase = phase_mark;
+        draw_context.pass_contract = color_material_pass_contract();
+        draw_context.current_tc_shader = TcShader(final_shader);
+        draw_context.layer_mask = data.layer_mask;
+        draw_context.render_category_mask = ctx.render_category_mask;
+        draw_context.camera_position = data.camera_position;
+        draw_context.viewport_width = data.rect.width;
+        draw_context.viewport_height = data.rect.height;
+        draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
         RenderItemDrawSubmitRequest encode_request{};
-        encode_request.shader = raw_shader;
+        encode_request.shader = tc_shader_get(final_shader);
+        encode_request.shader_handle = final_shader;
+        encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::FullMaterial;
-        encode_request.debug_pass_name = "ColorPass";
+        encode_request.draw_context = &draw_context;
+        encode_request.material_phase = phase;
+        encode_request.phase_mark = phase_mark.c_str();
+        encode_request.debug_pass_name = debug_pass_name_c;
         encode_request.debug_entity_name = ename;
+        encode_request.prepare_material_resources =
+            [this,
+             &device,
+             &material_resources,
+             &ctx,
+             &push](
+                tgfx::RenderContext2& draw_ctx,
+                const tc_shader* shader,
+                tc_material_phase* live_phase) {
+                if (!shader || !live_phase) {
+                    tc::Log::error(
+                        "[ColorPass/tgfx2] RenderItem resource callback called without shader or phase");
+                    return;
+                }
+
+                MaterialPipelineResourceView draw_resources = material_resources;
+                draw_resources.shadow_sampler = shadow_sampler_;
+                prepare_material_pipeline_resources(
+                    draw_ctx,
+                    device,
+                    shader,
+                    live_phase,
+                    draw_resources);
+
+                if (!extra_textures.empty()) {
+                    bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
+                }
+
+                bind_draw_data_for_shader(draw_ctx, shader, push);
+            };
         if (!submit_render_item_draw(
             *ctx2,
             *item,

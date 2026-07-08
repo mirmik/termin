@@ -42,6 +42,15 @@ Implementation progress:
   `termin-render`. `ColorPass` and `ShadowPass` now collect scene items once per
   pass execution and draw from collector item indices instead of re-collecting
   non-mesh items during draw.
+- 2026-07-08: `ColorPass` and `ShadowPass` no longer branch between mesh and
+  non-mesh submit paths. They build one `RenderItemDrawSubmitRequest` per task;
+  item-kind differences are handled by the shared submission layer and
+  registered encoders.
+- 2026-07-08 audit: `IdPass`, `DepthPass`, `DepthOnlyPass`, and `NormalPass`
+  still treat geometry collection as mesh-only. Their draw loops submit through
+  `submit_render_item_draw()`, but collection filters out non-mesh RenderItems
+  before task creation. This is not the old duplicated non-mesh draw path, but it
+  is still incomplete coverage for foliage, line, text, and future item kinds.
 - Remaining live migration work: finish Python-facing RenderItem integration
   tests and continue replacing any historical docs/examples that still describe
   the retired geometry-side-channel model.
@@ -346,6 +355,32 @@ Non-responsibilities:
 - deciding the order of the pass;
 - reaching back into drawable component classes for missing data.
 
+### Pass Compatibility
+
+Pass membership must be based on explicit compatibility between the pass
+contract and the item encoder, not on a hard-coded `Mesh` versus `NonMesh` split.
+
+Important cases:
+
+- `FoliageBatch` should participate in `ColorPass` and `ShadowPass`, and should
+  eventually participate in `IdPass`, `DepthPass`, `DepthOnlyPass`, and
+  `NormalPass` once those passes declare matching foliage vertex-transform
+  contracts and built-in shader templates.
+- `LineBatch` and `TextBatch` can be meaningful in `IdPass` when the pass supplies
+  an override pick color through the draw context.
+- `LineBatch` and `TextBatch` are not automatically meaningful in `DepthPass` or
+  `NormalPass`: a color/text/line encoder can submit backend commands, but that
+  does not imply it writes encoded depth or normal values with the pass ABI.
+
+The migration rule is:
+
+```text
+Collect all drawable RenderItems requested by the phase.
+Build tasks only for item/pass combinations with declared support.
+Log unsupported combinations when they indicate a missing migration or asset bug.
+Do not silently equate "not mesh" with "not renderable".
+```
+
 ### Encoder Registry
 
 The encoder registry should live with the render runtime or render engine
@@ -525,7 +560,15 @@ custom drawables from becoming backend submit owners.
     pass-family adoption remains.
 12. Move common task-list construction toward pass-owned `RenderTaskList`
     storage, with SoA task arrays where useful for sort/draw hot paths.
-13. Update `docs/render-phase-semantics.md` after the live contract changes.
+13. Remove remaining pass-level mesh/non-mesh submit branches. Done for
+    `ColorPass` and `ShadowPass`; mesh still has a built-in branch inside the
+    shared submission dispatcher until it becomes a normal registered encoder.
+14. Replace mesh-only filters in `GeometryPassBase` and `DepthOnlyPass` with
+    pass/item compatibility checks. Foliage should be enabled for id, depth,
+    depth-only, and normal only after matching foliage pass contracts and shader
+    templates exist. Line/text should be enabled per pass only where their
+    encoder produces the pass ABI, not merely because a draw encoder exists.
+15. Update `docs/render-phase-semantics.md` after the live contract changes.
 
 ## Diagnostics And Tests
 
@@ -551,6 +594,10 @@ Required tests:
 - material phase shader override still works through the task submission path;
 - unsupported item/contract combinations log useful errors and do not silently
   fall back.
+- geometry-pass coverage tests for foliage id/depth/normal once foliage pass
+  contracts and shader templates are added;
+- line/text picking tests if `IdPass` support is enabled through override-color
+  draw context.
 
 ## Open Questions
 
