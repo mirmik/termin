@@ -4,8 +4,17 @@
 """
 
 import numpy as np
+from termin.geombase import Vec2
 from termin.geombase.pose2 import Pose2
 from termin.geombase.screw import Screw2
+
+
+def _vec2(value) -> Vec2:
+    return Vec2(float(value[0]), float(value[1]))
+
+
+def _array2(value) -> np.ndarray:
+    return np.array([float(value[0]), float(value[1])], dtype=float)
 
 
 def skew2(v):
@@ -50,7 +59,7 @@ class SpatialInertia2D:
         В 2D момент инерции инвариантен относительно поворота.
         Центр масс переводится напрямую.
         """
-        c_new = pose.transform_point(self.c)
+        c_new = _array2(pose.transform_point(_vec2(self.c)))
         return SpatialInertia2D(self.m, self.I_com, c_new)
 
     # ------------------------------
@@ -115,7 +124,7 @@ class SpatialInertia2D:
         F = m * g
         τ = cx * F[1] - cy * F[0]
 
-        return Screw2(ang=τ, lin=F)
+        return Screw2(ang=float(τ), lin=_vec2(F))
 
     def __add__(self, other):
         if not isinstance(other, SpatialInertia2D):
@@ -157,4 +166,4 @@ class SpatialInertia2D:
 
         τz = 0.0  # В 2D кориолисового момента нет
 
-        return Screw2(ang=τz, lin=np.array([Fx, Fy]))
+        return Screw2(ang=τz, lin=Vec2(float(Fx), float(Fy)))
