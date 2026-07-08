@@ -46,6 +46,9 @@ Implementation progress:
   non-mesh submit paths. They build one `RenderItemDrawSubmitRequest` per task;
   item-kind differences are handled by the shared submission layer and
   registered encoders.
+- 2026-07-08: mesh submission was moved behind the same RenderItem encoder
+  registry used by line, text, and foliage. `TC_RENDER_ITEM_KIND_MESH` is now a
+  built-in reserved encoder entry instead of a special dispatcher branch.
 - 2026-07-08 audit: `IdPass`, `DepthPass`, `DepthOnlyPass`, and `NormalPass`
   still treat geometry collection as mesh-only. Their draw loops submit through
   `submit_render_item_draw()`, but collection filters out non-mesh RenderItems
@@ -561,8 +564,8 @@ custom drawables from becoming backend submit owners.
 12. Move common task-list construction toward pass-owned `RenderTaskList`
     storage, with SoA task arrays where useful for sort/draw hot paths.
 13. Remove remaining pass-level mesh/non-mesh submit branches. Done for
-    `ColorPass` and `ShadowPass`; mesh still has a built-in branch inside the
-    shared submission dispatcher until it becomes a normal registered encoder.
+    `ColorPass` and `ShadowPass`; mesh submission now also goes through the
+    RenderItem encoder registry as a built-in reserved encoder.
 14. Replace mesh-only filters in `GeometryPassBase` and `DepthOnlyPass` with
     pass/item compatibility checks. Foliage should be enabled for id, depth,
     depth-only, and normal only after matching foliage pass contracts and shader
