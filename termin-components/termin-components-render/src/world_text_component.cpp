@@ -206,6 +206,10 @@ void ensure_world_text_render_item_encoder_registered()
     RenderItemDrawEncoderDesc desc{};
     desc.encode = world_text_render_item_draw_encoder;
     desc.debug_name = "WorldTextComponent";
+    desc.capabilities.pass_semantic_mask =
+        render_item_pass_semantic_bit(RenderItemPassSemantic::Color);
+    desc.capabilities.requires_draw_context = true;
+    desc.capabilities.consumes_common_resources = false;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_TEXT_BATCH, desc);
 }
 

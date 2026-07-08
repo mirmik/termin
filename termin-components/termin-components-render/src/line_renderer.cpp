@@ -325,9 +325,9 @@ bool encode_line_batch_render_item_tgfx2(
             params.cap_shader_layout = tube_cap_shader.shader;
             params.bind_resources =
                 [&request, phase](tgfx::RenderContext2& line_ctx, const tc_shader* shader_layout) {
-                    if (request.prepare_material_resources) {
-                        request.prepare_material_resources(line_ctx, shader_layout, phase);
-                    }
+                    RenderItemDrawSubmitRequest line_request = request;
+                    line_request.material_phase = phase;
+                    bind_render_item_common_resources(line_ctx, shader_layout, line_request);
                 };
         }
 
@@ -407,6 +407,12 @@ void ensure_line_render_item_encoder_registered()
     desc.encode = line_render_item_draw_encoder;
     desc.user_data = &state;
     desc.debug_name = "LineRenderer";
+    desc.capabilities.pass_semantic_mask =
+        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
+        | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow)
+        | render_item_pass_semantic_bit(RenderItemPassSemantic::Id);
+    desc.capabilities.requires_draw_context = true;
+    desc.capabilities.consumes_common_resources = true;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_LINE_BATCH, desc);
 }
 
