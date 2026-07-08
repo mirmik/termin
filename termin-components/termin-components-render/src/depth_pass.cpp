@@ -486,7 +486,9 @@ void DepthOnlyPass::collect_draw_calls(
         }
 
         for (const tc_render_item& item : items.items) {
-            if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+            if (!render_item_encoder_supports_pass(
+                    item.kind,
+                    RenderItemPassSemantic::DepthOnly)) {
                 continue;
             }
 
@@ -592,7 +594,9 @@ void DepthOnlyPass::collect_shader_usages(
         }
 
         for (const tc_render_item& item : items.items) {
-            if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+            if (!render_item_encoder_supports_pass(
+                    item.kind,
+                    RenderItemPassSemantic::DepthOnly)) {
                 continue;
             }
 

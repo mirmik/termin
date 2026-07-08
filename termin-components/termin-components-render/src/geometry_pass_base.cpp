@@ -122,6 +122,7 @@ void GeometryPassBase::collect_shader_usages(
         const std::function<void(TcShader)>* emit = nullptr;
         tc_shader_handle base_shader = tc_shader_handle_invalid();
         MaterialPipelinePassContract pass_contract;
+        RenderItemPassSemantic pass_semantic = RenderItemPassSemantic::Color;
         const char* phase_mark = nullptr;
     };
 
@@ -150,7 +151,7 @@ void GeometryPassBase::collect_shader_usages(
         }
 
         for (const tc_render_item& item : items.items) {
-            if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+            if (!render_item_encoder_supports_pass(item.kind, ctx->pass_semantic)) {
                 continue;
             }
 
@@ -177,6 +178,7 @@ void GeometryPassBase::collect_shader_usages(
         &emit,
         base_shader,
         shader_pass_contract(),
+        render_item_pass_semantic(),
         collect_phase_mark};
 
     tc_scene_foreach_drawable(scene, callback, &context, TC_SCENE_FILTER_NONE, 0);
@@ -208,6 +210,7 @@ void GeometryPassBase::collect_draw_calls(
         std::vector<DrawCall>* draw_calls = nullptr;
         tc_shader_handle base_shader = tc_shader_handle_invalid();
         MaterialPipelinePassContract pass_contract;
+        RenderItemPassSemantic pass_semantic = RenderItemPassSemantic::Color;
         const char* phase_mark = nullptr;
         RenderContext* render_context = nullptr;
     };
@@ -242,7 +245,7 @@ void GeometryPassBase::collect_draw_calls(
 
         const int pick_id = ctx->pass->get_pick_id(ent);
         for (const tc_render_item& item : items.items) {
-            if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+            if (!render_item_encoder_supports_pass(item.kind, ctx->pass_semantic)) {
                 continue;
             }
 
@@ -293,6 +296,7 @@ void GeometryPassBase::collect_draw_calls(
         &cached_draw_calls_,
         base_shader,
         shader_pass_contract(),
+        render_item_pass_semantic(),
         collect_phase_mark,
         &render_context};
 

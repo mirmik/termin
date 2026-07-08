@@ -47,6 +47,9 @@ protected:
     // vertex layout are declared by shader_pass_contract(), not by this string.
     const char* phase_mark() const override { return "pick"; }
     MaterialPipelinePassContract shader_pass_contract() const override;
+    RenderItemPassSemantic render_item_pass_semantic() const override {
+        return RenderItemPassSemantic::Id;
+    }
     tc_shader_handle shader_usage_base_shader() const override;
 
     bool entity_filter(const Entity& ent) const override {

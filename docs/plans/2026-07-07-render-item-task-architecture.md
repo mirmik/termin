@@ -50,10 +50,11 @@ Implementation progress:
   registry used by line, text, and foliage. `TC_RENDER_ITEM_KIND_MESH` is now a
   built-in reserved encoder entry instead of a special dispatcher branch.
 - 2026-07-08 audit: `IdPass`, `DepthPass`, `DepthOnlyPass`, and `NormalPass`
-  still treat geometry collection as mesh-only. Their draw loops submit through
-  `submit_render_item_draw()`, but collection filters out non-mesh RenderItems
-  before task creation. This is not the old duplicated non-mesh draw path, but it
-  is still incomplete coverage for foliage, line, text, and future item kinds.
+  still treated geometry collection as mesh-only. Their draw loops submit through
+  `submit_render_item_draw()`, but collection filtered out non-mesh RenderItems
+  before task creation. This was not the old duplicated non-mesh draw path, but
+  it was still incomplete coverage for foliage, line, text, and future item
+  kinds.
 - 2026-07-09 direction update: the next migration should not preserve a
   `mesh` versus `non-mesh` conceptual split. Mesh is only one built-in item
   kind with a registered encoder. Passes should build item-kind-agnostic
@@ -69,6 +70,12 @@ Implementation progress:
   implementation slice, not the final shared `RenderTaskList` ABI, but the draw
   loops now submit tasks instead of constructing submit requests directly from
   sorted draw-call records.
+- 2026-07-09: render item encoders now register explicit capabilities. Pass
+  membership decisions in `GeometryPassBase` and `DepthOnlyPass` use
+  `render_item_encoder_supports_pass()` instead of hard-coded mesh-kind checks.
+  Current capabilities preserve existing behavior: mesh supports id/depth/
+  depth-only/normal, while line/text/foliage are not silently enabled there
+  until their pass contracts and tests are completed.
 - Remaining live migration work: finish Python-facing RenderItem integration
   tests and continue replacing any historical docs/examples that still describe
   the retired geometry-side-channel model.
@@ -718,18 +725,20 @@ custom drawables from becoming backend submit owners.
     `ColorPass` and `ShadowPass`; mesh submission now also goes through the
     RenderItem encoder registry as a built-in reserved encoder.
 14. Replace mesh-only filters in `GeometryPassBase` and `DepthOnlyPass` with
-    pass/item compatibility checks. Foliage should be enabled for id, depth,
-    depth-only, and normal only after matching foliage pass contracts and shader
-    templates exist. Line/text should be enabled per pass only where their
-    encoder produces the pass ABI, not merely because a draw encoder exists.
+    pass/item compatibility checks. Done: these passes now query encoder
+    capabilities. Foliage should be enabled for id, depth, depth-only, and
+    normal only after matching foliage pass contracts and shader templates
+    exist. Line/text should be enabled per pass only where their encoder
+    produces the pass ABI, not merely because a draw encoder exists.
 15. Introduce a pass-owned `RenderTask` or `RenderTaskList` used by Color and
     Shadow first, then by Id/Depth/DepthOnly/Normal. Done as a pass-local
     implementation slice for Color and Shadow; still needed for the
     Id/Depth/DepthOnly/Normal family and for a shared task shape if duplication
     starts to matter.
 16. Add encoder capability metadata and move pass membership decisions to
-    pass-contract/item-kind compatibility checks. Mesh must use the same route
-    as line, text, foliage, and future item kinds.
+    pass-contract/item-kind compatibility checks. Initial metadata and checks
+    are in place; remaining work is to make capabilities richer than pass
+    semantic masks and use them while enabling new item kinds per pass.
 17. Remove `RenderItemDrawSubmitRequest::prepare_material_resources`. Done:
     `RenderItemResourceBinding` now carries explicit pass resource packets, and
     `bind_render_item_common_resources()` can bind them for any shader layout.
