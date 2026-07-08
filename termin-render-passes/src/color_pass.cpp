@@ -156,7 +156,13 @@ struct ColorRenderTask {
         const std::vector<RenderItemNamedTextureBinding>& extra_textures)
     {
         named_uniforms = {{
-            {"draw_data", &draw_data, static_cast<uint32_t>(sizeof(draw_data))},
+            {
+                "draw_data",
+                &draw_data,
+                static_cast<uint32_t>(sizeof(draw_data)),
+                "draw_data",
+                nullptr,
+            },
         }};
         resources = {};
         resources.material_resources = material_resources;
