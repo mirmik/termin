@@ -388,6 +388,7 @@ class ProjectBrowserTcgui:
             items.append(MenuItem.sep())
 
         items.append(MenuItem("Create: Directory...", on_click=self._create_directory))
+        items.append(MenuItem("Create: File...", on_click=self._create_file))
         items.append(MenuItem("Create: Material...", on_click=self._create_material))
         items.append(MenuItem("Create: Shader...", on_click=self._create_shader))
         items.append(MenuItem("Create: Component...", on_click=self._create_component))
@@ -419,6 +420,7 @@ class ProjectBrowserTcgui:
         items.append(MenuItem("Copy Absolute Path", on_click=lambda p=directory: self._copy_absolute_path(p)))
         items.append(MenuItem("Show in Explorer", on_click=lambda p=directory: self._reveal_in_explorer(p)))
         items.append(MenuItem("Create: Directory...", on_click=lambda d=directory: self._create_directory_in(d)))
+        items.append(MenuItem("Create: File...", on_click=lambda d=directory: self._create_file_in(d)))
         items.append(MenuItem("Refresh", on_click=self.refresh))
         menu.items = items
         menu.show(ui, x, y)
@@ -471,6 +473,15 @@ class ProjectBrowserTcgui:
 
     def _create_directory(self) -> None:
         self._ops.create_directory(self._selected_dir, self.refresh)
+
+    def _create_directory_in(self, directory: Path) -> None:
+        self._ops.create_directory(directory, self.refresh)
+
+    def _create_file(self) -> None:
+        self._ops.create_file(self._selected_dir, self.refresh)
+
+    def _create_file_in(self, directory: Path) -> None:
+        self._ops.create_file(directory, self.refresh)
 
     def _delete_item(self, path: Path) -> None:
         self._ops.delete_item(path, self.refresh)
