@@ -15,7 +15,7 @@ class MenuItem:
 
     __slots__ = (
         "label", "icon", "shortcut", "enabled", "separator",
-        "on_click", "is_checkable", "checked",
+        "on_click", "is_checkable", "checked", "submenu",
     )
 
     def __init__(
@@ -29,6 +29,7 @@ class MenuItem:
         on_click: Callable[[], None] | None = None,
         is_checkable: bool = False,
         checked: bool = False,
+        submenu: Menu | list[MenuItem] | None = None,
     ):
         self.label = label
         self.icon = icon
@@ -38,6 +39,7 @@ class MenuItem:
         self.on_click = on_click
         self.is_checkable = is_checkable
         self.checked = checked
+        self.submenu = submenu
 
     @staticmethod
     def sep() -> MenuItem:
@@ -95,6 +97,8 @@ class Menu(Widget):
         self._hovered_index: int = -1
         self._scroll_offset: float = 0.0
         self._content_height: float = 0.0
+        self._parent_menu: Menu | None = None
+        self._child_menu: Menu | None = None
 
     def add_item(self, item: MenuItem) -> None:
         """Append a menu item."""
@@ -127,6 +131,8 @@ class Menu(Widget):
             content_w += self.font_size  # width for "✓" glyph
         if max_shortcut_w > 0:
             content_w += self.shortcut_gap + max_shortcut_w
+        if self._has_submenus():
+            content_w += self.font_size + self.padding_x
 
         content_h = self.padding_y * 2
         for it in self.items:
@@ -143,8 +149,17 @@ class Menu(Widget):
     # Show / hide via overlay
     # ------------------------------------------------------------------
 
-    def show(self, ui, x: float, y: float):
+    def show(
+        self,
+        ui,
+        x: float,
+        y: float,
+        *,
+        parent_menu: Menu | None = None,
+        dismiss_on_outside: bool = True,
+    ):
         """Show this menu as an overlay at (*x*, *y*)."""
+        self._parent_menu = parent_menu
         w, content_h = self._compute_content_size()
         vw = ui._viewport_w
         vh = ui._viewport_h
@@ -168,10 +183,15 @@ class Menu(Widget):
         self.layout(x, y, w, h, vw, vh)
 
         self._hovered_index = -1
-        ui.show_overlay(self, dismiss_on_outside=True, on_dismiss=self._on_dismissed)
+        ui.show_overlay(self, dismiss_on_outside=dismiss_on_outside, on_dismiss=self._on_dismissed)
 
     def _on_dismissed(self):
+        parent = self._parent_menu
+        if parent is not None and parent._child_menu is self:
+            parent._child_menu = None
         self._hovered_index = -1
+        self._parent_menu = None
+        self._hide_child_menu()
 
     # ------------------------------------------------------------------
     # Geometry helpers
@@ -234,6 +254,65 @@ class Menu(Widget):
         """Any item declared as checkable — reserves space for the checkmark."""
         return any(it.is_checkable for it in self.items if not it.separator)
 
+    def _has_submenus(self) -> bool:
+        return any(it.submenu is not None for it in self.items if not it.separator)
+
+    def _submenu_for_item(self, item: MenuItem) -> Menu | None:
+        if item.submenu is None:
+            return None
+        if isinstance(item.submenu, Menu):
+            return item.submenu
+        submenu = Menu()
+        submenu.items = item.submenu
+        item.submenu = submenu
+        return submenu
+
+    def _hide_child_menu(self) -> None:
+        child = self._child_menu
+        if child is None:
+            return
+        self._child_menu = None
+        if child._ui is not None:
+            child._ui.hide_overlay(child)
+        else:
+            child._on_dismissed()
+
+    def _hide_menu_chain(self) -> None:
+        root = self
+        while root._parent_menu is not None:
+            root = root._parent_menu
+        if root._ui is not None:
+            root._ui.hide_overlay(root)
+        else:
+            root._on_dismissed()
+
+    def _open_submenu(self, index: int) -> None:
+        if not (0 <= index < len(self.items)):
+            self._hide_child_menu()
+            return
+        item = self.items[index]
+        submenu = self._submenu_for_item(item)
+        if submenu is None or not item.enabled:
+            self._hide_child_menu()
+            return
+        if self._child_menu is submenu:
+            return
+
+        self._hide_child_menu()
+        ui = self._ui
+        if ui is None:
+            return
+
+        item_y = self.y + self._item_y(index) - self._scroll_offset
+        submenu.show(
+            ui,
+            self.x + self.width - 2,
+            item_y,
+            parent_menu=self,
+            dismiss_on_outside=False,
+        )
+        self._child_menu = submenu
+
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
@@ -246,6 +325,7 @@ class Menu(Widget):
 
         has_icons = self._has_icons()
         has_checkable = self._has_checkable()
+        has_submenus = self._has_submenus()
         text_x_offset = self.padding_x + (self.icon_width if has_icons else 0)
         if has_checkable:
             text_x_offset += self.font_size  # space for checkmark
@@ -317,6 +397,15 @@ class Menu(Widget):
                     it.shortcut, self.shortcut_color, self.font_size * 0.9,
                 )
 
+            if has_submenus and it.submenu is not None:
+                renderer.draw_text(
+                    self.x + self.width - self.padding_x - scrollbar_pad - self.font_size * 0.7,
+                    text_y,
+                    ">",
+                    tc,
+                    self.font_size,
+                )
+
             y += self.item_height
         renderer.end_clip()
 
@@ -345,6 +434,7 @@ class Menu(Widget):
 
     def on_mouse_move(self, event: MouseEvent):
         self._hovered_index = self._index_at(event.y)
+        self._open_submenu(self._hovered_index)
 
     def on_mouse_leave(self):
         self._hovered_index = -1
@@ -362,11 +452,13 @@ class Menu(Widget):
         callback = None
         if 0 <= idx < len(self.items):
             it = self.items[idx]
+            if it.enabled and it.submenu is not None:
+                self._open_submenu(idx)
+                return
             if it.enabled and it.on_click:
                 callback = it.on_click
         # Close menu, then invoke callback (may block).
-        if self._ui is not None:
-            self._ui.hide_overlay(self)
+        self._hide_menu_chain()
         if callback is not None:
             callback()
 
@@ -402,16 +494,28 @@ class Menu(Widget):
             callback = None
             if 0 <= self._hovered_index < len(self.items):
                 it = self.items[self._hovered_index]
+                if it.enabled and it.submenu is not None:
+                    self._open_submenu(self._hovered_index)
+                    return True
                 if it.enabled and it.on_click:
                     callback = it.on_click
             ui = self._ui
-            if ui is not None:
-                ui.hide_overlay(self)
+            self._hide_menu_chain()
             if callback is not None:
                 if ui is not None:
                     ui.defer(callback)
                 else:
                     callback()
+            return True
+        if key == Key.RIGHT:
+            if 0 <= self._hovered_index < len(self.items):
+                self._open_submenu(self._hovered_index)
+                if self._child_menu is not None:
+                    self._child_menu._move_hover(1)
+            return True
+        if key == Key.LEFT:
+            if self._parent_menu is not None and self._ui is not None:
+                self._ui.hide_overlay(self)
             return True
         return False
 

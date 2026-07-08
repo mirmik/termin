@@ -220,6 +220,7 @@ WorldTextComponent::WorldTextComponent(const char* type_name)
 void WorldTextComponent::register_type() {
     ensure_world_text_render_item_encoder_registered();
     register_component_type<WorldTextComponent>("WorldTextComponent", "Component");
+    ComponentRegistry::instance().set_category("WorldTextComponent", "Rendering");
     auto& inspect = tc::InspectRegistry::instance();
     inspect.add_with_callbacks<WorldTextComponent, std::string>(
         "WorldTextComponent",

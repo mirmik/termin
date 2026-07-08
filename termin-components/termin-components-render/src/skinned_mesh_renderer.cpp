@@ -75,6 +75,7 @@ SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
 void SkinnedMeshRenderer::register_type() {
     MeshRenderer::register_type();
     register_component_type<SkinnedMeshRenderer>("SkinnedMeshRenderer", "MeshRenderer");
+    ComponentRegistry::instance().set_category("SkinnedMeshRenderer", "Rendering");
     register_component_requirement("SkinnedMeshRenderer", "MeshComponent");
 }
 

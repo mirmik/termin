@@ -29,6 +29,8 @@ class FEMFixedJointComponent(PythonComponent):
     body_entity_name = имя entity с FEMRigidBodyComponent.
     """
 
+    component_category = "Physics"
+
     inspect_fields = {
         "body_entity_name": InspectField(
             path="body_entity_name",

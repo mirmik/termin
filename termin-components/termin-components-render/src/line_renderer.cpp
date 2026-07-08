@@ -829,6 +829,7 @@ LineRenderer::LineRenderer(const char* type_name)
 void LineRenderer::register_type() {
     ensure_line_render_item_encoder_registered();
     register_component_type<LineRenderer>("LineRenderer", "Component");
+    ComponentRegistry::instance().set_category("LineRenderer", "Rendering");
     tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, TcMaterial>(
         "LineRenderer",
         "material",

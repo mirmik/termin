@@ -24,6 +24,8 @@ class FEMRigidBodyComponent(PythonComponent):
     его позу с transform entity.
     """
 
+    component_category = "Physics"
+
     inspect_fields = {
         "mass": InspectField(
             path="mass",

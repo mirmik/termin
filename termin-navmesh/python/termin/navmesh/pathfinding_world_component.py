@@ -49,6 +49,8 @@ class PathfindingWorldComponent(PythonComponent):
         PathfindingWorldComponent.instance()
     """
 
+    component_category = "Navigation"
+
     _instance: "PathfindingWorldComponent | None" = None
 
     @classmethod

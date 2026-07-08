@@ -34,6 +34,7 @@ NavMeshKeeperComponent::NavMeshKeeperComponent()
 
 void NavMeshKeeperComponent::register_type() {
     register_component_type<NavMeshKeeperComponent>("NavMeshKeeperComponent", "Component");
+    ComponentRegistry::instance().set_category("NavMeshKeeperComponent", "Navigation");
     tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, TcNavMesh>(
         "NavMeshKeeperComponent",
         "navmesh",

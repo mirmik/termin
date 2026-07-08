@@ -87,6 +87,7 @@ Light LightComponent::to_light() const {
 
 void LightComponent::register_type() {
     register_component_type<LightComponent>("LightComponent", "CxxComponent");
+    ComponentRegistry::instance().set_category("LightComponent", "Rendering");
     register_light_component_inspect_fields();
 }
 
