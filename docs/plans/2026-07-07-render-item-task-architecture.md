@@ -64,6 +64,11 @@ Implementation progress:
   material resource views plus named uniform/texture bindings. The shared submit
   path binds those resources for mesh, and non-mesh encoders can call
   `bind_render_item_common_resources()` for additional shader layouts.
+- 2026-07-09: `ColorPass` and `ShadowPass` now build pass-local render task
+  records before the submit loop. This is intentionally still a local
+  implementation slice, not the final shared `RenderTaskList` ABI, but the draw
+  loops now submit tasks instead of constructing submit requests directly from
+  sorted draw-call records.
 - Remaining live migration work: finish Python-facing RenderItem integration
   tests and continue replacing any historical docs/examples that still describe
   the retired geometry-side-channel model.
@@ -718,8 +723,10 @@ custom drawables from becoming backend submit owners.
     templates exist. Line/text should be enabled per pass only where their
     encoder produces the pass ABI, not merely because a draw encoder exists.
 15. Introduce a pass-owned `RenderTask` or `RenderTaskList` used by Color and
-    Shadow first, then by Id/Depth/DepthOnly/Normal. The draw loop should submit
-    tasks, not inspect item kinds directly.
+    Shadow first, then by Id/Depth/DepthOnly/Normal. Done as a pass-local
+    implementation slice for Color and Shadow; still needed for the
+    Id/Depth/DepthOnly/Normal family and for a shared task shape if duplication
+    starts to matter.
 16. Add encoder capability metadata and move pass membership decisions to
     pass-contract/item-kind compatibility checks. Mesh must use the same route
     as line, text, foliage, and future item kinds.
