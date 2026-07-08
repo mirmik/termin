@@ -133,6 +133,40 @@ tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item
     return item.material_phase;
 }
 
+struct ColorDrawData {
+    float u_model[16];
+};
+
+struct ColorRenderTask {
+    size_t source_draw_index = 0;
+    size_t item_index = SIZE_MAX;
+    const tc_render_item* item = nullptr;
+    Entity entity;
+    tc_component* component = nullptr;
+    tc_material_phase* material_phase = nullptr;
+    tc_shader_handle final_shader = tc_shader_handle_invalid();
+    std::string entity_name;
+    ColorDrawData draw_data{};
+    RenderContext draw_context;
+    std::array<RenderItemNamedUniformBinding, 1> named_uniforms{};
+    RenderItemResourceBinding resources{};
+
+    void attach_resources(
+        const MaterialPipelineResourceView* material_resources,
+        const std::vector<RenderItemNamedTextureBinding>& extra_textures)
+    {
+        named_uniforms = {{
+            {"draw_data", &draw_data, static_cast<uint32_t>(sizeof(draw_data))},
+        }};
+        resources = {};
+        resources.material_resources = material_resources;
+        resources.named_uniforms = named_uniforms.data();
+        resources.named_uniform_count = static_cast<uint32_t>(named_uniforms.size());
+        resources.named_textures = extra_textures.data();
+        resources.named_texture_count = static_cast<uint32_t>(extra_textures.size());
+    }
+};
+
 } // anonymous namespace
 
 ColorPass::ColorPass(const ColorPassConfig& config)
@@ -647,10 +681,13 @@ void ColorPass::execute_with_data(
             tgfx::SamplerHandle{}});
     }
 
-    size_t draw_index = 0;
     const std::string debug_pass_name = get_pass_name();
     const char* debug_pass_name_c = debug_pass_name.c_str();
 
+    std::vector<ColorRenderTask> render_tasks;
+    render_tasks.reserve(cached_draw_calls_.size());
+
+    size_t draw_index = 0;
     for (const auto& dc : cached_draw_calls_) {
         if (!dc.component) {
             tc::Log::error(
@@ -705,6 +742,71 @@ void ColorPass::execute_with_data(
             continue;
         }
 
+        ColorRenderTask task;
+        task.source_draw_index = draw_index;
+        task.item_index = dc.item_index;
+        task.item = item;
+        task.entity = dc.entity;
+        task.component = dc.component;
+        task.material_phase = phase;
+        task.final_shader = final_shader;
+        task.entity_name = ename ? ename : "";
+        if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(
+                task.draw_data.u_model,
+                item->model_matrix,
+                sizeof(task.draw_data.u_model));
+        } else {
+            Mat44f identity = Mat44f::identity();
+            std::memcpy(
+                task.draw_data.u_model,
+                identity.data,
+                sizeof(task.draw_data.u_model));
+        }
+
+        task.draw_context.view = data.view;
+        task.draw_context.projection = data.projection;
+        std::memcpy(
+            task.draw_context.model.data,
+            task.draw_data.u_model,
+            sizeof(task.draw_data.u_model));
+        task.draw_context.phase = phase_mark;
+        task.draw_context.pass_contract = color_material_pass_contract();
+        task.draw_context.current_tc_shader = TcShader(final_shader);
+        task.draw_context.layer_mask = data.layer_mask;
+        task.draw_context.render_category_mask = ctx.render_category_mask;
+        task.draw_context.camera_position = data.camera_position;
+        task.draw_context.viewport_width = data.rect.width;
+        task.draw_context.viewport_height = data.rect.height;
+        task.draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
+        render_tasks.push_back(std::move(task));
+        ++draw_index;
+    }
+
+    if (!render_tasks.empty() && !shadow_sampler_) {
+        tgfx::SamplerDesc sd;
+        sd.min_filter = tgfx::FilterMode::Nearest;
+        sd.mag_filter = tgfx::FilterMode::Nearest;
+        sd.mip_filter = tgfx::FilterMode::Nearest;
+        // ClampToEdge + clear-depth 1.0 gives the same "outside
+        // frustum = not in shadow" behaviour as GL's ClampToBorder
+        // + white border: sampling beyond the shadow map returns a
+        // texel cleared to the far plane, and LessOrEqual below
+        // passes the compare.
+        sd.address_u = tgfx::AddressMode::ClampToEdge;
+        sd.address_v = tgfx::AddressMode::ClampToEdge;
+        sd.address_w = tgfx::AddressMode::ClampToEdge;
+        sd.compare_enable = true;
+        sd.compare_op = tgfx::CompareOp::LessEqual;
+        shadow_sampler_ = device.create_sampler(sd);
+    }
+    material_resources.shadow_sampler = shadow_sampler_;
+
+    for (ColorRenderTask& task : render_tasks) {
+        task.attach_resources(&material_resources, extra_texture_bindings);
+    }
+
+    for (const ColorRenderTask& task : render_tasks) {
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
         // that slot with its default texture. Without this reset, a missing
@@ -713,7 +815,7 @@ void ColorPass::execute_with_data(
         ctx2->clear_resource_bindings();
 
         // Render state from the material phase.
-        RenderState state = convert_render_state(phase->state);
+        RenderState state = convert_render_state(task.material_phase->state);
         if (wireframe) state.polygon_mode = PolygonMode::Line;
 
         ctx2->set_depth_test(state.depth_test);
@@ -726,81 +828,24 @@ void ColorPass::execute_with_data(
                                ? tgfx::PolygonMode::Line
                                : tgfx::PolygonMode::Fill);
 
-        if (!shadow_sampler_) {
-            tgfx::SamplerDesc sd;
-            sd.min_filter = tgfx::FilterMode::Nearest;
-            sd.mag_filter = tgfx::FilterMode::Nearest;
-            sd.mip_filter = tgfx::FilterMode::Nearest;
-            // ClampToEdge + clear-depth 1.0 gives the same "outside
-            // frustum = not in shadow" behaviour as GL's ClampToBorder
-            // + white border: sampling beyond the shadow map returns a
-            // texel cleared to the far plane, and LessOrEqual below
-            // passes the compare.
-            sd.address_u = tgfx::AddressMode::ClampToEdge;
-            sd.address_v = tgfx::AddressMode::ClampToEdge;
-            sd.address_w = tgfx::AddressMode::ClampToEdge;
-            sd.compare_enable = true;
-            sd.compare_op = tgfx::CompareOp::LessEqual;
-            shadow_sampler_ = device.create_sampler(sd);
-        }
-        material_resources.shadow_sampler = shadow_sampler_;
-
-        struct ColorPushData {
-            float u_model[16];
-        };
-        ColorPushData push{};
-        if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-            std::memcpy(push.u_model, item->model_matrix, sizeof(push.u_model));
-        } else {
-            Mat44f identity = Mat44f::identity();
-            std::memcpy(push.u_model, identity.data, sizeof(push.u_model));
-        }
-        std::array<RenderItemNamedUniformBinding, 1> draw_uniforms{{
-            {"draw_data", &push, static_cast<uint32_t>(sizeof(push))},
-        }};
-        RenderItemResourceBinding resource_binding{};
-        resource_binding.material_resources = &material_resources;
-        resource_binding.named_uniforms = draw_uniforms.data();
-        resource_binding.named_uniform_count =
-            static_cast<uint32_t>(draw_uniforms.size());
-        resource_binding.named_textures = extra_texture_bindings.data();
-        resource_binding.named_texture_count =
-            static_cast<uint32_t>(extra_texture_bindings.size());
-
-        RenderContext draw_context;
-        draw_context.view = data.view;
-        draw_context.projection = data.projection;
-        std::memcpy(draw_context.model.data, push.u_model, sizeof(push.u_model));
-        draw_context.phase = phase_mark;
-        draw_context.pass_contract = color_material_pass_contract();
-        draw_context.current_tc_shader = TcShader(final_shader);
-        draw_context.layer_mask = data.layer_mask;
-        draw_context.render_category_mask = ctx.render_category_mask;
-        draw_context.camera_position = data.camera_position;
-        draw_context.viewport_width = data.rect.width;
-        draw_context.viewport_height = data.rect.height;
-        draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
-
         RenderItemDrawSubmitRequest encode_request{};
-        encode_request.shader = tc_shader_get(final_shader);
-        encode_request.shader_handle = final_shader;
+        encode_request.shader = tc_shader_get(task.final_shader);
+        encode_request.shader_handle = task.final_shader;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::FullMaterial;
-        encode_request.draw_context = &draw_context;
-        encode_request.material_phase = phase;
+        encode_request.draw_context = &task.draw_context;
+        encode_request.material_phase = task.material_phase;
         encode_request.phase_mark = phase_mark.c_str();
         encode_request.debug_pass_name = debug_pass_name_c;
-        encode_request.debug_entity_name = ename;
-        encode_request.resources = &resource_binding;
+        encode_request.debug_entity_name = task.entity_name.c_str();
+        encode_request.resources = &task.resources;
         if (!submit_render_item_draw(
             *ctx2,
-            *item,
+            *task.item,
             encode_request)) {
-            ++draw_index;
             continue;
         }
-        capture_debug_symbol(ename);
-        ++draw_index;
+        capture_debug_symbol(task.entity_name.c_str());
     }
 
     ctx2->end_pass();
