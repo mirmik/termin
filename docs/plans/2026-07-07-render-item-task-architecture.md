@@ -32,6 +32,16 @@ Implementation progress:
   `draw_geometry()`, `get_mesh_for_phase()`, and `resolve_mesh_geometry()`
   were removed from the live C++/Python API. Mesh, line, world text, foliage,
   and Python drawable components now submit through `collect_render_items()`.
+- 2026-07-08 audit: `ColorPass` and `ShadowPass` still duplicate collection for
+  non-mesh items in some draw paths. They collect items while building draw
+  calls, store the item payload only for mesh, and re-call
+  `collect_render_items()` during draw by `component + geometry_id`. The next
+  cleanup should make draw calls/tasks reference pass-owned collected items
+  instead of re-querying mutable drawable state.
+- 2026-07-08: initial C++ `RenderSceneItemCollector` helper landed in
+  `termin-render`. `ColorPass` and `ShadowPass` now collect scene items once per
+  pass execution and draw from collector item indices instead of re-collecting
+  non-mesh items during draw.
 - Remaining live migration work: finish Python-facing RenderItem integration
   tests and continue replacing any historical docs/examples that still describe
   the retired geometry-side-channel model.
@@ -109,6 +119,9 @@ Important properties:
   views;
 - the item is safe to copy into pass-owned storage;
 - malformed items are logged by the sink/collector instead of silently ignored.
+- `RenderItem` is a per-collection snapshot. A drawable may cache expensive
+  representation data, but it must not own the submitted `RenderItem` as mutable
+  draw state shared by multiple passes.
 
 Expected initial item kinds:
 
@@ -121,6 +134,32 @@ FoliageBatch
 
 The exact list can evolve, but the model must avoid reintroducing
 drawable-owned `draw_tgfx2()` paths for non-mesh renderers.
+
+#### Drawable Caches Versus RenderItem Ownership
+
+Avoid moving `RenderItem` ownership into drawables just to reduce repeated field
+initialization. Most item fields are cheap descriptors: handles, submesh
+indices, material phase references, transforms, and small flags. The expensive
+data should be cached below the item level:
+
+```text
+Drawable/component cache:
+  generated line meshes or point buffers
+  text layout and font atlas state
+  foliage data handles and instance buffers
+  resolved resource handles and generation counters
+
+Per-pass/per-frame RenderItem:
+  phase/material selection
+  model snapshot
+  item kind and payload handle/view
+  copied short strings or arena-owned borrowed payloads when needed
+```
+
+The pass-owned snapshot prevents drift between collection and draw. An encoder
+may resolve stable handles carried by the item, but it should not read mutable
+component fields to recover data that should have been captured in the item
+payload.
 
 ### RenderItemCollectContext
 
@@ -158,6 +197,45 @@ Responsibilities:
 
 This replaces the current `void*` return path that hides a C++ vector behind the
 C drawable ABI.
+
+### RenderSceneItemCollector
+
+Scene-oriented passes should share a collector helper instead of each pass
+hand-rolling scene iteration, item validation, lifetime storage, material phase
+resolution, and task indexing.
+
+Responsibilities:
+
+- iterate scene drawables with the caller's visibility, layer, and category
+  filters;
+- build a `tc_render_item_collect_context` from pass inputs;
+- collect each drawable exactly once per requested phase/context;
+- validate and copy item payloads into collector-owned frame/pass storage;
+- expose stable item references or indices for pass task builders;
+- optionally resolve common material phase references and entity/component
+  metadata;
+- log malformed items and invalid collection requests with pass/component
+  context.
+
+Non-responsibilities:
+
+- selecting final pass membership beyond caller-provided generic filters;
+- sorting or batching tasks as a semantic pass decision;
+- binding resources or issuing backend draw calls;
+- hiding mutable backend services inside the collection context.
+
+The important ownership rule is:
+
+```text
+Drawable emits into the collector.
+Collector owns copied item storage for the pass/frame.
+Pass tasks reference collector item indices.
+Draw code consumes the referenced item snapshot.
+```
+
+This avoids the current `component + geometry_id` re-collection pattern and also
+handles cases where one component emits multiple items for the same geometry id
+or material phase.
 
 ### Pass
 
@@ -297,6 +375,43 @@ other component packages:
 `termin-render-passes` should use the registry through the submission API, but
 it should not own item-kind encoders.
 
+## Custom Passes And Escape Hatches
+
+The encoder registry is not intended to be the whole user pass API. It is the
+standard item-kind backend ABI for scene drawable work.
+
+Supported paths:
+
+```text
+Scene drawable rendering:
+  collect RenderItems
+  build pass-owned RenderTasks
+  submit tasks through the shared submission layer and registered encoders
+
+Special/manual pass rendering:
+  pass uses tgfx2/backend APIs directly for fullscreen, blit, procedural,
+  compute-like, editor overlay, or other non-scene-drawable work
+```
+
+A custom pass may draw directly when it owns the geometry and resource policy.
+If it wants to render ordinary scene drawables, the expected path is
+`collect_render_items()` plus shared submission. Bypassing encoders for scene
+drawables is an advanced escape hatch: the pass then owns material binding,
+shader variants, skinning, item-kind payload interpretation, diagnostics, and
+compatibility with future item kinds.
+
+The pass plugin API should therefore sit above encoders:
+
+```text
+custom pass chooses phase/filter/contract/resources
+RenderSceneItemCollector gathers item snapshots
+pass builds and sorts tasks
+submit layer dispatches item-kind encoders
+```
+
+This keeps user passes flexible without making every custom pass know how to
+draw mesh, line, text, foliage, and future item kinds by hand.
+
 ## C-First Data Boundary
 
 The new protocol should be designed as C data first, with C++ wrappers layered
@@ -329,6 +444,34 @@ Existing C++ types such as `MaterialPipelinePassContract` and
 the drawable/pass/submit boundary should expose C-compatible views. This is
 especially important for Python and non-C++ drawables, which must not depend on
 C++ `Drawable` vtable bypasses.
+
+## Storage Layout Direction
+
+Keep `tc_render_item` as an AoS C ABI record. It is the emission and submission
+unit crossing C, C++, and Python boundaries, and a full SoA ABI would make union
+payloads, borrowed strings, and third-party item kinds much harder to extend.
+
+Use SoA selectively inside pass-owned implementation details:
+
+```text
+RenderSceneItemCollector:
+  may store common fields and typed payload buckets internally
+  keeps C ABI emission as tc_render_item
+
+RenderTaskList:
+  good candidate for SoA
+  item_index[]
+  sort_key[]
+  final_shader[]
+  resolved_phase[]
+  pass_local_payload_index[]
+```
+
+The first optimization target should be the task list, not the public item ABI.
+Sorting and draw loops mostly read task keys, shader handles, material refs, and
+item indices; they do not need to move whole item payloads around. If profiling
+shows pressure from item storage, the collector can add typed per-kind buckets
+or arenas without changing the drawable-facing ABI.
 
 ## Material And Resource Binding Direction
 
@@ -376,7 +519,13 @@ custom drawables from becoming backend submit owners.
    the live C++/Python render API.
 10. Keep `upload_per_draw_uniforms_tgfx2()` narrow and renderer-owned until
     skinned mesh bone data has a typed RenderItem payload/resource path.
-11. Update `docs/render-phase-semantics.md` after the live contract changes.
+11. Add `RenderSceneItemCollector` and make `ColorPass` / `ShadowPass` draw
+    calls reference collected item indices instead of re-collecting non-mesh
+    items during draw. Initial C++ helper and pass conversion are done; broader
+    pass-family adoption remains.
+12. Move common task-list construction toward pass-owned `RenderTaskList`
+    storage, with SoA task arrays where useful for sort/draw hot paths.
+13. Update `docs/render-phase-semantics.md` after the live contract changes.
 
 ## Diagnostics And Tests
 
@@ -417,6 +566,10 @@ Required tests:
   static initialization.
 - How skinned mesh bone data should move from `upload_per_draw_uniforms_tgfx2()`
   into an explicit typed payload/resource path.
+- Exact public shape of `RenderSceneItemCollector`: C-only helper, C++ helper
+  over C sinks, or both.
+- Whether task storage becomes a shared SoA `RenderTaskList` type or remains a
+  private optimization inside concrete pass families.
 
 ## Invariants
 

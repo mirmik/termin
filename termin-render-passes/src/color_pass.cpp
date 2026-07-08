@@ -143,26 +143,6 @@ void bind_draw_data_for_shader(
         shader && shader->name ? shader->name : "<unnamed>");
 }
 
-bool collect_color_render_item_for_draw(
-    tc_component* component,
-    const tc_render_item_collect_context& context,
-    int geometry_id,
-    RenderItemCollection& items,
-    tc_render_item& out_item)
-{
-    items.clear();
-    if (!collect_drawable_render_items(component, context, items)) {
-        return false;
-    }
-    for (const tc_render_item& item : items.items) {
-        if (item.geometry_id == geometry_id) {
-            out_item = item;
-            return true;
-        }
-    }
-    return false;
-}
-
 tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item) {
     if (!tc_material_handle_is_invalid(item.material) &&
         item.material_phase_index != SIZE_MAX) {
@@ -284,14 +264,6 @@ std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
 
 namespace {
 
-// User data for drawable iteration callback
-struct CollectDrawCallsData {
-    std::vector<PhaseDrawCall>* draw_calls;
-    const char* phase_mark;
-    MaterialPipelinePassContract pass_contract;
-    const RenderContext* render_context;
-};
-
 struct CollectShaderUsagesData {
     const char* phase_mark = nullptr;
     MaterialPipelinePassContract pass_contract;
@@ -301,79 +273,6 @@ struct CollectShaderUsagesData {
 const char* safe_component_type(const tc_component* component) {
     const char* type_name = component ? tc_component_type_name(component) : nullptr;
     return type_name ? type_name : "<unknown>";
-}
-
-// Callback for tc_scene_foreach_drawable
-bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
-    auto* data = static_cast<CollectDrawCallsData*>(user_data);
-    if (!tc || !data || !data->draw_calls || !data->phase_mark) {
-        tc::Log::error("[ColorPass] collect_drawable_draw_calls: invalid callback data");
-        return true;
-    }
-
-    // Filter by phase_mark
-    if (data->phase_mark[0] != '\0' && !tc_component_has_phase(tc, data->phase_mark)) {
-        return true;
-    }
-
-    tc_render_item_collect_context item_context{};
-    item_context.phase_mark = data->phase_mark;
-    item_context.layer_mask = data->render_context
-        ? data->render_context->layer_mask
-        : UINT64_MAX;
-    item_context.render_category_mask = data->render_context
-        ? data->render_context->render_category_mask
-        : UINT64_MAX;
-    item_context.debug_pass_name = "ColorPass";
-    item_context.pass_contract = &data->pass_contract;
-    item_context.camera = data->render_context
-        ? data->render_context->camera
-        : nullptr;
-
-    RenderItemCollection items;
-    if (!collect_drawable_render_items(tc, item_context, items)) {
-        return true;
-    }
-
-    // Build Entity from component's owner
-    Entity ent(tc->owner);
-    if (!ent.valid()) {
-        tc::Log::error(
-            "[ColorPass] collect_drawable_draw_calls: drawable component '%s' has invalid owner",
-            safe_component_type(tc));
-        return true;
-    }
-
-    for (const tc_render_item& item : items.items) {
-        tc_material_phase* phase = resolve_render_item_material_phase(item);
-        if (phase) {
-            // Get final shader with overrides (skinning, etc.) applied
-            tc_shader_handle base_shader = phase->shader;
-            ShaderOverrideContext override_context;
-            override_context.phase_mark = data->phase_mark;
-            override_context.geometry_id = item.geometry_id;
-            override_context.original_shader = TcShader(base_shader);
-            override_context.pass_contract = data->pass_contract;
-            tc_shader_handle final_shader =
-                override_drawable_shader(tc, override_context).handle;
-
-            PhaseDrawCall dc;
-            dc.entity = ent;
-            dc.component = tc;
-            dc.phase = phase;
-            dc.final_shader = final_shader;
-            dc.priority = phase->priority;
-            dc.geometry_id = item.geometry_id;
-            if (item.kind == TC_RENDER_ITEM_KIND_MESH) {
-                dc.item = item;
-            }
-            dc.material = item.material;
-            dc.phase_index = item.material_phase_index;
-            data->draw_calls->push_back(dc);
-        }
-    }
-
-    return true;
 }
 
 bool collect_color_drawable_shader_usages(tc_component* tc, void* user_data) {
@@ -425,7 +324,8 @@ void ColorPass::collect_draw_calls(
     tc_scene_handle scene,
     const std::string& phase_mark,
     const RenderContext& render_context,
-    uint64_t layer_mask
+    uint64_t layer_mask,
+    RenderSceneItemCollector& collector
 ) {
     // Clear but keep capacity
     cached_draw_calls_.clear();
@@ -435,18 +335,67 @@ void ColorPass::collect_draw_calls(
         return;
     }
 
-    // Collect draw calls via drawable iteration
-    CollectDrawCallsData data;
-    data.draw_calls = &cached_draw_calls_;
-    data.phase_mark = phase_mark.c_str();
-    data.pass_contract = color_material_pass_contract();
-    data.render_context = &render_context;
+    MaterialPipelinePassContract pass_contract = color_material_pass_contract();
+    RenderSceneItemCollectRequest request{};
+    request.scene = scene;
+    request.phase_mark = phase_mark.c_str();
+    request.layer_mask = layer_mask;
+    request.render_category_mask = render_context.render_category_mask;
+    request.debug_pass_name = "ColorPass";
+    request.pass_contract = &pass_contract;
+    request.camera = render_context.camera;
+    if (!collector.collect(request)) {
+        tc::Log::error(
+            "[ColorPass] collect_draw_calls: item collection failed for phase '%s'",
+            phase_mark.c_str());
+    }
 
-    // Use tc_scene_foreach_drawable with filtering
-    int filter_flags = TC_SCENE_FILTER_ENABLED
-                     | TC_SCENE_FILTER_VISIBLE
-                     | TC_SCENE_FILTER_ENTITY_ENABLED;
-    tc_scene_foreach_drawable(scene, collect_drawable_draw_calls, &data, filter_flags, layer_mask);
+    const auto& items = collector.items();
+    cached_draw_calls_.reserve(items.size());
+    for (size_t item_index = 0; item_index < items.size(); ++item_index) {
+        const tc_render_item& item = items[item_index];
+        tc_component* tc = item.component;
+        if (!tc) {
+            tc::Log::error(
+                "[ColorPass] collect_draw_calls: collected item %zu has null component",
+                item_index);
+            continue;
+        }
+
+        Entity ent(tc->owner);
+        if (!ent.valid()) {
+            tc::Log::error(
+                "[ColorPass] collect_draw_calls: drawable component '%s' has invalid owner",
+                safe_component_type(tc));
+            continue;
+        }
+
+        tc_material_phase* phase = resolve_render_item_material_phase(item);
+        if (!phase) {
+            continue;
+        }
+
+        ShaderOverrideContext override_context;
+        override_context.phase_mark = phase_mark;
+        override_context.geometry_id = item.geometry_id;
+        override_context.original_shader = TcShader(phase->shader);
+        override_context.pass_contract = pass_contract;
+        tc_shader_handle final_shader =
+            override_drawable_shader(tc, override_context).handle;
+
+        PhaseDrawCall dc;
+        dc.entity = ent;
+        dc.component = tc;
+        dc.phase = phase;
+        dc.final_shader = final_shader;
+        dc.priority = phase->priority;
+        dc.geometry_id = item.geometry_id;
+        dc.item_index = item_index;
+        dc.item = item;
+        dc.material = item.material;
+        dc.phase_index = item.material_phase_index;
+        cached_draw_calls_.push_back(dc);
+    }
 }
 
 void ColorPass::collect_shader_usages(
@@ -660,7 +609,13 @@ void ColorPass::execute_with_data(
     collect_context.scene = TcSceneRef(data.scene);
     collect_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
-    collect_draw_calls(data.scene, phase_mark, collect_context, data.layer_mask);
+    RenderSceneItemCollector scene_items;
+    collect_draw_calls(
+        data.scene,
+        phase_mark,
+        collect_context,
+        data.layer_mask,
+        scene_items);
 
     if (sort_mode != "none" && !cached_draw_calls_.empty()) {
         compute_sort_keys(data.camera_position);
@@ -775,39 +730,21 @@ void ColorPass::execute_with_data(
         entity_names.push_back(ename ? ename : "");
 
         tc_shader_handle final_shader = dc.final_shader;
-        const tc_render_item* item = &dc.item;
-        tc_render_item typed_item{};
-        RenderItemCollection item_collection;
-        if (dc.item.kind != TC_RENDER_ITEM_KIND_MESH) {
-            tc_render_item_collect_context item_context{};
-            item_context.phase_mark = phase_mark.c_str();
-            item_context.layer_mask = data.layer_mask;
-            item_context.render_category_mask = ctx.render_category_mask;
-            item_context.debug_pass_name = debug_pass_name_c;
-            item_context.pass_contract = &collect_context.pass_contract;
-
-            if (!collect_color_render_item_for_draw(
-                    dc.component,
-                    item_context,
-                    dc.geometry_id,
-                    item_collection,
-                    typed_item)) {
-                ++draw_index;
-                continue;
-            }
-            item = &typed_item;
-            phase = resolve_render_item_material_phase(*item);
-            if (!phase) {
-                ++draw_index;
-                continue;
-            }
-
-            ShaderOverrideContext override_context;
-            override_context.phase_mark = phase_mark;
-            override_context.geometry_id = item->geometry_id;
-            override_context.original_shader = TcShader(phase->shader);
-            override_context.pass_contract = collect_context.pass_contract;
-            final_shader = override_drawable_shader(dc.component, override_context).handle;
+        const tc_render_item* item = scene_items.item(dc.item_index);
+        if (!item) {
+            tc::Log::error(
+                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu has invalid item index %zu",
+                get_pass_name().c_str(),
+                phase_mark.c_str(),
+                draw_index,
+                dc.item_index);
+            ++draw_index;
+            continue;
+        }
+        phase = resolve_render_item_material_phase(*item);
+        if (!phase) {
+            ++draw_index;
+            continue;
         }
 
         if (item->kind != TC_RENDER_ITEM_KIND_MESH) {
