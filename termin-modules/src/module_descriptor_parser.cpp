@@ -1,5 +1,7 @@
 #include "termin_modules/module_descriptor_parser.hpp"
 
+#include <tcbase/tc_trent.hpp>
+#include <tcbase/tc_value_trent.hpp>
 #include <tcbase/trent/yaml.h>
 
 #include <fstream>
@@ -18,7 +20,11 @@ std::string read_text_file(const std::filesystem::path& path, std::string& error
     return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
 }
 
-std::optional<std::string> get_optional_string(const nos::trent& node, const char* key) {
+tc::trent parse_descriptor_yaml(const std::string& text) {
+    return tc::trent::adopt(tc::trent_to_tc_value(nos::yaml::parse(text)));
+}
+
+std::optional<std::string> get_optional_string(tc::trent_view node, const char* key) {
     if (!node.is_dict() || !node.contains(key) || !node[key].is_string()) {
         return std::nullopt;
     }
@@ -48,7 +54,7 @@ std::string resolve_template_vars(std::string value, const std::string& module_i
 }
 
 std::optional<std::string> get_platform_string(
-    const nos::trent& node,
+    tc::trent_view node,
     const char* key,
     const std::string& module_id,
     std::string& error
@@ -59,7 +65,7 @@ std::optional<std::string> get_platform_string(
         return std::nullopt;
     }
 
-    const nos::trent& value_node = node[key];
+    tc::trent_view value_node = node[key];
     if (value_node.is_string()) {
         return resolve_template_vars(value_node.as_string(), module_id);
     }
@@ -83,19 +89,19 @@ std::optional<std::string> get_platform_string(
     return resolve_template_vars(value_node[platform].as_string(), module_id);
 }
 
-std::vector<std::string> get_optional_string_list(const nos::trent& node, const char* key, std::string& error) {
+std::vector<std::string> get_optional_string_list(tc::trent_view node, const char* key, std::string& error) {
     std::vector<std::string> result;
     if (!node.is_dict() || !node.contains(key)) {
         return result;
     }
 
-    const nos::trent& list_node = node[key];
+    tc::trent_view list_node = node[key];
     if (!list_node.is_list()) {
         error = std::string("Field '") + key + "' must be a list";
         return {};
     }
 
-    for (const auto& item : list_node.as_list()) {
+    for (tc::trent_view item : list_node.as_list()) {
         if (!item.is_string()) {
             error = std::string("Field '") + key + "' must contain only strings";
             return {};
@@ -106,15 +112,16 @@ std::vector<std::string> get_optional_string_list(const nos::trent& node, const 
     return result;
 }
 
-bool get_optional_bool(const nos::trent& node, const char* key, bool def) {
+bool get_optional_bool(tc::trent_view node, const char* key, bool def) {
     if (!node.is_dict() || !node.contains(key)) {
         return def;
     }
 
-    return node.get_as_boolean_def(nos::trent_path(key), def);
+    tc::trent_view value = node[key];
+    return value.is_bool() ? value.as_bool() : def;
 }
 
-std::optional<ModuleKind> parse_kind(const nos::trent& root, const std::filesystem::path& path, std::string& error) {
+std::optional<ModuleKind> parse_kind(tc::trent_view root, const std::filesystem::path& path, std::string& error) {
     const auto type_value = get_optional_string(root, "type");
     if (!type_value.has_value()) {
         if (path.extension() == ".module") {
@@ -148,9 +155,9 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
         return std::nullopt;
     }
 
-    nos::trent root;
+    tc::trent root;
     try {
-        root = nos::yaml::parse(text);
+        root = parse_descriptor_yaml(text);
     } catch (const std::exception& e) {
         error = "Failed to parse descriptor " + path.string() + ": " + e.what();
         return std::nullopt;
@@ -188,7 +195,7 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
             return std::nullopt;
         }
 
-        const nos::trent& build = root["build"];
+        tc::trent_view build = root["build"];
         auto config = std::make_shared<CppModuleConfig>();
         const auto build_command = get_platform_string(build, "command", spec.id, error);
         if (!error.empty()) {
