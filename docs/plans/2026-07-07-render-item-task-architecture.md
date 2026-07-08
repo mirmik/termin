@@ -73,9 +73,12 @@ Implementation progress:
 - 2026-07-09: render item encoders now register explicit capabilities. Pass
   membership decisions in `GeometryPassBase` and `DepthOnlyPass` use
   `render_item_encoder_supports_pass()` instead of hard-coded mesh-kind checks.
-  Current capabilities preserve existing behavior: mesh supports id/depth/
-  depth-only/normal, while line/text/foliage are not silently enabled there
-  until their pass contracts and tests are completed.
+  Current capabilities preserve existing behavior for depth/depth-only/normal:
+  mesh remains the only enabled item kind there until other encoders declare and
+  test those pass ABIs.
+- 2026-07-09: `LineBatch` is enabled for `IdPass`. The pass now supplies pick
+  color through `RenderContext::override_color`, and the line encoder uses its
+  existing override-color path instead of material shading for picking.
 - Remaining live migration work: finish Python-facing RenderItem integration
   tests and continue replacing any historical docs/examples that still describe
   the retired geometry-side-channel model.
@@ -391,8 +394,9 @@ Important cases:
   eventually participate in `IdPass`, `DepthPass`, `DepthOnlyPass`, and
   `NormalPass` once those passes declare matching foliage vertex-transform
   contracts and built-in shader templates.
-- `LineBatch` and `TextBatch` can be meaningful in `IdPass` when the pass supplies
-  an override pick color through the draw context.
+- `LineBatch` is meaningful in `IdPass` because the pass supplies an override
+  pick color through the draw context. `TextBatch` can follow the same route
+  once it has focused picking coverage.
 - `LineBatch` and `TextBatch` are not automatically meaningful in `DepthPass` or
   `NormalPass`: a color/text/line encoder can submit backend commands, but that
   does not imply it writes encoded depth or normal values with the pass ABI.
@@ -780,8 +784,10 @@ Required tests:
   fall back.
 - geometry-pass coverage tests for foliage id/depth/normal once foliage pass
   contracts and shader templates are added;
-- line/text picking tests if `IdPass` support is enabled through override-color
-  draw context.
+- line picking contract coverage when `IdPass` support is enabled through
+  override-color draw context; add pixel-level picking smoke when the test
+  harness is available.
+- text picking tests before enabling `TextBatch` in `IdPass`.
 - resource binding tests proving non-mesh encoders no longer depend on
   `RenderItemDrawSubmitRequest::prepare_material_resources`.
 
