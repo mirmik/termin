@@ -15,21 +15,15 @@
 #include "tgfx2/i_render_device.hpp"
 #include "tgfx2/tc_shader_bridge.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <optional>
-#include <span>
+#include <set>
 #include <string>
-#include <vector>
 
 extern "C" {
 #include "tc_picking.h"
-#include <tgfx/resources/tc_shader_registry.h>
-#include <tgfx/resources/tc_mesh_registry.h>
-#include "core/tc_drawable_protocol.h"
 }
 
 #include <termin/camera/camera_component.hpp>
@@ -58,13 +52,6 @@ struct IdPushStd140 {
 };
 static_assert(sizeof(IdPushStd140) == 80,
               "IdPushStd140 must be mat4 + vec4");
-
-struct IdMeshTask {
-    Entity entity;
-    tc_render_item item{};
-    tc_shader_handle final_shader = tc_shader_handle_invalid();
-    int pick_id = 0;
-};
 
 MaterialPipelinePassContract id_material_pass_contract()
 {
@@ -131,9 +118,8 @@ void IdPass::release_tgfx2_resources() {
 // ----------------------------------------------------------------------------
 //
 // Writes a color attachment (RGBA-encoded pick IDs) and uses depth test +
-// write for occlusion. Parameter block is a single 208-byte std140 UBO
-// containing {model, view, projection, pickColor}. Mesh-backed and typed
-// non-mesh drawables are submitted through RenderItems.
+// write for occlusion. Mesh-backed drawables are collected by GeometryPassBase
+// and submitted through RenderItems.
 void IdPass::execute_with_data_tgfx2(
     ExecuteContext& ctx,
     const Rect2i& rect,
@@ -163,87 +149,8 @@ void IdPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    const MaterialPipelinePassContract pass_contract = id_material_pass_contract();
-    const char* pick_phase = phase_mark();
-    const std::string debug_pass_name = get_pass_name();
-    const char* debug_pass_name_c = debug_pass_name.c_str();
-
-    std::vector<IdMeshTask> mesh_tasks;
-    if (tc_scene_handle_valid(scene)) {
-        struct CollectItemsContext {
-            std::vector<IdMeshTask>* tasks = nullptr;
-            MaterialPipelinePassContract pass_contract;
-            tc_shader_handle base_shader = tc_shader_handle_invalid();
-            const char* phase_mark = nullptr;
-            const char* debug_pass_name = "IdPass";
-            uint64_t layer_mask = 0;
-            uint64_t render_category_mask = 0;
-        };
-
-        CollectItemsContext collect_context{
-            &mesh_tasks,
-            pass_contract,
-            id_shader_handle_,
-            pick_phase,
-            debug_pass_name_c,
-            layer_mask,
-            ctx.render_category_mask};
-
-        auto collect_callback = [](tc_component* component, void* user_data) -> bool {
-            auto* data = static_cast<CollectItemsContext*>(user_data);
-            if (!component || !data || !data->tasks || !data->phase_mark) {
-                tc::Log::error("[IdPass] invalid RenderItem collection callback state");
-                return true;
-            }
-
-            Entity entity(component->owner);
-            if (!entity.valid() || !entity.pickable()) {
-                return true;
-            }
-
-            tc_render_item_collect_context item_context{};
-            item_context.phase_mark = data->phase_mark;
-            item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-            item_context.layer_mask = data->layer_mask;
-            item_context.render_category_mask = data->render_category_mask;
-            item_context.debug_pass_name = data->debug_pass_name;
-            item_context.pass_contract = &data->pass_contract;
-
-            RenderItemCollection items;
-            if (!collect_drawable_render_items(component, item_context, items)) {
-                return true;
-            }
-
-            for (const tc_render_item& item : items.items) {
-                if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
-                    continue;
-                }
-
-                ShaderOverrideContext override_context;
-                override_context.phase_mark = data->phase_mark;
-                override_context.geometry_id = item.geometry_id;
-                override_context.original_shader = TcShader(data->base_shader);
-                override_context.pass_contract = data->pass_contract;
-
-                IdMeshTask task;
-                task.entity = entity;
-                task.item = item;
-                task.final_shader = override_drawable_shader(component, override_context).handle;
-                task.pick_id = static_cast<int>(entity.pick_id());
-                data->tasks->push_back(task);
-            }
-            return true;
-        };
-
-        int filter_flags = TC_SCENE_FILTER_ENABLED
-                         | TC_SCENE_FILTER_VISIBLE
-                         | TC_SCENE_FILTER_ENTITY_ENABLED;
-        tc_scene_foreach_drawable(scene, collect_callback, &collect_context, filter_flags, layer_mask);
-        std::sort(mesh_tasks.begin(), mesh_tasks.end(),
-            [](const IdMeshTask& a, const IdMeshTask& b) {
-                return a.final_shader.index < b.final_shader.index;
-            });
-    }
+    collect_draw_calls(scene, layer_mask, ctx.render_category_mask, id_shader_handle_);
+    sort_draw_calls_by_shader();
 
     entity_names.clear();
     std::set<std::string> seen_entities;
@@ -327,20 +234,21 @@ void IdPass::execute_with_data_tgfx2(
             id_resources);
     };
 
-    auto draw_mesh_task = [&](const IdMeshTask& task) {
-        const char* name = task.entity.name();
+    auto draw_item = [&](const DrawCall& dc) {
+        const tc_render_item& item = dc.item;
+        const char* name = dc.entity.name();
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);
         }
 
-        if (task.pick_id != current_pick_id) {
-            current_pick_id = task.pick_id;
-            id_to_rgb(task.pick_id, pick_r, pick_g, pick_b);
+        if (dc.pick_id != current_pick_id) {
+            current_pick_id = dc.pick_id;
+            id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
 
         IdPushStd140 push{};
-        if (task.item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-            std::memcpy(push.u_model, task.item.model_matrix, sizeof(float) * 16);
+        if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(push.u_model, item.model_matrix, sizeof(float) * 16);
         } else {
             Mat44f identity = Mat44f::identity();
             std::memcpy(push.u_model, identity.data, sizeof(float) * 16);
@@ -358,7 +266,7 @@ void IdPass::execute_with_data_tgfx2(
         MaterialPipelineResourceContext draw_resources{};
         draw_resources.uniforms = base_draw_uniforms;
         RenderItemDrawSubmitRequest encode_request{};
-        encode_request.shader_handle = task.final_shader;
+        encode_request.shader_handle = dc.final_shader;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.material_resources = &draw_resources;
@@ -366,15 +274,15 @@ void IdPass::execute_with_data_tgfx2(
         encode_request.debug_entity_name = name;
         if (!submit_render_item_draw(
             *ctx.ctx2,
-            task.item,
+            item,
             encode_request)) {
             return;
         }
         capture_debug_symbol(name);
     };
 
-    for (const IdMeshTask& task : mesh_tasks) {
-        draw_mesh_task(task);
+    for (const DrawCall& dc : cached_draw_calls_) {
+        draw_item(dc);
     }
 
     ctx.ctx2->end_pass();
