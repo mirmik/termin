@@ -87,6 +87,9 @@ protected:
     }
     bool uses_material_phase_shader_override() const override { return true; }
     MaterialPipelinePassContract shader_pass_contract() const override;
+    RenderItemPassSemantic render_item_pass_semantic() const override {
+        return RenderItemPassSemantic::Depth;
+    }
     tc_shader_handle shader_usage_base_shader() const override;
     std::optional<std::string> fbo_format() const override { return "r16f"; }
 };

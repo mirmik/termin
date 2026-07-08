@@ -9,6 +9,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/line_renderer.hpp>
 #include <termin/render/material_pipeline.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <termin/render/world_text_component.hpp>
 #include <termin/tc_scene.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -419,6 +420,57 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
     REQUIRE(items[0].payload.line_batch.points == collected_points);
     CHECK(items[0].payload.line_batch.points[0].x == 0.0);
     CHECK(items[0].payload.line_batch.points[1].x == 1.0);
+
+    tc_shader_shutdown();
+    tc_material_shutdown();
+}
+
+TEST_CASE("LineRenderer can emit material-phaseless line render items for pick passes") {
+    tc_material_init();
+    tc_shader_init();
+
+    termin::LineRenderer::register_type();
+    CHECK(termin::render_item_encoder_supports_pass(
+        TC_RENDER_ITEM_KIND_LINE_BATCH,
+        termin::RenderItemPassSemantic::Id));
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-render-items-pick");
+    termin::Entity entity = scene.create_entity("line");
+
+    auto* renderer = new termin::LineRenderer();
+    renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
+    renderer->set_render_mode(termin::LineRenderMode::WorldBillboard);
+    tc_material_handle material_handle = tc_material_create(
+        "line-renderer-render-item-pick-opaque-only",
+        "line-renderer-render-item-pick-opaque-only");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    REQUIRE(tc_material_add_phase(
+        material,
+        tc_shader_handle_invalid(),
+        "opaque",
+        0) != nullptr);
+    renderer->set_material(termin::TcMaterial(material_handle));
+    entity.add_component(renderer);
+
+    tc_render_item_collect_context collect_context{};
+    collect_context.phase_mark = "pick";
+    collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
+    collect_context.debug_pass_name = "IdPass";
+
+    termin::RenderItemCollection collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        renderer->tc_component_ptr(),
+        collect_context,
+        collection));
+
+    const std::vector<tc_render_item>& items = collection.items;
+    REQUIRE(items.size() == 1u);
+    CHECK(items[0].kind == TC_RENDER_ITEM_KIND_LINE_BATCH);
+    CHECK(items[0].material_phase == nullptr);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE) == 0u);
+    CHECK((items[0].flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) != 0u);
 
     tc_shader_shutdown();
     tc_material_shutdown();
