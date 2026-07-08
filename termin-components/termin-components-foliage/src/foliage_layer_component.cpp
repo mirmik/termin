@@ -742,12 +742,10 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
     ctx2.clear_resource_bindings();
     ctx2.use_shader_resource_layout(shader_binding.shader);
 
-    if (!request.prepare_material_resources) {
-        tc::Log::error(
-            "[FoliageLayerComponent] cannot draw foliage: RenderItem submit request has no material resource callback");
+    if (!bind_render_item_common_resources(ctx2, shader_binding.shader, request)) {
+        tc::Log::error("[FoliageLayerComponent] failed to bind common RenderItem resources");
         return false;
     }
-    request.prepare_material_resources(ctx2, shader_binding.shader, phase);
 
     ctx2.bind_uniform_data("foliage_draw", &push, sizeof(push));
     ctx2.bind_storage_buffer(

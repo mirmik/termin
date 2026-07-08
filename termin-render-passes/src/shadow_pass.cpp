@@ -687,14 +687,35 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     Mat44f identity = Mat44f::identity();
                     std::memcpy(push.u_model, identity.data, sizeof(float) * 16);
                 }
-                std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
-                    {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
-                    {"shadow_draw", &push, static_cast<uint32_t>(sizeof(push))},
+                std::array<RenderItemNamedUniformBinding, 3> draw_uniforms{{
+                    {
+                        "per_frame",
+                        &per_frame,
+                        static_cast<uint32_t>(sizeof(per_frame)),
+                        "shadow_draw",
+                        nullptr,
+                    },
+                    {
+                        "shadow_draw",
+                        &push,
+                        static_cast<uint32_t>(sizeof(push)),
+                        "shadow_draw",
+                        nullptr,
+                    },
+                    {
+                        "per_frame",
+                        &typed_per_frame,
+                        static_cast<uint32_t>(sizeof(typed_per_frame)),
+                        nullptr,
+                        "shadow_draw",
+                    },
                 }};
-                MaterialPipelineResourceContext draw_resources{};
-                draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-                    draw_uniforms.data(),
-                    draw_uniforms.size());
+                MaterialPipelineResourceView draw_material_resources{};
+                RenderItemResourceBinding resource_binding{};
+                resource_binding.material_resources = &draw_material_resources;
+                resource_binding.named_uniforms = draw_uniforms.data();
+                resource_binding.named_uniform_count =
+                    static_cast<uint32_t>(draw_uniforms.size());
                 RenderContext draw_context;
                 draw_context.view = view_matrix;
                 draw_context.projection = proj_matrix;
@@ -718,36 +739,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 encode_request.phase_mark = "shadow";
                 encode_request.debug_pass_name = "ShadowPass";
                 encode_request.debug_entity_name = dc.entity.name();
-                encode_request.prepare_material_resources =
-                    [&device, &typed_per_frame, &draw_resources](
-                        tgfx::RenderContext2& draw_ctx,
-                        const tc_shader* shader,
-                        tc_material_phase* live_phase) {
-                        if (!shader || !live_phase) {
-                            tc::Log::error(
-                                "[ShadowPass/tgfx2] RenderItem resource callback called without shader or phase");
-                            return;
-                        }
-
-                        if (tc_shader_find_resource_binding(shader, "shadow_draw")) {
-                            prepare_material_pipeline_resources(
-                                draw_ctx,
-                                device,
-                                shader,
-                                live_phase,
-                                draw_resources);
-                            return;
-                        }
-
-                        MaterialPipelineResourceView typed_resources{};
-                        typed_resources.per_frame = &typed_per_frame;
-                        prepare_material_pipeline_resources(
-                            draw_ctx,
-                            device,
-                            shader,
-                            live_phase,
-                            typed_resources);
-                    };
+                encode_request.resources = &resource_binding;
                 if (!submit_render_item_draw(
                     *ctx.ctx2,
                     *item,

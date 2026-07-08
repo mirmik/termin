@@ -258,18 +258,21 @@ void IdPass::execute_with_data_tgfx2(
         push.u_pickColor[2] = pick_b;
         push.u_pickColor[3] = 1.0f;
 
-        std::array<MaterialPipelineUniformData, 2> base_draw_uniforms{{
+        std::array<RenderItemNamedUniformBinding, 2> base_draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
             {"id_draw", &push, static_cast<uint32_t>(sizeof(push))},
         }};
 
-        MaterialPipelineResourceContext draw_resources{};
-        draw_resources.uniforms = base_draw_uniforms;
+        MaterialPipelineResourceView draw_material_resources{};
+        RenderItemResourceBinding resource_binding{};
+        resource_binding.material_resources = &draw_material_resources;
+        resource_binding.named_uniforms = base_draw_uniforms.data();
+        resource_binding.named_uniform_count = static_cast<uint32_t>(base_draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
         encode_request.shader_handle = dc.final_shader;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-        encode_request.material_resources = &draw_resources;
+        encode_request.resources = &resource_binding;
         encode_request.debug_pass_name = "IdPass";
         encode_request.debug_entity_name = name;
         if (!submit_render_item_draw(

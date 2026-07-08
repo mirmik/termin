@@ -1,7 +1,7 @@
 # Render Item And Task Architecture
 
 Date: 2026-07-07
-Kanboard: #203, #205, #206
+Kanboard: #203, #205, #206, #207
 
 ## Status
 
@@ -54,6 +54,16 @@ Implementation progress:
   `submit_render_item_draw()`, but collection filters out non-mesh RenderItems
   before task creation. This is not the old duplicated non-mesh draw path, but it
   is still incomplete coverage for foliage, line, text, and future item kinds.
+- 2026-07-09 direction update: the next migration should not preserve a
+  `mesh` versus `non-mesh` conceptual split. Mesh is only one built-in item
+  kind with a registered encoder. Passes should build item-kind-agnostic
+  `RenderTask` records from collector-owned `RenderItem` snapshots, then rely on
+  encoder/pass compatibility metadata instead of hard-coded mesh filters.
+- 2026-07-09: `RenderItemDrawSubmitRequest::prepare_material_resources` was
+  removed. Passes now provide explicit `RenderItemResourceBinding` packets with
+  material resource views plus named uniform/texture bindings. The shared submit
+  path binds those resources for mesh, and non-mesh encoders can call
+  `bind_render_item_common_resources()` for additional shader layouts.
 - Remaining live migration work: finish Python-facing RenderItem integration
   tests and continue replacing any historical docs/examples that still describe
   the retired geometry-side-channel model.
@@ -384,6 +394,142 @@ Log unsupported combinations when they indicate a missing migration or asset bug
 Do not silently equate "not mesh" with "not renderable".
 ```
 
+## Item-Kind-Agnostic Task Model
+
+The next architectural target is to remove `mesh` / `non-mesh` as a pass-level
+branching concept. A render pass should not ask "is this a mesh?" before it can
+build a task. It should ask whether the collected item kind has an encoder that
+declares support for the pass contract and resource policy.
+
+The target flow is:
+
+```text
+Drawable/component emits RenderItem
+RenderSceneItemCollector owns copied RenderItem snapshots
+Pass builds RenderTask records from compatible items
+Pass sorts/orders RenderTask records
+Shared submit layer binds common resources and dispatches encoder
+Encoder interprets only its item-kind payload and emits backend draws
+```
+
+`TC_RENDER_ITEM_KIND_MESH` should remain a built-in ABI kind, but it should not
+receive special pass architecture. It should be registered and queried through
+the same encoder/compatibility route as `LINE_BATCH`, `TEXT_BATCH`,
+`FOLIAGE_BATCH`, and future kinds.
+
+### RenderTask Shape
+
+`RenderTask` is the pass-owned unit. It should be the only thing the draw loop
+submits after sorting. It can start as a C++ internal structure and later become
+a C ABI packet if needed.
+
+Candidate common fields:
+
+```text
+item_index
+item_kind
+component/entity/debug identity
+sort_key
+final_shader
+material_phase / material handle / phase index
+pass contract view
+draw context view
+pass resource packet
+pass-local draw payload reference
+encoder compatibility result
+```
+
+Pass-specific payloads should be explicit side records referenced from the task,
+not hidden in callbacks:
+
+```text
+ColorPass:
+  model/draw data
+  lighting and shadow resource packet
+  extra texture resource packet
+
+ShadowPass:
+  light-space draw data
+  shadow map/cascade resource packet
+
+IdPass:
+  pick id / override color packet
+
+Depth/Normal:
+  pass draw uniform packet and contract-specific output resources
+```
+
+The task builder can skip incompatible item/pass pairs, but it must do so through
+declared compatibility rather than item-kind name checks. For example, foliage
+support in depth/normal should be enabled when the foliage encoder declares a
+matching vertex transform contract and shader template, not because the pass was
+changed from `if mesh` to `if mesh or foliage`.
+
+### Encoder Metadata
+
+The encoder registry needs more than an `encode` function if passes are to avoid
+mesh-specific branches.
+
+Minimum metadata/hooks:
+
+```text
+item_kind
+debug_name
+supported pass contract features
+required material phase policy
+supported vertex transform kinds
+supported pass outputs or semantic roles
+optional task validation hook
+optional shader usage hook
+encode hook
+```
+
+The exact ABI can start conservative. A simple first slice can expose a C++
+`RenderItemEncoderCapabilities` helper inside `termin-render` while keeping the
+C-facing payload ABI stable. The important rule is that passes query the encoder
+capability table instead of hard-coding built-in item kinds.
+
+### Resource Binding Without Callbacks
+
+`RenderItemDrawSubmitRequest::prepare_material_resources` is the main remaining
+leak from pass-owned resource binding into item encoders. It should be removed,
+but not by pushing resource binding into every encoder.
+
+Target ownership:
+
+```text
+Pass:
+  creates explicit pass resource packets and per-task draw payload packets
+
+Shared submit layer:
+  resolves shader layout
+  binds material/pass/draw resources from explicit packets
+  exposes a small binder helper for encoders that need multiple shader layouts
+
+Encoder:
+  binds item-kind-specific buffers and payload resources
+  may call the shared binder with an explicit packet and shader layout
+  does not call a pass-provided callback
+```
+
+For line tube body/cap shaders and foliage instancing, the encoder may need to
+bind common resources against more than one shader layout. That should be an
+explicit binder operation:
+
+```text
+bind_render_task_common_resources(ctx, shader_layout, task.resource_packet)
+```
+
+not:
+
+```text
+request.prepare_material_resources(ctx, shader_layout, phase)
+```
+
+This lines up with #207: once the callback is gone, the resource packet can be
+flattened into C-like runtime data contracts with ptr/count arrays and stable
+handles.
+
 ### Encoder Registry
 
 The encoder registry should live with the render runtime or render engine
@@ -571,7 +717,24 @@ custom drawables from becoming backend submit owners.
     depth-only, and normal only after matching foliage pass contracts and shader
     templates exist. Line/text should be enabled per pass only where their
     encoder produces the pass ABI, not merely because a draw encoder exists.
-15. Update `docs/render-phase-semantics.md` after the live contract changes.
+15. Introduce a pass-owned `RenderTask` or `RenderTaskList` used by Color and
+    Shadow first, then by Id/Depth/DepthOnly/Normal. The draw loop should submit
+    tasks, not inspect item kinds directly.
+16. Add encoder capability metadata and move pass membership decisions to
+    pass-contract/item-kind compatibility checks. Mesh must use the same route
+    as line, text, foliage, and future item kinds.
+17. Remove `RenderItemDrawSubmitRequest::prepare_material_resources`. Done:
+    `RenderItemResourceBinding` now carries explicit pass resource packets, and
+    `bind_render_item_common_resources()` can bind them for any shader layout.
+18. Convert ColorPass, ShadowPass, IdPass, DepthPass, DepthOnlyPass, and
+    NormalPass to build resource packets without lambdas. Done for resource
+    binding; task construction still needs to move away from direct item-kind
+    branching where passes remain mesh-only.
+19. Move the encoder registry out of global static storage when module
+    bootstrap/hot-reload ownership is ready. Until then, keep registration
+    explicit and documented.
+20. Update `docs/render-phase-semantics.md` and live render docs after the
+    item-kind-agnostic task contract becomes the implementation contract.
 
 ## Diagnostics And Tests
 
@@ -593,6 +756,8 @@ Required tests:
   pass tasks;
 - Python/non-C++ drawable emits render items without a C++ `Drawable` cast;
 - typed line, text, and foliage item paths render without `draw_tgfx2()`;
+- mesh, line, text, and foliage all pass through the same task/submission
+  contract without a pass-level mesh/non-mesh branch;
 - pass ordering remains pass-owned;
 - material phase shader override still works through the task submission path;
 - unsupported item/contract combinations log useful errors and do not silently
@@ -601,6 +766,8 @@ Required tests:
   contracts and shader templates are added;
 - line/text picking tests if `IdPass` support is enabled through override-color
   draw context.
+- resource binding tests proving non-mesh encoders no longer depend on
+  `RenderItemDrawSubmitRequest::prepare_material_resources`.
 
 ## Open Questions
 

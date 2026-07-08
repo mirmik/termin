@@ -4,8 +4,6 @@
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/render_item_submission.hpp"
-#include "termin/render/shader_abi.hpp"
-#include "termin/render/shader_resource_apply.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include <optional>
@@ -28,6 +26,7 @@ extern "C" {
 }
 
 #include <cmath>
+#include <array>
 #include <cstring>
 #include <span>
 #include <string>
@@ -123,26 +122,6 @@ inline uint32_t float_to_sortable_uint(float f) {
     return bits ^ mask;
 }
 
-template <typename T>
-void bind_draw_data_for_shader(
-    tgfx::RenderContext2& ctx,
-    const tc_shader* shader,
-    const T& payload)
-{
-    const tc_shader_resource_binding* rb =
-        find_shader_abi_resource_binding(shader, ShaderAbiResourceId::DrawData);
-    if (rb) {
-        ctx.bind_uniform_data(rb, &payload, sizeof(payload));
-        return;
-    }
-    if (shader && tc_shader_has_resource_layout(shader)) {
-        return;
-    }
-    tc::Log::error(
-        "[ColorPass/tgfx2] shader '%s' is missing draw_data resource layout entry",
-        shader && shader->name ? shader->name : "<unnamed>");
-}
-
 tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item) {
     if (!tc_material_handle_is_invalid(item.material) &&
         item.material_phase_index != SIZE_MAX) {
@@ -199,44 +178,6 @@ void ColorPass::add_extra_texture(const std::string& uniform_name, const std::st
         name = "u_" + name;
     }
     extra_textures[name] = resource_name;
-}
-
-void ColorPass::bind_extra_textures(
-    const Tex2Map& tex2_reads,
-    tgfx::RenderContext2* ctx2,
-    const tc_shader* shader
-) {
-    extra_texture_uniforms.clear();
-    if (!ctx2) return;
-    if (!shader) {
-        tc::Log::error(
-            "[ColorPass:%s] cannot bind extra textures without active shader layout",
-            get_pass_name().c_str());
-        return;
-    }
-
-    for (const auto& [uniform_name, resource_name] : extra_textures) {
-        auto it = tex2_reads.find(resource_name);
-        if (it == tex2_reads.end() || !it->second) {
-            tc::Log::warn("[ColorPass:%s] tgfx2 texture not found for resource: %s",
-                         get_pass_name().c_str(), resource_name.c_str());
-            continue;
-        }
-
-        const tc_shader_resource_binding* rb =
-            tc_shader_find_resource_binding(shader, uniform_name.c_str());
-        if (!rb || rb->kind != TC_SHADER_RESOURCE_TEXTURE) {
-            tc::Log::error(
-                "[ColorPass:%s] extra texture '%s' cannot be bound to '%s': "
-                "shader does not declare a Texture2D resource with that name",
-                get_pass_name().c_str(),
-                resource_name.c_str(),
-                uniform_name.c_str());
-            continue;
-        }
-
-        ctx2->bind_texture(uniform_name, it->second);
-    }
 }
 
 CameraComponent* ColorPass::find_camera_by_name(tc_scene_handle scene, const std::string& name) {
@@ -689,6 +630,23 @@ void ColorPass::execute_with_data(
     material_resources.shadow_map_count = static_cast<uint32_t>(
         std::min<size_t>(shadow_tex2s.size(), MAX_SHADOW_MAPS));
 
+    std::vector<RenderItemNamedTextureBinding> extra_texture_bindings;
+    extra_texture_bindings.reserve(extra_textures.size());
+    for (const auto& [uniform_name, resource_name] : extra_textures) {
+        auto it = ctx.tex2_reads.find(resource_name);
+        if (it == ctx.tex2_reads.end() || !it->second) {
+            tc::Log::warn(
+                "[ColorPass:%s] tgfx2 texture not found for resource: %s",
+                get_pass_name().c_str(),
+                resource_name.c_str());
+            continue;
+        }
+        extra_texture_bindings.push_back(RenderItemNamedTextureBinding{
+            uniform_name.c_str(),
+            it->second,
+            tgfx::SamplerHandle{}});
+    }
+
     size_t draw_index = 0;
     const std::string debug_pass_name = get_pass_name();
     const char* debug_pass_name_c = debug_pass_name.c_str();
@@ -785,6 +743,7 @@ void ColorPass::execute_with_data(
             sd.compare_op = tgfx::CompareOp::LessEqual;
             shadow_sampler_ = device.create_sampler(sd);
         }
+        material_resources.shadow_sampler = shadow_sampler_;
 
         struct ColorPushData {
             float u_model[16];
@@ -796,6 +755,17 @@ void ColorPass::execute_with_data(
             Mat44f identity = Mat44f::identity();
             std::memcpy(push.u_model, identity.data, sizeof(push.u_model));
         }
+        std::array<RenderItemNamedUniformBinding, 1> draw_uniforms{{
+            {"draw_data", &push, static_cast<uint32_t>(sizeof(push))},
+        }};
+        RenderItemResourceBinding resource_binding{};
+        resource_binding.material_resources = &material_resources;
+        resource_binding.named_uniforms = draw_uniforms.data();
+        resource_binding.named_uniform_count =
+            static_cast<uint32_t>(draw_uniforms.size());
+        resource_binding.named_textures = extra_texture_bindings.data();
+        resource_binding.named_texture_count =
+            static_cast<uint32_t>(extra_texture_bindings.size());
 
         RenderContext draw_context;
         draw_context.view = data.view;
@@ -821,36 +791,7 @@ void ColorPass::execute_with_data(
         encode_request.phase_mark = phase_mark.c_str();
         encode_request.debug_pass_name = debug_pass_name_c;
         encode_request.debug_entity_name = ename;
-        encode_request.prepare_material_resources =
-            [this,
-             &device,
-             &material_resources,
-             &ctx,
-             &push](
-                tgfx::RenderContext2& draw_ctx,
-                const tc_shader* shader,
-                tc_material_phase* live_phase) {
-                if (!shader || !live_phase) {
-                    tc::Log::error(
-                        "[ColorPass/tgfx2] RenderItem resource callback called without shader or phase");
-                    return;
-                }
-
-                MaterialPipelineResourceView draw_resources = material_resources;
-                draw_resources.shadow_sampler = shadow_sampler_;
-                prepare_material_pipeline_resources(
-                    draw_ctx,
-                    device,
-                    shader,
-                    live_phase,
-                    draw_resources);
-
-                if (!extra_textures.empty()) {
-                    bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
-                }
-
-                bind_draw_data_for_shader(draw_ctx, shader, push);
-            };
+        encode_request.resources = &resource_binding;
         if (!submit_render_item_draw(
             *ctx2,
             *item,

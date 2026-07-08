@@ -312,20 +312,21 @@ void DepthPass::execute_with_data_tgfx2(
         // resources such as BoneBlock.
         DepthDrawStd140 draw{};
         fill_depth_draw_model(draw, item);
-        std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
+        std::array<RenderItemNamedUniformBinding, 2> draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
             {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
         }};
-        MaterialPipelineResourceContext draw_resources{};
-        draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-            draw_uniforms.data(),
-            draw_uniforms.size());
+        MaterialPipelineResourceView draw_material_resources{};
+        RenderItemResourceBinding resource_binding{};
+        resource_binding.material_resources = &draw_material_resources;
+        resource_binding.named_uniforms = draw_uniforms.data();
+        resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
         encode_request.shader_handle = dc.final_shader;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.material_phase = material_phase;
-        encode_request.material_resources = &draw_resources;
+        encode_request.resources = &resource_binding;
         encode_request.debug_pass_name = "DepthPass";
         encode_request.debug_entity_name = name;
         if (!submit_render_item_draw(
@@ -789,20 +790,21 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
         DepthDrawStd140 draw{};
         fill_depth_draw_model(draw, item);
-        std::array<MaterialPipelineUniformData, 2> draw_uniforms{{
+        std::array<RenderItemNamedUniformBinding, 2> draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
             {"depth_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
         }};
-        MaterialPipelineResourceContext draw_resources{};
-        draw_resources.uniforms = std::span<const MaterialPipelineUniformData>(
-            draw_uniforms.data(),
-            draw_uniforms.size());
+        MaterialPipelineResourceView draw_material_resources{};
+        RenderItemResourceBinding resource_binding{};
+        resource_binding.material_resources = &draw_material_resources;
+        resource_binding.named_uniforms = draw_uniforms.data();
+        resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
         encode_request.shader_handle = dc.final_shader;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.material_phase = material_phase;
-        encode_request.material_resources = &draw_resources;
+        encode_request.resources = &resource_binding;
         encode_request.debug_pass_name = "DepthOnlyPass";
         encode_request.debug_entity_name = name;
         if (!submit_render_item_draw(
