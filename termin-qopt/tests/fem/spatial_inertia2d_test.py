@@ -1,5 +1,6 @@
 import numpy as np
 from termin.fem.inertia2d import SpatialInertia2D
+from termin.geombase import Vec2
 from termin.geombase.pose2 import Pose2
 
 def test_spatial_inertia2d_add():
@@ -21,10 +22,10 @@ def test_spatial_inertia2d_add():
 def test_spatial_inertia2d_transform():
     # Тело с центром масс не в начале
     I = SpatialInertia2D(1.0, 2.0, [1.0, 2.0])
-    pose = Pose2(ang=np.pi/2, lin=np.array([3.0, 4.0]))  # Поворот на 90° и сдвиг
+    pose = Pose2(ang=np.pi/2, lin=Vec2(3.0, 4.0))  # Поворот на 90° и сдвиг
     I_tr = I.transform_by(pose)
     # Центр масс должен повернуться и сместиться
-    expected_c = pose.transform_point([1.0, 2.0])
+    expected_c = pose.transform_point(Vec2(1.0, 2.0))
     assert np.allclose(I_tr.c, expected_c)
     # Момент инерции не меняется
     assert np.isclose(I_tr.I_com, 2.0)

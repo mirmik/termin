@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from termin.geombase import Vec3
 from termin.csg.procedural_document import ProceduralMeshDocument
 from termin.csg.viewer_camera import OrbitCamera
 
@@ -20,7 +21,7 @@ SelectionData = tuple[str, str]
 
 @dataclass
 class CameraState:
-    target: tuple[float, float, float]
+    target: Vec3
     distance: float
     yaw: float
     pitch: float
@@ -30,9 +31,8 @@ class CameraState:
 
     @classmethod
     def from_camera(cls, camera: OrbitCamera) -> "CameraState":
-        target = camera.target
         return cls(
-            target=(float(target[0]), float(target[1]), float(target[2])),
+            target=camera.target,
             distance=float(camera.distance),
             yaw=float(camera.yaw),
             pitch=float(camera.pitch),
@@ -45,7 +45,7 @@ class CameraState:
     def from_dict(cls, data: dict) -> "CameraState":
         target = data.get("target", (0.0, 0.0, 0.0))
         return cls(
-            target=(float(target[0]), float(target[1]), float(target[2])),
+            target=Vec3(float(target[0]), float(target[1]), float(target[2])),
             distance=float(data.get("distance", 8.0)),
             yaw=float(data.get("yaw", 0.7853981633974483)),
             pitch=float(data.get("pitch", 0.4886921905584123)),
@@ -65,7 +65,7 @@ class CameraState:
 
     def to_dict(self) -> dict:
         return {
-            "target": list(self.target),
+            "target": [float(self.target[0]), float(self.target[1]), float(self.target[2])],
             "distance": self.distance,
             "yaw": self.yaw,
             "pitch": self.pitch,

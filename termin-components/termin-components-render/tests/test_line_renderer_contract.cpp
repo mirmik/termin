@@ -209,7 +209,20 @@ TEST_CASE("LineRenderer context-aware usage collection follows explicit pass con
 }
 
 TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
+    tc_material_init();
     tc_mesh_init();
+
+    tc_material_handle material_handle = tc_material_create(
+        "mesh-renderer-permissive-material",
+        "mesh-renderer-permissive-material");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    REQUIRE(tc_material_add_phase(
+        material,
+        tc_shader_handle_invalid(),
+        "opaque",
+        0) != nullptr);
 
     termin::TcMesh mesh = make_two_submesh_mesh();
     REQUIRE(mesh.is_valid());
@@ -222,6 +235,8 @@ TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
     entity.add_component(mesh_component);
 
     auto* renderer = new termin::MeshRenderer();
+    renderer->set_material(termin::TcMaterial(material_handle));
+    renderer->set_material_slot(1, termin::TcMaterial(material_handle));
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};
@@ -242,6 +257,7 @@ TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
     CHECK(collection.items[1].geometry_id == 1);
 
     tc_mesh_shutdown();
+    tc_material_shutdown();
 }
 
 TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
@@ -419,6 +435,18 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     auto* renderer = new termin::LineRenderer();
     renderer->set_points({tc_vec3{0, 0, 0}, tc_vec3{1, 0, 0}});
     renderer->set_render_mode(termin::LineRenderMode::WorldMesh);
+    tc_material_handle material_handle = tc_material_create(
+        "line-renderer-mesh-render-item-material",
+        "line-renderer-mesh-render-item-material");
+    REQUIRE(tc_material_is_valid(material_handle));
+    tc_material* material = tc_material_get(material_handle);
+    REQUIRE(material != nullptr);
+    REQUIRE(tc_material_add_phase(
+        material,
+        tc_shader_handle_invalid(),
+        "opaque",
+        0) != nullptr);
+    renderer->set_material(termin::TcMaterial(material_handle));
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};

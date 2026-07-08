@@ -36,6 +36,7 @@ from termin.csg.document_edit import (
 from termin.csg.procedural_document import CONTOUR_ROLE_HOLE, CONTOUR_ROLE_OUTER, ProceduralPlane
 from termin.csg.sketch_point_interaction import pick_selected_sketch_point
 from termin.csg.viewer_camera import OrbitCamera
+from termin.geombase import Vec3
 
 
 def _test_editor_panel(controller: CsgEditorController) -> CsgEditorPanel:
@@ -985,7 +986,7 @@ def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
     assert operation is not None
 
     camera = OrbitCamera()
-    camera.target = (3.0, 4.0, 5.0)
+    camera.target = Vec3(3.0, 4.0, 5.0)
     camera.distance = 12.0
     camera.yaw = 0.25
     camera.pitch = 0.5
@@ -999,7 +1000,7 @@ def test_cad_state_roundtrip_preserves_document_camera_and_selection(tmp_path):
     assert saved_path.name == "shape.tcsg.json"
     assert restored.document.contour_count() == 1
     assert restored.selection == ("operation", operation.id)
-    assert restored.camera.target == (3.0, 4.0, 5.0)
+    assert tuple(restored.camera.target) == (3.0, 4.0, 5.0)
     assert isclose(restored.camera.distance, 12.0)
     assert isclose(restored.camera.yaw, 0.25, abs_tol=1.0e-6)
     assert isclose(restored.camera.pitch, 0.5, abs_tol=1.0e-6)
