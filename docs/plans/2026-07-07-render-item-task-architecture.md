@@ -79,6 +79,19 @@ Implementation progress:
 - 2026-07-09: `LineBatch` is enabled for `IdPass`. The pass now supplies pick
   color through `RenderContext::override_color`, and the line encoder uses its
   existing override-color path instead of material shading for picking.
+- 2026-07-09: `GeometryPassBase` now keeps pass-owned `RenderItemCollection`
+  storage for the lifetime of its cached draw calls. This closes a dangling
+  payload lifetime bug that affected non-mesh item kinds: `tc_render_item`
+  snapshots were copied into draw calls while line/text/foliage payload views
+  still pointed into a temporary collection.
+- 2026-07-09: `IdPass` line support is covered by a Vulkan pixel smoke test.
+  The test renders a pickable `LineBatch`, verifies the center pixel decodes to
+  the entity pick color, and keeps the empty background clear.
+- 2026-07-09 audit: `TextBatch` is not yet enabled for `IdPass`. The encoder can
+  consume `RenderContext::override_color`, but `WorldTextComponent` currently
+  emits items only when the requested phase equals its own sanitized phase mark.
+  Pick support for text needs an explicit collection-semantic migration instead
+  of only adding the `Id` capability bit.
 - Remaining live migration work: finish Python-facing RenderItem integration
   tests and continue replacing any historical docs/examples that still describe
   the retired geometry-side-channel model.
