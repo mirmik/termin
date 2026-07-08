@@ -295,6 +295,11 @@ void ensure_foliage_render_item_encoder_registered()
     RenderItemDrawEncoderDesc desc{};
     desc.encode = foliage_render_item_draw_encoder;
     desc.debug_name = "FoliageLayerComponent";
+    desc.capabilities.pass_semantic_mask =
+        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
+        | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow);
+    desc.capabilities.requires_draw_context = true;
+    desc.capabilities.consumes_common_resources = true;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_FOLIAGE_BATCH, desc);
 }
 

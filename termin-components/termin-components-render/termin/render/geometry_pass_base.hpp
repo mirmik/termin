@@ -18,6 +18,7 @@
 #include <termin/render/execute_context.hpp>
 #include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/frame_pass.hpp>
+#include <termin/render/render_item_submission.hpp>
 #include <termin/render/resource_spec.hpp>
 
 extern "C" {
@@ -109,6 +110,8 @@ protected:
     // subclasses should declare vertex transform, skinned/foliage template,
     // fragment interface, and pass resource requirements.
     virtual MaterialPipelinePassContract shader_pass_contract() const = 0;
+
+    virtual RenderItemPassSemantic render_item_pass_semantic() const = 0;
 
     virtual tc_shader_handle shader_usage_base_shader() const = 0;
     virtual std::optional<std::string> fbo_format() const;

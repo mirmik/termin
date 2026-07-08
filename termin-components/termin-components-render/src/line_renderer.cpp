@@ -407,6 +407,11 @@ void ensure_line_render_item_encoder_registered()
     desc.encode = line_render_item_draw_encoder;
     desc.user_data = &state;
     desc.debug_name = "LineRenderer";
+    desc.capabilities.pass_semantic_mask =
+        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
+        | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow);
+    desc.capabilities.requires_draw_context = true;
+    desc.capabilities.consumes_common_resources = true;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_LINE_BATCH, desc);
 }
 
