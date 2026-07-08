@@ -11,136 +11,194 @@ handle on the controller so it can be mutated later.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 
 from .menu_spec import MenuItemSpec, MenuSpec
 
+VoidCallback = Callable[[], None]
+BoolGetter = Callable[[], bool]
+HandleSetter = Callable[[object], None]
 
-def build_editor_menu_spec(
-    # File
-    on_new_project: Callable[[], None],
-    on_open_project: Callable[[], None],
-    on_new_scene: Callable[[], None],
-    on_save_scene: Callable[[], None],
-    on_save_scene_as: Callable[[], None],
-    on_load_scene: Callable[[], None],
-    on_close_scene: Callable[[], None],
-    on_load_material: Callable[[], None],
-    on_load_components: Callable[[], None],
-    on_deploy_stdlib: Callable[[], None],
-    on_migrate_spec_to_meta: Callable[[], None],
-    on_exit: Callable[[], None],
-    # Edit
-    on_undo: Callable[[], None],
-    on_redo: Callable[[], None],
-    on_settings: Callable[[], None],
-    on_project_settings: Callable[[], None],
-    # View
-    on_toggle_fullscreen: Callable[[], None],
-    is_fullscreen: Callable[[], bool],
-    on_show_spacemouse_settings: Callable[[], None],
-    # Scene
-    on_scene_properties: Callable[[], None],
-    on_layers_settings: Callable[[], None],
-    on_shadow_settings: Callable[[], None],
-    on_pipeline_editor: Callable[[], None],
-    # Navigation
-    on_show_agent_types: Callable[[], None],
-    on_show_navmesh_areas: Callable[[], None],
-    # Game
-    on_toggle_game_mode: Callable[[], None],
-    on_build_project: Callable[[], None],
-    on_build_android: Callable[[], None],
-    on_build_quest_openxr: Callable[[], None],
-    on_run_build: Callable[[], None],
-    on_run_standalone: Callable[[], None],
-    # Debug
-    on_toggle_profiler: Callable[[], None],
-    is_profiler_visible: Callable[[], bool],
-    on_toggle_modules: Callable[[], None],
-    is_modules_visible: Callable[[], bool],
-    on_toggle_camera_frustums: Callable[[], None],
-    is_camera_frustums_visible: Callable[[], bool],
-    on_show_undo_stack_viewer: Callable[[], None],
-    on_show_framegraph_debugger: Callable[[], None],
-    on_show_resource_manager_viewer: Callable[[], None],
-    on_show_audio_debugger: Callable[[], None],
-    on_show_core_registry_viewer: Callable[[], None],
-    on_show_inspect_registry_viewer: Callable[[], None],
-    on_show_navmesh_registry_viewer: Callable[[], None],
-    on_show_scene_manager_viewer: Callable[[], None],
-    on_show_python_console: Callable[[], None],
-    # Help
-    on_show_about: Callable[[], None],
-    # Handle setters (called by the controller with native widget handles)
-    set_undo_handle: Callable[[object], None],
-    set_redo_handle: Callable[[object], None],
-    set_play_handle: Callable[[object], None],
-    set_fullscreen_handle: Callable[[object], None],
-    set_profiler_handle: Callable[[object], None],
-    set_modules_handle: Callable[[object], None],
-    set_camera_frustums_handle: Callable[[object], None],
-    on_toggle_surface_edge_debug_tool: Callable[[], None] | None = None,
-    is_surface_edge_debug_tool_enabled: Callable[[], bool] | None = None,
-    set_surface_edge_debug_tool_handle: Callable[[object], None] | None = None,
-    on_toggle_raw_detour_path_debug_tool: Callable[[], None] | None = None,
-    is_raw_detour_path_debug_tool_enabled: Callable[[], bool] | None = None,
-    set_raw_detour_path_debug_tool_handle: Callable[[object], None] | None = None,
-) -> list[MenuSpec]:
+
+@dataclass(frozen=True, slots=True)
+class FileMenuActions:
+    new_project: VoidCallback
+    open_project: VoidCallback
+    new_scene: VoidCallback
+    save_scene: VoidCallback
+    save_scene_as: VoidCallback
+    load_scene: VoidCallback
+    close_scene: VoidCallback
+    load_material: VoidCallback
+    load_components: VoidCallback
+    deploy_stdlib: VoidCallback
+    migrate_spec_to_meta: VoidCallback
+    exit: VoidCallback
+
+
+@dataclass(frozen=True, slots=True)
+class EditMenuActions:
+    undo: VoidCallback
+    redo: VoidCallback
+    settings: VoidCallback
+    project_settings: VoidCallback
+
+
+@dataclass(frozen=True, slots=True)
+class ViewMenuActions:
+    toggle_fullscreen: VoidCallback
+    show_spacemouse_settings: VoidCallback
+
+
+@dataclass(frozen=True, slots=True)
+class SceneMenuActions:
+    scene_properties: VoidCallback
+    layers_settings: VoidCallback
+    shadow_settings: VoidCallback
+    pipeline_editor: VoidCallback
+
+
+@dataclass(frozen=True, slots=True)
+class NavigationMenuActions:
+    show_agent_types: VoidCallback
+    show_navmesh_areas: VoidCallback
+    toggle_raw_detour_path_debug_tool: VoidCallback | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class GameMenuActions:
+    toggle_game_mode: VoidCallback
+    build_project: VoidCallback
+    build_android: VoidCallback
+    build_quest_openxr: VoidCallback
+    run_build: VoidCallback
+    run_standalone: VoidCallback
+
+
+@dataclass(frozen=True, slots=True)
+class DebugMenuActions:
+    toggle_profiler: VoidCallback
+    toggle_modules: VoidCallback
+    toggle_camera_frustums: VoidCallback
+    show_undo_stack_viewer: VoidCallback
+    show_framegraph_debugger: VoidCallback
+    show_resource_manager_viewer: VoidCallback
+    show_audio_debugger: VoidCallback
+    show_core_registry_viewer: VoidCallback
+    show_inspect_registry_viewer: VoidCallback
+    show_navmesh_registry_viewer: VoidCallback
+    show_scene_manager_viewer: VoidCallback
+    show_python_console: VoidCallback
+    toggle_surface_edge_debug_tool: VoidCallback | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class HelpMenuActions:
+    show_about: VoidCallback
+
+
+@dataclass(frozen=True, slots=True)
+class EditorMenuActions:
+    file: FileMenuActions
+    edit: EditMenuActions
+    view: ViewMenuActions
+    scene: SceneMenuActions
+    navigation: NavigationMenuActions
+    game: GameMenuActions
+    debug: DebugMenuActions
+    help: HelpMenuActions
+
+
+@dataclass(frozen=True, slots=True)
+class EditorMenuStateGetters:
+    fullscreen: BoolGetter
+    profiler_visible: BoolGetter
+    modules_visible: BoolGetter
+    camera_frustums_visible: BoolGetter
+    surface_edge_debug_tool_enabled: BoolGetter | None = None
+    raw_detour_path_debug_tool_enabled: BoolGetter | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EditorMenuHandleSetters:
+    undo: HandleSetter
+    redo: HandleSetter
+    play: HandleSetter
+    fullscreen: HandleSetter
+    profiler: HandleSetter
+    modules: HandleSetter
+    camera_frustums: HandleSetter
+    surface_edge_debug_tool: HandleSetter | None = None
+    raw_detour_path_debug_tool: HandleSetter | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class EditorMenuSpecConfig:
+    actions: EditorMenuActions
+    states: EditorMenuStateGetters
+    handles: EditorMenuHandleSetters
+
+
+def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
     """Build the full menu-bar specification for the editor."""
+    actions = config.actions
+    states = config.states
+    handles = config.handles
+
     navigation_items = [
-        MenuItemSpec("Agent Types...", on_show_agent_types),
-        MenuItemSpec("NavMesh Areas...", on_show_navmesh_areas),
+        MenuItemSpec("Agent Types...", actions.navigation.show_agent_types),
+        MenuItemSpec("NavMesh Areas...", actions.navigation.show_navmesh_areas),
     ]
-    if on_toggle_raw_detour_path_debug_tool is not None:
+    if actions.navigation.toggle_raw_detour_path_debug_tool is not None:
         navigation_items.extend([
             None,
             MenuItemSpec(
                 "Raw Detour Path Debug",
-                on_toggle_raw_detour_path_debug_tool,
+                actions.navigation.toggle_raw_detour_path_debug_tool,
                 is_checkable=True,
-                state_getter=is_raw_detour_path_debug_tool_enabled,
-                handle_getter=set_raw_detour_path_debug_tool_handle,
+                state_getter=states.raw_detour_path_debug_tool_enabled,
+                handle_getter=handles.raw_detour_path_debug_tool,
             ),
         ])
 
     debug_items = [
         MenuItemSpec(
-            "Profiler", on_toggle_profiler, shortcut="F7",
-            is_checkable=True, state_getter=is_profiler_visible,
-            handle_getter=set_profiler_handle,
+            "Profiler", actions.debug.toggle_profiler, shortcut="F7",
+            is_checkable=True, state_getter=states.profiler_visible,
+            handle_getter=handles.profiler,
         ),
         MenuItemSpec(
-            "Modules", on_toggle_modules, shortcut="F8",
-            is_checkable=True, state_getter=is_modules_visible,
-            handle_getter=set_modules_handle,
+            "Modules", actions.debug.toggle_modules, shortcut="F8",
+            is_checkable=True, state_getter=states.modules_visible,
+            handle_getter=handles.modules,
         ),
         MenuItemSpec(
-            "Camera Frustums", on_toggle_camera_frustums,
-            is_checkable=True, state_getter=is_camera_frustums_visible,
-            handle_getter=set_camera_frustums_handle,
+            "Camera Frustums", actions.debug.toggle_camera_frustums,
+            is_checkable=True, state_getter=states.camera_frustums_visible,
+            handle_getter=handles.camera_frustums,
         ),
         None,
-        MenuItemSpec("Undo/Redo Stack...", on_show_undo_stack_viewer),
-        MenuItemSpec("Framegraph Texture Viewer...", on_show_framegraph_debugger),
-        MenuItemSpec("Resource Manager...", on_show_resource_manager_viewer),
-        MenuItemSpec("Audio Debugger...", on_show_audio_debugger),
-        MenuItemSpec("Core Registry...", on_show_core_registry_viewer),
-        MenuItemSpec("Inspect Registry...", on_show_inspect_registry_viewer),
-        MenuItemSpec("NavMesh Registry...", on_show_navmesh_registry_viewer),
-        MenuItemSpec("Scene Manager...", on_show_scene_manager_viewer),
+        MenuItemSpec("Undo/Redo Stack...", actions.debug.show_undo_stack_viewer),
+        MenuItemSpec("Framegraph Texture Viewer...", actions.debug.show_framegraph_debugger),
+        MenuItemSpec("Resource Manager...", actions.debug.show_resource_manager_viewer),
+        MenuItemSpec("Audio Debugger...", actions.debug.show_audio_debugger),
+        MenuItemSpec("Core Registry...", actions.debug.show_core_registry_viewer),
+        MenuItemSpec("Inspect Registry...", actions.debug.show_inspect_registry_viewer),
+        MenuItemSpec("NavMesh Registry...", actions.debug.show_navmesh_registry_viewer),
+        MenuItemSpec("Scene Manager...", actions.debug.show_scene_manager_viewer),
         None,
-        MenuItemSpec("Python Console...", on_show_python_console),
+        MenuItemSpec("Python Console...", actions.debug.show_python_console),
     ]
-    if on_toggle_surface_edge_debug_tool is not None:
+    if actions.debug.toggle_surface_edge_debug_tool is not None:
         debug_items.extend([
             None,
             MenuItemSpec(
                 "Surface Edge Debug Tool",
-                on_toggle_surface_edge_debug_tool,
+                actions.debug.toggle_surface_edge_debug_tool,
                 is_checkable=True,
-                state_getter=is_surface_edge_debug_tool_enabled,
-                handle_getter=set_surface_edge_debug_tool_handle,
+                state_getter=states.surface_edge_debug_tool_enabled,
+                handle_getter=handles.surface_edge_debug_tool,
             ),
         ])
 
@@ -149,23 +207,23 @@ def build_editor_menu_spec(
         MenuSpec(
             name="File",
             items=[
-                MenuItemSpec("New Project...", on_new_project),
-                MenuItemSpec("Open Project...", on_open_project),
+                MenuItemSpec("New Project...", actions.file.new_project),
+                MenuItemSpec("Open Project...", actions.file.open_project),
                 None,  # separator
-                MenuItemSpec("New Scene", on_new_scene, shortcut="Ctrl+N"),
+                MenuItemSpec("New Scene", actions.file.new_scene, shortcut="Ctrl+N"),
                 None,
-                MenuItemSpec("Save Scene", on_save_scene, shortcut="Ctrl+S"),
-                MenuItemSpec("Save Scene As...", on_save_scene_as, shortcut="Ctrl+Shift+S"),
-                MenuItemSpec("Load Scene...", on_load_scene, shortcut="Ctrl+O"),
-                MenuItemSpec("Close Scene", on_close_scene, shortcut="Ctrl+W"),
+                MenuItemSpec("Save Scene", actions.file.save_scene, shortcut="Ctrl+S"),
+                MenuItemSpec("Save Scene As...", actions.file.save_scene_as, shortcut="Ctrl+Shift+S"),
+                MenuItemSpec("Load Scene...", actions.file.load_scene, shortcut="Ctrl+O"),
+                MenuItemSpec("Close Scene", actions.file.close_scene, shortcut="Ctrl+W"),
                 None,
-                MenuItemSpec("Load Material...", on_load_material),
-                MenuItemSpec("Load Components...", on_load_components),
+                MenuItemSpec("Load Material...", actions.file.load_material),
+                MenuItemSpec("Load Components...", actions.file.load_components),
                 None,
-                MenuItemSpec("Deploy Standard Library...", on_deploy_stdlib),
-                MenuItemSpec("Migrate .spec to .meta", on_migrate_spec_to_meta),
+                MenuItemSpec("Deploy Standard Library...", actions.file.deploy_stdlib),
+                MenuItemSpec("Migrate .spec to .meta", actions.file.migrate_spec_to_meta),
                 None,
-                MenuItemSpec("Exit", on_exit, shortcut="Ctrl+Q"),
+                MenuItemSpec("Exit", actions.file.exit, shortcut="Ctrl+Q"),
             ],
         ),
         # ── Edit ───────────────────────────────────────────────────────
@@ -173,16 +231,16 @@ def build_editor_menu_spec(
             name="Edit",
             items=[
                 MenuItemSpec(
-                    "Undo", on_undo, shortcut="Ctrl+Z",
-                    handle_getter=set_undo_handle,
+                    "Undo", actions.edit.undo, shortcut="Ctrl+Z",
+                    handle_getter=handles.undo,
                 ),
                 MenuItemSpec(
-                    "Redo", on_redo, shortcut="Ctrl+Shift+Z",
-                    handle_getter=set_redo_handle,
+                    "Redo", actions.edit.redo, shortcut="Ctrl+Shift+Z",
+                    handle_getter=handles.redo,
                 ),
                 None,
-                MenuItemSpec("Settings...", on_settings),
-                MenuItemSpec("Project Settings...", on_project_settings),
+                MenuItemSpec("Settings...", actions.edit.settings),
+                MenuItemSpec("Project Settings...", actions.edit.project_settings),
             ],
         ),
         # ── View ───────────────────────────────────────────────────────
@@ -190,23 +248,23 @@ def build_editor_menu_spec(
             name="View",
             items=[
                 MenuItemSpec(
-                    "Fullscreen", on_toggle_fullscreen, shortcut="F11",
-                    is_checkable=True, state_getter=is_fullscreen,
-                    handle_getter=set_fullscreen_handle,
+                    "Fullscreen", actions.view.toggle_fullscreen, shortcut="F11",
+                    is_checkable=True, state_getter=states.fullscreen,
+                    handle_getter=handles.fullscreen,
                 ),
                 None,
-                MenuItemSpec("SpaceMouse Settings...", on_show_spacemouse_settings),
+                MenuItemSpec("SpaceMouse Settings...", actions.view.show_spacemouse_settings),
             ],
         ),
         # ── Scene ──────────────────────────────────────────────────────
         MenuSpec(
             name="Scene",
             items=[
-                MenuItemSpec("Scene Properties...", on_scene_properties),
-                MenuItemSpec("Layers & Flags...", on_layers_settings),
-                MenuItemSpec("Shadow Settings...", on_shadow_settings),
+                MenuItemSpec("Scene Properties...", actions.scene.scene_properties),
+                MenuItemSpec("Layers & Flags...", actions.scene.layers_settings),
+                MenuItemSpec("Shadow Settings...", actions.scene.shadow_settings),
                 None,
-                MenuItemSpec("Pipeline Editor...", on_pipeline_editor),
+                MenuItemSpec("Pipeline Editor...", actions.scene.pipeline_editor),
             ],
         ),
         # ── Navigation ─────────────────────────────────────────────────
@@ -219,14 +277,14 @@ def build_editor_menu_spec(
             name="Game",
             items=[
                 MenuItemSpec(
-                    "Play", on_toggle_game_mode, shortcut="F5",
-                    handle_getter=set_play_handle,
+                    "Play", actions.game.toggle_game_mode, shortcut="F5",
+                    handle_getter=handles.play,
                 ),
-                MenuItemSpec("Build Project...", on_build_project),
-                MenuItemSpec("Build Android APK...", on_build_android),
-                MenuItemSpec("Quest/OpenXR Build...", on_build_quest_openxr),
-                MenuItemSpec("Run Build...", on_run_build),
-                MenuItemSpec("Run Standalone...", on_run_standalone, shortcut="F6"),
+                MenuItemSpec("Build Project...", actions.game.build_project),
+                MenuItemSpec("Build Android APK...", actions.game.build_android),
+                MenuItemSpec("Quest/OpenXR Build...", actions.game.build_quest_openxr),
+                MenuItemSpec("Run Build...", actions.game.run_build),
+                MenuItemSpec("Run Standalone...", actions.game.run_standalone, shortcut="F6"),
             ],
         ),
         # ── Debug ──────────────────────────────────────────────────────
@@ -238,7 +296,7 @@ def build_editor_menu_spec(
         MenuSpec(
             name="Help",
             items=[
-                MenuItemSpec("About Termin...", on_show_about),
+                MenuItemSpec("About Termin...", actions.help.show_about),
             ],
         ),
     ]

@@ -9,7 +9,21 @@ No module in this package may import tcgui or any other UI framework.
 from pathlib import Path
 
 from .menu_spec import MenuItemSpec, MenuSpec
-from .menu_bar_model import build_editor_menu_spec
+from .menu_bar_model import (
+    DebugMenuActions,
+    EditMenuActions,
+    EditorMenuActions,
+    EditorMenuHandleSetters,
+    EditorMenuSpecConfig,
+    EditorMenuStateGetters,
+    FileMenuActions,
+    GameMenuActions,
+    HelpMenuActions,
+    NavigationMenuActions,
+    SceneMenuActions,
+    ViewMenuActions,
+    build_editor_menu_spec,
+)
 
 
 def scene_name_from_file_path(file_path: str) -> str:
@@ -20,6 +34,18 @@ def scene_name_from_file_path(file_path: str) -> str:
 __all__ = [
     "MenuItemSpec",
     "MenuSpec",
+    "DebugMenuActions",
+    "EditMenuActions",
+    "EditorMenuActions",
+    "EditorMenuHandleSetters",
+    "EditorMenuSpecConfig",
+    "EditorMenuStateGetters",
+    "FileMenuActions",
+    "GameMenuActions",
+    "HelpMenuActions",
+    "NavigationMenuActions",
+    "SceneMenuActions",
+    "ViewMenuActions",
     "build_editor_menu_spec",
     "scene_name_from_file_path",
 ]
