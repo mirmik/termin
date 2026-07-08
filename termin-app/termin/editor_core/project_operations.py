@@ -169,6 +169,42 @@ class ProjectOperations:
             return
         on_refresh()
 
+    def create_file(self, base_dir: Path | None, on_refresh: Callable[[], None]) -> None:
+        if base_dir is None:
+            return
+        self._dialog.show_input(
+            title="Create File",
+            message="File name:",
+            default="NewFile.txt",
+            on_result=lambda name: self._apply_create_file(base_dir, name, on_refresh),
+        )
+
+    def _apply_create_file(
+        self,
+        base_dir: Path,
+        name: str | None,
+        on_refresh: Callable[[], None],
+    ) -> None:
+        if not name:
+            return
+        clean = name.strip()
+        if not clean:
+            return
+        if clean != Path(clean).name or "/" in clean or "\\" in clean:
+            self._dialog.show_error("Error", "Name must not contain path separators.")
+            return
+        file_path = base_dir / clean
+        if file_path.exists():
+            self._dialog.show_error("Error", f"Path '{file_path.name}' already exists.")
+            return
+        try:
+            file_path.write_text("", encoding="utf-8")
+        except OSError as e:
+            log.error(f"[ProjectOperations] create file failed: {e}")
+            self._dialog.show_error("Error", f"Failed to create file: {e}")
+            return
+        on_refresh()
+
     def delete_item(self, path: Path, on_refresh: Callable[[], None]) -> None:
         if path.is_file():
             message = f"Delete file '{path.name}'?"

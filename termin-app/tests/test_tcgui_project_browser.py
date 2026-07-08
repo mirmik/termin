@@ -23,7 +23,11 @@ class _DummyWidget:
 
 class _DummyProjectOps:
     def __init__(self) -> None:
+        self.created_files = []
         self.deleted_paths = []
+
+    def create_file(self, base_dir, on_refresh) -> None:
+        self.created_files.append(base_dir)
 
     def delete_item(self, path, on_refresh) -> None:
         self.deleted_paths.append(path)
@@ -106,3 +110,15 @@ def test_project_browser_delete_key_routes_selected_file(tmp_path):
     browser._on_file_delete(0, {"data": path})
 
     assert ops.deleted_paths == [path]
+
+
+def test_project_browser_create_file_uses_selected_directory(tmp_path):
+    ops = _DummyProjectOps()
+    browser = ProjectBrowserTcgui.__new__(ProjectBrowserTcgui)
+    browser._ops = ops
+    browser._selected_dir = tmp_path
+
+    browser._create_file()
+    browser._create_file_in(tmp_path / "assets")
+
+    assert ops.created_files == [tmp_path, tmp_path / "assets"]

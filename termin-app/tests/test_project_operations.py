@@ -85,6 +85,44 @@ def test_rename_file_rejects_existing_target_meta(tmp_path: Path) -> None:
     assert dialog.errors == [("Error", "Meta file 'GrenadeRenamed.png.meta' already exists.")]
 
 
+def test_create_file_writes_empty_text_file(tmp_path: Path) -> None:
+    dialog = FakeDialogService()
+    dialog.input_result = "notes.txt"
+    refreshed = []
+
+    ProjectOperations(dialog).create_file(tmp_path, lambda: refreshed.append(True))
+
+    assert (tmp_path / "notes.txt").read_text(encoding="utf-8") == ""
+    assert refreshed == [True]
+    assert dialog.errors == []
+
+
+def test_create_file_rejects_path_separators(tmp_path: Path) -> None:
+    dialog = FakeDialogService()
+    dialog.input_result = "nested/notes.txt"
+    refreshed = []
+
+    ProjectOperations(dialog).create_file(tmp_path, lambda: refreshed.append(True))
+
+    assert not (tmp_path / "nested").exists()
+    assert refreshed == []
+    assert dialog.errors == [("Error", "Name must not contain path separators.")]
+
+
+def test_create_file_rejects_existing_path(tmp_path: Path) -> None:
+    existing = tmp_path / "notes.txt"
+    existing.write_text("keep", encoding="utf-8")
+    dialog = FakeDialogService()
+    dialog.input_result = "notes.txt"
+    refreshed = []
+
+    ProjectOperations(dialog).create_file(tmp_path, lambda: refreshed.append(True))
+
+    assert existing.read_text(encoding="utf-8") == "keep"
+    assert refreshed == []
+    assert dialog.errors == [("Error", "Path 'notes.txt' already exists.")]
+
+
 def test_new_shader_template_is_current_slang_shader() -> None:
     assert "@language slang" in _SHADER_TEMPLATE
     assert "#version" not in _SHADER_TEMPLATE
