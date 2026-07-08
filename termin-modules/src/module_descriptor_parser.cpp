@@ -1,8 +1,7 @@
 #include "termin_modules/module_descriptor_parser.hpp"
 
 #include <tcbase/tc_trent.hpp>
-#include <tcbase/tc_value_trent.hpp>
-#include <tcbase/trent/yaml.h>
+#include <tcbase/tc_trent_yaml.hpp>
 
 #include <fstream>
 #include <iterator>
@@ -18,10 +17,6 @@ std::string read_text_file(const std::filesystem::path& path, std::string& error
     }
 
     return std::string(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
-}
-
-tc::trent parse_descriptor_yaml(const std::string& text) {
-    return tc::trent::adopt(tc::trent_to_tc_value(nos::yaml::parse(text)));
 }
 
 std::optional<std::string> get_optional_string(tc::trent_view node, const char* key) {
@@ -157,7 +152,7 @@ std::optional<ModuleSpec> ModuleDescriptorParser::parse(const std::filesystem::p
 
     tc::trent root;
     try {
-        root = parse_descriptor_yaml(text);
+        root = tc::yaml::parse(text);
     } catch (const std::exception& e) {
         error = "Failed to parse descriptor " + path.string() + ": " + e.what();
         return std::nullopt;
