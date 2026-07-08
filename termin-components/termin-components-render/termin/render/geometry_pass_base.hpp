@@ -40,6 +40,7 @@ public:
         tc_shader_handle final_shader = tc_shader_handle_invalid();
         tc_material_phase* material_phase = nullptr;
         tc_material_handle material = tc_material_handle_invalid();
+        tc_render_item item{};
         size_t phase_index = SIZE_MAX;
         int geometry_id = 0;
         int pick_id = 0;

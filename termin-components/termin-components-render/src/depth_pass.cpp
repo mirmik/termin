@@ -109,31 +109,6 @@ MaterialPipelinePassContract depth_material_pass_contract(const char* debug_name
     return contract;
 }
 
-bool collect_depth_mesh_render_item_for_draw(
-    tc_component* component,
-    const tc_render_item_collect_context& context,
-    int geometry_id,
-    const char* pass_name,
-    const char* entity_name,
-    tc_render_item& out_item)
-{
-    (void)pass_name;
-    (void)entity_name;
-
-    RenderItemCollection items;
-    if (!collect_drawable_render_items(component, context, items)) {
-        return false;
-    }
-    for (const tc_render_item& item : items.items) {
-        if (item.kind == TC_RENDER_ITEM_KIND_MESH &&
-            item.geometry_id == geometry_id) {
-            out_item = item;
-            return true;
-        }
-    }
-    return false;
-}
-
 tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item) {
     if (!tc_material_handle_is_invalid(item.material) &&
         item.material_phase_index != SIZE_MAX) {
@@ -319,32 +294,9 @@ void DepthPass::execute_with_data_tgfx2(
             nullptr,
             depth_resources);
     };
-    const MaterialPipelinePassContract pass_contract = depth_material_pass_contract("depth");
-    const char* depth_phase = phase_mark();
-    const std::string debug_pass_name = get_pass_name();
-    const char* debug_pass_name_c = debug_pass_name.c_str();
-
     for (const auto& dc : cached_draw_calls_) {
         const char* name = dc.entity.name();
-
-        tc_render_item_collect_context item_context{};
-        item_context.phase_mark = depth_phase;
-        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-        item_context.layer_mask = data.layer_mask;
-        item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = debug_pass_name_c;
-        item_context.pass_contract = &pass_contract;
-
-        tc_render_item item{};
-        if (!collect_depth_mesh_render_item_for_draw(
-                dc.component,
-                item_context,
-                dc.geometry_id,
-                "DepthPass",
-                name,
-                item)) {
-            continue;
-        }
+        const tc_render_item& item = dc.item;
 
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);
@@ -548,6 +500,7 @@ void DepthOnlyPass::collect_draw_calls(
             DrawCall dc;
             dc.entity = ent;
             dc.component = c;
+            dc.item = item;
             ShaderOverrideContext override_context;
             override_context.phase_mark = collect_ctx->pass->pass_phase_mark;
             override_context.geometry_id = item.geometry_id;
@@ -821,31 +774,9 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
             nullptr,
             depth_resources);
     };
-    const MaterialPipelinePassContract pass_contract = depth_material_pass_contract("depth_only");
-    const std::string debug_pass_name = get_pass_name();
-    const char* debug_pass_name_c = debug_pass_name.c_str();
-
     for (const auto& dc : cached_draw_calls_) {
         const char* name = dc.entity.name();
-
-        tc_render_item_collect_context item_context{};
-        item_context.phase_mark = pass_phase_mark.c_str();
-        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-        item_context.layer_mask = ctx.layer_mask;
-        item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = debug_pass_name_c;
-        item_context.pass_contract = &pass_contract;
-
-        tc_render_item item{};
-        if (!collect_depth_mesh_render_item_for_draw(
-                dc.component,
-                item_context,
-                dc.geometry_id,
-                "DepthOnlyPass",
-                name,
-                item)) {
-            continue;
-        }
+        const tc_render_item& item = dc.item;
 
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);
