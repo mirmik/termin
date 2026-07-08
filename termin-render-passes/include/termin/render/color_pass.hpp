@@ -197,14 +197,6 @@ public:
 
 private:
     /**
-     * Bind extra textures by shader resource name before rendering.
-     */
-    void bind_extra_textures(
-        const Tex2Map& tex2_reads,
-        tgfx::RenderContext2* ctx2,
-        const tc_shader* shader);
-
-    /**
      * Find camera component by entity name in scene.
      * Returns nullptr if not found.
      */

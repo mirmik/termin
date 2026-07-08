@@ -325,9 +325,9 @@ bool encode_line_batch_render_item_tgfx2(
             params.cap_shader_layout = tube_cap_shader.shader;
             params.bind_resources =
                 [&request, phase](tgfx::RenderContext2& line_ctx, const tc_shader* shader_layout) {
-                    if (request.prepare_material_resources) {
-                        request.prepare_material_resources(line_ctx, shader_layout, phase);
-                    }
+                    RenderItemDrawSubmitRequest line_request = request;
+                    line_request.material_phase = phase;
+                    bind_render_item_common_resources(line_ctx, shader_layout, line_request);
                 };
         }
 
