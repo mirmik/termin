@@ -268,6 +268,7 @@ void GeometryPassBase::collect_draw_calls(
             dc.entity = ent;
             dc.component = c;
             dc.final_shader = final_shader;
+            dc.item = item;
             dc.geometry_id = item.geometry_id;
             dc.pick_id = pick_id;
             if (selected_phase) {

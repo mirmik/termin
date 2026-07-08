@@ -70,29 +70,6 @@ MaterialPipelinePassContract normal_material_pass_contract()
     return contract;
 }
 
-bool collect_mesh_render_item_for_draw(
-    tc_component* component,
-    const tc_render_item_collect_context& context,
-    int geometry_id,
-    const char* entity_name,
-    tc_render_item& out_item)
-{
-    (void)entity_name;
-
-    RenderItemCollection items;
-    if (!collect_drawable_render_items(component, context, items)) {
-        return false;
-    }
-    for (const tc_render_item& item : items.items) {
-        if (item.kind == TC_RENDER_ITEM_KIND_MESH &&
-            item.geometry_id == geometry_id) {
-            out_item = item;
-            return true;
-        }
-    }
-    return false;
-}
-
 } // anonymous namespace
 
 MaterialPipelinePassContract NormalPass::shader_pass_contract() const {
@@ -202,32 +179,9 @@ void NormalPass::execute_with_data_tgfx2(
         nullptr,
         normal_resources);
 
-    const std::string& debug_symbol = get_debug_internal_point();
-    const MaterialPipelinePassContract pass_contract = normal_material_pass_contract();
-    const char* normal_phase = phase_mark();
-    const std::string debug_pass_name = get_pass_name();
-    const char* debug_pass_name_c = debug_pass_name.c_str();
-
     for (const auto& dc : cached_draw_calls_) {
         const char* name = dc.entity.name();
-
-        tc_render_item_collect_context item_context{};
-        item_context.phase_mark = normal_phase;
-        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-        item_context.layer_mask = layer_mask;
-        item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = debug_pass_name_c;
-        item_context.pass_contract = &pass_contract;
-
-        tc_render_item item{};
-        if (!collect_mesh_render_item_for_draw(
-                dc.component,
-                item_context,
-                dc.geometry_id,
-                name,
-                item)) {
-            continue;
-        }
+        const tc_render_item& item = dc.item;
 
         if (name && seen_entities.insert(name).second) {
             entity_names.push_back(name);

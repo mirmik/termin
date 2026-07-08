@@ -90,23 +90,6 @@ MaterialPipelinePassContract id_material_pass_contract()
     return contract;
 }
 
-bool same_drawable_geometry(tc_component* component, int geometry_id, const IdMeshTask& task) {
-    return task.item.component == component && task.item.geometry_id == geometry_id;
-}
-
-bool has_mesh_task_for(
-    const std::vector<IdMeshTask>& tasks,
-    tc_component* component,
-    int geometry_id)
-{
-    return std::any_of(
-        tasks.begin(),
-        tasks.end(),
-        [component, geometry_id](const IdMeshTask& task) {
-            return same_drawable_geometry(component, geometry_id, task);
-        });
-}
-
 } // anonymous namespace
 
 MaterialPipelinePassContract IdPass::shader_pass_contract() const {
@@ -157,7 +140,6 @@ void IdPass::execute_with_data_tgfx2(
     tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
-    const Vec3& camera_position,
     uint64_t layer_mask
 ) {
     if (!ctx.ctx2) {
@@ -262,11 +244,6 @@ void IdPass::execute_with_data_tgfx2(
                 return a.final_shader.index < b.final_shader.index;
             });
     }
-
-    // Non-mesh IdPass work is still collected by the pass-owned draw-call path
-    // below and submitted through typed RenderItem encoders.
-    collect_draw_calls(scene, layer_mask, ctx.render_category_mask, id_shader_handle_);
-    sort_draw_calls_by_shader();
 
     entity_names.clear();
     std::set<std::string> seen_entities;
@@ -400,82 +377,6 @@ void IdPass::execute_with_data_tgfx2(
         draw_mesh_task(task);
     }
 
-    for (const auto& dc : cached_draw_calls_) {
-        if (has_mesh_task_for(mesh_tasks, dc.component, dc.geometry_id)) {
-            continue;
-        }
-
-        const char* name = dc.entity.name();
-        if (name && seen_entities.insert(name).second) {
-            entity_names.push_back(name);
-        }
-
-        if (dc.pick_id != current_pick_id) {
-            current_pick_id = dc.pick_id;
-            id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
-        }
-
-        tc_render_item_collect_context item_context{};
-        item_context.phase_mark = pick_phase;
-        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-        item_context.layer_mask = layer_mask;
-        item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = debug_pass_name_c;
-        item_context.pass_contract = &pass_contract;
-
-        RenderItemCollection direct_items;
-        if (collect_drawable_render_items(dc.component, item_context, direct_items)) {
-            bool submitted_typed_item = false;
-            for (const tc_render_item& item : direct_items.items) {
-                if (item.geometry_id != dc.geometry_id ||
-                    item.kind == TC_RENDER_ITEM_KIND_MESH) {
-                    continue;
-                }
-
-                RenderContext direct_context;
-                direct_context.view = view;
-                direct_context.projection = projection;
-                if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-                    std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
-                }
-                direct_context.phase = pick_phase;
-                direct_context.pass_contract = pass_contract;
-                direct_context.current_tc_shader = TcShader(dc.final_shader);
-                direct_context.layer_mask = layer_mask;
-                direct_context.render_category_mask = ctx.render_category_mask;
-                direct_context.camera_position = camera_position;
-                direct_context.viewport_width = rect.width;
-                direct_context.viewport_height = rect.height;
-                direct_context.has_override_color = true;
-                direct_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
-
-                RenderItemDrawSubmitRequest submit_request{};
-                submit_request.shader = tc_shader_get(dc.final_shader);
-                submit_request.draw_context = &direct_context;
-                submit_request.material_phase = item.material_phase;
-                submit_request.phase_mark = pick_phase;
-                submit_request.debug_pass_name = debug_pass_name_c;
-                submit_request.debug_entity_name = name;
-                submit_render_item_draw(*ctx.ctx2, item, submit_request);
-                capture_debug_symbol(name);
-                restore_id_raster_state();
-                ctx.ctx2->clear_resource_bindings();
-                prepare_material_pipeline_resources(
-                    *ctx.ctx2,
-                    device,
-                    id_shader.shader,
-                    nullptr,
-                    id_resources);
-                submitted_typed_item = true;
-                break;
-            }
-            if (submitted_typed_item) {
-                continue;
-            }
-        }
-
-    }
-
     ctx.ctx2->end_pass();
     // color_tex2/depth_tex2 are persistent FBOPool wrappers — do not destroy.
 }
@@ -525,7 +426,6 @@ void IdPass::execute(ExecuteContext& ctx) {
     Mat44 proj_d = camera->get_projection_matrix();
     Mat44f view = view_d.to_float();
     Mat44f projection = proj_d.to_float();
-    Vec3 camera_position = camera->get_position();
 
     if (!ctx.ctx2) {
         tc::Log::error("[IdPass] ctx.ctx2 is null — IdPass is tgfx2-only");
@@ -538,7 +438,6 @@ void IdPass::execute(ExecuteContext& ctx) {
         scene,
         view,
         projection,
-        camera_position,
         ctx.layer_mask
     );
 }
