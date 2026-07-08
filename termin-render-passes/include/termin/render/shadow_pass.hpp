@@ -37,6 +37,7 @@ struct TERMIN_RENDER_PASSES_API ShadowDrawCall {
     tc_material_phase* phase = nullptr;
     tc_shader_handle final_shader;  // Shader after override (skinning, alpha-test, etc.)
     int geometry_id = 0;
+    tc_render_item item{};
     tc_material_handle material = tc_material_handle_invalid();
     size_t phase_index = SIZE_MAX;
 

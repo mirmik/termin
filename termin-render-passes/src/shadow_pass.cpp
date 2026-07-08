@@ -230,6 +230,17 @@ struct CollectShadowShaderUsagesData {
     const std::function<void(TcShader)>* emit = nullptr;
 };
 
+tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item) {
+    if (!tc_material_handle_is_invalid(item.material) &&
+        item.material_phase_index != SIZE_MAX) {
+        tc_material* material = tc_material_get(item.material);
+        if (material && item.material_phase_index < material->phase_count) {
+            return &material->phases[item.material_phase_index];
+        }
+    }
+    return item.material_phase;
+}
+
 bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
     auto* data = static_cast<CollectShadowDrawCallsData*>(user_data);
 
@@ -259,17 +270,7 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
     Entity ent(tc->owner);
 
     for (const tc_render_item& item : items.items) {
-        tc_material_phase* phase = nullptr;
-        if (!tc_material_handle_is_invalid(item.material) &&
-            item.material_phase_index != SIZE_MAX) {
-            tc_material* material = tc_material_get(item.material);
-            if (material && item.material_phase_index < material->phase_count) {
-                phase = &material->phases[item.material_phase_index];
-            }
-        }
-        if (!phase) {
-            phase = item.material_phase;
-        }
+        tc_material_phase* phase = resolve_render_item_material_phase(item);
         if (!phase) {
             continue;
         }
@@ -287,6 +288,9 @@ bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
         dc.phase = phase;
         dc.final_shader = final_shader;
         dc.geometry_id = item.geometry_id;
+        if (item.kind == TC_RENDER_ITEM_KIND_MESH) {
+            dc.item = item;
+        }
         dc.material = item.material;
         dc.phase_index = item.material_phase_index;
         data->draw_calls->push_back(dc);
@@ -321,17 +325,7 @@ bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
     }
 
     for (const tc_render_item& item : items.items) {
-        tc_material_phase* phase = nullptr;
-        if (!tc_material_handle_is_invalid(item.material) &&
-            item.material_phase_index != SIZE_MAX) {
-            tc_material* material = tc_material_get(item.material);
-            if (material && item.material_phase_index < material->phase_count) {
-                phase = &material->phases[item.material_phase_index];
-            }
-        }
-        if (!phase) {
-            phase = item.material_phase;
-        }
+        tc_material_phase* phase = resolve_render_item_material_phase(item);
         if (!phase) {
             continue;
         }
@@ -698,42 +692,61 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     nullptr,
                     shadow_resources);
             };
-            const MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
-            const std::string debug_pass_name = get_pass_name();
-            const char* debug_pass_name_c = debug_pass_name.c_str();
-
             for (const auto& dc : cached_draw_calls_) {
                 tc_material_phase* phase = dc.resolve_phase();
                 if (!phase) continue;
 
-                tc_render_item_collect_context item_context{};
-                item_context.phase_mark = "shadow";
-                item_context.layer_mask = data.layer_mask;
-                item_context.render_category_mask = ctx.render_category_mask;
-                item_context.debug_pass_name = debug_pass_name_c;
-                item_context.pass_contract = &pass_contract;
-
-                tc_render_item item{};
+                const tc_render_item* item = &dc.item;
+                tc_render_item typed_item{};
                 RenderItemCollection item_collection;
-                if (!collect_shadow_render_item_for_draw(
+                tc_shader_handle final_shader = dc.final_shader;
+                if (dc.item.kind != TC_RENDER_ITEM_KIND_MESH) {
+                    const MaterialPipelinePassContract pass_contract =
+                        shadow_material_pass_contract();
+                    const std::string debug_pass_name = get_pass_name();
+                    const char* debug_pass_name_c = debug_pass_name.c_str();
+
+                    tc_render_item_collect_context item_context{};
+                    item_context.phase_mark = "shadow";
+                    item_context.layer_mask = data.layer_mask;
+                    item_context.render_category_mask = ctx.render_category_mask;
+                    item_context.debug_pass_name = debug_pass_name_c;
+                    item_context.pass_contract = &pass_contract;
+
+                    if (!collect_shadow_render_item_for_draw(
+                            dc.component,
+                            item_context,
+                            dc.geometry_id,
+                            item_collection,
+                            typed_item)) {
+                        continue;
+                    }
+                    item = &typed_item;
+                    phase = resolve_render_item_material_phase(*item);
+                    if (!phase) {
+                        continue;
+                    }
+
+                    ShaderOverrideContext override_context;
+                    override_context.phase_mark = "shadow";
+                    override_context.geometry_id = item->geometry_id;
+                    override_context.original_shader = TcShader(shadow_shader_handle_);
+                    override_context.pass_contract = pass_contract;
+                    final_shader = override_drawable_shader(
                         dc.component,
-                        item_context,
-                        dc.geometry_id,
-                        item_collection,
-                        item)) {
-                    continue;
+                        override_context).handle;
                 }
 
-                if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+                if (item->kind != TC_RENDER_ITEM_KIND_MESH) {
                     RenderContext direct_context;
                     direct_context.view = view_matrix;
                     direct_context.projection = proj_matrix;
-                    if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-                        std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
+                    if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                        std::memcpy(direct_context.model.data, item->model_matrix, sizeof(float) * 16);
                     }
                     direct_context.phase = "shadow";
                     direct_context.pass_contract = shadow_material_pass_contract();
-                    direct_context.current_tc_shader = TcShader(dc.final_shader);
+                    direct_context.current_tc_shader = TcShader(final_shader);
                     direct_context.layer_mask = data.layer_mask;
                     direct_context.render_category_mask = ctx.render_category_mask;
                     direct_context.camera_position = shadow_camera_position(params);
@@ -741,7 +754,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     direct_context.viewport_height = resolution;
 
                     RenderItemDrawSubmitRequest submit_request{};
-                    submit_request.shader = tc_shader_get(dc.final_shader);
+                    submit_request.shader = tc_shader_get(final_shader);
                     submit_request.draw_context = &direct_context;
                     submit_request.material_phase = phase;
                     submit_request.phase_mark = "shadow";
@@ -766,7 +779,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                                 live_phase,
                                 typed_resources);
                         };
-                    submit_render_item_draw(*ctx.ctx2, item, submit_request);
+                    submit_render_item_draw(*ctx.ctx2, *item, submit_request);
                     capture_debug_symbol(dc.entity.name());
                     restore_shadow_raster_state();
                     ctx.ctx2->bind_shader(shadow_shader.vertex, shadow_shader.fragment);
@@ -785,8 +798,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 // as BoneBlock. Bias is applied receiver-side while sampling
                 // so the caster's projected XY footprint stays stable.
                 ShadowPushStd140 push{};
-                if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-                    std::memcpy(push.u_model, item.model_matrix, sizeof(float) * 16);
+                if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                    std::memcpy(push.u_model, item->model_matrix, sizeof(float) * 16);
                 } else {
                     Mat44f identity = Mat44f::identity();
                     std::memcpy(push.u_model, identity.data, sizeof(float) * 16);
@@ -800,7 +813,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     draw_uniforms.data(),
                     draw_uniforms.size());
                 RenderItemDrawSubmitRequest encode_request{};
-                encode_request.shader_handle = dc.final_shader;
+                encode_request.shader_handle = final_shader;
                 encode_request.device = &device;
                 encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
                 encode_request.material_resources = &draw_resources;
@@ -808,7 +821,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 encode_request.debug_entity_name = dc.entity.name();
                 if (!submit_render_item_draw(
                     *ctx.ctx2,
-                    item,
+                    *item,
                     encode_request)) {
                     continue;
                 }

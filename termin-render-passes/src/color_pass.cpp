@@ -364,6 +364,9 @@ bool collect_drawable_draw_calls(tc_component* tc, void* user_data) {
             dc.final_shader = final_shader;
             dc.priority = phase->priority;
             dc.geometry_id = item.geometry_id;
+            if (item.kind == TC_RENDER_ITEM_KIND_MESH) {
+                dc.item = item;
+            }
             dc.material = item.material;
             dc.phase_index = item.material_phase_index;
             data->draw_calls->push_back(dc);
@@ -414,68 +417,6 @@ bool collect_color_drawable_shader_usages(tc_component* tc, void* user_data) {
     }
 
     return true;
-}
-
-bool same_shader_handle(tc_shader_handle a, tc_shader_handle b) {
-    return a.index == b.index && a.generation == b.generation;
-}
-
-struct ResolvedDrawPhase {
-    tc_material_phase* phase = nullptr;
-    tc_shader_handle final_shader = tc_shader_handle_invalid();
-};
-
-ResolvedDrawPhase resolve_draw_phase(
-    tc_component* component,
-    const RenderContext& render_context,
-    const std::string& phase_mark,
-    int geometry_id,
-    tc_material_handle expected_material,
-    size_t expected_phase_index,
-    const MaterialPipelinePassContract& pass_contract
-) {
-    ResolvedDrawPhase resolved;
-    if (!component) {
-        return resolved;
-    }
-
-    tc_render_item_collect_context item_context{};
-    item_context.phase_mark = phase_mark.c_str();
-    item_context.layer_mask = render_context.layer_mask;
-    item_context.render_category_mask = render_context.render_category_mask;
-    item_context.debug_pass_name = "ColorPass/ResolvePhase";
-    item_context.pass_contract = &pass_contract;
-    item_context.camera = render_context.camera;
-
-    RenderItemCollection items;
-    if (!collect_drawable_render_items(component, item_context, items)) {
-        return resolved;
-    }
-    for (const tc_render_item& item : items.items) {
-        tc_material_phase* phase = resolve_render_item_material_phase(item);
-        if (!phase || item.geometry_id != geometry_id) {
-            continue;
-        }
-        if (!tc_material_handle_is_invalid(expected_material) &&
-            (!tc_material_handle_eq(item.material, expected_material) ||
-             item.material_phase_index != expected_phase_index)) {
-            continue;
-        }
-
-        ShaderOverrideContext override_context;
-        override_context.phase_mark = phase_mark;
-        override_context.geometry_id = geometry_id;
-        override_context.original_shader = TcShader(phase->shader);
-        override_context.pass_contract = pass_contract;
-        tc_shader_handle final_shader =
-            override_drawable_shader(component, override_context).handle;
-
-        resolved.phase = phase;
-        resolved.final_shader = final_shader;
-        return resolved;
-    }
-
-    return resolved;
 }
 
 } // anonymous namespace
@@ -834,57 +775,42 @@ void ColorPass::execute_with_data(
         entity_names.push_back(ename ? ename : "");
 
         tc_shader_handle final_shader = dc.final_shader;
-
-        auto refresh_phase = [&]() -> bool {
-            ResolvedDrawPhase resolved = resolve_draw_phase(
-                dc.component,
-                collect_context,
-                phase_mark,
-                dc.geometry_id,
-                dc.material,
-                dc.phase_index,
-                color_material_pass_contract());
-            if (!resolved.phase) {
-                tc::Log::error(
-                    "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' geometry=%d could not resolve live material phase",
-                    get_pass_name().c_str(),
-                    phase_mark.c_str(),
-                    draw_index,
-                    ename ? ename : "<unnamed>",
-                    safe_component_type(dc.component),
-                    dc.geometry_id);
-                return false;
-            }
-            phase = resolved.phase;
-            final_shader = resolved.final_shader;
-            return true;
-        };
-
-        if (!refresh_phase()) {
-            ++draw_index;
-            continue;
-        }
-
-        tc_render_item_collect_context item_context{};
-        item_context.phase_mark = phase_mark.c_str();
-        item_context.layer_mask = data.layer_mask;
-        item_context.render_category_mask = ctx.render_category_mask;
-        item_context.debug_pass_name = debug_pass_name_c;
-        item_context.pass_contract = &collect_context.pass_contract;
-
-        tc_render_item item{};
+        const tc_render_item* item = &dc.item;
+        tc_render_item typed_item{};
         RenderItemCollection item_collection;
-        if (!collect_color_render_item_for_draw(
-                dc.component,
-                item_context,
-                dc.geometry_id,
-                item_collection,
-                item)) {
-            ++draw_index;
-            continue;
+        if (dc.item.kind != TC_RENDER_ITEM_KIND_MESH) {
+            tc_render_item_collect_context item_context{};
+            item_context.phase_mark = phase_mark.c_str();
+            item_context.layer_mask = data.layer_mask;
+            item_context.render_category_mask = ctx.render_category_mask;
+            item_context.debug_pass_name = debug_pass_name_c;
+            item_context.pass_contract = &collect_context.pass_contract;
+
+            if (!collect_color_render_item_for_draw(
+                    dc.component,
+                    item_context,
+                    dc.geometry_id,
+                    item_collection,
+                    typed_item)) {
+                ++draw_index;
+                continue;
+            }
+            item = &typed_item;
+            phase = resolve_render_item_material_phase(*item);
+            if (!phase) {
+                ++draw_index;
+                continue;
+            }
+
+            ShaderOverrideContext override_context;
+            override_context.phase_mark = phase_mark;
+            override_context.geometry_id = item->geometry_id;
+            override_context.original_shader = TcShader(phase->shader);
+            override_context.pass_contract = collect_context.pass_contract;
+            final_shader = override_drawable_shader(dc.component, override_context).handle;
         }
 
-        if (item.kind != TC_RENDER_ITEM_KIND_MESH) {
+        if (item->kind != TC_RENDER_ITEM_KIND_MESH) {
             RenderState state = convert_render_state(phase->state);
             if (wireframe) state.polygon_mode = PolygonMode::Line;
 
@@ -915,8 +841,8 @@ void ColorPass::execute_with_data(
             RenderContext direct_context;
             direct_context.view = data.view;
             direct_context.projection = data.projection;
-            if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-                std::memcpy(direct_context.model.data, item.model_matrix, sizeof(float) * 16);
+            if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+                std::memcpy(direct_context.model.data, item->model_matrix, sizeof(float) * 16);
             }
             direct_context.phase = phase_mark;
             direct_context.pass_contract = color_material_pass_contract();
@@ -962,7 +888,7 @@ void ColorPass::execute_with_data(
                         bind_extra_textures(ctx.tex2_reads, &draw_ctx, shader);
                     }
                 };
-            if (submit_render_item_draw(*ctx2, item, submit_request)) {
+            if (submit_render_item_draw(*ctx2, *item, submit_request)) {
                 capture_debug_symbol(ename);
             }
             ++draw_index;
@@ -990,7 +916,6 @@ void ColorPass::execute_with_data(
         tgfx::ShaderHandle vs2 = shader_binding.vertex;
         tgfx::ShaderHandle fs2 = shader_binding.fragment;
         raw_shader = shader_binding.shader;
-        tc_shader_handle ensured_shader = final_shader;
 
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
@@ -999,35 +924,6 @@ void ColorPass::execute_with_data(
         // striped materials after resize/post-processing passes.
         ctx2->clear_resource_bindings();
         ctx2->use_shader_resource_layout(raw_shader);
-
-        // Material storage is handle-addressable but not pointer-stable:
-        // tc_material_create() may grow the pool and move existing materials.
-        // Resolve the phase as late as possible so a draw never dereferences
-        // a stale phase pointer captured during collection/sorting.
-        if (!refresh_phase()) {
-            ++draw_index;
-            continue;
-        }
-        if (!same_shader_handle(final_shader, ensured_shader)) {
-            raw_shader = tc_shader_get(final_shader);
-            if (!raw_shader) {
-                ++draw_index;
-                continue;
-            }
-            if (!ensure_material_pipeline_shader(
-                    *ctx2,
-                    device,
-                    final_shader,
-                    "ColorPass/refreshed",
-                    shader_binding)) {
-                ++draw_index;
-                continue;
-            }
-            raw_shader = shader_binding.shader;
-            vs2 = shader_binding.vertex;
-            fs2 = shader_binding.fragment;
-            ensured_shader = final_shader;
-        }
 
         // Render state from the material phase.
         RenderState state = convert_render_state(phase->state);
@@ -1087,8 +983,8 @@ void ColorPass::execute_with_data(
             float u_model[16];
         };
         ColorPushData push{};
-        if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-            std::memcpy(push.u_model, item.model_matrix, sizeof(push.u_model));
+        if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(push.u_model, item->model_matrix, sizeof(push.u_model));
         } else {
             Mat44f identity = Mat44f::identity();
             std::memcpy(push.u_model, identity.data, sizeof(push.u_model));
@@ -1102,7 +998,7 @@ void ColorPass::execute_with_data(
         encode_request.debug_entity_name = ename;
         if (!submit_render_item_draw(
             *ctx2,
-            item,
+            *item,
             encode_request)) {
             ++draw_index;
             continue;
