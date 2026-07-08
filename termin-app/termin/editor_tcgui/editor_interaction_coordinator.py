@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Callable
 
+from tcbase import Action, Key, log
+
 from termin.editor_core.editor_commands import (
     AddEntityCommand,
     DeleteEntityCommand,
@@ -153,7 +155,31 @@ class EditorInteractionCoordinator:
         return self._dispatch_viewport_pointer(event)
 
     def on_editor_key(self, event) -> bool:
-        return self._dispatch_viewport_key(event)
+        if self._dispatch_viewport_key(event):
+            return True
+        if event.key == Key.DELETE.value and event.action == Action.PRESS.value:
+            return self.delete_selected_entity()
+        return False
+
+    def delete_selected_entity(self) -> bool:
+        interaction_system = self._get_interaction_system()
+        if interaction_system is None:
+            log.error("[EditorInteractionCoordinator] cannot delete selection: interaction system is not available")
+            return False
+
+        from termin.scene import Entity
+
+        entity = interaction_system.selection.selected
+        if not isinstance(entity, Entity) or not entity.valid():
+            return False
+
+        scene_tree_controller = self._get_scene_tree_controller()
+        if scene_tree_controller is None:
+            log.error("[EditorInteractionCoordinator] cannot delete selected entity: scene tree controller is not available")
+            return False
+
+        scene_tree_controller.operations.delete_entity(entity)
+        return True
 
     def on_transform_end(self, old_pose, new_pose) -> None:
         interaction_system = self._get_interaction_system()

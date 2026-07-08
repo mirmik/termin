@@ -113,6 +113,7 @@ class TreeWidget(Widget):
         # Callbacks
         self.on_select: Callable[[TreeNode], None] | None = None
         self.on_activate: Callable[[TreeNode], None] | None = None
+        self.on_delete: Callable[[TreeNode], None] | None = None
         self.on_expand: Callable[[TreeNode], None] | None = None
         self.on_collapse: Callable[[TreeNode], None] | None = None
 
@@ -639,6 +640,12 @@ class TreeWidget(Widget):
             if self.selected_node is not None and self.on_activate:
                 self.on_activate(self.selected_node)
             return True
+
+        if key == Key.DELETE:
+            if self.selected_node is not None and self.on_delete:
+                self.on_delete(self.selected_node)
+                return True
+            return False
 
         return False
 

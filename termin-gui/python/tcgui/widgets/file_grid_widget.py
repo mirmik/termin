@@ -6,8 +6,8 @@ import math
 import time
 from typing import TYPE_CHECKING, Callable
 
-from tcbase import MouseButton
-from tcgui.widgets.events import DragPayload, MouseEvent, MouseWheelEvent
+from tcbase import Key, MouseButton
+from tcgui.widgets.events import DragPayload, KeyEvent, MouseEvent, MouseWheelEvent
 from tcgui.widgets.theme import current_theme as _t
 from tcgui.widgets.widget import Widget
 
@@ -20,6 +20,7 @@ class FileGridWidget(Widget):
 
     def __init__(self):
         super().__init__()
+        self.focusable = True
         self._items: list[dict] = []
         self.selected_index: int = -1
 
@@ -48,6 +49,7 @@ class FileGridWidget(Widget):
 
         self.on_select: Callable[[int, dict], None] | None = None
         self.on_activate: Callable[[int, dict], None] | None = None
+        self.on_delete: Callable[[int, dict], None] | None = None
         self.on_context_menu: Callable[[int, dict, float, float], None] | None = None
         self.drag_enabled: bool = False
         self.drag_payload_factory: Callable[[int, dict], DragPayload | None] | None = None
@@ -82,6 +84,26 @@ class FileGridWidget(Widget):
         if 0 <= self.selected_index < len(self._items):
             return self._items[self.selected_index]
         return None
+
+    def _select_index(self, index: int) -> bool:
+        if not self._items:
+            return False
+        clamped = max(0, min(len(self._items) - 1, index))
+        self.selected_index = clamped
+        self._ensure_visible(clamped)
+        if self.on_select is not None:
+            self.on_select(clamped, self._items[clamped])
+        return True
+
+    def _ensure_visible(self, index: int) -> None:
+        ix, iy, iw, ih = self._item_rect(index)
+        item_top = iy - self.y + self._scroll_offset
+        item_bottom = item_top + ih
+        viewport_h = max(0.0, self.height)
+        if item_top < self._scroll_offset:
+            self._set_scroll_offset(item_top)
+        elif item_bottom > self._scroll_offset + viewport_h:
+            self._set_scroll_offset(item_bottom - viewport_h)
 
     def _column_count(self) -> int:
         usable_w = max(1.0, self.width - self.padding * 2.0)
@@ -254,6 +276,41 @@ class FileGridWidget(Widget):
             return False
         self._set_scroll_offset(self._scroll_offset - event.dy * 30.0)
         return True
+
+    def on_key_down(self, event: KeyEvent) -> bool:
+        if not self._items:
+            return False
+
+        key = event.key
+        if key == Key.ENTER:
+            if self.selected_index >= 0 and self.on_activate is not None:
+                self.on_activate(self.selected_index, self._items[self.selected_index])
+                return True
+            return False
+
+        if key == Key.DELETE:
+            if self.selected_index >= 0 and self.on_delete is not None:
+                self.on_delete(self.selected_index, self._items[self.selected_index])
+                return True
+            return False
+
+        if key == Key.RIGHT:
+            start = self.selected_index if self.selected_index >= 0 else -1
+            return self._select_index(start + 1)
+
+        if key == Key.LEFT:
+            start = self.selected_index if self.selected_index >= 0 else 1
+            return self._select_index(start - 1)
+
+        if key == Key.DOWN:
+            start = self.selected_index if self.selected_index >= 0 else -self._column_count()
+            return self._select_index(start + self._column_count())
+
+        if key == Key.UP:
+            start = self.selected_index if self.selected_index >= 0 else self._column_count()
+            return self._select_index(start - self._column_count())
+
+        return False
 
     def on_mouse_move(self, event: MouseEvent):
         if self._dragging_scrollbar:
