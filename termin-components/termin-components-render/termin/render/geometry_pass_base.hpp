@@ -74,6 +74,7 @@ public:
 
 protected:
     mutable std::vector<DrawCall> cached_draw_calls_;
+    mutable RenderItemCollection cached_render_items_;
 
 protected:
     GeometryPassBase(

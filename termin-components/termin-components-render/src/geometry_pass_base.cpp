@@ -191,6 +191,7 @@ void GeometryPassBase::collect_draw_calls(
     tc_shader_handle base_shader
 ) const {
     cached_draw_calls_.clear();
+    cached_render_items_.clear();
 
     if (!tc_scene_handle_valid(scene)) {
         return;
@@ -208,6 +209,7 @@ void GeometryPassBase::collect_draw_calls(
     public:
         const GeometryPassBase* pass = nullptr;
         std::vector<DrawCall>* draw_calls = nullptr;
+        RenderItemCollection* render_items = nullptr;
         tc_shader_handle base_shader = tc_shader_handle_invalid();
         MaterialPipelinePassContract pass_contract;
         RenderItemPassSemantic pass_semantic = RenderItemPassSemantic::Color;
@@ -238,13 +240,24 @@ void GeometryPassBase::collect_draw_calls(
             ? ctx->render_context->camera
             : nullptr;
 
-        RenderItemCollection items;
-        if (!collect_drawable_render_items(c, item_context, items)) {
+        const size_t first_item_index = ctx->render_items
+            ? ctx->render_items->items.size()
+            : 0u;
+        if (!ctx->render_items) {
+            tc::Log::error(
+                "[GeometryPassBase] pass '%s' has no render item storage",
+                ctx->pass->get_pass_name().c_str());
+            return true;
+        }
+        if (!collect_drawable_render_items(c, item_context, *ctx->render_items)) {
             return true;
         }
 
         const int pick_id = ctx->pass->get_pick_id(ent);
-        for (const tc_render_item& item : items.items) {
+        for (size_t item_index = first_item_index;
+             item_index < ctx->render_items->items.size();
+             ++item_index) {
+            const tc_render_item& item = ctx->render_items->items[item_index];
             if (!render_item_encoder_supports_pass(item.kind, ctx->pass_semantic)) {
                 continue;
             }
@@ -294,6 +307,7 @@ void GeometryPassBase::collect_draw_calls(
     CollectContext context{
         this,
         &cached_draw_calls_,
+        &cached_render_items_,
         base_shader,
         shader_pass_contract(),
         render_item_pass_semantic(),
