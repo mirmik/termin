@@ -101,6 +101,7 @@ class ProjectBrowserTcgui:
         self._dir_tree.on_context_menu = self._on_dir_context_menu
         self._file_list.on_select = self._on_file_selected
         self._file_list.on_activate = self._on_file_activated
+        self._file_list.on_delete = self._on_file_delete
         self._file_list.on_context_menu = self._on_file_context_menu
         self._file_list.drag_enabled = True
         self._file_list.drag_payload_factory = self._make_file_drag_payload
@@ -342,6 +343,12 @@ class ProjectBrowserTcgui:
             return
         if self.on_file_activated is not None:
             self.on_file_activated(str(path))
+
+    def _on_file_delete(self, index: int, item: dict) -> None:
+        path: Path | None = item.get("data")
+        if path is None:
+            return
+        self._delete_item(path)
 
     def _on_file_context_menu(self, index: int, item: dict, x: float, y: float) -> None:
         if self._root_path is None or self._selected_dir is None:

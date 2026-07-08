@@ -48,6 +48,7 @@ class SceneTreeControllerTcgui:
 
         self._tree.draggable = True
         self._tree.on_select = self._on_tree_select
+        self._tree.on_delete = self._on_tree_delete
         self._tree.on_drop = self._on_drop
         self._tree.on_external_drag = self._on_external_drag
         self._tree.on_external_drop = self._on_external_drop
@@ -317,6 +318,11 @@ class SceneTreeControllerTcgui:
             self._on_object_selected(None)
         else:
             self._on_object_selected(node.data)
+
+    def _on_tree_delete(self, node: TreeNode) -> None:
+        entity = node.data
+        if isinstance(entity, Entity):
+            self._ops.delete_entity(entity)
 
     def _on_tree_context_menu(self, node: TreeNode | None, x: float, y: float) -> None:
         entity = node.data if node is not None else None
