@@ -37,6 +37,8 @@ class EditorCameraUIController(PythonComponent):
     через него получает viewport и доступ к pipeline.passes.
     """
 
+    component_category = "Editor/Internal"
+
     inspect_fields = {
         "colliders_enabled": InspectField(
             path="colliders_enabled",

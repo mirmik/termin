@@ -17,6 +17,8 @@ class TeleportComponent(InputComponent):
     entity are ignored.
     """
 
+    component_category = "Collision"
+
     def on_mouse_button(self, event: MouseButtonEvent):
         if event.button != MouseButton.LEFT or event.action != Action.PRESS:
             return

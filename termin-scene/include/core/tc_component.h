@@ -374,6 +374,19 @@ TC_API bool tc_component_registry_has_requirement(
 
 // Get component kind (TC_CXX_COMPONENT or TC_PYTHON_COMPONENT)
 TC_API tc_component_kind tc_component_registry_get_kind(const char* type_name);
+TC_API bool tc_component_registry_is_abstract(const char* type_name);
+
+TC_API void tc_component_registry_set_display_name(
+    const char* type_name,
+    const char* display_name
+);
+TC_API const char* tc_component_registry_get_display_name(const char* type_name);
+
+TC_API void tc_component_registry_set_category(
+    const char* type_name,
+    const char* category
+);
+TC_API const char* tc_component_registry_get_category(const char* type_name);
 
 TC_API void tc_component_registry_set_capability(
     const char* type_name,

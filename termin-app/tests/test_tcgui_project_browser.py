@@ -2,6 +2,7 @@ from tcbase import Key
 from tcgui.widgets.events import KeyEvent
 from tcgui.widgets.file_grid_widget import FileGridWidget
 from tcgui.widgets.label import Label
+from tcgui.widgets.menu import Menu, MenuItem
 from tcgui.widgets.tree import TreeNode, TreeWidget
 
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui, _get_file_subtitle
@@ -99,6 +100,29 @@ def test_tree_delete_key_dispatches_selected_node() -> None:
 
     assert tree.on_key_down(KeyEvent(Key.DELETE))
     assert deleted == [node]
+
+
+def test_menu_item_accepts_submenu_items() -> None:
+    clicked = []
+    submenu_items = [MenuItem("Child", on_click=lambda: clicked.append("child"))]
+    item = MenuItem("Parent", submenu=submenu_items)
+    menu = Menu()
+
+    submenu = menu._submenu_for_item(item)
+
+    assert isinstance(submenu, Menu)
+    assert submenu.items == submenu_items
+
+
+def test_submenu_dismiss_clears_parent_child_link() -> None:
+    parent = Menu()
+    child = Menu()
+    parent._child_menu = child
+    child._parent_menu = parent
+
+    child._on_dismissed()
+
+    assert parent._child_menu is None
 
 
 def test_project_browser_delete_key_routes_selected_file(tmp_path):

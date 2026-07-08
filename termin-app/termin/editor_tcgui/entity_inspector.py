@@ -36,6 +36,58 @@ from termin.editor_tcgui.transform_inspector import TransformInspector
 from termin.editor_tcgui.inspect_field_panel import InspectFieldPanel
 
 
+_COMPONENT_CATEGORY_ORDER = (
+    "Rendering",
+    "Input",
+    "UI",
+    "Navigation",
+    "Animation",
+    "Physics",
+    "Collision",
+    "Audio",
+    "Gameplay",
+    "Project",
+    "Editor/Internal",
+    "Other",
+)
+
+
+def _component_category_sort_key(category: str) -> tuple[int, str]:
+    try:
+        return (_COMPONENT_CATEGORY_ORDER.index(category), category.lower())
+    except ValueError:
+        return (len(_COMPONENT_CATEGORY_ORDER), category.lower())
+
+
+def _build_add_component_menu_items(
+    component_infos,
+    on_add: Callable[[str], None],
+) -> list[MenuItem]:
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for info in component_infos:
+        if bool(info.get("is_abstract", False)):
+            continue
+        name = str(info.get("name") or "")
+        if not name:
+            continue
+        display_name = str(info.get("display_name") or name)
+        category = str(info.get("category") or "Other").strip() or "Other"
+        groups.setdefault(category, []).append((display_name, name))
+
+    if not groups:
+        return [MenuItem("(No component types)", enabled=False)]
+
+    items: list[MenuItem] = []
+    for category in sorted(groups, key=_component_category_sort_key):
+        entries = sorted(groups[category], key=lambda pair: (pair[0].lower(), pair[1].lower()))
+        submenu_items = [
+            MenuItem(display_name, on_click=lambda n=name: on_add(n))
+            for display_name, name in entries
+        ]
+        items.append(MenuItem(category, submenu=submenu_items))
+    return items
+
+
 class EntityInspector(VStack):
     """Full entity inspector: entity props + transform + components + field editor."""
 
@@ -406,8 +458,8 @@ class EntityInspector(VStack):
             return
         from termin.scene import ComponentRegistry
 
-        component_names = ComponentRegistry.instance().list_all()
-        items = [MenuItem(name, on_click=(lambda n=name: self._add_component(n))) for name in component_names]
+        component_infos = ComponentRegistry.instance().list_info()
+        items = _build_add_component_menu_items(component_infos, self._add_component)
         ctx = Menu()
         ctx.items = items
 

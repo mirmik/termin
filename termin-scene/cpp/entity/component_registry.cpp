@@ -95,6 +95,24 @@ bool ComponentRegistry::is_a(const std::string& name, const std::string& base_na
     return tc_component_registry_is_a(name.c_str(), base_name.c_str());
 }
 
+void ComponentRegistry::set_display_name(const std::string& name, const std::string& display_name) {
+    tc_component_registry_set_display_name(name.c_str(), display_name.c_str());
+}
+
+std::string ComponentRegistry::display_name_of(const std::string& name) const {
+    const char* display_name = tc_component_registry_get_display_name(name.c_str());
+    return display_name ? std::string(display_name) : std::string();
+}
+
+void ComponentRegistry::set_category(const std::string& name, const std::string& category) {
+    tc_component_registry_set_category(name.c_str(), category.c_str());
+}
+
+std::string ComponentRegistry::category_of(const std::string& name) const {
+    const char* category = tc_component_registry_get_category(name.c_str());
+    return category ? std::string(category) : std::string();
+}
+
 std::vector<std::string> ComponentRegistry::list_all() const {
     std::vector<std::string> result;
     tc_runtime_type_registry_foreach_type_with_facet(

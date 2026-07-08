@@ -274,6 +274,7 @@ void DetourPathfindingWorldComponent::register_type() {
         "DetourPathfindingWorldComponent",
         "Component"
     );
+    ComponentRegistry::instance().set_category("DetourPathfindingWorldComponent", "Navigation");
     register_detour_pathfinding_world_inspect_fields();
 }
 

@@ -29,6 +29,8 @@ class NavMeshAgentComponent(InputComponent):
     3. Или вызвать set_destination(target) программно
     """
 
+    component_category = "Navigation"
+
     inspect_fields = {
         "speed": InspectField(
             path="speed",

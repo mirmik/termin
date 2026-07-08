@@ -98,6 +98,46 @@ void bind_component_registry(nb::module_& m) {
         .def("set_registration_owner", &ComponentRegistry::set_registration_owner, nb::arg("owner"))
         .def("registration_owner", &ComponentRegistry::registration_owner)
         .def("owner_of", &ComponentRegistry::owner_of, nb::arg("name"))
+        .def("set_display_name", &ComponentRegistry::set_display_name,
+            nb::arg("name"), nb::arg("display_name"))
+        .def("display_name_of", &ComponentRegistry::display_name_of, nb::arg("name"))
+        .def("set_category", &ComponentRegistry::set_category,
+            nb::arg("name"), nb::arg("category"))
+        .def("category_of", &ComponentRegistry::category_of, nb::arg("name"))
+        .def("get_info", [](ComponentRegistry& reg, const std::string& name) {
+            nb::dict info;
+            info["name"] = name;
+            info["display_name"] = reg.display_name_of(name);
+            info["category"] = reg.category_of(name);
+            tc_component_kind kind = tc_component_registry_get_kind(name.c_str());
+            info["kind"] = kind == TC_CXX_COMPONENT ? "cxx" :
+                (kind == TC_PYTHON_COMPONENT ? "python" : "csharp");
+            const char* parent = tc_component_registry_get_parent(name.c_str());
+            info["parent"] = parent ? nb::str(parent) : nb::none();
+            const char* owner = tc_component_registry_get_owner(name.c_str());
+            info["owner"] = owner ? nb::str(owner) : nb::str("");
+            info["is_abstract"] = tc_component_registry_is_abstract(name.c_str());
+            return info;
+        }, nb::arg("name"))
+        .def("list_info", [](ComponentRegistry& reg) {
+            nb::list result;
+            for (const std::string& name : reg.list_all()) {
+                nb::dict info;
+                info["name"] = name;
+                info["display_name"] = reg.display_name_of(name);
+                info["category"] = reg.category_of(name);
+                tc_component_kind kind = tc_component_registry_get_kind(name.c_str());
+                info["kind"] = kind == TC_CXX_COMPONENT ? "cxx" :
+                    (kind == TC_PYTHON_COMPONENT ? "python" : "csharp");
+                const char* parent = tc_component_registry_get_parent(name.c_str());
+                info["parent"] = parent ? nb::str(parent) : nb::none();
+                const char* owner = tc_component_registry_get_owner(name.c_str());
+                info["owner"] = owner ? nb::str(owner) : nb::str("");
+                info["is_abstract"] = tc_component_registry_is_abstract(name.c_str());
+                result.append(info);
+            }
+            return result;
+        })
         .def_prop_ro("component_names", [](ComponentRegistry& reg) {
             return reg.list_all();
         })
@@ -137,7 +177,10 @@ void bind_component_registry(nb::module_& m) {
 
             nb::dict info;
             info["name"] = type_name;
+            info["display_name"] = tc_component_registry_get_display_name(type_name);
+            info["category"] = tc_component_registry_get_category(type_name);
             info["language"] = tc_component_registry_get_kind(type_name) == TC_CXX_COMPONENT ? "C++" : "Python";
+            info["is_abstract"] = tc_component_registry_is_abstract(type_name);
 
             const char* parent = tc_component_registry_get_parent(type_name);
             info["parent"] = parent ? nb::str(parent) : nb::none();

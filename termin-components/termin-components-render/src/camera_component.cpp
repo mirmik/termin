@@ -377,6 +377,7 @@ void register_camera_component_inspect_fields() {
 
 void CameraComponent::register_type() {
     register_component_type<CameraComponent>("CameraComponent", "CxxComponent");
+    ComponentRegistry::instance().set_category("CameraComponent", "Rendering");
     register_camera_component_inspect_fields();
 }
 

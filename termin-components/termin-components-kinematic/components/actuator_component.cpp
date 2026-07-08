@@ -17,6 +17,7 @@ void ActuatorComponent::register_type() {
     KinematicUnitComponent::register_type();
 
     register_component_type<ActuatorComponent>("ActuatorComponent", "KinematicUnitComponent");
+    ComponentRegistry::instance().set_category("ActuatorComponent", "Kinematic");
     register_actuator_axis_scale_field();
 }
 
