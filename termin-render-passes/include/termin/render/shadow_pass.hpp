@@ -12,6 +12,7 @@
 #include "termin/lighting/shadow.hpp"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/render/render_scene_item_collector.hpp"
 #include "tgfx/render_state.hpp"
 #include "tgfx/handles.hpp"
 #include "tgfx2/handles.hpp"
@@ -37,6 +38,7 @@ struct TERMIN_RENDER_PASSES_API ShadowDrawCall {
     tc_material_phase* phase = nullptr;
     tc_shader_handle final_shader;  // Shader after override (skinning, alpha-test, etc.)
     int geometry_id = 0;
+    size_t item_index = SIZE_MAX;
     tc_render_item item{};
     tc_material_handle material = tc_material_handle_invalid();
     size_t phase_index = SIZE_MAX;
@@ -196,7 +198,8 @@ private:
     void collect_shadow_casters(
         tc_scene_handle scene,
         uint64_t layer_mask,
-        uint64_t render_category_mask
+        uint64_t render_category_mask,
+        RenderSceneItemCollector& collector
     );
 
     // Sort draw calls by shader

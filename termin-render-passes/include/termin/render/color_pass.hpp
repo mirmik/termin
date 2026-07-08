@@ -13,6 +13,7 @@
 #include "termin/render_passes/export.h"
 #include "termin/render/drawable.hpp"
 #include "termin/render/render_context.hpp"
+#include "termin/render/render_scene_item_collector.hpp"
 
 namespace tgfx {
 class IRenderDevice;
@@ -237,7 +238,8 @@ private:
         tc_scene_handle scene,
         const std::string& phase_mark,
         const RenderContext& render_context,
-        uint64_t layer_mask
+        uint64_t layer_mask,
+        RenderSceneItemCollector& collector
     );
 
     // Compute sort keys for all draw calls (priority + distance)

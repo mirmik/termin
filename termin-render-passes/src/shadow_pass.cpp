@@ -217,13 +217,6 @@ tgfx::TextureHandle ShadowPass::get_or_create_depth_tex2(
 
 namespace {
 
-struct CollectShadowDrawCallsData {
-    std::vector<ShadowDrawCall>* draw_calls;
-    tc_shader_handle base_shader;
-    MaterialPipelinePassContract pass_contract;
-    RenderContext* render_context;
-};
-
 struct CollectShadowShaderUsagesData {
     tc_shader_handle base_shader = tc_shader_handle_invalid();
     MaterialPipelinePassContract pass_contract;
@@ -239,64 +232,6 @@ tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item
         }
     }
     return item.material_phase;
-}
-
-bool collect_shadow_drawable_draw_calls(tc_component* tc, void* user_data) {
-    auto* data = static_cast<CollectShadowDrawCallsData*>(user_data);
-
-    if (!tc_component_has_phase(tc, "shadow")) {
-        return true;
-    }
-
-    tc_render_item_collect_context item_context{};
-    item_context.phase_mark = "shadow";
-    item_context.layer_mask = data->render_context
-        ? data->render_context->layer_mask
-        : UINT64_MAX;
-    item_context.render_category_mask = data->render_context
-        ? data->render_context->render_category_mask
-        : UINT64_MAX;
-    item_context.debug_pass_name = "ShadowPass";
-    item_context.pass_contract = &data->pass_contract;
-    item_context.camera = data->render_context
-        ? data->render_context->camera
-        : nullptr;
-
-    RenderItemCollection items;
-    if (!collect_drawable_render_items(tc, item_context, items)) {
-        return true;
-    }
-
-    Entity ent(tc->owner);
-
-    for (const tc_render_item& item : items.items) {
-        tc_material_phase* phase = resolve_render_item_material_phase(item);
-        if (!phase) {
-            continue;
-        }
-        // Get final shader with overrides (skinning, alpha-test, etc.)
-        ShaderOverrideContext override_context;
-        override_context.phase_mark = "shadow";
-        override_context.geometry_id = item.geometry_id;
-        override_context.original_shader = TcShader(data->base_shader);
-        override_context.pass_contract = data->pass_contract;
-        tc_shader_handle final_shader =
-            override_drawable_shader(tc, override_context).handle;
-        ShadowDrawCall dc;
-        dc.entity = ent;
-        dc.component = tc;
-        dc.phase = phase;
-        dc.final_shader = final_shader;
-        dc.geometry_id = item.geometry_id;
-        if (item.kind == TC_RENDER_ITEM_KIND_MESH) {
-            dc.item = item;
-        }
-        dc.material = item.material;
-        dc.phase_index = item.material_phase_index;
-        data->draw_calls->push_back(dc);
-    }
-
-    return true;
 }
 
 bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
@@ -341,32 +276,13 @@ bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
     return true;
 }
 
-bool collect_shadow_render_item_for_draw(
-    tc_component* component,
-    const tc_render_item_collect_context& context,
-    int geometry_id,
-    RenderItemCollection& items,
-    tc_render_item& out_item)
-{
-    items.clear();
-    if (!collect_drawable_render_items(component, context, items)) {
-        return false;
-    }
-    for (const tc_render_item& item : items.items) {
-        if (item.geometry_id == geometry_id) {
-            out_item = item;
-            return true;
-        }
-    }
-    return false;
-}
-
 } // anonymous namespace
 
 void ShadowPass::collect_shadow_casters(
     tc_scene_handle scene,
     uint64_t layer_mask,
-    uint64_t render_category_mask
+    uint64_t render_category_mask,
+    RenderSceneItemCollector& collector
 ) {
     cached_draw_calls_.clear();
 
@@ -381,19 +297,65 @@ void ShadowPass::collect_shadow_casters(
     render_context.render_category_mask = render_category_mask;
     render_context.scene = TcSceneRef(scene);
 
-    CollectShadowDrawCallsData data;
-    data.draw_calls = &cached_draw_calls_;
-    // Use the UBO-based shadow shader as the base. Skinned variants are
-    // assembled through the material pipeline vertex-variant helper and keep
-    // the same draw/per-frame resource contract as the base path.
-    data.base_shader = shadow_shader_handle_;
-    data.pass_contract = shadow_material_pass_contract();
-    data.render_context = &render_context;
+    MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
+    RenderSceneItemCollectRequest request{};
+    request.scene = scene;
+    request.phase_mark = "shadow";
+    request.layer_mask = layer_mask;
+    request.render_category_mask = render_category_mask;
+    request.debug_pass_name = "ShadowPass";
+    request.pass_contract = &pass_contract;
+    request.camera = render_context.camera;
+    if (!collector.collect(request)) {
+        tc::Log::error("[ShadowPass] collect_shadow_casters: item collection failed");
+    }
 
-    int filter_flags = TC_SCENE_FILTER_ENABLED
-                     | TC_SCENE_FILTER_VISIBLE
-                     | TC_SCENE_FILTER_ENTITY_ENABLED;
-    tc_scene_foreach_drawable(scene, collect_shadow_drawable_draw_calls, &data, filter_flags, layer_mask);
+    const auto& items = collector.items();
+    cached_draw_calls_.reserve(items.size());
+    for (size_t item_index = 0; item_index < items.size(); ++item_index) {
+        const tc_render_item& item = items[item_index];
+        tc_component* tc = item.component;
+        if (!tc) {
+            tc::Log::error(
+                "[ShadowPass] collect_shadow_casters: collected item %zu has null component",
+                item_index);
+            continue;
+        }
+
+        Entity ent(tc->owner);
+        if (!ent.valid()) {
+            const char* component_name = tc_component_type_name(tc);
+            tc::Log::error(
+                "[ShadowPass] collect_shadow_casters: drawable component '%s' has invalid owner",
+                component_name ? component_name : "<unknown>");
+            continue;
+        }
+
+        tc_material_phase* phase = resolve_render_item_material_phase(item);
+        if (!phase) {
+            continue;
+        }
+
+        ShaderOverrideContext override_context;
+        override_context.phase_mark = "shadow";
+        override_context.geometry_id = item.geometry_id;
+        override_context.original_shader = TcShader(shadow_shader_handle_);
+        override_context.pass_contract = pass_contract;
+        tc_shader_handle final_shader =
+            override_drawable_shader(tc, override_context).handle;
+
+        ShadowDrawCall dc;
+        dc.entity = ent;
+        dc.component = tc;
+        dc.phase = phase;
+        dc.final_shader = final_shader;
+        dc.geometry_id = item.geometry_id;
+        dc.item_index = item_index;
+        dc.item = item;
+        dc.material = item.material;
+        dc.phase_index = item.material_phase_index;
+        cached_draw_calls_.push_back(dc);
+    }
 }
 
 void ShadowPass::collect_shader_usages(
@@ -501,7 +463,12 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    collect_shadow_casters(data.scene, data.layer_mask, ctx.render_category_mask);
+    RenderSceneItemCollector scene_items;
+    collect_shadow_casters(
+        data.scene,
+        data.layer_mask,
+        ctx.render_category_mask,
+        scene_items);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -696,46 +663,18 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 tc_material_phase* phase = dc.resolve_phase();
                 if (!phase) continue;
 
-                const tc_render_item* item = &dc.item;
-                tc_render_item typed_item{};
-                RenderItemCollection item_collection;
-                tc_shader_handle final_shader = dc.final_shader;
-                if (dc.item.kind != TC_RENDER_ITEM_KIND_MESH) {
-                    const MaterialPipelinePassContract pass_contract =
-                        shadow_material_pass_contract();
-                    const std::string debug_pass_name = get_pass_name();
-                    const char* debug_pass_name_c = debug_pass_name.c_str();
-
-                    tc_render_item_collect_context item_context{};
-                    item_context.phase_mark = "shadow";
-                    item_context.layer_mask = data.layer_mask;
-                    item_context.render_category_mask = ctx.render_category_mask;
-                    item_context.debug_pass_name = debug_pass_name_c;
-                    item_context.pass_contract = &pass_contract;
-
-                    if (!collect_shadow_render_item_for_draw(
-                            dc.component,
-                            item_context,
-                            dc.geometry_id,
-                            item_collection,
-                            typed_item)) {
-                        continue;
-                    }
-                    item = &typed_item;
-                    phase = resolve_render_item_material_phase(*item);
-                    if (!phase) {
-                        continue;
-                    }
-
-                    ShaderOverrideContext override_context;
-                    override_context.phase_mark = "shadow";
-                    override_context.geometry_id = item->geometry_id;
-                    override_context.original_shader = TcShader(shadow_shader_handle_);
-                    override_context.pass_contract = pass_contract;
-                    final_shader = override_drawable_shader(
-                        dc.component,
-                        override_context).handle;
+                const tc_render_item* item = scene_items.item(dc.item_index);
+                if (!item) {
+                    tc::Log::error(
+                        "[ShadowPass/tgfx2] skip draw: invalid item index %zu",
+                        dc.item_index);
+                    continue;
                 }
+                phase = resolve_render_item_material_phase(*item);
+                if (!phase) {
+                    continue;
+                }
+                tc_shader_handle final_shader = dc.final_shader;
 
                 if (item->kind != TC_RENDER_ITEM_KIND_MESH) {
                     RenderContext direct_context;
