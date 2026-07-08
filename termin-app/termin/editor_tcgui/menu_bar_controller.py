@@ -6,13 +6,53 @@ Renders a shared ``MenuSpec`` (from ``editor_core``) into tcgui ``MenuItem`` /
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable
 
 from tcgui.widgets.menu import Menu, MenuItem
 from tcgui.widgets.menu_bar import MenuBar
 
-from termin.editor_core.menu_bar_model import build_editor_menu_spec
+from termin.editor_core.menu_bar_model import (
+    DebugMenuActions,
+    EditMenuActions,
+    EditorMenuActions,
+    EditorMenuHandleSetters,
+    EditorMenuSpecConfig,
+    EditorMenuStateGetters,
+    FileMenuActions,
+    GameMenuActions,
+    HelpMenuActions,
+    NavigationMenuActions,
+    SceneMenuActions,
+    ViewMenuActions,
+    build_editor_menu_spec,
+)
 from termin.editor_core.menu_spec import MenuSpec
+
+
+@dataclass(frozen=True, slots=True)
+class MenuBarControllerStateGetters:
+    can_undo: Callable[[], bool]
+    can_redo: Callable[[], bool]
+    fullscreen: Callable[[], bool]
+    profiler_visible: Callable[[], bool]
+    modules_visible: Callable[[], bool]
+    camera_frustums_visible: Callable[[], bool]
+    surface_edge_debug_tool_enabled: Callable[[], bool]
+    raw_detour_path_debug_tool_enabled: Callable[[], bool]
+
+
+@dataclass(frozen=True, slots=True)
+class MenuBarControllerConfig:
+    file: FileMenuActions
+    edit: EditMenuActions
+    view: ViewMenuActions
+    scene: SceneMenuActions
+    navigation: NavigationMenuActions
+    game: GameMenuActions
+    debug: DebugMenuActions
+    help: HelpMenuActions
+    states: MenuBarControllerStateGetters
 
 
 class MenuBarControllerTcgui:
@@ -25,78 +65,17 @@ class MenuBarControllerTcgui:
     def __init__(
         self,
         menu_bar: MenuBar,
-        # File
-        on_new_project: Callable,
-        on_open_project: Callable,
-        on_new_scene: Callable,
-        on_save_scene: Callable,
-        on_save_scene_as: Callable,
-        on_load_scene: Callable,
-        on_close_scene: Callable,
-        on_load_material: Callable,
-        on_load_components: Callable,
-        on_deploy_stdlib: Callable,
-        on_migrate_spec_to_meta: Callable,
-        on_exit: Callable,
-        # Edit
-        on_undo: Callable,
-        on_redo: Callable,
-        on_settings: Callable,
-        on_project_settings: Callable,
-        # View
-        on_toggle_fullscreen: Callable,
-        on_show_spacemouse_settings: Callable,
-        # Scene
-        on_scene_properties: Callable,
-        on_layers_settings: Callable,
-        on_shadow_settings: Callable,
-        on_pipeline_editor: Callable,
-        # Navigation
-        on_show_agent_types: Callable,
-        on_show_navmesh_areas: Callable,
-        on_toggle_raw_detour_path_debug_tool: Callable,
-        is_raw_detour_path_debug_tool_enabled: Callable[[], bool],
-        # Game
-        on_toggle_game_mode: Callable,
-        on_build_project: Callable,
-        on_build_android: Callable,
-        on_build_quest_openxr: Callable,
-        on_run_build: Callable,
-        on_run_standalone: Callable,
-        # Debug
-        on_toggle_profiler: Callable,
-        on_toggle_modules: Callable,
-        on_toggle_camera_frustums: Callable,
-        is_camera_frustums_visible: Callable[[], bool],
-        on_show_undo_stack_viewer: Callable,
-        on_show_framegraph_debugger: Callable,
-        on_show_resource_manager_viewer: Callable,
-        on_show_audio_debugger: Callable,
-        on_show_core_registry_viewer: Callable,
-        on_show_inspect_registry_viewer: Callable,
-        on_show_navmesh_registry_viewer: Callable,
-        on_show_scene_manager_viewer: Callable,
-        on_show_python_console: Callable,
-        # Help
-        on_show_about: Callable,
-        on_toggle_surface_edge_debug_tool: Callable,
-        is_surface_edge_debug_tool_enabled: Callable[[], bool],
-        # State getters
-        can_undo: Callable[[], bool],
-        can_redo: Callable[[], bool],
-        is_fullscreen: Callable[[], bool],
-        is_profiler_visible: Callable[[], bool],
-        is_modules_visible: Callable[[], bool],
+        config: MenuBarControllerConfig,
     ):
         # State getters
-        self._can_undo = can_undo
-        self._can_redo = can_redo
-        self._is_fullscreen = is_fullscreen
-        self._is_profiler_visible = is_profiler_visible
-        self._is_modules_visible = is_modules_visible
-        self._is_camera_frustums_visible = is_camera_frustums_visible
-        self._is_surface_edge_debug_tool_enabled = is_surface_edge_debug_tool_enabled
-        self._is_raw_detour_path_debug_tool_enabled = is_raw_detour_path_debug_tool_enabled
+        self._can_undo = config.states.can_undo
+        self._can_redo = config.states.can_redo
+        self._is_fullscreen = config.states.fullscreen
+        self._is_profiler_visible = config.states.profiler_visible
+        self._is_modules_visible = config.states.modules_visible
+        self._is_camera_frustums_visible = config.states.camera_frustums_visible
+        self._is_surface_edge_debug_tool_enabled = config.states.surface_edge_debug_tool_enabled
+        self._is_raw_detour_path_debug_tool_enabled = config.states.raw_detour_path_debug_tool_enabled
 
         # Toolkit-specific handles for dynamic state
         self._item_undo: MenuItem | None = None
@@ -111,67 +90,37 @@ class MenuBarControllerTcgui:
 
         # Build shared menu spec
         specs = build_editor_menu_spec(
-            on_new_project=on_new_project,
-            on_open_project=on_open_project,
-            on_new_scene=on_new_scene,
-            on_save_scene=on_save_scene,
-            on_save_scene_as=on_save_scene_as,
-            on_load_scene=on_load_scene,
-            on_close_scene=on_close_scene,
-            on_load_material=on_load_material,
-            on_load_components=on_load_components,
-            on_deploy_stdlib=on_deploy_stdlib,
-            on_migrate_spec_to_meta=on_migrate_spec_to_meta,
-            on_exit=on_exit,
-            on_undo=on_undo,
-            on_redo=on_redo,
-            on_settings=on_settings,
-            on_project_settings=on_project_settings,
-            on_toggle_fullscreen=on_toggle_fullscreen,
-            is_fullscreen=is_fullscreen,
-            on_show_spacemouse_settings=on_show_spacemouse_settings,
-            on_scene_properties=on_scene_properties,
-            on_layers_settings=on_layers_settings,
-            on_shadow_settings=on_shadow_settings,
-            on_pipeline_editor=on_pipeline_editor,
-            on_show_agent_types=on_show_agent_types,
-            on_show_navmesh_areas=on_show_navmesh_areas,
-            on_toggle_raw_detour_path_debug_tool=on_toggle_raw_detour_path_debug_tool,
-            is_raw_detour_path_debug_tool_enabled=is_raw_detour_path_debug_tool_enabled,
-            on_toggle_game_mode=on_toggle_game_mode,
-            on_build_project=on_build_project,
-            on_build_android=on_build_android,
-            on_build_quest_openxr=on_build_quest_openxr,
-            on_run_build=on_run_build,
-            on_run_standalone=on_run_standalone,
-            on_toggle_profiler=on_toggle_profiler,
-            is_profiler_visible=is_profiler_visible,
-            on_toggle_modules=on_toggle_modules,
-            is_modules_visible=is_modules_visible,
-            on_toggle_camera_frustums=on_toggle_camera_frustums,
-            is_camera_frustums_visible=is_camera_frustums_visible,
-            on_show_undo_stack_viewer=on_show_undo_stack_viewer,
-            on_show_framegraph_debugger=on_show_framegraph_debugger,
-            on_show_resource_manager_viewer=on_show_resource_manager_viewer,
-            on_show_audio_debugger=on_show_audio_debugger,
-            on_show_core_registry_viewer=on_show_core_registry_viewer,
-            on_show_inspect_registry_viewer=on_show_inspect_registry_viewer,
-            on_show_navmesh_registry_viewer=on_show_navmesh_registry_viewer,
-            on_show_scene_manager_viewer=on_show_scene_manager_viewer,
-            on_show_python_console=on_show_python_console,
-            on_show_about=on_show_about,
-            on_toggle_surface_edge_debug_tool=on_toggle_surface_edge_debug_tool,
-            is_surface_edge_debug_tool_enabled=is_surface_edge_debug_tool_enabled,
-            # Handle setters — direct assignment, no reflection
-            set_undo_handle=self._set_undo_handle,
-            set_redo_handle=self._set_redo_handle,
-            set_play_handle=self._set_play_handle,
-            set_fullscreen_handle=self._set_fullscreen_handle,
-            set_profiler_handle=self._set_profiler_handle,
-            set_modules_handle=self._set_modules_handle,
-            set_camera_frustums_handle=self._set_camera_frustums_handle,
-            set_surface_edge_debug_tool_handle=self._set_surface_edge_debug_tool_handle,
-            set_raw_detour_path_debug_tool_handle=self._set_raw_detour_path_debug_tool_handle,
+            EditorMenuSpecConfig(
+                actions=EditorMenuActions(
+                    file=config.file,
+                    edit=config.edit,
+                    view=config.view,
+                    scene=config.scene,
+                    navigation=config.navigation,
+                    game=config.game,
+                    debug=config.debug,
+                    help=config.help,
+                ),
+                states=EditorMenuStateGetters(
+                    fullscreen=config.states.fullscreen,
+                    profiler_visible=config.states.profiler_visible,
+                    modules_visible=config.states.modules_visible,
+                    camera_frustums_visible=config.states.camera_frustums_visible,
+                    surface_edge_debug_tool_enabled=config.states.surface_edge_debug_tool_enabled,
+                    raw_detour_path_debug_tool_enabled=config.states.raw_detour_path_debug_tool_enabled,
+                ),
+                handles=EditorMenuHandleSetters(
+                    undo=self._set_undo_handle,
+                    redo=self._set_redo_handle,
+                    play=self._set_play_handle,
+                    fullscreen=self._set_fullscreen_handle,
+                    profiler=self._set_profiler_handle,
+                    modules=self._set_modules_handle,
+                    camera_frustums=self._set_camera_frustums_handle,
+                    surface_edge_debug_tool=self._set_surface_edge_debug_tool_handle,
+                    raw_detour_path_debug_tool=self._set_raw_detour_path_debug_tool_handle,
+                ),
+            )
         )
 
         self._render_specs(menu_bar, specs)

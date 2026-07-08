@@ -11,7 +11,8 @@ not enable `PLR0913`.
 
 ## Summary
 
-- Python/Ruff `PLR0913` with `lint.pylint.max-args = 7`: 54 diagnostics.
+- Python/Ruff `PLR0913` with `lint.pylint.max-args = 7`: 52 diagnostics
+  after the first editor menu cleanup, down from the original 54.
 - Original C/C++/clang-tidy `readability-function-size.ParameterThreshold = 7`
   baseline: 84 diagnostics total.
 - Of the original C/C++ diagnostics, 64 were in repository-owned code and 20
@@ -116,6 +117,10 @@ APIs need deliberate API shape work before this becomes a clean CI rule.
   value instead of a flat shadow entry argument list.
 - Rebuilt SDK with `./build-sdk.sh --no-wheels` and refreshed the editable test
   venv with `./setup-test-venv.sh --force`.
+- Updated Python editor menu wiring so `build_editor_menu_spec` and
+  `MenuBarControllerTcgui.__init__` take typed action/state/config objects
+  instead of 60- and 54-argument flat dependency lists. Python `PLR0913`
+  diagnostics dropped from 54 to 52.
 
 ## Reproduction
 
@@ -150,30 +155,27 @@ The C/C++ audit was run across all 280 repository-owned translation units from
 
 ## Python Results
 
-Diagnostics by area:
+Current diagnostics by area:
 
 | Count | Area |
 |---:|---|
 | 11 | `termin-project-build` |
-| 10 | `termin-app/termin/editor_tcgui` |
 | 9 | `termin-navmesh` |
+| 9 | `termin-app/termin/editor_tcgui` |
 | 5 | `termin-qopt` |
-| 4 | `termin-csg` |
 | 4 | `termin-gui` |
+| 4 | `termin-csg` |
 | 3 | `termin-glb` |
-| 2 | `termin-components/termin-components-voxels` |
 | 2 | `termin-player` |
+| 2 | `termin-components/termin-components-voxels` |
 | 1 | `scripts` |
-| 1 | `termin-app/termin/editor_core` |
 | 1 | `termin-audio` |
 | 1 | `termin-inspect` |
 
-Notable highest-count definitions:
+Remaining notable highest-count definitions:
 
 | Parameters | Definition |
 |---:|---|
-| 60 | `termin-app/termin/editor_core/menu_bar_model.py:19` `build_editor_menu_spec` |
-| 54 | `termin-app/termin/editor_tcgui/menu_bar_controller.py:25` `MenuBarController.__init__` |
 | 26 | `termin-navmesh/python/termin/navmesh/builder_component.py:100` `NavMeshBuilderComponent.__init__` |
 | 23 | `termin-components/termin-components-voxels/python/termin_voxel_components/voxelizer_component.py:117` `VoxelizerComponent.__init__` |
 | 22 | `termin-app/termin/editor_tcgui/editor_dialog_launcher.py:12` `EditorDialogLauncher.__init__` |

@@ -21,6 +21,16 @@ from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
 
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
+from termin.editor_core.menu_bar_model import (
+    DebugMenuActions,
+    EditMenuActions,
+    FileMenuActions,
+    GameMenuActions,
+    HelpMenuActions,
+    NavigationMenuActions,
+    SceneMenuActions,
+    ViewMenuActions,
+)
 from termin.engine import SceneManager, default_scene_extensions, scene as engine_scene
 from termin.default_assets.default_preloaders import (
     register_default_preloaders as register_default_asset_preloaders,
@@ -39,7 +49,11 @@ from termin.editor_core.resource_manager import ResourceManager
 from termin.display import FBOSurface
 
 from termin.editor_core.editor_state_io import EditorStateIO
-from termin.editor_tcgui.menu_bar_controller import MenuBarControllerTcgui
+from termin.editor_tcgui.menu_bar_controller import (
+    MenuBarControllerConfig,
+    MenuBarControllerStateGetters,
+    MenuBarControllerTcgui,
+)
 from termin.editor_tcgui.project_build_controller import ProjectBuildController
 from termin.editor_tcgui.project_session_controller import ProjectSessionController
 from termin.editor_tcgui.shader_runtime import resolve_slangc, resolve_termin_shaderc
@@ -730,59 +744,79 @@ class EditorWindowTcgui:
     def _setup_menu_bar(self, menu_bar: MenuBar) -> None:
         self._menu_bar_controller = MenuBarControllerTcgui(
             menu_bar=menu_bar,
-            on_new_project=self._new_project,
-            on_open_project=self._open_project,
-            on_new_scene=self._new_scene,
-            on_save_scene=self._save_scene,
-            on_save_scene_as=self._save_scene_as,
-            on_load_scene=self._load_scene,
-            on_close_scene=self._close_scene,
-            on_load_material=self._load_material_from_file,
-            on_load_components=self._load_components_from_file,
-            on_deploy_stdlib=self._deploy_stdlib,
-            on_migrate_spec_to_meta=self._migrate_spec_to_meta,
-            on_exit=self.close,
-            on_undo=self.undo,
-            on_redo=self.redo,
-            on_settings=self._show_settings,
-            on_project_settings=self._show_project_settings,
-            on_toggle_fullscreen=self._toggle_fullscreen,
-            on_show_spacemouse_settings=self._show_spacemouse_settings,
-            on_scene_properties=self._show_scene_properties,
-            on_layers_settings=self._show_layers_settings,
-            on_shadow_settings=self._show_shadow_settings,
-            on_pipeline_editor=self._show_pipeline_editor,
-            on_show_agent_types=self._show_agent_types,
-            on_show_navmesh_areas=self._show_navmesh_areas,
-            on_toggle_raw_detour_path_debug_tool=self._toggle_raw_detour_path_debug_tool,
-            is_raw_detour_path_debug_tool_enabled=self._is_raw_detour_path_debug_tool_enabled,
-            on_toggle_game_mode=self._toggle_game_mode,
-            on_build_project=self._build_project,
-            on_build_android=self._build_android,
-            on_build_quest_openxr=self._show_quest_openxr_build_dialog,
-            on_run_build=self._run_build,
-            on_run_standalone=self._run_standalone,
-            on_toggle_profiler=self._toggle_profiler,
-            on_toggle_modules=self._toggle_modules,
-            on_toggle_camera_frustums=self._toggle_camera_frustums,
-            is_camera_frustums_visible=self._is_camera_frustums_visible,
-            on_show_undo_stack_viewer=self._show_undo_stack_viewer,
-            on_show_framegraph_debugger=self._show_framegraph_debugger,
-            on_show_resource_manager_viewer=self._show_resource_manager_viewer,
-            on_show_audio_debugger=self._show_audio_debugger,
-            on_show_core_registry_viewer=self._show_core_registry_viewer,
-            on_show_inspect_registry_viewer=self._show_inspect_registry_viewer,
-            on_show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
-            on_show_scene_manager_viewer=self._show_scene_manager_viewer,
-            on_show_python_console=self._show_python_console,
-            on_show_about=self._show_about,
-            on_toggle_surface_edge_debug_tool=self._toggle_surface_edge_debug_tool,
-            is_surface_edge_debug_tool_enabled=self._is_surface_edge_debug_tool_enabled,
-            can_undo=lambda: self.undo_stack.can_undo,
-            can_redo=lambda: self.undo_stack.can_redo,
-            is_fullscreen=lambda: self._fullscreen.is_fullscreen,
-            is_profiler_visible=lambda: self._debug_panels.profiler_visible,
-            is_modules_visible=lambda: self._debug_panels.modules_visible,
+            config=MenuBarControllerConfig(
+                file=FileMenuActions(
+                    new_project=self._new_project,
+                    open_project=self._open_project,
+                    new_scene=self._new_scene,
+                    save_scene=self._save_scene,
+                    save_scene_as=self._save_scene_as,
+                    load_scene=self._load_scene,
+                    close_scene=self._close_scene,
+                    load_material=self._load_material_from_file,
+                    load_components=self._load_components_from_file,
+                    deploy_stdlib=self._deploy_stdlib,
+                    migrate_spec_to_meta=self._migrate_spec_to_meta,
+                    exit=self.close,
+                ),
+                edit=EditMenuActions(
+                    undo=self.undo,
+                    redo=self.redo,
+                    settings=self._show_settings,
+                    project_settings=self._show_project_settings,
+                ),
+                view=ViewMenuActions(
+                    toggle_fullscreen=self._toggle_fullscreen,
+                    show_spacemouse_settings=self._show_spacemouse_settings,
+                ),
+                scene=SceneMenuActions(
+                    scene_properties=self._show_scene_properties,
+                    layers_settings=self._show_layers_settings,
+                    shadow_settings=self._show_shadow_settings,
+                    pipeline_editor=self._show_pipeline_editor,
+                ),
+                navigation=NavigationMenuActions(
+                    show_agent_types=self._show_agent_types,
+                    show_navmesh_areas=self._show_navmesh_areas,
+                    toggle_raw_detour_path_debug_tool=self._toggle_raw_detour_path_debug_tool,
+                ),
+                game=GameMenuActions(
+                    toggle_game_mode=self._toggle_game_mode,
+                    build_project=self._build_project,
+                    build_android=self._build_android,
+                    build_quest_openxr=self._show_quest_openxr_build_dialog,
+                    run_build=self._run_build,
+                    run_standalone=self._run_standalone,
+                ),
+                debug=DebugMenuActions(
+                    toggle_profiler=self._toggle_profiler,
+                    toggle_modules=self._toggle_modules,
+                    toggle_camera_frustums=self._toggle_camera_frustums,
+                    show_undo_stack_viewer=self._show_undo_stack_viewer,
+                    show_framegraph_debugger=self._show_framegraph_debugger,
+                    show_resource_manager_viewer=self._show_resource_manager_viewer,
+                    show_audio_debugger=self._show_audio_debugger,
+                    show_core_registry_viewer=self._show_core_registry_viewer,
+                    show_inspect_registry_viewer=self._show_inspect_registry_viewer,
+                    show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
+                    show_scene_manager_viewer=self._show_scene_manager_viewer,
+                    show_python_console=self._show_python_console,
+                    toggle_surface_edge_debug_tool=self._toggle_surface_edge_debug_tool,
+                ),
+                help=HelpMenuActions(
+                    show_about=self._show_about,
+                ),
+                states=MenuBarControllerStateGetters(
+                    can_undo=lambda: self.undo_stack.can_undo,
+                    can_redo=lambda: self.undo_stack.can_redo,
+                    fullscreen=lambda: self._fullscreen.is_fullscreen,
+                    profiler_visible=lambda: self._debug_panels.profiler_visible,
+                    modules_visible=lambda: self._debug_panels.modules_visible,
+                    camera_frustums_visible=self._is_camera_frustums_visible,
+                    surface_edge_debug_tool_enabled=self._is_surface_edge_debug_tool_enabled,
+                    raw_detour_path_debug_tool_enabled=self._is_raw_detour_path_debug_tool_enabled,
+                ),
+            ),
         )
 
     # ------------------------------------------------------------------
