@@ -259,6 +259,7 @@ def test_validate_runtime_package_reports_scene_missing_material_resource(tmp_pa
                                     "type": "uuid",
                                     "uuid": "missing-material",
                                     "name": "Missing Material",
+                                    "kind": "tc_material",
                                 }
                             },
                         }
@@ -275,6 +276,43 @@ def test_validate_runtime_package_reports_scene_missing_material_resource(tmp_pa
             "error",
             "scene.entities[0].components[0].data.material",
             "Runtime package references missing material resource uuid 'missing-material'",
+        )
+    ]
+
+
+def test_validate_runtime_package_rejects_legacy_scene_resource_ref(tmp_path: Path) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_json(
+        package_dir / "scene.json",
+        {
+            "uuid": "scene",
+            "entities": [
+                {
+                    "components": [
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
+                                "material": {
+                                    "type": "uuid",
+                                    "uuid": "missing-material",
+                                    "name": "Missing Material",
+                                }
+                            },
+                        }
+                    ]
+                }
+            ],
+        },
+    )
+
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert [(diagnostic.level, diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
+        (
+            "error",
+            "scene.entities[0].components[0].data.material",
+            "Runtime package rejected legacy material resource ref from legacy field name; "
+            "add kind='tc_material' or role='material' to the uuid ref",
         )
     ]
 

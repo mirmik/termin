@@ -198,7 +198,10 @@ def make_basic_page(status_bar):
     ti_status.text = 'Text: ""'
     ti_status.font_size = 12
     ti_status.color = _t.text_muted
-    ti.on_change = lambda v: setattr(ti_status, 'text', f'Text: "{v}"')
+    def update_ti_status(value):
+        ti_status.text = f'Text: "{value}"'
+
+    ti.on_change = update_ti_status
     page.add_child(ti)
     page.add_child(ti_status)
 
@@ -233,7 +236,10 @@ def make_lists_page():
     lst_status.text = "Selected: (none)"
     lst_status.font_size = 12
     lst_status.color = _t.text_muted
-    lst.on_select = lambda i, d: setattr(lst_status, 'text', f"Selected: {d.get('text', '?')}")
+    def update_lst_status(_index, data):
+        lst_status.text = f"Selected: {data.get('text', '?')}"
+
+    lst.on_select = update_lst_status
     page.add_child(lst)
     page.add_child(lst_status)
 
@@ -246,7 +252,10 @@ def make_lists_page():
     cb_status.text = "ComboBox: Option 1"
     cb_status.font_size = 12
     cb_status.color = _t.text_muted
-    cb.on_changed = lambda i, s: setattr(cb_status, 'text', f"ComboBox: {s}")
+    def update_cb_status(_index, text):
+        cb_status.text = f"ComboBox: {text}"
+
+    cb.on_changed = update_cb_status
     page.add_child(cb)
     page.add_child(cb_status)
 
@@ -334,7 +343,10 @@ def make_sliders_page():
     s1_lbl = Label()
     s1_lbl.text = "Continuous: 0.65"
     s1_lbl.font_size = 13
-    s1.on_change = lambda v: setattr(s1_lbl, 'text', f"Continuous: {v:.2f}")
+    def update_s1_label(value):
+        s1_lbl.text = f"Continuous: {value:.2f}"
+
+    s1.on_change = update_s1_label
     page.add_child(s1_lbl)
     page.add_child(s1)
 
@@ -348,7 +360,10 @@ def make_sliders_page():
     s2_lbl = Label()
     s2_lbl.text = "Stepped (0-100, step 10): 50"
     s2_lbl.font_size = 13
-    s2.on_change = lambda v: setattr(s2_lbl, 'text', f"Stepped (0-100, step 10): {int(v)}")
+    def update_s2_label(value):
+        s2_lbl.text = f"Stepped (0-100, step 10): {int(value)}"
+
+    s2.on_change = update_s2_label
     page.add_child(s2_lbl)
     page.add_child(s2)
 
@@ -363,7 +378,10 @@ def make_sliders_page():
     sb_lbl = Label()
     sb_lbl.text = "SpinBox: 42"
     sb_lbl.font_size = 13
-    sb.on_change = lambda v: setattr(sb_lbl, 'text', f"SpinBox: {int(v)}")
+    def update_sb_label(value):
+        sb_lbl.text = f"SpinBox: {int(value)}"
+
+    sb.on_change = update_sb_label
     page.add_child(sb_lbl)
     page.add_child(sb)
 
@@ -378,7 +396,10 @@ def make_sliders_page():
     se_lbl = Label()
     se_lbl.text = "SliderEdit: 42"
     se_lbl.font_size = 13
-    se.on_change = lambda v: setattr(se_lbl, 'text', f"SliderEdit: {int(v)}")
+    def update_se_label(value):
+        se_lbl.text = f"SliderEdit: {int(value)}"
+
+    se.on_change = update_se_label
     page.add_child(se_lbl)
     page.add_child(se)
 
@@ -428,7 +449,10 @@ def make_text_page():
     ta_status.text = f"Lines: {len(ta._lines)} | Chars: {len(ta.text)}"
     ta_status.font_size = 12
     ta_status.color = _t.text_muted
-    ta.on_change = lambda v: setattr(ta_status, 'text', f"Lines: {len(ta._lines)} | Chars: {len(v)}")
+    def update_ta_status(value):
+        ta_status.text = f"Lines: {len(ta._lines)} | Chars: {len(value)}"
+
+    ta.on_change = update_ta_status
     page.add_child(ta)
     page.add_child(ta_status)
 

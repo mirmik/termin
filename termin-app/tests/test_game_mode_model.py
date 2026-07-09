@@ -240,7 +240,6 @@ class _RenderingControllerForAttachment:
         self.attach_calls = []
         self._viewport_list = _ViewportList()
         self.render_target_refresh_count = 0
-        self.offscreen_context = None
 
     def attach_scene(self, scene) -> None:
         self.attach_calls.append(scene.name)

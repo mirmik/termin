@@ -95,10 +95,6 @@ public:
     // Last GPU time in milliseconds (from detailed profiling)
     double last_gpu_time_ms() const { return last_gpu_time_ms_; }
 
-    // Legacy debug cache. Layout-backed shaders bind extra textures by name;
-    // this map remains for old inspector/API callers and is cleared per pass.
-    std::unordered_map<std::string, int> extra_texture_uniforms;
-
     // INSPECT_FIELD registrations
     INSPECT_FIELD(ColorPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(ColorPass, output_res, "Output Resource", "string")
@@ -117,14 +113,6 @@ public:
     explicit ColorPass(const ColorPassConfig& config = {});
 
     virtual ~ColorPass() = default;
-
-    // Clear extra texture uniforms (call after execute)
-    void clear_extra_textures() { extra_texture_uniforms.clear(); }
-
-    // Set extra texture uniform
-    void set_extra_texture_uniform(const std::string& name, int unit) {
-        extra_texture_uniforms[name] = unit;
-    }
 
     /**
      * Execute the color pass.

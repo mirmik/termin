@@ -112,6 +112,14 @@ def create_parser() -> argparse.ArgumentParser:
     create_task_parser.add_argument("--column", default="Backlog", help="Column id or title, default: Backlog")
     create_task_parser.add_argument("--swimlane", default="Common", help="Swimlane id or title, default: Common")
     create_task_parser.add_argument("--owner-id", type=int, default=0)
+    create_task_parser.add_argument(
+        "--tags",
+        action="append",
+        nargs="+",
+        default=[],
+        metavar="TAG",
+        help="Tags to assign after creation; accepts repeated args and comma-separated groups",
+    )
     create_task_parser.add_argument("--dry-run", action="store_true")
     create_task_parser.set_defaults(func=cmd_create)
 
@@ -307,6 +315,7 @@ def cmd_create(client: KanboardClient, args: argparse.Namespace) -> int:
     swimlanes = fetch_swimlanes(client, args.project_id)
     column_id = resolve_named_id(args.column, columns, "column")
     swimlane_id = resolve_named_id(args.swimlane, swimlanes, "swimlane")
+    tags = parse_tag_args(args.tags)
     params: dict[str, Any] = {
         "project_id": args.project_id,
         "title": args.title,
@@ -316,12 +325,24 @@ def cmd_create(client: KanboardClient, args: argparse.Namespace) -> int:
         "owner_id": args.owner_id,
     }
     print(f"create {args.title} -> {column_title(column_id, columns)} / {swimlane_title(swimlane_id, swimlanes)}")
+    if tags:
+        print(f"tags: {', '.join(tags)}")
     if args.dry_run:
-        print_json(params)
+        dry_run_payload: dict[str, Any] = {"createTask": params}
+        if tags:
+            dry_run_payload["setTaskTags"] = {
+                "project_id": args.project_id,
+                "task_id": "<created-task-id>",
+                "tags": tags,
+            }
+        print_json(dry_run_payload)
         print("dry-run: no changes")
         return 0
     task_id = client.result("createTask", params)
     print(f"created #{task_id}")
+    if tags:
+        assign_task_tags(client, args.project_id, int(task_id), tags)
+        print(f"tagged #{task_id}")
     return 0
 
 
@@ -367,6 +388,27 @@ def fetch_task_tags(client: KanboardClient, task_id: int) -> dict[str, str]:
     return {str(tag_id): str(tag_name) for tag_id, tag_name in result.items()}
 
 
+def assign_task_tags(client: KanboardClient, project_id: int, task_id: int, tags: list[str]) -> None:
+    result = client.result(
+        "setTaskTags",
+        {
+            "project_id": project_id,
+            "task_id": task_id,
+            "tags": tags,
+        },
+    )
+    if result is not True:
+        raise KanboardError(f"setTaskTags returned unexpected result for #{task_id}: {result!r}")
+
+    actual_tags = set(fetch_task_tags(client, task_id).values())
+    expected_tags = set(tags)
+    if actual_tags != expected_tags:
+        raise KanboardError(
+            f"task #{task_id} tags mismatch after setTaskTags: "
+            f"expected {sorted(expected_tags)!r}, got {sorted(actual_tags)!r}"
+        )
+
+
 def fetch_columns(client: KanboardClient, project_id: int) -> list[dict[str, Any]]:
     result = client.result("getColumns", {"project_id": project_id})
     if not isinstance(result, list):
@@ -403,6 +445,20 @@ def resolve_named_id(value: str, records: list[dict[str, Any]], kind: str) -> in
         raise KanboardError(f"Ambiguous {kind} name: {value}")
     known = ", ".join(str(record[name_key]) for record in records)
     raise KanboardError(f"Unknown {kind} name: {value}. Known: {known}")
+
+
+def parse_tag_args(tag_groups: list[list[str]]) -> list[str]:
+    tags: list[str] = []
+    seen: set[str] = set()
+    for group in tag_groups:
+        for raw_tag in group:
+            for tag in raw_tag.split(","):
+                normalized = tag.strip()
+                if not normalized or normalized in seen:
+                    continue
+                tags.append(normalized)
+                seen.add(normalized)
+    return tags
 
 
 def next_position(client: KanboardClient, project_id: int, column_id: int, swimlane_id: int) -> int:

@@ -37,13 +37,14 @@ namespace termin::bootstrap {
 namespace {
 
 template<typename H>
-nb::object serialize_uuid_handle(nb::object obj) {
+nb::object serialize_uuid_handle(nb::object obj, const char* kind_name) {
     H handle = nb::cast<H>(obj);
     nb::dict result;
     if (handle.is_valid()) {
         result["uuid"] = nb::str(handle.uuid());
         result["name"] = nb::str(handle.name());
         result["type"] = "uuid";
+        result["kind"] = nb::str(kind_name);
     } else {
         result["type"] = "none";
     }
@@ -69,8 +70,8 @@ void register_python_uuid_handle_kind(const char* kind_name, nb::handle type_obj
     tc::KindRegistry::instance().register_type(type_obj, kind_name);
     tc::KindRegistry::instance().register_python(
         kind_name,
-        nb::cpp_function([](nb::object obj) -> nb::object {
-            return serialize_uuid_handle<H>(obj);
+        nb::cpp_function([kind_name](nb::object obj) -> nb::object {
+            return serialize_uuid_handle<H>(obj, kind_name);
         }),
         nb::cpp_function([](nb::object data) -> nb::object {
             return deserialize_uuid_handle<H>(data);

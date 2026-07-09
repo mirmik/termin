@@ -27,6 +27,7 @@ scripts/taskboard comment 119 "Still reproducible after player shutdown fixes."
 scripts/taskboard move 13 "Ready" --dry-run
 scripts/taskboard move 13 "On Test" --dry-run
 scripts/taskboard create "[bug] Short title" --description "Context..."
+scripts/taskboard create "[bug] Short title" --description "Context..." --tags bug size:S
 ```
 
 Справочники:
@@ -41,5 +42,6 @@ scripts/taskboard swimlanes
 - Для чтения доски и обычных изменений предпочитай `scripts/taskboard`.
 - Для массовых закрытий сначала используй `--dry-run`.
 - После write-команды `taskboard` перечитывает карточку там, где это важно
-  (`close`, `move`) и падает, если Kanboard не принял ожидаемое состояние.
+  (`close`, `move`, `create --tags`) и падает, если Kanboard не принял
+  ожидаемое состояние.
 - Для нестандартных JSON-RPC methods используй `scripts/kanboard-api`.

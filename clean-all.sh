@@ -33,44 +33,56 @@ done
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-PROJECT_ROOTS=(
-    "$ROOT_DIR/termin-base"
-    "$ROOT_DIR/termin-mesh"
-    "$ROOT_DIR/termin-graphics"
-    "$ROOT_DIR/termin-inspect"
-    "$ROOT_DIR/termin-prefab"
-    "$ROOT_DIR/termin-glb"
-    "$ROOT_DIR/termin-scene"
-    "$ROOT_DIR/termin-collision"
-    "$ROOT_DIR/termin-components/termin-components-collision"
-    "$ROOT_DIR/termin-components/termin-components-mesh"
-    "$ROOT_DIR/termin-components/termin-components-kinematic"
-    "$ROOT_DIR/termin-gui"
-    "$ROOT_DIR/termin-nodegraph"
-    "$ROOT_DIR/termin"
-)
-
-EXPLICIT_DIRS=(
-    "termin-base/build" "termin-base/dist" "termin-base/install" "termin-base/install_win"
-    "termin-mesh/build" "termin-mesh/dist" "termin-mesh/install" "termin-mesh/install_win"
-    "termin-graphics/build" "termin-graphics/dist" "termin-graphics/install" "termin-graphics/install_win"
-    "termin-inspect/build" "termin-inspect/dist" "termin-inspect/install" "termin-inspect/install_win"
-    "termin-prefab/build" "termin-prefab/dist"
-    "termin-glb/build" "termin-glb/dist"
-    "termin-scene/build" "termin-scene/dist" "termin-scene/install" "termin-scene/install_win"
-    "termin-collision/build" "termin-collision/dist" "termin-collision/install" "termin-collision/install_win"
-    "termin-components/termin-components-collision/build" "termin-components/termin-components-collision/dist" "termin-components/termin-components-collision/install"
-    "termin-components/termin-components-mesh/build" "termin-components/termin-components-mesh/dist" "termin-components/termin-components-mesh/install"
-    "termin-components/termin-components-kinematic/build" "termin-components/termin-components-kinematic/dist" "termin-components/termin-components-kinematic/install"
-    "termin-gui/build" "termin-gui/dist"
-    "termin-nodegraph/build" "termin-nodegraph/dist"
-    "termin/build_win" "termin/build_standalone" "termin/install" "termin/install_win" "termin/cpp/build"
-)
-
 TARGETS=()
 
-for rel in "${EXPLICIT_DIRS[@]}"; do
-    p="$ROOT_DIR/$rel"
+PROJECT_ROOTS=("$ROOT_DIR")
+
+while IFS= read -r -d '' pyproject; do
+    project_root="$(dirname "$pyproject")"
+    case "$project_root" in
+        "$ROOT_DIR/termin-thirdparty/"*) continue ;;
+    esac
+    PROJECT_ROOTS+=("$project_root")
+done < <(
+    find "$ROOT_DIR" \
+        -path "$ROOT_DIR/.git" -prune -o \
+        -path "$ROOT_DIR/build" -prune -o \
+        -path "$ROOT_DIR/sdk" -prune -o \
+        -path "$ROOT_DIR/.venv" -prune -o \
+        -type f -name 'pyproject.toml' -print0
+)
+
+PROJECT_ROOTS+=(
+    "$ROOT_DIR/termin-app"
+    "$ROOT_DIR/termin-app/cpp"
+    "$ROOT_DIR/termin-csharp"
+)
+
+ARTIFACT_DIR_NAMES=(
+    build
+    build_standalone
+    build_win
+    dist
+    install
+    install_win
+)
+
+for project_root in "${PROJECT_ROOTS[@]}"; do
+    [[ -d "$project_root" ]] || continue
+
+    for name in "${ARTIFACT_DIR_NAMES[@]}"; do
+        p="$project_root/$name"
+        if [[ -e "$p" ]]; then
+            TARGETS+=("$p")
+        fi
+    done
+done
+
+for p in \
+    "$ROOT_DIR/termin-app/build_standalone" \
+    "$ROOT_DIR/termin-app/install" \
+    "$ROOT_DIR/termin-app/cpp/build"
+do
     if [[ -e "$p" ]]; then
         TARGETS+=("$p")
     fi
@@ -83,20 +95,25 @@ for project_root in "${PROJECT_ROOTS[@]}"; do
         TARGETS+=("$d")
     done < <(
         find "$project_root" \
+            -path "$ROOT_DIR/.git" -prune -o \
+            -path "$ROOT_DIR/build" -prune -o \
+            -path "$ROOT_DIR/sdk" -prune -o \
+            -path "$ROOT_DIR/.venv" -prune -o \
             -path '*/.git' -prune -o \
             -type d \( -name '__pycache__' -o -name '.pytest_cache' -o -name '*.egg-info' \) \
             -print0
     )
 
-    if [[ -d "$project_root/termin/csharp" ]]; then
-        while IFS= read -r -d '' d; do
-            TARGETS+=("$d")
-        done < <(
-            find "$project_root/termin/csharp" \
-                -type d \( -name 'bin' -o -name 'obj' \) -print0
-        )
-    fi
 done
+
+if [[ -d "$ROOT_DIR/termin-csharp" ]]; then
+    while IFS= read -r -d '' d; do
+        TARGETS+=("$d")
+    done < <(
+        find "$ROOT_DIR/termin-csharp" \
+            -type d \( -name 'bin' -o -name 'obj' \) -print0
+    )
+fi
 
 if [[ "$INCLUDE_SDK" -eq 1 ]]; then
     [[ -e "$ROOT_DIR/sdk" ]] && TARGETS+=("$ROOT_DIR/sdk")

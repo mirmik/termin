@@ -83,13 +83,5 @@ class TextureSpec:
 
         Preserves existing fields like uuid from the .meta file.
         """
-        import os
         meta_path = Path(str(texture_path) + ".meta")
         self.save(meta_path, preserve_existing=True)
-        # Remove old .spec if exists (migration)
-        old_spec = Path(str(texture_path) + ".spec")
-        if old_spec.exists():
-            try:
-                os.remove(old_spec)
-            except Exception:
-                log.warning(f"[TextureSpec] Failed to remove old spec {old_spec}", exc_info=True)

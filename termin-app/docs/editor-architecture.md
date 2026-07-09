@@ -50,7 +50,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 | `dialog_service.py` | Абстрактный `DialogService` — show_error / show_input / show_choice. Шлёт через callbacks, чтобы core не зависел от конкретного UI. |
 | `entity_operations.py` | `EntityOperations` — create / delete / rename / reparent / duplicate + drops prefab/glb. Все scene-tree CRUD живут тут. View вызывает, модель исполняет, диалоги приходят через `DialogService`. |
 | `inspector_model.py` | `InspectorKind` enum + `InspectorModel` — какой инспектор активен, что в нём target, набор `show_*` методов + `resync_from_selection` (диспатч по типу выделенного объекта). View подписывается на `changed` Signal. |
-| `rendering_model.py` | `RenderingModel` — состояние displays/viewports/render targets: editor_display_ptr, offscreen_context, selected_display/viewport, display_input_managers dict. Методы: `attach_scene`, `detach_scene`, `remove_viewports_for_scene`, `sync_viewport_configs_to_scene`, `sync_render_target_configs_to_scene`, `apply_display_input`, `find_viewport_config`. |
+| `rendering_model.py` | `RenderingModel` — состояние displays/viewports/render targets: editor_display_ptr, selected_display/viewport, display_input_managers dict. Методы: `attach_scene`, `detach_scene`, `remove_viewports_for_scene`, `sync_viewport_configs_to_scene`, `sync_render_target_configs_to_scene`, `apply_display_input`, `find_viewport_config`. |
 | `prefab_edit_controller.py` | `PrefabEditController` — UI-agnostic isolation mode for editing `.prefab` files. |
 | `spacemouse_controller.py` | `SpaceMouseController` — libspnav integration; polling from the tcgui render loop. |
 | `gizmo/` | Unified gizmo exports and Python collider/constraint helpers used by runtime rendering code. |
@@ -75,7 +75,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 - `fullscreen_controller.py` — сохранение/восстановление visibility состояния панелей fullscreen mode.
 - `prefab_toolbar_controller.py` — presentation state toolbar-а prefab editing.
 - `game_mode_ui_controller.py` — presentation state Play/Pause buttons, game-mode status и menu action sync.
-- `resource_actions_controller.py` — material/components file loading, stdlib deploy, `.spec` to `.meta` migration.
+- `resource_actions_controller.py` — material/components file loading and stdlib deploy.
 - `editor_dialog_launcher.py` — запуск settings/viewer/debugger/pipeline диалогов и хранение их view-specific state.
 - `component_extension_panel_controller.py` — lifecycle component editor extensions и их inspector/left-tab panels.
 - `project_file_action_controller.py` — dispatch активации/выбора файлов project browser к scene/prefab/inspector/text editor actions.
@@ -120,12 +120,12 @@ def my_handler(model: RenderingModel) -> None:
 Старый layout требовал синкать файлы термина в несколько точек, иначе `sdk/bin/termin_launcher` мог запустить устаревшее:
 
 ```
-termin-app/install/lib/python/termin/
+termin-app/install/lib/python3.10/site-packages/termin/
 sdk/lib/python3.10/site-packages/termin/
 ~/.pyenv/versions/3.10.19/lib/python3.10/site-packages/termin/
 ```
 
-Актуальный SDK layout не должен содержать `sdk/lib/python/termin/`: bundled запуск берет пакеты из `sdk/lib/python3.x/site-packages/termin/` на Linux и `sdk/python/Lib/site-packages/termin/` на Windows, а editable/test окружение берет Python-код из исходников. Windows не использует `sdk/Lib/`, потому что этот путь конфликтует с native `sdk/lib/` на case-insensitive filesystem.
+Актуальный SDK/standalone layout не должен содержать `sdk/lib/python/termin/` или `termin-app/install/lib/python/termin/`: bundled запуск берет пакеты из `lib/python3.x/site-packages/termin/` на Linux и `python/Lib/site-packages/termin/` на Windows, а editable/test окружение берет Python-код из исходников. Windows не использует `sdk/Lib/`, потому что этот путь конфликтует с native `sdk/lib/` на case-insensitive filesystem.
 
 (См. заметку в `memory/termin_lib_sync_locations.md`.)
 

@@ -79,52 +79,6 @@ class ResourceActionsController:
             windowed=True,
         )
 
-    def migrate_spec_to_meta(self) -> None:
-        ui = self._get_ui()
-        if ui is None:
-            return
-        project = self._get_project_path()
-        if not project:
-            MessageBox.warning(
-                ui,
-                "No Project",
-                "Open a project first to migrate .spec files.",
-            )
-            return
-
-        spec_files = list(Path(project).rglob("*.spec"))
-        if not spec_files:
-            MessageBox.info(
-                ui,
-                "No Files to Migrate",
-                "No .spec files found in the current project.",
-            )
-            return
-
-        migrated = 0
-        errors: list[str] = []
-        for spec_path in spec_files:
-            meta_path = spec_path.with_suffix(".meta")
-            try:
-                spec_path.rename(meta_path)
-                migrated += 1
-            except Exception as e:
-                errors.append(f"{spec_path.name}: {e}")
-
-        if errors:
-            MessageBox.warning(
-                ui,
-                "Migration Completed with Errors",
-                f"Migrated {migrated} files.\nErrors: {len(errors)}",
-            )
-            log.error("Spec->meta migration completed with errors:\n" + "\n".join(errors))
-        else:
-            MessageBox.info(
-                ui,
-                "Migration Complete",
-                f"Successfully migrated {migrated} files.",
-            )
-
     def on_material_file_selected(self, path: str | None) -> None:
         if not path:
             return

@@ -140,12 +140,6 @@ class NavigationSettingsManager:
         settings_dir = self._project_path / "project_settings"
         return settings_dir / "navigation.json"
 
-    def _get_legacy_project_settings_path(self) -> Optional[Path]:
-        """Get path to legacy project settings file."""
-        if self._project_path is None:
-            return None
-        return self._project_path / "project_settings" / "project.json"
-
     def _load(self) -> None:
         """Load settings from file."""
         path = self._get_settings_path()
@@ -157,27 +151,9 @@ class NavigationSettingsManager:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self._settings = NavigationSettings.from_dict(data)
-            if "navmesh_area_names" not in data:
-                self._load_legacy_navmesh_area_names()
         except Exception as e:
             log.error(f"[NavigationSettings] Failed to load settings: {e}")
             self._settings = NavigationSettings()
-
-    def _load_legacy_navmesh_area_names(self) -> None:
-        """Load area names from old project settings location if present."""
-        path = self._get_legacy_project_settings_path()
-        if path is None or not path.exists():
-            return
-
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            log.error(f"[NavigationSettings] Failed to load legacy project settings: {e}")
-            return
-
-        if "navmesh_area_names" in data:
-            self._settings.navmesh_area_names = _normalize_navmesh_area_names(data.get("navmesh_area_names"))
 
     def save(self) -> bool:
         """Save settings to file."""

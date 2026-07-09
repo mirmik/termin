@@ -531,6 +531,7 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
 
     auto* text = new termin::WorldTextComponent();
     text->set_text("hello");
+    text->set_font_path("font-a.ttf");
     text->set_phase_mark("transparent");
     text->set_size(0.75f);
     text->set_anchor(termin::WorldTextAnchor::Right);
@@ -555,7 +556,9 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     CHECK(item.geometry_id == 0);
     CHECK(item.material_phase != nullptr);
     REQUIRE(item.payload.text_batch.text != nullptr);
+    REQUIRE(item.payload.text_batch.font_path != nullptr);
     CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
+    CHECK(std::strcmp(item.payload.text_batch.font_path, "font-a.ttf") == 0);
     CHECK(item.payload.text_batch.size == 0.75f);
     CHECK(item.payload.text_batch.anchor ==
           static_cast<uint32_t>(termin::WorldTextAnchor::Right));
@@ -566,9 +569,13 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     CHECK(item.payload.text_batch.local_offset.z == 3.0);
 
     const char* collected_text = item.payload.text_batch.text;
+    const char* collected_font_path = item.payload.text_batch.font_path;
     text->set_text("changed");
+    text->set_font_path("font-b.ttf");
     REQUIRE(item.payload.text_batch.text == collected_text);
+    REQUIRE(item.payload.text_batch.font_path == collected_font_path);
     CHECK(std::strcmp(item.payload.text_batch.text, "hello") == 0);
+    CHECK(std::strcmp(item.payload.text_batch.font_path, "font-a.ttf") == 0);
 
     tc_shader_shutdown();
     tc_material_shutdown();

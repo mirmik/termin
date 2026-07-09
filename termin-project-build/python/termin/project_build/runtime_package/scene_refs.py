@@ -99,11 +99,23 @@ def collect_typed_ref(
     mesh_reason = resource_ref_match_reason(value, field_name, "mesh")
     if mesh_reason is not None:
         refs.meshes[uuid_value] = name
-        append_legacy_ref_diagnostic(diagnostics, mesh_reason, "mesh", ref_path)
+    else:
+        append_rejected_legacy_ref_diagnostic(
+            diagnostics,
+            legacy_resource_ref_reason(value, field_name, "mesh"),
+            "mesh",
+            ref_path,
+        )
     material_reason = resource_ref_match_reason(value, field_name, "material")
     if material_reason is not None:
         refs.materials[uuid_value] = name
-        append_legacy_ref_diagnostic(diagnostics, material_reason, "material", ref_path)
+    else:
+        append_rejected_legacy_ref_diagnostic(
+            diagnostics,
+            legacy_resource_ref_reason(value, field_name, "material"),
+            "material",
+            ref_path,
+        )
 
 
 def collect_pipeline_refs(value: dict[str, Any], refs: RuntimeRefs) -> None:
@@ -192,6 +204,14 @@ def resource_ref_match_reason(
     if kind_value == canonical_kind or role_value == resource_type:
         return "explicit"
 
+    return None
+
+
+def legacy_resource_ref_reason(
+    value: dict[str, Any],
+    field_name: str,
+    resource_type: str,
+) -> str | None:
     if field_name == resource_type:
         return "legacy field name"
 
@@ -202,13 +222,13 @@ def resource_ref_match_reason(
     return None
 
 
-def append_legacy_ref_diagnostic(
+def append_rejected_legacy_ref_diagnostic(
     diagnostics: list[RuntimePackageExportDiagnostic] | None,
-    reason: str,
+    reason: str | None,
     resource_type: str,
     ref_path: str,
 ) -> None:
-    if diagnostics is None or reason == "explicit":
+    if diagnostics is None or reason is None:
         return
     if resource_type == "mesh":
         canonical_hint = "kind='tc_mesh' or role='mesh'"
@@ -218,10 +238,10 @@ def append_legacy_ref_diagnostic(
         raise ValueError(f"Unsupported runtime resource ref type: {resource_type}")
     diagnostics.append(
         RuntimePackageExportDiagnostic(
-            level="warning",
+            level="error",
             path="scene.json",
             message=(
-                f"Runtime exporter inferred {resource_type} resource ref from {reason} "
+                f"Runtime exporter rejected legacy {resource_type} resource ref from {reason} "
                 f"at {ref_path}; add {canonical_hint} to the uuid ref"
             ),
         )

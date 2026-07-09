@@ -110,7 +110,7 @@ class SceneFileController:
             ui,
             title="Save Scene As",
             directory=directory,
-            filter_str="Scene Files (*.scene);;Legacy Scene Files (*.tc_scene);;All Files (*)",
+            filter_str="Scene Files (*.scene);;All Files (*)",
             on_result=lambda path: self.save_scene_to_file(path) if path else None,
             windowed=True,
         )
@@ -127,7 +127,7 @@ class SceneFileController:
             ui,
             title="Load Scene",
             directory=directory,
-            filter_str="Scene Files (*.scene);;Legacy Scene Files (*.tc_scene);;All Files (*)",
+            filter_str="Scene Files (*.scene);;All Files (*)",
             on_result=lambda path: self.load_scene_from_file(path) if path else None,
             windowed=True,
         )

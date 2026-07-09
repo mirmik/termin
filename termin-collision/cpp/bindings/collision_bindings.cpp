@@ -18,10 +18,8 @@ using namespace termin::collision;
 using namespace termin::colliders;
 
 static tc_scene_handle extract_scene_handle(nb::handle scene_obj) {
-    if (!scene_obj.is_none() && nb::hasattr(scene_obj, "scene_handle")) {
-        return nb::cast<tc_scene_handle>(scene_obj.attr("scene_handle")());
-    }
-    return TC_SCENE_HANDLE_INVALID;
+    if (scene_obj.is_none()) return TC_SCENE_HANDLE_INVALID;
+    return nb::cast<tc_scene_handle>(scene_obj.attr("scene_handle")());
 }
 
 NB_MODULE(_collision_native, m) {

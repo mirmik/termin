@@ -21,7 +21,7 @@ class EditorStateIO:
     """UI-independent editor state serialization.
 
     Collects/applies: camera, selection, expanded entities, displays.
-    File format matches ``data["editor"]`` section of ``.tc_scene`` files.
+    File format matches ``data["editor"]`` section of ``.scene`` files.
 
     Usage::
 

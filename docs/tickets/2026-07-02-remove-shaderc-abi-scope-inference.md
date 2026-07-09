@@ -1,8 +1,12 @@
 # Remove ABI Name-Based Scope Assignment From termin_shaderc
 
-Status: open
+Status: implemented 2026-07-09
 Created: 2026-07-02
 Area: shaderc, shader ABI, resource layout
+
+Implemented by making `termin_shaderc` reject ABI-known resources that arrive
+without explicit/imported scope metadata. Active regression coverage lives in
+`termin-graphics/tests/python/test_termin_shaderc_cli.py`.
 
 ## Context
 

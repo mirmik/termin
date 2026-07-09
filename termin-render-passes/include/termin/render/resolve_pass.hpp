@@ -11,21 +11,17 @@
 namespace termin {
 
 // ResolvePass resolves an MSAA color resource into a single-sample color
-// resource through the backend transfer/resolve path. The strategy field is
-// kept for serialized graph compatibility; average is the only supported mode.
+// resource through the backend transfer/resolve path.
 class TERMIN_RENDER_PASSES_API ResolvePass : public CxxFramePass {
 public:
     std::string input_res = "color";
     std::string output_res = "resolved";
     std::string output_res_target;
-    std::string strategy = "average";
 
 public:
     INSPECT_FIELD(ResolvePass, input_res, "Input Resource", "string")
     INSPECT_FIELD(ResolvePass, output_res, "Output Resource", "string")
     INSPECT_FIELD(ResolvePass, output_res_target, "Output Target", "string")
-    INSPECT_FIELD_CHOICES(ResolvePass, strategy, "Strategy", "string",
-        std::pair<const char*, const char*>{"average", "Average"})
     INSPECT_TYPE_METADATA(ResolvePass, graph, make_pass_graph_metadata(
         {{"input_res", "fbo"}, {"output_res_target", "fbo"}},
         {{"output_res", "fbo"}},
@@ -34,8 +30,7 @@ public:
 
     ResolvePass(
         const std::string& input = "color",
-        const std::string& output = "resolved",
-        const std::string& strategy = "average"
+        const std::string& output = "resolved"
     );
 
     std::set<const char*> compute_reads() const override;

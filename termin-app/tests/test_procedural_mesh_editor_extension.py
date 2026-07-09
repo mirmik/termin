@@ -2,6 +2,7 @@ from math import isclose
 
 from tcbase._geom_native import Vec3
 
+from termin.csg.cad_tree_adapter import tree_node_data
 from termin.csg.procedural_document import ProceduralMeshDocument
 from termin.csg.procedural_document import ProceduralPlane
 from termin.editor_tcgui.procedural_mesh_editor_extension import ProceduralMeshEditorExtension
@@ -183,14 +184,14 @@ def test_procedural_mesh_editor_extension_builds_left_document_tree_panel():
     assert right_panel is not None
     assert left_panel is not None
     assert len(extension._document_tree.root_nodes) == 1
-    assert extension._document_tree.root_nodes[0].data == ("info", "empty")
+    assert tree_node_data(extension._document_tree.root_nodes[0]) == ("info", "empty")
 
     extension._add_primitive_operation("box")
 
     operation = component.document.operations[0]
     assert len(extension._document_tree.root_nodes) == 1
     root_node = extension._document_tree.root_nodes[0]
-    assert root_node.data == ("operation", operation.id)
+    assert tree_node_data(root_node) == ("operation", operation.id)
     assert extension._document_tree.selected_node is root_node
 
 

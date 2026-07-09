@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from termin.default_assets.builtin_uuids import BUILTIN_TEXTURE_LEGACY_UUIDS, BUILTIN_UUIDS
+from termin.default_assets.builtin_uuids import BUILTIN_UUIDS
 
 if TYPE_CHECKING:
     from termin.default_assets.resource_api import DefaultAssetsResourceApiMixin
@@ -22,34 +22,6 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
     """Register built-in placeholder textures."""
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin.render.texture import get_normal_texture, get_white_texture
-    from tgfx import TcTexture
-
-    def register_legacy_texture_uuids(name: str, asset: TextureAsset) -> None:
-        texture = asset.texture_data
-        if texture is None or not texture.is_valid:
-            return
-
-        data = texture.data
-        if data is None:
-            return
-
-        for legacy_uuid in BUILTIN_TEXTURE_LEGACY_UUIDS.get(name, ()):
-            rm._assets_by_uuid[legacy_uuid] = asset
-            if TcTexture.from_uuid(legacy_uuid).is_valid:
-                continue
-
-            TcTexture.from_data(
-                data=data,
-                width=texture.width,
-                height=texture.height,
-                channels=texture.channels,
-                flip_x=texture.flip_x,
-                flip_y=texture.flip_y,
-                transpose=texture.transpose,
-                name=name,
-                source_path=texture.source_path or name,
-                uuid=legacy_uuid,
-            )
 
     if "__white_1x1__" not in rm._texture_registry.assets:
         white_texture = get_white_texture().texture_data
@@ -61,9 +33,6 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
                 uuid=white_texture.uuid,
             )
             rm.register_texture_asset("__white_1x1__", white_asset, uuid=white_texture.uuid)
-    white_asset = rm.get_texture_asset("__white_1x1__")
-    if white_asset is not None:
-        register_legacy_texture_uuids("__white_1x1__", white_asset)
 
     if "__normal_1x1__" not in rm._texture_registry.assets:
         normal_texture = get_normal_texture().texture_data
@@ -75,9 +44,6 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
                 uuid=normal_texture.uuid,
             )
             rm.register_texture_asset("__normal_1x1__", normal_asset, uuid=normal_texture.uuid)
-    normal_asset = rm.get_texture_asset("__normal_1x1__")
-    if normal_asset is not None:
-        register_legacy_texture_uuids("__normal_1x1__", normal_asset)
 
 
 def register_builtin_materials(rm: DefaultAssetsResourceApiMixin) -> None:
