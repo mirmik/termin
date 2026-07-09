@@ -5,6 +5,9 @@
 #include <nanobind/stl/shared_ptr.h>
 #include <nanobind/stl/pair.h>
 
+#include <cstdint>
+#include <string>
+
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_render_surface.hpp"
 #include "termin/platform/sdl_backend_window.hpp"
@@ -16,6 +19,211 @@
 namespace nb = nanobind;
 
 namespace termin {
+
+namespace {
+
+constexpr int TC_KEY_UNKNOWN = -1;
+constexpr int TC_KEY_TAB = 9;
+constexpr int TC_KEY_ENTER = 13;
+constexpr int TC_KEY_SPACE = 32;
+constexpr int TC_KEY_ESCAPE = 256;
+constexpr int TC_KEY_BACKSPACE = 259;
+constexpr int TC_KEY_DELETE = 261;
+constexpr int TC_KEY_RIGHT = 262;
+constexpr int TC_KEY_LEFT = 263;
+constexpr int TC_KEY_DOWN = 264;
+constexpr int TC_KEY_UP = 265;
+constexpr int TC_KEY_HOME = 268;
+constexpr int TC_KEY_END = 269;
+
+uint32_t sdl_event_window_id(const SDL_Event& event) {
+    switch (event.type) {
+        case SDL_WINDOWEVENT:
+            return event.window.windowID;
+        case SDL_MOUSEMOTION:
+            return event.motion.windowID;
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP:
+            return event.button.windowID;
+        case SDL_MOUSEWHEEL:
+            return event.wheel.windowID;
+        case SDL_KEYDOWN:
+        case SDL_KEYUP:
+            return event.key.windowID;
+        case SDL_TEXTINPUT:
+            return event.text.windowID;
+        case SDL_DROPFILE:
+            return event.drop.windowID;
+        default:
+            return 0;
+    }
+}
+
+int translate_sdl_key(SDL_Scancode scancode) {
+    switch (scancode) {
+        case SDL_SCANCODE_BACKSPACE:
+            return TC_KEY_BACKSPACE;
+        case SDL_SCANCODE_DELETE:
+            return TC_KEY_DELETE;
+        case SDL_SCANCODE_LEFT:
+            return TC_KEY_LEFT;
+        case SDL_SCANCODE_RIGHT:
+            return TC_KEY_RIGHT;
+        case SDL_SCANCODE_UP:
+            return TC_KEY_UP;
+        case SDL_SCANCODE_DOWN:
+            return TC_KEY_DOWN;
+        case SDL_SCANCODE_HOME:
+            return TC_KEY_HOME;
+        case SDL_SCANCODE_END:
+            return TC_KEY_END;
+        case SDL_SCANCODE_RETURN:
+            return TC_KEY_ENTER;
+        case SDL_SCANCODE_ESCAPE:
+            return TC_KEY_ESCAPE;
+        case SDL_SCANCODE_TAB:
+            return TC_KEY_TAB;
+        case SDL_SCANCODE_SPACE:
+            return TC_KEY_SPACE;
+        default:
+            break;
+    }
+
+    int keycode = SDL_GetKeyFromScancode(scancode);
+    if (keycode >= 'a' && keycode <= 'z') {
+        keycode -= ('a' - 'A');
+    }
+    if (keycode >= 0 && keycode < 128) {
+        return keycode;
+    }
+    return TC_KEY_UNKNOWN;
+}
+
+nb::dict make_base_event(const char* type, const SDL_Event& event) {
+    nb::dict result;
+    result["type"] = type;
+    result["window_id"] = sdl_event_window_id(event);
+    return result;
+}
+
+nb::object translate_sdl_event(const SDL_Event& event) {
+    switch (event.type) {
+        case SDL_QUIT:
+            return make_base_event("quit", event);
+
+        case SDL_WINDOWEVENT:
+            if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
+                return make_base_event("window_close", event);
+            }
+            return nb::none();
+
+        case SDL_MOUSEMOTION: {
+            nb::dict result = make_base_event("mouse_move", event);
+            result["x"] = static_cast<double>(event.motion.x);
+            result["y"] = static_cast<double>(event.motion.y);
+            result["mods"] = SDLWindow::translate_sdl_mods(SDL_GetModState());
+            return result;
+        }
+
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP: {
+            nb::dict result = make_base_event(
+                event.type == SDL_MOUSEBUTTONDOWN ? "mouse_down" : "mouse_up",
+                event
+            );
+            result["x"] = static_cast<double>(event.button.x);
+            result["y"] = static_cast<double>(event.button.y);
+            result["button"] = SDLWindow::translate_mouse_button(event.button.button);
+            result["mods"] = SDLWindow::translate_sdl_mods(SDL_GetModState());
+            return result;
+        }
+
+        case SDL_MOUSEWHEEL: {
+            int x = 0;
+            int y = 0;
+            SDL_GetMouseState(&x, &y);
+
+            nb::dict result = make_base_event("mouse_wheel", event);
+            result["dx"] = static_cast<double>(event.wheel.x);
+            result["dy"] = static_cast<double>(event.wheel.y);
+            result["x"] = static_cast<double>(x);
+            result["y"] = static_cast<double>(y);
+            result["mods"] = SDLWindow::translate_sdl_mods(SDL_GetModState());
+            return result;
+        }
+
+        case SDL_KEYDOWN:
+        case SDL_KEYUP: {
+            nb::dict result = make_base_event(
+                event.type == SDL_KEYDOWN ? "key_down" : "key_up",
+                event
+            );
+            result["key"] = translate_sdl_key(event.key.keysym.scancode);
+            result["scancode"] = static_cast<int>(event.key.keysym.scancode);
+            result["mods"] = SDLWindow::translate_sdl_mods(event.key.keysym.mod);
+            result["repeat"] = event.key.repeat != 0;
+            return result;
+        }
+
+        case SDL_TEXTINPUT: {
+            nb::dict result = make_base_event("text_input", event);
+            result["text"] = std::string(event.text.text);
+            return result;
+        }
+
+        case SDL_DROPFILE: {
+            nb::dict result = make_base_event("file_drop", event);
+            result["path"] = event.drop.file ? std::string(event.drop.file) : std::string();
+
+            int x = 0;
+            int y = 0;
+            SDL_GetMouseState(&x, &y);
+            result["x"] = static_cast<double>(x);
+            result["y"] = static_cast<double>(y);
+            result["mods"] = SDLWindow::translate_sdl_mods(SDL_GetModState());
+
+            if (event.drop.file) {
+                SDL_free(event.drop.file);
+            }
+            return result;
+        }
+
+        default:
+            return nb::none();
+    }
+}
+
+void append_translated_event(nb::list& events, const SDL_Event& event) {
+    nb::object translated = translate_sdl_event(event);
+    if (!translated.is_none()) {
+        events.append(translated);
+    }
+}
+
+nb::list poll_sdl_events() {
+    nb::list events;
+    SDL_Event event;
+    while (SDL_PollEvent(&event) != 0) {
+        append_translated_event(events, event);
+    }
+    return events;
+}
+
+nb::list wait_sdl_events_timeout(int timeout_ms) {
+    nb::list events;
+    SDL_Event event;
+    if (SDL_WaitEventTimeout(&event, timeout_ms) == 0) {
+        return events;
+    }
+
+    append_translated_event(events, event);
+    while (SDL_PollEvent(&event) != 0) {
+        append_translated_event(events, event);
+    }
+    return events;
+}
+
+} // namespace
 
 void bind_sdl(nb::module_& m) {
     m.def("get_clipboard_text", []() -> std::string {
@@ -30,6 +238,19 @@ void bind_sdl(nb::module_& m) {
     m.def("set_clipboard_text", [](const std::string& text) {
         SDL_SetClipboardText(text.c_str());
     }, nb::arg("text"));
+    m.def("start_text_input", []() {
+        SDL_StartTextInput();
+    });
+    m.def("stop_text_input", []() {
+        SDL_StopTextInput();
+    });
+    m.def("quit_sdl", []() {
+        SDL_Quit();
+    });
+    m.def("poll_sdl_events", &poll_sdl_events,
+        "Drain SDL events and return Termin event dictionaries without exposing SDL_Event.");
+    m.def("wait_sdl_events_timeout", &wait_sdl_events_timeout, nb::arg("timeout_ms"),
+        "Wait for one SDL event, drain pending events, and return Termin event dictionaries.");
 
     // SDLWindow
     nb::class_<SDLWindow>(m, "SDLWindow")

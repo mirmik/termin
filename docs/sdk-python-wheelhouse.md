@@ -19,8 +19,10 @@ python -m pip install --find-links /path/to/termin/sdk/wheels tcgui termin-displ
 ```
 
 `pip` will resolve the Termin dependency chain from `sdk/wheels`. Non-Termin
-dependencies such as `numpy`, `Pillow`, `PyYAML`, and `nanobind` are still
-normal Python dependencies and can come from PyPI or another package source.
+dependencies such as `numpy`, `PyYAML`, and `nanobind` are still normal Python
+dependencies and can come from PyPI or another package source. Runtime image
+decoding is provided by `termin-image` backed by native codec libraries instead
+of Pillow.
 
 For local development from source, `./install-pip-packages.sh` remains the
 host-environment install path. It uses the same package list as

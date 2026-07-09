@@ -208,9 +208,10 @@ public:
     // Rendering - Single Display (Simple Path)
     // ========================================================================
 
-    // Render a single display (simple path for player/examples)
-    // Renders all viewports on the display directly to screen.
-    // void render_display(tc_display* display, bool present = true);
+    // Render and present a single display for pull-based hosts (WPF/Qt style).
+    // Renders RT-backed viewports on this display through the shared offscreen
+    // render-target path, then composites them into the display surface.
+    void render_display(tc_display* display);
 
     // ========================================================================
     // Rendering - Offscreen-First Model (Full Path)
@@ -360,7 +361,7 @@ private:
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
 
-    // Runtime GPU output state for viewports and render targets.
+    // Runtime GPU output state helpers.
     std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
 
     // Compiled scene pipeline handles and target viewport mappings.

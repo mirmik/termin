@@ -283,7 +283,8 @@ then to `termin-default-assets`.
 `termin.default_assets.render.pipeline_plugin`, and
 `termin.default_assets.render.scene_pipeline_plugin`. The old
 `termin.assets.pipeline_*`, `termin.assets.scene_pipeline_*`, and
-`termin.render.*` modules remain compatibility re-exports. Remaining render
+`termin.render.*` compatibility re-export modules were removed; use the
+owning `termin.default_assets.render.*` modules directly. Remaining render
 asset follow-ups: material file parse/save and pipeline pass-list
 deserialization still use the app `ResourceManager` facade at runtime for
 typed lookups, and live pipeline reload notifications still bridge through the

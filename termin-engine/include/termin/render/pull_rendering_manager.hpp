@@ -1,7 +1,7 @@
 #pragma once
 
 #include "termin/engine/termin_engine_api.hpp"
-#include "termin/render/viewport_render_state.hpp"
+#include "termin/render/rendering_manager.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 
@@ -13,22 +13,22 @@ extern "C" {
 }
 
 #include <vector>
-#include <unordered_map>
 #include <memory>
 #include <string>
 
 namespace termin {
 
-// PullRenderingManager - for pull-based rendering (WPF, Qt style)
+// PullRenderingManager - deprecated compatibility wrapper for pull-based hosts.
 // Each display's Render callback calls render_display() independently.
 // Viewports are rendered to offscreen FBOs and immediately blitted to display.
-class TERMIN_ENGINE_API PullRenderingManager {
-public:
-    RenderEngine* render_engine_ = nullptr;
-    std::unique_ptr<RenderEngine> owned_render_engine_;
-    std::vector<tc_display*> displays_;
-    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
+#if defined(_MSC_VER)
+#define TERMIN_PULL_RENDERING_MANAGER_DEPRECATED __declspec(deprecated("Use RenderingManager::render_display(tc_display*) instead."))
+#else
+#define TERMIN_PULL_RENDERING_MANAGER_DEPRECATED [[deprecated("Use RenderingManager::render_display(tc_display*) instead.")]]
+#endif
 
+class TERMIN_ENGINE_API TERMIN_PULL_RENDERING_MANAGER_DEPRECATED PullRenderingManager {
+public:
     static PullRenderingManager* s_instance;
 
     static PullRenderingManager& instance();
@@ -45,15 +45,10 @@ public:
     void add_display(tc_display* display);
     void remove_display(tc_display* display);
     tc_display* get_display_by_name(const std::string& name) const;
-    const std::vector<tc_display*>& displays() const { return displays_; }
-
-    // Viewport state management
-    ViewportRenderState* get_viewport_state(tc_viewport_handle viewport);
-    ViewportRenderState* get_or_create_viewport_state(tc_viewport_handle viewport);
-    void remove_viewport_state(tc_viewport_handle viewport);
+    const std::vector<tc_display*>& displays() const;
 
     // Pull-rendering API
-    // Renders all viewports of this display to offscreen FBOs and blits to display.
+    // Renders this display's RT-backed viewports and blits them to display.
     // Call from each display's Render callback.
     void render_display(tc_display* display);
 
@@ -61,8 +56,12 @@ public:
     void shutdown();
 
 private:
-    void render_viewport_offscreen(tc_viewport_handle viewport);
-    std::vector<Light> collect_lights(tc_scene_handle scene);
+    RenderingManager* manager();
+
+    std::unique_ptr<RenderingManager> owned_manager_;
+    RenderingManager* manager_ = nullptr;
 };
+
+#undef TERMIN_PULL_RENDERING_MANAGER_DEPRECATED
 
 } // namespace termin

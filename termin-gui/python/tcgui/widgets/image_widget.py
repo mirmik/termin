@@ -36,10 +36,11 @@ class ImageWidget(Widget):
 
     def _ensure_texture(self, renderer: 'UIRenderer'):
         if self._texture is None and self.image_path:
-            from PIL import Image
-            img = Image.open(self.image_path)
-            self._image_w, self._image_h = img.size
-            self._texture = renderer.load_image(self.image_path)
+            from termin.image import decode_rgba8_file
+            decoded = decode_rgba8_file(self.image_path)
+            self._image_w = decoded.width
+            self._image_h = decoded.height
+            self._texture = renderer.upload_texture(decoded.to_numpy())
 
     def render(self, renderer: 'UIRenderer'):
         self._ensure_texture(renderer)

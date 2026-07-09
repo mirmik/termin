@@ -7,15 +7,14 @@ converted to TcMesh and rendered through termin-graphics draw_tc_mesh().
 
 from __future__ import annotations
 
-import ctypes
 import uuid
 
 import numpy as np
-import sdl2
 
+from tcbase import Key, MouseButton
 from termin.csg import Solid, to_mesh3, to_tc_mesh
 from termin.csg.viewer_camera import OrbitCamera
-from termin.display import SDLBackendWindow
+from termin.display import SDLBackendWindow, quit_sdl, wait_sdl_events_timeout
 from tgfx import (
     CULL_NONE,
     PIXEL_D32F,
@@ -210,32 +209,31 @@ def _push_draw_state(ctx, mvp, color):
 
 
 def _dispatch_event(window, camera, state, ev):
-    t = ev.type
-    if t == sdl2.SDL_QUIT:
+    event_type = ev.get("type")
+    if event_type == "quit":
         window.set_should_close(True)
-    elif t == sdl2.SDL_KEYDOWN:
-        if ev.key.keysym.scancode == sdl2.SDL_SCANCODE_ESCAPE:
+    elif event_type == "key_down":
+        if int(ev.get("key", Key.UNKNOWN.value)) == Key.ESCAPE.value:
             window.set_should_close(True)
-    elif t == sdl2.SDL_WINDOWEVENT:
-        if ev.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
-            window.set_should_close(True)
-    elif t == sdl2.SDL_MOUSEBUTTONDOWN:
-        if ev.button.button == sdl2.SDL_BUTTON_LEFT:
+    elif event_type == "window_close":
+        window.set_should_close(True)
+    elif event_type == "mouse_down":
+        if int(ev.get("button", MouseButton.LEFT.value)) == MouseButton.LEFT.value:
             state["dragging"] = True
-            state["x"] = int(ev.button.x)
-            state["y"] = int(ev.button.y)
-    elif t == sdl2.SDL_MOUSEBUTTONUP:
-        if ev.button.button == sdl2.SDL_BUTTON_LEFT:
+            state["x"] = int(ev.get("x", 0))
+            state["y"] = int(ev.get("y", 0))
+    elif event_type == "mouse_up":
+        if int(ev.get("button", MouseButton.LEFT.value)) == MouseButton.LEFT.value:
             state["dragging"] = False
-    elif t == sdl2.SDL_MOUSEMOTION:
+    elif event_type == "mouse_move":
         if state["dragging"]:
-            x = int(ev.motion.x)
-            y = int(ev.motion.y)
+            x = int(ev.get("x", 0))
+            y = int(ev.get("y", 0))
             camera.orbit(x - state["x"], y - state["y"])
             state["x"] = x
             state["y"] = y
-    elif t == sdl2.SDL_MOUSEWHEEL:
-        camera.zoom(float(ev.wheel.y))
+    elif event_type == "mouse_wheel":
+        camera.zoom(float(ev.get("dy", 0.0)))
 
 
 def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 760)):
@@ -255,13 +253,10 @@ def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 76
     depth_tex = None
     tex_size = (0, 0)
     state = {"dragging": False, "x": 0, "y": 0}
-    event = sdl2.SDL_Event()
 
     while not window.should_close():
-        if sdl2.SDL_WaitEventTimeout(ctypes.byref(event), 16):
+        for event in wait_sdl_events_timeout(16):
             _dispatch_event(window, camera, state, event)
-            while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
-                _dispatch_event(window, camera, state, event)
 
         w, h = window.framebuffer_size()
         if w <= 0 or h <= 0:
@@ -306,7 +301,7 @@ def draw_solids(*solids, title="termin-csg", show_wireframe=True, size=(1000, 76
     graphics.device.destroy_shader(vs)
     graphics.device.destroy_shader(fs)
     window.close()
-    sdl2.SDL_Quit()
+    quit_sdl()
 
 
 __all__ = ["draw_solids"]

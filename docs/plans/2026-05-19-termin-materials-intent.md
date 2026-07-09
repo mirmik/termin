@@ -13,7 +13,8 @@
 - Python shader-parser imports внутри `termin-app` переведены на canonical `termin.materials`.
 - `TcMaterial` binding больше не зависит от app-level `TextureHandle`: `set_texture` и `create_material_from_parsed(..., textures=...)` принимают `TcTexture`, а default white/normal texture lookup передается из app слоя через `default_white_texture` / `default_normal_texture`.
 - `termin._native.render` пока сохраняет исторический export material/shader типов через импорт `termin.materials._materials_native`; это совместимость существующего пути, не новый owner.
-- App-level GLSL fallback loader через `ResourceManager` остается в `termin.visualization.render.glsl_preprocessor`, потому что это не core material/shader-format логика.
+- App-level GLSL fallback loader через `ResourceManager` удалён. Оставшийся
+  `glsl_preprocessor` обрабатывает только явно зарегистрированные include-ы.
 
 ## Зачем
 

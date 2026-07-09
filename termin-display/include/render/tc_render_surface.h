@@ -73,7 +73,7 @@ struct tc_render_surface_vtable {
 
     // --- tgfx2 composite target (backend-neutral) -------------------------
     // Return the tgfx2 TextureHandle id (uint32_t) that the engine should
-    // composite viewports into. When non-zero, PullRenderingManager
+    // composite viewports into. When non-zero, RenderingManager presentation
     // prefers this path over the legacy `get_framebuffer`+blit-to-FBO
     // path and routes through IRenderDevice::blit_to_texture /
     // clear_texture — the only path that works on Vulkan.

@@ -13,8 +13,9 @@ layer удалён из runtime:
   и `RenderContext2` symbolic API;
 - отсутствующий reflected resource теперь логируется как ошибка, а не
   подменяется историческим числовым слотом;
-- parser-generated GLSL compatibility blocks используют компактный layout,
-  который loaders зеркалят в C-side resource metadata.
+- parser больше не генерирует старые GLSL-блоки совместимости и не зеркалит их в
+  C-side resource metadata; `.shader` материалы должны идти через Slang и
+  generated layout sidecar.
 
 Оставшиеся риски находятся не в runtime fallback-е, а в самих authored shader
 interfaces: любой built-in/pass shader, который объявляет явные backend
