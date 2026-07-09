@@ -103,7 +103,7 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
             {"shadow_res", ""},
             {"phase_mark", "opaque"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
     if (tc_pass* p = create_scene_pass("ColorPass", "Transparent", {
             {"input_res", "color_opaque"},
@@ -112,7 +112,7 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
             {"phase_mark", "transparent"},
             {"sort_mode", "far_to_near"}
     })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
     if (tc_pass* p = create_scene_pass("TonemapPass", "Tonemap", {
             {"input_res", "color"},
@@ -120,13 +120,13 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
         })) {
         set_pass_float(p, "exposure", 1.0f);
         set_pass_int(p, "method", 0);
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
     if (tc_pass* p = create_scene_pass("PresentToScreenPass", "Present", {
             {"input_res", "color_ldr"},
             {"output_res", "OUTPUT"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     const char* color_resources[] = {

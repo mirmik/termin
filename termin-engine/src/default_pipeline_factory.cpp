@@ -43,14 +43,14 @@ tc_pipeline_handle make_default_pipeline() {
     if (tc_pass* p = create_and_configure_pass("ShadowPass", "Shadow", {
             {"output_res", "shadow_maps"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     if (tc_pass* p = create_and_configure_pass("SkyBoxPass", "Skybox", {
             {"input_res", "empty"},
             {"output_res", "skybox"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     if (tc_pass* p = create_and_configure_pass("ColorPass", "Color", {
@@ -59,7 +59,7 @@ tc_pipeline_handle make_default_pipeline() {
             {"shadow_res", "shadow_maps"},
             {"phase_mark", "opaque"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     if (tc_pass* p = create_and_configure_pass("ColorPass", "Transparent", {
@@ -69,34 +69,34 @@ tc_pipeline_handle make_default_pipeline() {
             {"phase_mark", "transparent"},
             {"sort_mode", "far_to_near"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     if (tc_pass* p = create_and_configure_pass("ResolvePass", "Resolve", {
         {"input_res", "color"},
         {"output_res", "color_resolved"},
     })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     if (tc_pass* p = create_and_configure_pass("BloomPass", "Bloom", {
         {"input_res", "color_resolved"},
         {"output_res", "color_bloom"},
     })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     if (tc_pass* p = create_and_configure_pass("UIWidgetPass", "UIWidgets", {
             {"input_res", "color_bloom"},
             {"output_res", "color+widgets"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     if (tc_pass* p = create_and_configure_pass("PresentToScreenPass", "Present", {
             {"input_res", "color+widgets"}
         })) {
-        tc_pipeline_add_pass(ph, p);
+        tc_pipeline_add_pass_take(ph, p);
     }
 
     const char* color_resources[] = {
