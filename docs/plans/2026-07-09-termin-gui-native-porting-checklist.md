@@ -45,22 +45,22 @@ Already started in `termin-gui-native`:
 - [x] Define child layout policy per child: fixed, preferred, flex, stretch.
 - [x] Add child metadata storage without making parent/child imply memory
   ownership.
-- [ ] Add max-size constraints and overflow behavior.
-- [ ] Add hit-test helper API for root and containers.
-- [ ] Add pointer hover tracking in `tc_ui_document`.
-- [ ] Add pointer capture for pressed/draggable widgets.
-- [ ] Add focus handle and focusable flag.
-- [ ] Add keyboard event ABI.
-- [ ] Add text input event ABI.
-- [ ] Add callback/signal storage pattern for C++ widgets.
-- [ ] Add stable widget id/name/debug metadata.
-- [ ] Add dirty flags: layout dirty, paint dirty, state dirty.
+- [x] Add max-size constraints and overflow behavior.
+- [x] Add hit-test helper API for root and containers.
+- [x] Add pointer hover tracking in `tc_ui_document`.
+- [x] Add pointer capture for pressed/draggable widgets.
+- [x] Add focus handle and focusable flag.
+- [x] Add keyboard event ABI.
+- [x] Add text input event ABI.
+- [x] Add callback/signal storage pattern for C++ widgets.
+- [x] Add stable widget id/name/debug metadata.
+- [x] Add dirty flags: layout dirty, paint dirty, state dirty.
 - [ ] Add theme/style structs and make built-in widgets consume them.
 - [ ] Add font provider or measurement service so `Label` measure uses real
   font metrics.
-- [ ] Add tests for stale child handles inside containers.
-- [ ] Add tests for event propagation order and capture release.
-- [ ] Add tests for focus handoff and keyboard routing.
+- [x] Add tests for stale child handles inside containers.
+- [x] Add tests for event propagation order and capture release.
+- [x] Add tests for focus handoff and keyboard routing.
 
 Phase 1 notes:
 
@@ -69,10 +69,50 @@ Phase 1 notes:
   `termin-gui-native/src/widgets.cpp` via `LayoutPolicy`, `LayoutItem` and
   typed `BoxLayout::add_*_child` helpers. Containers still store handles plus
   metadata only; document ownership remains centralized in `tc_ui_document`.
+- `NativeWidget` now separates hard minimum, preferred and maximum size.
+  Built-in widgets use preferred size for natural layout so flexible children
+  can shrink before overflowing.
+- `BoxLayout` resolves each child to basis/preferred size, then distributes
+  extra space by grow weights or deficit by shrink weights. Fixed/preferred
+  children with zero shrink may intentionally overflow; clamped children stop
+  at max extent and remaining extra is redistributed.
+- `tc_ui_document_hit_test` and `NativeWidget::hit_test` provide root and
+  container hit-test helpers. `BoxLayout` returns the deepest visible native
+  child by reverse child order and falls back to its own handle when a point is
+  inside the container but no live child is hit.
+- `tc_ui_document` now tracks the hovered widget handle from pointer events and
+  supports pointer capture through `tc_ui_document_set_pointer_capture`,
+  `tc_ui_document_pointer_capture` and `tc_ui_document_release_pointer_capture`.
+  Captured widgets receive pointer events directly until release or destroy.
+- `tc_widget` exposes `TC_WIDGET_FOCUSABLE`; `tc_ui_document` tracks focused
+  widget handle, focuses a focusable hit target on pointer down, clears focus
+  on non-focusable hits, and dispatches keyboard/text input events to the
+  focused widget through C ABI vtable hooks.
+- C++ widgets expose a typed `Signal<Args...>` storage pattern with connection
+  ids and disconnect support. `Button::clicked`, `Checkbox::changed` and
+  `Slider::changed` are wired to pointer/state changes; the C++ showcase uses
+  `Slider::changed` to update its progress bar.
+- `tc_widget` exposes stable id/name/debug metadata pointers through C ABI
+  accessors. C++ `Widget` owns the backing strings for `set_stable_id`,
+  `set_name` and `set_debug_name`, so debug metadata remains stable after
+  temporary construction strings go out of scope.
+- `tc_widget` exposes dirty flags for layout, paint and state. C++ widgets mark
+  layout/paint on sizing and layout-affecting container changes, paint on visual
+  changes, state/paint on value changes, and clear layout dirty after applying
+  `layout()`.
 - Headless coverage: `termin_gui_native_widgets_test` checks default stretch
-  layout compatibility and mixed fixed/preferred/flex distribution.
+  layout compatibility, mixed fixed/preferred/flex distribution, flexible
+  shrink, max extent clamping, preferred overflow, topmost-root hit order,
+  deepest child hit order, stale child handle skipping, hover updates, capture
+  routing outside bounds, hover/capture cleanup on destroy, focus routing,
+  focus rejection for non-focusable widgets, focused key/text dispatch, signal
+  emit/disconnect behavior and signal emission from button/checkbox/slider
+  interactions, plus owned widget metadata stability and C ABI metadata
+  accessors, dirty flag marking/clearing and separation from focusable flags.
 - Visual verification remains deferred until the SDL/offscreen renderer smoke
   is available on the host display backend.
+- C++ test executables now undefine `NDEBUG`, so `assert`-based headless
+  contracts run in Release as well as Debug builds.
 
 ## Phase 2 - Draw List And Renderer Parity
 
@@ -90,7 +130,19 @@ Phase 1 notes:
 - [ ] Per-command debug label for renderer diagnostics.
 - [ ] Optional command bounds for test/debug inspection.
 - [ ] Renderer smoke into offscreen target with pixel readback.
-- [ ] Python binding tests for every command type.
+- [x] Python binding tests for every command type.
+
+Phase 2 notes:
+
+- Python coverage in `termin-gui-native/python/tests/test_gui_native.py` now
+  exercises `PushClip`, `FillRect`, `StrokeRect`, `Line`, `Text` and `PopClip`
+  through the bound `PaintContext` and validates the resulting command fields.
+- Packaging note: standalone `cmake --install` for `termin-gui-native` can
+  install the fresh Python module under `sdk/lib/python`, while the active SDK
+  import path resolves `termin.gui_native` from
+  `sdk/lib/python3.10/site-packages`. The full `./build-sdk.sh --no-wheels`
+  flow removes the legacy `sdk/lib/python` staging tree and the Python binding
+  test passes through the normal `site-packages` import path.
 
 ## Phase 3 - Basic Widgets
 
@@ -104,8 +156,8 @@ These should be ported before complex editor widgets.
 - [x] `Panel`.
 - [x] `Spacer`.
 - [x] `Swatch`.
-- [ ] `Separator`.
-- [ ] `TextInput` single-line skeleton.
+- [x] `Separator`.
+- [x] `TextInput` single-line skeleton.
 - [ ] `TextArea` skeleton.
 - [ ] `SpinBox`.
 - [ ] `SliderEdit`.
@@ -124,16 +176,24 @@ Acceptance per widget:
 - [ ] Recursive destroy test if it owns child handles.
 - [ ] Python binding decision recorded: bind now, defer, or not needed.
 
+Phase 3 notes:
+
+- `Separator` emits a deterministic fill command and participates in
+  preferred-size layout.
+- `TextInput` is a focusable single-line skeleton with text insertion,
+  backspace/delete, caret movement and submit signal. It uses approximate
+  glyph advance until the font measurement service lands.
+
 ## Phase 4 - Layout And Containers
 
 - [x] `BoxLayout` primitive.
-- [ ] `HStack` convenience wrapper.
-- [ ] `VStack` convenience wrapper.
-- [ ] `GridLayout`.
-- [ ] `ScrollArea`.
-- [ ] `Splitter`.
-- [ ] `GroupBox`.
-- [ ] `TabView` / tabs.
+- [x] `HStack` convenience wrapper.
+- [x] `VStack` convenience wrapper.
+- [x] `GridLayout`.
+- [x] `ScrollArea`.
+- [x] `Splitter`.
+- [x] `GroupBox`.
+- [x] `TabView` / tabs.
 - [ ] Overlay container.
 - [ ] Dialog root/container.
 - [ ] Menu popup container.
@@ -143,10 +203,30 @@ Acceptance per widget:
 Acceptance:
 
 - [ ] Layout tests cover empty, one child, many children.
-- [ ] Layout tests cover padding, spacing, min/max, flex distribution.
+- [x] Layout tests cover padding, spacing, min/max, flex distribution.
 - [ ] Paint tests cover clipping.
 - [ ] Event tests cover child order, clipping and overlay precedence.
 - [ ] Destroy tests prove containers do not leak child widgets.
+
+Phase 4 notes:
+
+- `HStack` and `VStack` are thin `BoxLayout` wrappers for source-porting
+  ergonomics. The showcase uses them instead of raw orientation arguments.
+- `GridLayout` supports explicit fixed/preferred/flex/stretch rows and columns,
+  padding, row/column spacing, child row/column spans, recursive destroy,
+  reverse-order hit-testing and pointer routing. The showcase palette now uses
+  it, and `termin_gui_native_widgets_test` covers track distribution and spans.
+- `GroupBox` supports a titled header, one content handle, content padding,
+  clipped child paint, content hit-testing/event routing and recursive destroy.
+  The showcase wraps its control row in a group box.
+- `Splitter` supports horizontal/vertical two-pane layout, split fraction,
+  divider thickness, min extents, divider hit-testing, pointer-capture dragging
+  and recursive destroy. The showcase preview area now uses it.
+- `ScrollArea` supports one content handle, viewport clipping, wheel scrolling,
+  clamped offsets, clipped hit-testing and recursive destroy of content.
+- `TabView` supports simple tab headers, selected page layout, body clipping,
+  header click switching, selected-page hit-testing and recursive destroy of
+  pages.
 
 ## Phase 5 - Input, Focus And Interaction
 
@@ -231,13 +311,22 @@ Port only after layout, focus and events are reliable.
 ## Phase 11 - Showcase And Smoke Gates
 
 - [x] C++ showcase compiles with basic widgets.
-- [ ] C++ showcase uses text, panels, buttons, checkbox, slider, progress,
-  palette, scroll area and tabs.
+- [x] C++ showcase uses text, panels, buttons, checkbox, slider, progress,
+  splitter, group box, grid palette, scroll area and tabs.
 - [ ] Python showcase mirrors the C++ showcase.
-- [ ] Headless draw-list snapshot test for showcase structure.
+- [x] Headless draw-list snapshot test for showcase structure.
 - [ ] Offscreen renderer pixel smoke for text + rect + clip.
 - [ ] Manual SDL smoke once visual verification is available.
 - [ ] Screenshot capture path for future visual regression checks.
+
+Phase 11 notes:
+
+- The C++ showcase now uses text, panels, buttons, checkbox, slider, progress,
+  `Splitter`, `GroupBox`, grid palette, `Separator`, `TextInput`, `ScrollArea`
+  and `TabView`.
+- The showcase tree is built by shared `build_showcase(Document&)` code used by
+  both the SDL example and `termin_gui_native_showcase_test`. The snapshot test
+  fixes draw-list command totals by type after an 800x600 layout.
 
 ## Phase 12 - Editor Migration Slices
 
