@@ -7,7 +7,7 @@ re-render. Error messages go through the supplied :class:`DialogService`.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from tcbase import log
 
@@ -17,6 +17,35 @@ from termin.editor_core.signal import Signal
 if TYPE_CHECKING:
     from termin.render_framework import RenderPipeline
     from termin.render_framework import ResourceSpec
+
+
+def _set_resource_spec_resource(spec: "ResourceSpec", value: Any) -> None:
+    spec.resource = value
+
+
+def _set_resource_spec_samples(spec: "ResourceSpec", value: Any) -> None:
+    spec.samples = value
+
+
+def _set_resource_spec_format(spec: "ResourceSpec", value: Any) -> None:
+    spec.format = value
+
+
+def _set_resource_spec_clear_color(spec: "ResourceSpec", value: Any) -> None:
+    spec.clear_color = value
+
+
+def _set_resource_spec_clear_depth(spec: "ResourceSpec", value: Any) -> None:
+    spec.clear_depth = value
+
+
+_RESOURCE_SPEC_FIELD_SETTERS = {
+    "resource": _set_resource_spec_resource,
+    "samples": _set_resource_spec_samples,
+    "format": _set_resource_spec_format,
+    "clear_color": _set_resource_spec_clear_color,
+    "clear_depth": _set_resource_spec_clear_depth,
+}
 
 
 class PipelineOperations:
@@ -145,8 +174,13 @@ class PipelineOperations:
                 )
                 return False
 
+        setter = _RESOURCE_SPEC_FIELD_SETTERS.get(field)
+        if setter is None:
+            log.error(f"[PipelineOperations] unknown resource spec field: {field!r}")
+            return False
+
         try:
-            setattr(spec, field, value)
+            setter(spec, value)
         except TypeError as e:
             log.warn(f"[PipelineOperations] update_spec_field({field!r}) rejected: {e}")
             return False
