@@ -49,22 +49,17 @@ static nb::object pipeline_to_python(tc_pipeline_handle h) {
 
 // Helper to extract tc_scene_handle from Python Scene object (Scene inherits TcScene)
 static tc_scene_handle get_scene_handle(nb::object scene_py) {
-    if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
-        return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
-    }
-    return TC_SCENE_HANDLE_INVALID;
+    if (scene_py.is_none()) return TC_SCENE_HANDLE_INVALID;
+    return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
 }
 
 // Helper to extract tc_display* from Python Display object
 static tc_display* get_display_ptr(nb::object display_py) {
     if (display_py.is_none()) return nullptr;
     // Display.tc_display_ptr is a property returning int (pointer as int)
-    if (nb::hasattr(display_py, "tc_display_ptr")) {
-        return reinterpret_cast<tc_display*>(
-            nb::cast<uintptr_t>(display_py.attr("tc_display_ptr"))
-        );
-    }
-    return nullptr;
+    return reinterpret_cast<tc_display*>(
+        nb::cast<uintptr_t>(display_py.attr("tc_display_ptr"))
+    );
 }
 
 // Helper to convert viewport handle tuple
@@ -84,11 +79,9 @@ static tc_viewport_handle get_viewport_handle(nb::object viewport_py) {
     tc_viewport_handle h = TC_VIEWPORT_HANDLE_INVALID;
     if (viewport_py.is_none()) return h;
     // Viewport.handle is a uint64 property that packs (index << 32 | generation)
-    if (nb::hasattr(viewport_py, "handle")) {
-        uint64_t packed = nb::cast<uint64_t>(viewport_py.attr("handle"));
-        h.index = static_cast<uint32_t>(packed >> 32);
-        h.generation = static_cast<uint32_t>(packed & 0xFFFFFFFF);
-    }
+    uint64_t packed = nb::cast<uint64_t>(viewport_py.attr("handle"));
+    h.index = static_cast<uint32_t>(packed >> 32);
+    h.generation = static_cast<uint32_t>(packed & 0xFFFFFFFF);
     return h;
 }
 

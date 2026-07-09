@@ -208,18 +208,11 @@ def shader_to_spec(shader: Any) -> ShaderSpec:
 
 
 def shader_language(shader: Any) -> str:
-    try:
-        language = shader.language
-    except AttributeError:
-        return "glsl"
-
+    language = shader.language
     if isinstance(language, str):
         text = language
     else:
-        try:
-            text = language.name
-        except AttributeError:
-            text = str(language)
+        text = str(language)
     text = text.lower()
     if text.endswith(".glsl") or text == "glsl":
         return "glsl"
@@ -232,4 +225,3 @@ def shader_language(shader: Any) -> str:
 
 def resource_policy_allows_fallback(resource_policy: str) -> bool:
     return resource_policy == "dev_smoke"
-

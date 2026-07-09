@@ -35,6 +35,7 @@ scripts/taskboard close 28 29 41 --dry-run
 scripts/taskboard close 28 29 41 --comment "Implemented and verified."
 scripts/taskboard move 13 "On Test" --dry-run
 scripts/taskboard create "[bug] Short title" --description "Context..."
+scripts/taskboard create "[bug] Short title" --description "Context..." --tags bug size:S
 # Windows:
 scripts/taskboard.ps1 list
 ```
