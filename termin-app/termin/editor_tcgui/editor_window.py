@@ -745,7 +745,6 @@ class EditorWindowTcgui:
                     load_material=self._load_material_from_file,
                     load_components=self._load_components_from_file,
                     deploy_stdlib=self._deploy_stdlib,
-                    migrate_spec_to_meta=self._migrate_spec_to_meta,
                     exit=self.close,
                 ),
                 edit=EditMenuActions(
@@ -1423,9 +1422,6 @@ class EditorWindowTcgui:
 
     def _deploy_stdlib(self) -> None:
         self._resource_actions.deploy_stdlib()
-
-    def _migrate_spec_to_meta(self) -> None:
-        self._resource_actions.migrate_spec_to_meta()
 
     def close(self) -> None:
         self._should_close = True

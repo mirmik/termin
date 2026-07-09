@@ -8,7 +8,7 @@ from typing import Callable
 from tcbase import log
 
 
-SCENE_FILE_EXTENSIONS = {".scene", ".tc_scene"}
+SCENE_FILE_EXTENSIONS = {".scene"}
 
 
 class ProjectFileActionController:
@@ -30,7 +30,7 @@ class ProjectFileActionController:
         if ext in SCENE_FILE_EXTENSIONS:
             self._load_scene_from_file(path)
             return
-        if ext == ".tc_prefab":
+        if ext == ".prefab":
             self._open_prefab(path)
             return
         self._open_in_text_editor(path)
@@ -41,10 +41,10 @@ class ProjectFileActionController:
             return
 
         ext = Path(path).suffix.lower()
-        if ext in (".tc_mat", ".material"):
+        if ext == ".material":
             inspector.show_material_inspector_for_file(path)
             return
-        if ext in (".pipeline", ".tc_pipeline", ".scene_pipeline"):
+        if ext in (".pipeline", ".scene_pipeline"):
             inspector.show_pipeline_inspector_for_file(path)
             return
         if ext in (".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"):

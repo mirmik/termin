@@ -16,7 +16,7 @@ from termin.editor_core.entity_operations import EntityOperations
 from termin.scene import Entity
 
 _GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
-_SCENE_TREE_EXTERNAL_EXTENSIONS = _GLTF_MODEL_EXTENSIONS + (".prefab", ".tc_prefab")
+_SCENE_TREE_EXTERNAL_EXTENSIONS = _GLTF_MODEL_EXTENSIONS + (".prefab",)
 
 
 class SceneTreeControllerTcgui:
@@ -388,7 +388,7 @@ class SceneTreeControllerTcgui:
         if ext in _GLTF_MODEL_EXTENSIONS:
             self._ops.drop_glb(path, parent_entity)
             return True
-        if ext in (".prefab", ".tc_prefab"):
+        if ext == ".prefab":
             self._ops.drop_prefab(path, parent_entity)
             return True
         return False

@@ -346,7 +346,7 @@ def test_sync_render_target_configs_preserves_pipeline_params(monkeypatch):
     render_target.scene = scene
     render_target.color_format = "rgba8"
     render_target.depth_format = "depth24"
-    render_target.pipeline_params = {"input_texture": "FovTarget", "mask": "file:Noise"}
+    render_target.pipeline_params = {"input_texture": "FovTarget", "mask": "file:texture-uuid-noise"}
     manager.managed_render_targets.append(render_target)
 
     model.sync_render_target_configs_to_scene(scene)
@@ -356,7 +356,7 @@ def test_sync_render_target_configs_preserves_pipeline_params(monkeypatch):
     assert scene._mount.render_target_configs[0].depth_format == "depth24"
     assert scene._mount.render_target_configs[0].pipeline_params == {
         "input_texture": "FovTarget",
-        "mask": "file:Noise",
+        "mask": "file:texture-uuid-noise",
     }
 
 
@@ -405,17 +405,17 @@ def test_sync_render_target_configs_preserves_clear_settings(monkeypatch):
 
 
 def _configure_pipeline_params(config):
-    config.pipeline_params = {"input_texture": "FovTarget", "mask": "file:Noise"}
+    config.pipeline_params = {"input_texture": "FovTarget", "mask": "file:texture-uuid-noise"}
 
 
 def _assert_pipeline_params_roundtrip(serialized, restored):
     assert serialized["pipeline_params"] == {
         "input_texture": "FovTarget",
-        "mask": "file:Noise",
+        "mask": "file:texture-uuid-noise",
     }
     assert restored.pipeline_params == {
         "input_texture": "FovTarget",
-        "mask": "file:Noise",
+        "mask": "file:texture-uuid-noise",
     }
 
 

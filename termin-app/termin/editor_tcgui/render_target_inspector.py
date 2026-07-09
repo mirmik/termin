@@ -646,7 +646,11 @@ class RenderTargetInspectorTcgui(VStack):
         if tag == "default" or not value:
             params.pop(slot, None)
         elif tag == "file":
-            params[slot] = self._file_ref_from_texture_name(value)
+            file_ref = self._file_ref_from_texture_name(value)
+            if file_ref is None:
+                params.pop(slot, None)
+            else:
+                params[slot] = file_ref
         else:
             params[slot] = value
         self._render_target.pipeline_params = params
@@ -663,15 +667,13 @@ class RenderTargetInspectorTcgui(VStack):
         if asset is not None:
             return asset.name
 
-        # Legacy scenes stored file refs by asset name, e.g. file:Grenade.
-        asset = self._rm.get_texture_asset(payload)
-        if asset is not None:
-            return payload
-
-        log.warn(f"[RenderTargetInspector] texture file ref not found: {ref}")
+        log.warn(
+            "[RenderTargetInspector] texture file ref must be file:<uuid>; "
+            f"asset uuid not found: {payload}"
+        )
         return payload
 
-    def _file_ref_from_texture_name(self, name: str) -> str:
+    def _file_ref_from_texture_name(self, name: str) -> str | None:
         """Serialize TexturePicker asset name as file:<asset uuid>."""
         asset = self._rm.get_texture_asset(name)
         if asset is not None:
@@ -681,8 +683,11 @@ class RenderTargetInspectorTcgui(VStack):
         if asset is not None:
             return "file:" + asset.uuid
 
-        log.warn(f"[RenderTargetInspector] texture asset not found for pipeline param: {name}")
-        return "file:" + name
+        log.error(
+            "[RenderTargetInspector] refusing to serialize texture pipeline param "
+            f"without a known asset UUID: {name}"
+        )
+        return None
 
     def _update_size_visibility(self) -> None:
         texture_target = self._is_texture_target()
