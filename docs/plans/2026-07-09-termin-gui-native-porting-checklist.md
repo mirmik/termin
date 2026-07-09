@@ -259,7 +259,7 @@ These should be ported before complex editor widgets.
 - [x] `Swatch`.
 - [x] `Separator`.
 - [x] `TextInput` single-line skeleton.
-- [ ] `TextArea` skeleton.
+- [x] `TextArea` multiline editor.
 - [ ] `SpinBox`.
 - [ ] `SliderEdit`.
 - [ ] `ComboBox` closed-state skeleton.
@@ -282,13 +282,23 @@ Phase 3 notes:
 - `Separator` emits a deterministic fill command and participates in
   preferred-size layout.
 - `TextInput` is a focusable single-line control with text insertion,
-  backspace/delete, caret movement and submit signal. Font metrics drive
-  preferred size, pointer-to-caret mapping and caret paint. Long text remains
-  inside an inner clip and scrolls horizontally to keep the caret visible.
-- TextInput caret offsets remain byte offsets at the C++ API boundary, but are
-  normalized to UTF-8 codepoint boundaries. Left/right, backspace and delete
-  operate on whole codepoints; invalid UTF-8 initial/set/event text is rejected
-  and logged. Selection and clipboard remain in #253.
+  backspace/delete, selection, caret movement and submit signal. Font metrics
+  drive preferred size, pointer-to-caret mapping, selection and caret paint.
+  Long text remains inside an inner clip and scrolls horizontally to keep the
+  caret visible.
+- `TextArea` uses one canonical UTF-8 buffer with computed line spans. It
+  supports multiline selection and replacement, horizontal/vertical
+  navigation, Home/End, pointer drag selection, wheel scrolling and
+  horizontal/vertical caret scrolling. The initial contract is deliberately
+  unwrapped; word wrapping remains a separate layout feature rather than a
+  second text representation.
+- Editor carets and selection anchors are byte offsets at the C++ and Python
+  boundaries, normalized to UTF-8 codepoint boundaries. Editing never splits
+  a codepoint, and invalid UTF-8 initial/set/event/clipboard text is rejected
+  and logged.
+- Clipboard access is injected into `tc_ui_document` through non-owning C
+  callbacks. C++ and Python-facing tests cover cross-codepoint and multiline
+  copy/cut/paste through the same host service.
 
 ## Phase 4 - Layout And Containers
 
@@ -357,6 +367,7 @@ Phase 4 notes:
 - [x] Tab focus traversal.
 - [x] Keyboard event ABI.
 - [x] Text input ABI.
+- [x] Host-injected clipboard ABI.
 - [x] Parent-chain event bubbling.
 - [ ] Shortcut routing.
 - [x] Modal overlay input capture.
@@ -441,7 +452,7 @@ Port only after layout, focus and events are reliable.
 
 - [x] C++ showcase compiles with basic widgets.
 - [x] C++ showcase uses text, panels, buttons, checkbox, slider, progress,
-  splitter, group box, grid palette, scroll area and tabs.
+  text input/area, splitter, group box, grid palette, scroll area and tabs.
 - [ ] Python showcase mirrors the C++ showcase.
 - [x] Headless draw-list snapshot test for showcase structure.
 - [x] Offscreen renderer pixel smoke for text + texture + rounded geometry +
@@ -452,8 +463,8 @@ Port only after layout, focus and events are reliable.
 Phase 11 notes:
 
 - The C++ showcase now uses text, panels, buttons, checkbox, slider, progress,
-  `Splitter`, `GroupBox`, grid palette, `Separator`, `TextInput`, `ScrollArea`
-  and `TabView`.
+  `Splitter`, `GroupBox`, grid palette, `Separator`, `TextInput`, `TextArea`,
+  `ScrollArea` and `TabView`.
 - The showcase tree is built by shared `build_showcase(Document&)` code used by
   both the SDL examples and `termin_gui_native_showcase_test`. The dedicated
   `termin_gui_native_showcase` example is the primary manual visual smoke entry
