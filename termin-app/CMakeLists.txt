@@ -41,23 +41,22 @@ endif()
 # Find Python (needed for bundling info)
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
-# Add the main C++ subproject
-# cpp/CMakeLists.txt handles all native modules and libraries
-add_subdirectory(cpp)
-
-# Post-install: copy Python sources to install directory for embedded Python
-# Native modules (.so/.dll) are already installed by cpp/CMakeLists.txt
-# This copies Python source files alongside them
-install(DIRECTORY ${TERMIN_ROOT}/termin/
-    DESTINATION lib/python/termin
-    PATTERN "__pycache__" EXCLUDE
-    PATTERN "*.pyc" EXCLUDE
-    PATTERN "*.pyo" EXCLUDE
-    PATTERN "*.so" EXCLUDE
-    PATTERN "*.dll" EXCLUDE
-    PATTERN "*.dylib" EXCLUDE
-    PATTERN "*.egg-info" EXCLUDE
+execute_process(
+    COMMAND ${Python_EXECUTABLE} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+    OUTPUT_VARIABLE PYTHON_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+if(WIN32)
+    set(STDLIB_INSTALL_DIR "python/Lib")
+else()
+    set(STDLIB_INSTALL_DIR "lib/python${PYTHON_VERSION}")
+endif()
+set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
+
+# Add the main C++ subproject.
+# cpp/CMakeLists.txt handles all native modules and libraries.
+add_subdirectory(cpp)
 
 # Bundle Python runtime if requested
 if(BUNDLE_PYTHON)
@@ -65,11 +64,6 @@ if(BUNDLE_PYTHON)
     execute_process(
         COMMAND ${Python_EXECUTABLE} -c "import sys; print(sys.prefix)"
         OUTPUT_VARIABLE PYTHON_PREFIX_RAW
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    execute_process(
-        COMMAND ${Python_EXECUTABLE} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
-        OUTPUT_VARIABLE PYTHON_VERSION
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
@@ -99,8 +93,6 @@ if(BUNDLE_PYTHON)
             PATTERN "libpython${PYTHON_VERSION}*.so*"
             PATTERN "python${PYTHON_VERSION}" EXCLUDE
         )
-        set(STDLIB_INSTALL_DIR "lib/python${PYTHON_VERSION}")
-        set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
     else()
         # Windows: Install python3xx.dll to bin/
         file(GLOB PYTHON_DLLS "${PYTHON_PREFIX}/python*.dll")
@@ -125,8 +117,6 @@ if(BUNDLE_PYTHON)
             )
         endif()
         # Windows expects stdlib in {python-home}/Lib/ (capital L, no version).
-        set(STDLIB_INSTALL_DIR "${WINDOWS_PYTHON_HOME_INSTALL_DIR}/Lib")
-        set(SITEPACKAGES_INSTALL_DIR "${STDLIB_INSTALL_DIR}/site-packages")
     endif()
 
     # Install Python standard library (excluding heavy/unneeded parts)
@@ -210,20 +200,6 @@ if(BUNDLE_PYTHON)
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE
     )
-
-    if(NOT WIN32)
-        # Linux: Copy standalone Python extension .so files.
-        file(GLOB STANDALONE_SOS "${PYTHON_SITEPACKAGES}/*.so")
-        install(FILES ${STANDALONE_SOS}
-            DESTINATION ${SITEPACKAGES_INSTALL_DIR}
-        )
-    else()
-        # Windows: Copy standalone .pyd files
-        file(GLOB STANDALONE_PYDS "${PYTHON_SITEPACKAGES}/*.pyd")
-        install(FILES ${STANDALONE_PYDS}
-            DESTINATION ${SITEPACKAGES_INSTALL_DIR}
-        )
-    endif()
 
     # Copy .libs directories used by external binary Python packages.
     foreach(pkg numpy)

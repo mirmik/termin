@@ -1,3 +1,5 @@
+# Multilanguage Component/Pass/Widget Lifetime Model
+
 ## Категории мультиязычных классов tc_component, tc_pass, tc_widget
 
 Документ описывает модель контроля лайфтайма общей категории классов.
