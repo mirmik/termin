@@ -14,7 +14,12 @@ from tcgui.widgets.vstack import VStack
 from termin.editor_tcgui.component_editor_extension import (
     register_component_editor_extension,
 )
-from termin.csg.cad_tree_adapter import restore_tree_selection, to_tree_node, tree_node_data
+from termin.csg.cad_tree_adapter import (
+    restore_tree_selection,
+    to_tree_node,
+    tree_node_data,
+    tree_node_payload,
+)
 from termin.csg.csg_editor_panel import CsgEditorPanel
 from termin.csg.document_eval import evaluate_document
 from termin.csg.document_tree_model import (
@@ -222,7 +227,7 @@ class ProceduralMeshEditorExtension:
         label.text = text
         label.color = (0.68, 0.72, 0.78, 1.0)
         node = TreeNode(label)
-        node.data = data
+        node.data = tree_node_payload(data[0], data[1])
         return node
 
     def _on_document_node_selected(self, node: TreeNode) -> None:
