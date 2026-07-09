@@ -5,7 +5,21 @@
 This checklist tracks the migration from Python `termin-gui`/`tcgui` concepts to
 the C++/C ABI `termin-gui-native` core.
 
-Board anchor: Kanboard `#210 [ui/plot] Design C++ UI core and plot annotation layer`.
+Board anchor: Kanboard `#244 [ui/native] Add native UI manager parity layer` in
+the `termin-gui-native` swimlane. The cross-cutting plot boundary remains in
+`#210 [ui/plot] Design C++ UI core and plot annotation layer`.
+
+The target lifetime and language model is defined by:
+
+- `docs/architecture/2026-07-07-ui-storage-and-plot-annotations.md`;
+- `docs/architecture/2026-07-09-multilanguage-component-lifetime-model.md`.
+
+`tc_widget` is the single common widget object embedded into C++, Python or
+another language implementation. `tc_ui_document` adopts it through a
+creator-supplied deleter and maps handles directly to it. There is no parallel
+`WidgetRecord`. Common bounds, size constraints, flags and canonical tree links
+belong in `tc_widget`; widget-specific and parent-child layout metadata remains
+in the implementation that interprets it.
 
 The goal is not pixel-perfect parity first. Until visual verification is
 available, each item should close through headless contracts:
@@ -40,6 +54,25 @@ Already started in `termin-gui-native`:
   are stable.
 - Compatibility fallbacks that hide broken migration state.
 
+## Board Work Breakdown
+
+- `#244` umbrella: full native parity and legacy retirement.
+- `#247`: common `tc_widget` state and canonical tree.
+- `#248`: input routing and focus traversal.
+- `#249`: overlays, modal routing and tooltips.
+- `#250`: theme and style.
+- `#251`: draw-list and renderer primitive parity.
+- `#252`: embedded `tc_widget` Python bridge.
+- `#246`, then `#253`: text measurement/clipping and complete text editing.
+- `#254`: remaining basic input and media widgets.
+- `#255`: collection widgets and shared models.
+- `#256`: menus, menu bar, toolbar and status bar.
+- `#257`: dialogs and pickers.
+- `#258`: factories, inspect, serialization and hot reload.
+- `#259`: rich and specialized widgets.
+- `#260`: visual regression and showcase gates.
+- `#261`: editor migration and retirement of `termin-gui`.
+
 ## Phase 1 - Core Contracts
 
 - [x] Define child layout policy per child: fixed, preferred, flex, stretch.
@@ -55,6 +88,12 @@ Already started in `termin-gui-native`:
 - [x] Add callback/signal storage pattern for C++ widgets.
 - [x] Add stable widget id/name/debug metadata.
 - [x] Add dirty flags: layout dirty, paint dirty, state dirty.
+- [ ] Move common computed bounds and size constraints into `tc_widget`.
+- [ ] Add canonical parent/ordered-children links and mutation APIs to
+  `tc_widget` without making tree links imply recursive ownership.
+- [ ] Add common visible, enabled and mouse-transparent flags.
+- [ ] Make layout, hit testing, event routing and debug inspection consume the
+  common `tc_widget` state without parallel container-specific copies.
 - [ ] Add theme/style structs and make built-in widgets consume them.
 - [ ] Add font provider or measurement service so `Label` measure uses real
   font metrics.
@@ -230,13 +269,15 @@ Phase 4 notes:
 
 ## Phase 5 - Input, Focus And Interaction
 
-- [ ] Pointer move/down/up/wheel event model.
+- [x] Pointer move/down/up/wheel event ABI and basic dispatch.
 - [ ] Hover enter/leave callbacks.
 - [ ] Pressed state lifecycle.
-- [ ] Pointer capture API.
-- [ ] Focusable flag and focus traversal.
-- [ ] Keyboard event ABI.
-- [ ] Text input ABI.
+- [x] Pointer capture API.
+- [x] Focusable flag and direct focus assignment.
+- [ ] Tab focus traversal.
+- [x] Keyboard event ABI.
+- [x] Text input ABI.
+- [ ] Parent-chain event bubbling.
 - [ ] Shortcut routing.
 - [ ] Modal overlay input capture.
 - [ ] Dismiss-on-outside behavior.
@@ -301,12 +342,18 @@ Port only after layout, focus and events are reliable.
 - [ ] Bind layout APIs.
 - [ ] Bind event structs.
 - [ ] Bind draw text/image commands.
-- [ ] Decide Python ownership policy for native widgets: wrapper observes handle
-  or creates/adopts owned widget.
+- [ ] Implement Python-defined widgets with an embedded `tc_widget`, Python
+  vtable dispatch and an adoption retain/deleter pair.
+- [ ] Implement handle wrappers for already-native widgets without creating a
+  second widget state object.
 - [ ] Add Python tests for stale handles and document-destroy behavior.
 - [ ] Add Python showcase that uses native layouts/widgets instead of custom
   Python paint-only widgets.
 - [ ] Decide migration path for existing `tcgui.widgets.Widget`.
+- [ ] Define multilingual widget factory registration and creation.
+- [ ] Expose common inspect metadata and document/tree snapshots.
+- [ ] Define serialization identity and state hooks for registered widgets.
+- [ ] Define widget hot-reload invalidation/recreation behavior.
 
 ## Phase 11 - Showcase And Smoke Gates
 
