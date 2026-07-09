@@ -12,6 +12,7 @@ Kanboard project id `1` по умолчанию и не требует писа�
 ```bash
 scripts/taskboard list
 scripts/taskboard list --tags
+scripts/taskboard list --column "Ready" --tags
 scripts/taskboard list --column "On Test" --tags
 scripts/taskboard show 119
 scripts/taskboard export --comments --tags --output /tmp/termin-board.json
@@ -23,6 +24,7 @@ Write-операции имеют dry-run там, где это важно:
 scripts/taskboard close 28 29 41 --dry-run
 scripts/taskboard close 28 29 41 --comment "Implemented and verified."
 scripts/taskboard comment 119 "Still reproducible after player shutdown fixes."
+scripts/taskboard move 13 "Ready" --dry-run
 scripts/taskboard move 13 "On Test" --dry-run
 scripts/taskboard create "[bug] Short title" --description "Context..."
 scripts/taskboard create "[bug] Short title" --description "Context..." --tags bug size:S
