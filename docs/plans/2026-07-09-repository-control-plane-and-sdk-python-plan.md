@@ -373,6 +373,13 @@ unclassified test fails the check profile.
 
 ### Phase 2: Hermetic SDK Python foundation
 
+Linux implementation status, 2026-07-09: #141 now provides a native
+SDK-relative `termin_python` launcher based on `PyConfig`, hostile-environment
+verification in the SDK doctor, and a bundled `libpython` restoration step after
+bindings staging. Runtime population is still performed by host pip, so the
+lock/manifest/offline population portion of this phase remains open. Windows
+launcher acceptance also remains to be run on Windows.
+
 - Isolate SDK Python population from host packages.
 - Introduce runtime constraints/lock and installed-distribution manifest.
 - Add the cross-platform SDK Python launcher.
@@ -382,6 +389,15 @@ Close when the SDK Python launcher runs an installed-package import smoke on
 Linux and Windows from a clean environment.
 
 ### Phase 3: Source overlay and test tooling
+
+Linux implementation status, 2026-07-09: the test runner now uses
+`build/python-envs/test` with pinned test-only dependencies and a generated,
+fingerprinted source overlay. Exact source mappings take precedence for `.py`
+modules while package search paths prefer installed SDK directories for native
+extensions. `run-tests-python.sh`, repository-control child runs, and Ruff use
+the same launcher arguments. The old setup entry point is now only a wrapper.
+PowerShell runtime acceptance and removal of legacy native copies from existing
+developer checkouts remain before the old workflow can be deleted.
 
 - Implement checkout-local overlay creation/synchronization.
 - Separate runtime, build, lint, and test dependency profiles.
