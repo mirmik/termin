@@ -54,3 +54,4 @@
 - [Detour 1D linear paths](2026-07-05-detour-1d-linear-paths.md)
 - [Render item and task architecture](2026-07-07-render-item-task-architecture.md)
 - [NumPy-only input buffer contracts migration](2026-07-09-numpy-input-buffer-contracts.md)
+- [termin-gui-native porting checklist](2026-07-09-termin-gui-native-porting-checklist.md)
