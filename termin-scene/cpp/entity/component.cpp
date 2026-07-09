@@ -117,6 +117,39 @@ void CxxComponent::release() {
     }
 }
 
+tc_value serialize_component_data(tc_component* component) {
+    if (!component) {
+        return tc_value_nil();
+    }
+
+    const char* type_name = tc_component_type_name(component);
+    if (!type_name || type_name[0] == '\0') {
+        tc::Log::warn("[Component] Cannot serialize component with empty type name");
+        return tc_value_nil();
+    }
+
+    if (component->kind == TC_CXX_COMPONENT) {
+        CxxComponent* cxx = CxxComponent::from_tc(component);
+        if (!cxx) {
+            tc::Log::warn("[Component] Cannot serialize C++ component '%s': object is null", type_name);
+            return tc_value_nil();
+        }
+        return cxx->serialize_data();
+    }
+
+    if (!component->body) {
+        tc::Log::warn("[Component] Cannot serialize component '%s': body is null", type_name);
+        return tc_value_nil();
+    }
+
+    tc_value data = tc_inspect_serialize(component->body, type_name);
+    const char* name = tc_component_get_display_name(component);
+    if (data.type == TC_VALUE_DICT && name && name[0] && !tc_value_dict_has(&data, "display_name")) {
+        tc_value_dict_set(&data, "display_name", tc_value_string(name));
+    }
+    return data;
+}
+
 // Static callbacks that dispatch to C++ virtual methods
 void CxxComponent::_cb_start(tc_component* c) {
     auto* self = from_tc(c);
