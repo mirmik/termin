@@ -113,6 +113,7 @@ identity/lifetime    vtable, deleter, body, language, document, handle
 tree                 direct tc_widget parent and ordered child pointers
 layout               computed bounds, common min/preferred/max constraints
 state                visible, enabled, mouse-transparent, focusable, dirty flags
+style                semantic role and masked local/inheritable override
 diagnostics          stable id, name, debug name
 ```
 
@@ -138,6 +139,17 @@ UiInputRouter   hit-test, focus, capture, hover
 UiRenderer      traversal through Canvas2DRenderer
 UiTheme         style tokens and inherited style state
 ```
+
+`tc_ui_document` owns the active `tc_ui_theme` by value and advances a revision
+whenever it is replaced. Theme roles contain a complete base style plus masked
+hovered, pressed, focused, disabled and checked layers. A `tc_widget` contains
+only its semantic role and one masked override by value. The override may be
+marked inheritable, in which case descendants consume it strictly through the
+canonical parent chain. Resolution order is role base, interaction layers,
+inheritable root-to-parent overrides, then the widget-local override. Theme and
+inheritable override changes dirty every affected widget for layout, paint and
+state. This keeps style data accessible to C++, Python and future runtimes
+without introducing a `WidgetRecord`, style object lifetime or parallel tree.
 
 Text measurement is a document service rather than widget-local arithmetic.
 The C ABI callback accepts UTF-8 data with an explicit byte length and returns
