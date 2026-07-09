@@ -103,15 +103,12 @@ class EditorWindowTcgui:
         self,
         initial_scene,
         scene_manager: SceneManager,
-        offscreen_context=None,
         ctx=None,
         main_window=None,
     ) -> None:
-        self._offscreen_context = offscreen_context
         # Process-global tgfx2 context — the editor's FBOSurface and
         # RenderingControllerTcgui allocate their render targets here.
-        # Supplied by run_editor_tcgui; under M4 it will come from
-        # BackendWindow (replacing offscreen_context entirely).
+        # Supplied by run_editor_tcgui from SDLBackendWindow.
         self._ctx = ctx
         self._main_window = main_window
         self._should_close = False
@@ -472,7 +469,6 @@ class EditorWindowTcgui:
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
                 viewport_list_widget=self._viewport_list,
-                offscreen_context=self._offscreen_context,
                 ctx=self._ctx,
                 get_scene=lambda: self.scene,
                 make_editor_pipeline=make_editor_pipeline,
@@ -714,14 +710,6 @@ class EditorWindowTcgui:
 
     def _setup_viewport(self) -> None:
         """Create FBO surface, editor display, and connect to Viewport3D."""
-        # The old OffscreenContext.make_current() is a no-op under the
-        # single-device BackendWindow architecture — the process has one
-        # tgfx2 device and on GL its context is always current. Under
-        # Vulkan there's nothing to make current anyway. Keep the call
-        # only when a legacy offscreen_context was actually passed in,
-        # for parity with tests that still supply one.
-        if self._offscreen_context is not None:
-            self._offscreen_context.make_current()
         self._fbo_surface = FBOSurface(self._ctx.device, 800, 600)
 
         try:
