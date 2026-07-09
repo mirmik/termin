@@ -1,23 +1,9 @@
 // pull_rendering_manager.cpp - Pull-based rendering manager for WPF/Qt style rendering
 
 #include "termin/render/pull_rendering_manager.hpp"
-#include "render_target_context_builder.hpp"
-#include "rendering_manager_utils.hpp"
-#include "termin/render/render_camera.hpp"
-#include "termin/render/tgfx2_bridge.hpp"
-#include <cstring>
-
-#include <tgfx2/i_render_device.hpp>
-#include "tgfx/handles.hpp"
-
 extern "C" {
 #include <tcbase/tc_log.h>
-#include "core/tc_camera_capability.h"
-#include "render/tc_viewport_pool.h"
-#include "render/tc_render_target.h"
 }
-
-#include <algorithm>
 
 namespace termin {
 
@@ -46,249 +32,59 @@ PullRenderingManager::~PullRenderingManager() {
 
 // Configuration
 void PullRenderingManager::set_render_engine(RenderEngine* engine) {
-    render_engine_ = engine;
-    owned_render_engine_.reset();
+    manager()->set_render_engine(engine);
 }
 
 RenderEngine* PullRenderingManager::render_engine() {
-    if (!render_engine_) {
-        owned_render_engine_ = std::make_unique<RenderEngine>();
-        render_engine_ = owned_render_engine_.get();
-    }
-    return render_engine_;
+    return manager()->render_engine();
 }
 
 // Display management
 void PullRenderingManager::add_display(tc_display* display) {
-    if (!display) return;
-
-    auto it = std::find(displays_.begin(), displays_.end(), display);
-    if (it != displays_.end()) return;
-
-    displays_.push_back(display);
+    manager()->add_display(display);
     tc_log(TC_LOG_INFO, "[PullRenderingManager] Added display: %s",
-           tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
+           display && tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
 }
 
 void PullRenderingManager::remove_display(tc_display* display) {
-    if (!display) return;
-
-    auto it = std::find(displays_.begin(), displays_.end(), display);
-    if (it == displays_.end()) return;
-
-    displays_.erase(it);
+    manager()->remove_display(display);
     tc_log(TC_LOG_INFO, "[PullRenderingManager] Removed display: %s",
-           tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
+           display && tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
 }
 
 tc_display* PullRenderingManager::get_display_by_name(const std::string& name) const {
-    for (tc_display* d : displays_) {
-        const char* dname = tc_display_get_name(d);
-        if (dname && name == dname) {
-            return d;
-        }
-    }
-    return nullptr;
+    return const_cast<PullRenderingManager*>(this)->manager()->get_display_by_name(name);
+}
+
+const std::vector<tc_display*>& PullRenderingManager::displays() const {
+    return const_cast<PullRenderingManager*>(this)->manager()->displays();
 }
 
 // Pull-rendering: render and present single display
 void PullRenderingManager::render_display(tc_display* display) {
-    if (!display) return;
-
-    tc_render_surface* surface = tc_display_get_surface(display);
-    if (!surface) {
-        tc_log(TC_LOG_WARN, "[PullRenderingManager] render_display: surface is null");
-        return;
-    }
-
-    // Make display context current; tgfx2 resources are owned by IRenderDevice.
-    tc_render_surface_make_current(surface);
-
-    int width, height;
-    tc_render_surface_get_size(surface, &width, &height);
-    if (width <= 0 || height <= 0) return;
-
-    // Backend-neutral composite target. Surfaces must expose a tgfx2
-    // TextureHandle; raw FBO presentation is intentionally not supported
-    // through tgfx2 anymore.
-    tgfx::TextureHandle display_color_tex{
-        tc_render_surface_get_tgfx_color_tex_id(surface)
-    };
-    if (!display_color_tex) {
-        tc_log(TC_LOG_ERROR,
-               "[PullRM] present_display: render surface has no tgfx2 color texture target");
-        return;
-    }
-
-    RenderEngine* engine = render_engine();
-    if (engine) engine->ensure_tgfx2();
-    tgfx::IRenderDevice* dev = engine ? engine->tgfx2_device() : nullptr;
-    if (!dev) {
-        tc_log(TC_LOG_WARN, "[PullRM] present_display: tgfx2 device not available");
-        return;
-    }
-    dev->clear_texture(
-        display_color_tex,
-        Color4{0.1f, 0.1f, 0.1f, 1.0f},
-        Bounds2i::from_size(width, height)
-    );
-
-    // Collect viewports sorted by depth
-    std::vector<tc_viewport_handle> viewports;
-    tc_viewport_handle vp = tc_display_get_first_viewport(display);
-    while (tc_viewport_handle_valid(vp)) {
-        if (tc_viewport_get_enabled(vp)) {
-            viewports.push_back(vp);
-        }
-        vp = tc_viewport_get_display_next(vp);
-    }
-    std::sort(viewports.begin(), viewports.end(), [](tc_viewport_handle a, tc_viewport_handle b) {
-        return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
-    });
-
-    // Render and blit each RT-backed viewport. A viewport without a
-    // RenderTarget is an empty presentation slot.
-    for (tc_viewport_handle viewport : viewports) {
-        // Skip viewports managed by scene pipeline
-        const char* managed_by = tc_viewport_get_managed_by(viewport);
-        if (managed_by && managed_by[0] != '\0') continue;
-
-        // Update viewport pixel_rect based on current display size
-        tc_viewport_update_pixel_rect(viewport, width, height);
-        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-        if (!tc_render_target_handle_valid(rt) || !tc_render_target_get_enabled(rt)) {
-            continue;
-        }
-        if (tc_render_target_get_kind(rt) != TC_RENDER_TARGET_TEXTURE_2D) {
-            continue;
-        }
-
-        render_viewport_offscreen(viewport);
-
-        tgfx::TextureHandle src_color = wrap_tc_texture_as_tgfx2(
-            *dev, tc_render_target_get_color_texture(rt));
-        int src_w = tc_render_target_get_width(rt);
-        int src_h = tc_render_target_get_height(rt);
-        if (!src_color || src_w <= 0 || src_h <= 0) {
-            continue;
-        }
-
-        int px, py, pw, ph;
-        tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-
-        dev->blit_to_texture(
-            display_color_tex, src_color,
-            Bounds2i::from_size(src_w, src_h),
-            Bounds2i{px, py, px + pw, py + ph}
-        );
-    }
-}
-
-void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport)) return;
-
-    tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
-    if (!tc_render_target_handle_valid(rt) || !tc_render_target_get_enabled(rt)) {
-        return;
-    }
-    if (tc_render_target_get_kind(rt) != TC_RENDER_TARGET_TEXTURE_2D) {
-        return;
-    }
-
-    tc_scene_handle scene = tc_viewport_get_scene(viewport);
-    tc_component* camera_comp = tc_render_target_get_camera(rt);
-    tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
-
-    if (!tc_scene_handle_valid(scene) || !camera_comp || !tc_pipeline_handle_valid(pipeline)) {
-        return;
-    }
-
-    if (!tc_pipeline_pool_alive(pipeline)) return;
-    RenderPipeline render_pipeline(pipeline);
-
-    int px, py, pw, ph;
-    tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
-    if (pw <= 0 || ph <= 0) return;
-
-    int rw = pw;
-    int rh = ph;
-    rendering_manager_detail::resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
-
-    double aspect = static_cast<double>(rw) / std::max(1, rh);
-    RenderCamera render_camera;
-    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-    uint64_t camera_render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
-    {
-        const tc_camera_capability* cap = tc_camera_capability_get(camera_comp);
-        if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return;
-        tc_camera_data cd{};
-        if (!cap->vtable->get_camera_data(camera_comp, aspect, &cd)) return;
-        std::memcpy(render_camera.view.data, cd.view, sizeof(cd.view));
-        std::memcpy(render_camera.projection.data, cd.projection, sizeof(cd.projection));
-        render_camera.position = Vec3(cd.position[0], cd.position[1], cd.position[2]);
-        render_camera.near_clip = cd.near_clip;
-        render_camera.far_clip = cd.far_clip;
-        camera_layer_mask = cd.layer_mask;
-        camera_render_category_mask = cd.render_category_mask;
-    }
-
-    RenderEngine* engine = render_engine();
-    if (engine) engine->ensure_tgfx2();
-    tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
-    if (!device) {
-        tc_log(TC_LOG_WARN, "[PullRM] render_viewport_offscreen: tgfx2 device unavailable");
-        return;
-    }
-    tc_render_target_ensure_textures(rt);
-    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_color_texture(rt));
-    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
-        *device, tc_render_target_get_depth_texture(rt));
-    if (!out_color || !out_depth) {
-        tc_log(TC_LOG_WARN, "[PullRM] render_viewport_offscreen: render target textures unavailable");
-        return;
-    }
-
-    std::vector<Light> lights = collect_lights(scene);
-    const char* vp_name = tc_viewport_get_name(viewport);
-    tc_entity_handle internal_entities = tc_viewport_get_internal_entities(viewport);
-    std::string name = vp_name ? vp_name : "";
-
-    std::unordered_map<std::string, RenderTargetContext> contexts;
-    RenderTargetContext ctx;
-    ctx.name = name;
-    ctx.camera = render_camera;
-    ctx.render_rect = {0, 0, rw, rh};
-    ctx.internal_entities = internal_entities;
-    ctx.layer_mask = camera_layer_mask & tc_render_target_get_layer_mask(rt);
-    ctx.render_category_mask = camera_render_category_mask;
-    ctx.output_color_tex = out_color;
-    ctx.output_depth_tex = out_depth;
-    ctx.output_color_format = render_target_format_to_tgfx2(
-        tc_render_target_get_color_format(rt));
-    ctx.output_depth_format = render_target_format_to_tgfx2(
-        tc_render_target_get_depth_format(rt));
-    ctx.clear_color_enabled = tc_render_target_get_clear_color_enabled(rt);
-    tc_render_target_get_clear_color_value(rt, ctx.clear_color);
-    ctx.clear_depth_enabled = tc_render_target_get_clear_depth_enabled(rt);
-    ctx.clear_depth = tc_render_target_get_clear_depth_value(rt);
-    contexts[name] = std::move(ctx);
-    engine->render_scene_pipeline_offscreen(
-        render_pipeline, scene, contexts, lights, name
-    );
+    manager()->render_display(display);
 }
 
 // Shutdown
 void PullRenderingManager::shutdown() {
-    displays_.clear();
-    owned_render_engine_.reset();
-    render_engine_ = nullptr;
+    if (owned_manager_) {
+        owned_manager_->shutdown();
+    }
+    owned_manager_.reset();
+    manager_ = nullptr;
 }
 
-// Helpers
-std::vector<Light> PullRenderingManager::collect_lights(tc_scene_handle scene) {
-    (void)scene;
-    return {};
+RenderingManager* PullRenderingManager::manager() {
+    if (manager_) {
+        return manager_;
+    }
+    if (RenderingManager* existing = RenderingManager::instance_or_null()) {
+        manager_ = existing;
+        return manager_;
+    }
+    owned_manager_ = std::make_unique<RenderingManager>();
+    manager_ = owned_manager_.get();
+    return manager_;
 }
 
 } // namespace termin

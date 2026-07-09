@@ -208,9 +208,10 @@ public:
     // Rendering - Single Display (Simple Path)
     // ========================================================================
 
-    // Render a single display (simple path for player/examples)
-    // Renders all viewports on the display directly to screen.
-    // void render_display(tc_display* display, bool present = true);
+    // Render and present a single display for pull-based hosts (WPF/Qt style).
+    // Renders RT-backed viewports on this display through the shared offscreen
+    // render-target path, then composites them into the display surface.
+    void render_display(tc_display* display);
 
     // ========================================================================
     // Rendering - Offscreen-First Model (Full Path)

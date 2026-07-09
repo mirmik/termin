@@ -14,11 +14,12 @@ public partial class SceneViewerControl : UserControl, IDisposable
     private GlWpfBackend? _backend;
     private WpfRenderSurface? _renderSurface;
     private NativeDisplayManager? _displayManager;
-    private PullRenderingManager? _renderingManager;
+    private RenderingManager? _renderingManager;
     private RenderEngine? _renderEngine;
 
     // Viewport
     private TcViewportHandle _viewportHandle;
+    private TcRenderTargetHandle _renderTargetHandle = TcRenderTargetHandle.Invalid;
     private RenderPipeline? _pipeline;
     private ColorPass? _colorPass;
     private PresentToScreenPass? _presentPass;
@@ -111,7 +112,7 @@ public partial class SceneViewerControl : UserControl, IDisposable
         GL.Enable(EnableCap.DepthTest);
 
         // Setup rendering manager
-        _renderingManager = PullRenderingManager.instance();
+        _renderingManager = new RenderingManager();
 
         _renderEngine = new RenderEngine();
         _renderingManager.set_render_engine(_renderEngine);
@@ -207,7 +208,17 @@ public partial class SceneViewerControl : UserControl, IDisposable
         // Full size viewport (relative coords 0-1)
         TerminCore.ViewportSetRect(_viewportHandle, 0.0f, 0.0f, 1.0f, 1.0f);
 
-        // Set pipeline
+        _renderTargetHandle = TerminCore.RenderTargetNew("SceneViewerTarget");
+        if (!_renderTargetHandle.IsValid)
+        {
+            throw new InvalidOperationException("Failed to create render target");
+        }
+        TerminCore.RenderTargetSetScene(_renderTargetHandle, _scene?.Handle ?? TcSceneHandle.Invalid);
+        TerminCore.RenderTargetSetCamera(_renderTargetHandle, _camera.tc_component_ptr());
+        TerminCore.RenderTargetSetPipeline(_renderTargetHandle, _pipeline.handle());
+        TerminCore.RenderTargetSetDynamicResolution(_renderTargetHandle, true);
+        TerminCore.RenderTargetSetEnabled(_renderTargetHandle, true);
+        TerminCore.ViewportSetRenderTarget(_viewportHandle, _renderTargetHandle);
 
         // Set internal entities
         TerminCore.ViewportSetInternalEntities(
@@ -237,11 +248,19 @@ public partial class SceneViewerControl : UserControl, IDisposable
         if (_scene != null)
         {
             TerminCore.ViewportSetScene(_viewportHandle, _scene.Handle);
+            if (_renderTargetHandle.IsValid)
+            {
+                TerminCore.RenderTargetSetScene(_renderTargetHandle, _scene.Handle);
+            }
             Console.WriteLine($"[SceneViewer] Scene set: {_scene.Handle}");
         }
         else
         {
             TerminCore.ViewportSetScene(_viewportHandle, TcSceneHandle.Invalid);
+            if (_renderTargetHandle.IsValid)
+            {
+                TerminCore.RenderTargetSetScene(_renderTargetHandle, TcSceneHandle.Invalid);
+            }
             Console.WriteLine("[SceneViewer] Scene cleared");
         }
     }
@@ -332,6 +351,12 @@ public partial class SceneViewerControl : UserControl, IDisposable
         {
             TerminCore.ViewportFree(_viewportHandle);
             _viewportHandle = TcViewportHandle.Invalid;
+        }
+
+        if (_renderTargetHandle.IsValid)
+        {
+            TerminCore.RenderTargetFree(_renderTargetHandle);
+            _renderTargetHandle = TcRenderTargetHandle.Invalid;
         }
 
         // Dispose managers
