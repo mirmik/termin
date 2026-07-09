@@ -146,7 +146,7 @@ PYTHON_IMPORT_TO_DIR = {
     "termin.kinematic": "termin-components-kinematic",
     "termin.robot": "termin-qopt",
     "termin.navmesh": "termin-navmesh",
-    "termin.tween.component": "termin-components-tween",
+    "termin.tween_components": "termin-components-tween",
     "termin.tween": "termin-tween",
     "termin.voxels.component": "termin-components-voxels",
     "termin.voxels.display_component": "termin-components-voxels",
