@@ -32,17 +32,26 @@ class ModuleFileChange:
 
 def _is_python_executable(path: Path) -> bool:
     name = path.name.lower()
-    return name in {"python", "python3", "python.exe", "pythonw.exe"} or name.startswith("python3.")
+    return name in {
+        "python",
+        "python3",
+        "python.exe",
+        "pythonw.exe",
+        "termin_python",
+        "termin_python.exe",
+    } or name.startswith("python3.")
 
 
 def _sdk_python_executable(prefix_root: Path) -> Path | None:
     if sys.platform == "win32":
         candidates = (
+            prefix_root / "bin" / "termin_python.exe",
             prefix_root / "python" / "python.exe",
             prefix_root / "bin" / "python.exe",
         )
     else:
         candidates = (
+            prefix_root / "bin" / "termin_python",
             prefix_root / "bin" / "python3",
             prefix_root / "bin" / "python",
         )
@@ -451,7 +460,7 @@ class ProjectModulesRuntime:
             else:
                 log.error(
                     "[ProjectModulesRuntime] SDK Python executable was not found. "
-                    f"Expected bundled interpreter under {prefix_root / 'python'}; "
+                    f"Expected termin_python under {prefix_root / 'bin'}; "
                     "rebuild SDK or set TERMIN_MODULES_PYTHON."
                 )
                 environment.python_executable = ""

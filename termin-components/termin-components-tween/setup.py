@@ -11,9 +11,11 @@ setup(
     author="mirmik",
     author_email="mirmikns@yandex.ru",
     python_requires=">=3.10",
-    py_modules=["termin.tween.component"],
-    packages=["termin_tween_component_specs"],
-    package_dir={"": "python"},
+    packages=["termin.tween_components", "termin_tween_component_specs"],
+    package_dir={
+        "termin.tween_components": "python/termin/tween_components",
+        "termin_tween_component_specs": "python/termin_tween_component_specs",
+    },
     install_requires=[
         "numpy",
         "termin-scene",

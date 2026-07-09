@@ -1,4 +1,4 @@
-"""TweenManagerComponent - Component wrapper for TweenManager."""
+"""Scene component wrapper for :class:`termin.tween.TweenManager`."""
 
 from __future__ import annotations
 

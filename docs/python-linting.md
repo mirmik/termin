@@ -19,7 +19,11 @@ Specific paths can be checked during focused work:
 ./run-lint-python.sh termin-csg termin-app/tests
 ```
 
-`./setup-test-venv.sh` installs Ruff into the shared test venv.
+`./setup-sdk-python-env.sh` installs Ruff into the checkout-local
+`build/python-envs/test` tools layer. Ruff is launched by the isolated SDK
+Python with the same source overlay as pytest. Use `--system-python` only for an
+explicit diagnostic run outside that environment; `--no-venv` remains a
+temporary alias for compatibility.
 
 ## Current Baseline
 
