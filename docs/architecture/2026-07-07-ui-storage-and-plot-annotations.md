@@ -159,6 +159,13 @@ same `FontAtlas` used to render draw-list text. This keeps font implementation
 details outside `tc_widget` while making C++, Python and future language
 widgets consume one metric contract.
 
+Clipboard access follows the same host-service boundary. `tc_ui_document`
+stores non-owning UTF-8 getter/setter callbacks and an opaque host pointer;
+widgets copy clipboard input immediately and never own a platform clipboard or
+call SDL/Python directly. Text editor caret and selection positions are UTF-8
+byte offsets normalized to codepoint boundaries, which keeps the C ABI stable
+and gives C++, Python and future runtimes identical editing semantics.
+
 These systems operate on `tc_widget` resolved from a handle. They must not keep
 parallel copies of bounds, flags or tree links. The important constraints are
 explicit lifetime, a single source of widget state and inspectability.
