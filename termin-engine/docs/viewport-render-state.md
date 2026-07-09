@@ -1,6 +1,6 @@
 # ViewportRenderState
 
-`ViewportRenderState` - это GPU output state, который `RenderingManager` использует для viewport или render target.
+`ViewportRenderState` - это небольшой internal GPU output state helper, который `RenderingManager` использует там, где runtime output textures не принадлежат persistent scene configuration.
 
 Исходник:
 
@@ -8,7 +8,7 @@
 
 ## Роль
 
-Этот класс намеренно маленький: он владеет final output textures, нужными для рендера viewport/render target в конкретном размере и формате.
+Этот класс намеренно маленький: он владеет final output textures в конкретном размере и формате.
 
 Он отслеживает:
 
@@ -24,6 +24,8 @@ State владеет GPU textures. Когда меняется size, format ил
 
 Так lifetime GPU output привязан к runtime object, которому этот output действительно нужен, а не к persistent scene configuration.
 
+Viewport без `RenderTarget` не является владельцем output textures. Это пустой presentation slot: он может существовать в display layout, но ничего не рендерит и не презентит, пока ему явно не назначен `tc_render_target`.
+
 ## Связь с RenderingManager
 
-`RenderingManager` хранит эти states в maps, ключом которых является viewport handle или render target handle. Удаление viewport, detach scene или освобождение managed render target должны очищать соответствующий state.
+`RenderingManager` хранит эти states в maps для runtime-owned output. Удаление viewport, detach scene или освобождение managed render target должны очищать соответствующий state.

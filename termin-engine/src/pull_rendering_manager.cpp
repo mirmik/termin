@@ -1,8 +1,10 @@
 // pull_rendering_manager.cpp - Pull-based rendering manager for WPF/Qt style rendering
 
 #include "termin/render/pull_rendering_manager.hpp"
+#include "render_target_context_builder.hpp"
 #include "rendering_manager_utils.hpp"
 #include "termin/render/render_camera.hpp"
+#include "termin/render/tgfx2_bridge.hpp"
 #include <cstring>
 
 #include <tgfx2/i_render_device.hpp>
@@ -74,13 +76,6 @@ void PullRenderingManager::remove_display(tc_display* display) {
     auto it = std::find(displays_.begin(), displays_.end(), display);
     if (it == displays_.end()) return;
 
-    // Clean up viewport states for viewports on this display
-    tc_viewport_handle vp = tc_display_get_first_viewport(display);
-    while (tc_viewport_handle_valid(vp)) {
-        remove_viewport_state(vp);
-        vp = tc_viewport_get_display_next(vp);
-    }
-
     displays_.erase(it);
     tc_log(TC_LOG_INFO, "[PullRenderingManager] Removed display: %s",
            tc_display_get_name(display) ? tc_display_get_name(display) : "(unnamed)");
@@ -94,34 +89,6 @@ tc_display* PullRenderingManager::get_display_by_name(const std::string& name) c
         }
     }
     return nullptr;
-}
-
-// Viewport state management
-ViewportRenderState* PullRenderingManager::get_viewport_state(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport)) return nullptr;
-    uint64_t key = viewport_key(viewport);
-    auto it = viewport_states_.find(key);
-    return (it != viewport_states_.end()) ? it->second.get() : nullptr;
-}
-
-ViewportRenderState* PullRenderingManager::get_or_create_viewport_state(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport)) return nullptr;
-    uint64_t key = viewport_key(viewport);
-    auto& state = viewport_states_[key];
-    if (!state) {
-        state = std::make_unique<ViewportRenderState>();
-    }
-    return state.get();
-}
-
-void PullRenderingManager::remove_viewport_state(tc_viewport_handle viewport) {
-    if (!tc_viewport_handle_valid(viewport)) return;
-    uint64_t key = viewport_key(viewport);
-    auto it = viewport_states_.find(key);
-    if (it != viewport_states_.end()) {
-        it->second->clear_all();
-        viewport_states_.erase(it);
-    }
 }
 
 // Pull-rendering: render and present single display
@@ -179,7 +146,8 @@ void PullRenderingManager::render_display(tc_display* display) {
         return tc_viewport_get_depth(a) < tc_viewport_get_depth(b);
     });
 
-    // Render and blit each viewport
+    // Render and blit each RT-backed viewport. A viewport without a
+    // RenderTarget is an empty presentation slot.
     for (tc_viewport_handle viewport : viewports) {
         // Skip viewports managed by scene pipeline
         const char* managed_by = tc_viewport_get_managed_by(viewport);
@@ -187,25 +155,29 @@ void PullRenderingManager::render_display(tc_display* display) {
 
         // Update viewport pixel_rect based on current display size
         tc_viewport_update_pixel_rect(viewport, width, height);
+        tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+        if (!tc_render_target_handle_valid(rt) || !tc_render_target_get_enabled(rt)) {
+            continue;
+        }
+        if (tc_render_target_get_kind(rt) != TC_RENDER_TARGET_TEXTURE_2D) {
+            continue;
+        }
 
-        // Render viewport to offscreen FBO
         render_viewport_offscreen(viewport);
 
-        // Blit to display
-        ViewportRenderState* state = get_viewport_state(viewport);
-        if (!state || !state->has_output()) {
-            tc_log(TC_LOG_WARN, "[PullRM] viewport has no output texture after render");
+        tgfx::TextureHandle src_color = wrap_tc_texture_as_tgfx2(
+            *dev, tc_render_target_get_color_texture(rt));
+        int src_w = tc_render_target_get_width(rt);
+        int src_h = tc_render_target_get_height(rt);
+        if (!src_color || src_w <= 0 || src_h <= 0) {
             continue;
         }
 
         int px, py, pw, ph;
         tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
 
-        int src_w = state->output_width;
-        int src_h = state->output_height;
-
         dev->blit_to_texture(
-            display_color_tex, state->output_color_tex,
+            display_color_tex, src_color,
             Bounds2i::from_size(src_w, src_h),
             Bounds2i{px, py, px + pw, py + ph}
         );
@@ -216,6 +188,13 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     if (!tc_viewport_handle_valid(viewport)) return;
 
     tc_render_target_handle rt = tc_viewport_get_render_target(viewport);
+    if (!tc_render_target_handle_valid(rt) || !tc_render_target_get_enabled(rt)) {
+        return;
+    }
+    if (tc_render_target_get_kind(rt) != TC_RENDER_TARGET_TEXTURE_2D) {
+        return;
+    }
+
     tc_scene_handle scene = tc_viewport_get_scene(viewport);
     tc_component* camera_comp = tc_render_target_get_camera(rt);
     tc_pipeline_handle pipeline = tc_render_target_get_pipeline(rt);
@@ -231,7 +210,11 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     tc_viewport_get_pixel_rect(viewport, &px, &py, &pw, &ph);
     if (pw <= 0 || ph <= 0) return;
 
-    double aspect = static_cast<double>(pw) / std::max(1, ph);
+    int rw = pw;
+    int rh = ph;
+    rendering_manager_detail::resolve_render_target_size_for_viewport(rt, pw, ph, rw, rh);
+
+    double aspect = static_cast<double>(rw) / std::max(1, rh);
     RenderCamera render_camera;
     uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
     uint64_t camera_render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
@@ -249,7 +232,6 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
         camera_render_category_mask = cd.render_category_mask;
     }
 
-    ViewportRenderState* state = get_or_create_viewport_state(viewport);
     RenderEngine* engine = render_engine();
     if (engine) engine->ensure_tgfx2();
     tgfx::IRenderDevice* device = engine ? engine->tgfx2_device() : nullptr;
@@ -257,7 +239,15 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
         tc_log(TC_LOG_WARN, "[PullRM] render_viewport_offscreen: tgfx2 device unavailable");
         return;
     }
-    state->ensure_output_textures(*device, pw, ph);
+    tc_render_target_ensure_textures(rt);
+    tgfx::TextureHandle out_color = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_color_texture(rt));
+    tgfx::TextureHandle out_depth = wrap_tc_texture_as_tgfx2(
+        *device, tc_render_target_get_depth_texture(rt));
+    if (!out_color || !out_depth) {
+        tc_log(TC_LOG_WARN, "[PullRM] render_viewport_offscreen: render target textures unavailable");
+        return;
+    }
 
     std::vector<Light> lights = collect_lights(scene);
     const char* vp_name = tc_viewport_get_name(viewport);
@@ -268,12 +258,12 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
     RenderTargetContext ctx;
     ctx.name = name;
     ctx.camera = render_camera;
-    ctx.render_rect = {0, 0, pw, ph};
+    ctx.render_rect = {0, 0, rw, rh};
     ctx.internal_entities = internal_entities;
     ctx.layer_mask = camera_layer_mask & tc_render_target_get_layer_mask(rt);
     ctx.render_category_mask = camera_render_category_mask;
-    ctx.output_color_tex = state->output_color_tex;
-    ctx.output_depth_tex = state->output_depth_tex;
+    ctx.output_color_tex = out_color;
+    ctx.output_depth_tex = out_depth;
     ctx.output_color_format = render_target_format_to_tgfx2(
         tc_render_target_get_color_format(rt));
     ctx.output_depth_format = render_target_format_to_tgfx2(
@@ -290,10 +280,6 @@ void PullRenderingManager::render_viewport_offscreen(tc_viewport_handle viewport
 
 // Shutdown
 void PullRenderingManager::shutdown() {
-    for (auto& pair : viewport_states_) {
-        pair.second->clear_all();
-    }
-    viewport_states_.clear();
     displays_.clear();
     owned_render_engine_.reset();
     render_engine_ = nullptr;

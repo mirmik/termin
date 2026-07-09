@@ -7,7 +7,7 @@
 - [EngineCore](engine-core.md) - владелец runtime loop.
 - [SceneManager](scene-manager.md) - владелец списка сцен и их update-состояния.
 - [RenderingManager](rendering-manager.md) - владелец runtime render attachments: displays, viewports, render targets, compiled scene pipelines.
-- [ViewportRenderState](viewport-render-state.md) - GPU output state для viewport/render target.
+- [ViewportRenderState](viewport-render-state.md) - internal GPU output state helper.
 
 ## Модель
 

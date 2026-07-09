@@ -25,7 +25,7 @@
 - [EngineCore](engine-core.md) - runtime owner и frame loop.
 - [SceneManager](scene-manager.md) - registry/lifecycle/update cycle сцен.
 - [RenderingManager](rendering-manager.md) - displays, viewports, render targets, pipelines и presentation.
-- [ViewportRenderState](viewport-render-state.md) - GPU output state для viewport/render target.
+- [ViewportRenderState](viewport-render-state.md) - internal GPU output state helper.
 - `register_default_scene_extensions` / `create_scene_with_render` - engine-level helpers для render-enabled scene lifecycle и регистрации render/collision extensions.
 - `TermModulesIntegration` - связывает `termin_modules::ModuleRuntime` с live scenes: при unload module деградирует module-owned components в unknown components, при load пробует поднять их обратно.
 
