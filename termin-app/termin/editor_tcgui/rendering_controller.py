@@ -1,9 +1,4 @@
-"""RenderingControllerTcgui — manages displays and viewports in the tcgui editor.
-
-Tcgui port of RenderingController. Uses FBOSurface instead of SDL embedded windows,
-OffscreenContext for dedicated GL context, and delegates to RenderingManager for
-core rendering logic.
-"""
+"""RenderingControllerTcgui — manages displays and viewports in the tcgui editor."""
 
 from __future__ import annotations
 
@@ -16,7 +11,6 @@ if TYPE_CHECKING:
     from termin.viewport import Viewport
     from termin.scene import TcScene as Scene
     from termin.render_framework import RenderPipeline
-    from termin.editor_tcgui.offscreen_context import OffscreenContext
     from tgfx._tgfx_native import Tgfx2Context
 
 
@@ -33,7 +27,6 @@ class RenderingControllerTcgui:
     def __init__(
         self,
         viewport_list_widget,
-        offscreen_context: OffscreenContext,
         ctx: "Tgfx2Context",
         get_scene: Callable[[], "Scene | None"] | None = None,
         make_editor_pipeline: Callable[[], "RenderPipeline"] | None = None,
@@ -48,12 +41,9 @@ class RenderingControllerTcgui:
         from termin.editor_core.rendering_model import RenderingModel
 
         self._manager = RenderingManager.instance()
-        self._model = RenderingModel(self._manager, offscreen_context=offscreen_context)
-        self._offscreen_context = offscreen_context
+        self._model = RenderingModel(self._manager)
         # Process-global tgfx2 context — every FBOSurface this controller
         # creates allocates its color/depth textures on this device.
-        # Passed in from run_editor_tcgui (currently built around
-        # OffscreenContext, migrating to BackendWindow in M4).
         self._ctx = ctx
         self._get_scene = get_scene
         self._make_editor_pipeline = make_editor_pipeline
@@ -70,16 +60,8 @@ class RenderingControllerTcgui:
         self._viewport_list = viewport_list_widget
         self._center_tabs = None
 
-        # Register offscreen context with RenderingManager. Under
-        # BackendWindow the GL context is always current on the one
-        # thread that ever renders, and on Vulkan there's nothing to
-        # make current at all — so the callback is a no-op in that
-        # mode. We still wire it up when a legacy offscreen_context
-        # was supplied (standalone tests that pre-date M4).
-        if offscreen_context is not None:
-            self._manager.set_make_current_callback(offscreen_context.make_current)
-        else:
-            self._manager.set_make_current_callback(lambda: None)
+        # BackendWindow/render surfaces own make-current during presentation.
+        self._manager.set_make_current_callback(lambda: None)
 
         # Register factories
         self._manager.set_display_factory(self._create_display_for_name)
@@ -105,10 +87,6 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
-
-    @property
-    def offscreen_context(self) -> OffscreenContext:
-        return self._offscreen_context
 
     def backend_name(self) -> str:
         """Return the active rendering backend name for diagnostics."""
@@ -232,9 +210,6 @@ class RenderingControllerTcgui:
     def _create_display_for_name(self, name: str) -> "Display | None":
         from termin.display import Display
         from termin.display import FBOSurface
-
-        if self._offscreen_context is not None:
-            self._offscreen_context.make_current()
 
         fbo = FBOSurface(self._ctx.device, 800, 600)
         display = Display(surface=fbo, name=name)

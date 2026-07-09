@@ -215,7 +215,6 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     win = EditorWindowTcgui(
         initial_scene=initial_scene,
         scene_manager=engine.scene_manager,
-        offscreen_context=None,
         ctx=tgfx2_ctx,
         main_window=main_window,
     )

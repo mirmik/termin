@@ -50,7 +50,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 | `dialog_service.py` | Абстрактный `DialogService` — show_error / show_input / show_choice. Шлёт через callbacks, чтобы core не зависел от конкретного UI. |
 | `entity_operations.py` | `EntityOperations` — create / delete / rename / reparent / duplicate + drops prefab/glb. Все scene-tree CRUD живут тут. View вызывает, модель исполняет, диалоги приходят через `DialogService`. |
 | `inspector_model.py` | `InspectorKind` enum + `InspectorModel` — какой инспектор активен, что в нём target, набор `show_*` методов + `resync_from_selection` (диспатч по типу выделенного объекта). View подписывается на `changed` Signal. |
-| `rendering_model.py` | `RenderingModel` — состояние displays/viewports/render targets: editor_display_ptr, offscreen_context, selected_display/viewport, display_input_managers dict. Методы: `attach_scene`, `detach_scene`, `remove_viewports_for_scene`, `sync_viewport_configs_to_scene`, `sync_render_target_configs_to_scene`, `apply_display_input`, `find_viewport_config`. |
+| `rendering_model.py` | `RenderingModel` — состояние displays/viewports/render targets: editor_display_ptr, selected_display/viewport, display_input_managers dict. Методы: `attach_scene`, `detach_scene`, `remove_viewports_for_scene`, `sync_viewport_configs_to_scene`, `sync_render_target_configs_to_scene`, `apply_display_input`, `find_viewport_config`. |
 | `prefab_edit_controller.py` | `PrefabEditController` — UI-agnostic isolation mode for editing `.prefab` files. |
 | `spacemouse_controller.py` | `SpaceMouseController` — libspnav integration; polling from the tcgui render loop. |
 | `gizmo/` | Unified gizmo exports and Python collider/constraint helpers used by runtime rendering code. |

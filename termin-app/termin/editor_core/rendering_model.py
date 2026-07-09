@@ -4,7 +4,6 @@ Owns:
 - a reference to the RenderingManager singleton
 - the "editor display" pointer (a non-serialized display the editor uses
   for its main viewport)
-- the offscreen GL context (needed before destroying GPU resources)
 
 Provides UI-agnostic operations used by the tcgui rendering controller:
 - ``remove_viewports_for_scene`` — scoped cleanup on scene unload
@@ -30,9 +29,8 @@ if TYPE_CHECKING:
 
 
 class RenderingModel:
-    def __init__(self, manager: "RenderingManager", offscreen_context=None):
+    def __init__(self, manager: "RenderingManager"):
         self._manager = manager
-        self._offscreen_context = offscreen_context
         self._editor_display_ptr: int | None = None
 
         self._selected_display: "Display | None" = None
@@ -57,13 +55,6 @@ class RenderingModel:
 
     def set_editor_display_ptr(self, ptr: int | None) -> None:
         self._editor_display_ptr = ptr
-
-    @property
-    def offscreen_context(self):
-        return self._offscreen_context
-
-    def set_offscreen_context(self, ctx) -> None:
-        self._offscreen_context = ctx
 
     # ------------------------------------------------------------------
     # Selection state (display / viewport)
@@ -294,12 +285,8 @@ class RenderingModel:
         """Remove all viewports that belong to ``scene``.
 
         Editor display is skipped — its viewport is managed by
-        EditorSceneAttachment. GL resources are cleared on the offscreen
-        context first so deletes don't crash on a foreign context.
+        EditorSceneAttachment.
         """
-        if self._offscreen_context is not None:
-            self._offscreen_context.make_current()
-
         for display in self._non_editor_displays():
             viewports_to_remove = [
                 vp for vp in display.viewports
