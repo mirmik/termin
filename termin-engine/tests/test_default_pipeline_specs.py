@@ -59,10 +59,13 @@ def test_builtin_default_pipeline_uses_python_ui_widget_pass_when_available(rend
     assert isinstance(widget_pass.to_python(), UIWidgetPass)
 
 
-def test_resolve_pass_strategy_defaults_to_average():
+def test_resolve_pass_serialized_schema_has_no_strategy():
     frame_pass = ResolvePass()
+
+    with pytest.raises(AttributeError):
+        frame_pass.strategy
+    assert "strategy" not in frame_pass._tc_pass.serialize_data()
 
     frame_pass._tc_pass.deserialize_data({"strategy": "average"})
 
-    assert frame_pass.strategy == "average"
-    assert frame_pass._tc_pass.serialize_data()["strategy"] == "average"
+    assert "strategy" not in frame_pass._tc_pass.serialize_data()

@@ -346,9 +346,8 @@ void bind_render_passes(nb::module_& m) {
         .def("__init__", [](ResolvePass* self,
                             const std::string& input_res,
                             const std::string& output_res,
-                            const std::string& pass_name,
-                            const std::string& strategy) {
-            new (self) ResolvePass(input_res, output_res, strategy);
+                            const std::string& pass_name) {
+            new (self) ResolvePass(input_res, output_res);
             if (!pass_name.empty()) {
                 self->set_pass_name(pass_name);
             }
@@ -356,12 +355,10 @@ void bind_render_passes(nb::module_& m) {
         },
              nb::arg("input_res") = "color",
              nb::arg("output_res") = "resolved",
-             nb::arg("pass_name") = "Resolve",
-             nb::arg("strategy") = "average")
+             nb::arg("pass_name") = "Resolve")
         .def_rw("input_res", &ResolvePass::input_res)
         .def_rw("output_res", &ResolvePass::output_res)
         .def_rw("output_res_target", &ResolvePass::output_res_target)
-        .def_rw("strategy", &ResolvePass::strategy)
         .def("compute_reads", &ResolvePass::compute_reads)
         .def("compute_writes", &ResolvePass::compute_writes)
         .def("get_inplace_aliases", &ResolvePass::get_inplace_aliases)

@@ -457,9 +457,8 @@ Status:
   keep their existing material phase/render-state creation path.
 - Voxel display and voxelizer line debug shaders now use
   `TcShader.from_builtin_catalog` instead of inline Python GLSL strings.
-- ResolvePass no longer has min/max shader variants. It resolves through the
-  backend average path only; `strategy` remains as a serialized compatibility
-  field and logs when an obsolete value is used.
+- ResolvePass no longer has min/max shader variants or a serialized `strategy`
+  field. It resolves through the backend average path only.
 - The live catalog/source loader moved down into `termin_graphics2`
   (`tgfx2/builtin_shader_sources.hpp`) so both engine renderers and
   render-passes use one shared catalog API instead of a render-pass-local
