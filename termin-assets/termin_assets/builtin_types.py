@@ -29,7 +29,14 @@ def collect_builtin_type_specs(
             log.warning(f"Failed to import builtin type provider {module_name}: {exc}")
             continue
 
-        provider_specs = getattr(module, attribute_name, ())
+        try:
+            provider_specs = getattr(module, attribute_name)
+        except AttributeError:
+            log.error(
+                f"Builtin type provider {module_name} does not expose {attribute_name}",
+                exc_info=True,
+            )
+            raise
         specs.extend(provider_specs)
     return specs
 
