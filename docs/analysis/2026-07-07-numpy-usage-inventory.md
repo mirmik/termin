@@ -1,7 +1,7 @@
 # NumPy Usage Inventory
 
 Date: 2026-07-07
-Last updated: 2026-07-07 after geometry nanobind API migration
+Last updated: 2026-07-09 after first buffer-compatible input binding pass
 
 This inventory lists project Python files that import NumPy directly. It excludes
 virtual environments, build outputs, the SDK bundle, and third-party sources.
@@ -82,6 +82,33 @@ Total files: 143
 - `termin-pga/python/termin/ga201/convex_body.py`: `np.argmin` replaced by list/min selection.
 - `termin-tween/python/termin/tween/manager.py`: annotation-only NumPy import removed.
 
+## 2026-07-09 Buffer-Compatible Input Pass
+
+First pass for Kanboard `#221` migrated selected public C++/nanobind inputs away
+from NumPy-only contracts while leaving NumPy-returning APIs in place for `#214`:
+
+- `termin-graphics/python/bindings/immediate_bindings.cpp`: batch triangle
+  vertex/index/color inputs and `flush`/`flush_depth` matrix inputs now use
+  generic C-contiguous CPU buffer contracts without `nb::numpy`; triangle colors
+  require one RGBA row per vertex.
+- `termin-render/python/render_framework_bindings.cpp`: `RenderContext` kwargs
+  `view`, `projection`, and `model` now accept `Mat44` or a 4x4 C-contiguous
+  `float32` buffer-compatible matrix; invalid buffers log and raise a clear
+  runtime error.
+- `termin-render-passes/python/render_passes_bindings.cpp`: `compute_frustum_corners`
+  and matrix-based `fit_shadow_frustum_to_camera` inputs now accept generic
+  C-contiguous CPU `float64` buffers without requiring NumPy.
+- `termin-materials/python/bindings/material_bindings.cpp`: material uniform/color
+  array inputs now accept generic C-contiguous CPU `float32` buffers; unsupported
+  uniform buffer sizes raise instead of being silently ignored.
+- `termin-mesh/python/bindings/mesh_bindings.cpp`: already-generic `Mesh3`
+  constructor inputs now require explicit `(N, 3)` vertex/index/normal shape and
+  `(N, 2)` UV shape, preventing flat buffer misinterpretation.
+
+Representative tests cover `RenderContext` with both NumPy matrices and non-NumPy
+`memoryview` matrices, plus `Mesh3` with shaped non-NumPy memoryviews and a flat
+buffer rejection case.
+
 ## Binding Notes
 
 `nb::ndarray` also appears in native bindings. Geometry-shaped overloads are reduction
@@ -92,17 +119,32 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
   remaining base NumPy imports are tests only.
 - `termin-scene/cpp/bindings/transform_bindings.cpp` and `termin-scene/include/termin/bindings/entity_helpers.hpp`: resolved for geometry APIs; remaining `nb::object` usage is Python object plumbing, not NumPy geometry.
 - `termin-collision/cpp/bindings/colliders_bindings.cpp`: `Ray3` moved to base geometry; corner/axis bulk returns are buffer-like and lower priority.
-- `termin-render-passes/python/render_passes_bindings.cpp`: resolved for `ShadowCameraParams` vector fields and `ortho_bounds` (`Vec3`/`Bounds2f`); matrix helpers are still `Mat44` candidates, while pass/debug buffer outputs should stay ndarray for now.
+- `termin-render-passes/python/render_passes_bindings.cpp`: resolved for `ShadowCameraParams` vector fields, `ortho_bounds` (`Vec3`/`Bounds2f`), and matrix helper inputs; matrix/frustum/debug outputs still return ndarray and remain `#214` scope.
 - `termin-skeleton/cpp/bindings/skeleton_module.cpp`: resolved for bone transform inputs; keep `nb::ndarray` for bone matrix bulk outputs until replacement buffer APIs exist.
 - `termin-app/cpp/termin/bindings/{editor/gizmo_bindings.cpp,render/solid_primitive.cpp}`: resolved for geometry helper APIs.
 - `termin-components/termin-components-render/components/orbit_camera_bindings.cpp`: resolved for camera target geometry; remaining `nb::object` is Python object plumbing.
 - `termin-components/termin-components-render/components/render_components_bindings.cpp`: keep `nb::ndarray` for skinned bone matrix bulk output; geometry fields have moved to `Vec3`/`Vec4`.
+- `termin-graphics/python/bindings/immediate_bindings.cpp`: resolved for batch
+  triangle and matrix inputs; remaining immediate-renderer flush overloads that
+  take `Mat44` are native type paths, not NumPy.
 - `termin-graphics/python/bindings/tgfx2_bindings.cpp`: `set_push_constants` and
   `bind_uniform_by_name` now accept `bytes` in addition to legacy `uint8` ndarray,
   which lets small uniform payloads avoid NumPy without solving the full bulk-buffer
   migration.
+- `termin-render/python/render_framework_bindings.cpp`: resolved for `RenderContext`
+  matrix kwargs.
+- `termin-materials/python/bindings/material_bindings.cpp`: resolved for material
+  uniform/color buffer inputs.
+- `termin-mesh/python/bindings/mesh_bindings.cpp`: public mesh creation/update
+  inputs are generic CPU buffers; mesh buffer accessors still return NumPy arrays
+  and are deferred to native buffer return work.
 - `termin-navmesh/python/bindings/navmesh_module.cpp`: keep `nb::ndarray` for Detour build vertex/index/area buffers; off-mesh link endpoints have moved to `Vec3`.
-- `termin-graphics`, `termin-mesh`, `termin-voxels`, `termin-navmesh`, `tcplot`: mostly mesh, texture, plot, or dense voxel buffers; keep ndarray unless a non-NumPy buffer/list API is designed.
+- `termin-graphics/python/bindings/texture_bindings.cpp`: `from_data` input is
+  already generic CPU `uint8`; `get_data`/`to_numpy` style outputs remain NumPy
+  until a native buffer return API exists.
+- `termin-voxels`, `termin-navmesh`, `tcplot`: mostly mesh, texture, plot, or
+  dense voxel buffers. Many inputs already use `nb::ndarray<..., nb::device::cpu>`
+  without `nb::numpy`; remaining NumPy-returning APIs stay deferred to `#214`.
 
 ## Annotated Files
 

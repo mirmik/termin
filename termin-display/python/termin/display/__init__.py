@@ -7,11 +7,24 @@ preload_sdk_libs("termin_display")
 _logger = logging.getLogger(__name__)
 
 try:
-    from termin.display._platform_native import BackendWindow, SDLBackendWindow
+    from termin.display._platform_native import (
+        BackendWindow,
+        SDLBackendWindow,
+        poll_sdl_events,
+        quit_sdl,
+        start_text_input,
+        stop_text_input,
+        wait_sdl_events_timeout,
+    )
 except ImportError as e:
     _logger.debug("Platform native module not available (optional): %s", e)
     BackendWindow = None
     SDLBackendWindow = None
+    poll_sdl_events = None
+    quit_sdl = None
+    start_text_input = None
+    stop_text_input = None
+    wait_sdl_events_timeout = None
 
 try:
     from termin.display.window_manager import (
@@ -53,6 +66,11 @@ from termin.display.input_manager import BasicDisplayInputManager
 __all__ = [
     "BackendWindow",
     "SDLBackendWindow",
+    "poll_sdl_events",
+    "quit_sdl",
+    "start_text_input",
+    "stop_text_input",
+    "wait_sdl_events_timeout",
     "BackendWindowEntry",
     "BackendWindowManager",
     "Display",

@@ -237,39 +237,9 @@ class NavMeshDisplayComponent(DrawableComponent):
         """Получить или создать материал для контуров."""
         if self._contour_material is None:
             from tgfx import RenderState
-            from tgfx import TcShader
+            from termin.navmesh.navmesh_shader import navmesh_display_shader
 
-            # Простой шейдер для линий
-            vertex_source = """
-#version 330 core
-
-layout(location = 0) in vec3 a_position;
-
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-
-void main() {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-"""
-            fragment_source = """
-#version 330 core
-
-uniform vec4 u_color;
-
-out vec4 FragColor;
-
-void main() {
-    FragColor = u_color;
-}
-"""
-            shader = TcShader.from_sources(
-                vertex_source,
-                fragment_source,
-                "",
-                "NavMeshContour",
-            )
+            shader = navmesh_display_shader()
 
             # Контуры — яркий контрастный цвет (жёлтый)
             contour_color = (1.0, 1.0, 0.0, 1.0)

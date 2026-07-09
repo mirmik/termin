@@ -591,3 +591,25 @@ def test_legacy_project_builder_and_build_json_player_path_are_removed() -> None
                     offenders.append(f"{path.relative_to(REPO_ROOT)}: {fragment}")
 
     assert offenders == []
+
+
+def test_python_compatibility_reexport_modules_stay_removed() -> None:
+    source_roots = [
+        root
+        for root in [*REPO_ROOT.glob("termin-*"), REPO_ROOT / "tcplot"]
+        if root.is_dir()
+    ]
+
+    offenders: list[str] = []
+    for root in source_roots:
+        if "termin-thirdparty" in root.parts:
+            continue
+        for path in root.rglob("*.py"):
+            if path == Path(__file__):
+                continue
+            if any(part in {"build", "sdk", ".venv", "__pycache__"} for part in path.parts):
+                continue
+            if "Compatibility re-export" in _read_text(path):
+                offenders.append(str(path.relative_to(REPO_ROOT)))
+
+    assert offenders == []

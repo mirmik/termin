@@ -297,12 +297,14 @@ public partial class MainWindow : Window
     private WpfRenderSurface? _renderSurface;
     private NativeDisplayManager? _nativeDisplayManager;
     private TcViewportHandle _viewportHandle;
+    private TcRenderTargetHandle _renderTargetHandle = TcRenderTargetHandle.Invalid;
 
     // Backend и Native Display (второй контрол)
     private GlWpfBackend? _backend2;
     private WpfRenderSurface? _renderSurface2;
     private NativeDisplayManager? _nativeDisplayManager2;
     private TcViewportHandle _viewportHandle2;
+    private TcRenderTargetHandle _renderTargetHandle2 = TcRenderTargetHandle.Invalid;
 
     // Pipeline rendering via SWIG C++ classes
     private RenderPipeline? _renderPipeline;
@@ -314,7 +316,7 @@ public partial class MainWindow : Window
     private EntityPool? _internalEntitiesPool2;
     private TcEntityId _internalRootId;
     private TcEntityId _internalRootId2;
-    private PullRenderingManager? _renderingManager;
+    private RenderingManager? _renderingManager;
     private OrbitCameraController? _orbitController;
     private OrbitCameraController? _orbitController2;
     private ColorPass? _colorPass;  // Keep reference to prevent GC collection
@@ -386,7 +388,7 @@ public partial class MainWindow : Window
         GL.Enable(EnableCap.DepthTest);
 
         // Set up RenderingManager (store reference to prevent GC issues)
-        _renderingManager = PullRenderingManager.instance();
+        _renderingManager = new RenderingManager();
 
         // Create render engine (RenderingManager will use it)
         _renderEngine = new RenderEngine();
@@ -501,7 +503,12 @@ public partial class MainWindow : Window
             // Full screen viewport
             TerminCore.ViewportSetRect(_viewportHandle, 0.0f, 0.0f, 1.0f, 1.0f);
 
-            // Set pipeline on viewport (for RenderingManager)
+            _renderTargetHandle = CreateRenderTarget(
+                "MainTarget",
+                _scene.Handle,
+                _cameraComponent,
+                _renderPipeline);
+            TerminCore.ViewportSetRenderTarget(_viewportHandle, _renderTargetHandle);
 
             // Set internal entities (camera lives here)
             var internalEntityHandle = new TcEntityHandle
@@ -541,7 +548,12 @@ public partial class MainWindow : Window
             // Full screen viewport
             TerminCore.ViewportSetRect(_viewportHandle2, 0.0f, 0.0f, 1.0f, 1.0f);
 
-            // Set pipeline on viewport
+            _renderTargetHandle2 = CreateRenderTarget(
+                "SecondaryTarget",
+                _scene.Handle,
+                _cameraComponent2,
+                _renderPipeline2);
+            TerminCore.ViewportSetRenderTarget(_viewportHandle2, _renderTargetHandle2);
 
             // Set internal entities (camera lives here)
             var internalEntityHandle2 = new TcEntityHandle
@@ -557,6 +569,26 @@ public partial class MainWindow : Window
 
             Console.WriteLine($"[Init] Created viewport2 with pipeline2 and added to display2");
         }
+    }
+
+    private static TcRenderTargetHandle CreateRenderTarget(
+        string name,
+        TcSceneHandle scene,
+        CameraComponent camera,
+        RenderPipeline pipeline)
+    {
+        TcRenderTargetHandle renderTarget = TerminCore.RenderTargetNew(name);
+        if (!renderTarget.IsValid)
+        {
+            throw new InvalidOperationException($"Failed to create render target '{name}'");
+        }
+
+        TerminCore.RenderTargetSetScene(renderTarget, scene);
+        TerminCore.RenderTargetSetCamera(renderTarget, camera.tc_component_ptr());
+        TerminCore.RenderTargetSetPipeline(renderTarget, pipeline.handle());
+        TerminCore.RenderTargetSetDynamicResolution(renderTarget, true);
+        TerminCore.RenderTargetSetEnabled(renderTarget, true);
+        return renderTarget;
     }
 
     private void CreateMaterial()
@@ -799,7 +831,7 @@ void main() {
             _scene?.Update(delta.TotalSeconds);
             _scene?.BeforeRender();
 
-            // Render via PullRenderingManager
+            // Render via RenderingManager
             if (_renderSurface != null && _nativeDisplayManager != null && _renderingManager != null)
             {
                 // Cache WPF's FBO before rendering
@@ -833,7 +865,7 @@ void main() {
                 _cameraComponent2.aspect = aspect;
             }
 
-            // Render via PullRenderingManager
+            // Render via RenderingManager
             if (_renderSurface2 != null && _nativeDisplayManager2 != null && _renderingManager != null)
             {
                 // Cache WPF's FBO before rendering
@@ -872,6 +904,17 @@ void main() {
         {
             TerminCore.ViewportFree(_viewportHandle2);
             _viewportHandle2 = TcViewportHandle.Invalid;
+        }
+
+        if (_renderTargetHandle.IsValid)
+        {
+            TerminCore.RenderTargetFree(_renderTargetHandle);
+            _renderTargetHandle = TcRenderTargetHandle.Invalid;
+        }
+        if (_renderTargetHandle2.IsValid)
+        {
+            TerminCore.RenderTargetFree(_renderTargetHandle2);
+            _renderTargetHandle2 = TcRenderTargetHandle.Invalid;
         }
 
         // Free render surfaces

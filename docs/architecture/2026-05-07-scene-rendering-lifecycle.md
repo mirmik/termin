@@ -89,7 +89,7 @@ RenderTarget (tc_render_target_handle)
   └─ pipeline (опциональный пайплайн)
 ```
 
-Важное различие: **ViewportRenderState** — это GPU-состояние (tgfx-текстуры) для вьюпортов **без** render target (legacy-путь). **RenderTarget** — более новый путь, где текстуры живут внутри самого `tc_render_target`.
+Важное различие: **Viewport** — это presentation/layout slot. Он может быть пустым и сам не владеет output-текстурами. **RenderTarget** владеет color/depth текстурами и явно назначается viewport'у, когда этот viewport должен что-то показывать.
 
 ### Два списка дисплеев
 
@@ -112,14 +112,14 @@ RenderTarget (tc_render_target_handle)
    - Собрать `ViewportContext` для каждого target-вьюпорта пайплайна (камера, output-текстуры, layer_mask)
    - Собрать lights
    - Вызвать `engine->render_scene_pipeline_offscreen()`
-5. Отрендерить «неуправляемые» вьюпорты (без `managed_by`) — и сценовые, и редакторские
+5. Отрендерить RT-backed viewport'ы, которые не управляются scene pipeline. Viewport без `RenderTarget` пропускается.
 
 **Фаза 2 — `present_all()`:**
 - Для каждого дисплея (сценовые + редакторские):
   - Сделать контекст дисплея текущим
   - Очистить surface (серый цвет)
   - Отсортировать вьюпорты по depth
-  - Для каждого вьюпорта: взять output color texture (из RenderTarget или ViewportRenderState), блитить в регион дисплея
+  - Для каждого вьюпорта с `RenderTarget`: взять output color texture из render target, блитить в регион дисплея
   - Swap buffers
 
 Ключевое свойство: **все рендерится в offscreen-контексте в общей share-group**, поэтому текстуры, созданные при offscreen-рендере, видны при present на любом дисплее.
@@ -131,7 +131,7 @@ RenderTarget (tc_render_target_handle)
 2. Создать вьюпорты из `viewport_configs` сцены:
    - Для каждого конфига: `get_or_create_display(display_name)` — найти или создать дисплей через factory
    - Аллоцировать вьюпорт, установить rect, depth, scene
-   - Найти или создать render target (по имени из конфига; если не найден — создать новый dynamic-resolution RT)
+   - Найти render target по имени из конфига; если target не найден или имя пустое, оставить viewport пустым
    - Добавить вьюпорт на дисплей
 3. `apply_scene_pipelines()` — скомпилировать шаблоны пайплайнов, пометить вьюпорты как `managed_by`
 4. Добавить сцену в `attached_scenes_`
@@ -139,7 +139,7 @@ RenderTarget (tc_render_target_handle)
 **`detach_scene_full(scene)`** — полное отключение:
 1. `unmount_scene(scene, display)` для каждого сценового дисплея:
    - Найти все вьюпорты на дисплее, ссылающиеся на эту сцену
-   - Для каждого: удалить viewport state, удалить с дисплея, освободить вьюпорт
+   - Для каждого: удалить с дисплея, освободить вьюпорт
    - Если render target не зарегистрирован в `managed_render_targets_` и больше нигде не используется — освободить и его
 2. Пройти по `managed_render_targets_`, освободить принадлежащие сцене
 3. Удалить сцену из `attached_scenes_`
@@ -278,7 +278,7 @@ GameModeModel._stop_game_mode()
 Render target с `dynamic_resolution=true` автоматически подстраивает размер текстур под `pixel_rect` своего вьюпорта (в `sync_viewport_resolutions()` и `render_scene_pipeline_offscreen()`). Это позволяет вьюпортам менять размер (ресайз окна, сплит-панели) без ручного управления текстурами.
 
 ### Владение GPU-ресурсами
-- `ViewportRenderState` владеет tgfx-текстурами для legacy-вьюпортов (без render target)
-- `tc_render_target` владеет `tc_texture` для нового пути
+- Viewport без render target — пустой presentation slot и не владеет GPU output
+- `tc_render_target` владеет `tc_texture` output'ом
 - `RenderingManager` владеет скомпилированными пайплайнами (в `scene_pipelines_`)
 - При `shutdown()` все ресурсы освобождаются в правильном порядке

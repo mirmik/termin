@@ -458,7 +458,7 @@ C++/Android должны управлять:
 
 - desktop editor modules;
 - desktop SDL backends;
-- `pysdl2` как обязательную runtime-зависимость;
+- legacy `pysdl2` как обязательную runtime-зависимость;
 - инструменты, требующие desktop filesystem/dialogs.
 
 Осторожно подключать:

@@ -154,7 +154,7 @@ static void pysurface_destroy(tc_render_surface* s) {
 static uint32_t pysurface_get_tgfx_color_tex_id(tc_render_surface* s) {
     // Optional method. Surfaces that still own a raw GL FBO and have
     // not been migrated to tgfx2 textures simply skip this attribute;
-    // PullRenderingManager falls back to the FBO path.
+    // RenderingManager presentation then skips backend-neutral blitting.
     if (!s->body) return 0;
     nb::gil_scoped_acquire gil;
     try {

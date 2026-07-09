@@ -12,6 +12,7 @@ import numpy as np
 from tcbase import log
 from termin.scene import PythonComponent
 from termin.inspect import InspectField
+from termin.geombase import Mat44, Vec3
 from termin.navmesh.pathfinding import (
     RegionGraph,
     NavMeshGraph,
@@ -32,8 +33,12 @@ def _rebuild_graph_action(component: "PathfindingWorldComponent") -> None:
     component.rebuild()
 
 
-def _entity_pose_matrix(entity: "Entity") -> np.ndarray:
-    return np.asarray(entity.transform.global_pose().as_matrix(), dtype=np.float64)
+def _entity_pose_matrix(entity: "Entity") -> Mat44:
+    return entity.transform.global_pose().as_mat44()
+
+
+def _vec3_to_array(value: Vec3) -> np.ndarray:
+    return np.array([value.x, value.y, value.z], dtype=np.float32)
 
 
 class PathfindingWorldComponent(PythonComponent):
@@ -449,7 +454,7 @@ class PathfindingWorldComponent(PythonComponent):
         # Получаем entity для трансформации
         entity = self._region_entities.get(region_id)
         transform = _entity_pose_matrix(entity) if entity else None
-        inverse = np.linalg.inv(transform) if transform is not None else None
+        inverse = transform.inverse() if transform is not None else None
 
         # Трансформируем start/end в локальные координаты
         if inverse is not None:
@@ -646,7 +651,7 @@ class PathfindingWorldComponent(PythonComponent):
     def _transform_path_to_world(
         self,
         local_path: List[np.ndarray],
-        transform: Optional[np.ndarray],
+        transform: Optional[Mat44],
     ) -> List[np.ndarray]:
         """Трансформировать путь из локальных в мировые координаты."""
         path_points: List[np.ndarray] = []
@@ -677,7 +682,7 @@ class PathfindingWorldComponent(PythonComponent):
         # Трансформируем точку в локальные координаты региона
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            inverse = np.linalg.inv(_entity_pose_matrix(entity))
+            inverse = _entity_pose_matrix(entity).inverse()
             local_point = self._transform_point(point, inverse)
         else:
             local_point = point
@@ -707,7 +712,7 @@ class PathfindingWorldComponent(PythonComponent):
         # Трансформируем точку в локальные координаты региона
         entity = self._region_entities.get(region_id)
         if entity is not None:
-            inverse = np.linalg.inv(_entity_pose_matrix(entity))
+            inverse = _entity_pose_matrix(entity).inverse()
             local_point = self._transform_point(point, inverse)
         else:
             local_point = point
@@ -859,7 +864,7 @@ class PathfindingWorldComponent(PythonComponent):
             # Трансформируем точку в локальные координаты региона
             entity = self._region_entities.get(region_id)
             if entity is not None:
-                inverse = np.linalg.inv(_entity_pose_matrix(entity))
+                inverse = _entity_pose_matrix(entity).inverse()
                 local_point = self._transform_point(point, inverse)
             else:
                 local_point = point
@@ -900,7 +905,7 @@ class PathfindingWorldComponent(PythonComponent):
 
             # Трансформируем луч в локальное пространство entity
             transform_matrix = _entity_pose_matrix(entity)
-            inverse_matrix = np.linalg.inv(transform_matrix)
+            inverse_matrix = transform_matrix.inverse()
 
             local_origin = self._transform_point(origin, inverse_matrix)
             local_direction = self._transform_direction(direction, inverse_matrix)
@@ -933,17 +938,15 @@ class PathfindingWorldComponent(PythonComponent):
 
         return closest_hit
 
-    def _transform_point(self, point: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    def _transform_point(self, point: np.ndarray, matrix: Mat44) -> np.ndarray:
         """Трансформировать точку с помощью матрицы 4x4."""
-        p_h = np.array([point[0], point[1], point[2], 1.0], dtype=np.float64)
-        result = matrix @ p_h
-        return result[:3].astype(np.float32)
+        result = matrix.transform_point(Vec3(float(point[0]), float(point[1]), float(point[2])))
+        return _vec3_to_array(result)
 
-    def _transform_direction(self, direction: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    def _transform_direction(self, direction: np.ndarray, matrix: Mat44) -> np.ndarray:
         """Трансформировать направление с помощью матрицы 4x4 (без translation)."""
-        d_h = np.array([direction[0], direction[1], direction[2], 0.0], dtype=np.float64)
-        result = matrix @ d_h
-        return result[:3].astype(np.float32)
+        result = matrix.transform_direction(Vec3(float(direction[0]), float(direction[1]), float(direction[2])))
+        return _vec3_to_array(result)
 
     def _optimize_path_los(
         self,
@@ -1034,7 +1037,6 @@ class PathfindingWorldComponent(PythonComponent):
     def draw(self) -> None:
         """Отрисовка отладочной визуализации."""
         from termin.render import ImmediateRenderer
-        from termin.geombase import Vec3
         from tgfx import Color4
 
         renderer = ImmediateRenderer.instance()
