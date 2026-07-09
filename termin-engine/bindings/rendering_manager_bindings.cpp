@@ -93,7 +93,7 @@ static tc_viewport_handle get_viewport_handle(nb::object viewport_py) {
 }
 
 void bind_rendering_manager(nb::module_& m) {
-    // ViewportRenderState - per-viewport GPU resource state (native tgfx2).
+    // ViewportRenderState - runtime GPU output state helper (native tgfx2).
     nb::class_<ViewportRenderState>(m, "ViewportRenderState")
         .def_prop_ro("output_width", [](ViewportRenderState& self) { return self.output_width; })
         .def_prop_ro("output_height", [](ViewportRenderState& self) { return self.output_height; })

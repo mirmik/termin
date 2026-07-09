@@ -360,7 +360,7 @@ private:
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
 
-    // Runtime GPU output state for viewports and render targets.
+    // Runtime GPU output state helpers.
     std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
 
     // Compiled scene pipeline handles and target viewport mappings.

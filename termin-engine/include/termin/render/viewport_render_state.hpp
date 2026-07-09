@@ -1,4 +1,4 @@
-// viewport_render_state.hpp - Per-viewport GPU resource state
+// viewport_render_state.hpp - Runtime GPU output state helper
 #pragma once
 
 #include <tgfx2/handles.hpp>
@@ -8,10 +8,11 @@
 
 namespace termin {
 
-// Holds GPU resources for a single viewport:
+// Holds runtime-owned GPU output resources:
 // - output_color_tex / output_depth_tex: native tgfx2 textures used
-//   as the viewport's final render target (color + depth). They are
-//   owned by this state and destroyed on resize / destruction.
+//   as final render output where textures are not owned by persistent
+//   scene configuration. They are owned by this state and destroyed on
+//   resize / destruction.
 // - Intermediate FBOs are managed separately by the pipeline's FBOPool.
 class ViewportRenderState {
 public:

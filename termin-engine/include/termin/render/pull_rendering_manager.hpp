@@ -1,7 +1,6 @@
 #pragma once
 
 #include "termin/engine/termin_engine_api.hpp"
-#include "termin/render/viewport_render_state.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
 
@@ -13,7 +12,6 @@ extern "C" {
 }
 
 #include <vector>
-#include <unordered_map>
 #include <memory>
 #include <string>
 
@@ -27,7 +25,6 @@ public:
     RenderEngine* render_engine_ = nullptr;
     std::unique_ptr<RenderEngine> owned_render_engine_;
     std::vector<tc_display*> displays_;
-    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
 
     static PullRenderingManager* s_instance;
 
@@ -47,13 +44,8 @@ public:
     tc_display* get_display_by_name(const std::string& name) const;
     const std::vector<tc_display*>& displays() const { return displays_; }
 
-    // Viewport state management
-    ViewportRenderState* get_viewport_state(tc_viewport_handle viewport);
-    ViewportRenderState* get_or_create_viewport_state(tc_viewport_handle viewport);
-    void remove_viewport_state(tc_viewport_handle viewport);
-
     // Pull-rendering API
-    // Renders all viewports of this display to offscreen FBOs and blits to display.
+    // Renders this display's RT-backed viewports and blits them to display.
     // Call from each display's Render callback.
     void render_display(tc_display* display);
 
