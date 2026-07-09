@@ -97,7 +97,7 @@ Already started in `termin-gui-native`:
 - [x] Add common visible, enabled and mouse-transparent flags.
 - [x] Make layout, hit testing and event routing consume the
   common `tc_widget` state without parallel container-specific copies.
-- [ ] Add theme/style structs and make built-in widgets consume them.
+- [x] Add theme/style structs and make built-in widgets consume them.
 - [x] Add font provider or measurement service so `Label` measure uses real
   font metrics.
 - [x] Add tests for stale child handles inside containers.
@@ -357,13 +357,15 @@ Phase 4 notes:
 
 Start with data structures and tests; postpone visual tuning.
 
-- [ ] `Theme` object with colors, spacing, border widths and font sizes.
-- [ ] Per-widget style refs or style classes.
-- [ ] Default theme matching current native showcase.
-- [ ] Disabled/hover/pressed/focused state colors.
-- [ ] Theme propagation from document/root.
-- [ ] Runtime theme switch test.
-- [ ] Python-facing theme API.
+- [x] `tc_ui_theme` with role-based colors, spacing, border widths, font sizes
+  and minimum metrics, owned by `tc_ui_document` by value.
+- [x] Semantic role and masked `tc_ui_style_override` stored directly in each
+  `tc_widget`, without a second widget/style record.
+- [x] Default theme matching the current native showcase palette.
+- [x] Disabled/hover/pressed/focused/checked state layers.
+- [x] Explicit inherited overrides along the canonical parent chain.
+- [x] Runtime theme revision, full-widget invalidation and switch tests.
+- [x] C++ and Python-facing theme/style APIs and inheritance/state tests.
 
 ## Phase 7 - Collection Widgets
 
