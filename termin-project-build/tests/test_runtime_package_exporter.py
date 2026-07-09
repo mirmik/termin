@@ -327,7 +327,7 @@ def test_collect_runtime_refs_accepts_explicit_mesh_material_metadata() -> None:
     assert diagnostics == []
 
 
-def test_collect_runtime_refs_reports_legacy_mesh_material_inference() -> None:
+def test_collect_runtime_refs_rejects_legacy_mesh_material_inference() -> None:
     diagnostics = []
 
     refs = collect_runtime_refs(
@@ -352,22 +352,22 @@ def test_collect_runtime_refs_reports_legacy_mesh_material_inference() -> None:
         diagnostics,
     )
 
-    assert refs.meshes == {"field-mesh": "Field Mesh"}
-    assert refs.materials == {"name-material": "Name Material"}
+    assert refs.meshes == {}
+    assert refs.materials == {}
     assert [
         (diagnostic.level, diagnostic.path, diagnostic.message)
         for diagnostic in diagnostics
     ] == [
         (
-            "warning",
+            "error",
             "scene.json",
-            "Runtime exporter inferred mesh resource ref from legacy field name "
+            "Runtime exporter rejected legacy mesh resource ref from legacy field name "
             "at $.components[0].mesh; add kind='tc_mesh' or role='mesh' to the uuid ref",
         ),
         (
-            "warning",
+            "error",
             "scene.json",
-            "Runtime exporter inferred material resource ref from legacy resource name "
+            "Runtime exporter rejected legacy material resource ref from legacy resource name "
             "at $.components[1].resource_ref; add kind='tc_material' or role='material' "
             "to the uuid ref",
         ),
@@ -397,6 +397,7 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
                                         "uuid": "mesh-uuid",
                                         "name": "Triangle",
                                         "type": "uuid",
+                                        "kind": "tc_mesh",
                                     },
                                 },
                             },
@@ -407,6 +408,7 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
                                         "uuid": "material-uuid",
                                         "name": "Triangle Material",
                                         "type": "uuid",
+                                        "kind": "tc_material",
                                     },
                                 },
                             },
@@ -534,6 +536,7 @@ def test_export_runtime_package_reports_missing_resources_as_errors_by_default(t
                                     "uuid": "missing-mesh",
                                     "name": "MissingMesh",
                                     "type": "uuid",
+                                    "kind": "tc_mesh",
                                 },
                             },
                         },
@@ -544,6 +547,7 @@ def test_export_runtime_package_reports_missing_resources_as_errors_by_default(t
                                     "uuid": "missing-material",
                                     "name": "MissingMaterial",
                                     "type": "uuid",
+                                    "kind": "tc_material",
                                 },
                             },
                         }
@@ -625,6 +629,7 @@ def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_pat
                                     "uuid": mesh_uuid,
                                     "name": "Triangle",
                                     "type": "uuid",
+                                    "kind": "tc_mesh",
                                 },
                             },
                         },
@@ -635,6 +640,7 @@ def test_export_runtime_package_reads_standalone_mesh_asset_by_meta_uuid(tmp_pat
                                     "uuid": material_uuid,
                                     "name": "Triangle Material",
                                     "type": "uuid",
+                                    "kind": "tc_material",
                                 },
                             },
                         }
@@ -702,6 +708,7 @@ def test_export_runtime_package_reports_malformed_mesh_meta_before_dev_smoke_fal
                                     "uuid": mesh_uuid,
                                     "name": "Triangle",
                                     "type": "uuid",
+                                    "kind": "tc_mesh",
                                 },
                             },
                         }
@@ -1756,6 +1763,9 @@ def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage
 
         scene_data = scene.serialize()
         scene_data["uuid"] = "scene-uuid"
+        components = scene_data["entities"][0]["components"]
+        assert components[1]["data"]["mesh"]["kind"] == "tc_mesh"
+        assert components[2]["data"]["material"]["kind"] == "tc_material"
         scene_data["render_mount"] = {
             "render_target_configs": [
                 {
