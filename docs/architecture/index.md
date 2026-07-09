@@ -11,3 +11,4 @@
 - [Scene rendering lifecycle](2026-05-07-scene-rendering-lifecycle.md) - заметки по lifecycle scene rendering.
 - [Clip space policy](2026-06-26-clip-space-policy.md) - целевая политика `TerminClip -> NativeClip` и план миграции 3D render paths.
 - [UI storage and plot annotations](2026-07-07-ui-storage-and-plot-annotations.md) - целевая модель владения UI-виджетами и границы plot annotations.
+- [Multilanguage component/pass/widget lifetime model](2026-07-09-multilanguage-component-lifetime-model.md) - направление для единой модели владения `tc_component`, `tc_pass` и `tc_widget`; связано с refcount/ownership cleanup задачами.

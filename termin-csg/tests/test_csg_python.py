@@ -16,6 +16,13 @@ from termin.csg import (
     to_mesh3,
 )
 from termin.csg.cad import box, circle, mesh, rect
+from termin.csg.cad_tree_adapter import (
+    CsgTreeNodePayload,
+    find_tree_node,
+    to_tree_node,
+    tree_node_data,
+    tree_node_model,
+)
 from termin.csg.csg_editor_panel import CsgEditorPanel
 from termin.csg.cad_state import CadState, load_cad_state, save_cad_state
 from termin.csg.cad_viewer import build_document_solid_meshes, document_bounds
@@ -199,6 +206,23 @@ def test_procedural_document_extrudes_outer_contours_with_holes():
     assert outer_node.text.startswith("[Outer]")
     assert len(outer_node.children) == 1
     assert outer_node.children[0].text.startswith("[Hole]")
+
+
+def test_cad_tree_adapter_uses_explicit_payload_for_document_nodes():
+    document = ProceduralMeshDocument()
+    operation = document.add_primitive_operation("box")
+    assert operation is not None
+
+    model_root = build_document_tree(document)[0]
+    tree_root = to_tree_node(model_root)
+
+    assert isinstance(tree_root.data, CsgTreeNodePayload)
+    assert tree_node_data(tree_root) == ("operation", operation.id)
+    assert tree_node_model(tree_root) is model_root
+    assert "csg_document_node" not in vars(tree_root)
+
+    found = find_tree_node(tree_root, ("operation", operation.id))
+    assert found is tree_root
 
 
 def test_procedural_document_stores_open_sketch_paths_separately_from_contours():
@@ -1099,7 +1123,7 @@ def test_cad_app_tree_drop_adds_and_reorders_boolean_inputs():
 
 def _first_tree_node(nodes, data):
     for node in nodes:
-        if node.data == data:
+        if tree_node_data(node) == data:
             return node
         found = _first_tree_node(node.subnodes, data)
         if found is not None:

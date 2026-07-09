@@ -86,3 +86,16 @@ def test_scene_tree_drops_gltf_as_model() -> None:
     assert controller._on_external_drop(event, None, "root")
     assert controller._ops.glb_drops == [("/tmp/Bush.gltf", None)]
     assert controller._ops.prefab_drops == []
+
+
+def test_scene_tree_drops_prefab_but_not_legacy_tc_prefab() -> None:
+    controller = SceneTreeControllerTcgui.__new__(SceneTreeControllerTcgui)
+    controller._ops = _Ops()
+    prefab_event = _project_file_event("/tmp/Tree.prefab", ".prefab")
+    legacy_event = _project_file_event("/tmp/Tree.tc_prefab", ".tc_prefab")
+
+    assert controller._on_external_drag(prefab_event, None, "root")
+    assert controller._on_external_drop(prefab_event, None, "root")
+    assert not controller._on_external_drag(legacy_event, None, "root")
+    assert not controller._on_external_drop(legacy_event, None, "root")
+    assert controller._ops.prefab_drops == [("/tmp/Tree.prefab", None)]

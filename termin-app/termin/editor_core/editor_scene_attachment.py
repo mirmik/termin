@@ -208,14 +208,6 @@ class EditorSceneAttachment:
                 self._camera_manager.camera.remove_viewport(self._viewport)
 
             if self._rendering_controller is not None:
-                # Make offscreen GL context current before destroying GPU
-                # resources. Under BackendWindow there is no offscreen
-                # GL context — the process runs on a single tgfx2 device,
-                # and on Vulkan there is no context to make current at
-                # all. Guarded to support both editor modes.
-                if self._rendering_controller.offscreen_context is not None:
-                    self._rendering_controller.offscreen_context.make_current()
-
                 # Clear viewport state (output_fbo)
                 state = self._rendering_controller.get_viewport_state(self._viewport)
                 if state is not None:
@@ -298,10 +290,6 @@ class EditorSceneAttachment:
         """Remove all viewports from this display."""
         if not self._display.viewports:
             return
-
-        if self._rendering_controller is not None:
-            if self._rendering_controller.offscreen_context is not None:
-                self._rendering_controller.offscreen_context.make_current()
 
         for vp in list(self._display.viewports):
             # Remove from camera

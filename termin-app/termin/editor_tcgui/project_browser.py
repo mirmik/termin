@@ -28,10 +28,6 @@ _KNOWN_EXTENSIONS = {
     ".scene": "Scene",
     ".shader": "Shader",
     ".py": "Python",
-    ".tc_scene": "Scene",
-    ".tc_mat": "Material",
-    ".tc_pipeline": "Pipeline",
-    ".tc_component": "Component",
     ".glb": "GLB",
     ".gltf": "GLTF",
     ".glsl": "GLSL",
@@ -46,8 +42,6 @@ _KNOWN_EXTENSIONS = {
     ".wav": "Audio",
     ".ogg": "Audio",
     ".mp3": "Audio",
-    ".tc_prefab": "Prefab",
-    ".tc_navmesh": "NavMesh",
     ".terminproj": "Project",
 }
 

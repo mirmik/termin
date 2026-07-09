@@ -80,10 +80,8 @@ static Rect2i tuple_to_rect(nb::tuple rect_py) {
 }
 
 static tc_scene_handle object_to_scene_handle(nb::object scene_py) {
-    if (!scene_py.is_none() && nb::hasattr(scene_py, "scene_handle")) {
-        return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
-    }
-    return TC_SCENE_HANDLE_INVALID;
+    if (scene_py.is_none()) return TC_SCENE_HANDLE_INVALID;
+    return nb::cast<tc_scene_handle>(scene_py.attr("scene_handle")());
 }
 
 static void set_material_from_python(MaterialPass& pass, nb::object material_obj) {

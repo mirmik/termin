@@ -477,6 +477,51 @@ def test_mesh_renderer_material_slots_survive_entity_hierarchy_roundtrip():
         restored_scene.destroy()
 
 
+def test_mesh_renderer_preconfigured_component_survives_entity_add_component():
+    from termin.scene import Entity, TcScene
+
+    legacy_material = create_unique_test_material("MeshRendererPreconfiguredLegacy")
+    slot0_material = create_unique_test_material("MeshRendererPreconfiguredSlot0")
+    slot2_material = create_unique_test_material("MeshRendererPreconfiguredSlot2")
+
+    source_scene = TcScene.create("mesh-renderer-preconfigured-source")
+    restored_scene = TcScene.create("mesh-renderer-preconfigured-restored")
+    try:
+        entity = source_scene.create_entity("mesh")
+        renderer = MeshRenderer(material=legacy_material, cast_shadow=False)
+        renderer.set_material_slot(0, slot0_material)
+        renderer.set_material_slot(2, slot2_material)
+
+        entity.add_component(renderer)
+        hierarchy = entity.serialize_hierarchy()
+        component_data = next(
+            item["data"] for item in hierarchy["components"] if item["type"] == "MeshRenderer"
+        )
+
+        assert component_data["material"]["uuid"] == legacy_material.uuid
+        assert component_data["cast_shadow"] is False
+        assert [slot["type"] for slot in component_data["materials"]] == ["uuid", "none", "uuid"]
+        assert component_data["materials"][0]["uuid"] == slot0_material.uuid
+        assert component_data["materials"][2]["uuid"] == slot2_material.uuid
+
+        restored_entity = Entity.deserialize_hierarchy(
+            hierarchy,
+            restored_scene,
+            None,
+        )
+        restored = restored_entity.get_component(MeshRenderer)
+
+        assert restored.material.uuid == legacy_material.uuid
+        assert restored.cast_shadow is False
+        assert restored.material_slot_count == 3
+        assert restored.materials[0].uuid == slot0_material.uuid
+        assert restored.materials[1].is_valid is False
+        assert restored.materials[2].uuid == slot2_material.uuid
+    finally:
+        source_scene.destroy()
+        restored_scene.destroy()
+
+
 def test_mesh_renderer_legacy_single_material_data_clears_material_slots():
     legacy_material = create_unique_test_material("MeshRendererLegacySingleMaterial")
     stale_slot_material = create_unique_test_material("MeshRendererStaleSlot")

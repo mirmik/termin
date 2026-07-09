@@ -342,21 +342,13 @@ nos::trent serialize_entity_recursive(const Entity& e) {
         tc_component* tc = e.component_at(i);
         if (!tc) continue;
 
-        // Serialize via tc_inspect
         const char* type_name = tc_component_type_name(tc);
         if (!type_name) continue;
 
-        void* obj_ptr = nullptr;
-        if (tc->kind == TC_CXX_COMPONENT) {
-            obj_ptr = CxxComponent::from_tc(tc);
-        } else {
-            obj_ptr = tc->body;
-        }
-
         nos::trent comp_data;
         comp_data["type"] = type_name;
-        if (obj_ptr) {
-            tc_value v = tc_inspect_serialize(obj_ptr, type_name);
+        if (tc->kind == TC_CXX_COMPONENT || tc->body) {
+            tc_value v = serialize_component_data(tc);
             comp_data["data"] = tc::tc_value_to_trent(v);
             tc_value_free(&v);
         }

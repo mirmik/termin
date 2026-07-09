@@ -413,6 +413,29 @@ def test_render_target_inspector_saves_file_pipeline_param_by_uuid(monkeypatch):
     }
 
 
+def test_render_target_inspector_rejects_unknown_file_pipeline_param(monkeypatch):
+    texture_module = types.ModuleType("termin.render.texture")
+    texture_module.get_white_texture = lambda: types.SimpleNamespace(_image_data=None)
+    texture_module.get_normal_texture = lambda: types.SimpleNamespace(_image_data=None)
+    monkeypatch.setitem(sys.modules, "termin.render.texture", texture_module)
+
+    scene_mount_module = types.ModuleType("termin.render")
+    scene_mount_module.scene_render_mount = lambda scene: types.SimpleNamespace(render_target_configs=[])
+    monkeypatch.setitem(sys.modules, "termin.render", scene_mount_module)
+
+    scene = _Scene("Scene", 1, [])
+    render_target = _RenderTarget(scene, None)
+    render_target.pipeline = _Pipeline("Pipe")
+    render_target.pipeline_params = {"input_texture": "file:texture-uuid-grenade"}
+
+    inspector = RenderTargetInspectorTcgui(_TextureResourceManager())
+    inspector.set_scene_getter(lambda: [scene])
+    inspector.set_render_target(render_target, scene)
+    inspector._on_pipeline_param_changed("input_texture", "file", "MissingTexture")
+
+    assert render_target.pipeline_params == {}
+
+
 def test_render_target_inspector_reads_uuid_file_pipeline_param(monkeypatch):
     texture_module = types.ModuleType("termin.render.texture")
     texture_module.get_white_texture = lambda: types.SimpleNamespace(_image_data=None)

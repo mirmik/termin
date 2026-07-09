@@ -33,7 +33,6 @@ class FileMenuActions:
     load_material: VoidCallback
     load_components: VoidCallback
     deploy_stdlib: VoidCallback
-    migrate_spec_to_meta: VoidCallback
     exit: VoidCallback
 
 
@@ -221,7 +220,6 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
                 MenuItemSpec("Load Components...", actions.file.load_components),
                 None,
                 MenuItemSpec("Deploy Standard Library...", actions.file.deploy_stdlib),
-                MenuItemSpec("Migrate .spec to .meta", actions.file.migrate_spec_to_meta),
                 None,
                 MenuItemSpec("Exit", actions.file.exit, shortcut="Ctrl+Q"),
             ],

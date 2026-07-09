@@ -14,6 +14,7 @@ ENV_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$SCRIPT_DIR/build_standalone"
 INSTALL_DIR="$SCRIPT_DIR/install"
 SDK_DIR="${SDK_PREFIX:-$(dirname "$SCRIPT_DIR")/sdk}"
+PYTHON_VERSION="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 
 BUILD_TYPE="Release"
 CLEAN=0
@@ -65,6 +66,7 @@ if [[ $ASAN -eq 1 ]]; then
 fi
 echo "Build dir:  $BUILD_DIR"
 echo "Install dir: $INSTALL_DIR"
+echo "Python:     $PYTHON_VERSION"
 echo ""
 
 # Clean if requested
@@ -146,12 +148,16 @@ fi
 
 # Copy Python bindings (.so) and .py sources from subprojects
 echo "Copying Python packages from subprojects..."
-PYTHON_DEST="$INSTALL_DIR/lib/python"
+PYTHON_DEST="$INSTALL_DIR/lib/python$PYTHON_VERSION/site-packages"
+SDK_SITE_PACKAGES="$SDK_DIR/lib/python$PYTHON_VERSION/site-packages"
+if [[ ! -d "$SDK_SITE_PACKAGES" && -d "$SDK_DIR/lib" ]]; then
+    SDK_SITE_PACKAGES="$(find "$SDK_DIR/lib" -maxdepth 2 -type d -path '*/python*/site-packages' | sort | head -1)"
+fi
 
 # Module definitions: project_dir | python_subdir | so_pattern | py_source_dir
 #
 # Mirrors which subproject contributes what to the local install
-# lib/python/termin/<subdir>/ tree used by this legacy app build script.
+# lib/pythonX.Y/site-packages/ tree used by this standalone app build script.
 # Each entry either brings an .so binding, a .py source tree, or both.
 # When multiple subprojects target the same python_subdir (e.g. termin.colliders
 # from both termin-collision and termin-components-collision), they are listed
@@ -208,14 +214,14 @@ for entry in "${PYTHON_MODULES[@]}"; do
     if [[ -n "$SO_FILE" ]]; then
         cp "$SO_FILE" "$PYTHON_DEST/$py_subdir/"
         echo "  Copied $(basename "$SO_FILE") → $py_subdir/"
-    elif [[ -n "$so_pattern" && -d "$SDK_DIR/lib/python/$py_subdir" ]]; then
+    elif [[ -n "$so_pattern" && -n "$SDK_SITE_PACKAGES" && -d "$SDK_SITE_PACKAGES/$py_subdir" ]]; then
         # Fallback: copy .so from SDK when subproject wasn't built from source
-        SDK_SO=$(find "$SDK_DIR/lib/python/$py_subdir" -maxdepth 1 -name "$so_pattern" | head -1)
+        SDK_SO=$(find "$SDK_SITE_PACKAGES/$py_subdir" -maxdepth 1 -name "$so_pattern" | head -1)
         if [[ -n "$SDK_SO" ]]; then
             cp "$SDK_SO" "$PYTHON_DEST/$py_subdir/"
             echo "  Copied $(basename "$SDK_SO") → $py_subdir/ (from SDK)"
         else
-            echo "  WARNING: $so_pattern not found in $build_dir or $SDK_DIR/lib/python/$py_subdir"
+            echo "  WARNING: $so_pattern not found in $build_dir or $SDK_SITE_PACKAGES/$py_subdir"
         fi
     elif [[ -n "$so_pattern" ]]; then
         echo "  WARNING: $so_pattern not found in $build_dir"

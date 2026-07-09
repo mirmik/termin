@@ -23,17 +23,6 @@ endif()
 
 option(TERMIN_BUILD_PYTHON "Build Python/nanobind bindings" ON)
 
-# Install prefix for Python modules only.
-# Shared C/C++ runtime libraries are installed into the normal lib/bin dirs.
-# For standalone: lib/python/termin/, for setup.py: CMAKE_INSTALL_PREFIX directly
-if(BUILD_STANDALONE OR TERMIN_BUILD_MONOREPO)
-    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/lib/python/termin")
-    set(TERMIN_PYTHON_INSTALL_DIR "lib/python/termin")
-else()
-    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}")
-    set(TERMIN_PYTHON_INSTALL_DIR ".")
-endif()
-
 # Default to Release build for single-config generators
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -68,6 +57,26 @@ else()
 endif()
 
 find_package(Python COMPONENTS Interpreter Development REQUIRED)
+
+execute_process(
+    COMMAND ${Python_EXECUTABLE} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+    OUTPUT_VARIABLE PYTHON_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+# Install prefix for Python modules only.
+# Shared C/C++ runtime libraries are installed into the normal lib/bin dirs.
+if(BUILD_STANDALONE OR TERMIN_BUILD_MONOREPO)
+    if(WIN32)
+        set(TERMIN_PYTHON_INSTALL_DIR "python/Lib/site-packages/termin")
+    else()
+        set(TERMIN_PYTHON_INSTALL_DIR "lib/python${PYTHON_VERSION}/site-packages/termin")
+    endif()
+    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}/${TERMIN_PYTHON_INSTALL_DIR}")
+else()
+    set(TERMIN_PYTHON_PREFIX "${CMAKE_INSTALL_PREFIX}")
+    set(TERMIN_PYTHON_INSTALL_DIR ".")
+endif()
 
 set(TERMIN_HOST_PYTHON_PATHS "")
 foreach(path_var Python_SITELIB Python_SITEARCH)
@@ -244,7 +253,7 @@ if(BUILD_EDITOR_MINIMAL)
     endif()
     install(TARGETS termin_editor RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     set_target_properties(termin_editor PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
         BUILD_WITH_INSTALL_RPATH FALSE
     )
@@ -272,7 +281,7 @@ if(BUILD_LAUNCHER)
     endif()
     install(TARGETS termin_launcher RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     set_target_properties(termin_launcher PROPERTIES
-        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN/../lib/python/termin;$ORIGIN"
+        INSTALL_RPATH "$ORIGIN/../lib;$ORIGIN"
         BUILD_RPATH "${CMAKE_BINARY_DIR}/bin"
         BUILD_WITH_INSTALL_RPATH FALSE
     )

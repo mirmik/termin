@@ -285,7 +285,7 @@ def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
     assert manager.get_asset_by_uuid("dummy-uuid") is None
 
 
-def test_spec_file_helpers_use_meta_only_and_remove_stale_legacy_spec(tmp_path) -> None:
+def test_spec_file_helpers_use_meta_only_and_leave_unrelated_spec_files(tmp_path) -> None:
     asset_path = tmp_path / "probe.obj"
     asset_path.write_text("", encoding="utf-8")
     spec_path = tmp_path / "probe.obj.spec"
@@ -296,7 +296,7 @@ def test_spec_file_helpers_use_meta_only_and_remove_stale_legacy_spec(tmp_path) 
 
     assert write_spec_file(str(asset_path), {"uuid": "meta"})
     assert read_spec_file(str(asset_path)) == {"uuid": "meta"}
-    assert not spec_path.exists()
+    assert spec_path.exists()
 
 
 class _EntryPoint:

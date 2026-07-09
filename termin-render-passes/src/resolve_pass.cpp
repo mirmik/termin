@@ -3,33 +3,16 @@
 #include "termin/render/execute_context.hpp"
 #include "tgfx2/render_context.hpp"
 
-#include <cctype>
 #include <tcbase/tc_log.hpp>
 
 namespace termin {
-namespace {
-
-std::string normalize_strategy(const std::string& value) {
-    std::string mode;
-    mode.reserve(value.size());
-    for (char c : value) {
-        if (!std::isspace(static_cast<unsigned char>(c))) {
-            mode.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-        }
-    }
-    return mode.empty() ? "average" : mode;
-}
-
-} // namespace
 
 ResolvePass::ResolvePass(
     const std::string& input,
-    const std::string& output,
-    const std::string& strategy_value
+    const std::string& output
 )
     : input_res(input)
     , output_res(output)
-    , strategy(strategy_value)
 {
     pass_name_set("Resolve");
     link_to_type_registry("ResolvePass");
@@ -77,11 +60,6 @@ void ResolvePass::execute(ExecuteContext& ctx) {
 
     tgfx::TextureHandle input_tex = in_it->second;
     tgfx::TextureHandle output_tex = out_it->second;
-    const std::string mode = normalize_strategy(strategy);
-    if (mode != "average") {
-        tc::Log::warn("[ResolvePass] strategy '%s' is deprecated; using average resolve in pass '%s'",
-                      strategy.c_str(), get_pass_name().c_str());
-    }
     ctx.ctx2->blit(input_tex, output_tex);
 }
 

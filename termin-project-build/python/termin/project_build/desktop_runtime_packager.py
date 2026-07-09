@@ -875,7 +875,7 @@ def _distribution_sort_key(
     except InvalidVersion:
         version = Version("0")
         valid_version = 0
-    metadata_path = getattr(distribution, "_path", "")
+    metadata_path = distribution.locate_file("")
     return (valid_version, version, version_text, str(metadata_path))
 
 

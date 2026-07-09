@@ -62,6 +62,30 @@ static fs::path find_python_stdlib(const fs::path& install_root) {
 #endif
 }
 
+static fs::path find_site_packages_termin(const fs::path& install_root) {
+#ifdef _WIN32
+    fs::path termin_dir = install_root / "python" / "Lib" / "site-packages" / "termin";
+    if (fs::exists(termin_dir)) {
+        return termin_dir;
+    }
+    return {};
+#else
+    fs::path lib_dir = install_root / "lib";
+    if (!fs::exists(lib_dir)) return {};
+
+    for (const auto& entry : fs::directory_iterator(lib_dir)) {
+        if (!entry.is_directory()) continue;
+        std::string name = entry.path().filename().string();
+        if (name.find("python3.") != 0) continue;
+        fs::path termin_dir = entry.path() / "site-packages" / "termin";
+        if (fs::exists(termin_dir)) {
+            return termin_dir;
+        }
+    }
+    return {};
+#endif
+}
+
 static void set_python_argv(int argc, char* argv[]) {
     wchar_t** wargv = new wchar_t*[argc];
     for (int i = 0; i < argc; i++) {
@@ -82,7 +106,8 @@ int main(int argc, char* argv[]) {
     fs::path python_stdlib = find_python_stdlib(install_root);
 
     fs::path termin_path;
-    bool sdk_python_tree = false;
+    bool installed_site_packages = false;
+    fs::path installed_termin_path = find_site_packages_termin(install_root);
 
     if (!python_stdlib.empty()) {
         bundled_python = true;
@@ -113,10 +138,10 @@ int main(int argc, char* argv[]) {
 
         Py_NoSiteFlag = 0;
         Py_IgnoreEnvironmentFlag = 1;
-    } else if (fs::exists(install_root / "lib" / "python" / "termin")) {
-        sdk_python_tree = true;
-        termin_path = install_root / "lib" / "python" / "termin";
-        std::cout << "Using SDK Python modules: " << termin_path << std::endl;
+    } else if (!installed_termin_path.empty()) {
+        installed_site_packages = true;
+        termin_path = installed_termin_path;
+        std::cout << "Using installed Python modules: " << termin_path << std::endl;
 
         if (std::getenv("TERMIN_SDK") == nullptr) {
 #ifdef _WIN32
@@ -158,18 +183,14 @@ int main(int argc, char* argv[]) {
         path_code =
             "import sys\n"
             "sys.path.insert(0, r'" + site_packages.string() + "')\n";
-    } else if (sdk_python_tree) {
+    } else if (installed_site_packages) {
         path_code =
-            "import sys, types\n"
+            "import sys\n"
             "host_paths = [p for p in r'" TERMIN_HOST_PYTHON_PATHS "'.split('|') if p]\n"
             "for p in reversed(host_paths):\n"
             "    if p and p not in sys.path:\n"
             "        sys.path.insert(0, p)\n"
-            "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n"
-            "termin_pkg = types.ModuleType('termin')\n"
-            "termin_pkg.__path__ = [r'" + termin_path.string() + "']\n"
-            "termin_pkg.__package__ = 'termin'\n"
-            "sys.modules['termin'] = termin_pkg\n";
+            "sys.path.insert(0, r'" + termin_path.parent_path().string() + "')\n";
     } else {
         path_code =
             "import sys\n"

@@ -76,29 +76,9 @@ public:
     nb::object serialize_data() const {
         if (!_c) return nb::none();
 
-        nb::object result = nb::none();
-        if (_c->kind == TC_CXX_COMPONENT) {
-            CxxComponent* cxx = CxxComponent::from_tc(_c);
-            if (!cxx) return nb::none();
-            tc_value v = cxx->serialize_data();
-            result = tc_value_to_py(&v);
-            tc_value_free(&v);
-        } else {
-            void* obj_ptr = _c->body;
-            if (!obj_ptr) return nb::none();
-            tc_value v = tc_inspect_serialize(obj_ptr, tc_component_type_name(_c));
-            result = tc_value_to_py(&v);
-            tc_value_free(&v);
-        }
-
-        if (nb::isinstance<nb::dict>(result)) {
-            nb::dict data = nb::cast<nb::dict>(result);
-            const char* name = tc_component_get_display_name(_c);
-            if (name && name[0]) {
-                data["display_name"] = name;
-            }
-            return data;
-        }
+        tc_value v = serialize_component_data(_c);
+        nb::object result = tc_value_to_py(&v);
+        tc_value_free(&v);
         return result;
     }
 

@@ -90,7 +90,7 @@ nos::trent serialize_entity_hierarchy(const Entity& entity) {
             continue;
         }
 
-        if (tc->body == nullptr) {
+        if (tc->kind != TC_CXX_COMPONENT && tc->body == nullptr) {
             continue;
         }
 
@@ -102,7 +102,7 @@ nos::trent serialize_entity_hierarchy(const Entity& entity) {
                 type_name
             );
         }
-        tc_value value = tc_inspect_serialize(tc->body, type_name);
+        tc_value value = serialize_component_data(tc);
         comp_data["data"] = tc::tc_value_to_trent(value);
         tc_value_free(&value);
         components.push_back(std::move(comp_data));

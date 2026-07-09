@@ -522,6 +522,14 @@ def _validate_scene_typed_ref(
 
     expected_type = _expected_scene_resource_type(value, context)
     if expected_type is None:
+        legacy_type, legacy_reason = _legacy_scene_resource_ref(value, context)
+        if legacy_type is not None and legacy_reason is not None:
+            _append_rejected_legacy_scene_ref(
+                diagnostics,
+                legacy_type,
+                legacy_reason,
+                context,
+            )
         return
     _validate_resource_ref(
         uuid_value,
@@ -551,12 +559,6 @@ def _validate_scene_pipeline_ref(
 
 
 def _expected_scene_resource_type(value: dict[str, Any], context: str) -> str | None:
-    context_tail = context.rsplit(".", 1)[-1]
-    if context_tail == "mesh":
-        return "mesh"
-    if context_tail == "material":
-        return "material"
-
     kind_value = value.get("kind")
     role_value = value.get("role")
     if kind_value == "tc_mesh" or role_value == "mesh":
@@ -564,14 +566,51 @@ def _expected_scene_resource_type(value: dict[str, Any], context: str) -> str | 
     if kind_value == "tc_material" or role_value == "material":
         return "material"
 
+    return None
+
+
+def _legacy_scene_resource_ref(
+    value: dict[str, Any],
+    context: str,
+) -> tuple[str | None, str | None]:
+    context_tail = context.rsplit(".", 1)[-1]
+    if context_tail == "mesh":
+        return "mesh", "legacy field name"
+    if context_tail == "material":
+        return "material", "legacy field name"
+
     name_value = value.get("name")
     if isinstance(name_value, str):
         lowered = name_value.lower()
         if "mesh" in lowered:
-            return "mesh"
+            return "mesh", "legacy resource name"
         if "material" in lowered:
-            return "material"
-    return None
+            return "material", "legacy resource name"
+    return None, None
+
+
+def _append_rejected_legacy_scene_ref(
+    diagnostics: list[RuntimePackageExportDiagnostic],
+    resource_type: str,
+    reason: str,
+    context: str,
+) -> None:
+    if resource_type == "mesh":
+        canonical_hint = "kind='tc_mesh' or role='mesh'"
+    elif resource_type == "material":
+        canonical_hint = "kind='tc_material' or role='material'"
+    else:
+        raise ValueError(f"Unsupported runtime resource ref type: {resource_type}")
+    diagnostics.append(
+        RuntimePackageExportDiagnostic(
+            "error",
+            context,
+            (
+                f"Runtime package rejected legacy {resource_type} resource ref from {reason}; "
+                f"add {canonical_hint} to the uuid ref"
+            ),
+        )
+    )
 
 
 def _validate_resource_graph(
