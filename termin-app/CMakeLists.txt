@@ -155,7 +155,6 @@ if(BUNDLE_PYTHON)
         glfw
         packaging
         pyassimp
-        sdl2
         yaml
         watchdog
     )
