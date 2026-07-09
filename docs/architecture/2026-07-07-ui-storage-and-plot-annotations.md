@@ -163,6 +163,16 @@ These systems operate on `tc_widget` resolved from a handle. They must not keep
 parallel copies of bounds, flags or tree links. The important constraints are
 explicit lifetime, a single source of widget state and inspectability.
 
+The native UI draw list is backend-neutral command storage rather than a GPU
+resource owner. Variable command data such as UTF-8 text and polyline points is
+copied into draw-list-owned stable backing. Texture commands retain only the
+opaque tgfx2 texture id, so the originating render device must keep that
+texture alive until the draw list has been rendered. Geometry and clipping are
+executed through `Canvas2DRenderer`; widget code does not branch on Vulkan,
+D3D11 or OpenGL. Arbitrary paths are intentionally outside the current UI
+contract until plot annotations define the required verbs, fill rules and
+tessellation semantics.
+
 ## Multilanguage Lifecycle And Factories
 
 `tc_widget` should converge with `tc_component` and `tc_pass` on shared
