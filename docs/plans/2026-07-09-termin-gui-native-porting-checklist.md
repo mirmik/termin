@@ -260,12 +260,12 @@ These should be ported before complex editor widgets.
 - [x] `Separator`.
 - [x] `TextInput` single-line skeleton.
 - [x] `TextArea` multiline editor.
-- [ ] `SpinBox`.
-- [ ] `SliderEdit`.
-- [ ] `ComboBox` closed-state skeleton.
-- [ ] `IconButton` with image/icon command dependency.
-- [ ] `ImageWidget` with texture/image command dependency.
-- [ ] `Canvas` custom paint callback widget.
+- [x] `SpinBox`.
+- [x] `SliderEdit`.
+- [x] `ComboBox` with document overlay dropdown.
+- [x] `IconButton` with text/texture icon.
+- [x] `ImageWidget` with texture/image command dependency.
+- [x] `Canvas` custom paint callback widget.
 
 Acceptance per widget:
 
@@ -299,6 +299,23 @@ Phase 3 notes:
 - Clipboard access is injected into `tc_ui_document` through non-owning C
   callbacks. C++ and Python-facing tests cover cross-codepoint and multiline
   copy/cut/paste through the same host service.
+- `Slider` now supports finite min/max ranges and optional step quantization.
+  `SpinBox` provides clamped stepping and fully parsed numeric editing;
+  `SliderEdit` owns canonical Slider/SpinBox children and synchronizes changes
+  in both directions without parallel child state.
+- `ComboBox` owns one reusable, unparented overlay handle. The dropdown supports
+  outside dismissal, keyboard selection, hover and wheel scrolling. Unlike the
+  legacy widget it does not yet expose a draggable scrollbar thumb; wheel
+  overflow behavior and overlay destruction are covered by native tests.
+- `IconButton` supports UTF-8 text icons or a non-owning texture handle.
+  `ImageWidget` preserves intrinsic aspect by default. `Canvas` supports a
+  main/overlay texture pair, fit/zoom/pan transforms, image-coordinate pointer
+  signals and a clipped custom paint callback.
+- Media widgets deliberately do not decode files, retain CPU arrays or
+  create/update/destroy GPU resources. Hosts inject registered tgfx2 texture
+  handles and keep them alive through rendering, matching draw-list ownership.
+- All six widgets have typed Python references/factories. Python callbacks map
+  changed/clicked/custom-paint behavior onto the same C++ widget instances.
 
 ## Phase 4 - Layout And Containers
 
