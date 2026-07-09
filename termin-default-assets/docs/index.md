@@ -50,5 +50,3 @@ Compatibility paths:
 
 - `texture_handle` remains accepted as a legacy selector kind for old
   metadata, but new texture selectors should use `tc_texture`.
-- `termin.default_assets.prefab`: compatibility re-exports for prefab classes
-  that now live in `termin.prefab`.

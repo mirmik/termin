@@ -164,7 +164,6 @@ if(TERMIN_BUILD_PYTHON)
     install(TARGETS _components_render_native DESTINATION ${_py_dest})
     install(FILES
         python/termin/render_components/__init__.py
-        python/termin/render_components/builtins.py
         python/termin/render_components/camera.py
         python/termin/render_components/line_renderer.py
         python/termin/render_components/material_pass.py
