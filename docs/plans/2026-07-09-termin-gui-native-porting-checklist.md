@@ -82,7 +82,10 @@ Already started in `termin-gui-native`:
 - [x] Add hit-test helper API for root and containers.
 - [x] Add pointer hover tracking in `tc_ui_document`.
 - [x] Add pointer capture for pressed/draggable widgets.
+- [x] Add target-to-root pointer and keyboard bubbling with consumption.
+- [x] Add direct hover enter/leave transitions and pressed lifecycle state.
 - [x] Add focus handle and focusable flag.
+- [x] Add focus enter/leave notification and Tab/reverse-Tab traversal.
 - [x] Add keyboard event ABI.
 - [x] Add text input event ABI.
 - [x] Add callback/signal storage pattern for C++ widgets.
@@ -136,14 +139,25 @@ Phase 1 notes:
   container hit-test helpers. `BoxLayout` returns the deepest visible native
   child by reverse child order and falls back to its own handle when a point is
   inside the container but no live child is hit.
-- `tc_ui_document` now tracks the hovered widget handle from pointer events and
-  supports pointer capture through `tc_ui_document_set_pointer_capture`,
-  `tc_ui_document_pointer_capture` and `tc_ui_document_release_pointer_capture`.
-  Captured widgets receive pointer events directly until release or destroy.
+- `tc_ui_document` owns hovered, pressed, pointer-capture and focused handles.
+  Hit testing selects one canonical target; ordinary pointer events then bubble
+  target-to-root until the first `Handled`. Capture takes priority over pressed
+  routing, pressed takes priority over the current hit for move/up, and wheel
+  remains routed from the current hit. Hover `Enter`/`Leave` notifications are
+  direct and do not bubble.
+- Each pointer/key/text route is snapshotted as generation handles before the
+  first callback. Destruction or reparenting during a callback cannot expose a
+  dangling `tc_widget*`; stale route members are skipped and the route order
+  remains the order observed at dispatch start.
 - `tc_widget` exposes `TC_WIDGET_FOCUSABLE`; `tc_ui_document` tracks focused
-  widget handle, focuses a focusable hit target on pointer down, clears focus
-  on non-focusable hits, and dispatches keyboard/text input events to the
-  focused widget through C ABI vtable hooks.
+  widget handle, focuses the nearest focusable hit ancestor on pointer down,
+  and bubbles keyboard/text input from focus to root. Focus transitions invoke
+  the vtable `focus_event` hook. Unhandled `Tab`/`Shift+Tab` wraps through
+  effectively visible/enabled focusables in canonical root/depth-first order.
+- Common visibility/enabled/focusable setters invalidate interaction state
+  immediately. Hiding or disabling an ancestor clears hover, capture, pressed
+  and focus handles inside that subtree, so language-specific widget bodies do
+  not need parallel cleanup rules.
 - C++ widgets expose a typed `Signal<Args...>` storage pattern with connection
   ids and disconnect support. `Button::clicked`, `Checkbox::changed` and
   `Slider::changed` are wired to pointer/state changes; the C++ showcase uses
@@ -156,7 +170,11 @@ Phase 1 notes:
   layout/paint on sizing and layout-affecting container changes, paint on visual
   changes, state/paint on value changes, and clear layout dirty after applying
   `layout()`.
-- Headless coverage: `termin_gui_native_widgets_test` checks default stretch
+- Headless coverage: `termin_gui_native_document_test` additionally fixes the
+  exact enter/leave, target-to-root bubbling, pressed, keyboard bubbling and
+  forward/reverse traversal order. It destroys a pointer target from its own
+  callback and verifies that the frozen route safely continues at the live
+  parent. `termin_gui_native_widgets_test` checks default stretch
   layout compatibility, mixed fixed/preferred/flex distribution, flexible
   shrink, max extent clamping, preferred overflow, topmost-root hit order,
   deepest child hit order, stale child handle skipping, hover updates, capture
@@ -173,7 +191,7 @@ Phase 1 notes:
   byte lengths. `UiDrawListRenderer` binds its `FontAtlas` as the production
   provider, while headless tests install deterministic proportional metrics.
 - Python-defined widgets now dispatch measure, layout, paint, pointer, hit-test,
-  key, text and destroy callbacks through a complete `tc_widget_vtable`.
+  key, text, focus and destroy callbacks through a complete `tc_widget_vtable`.
   `WidgetRef` exposes common state, canonical parent/children and mutation via
   document plus handle without copying widget fields or owning the document.
 - Initial Python document factories construct native C++ `HStack`, `VStack`,
@@ -181,8 +199,10 @@ Phase 1 notes:
   Python-defined widgets.
 - The document retains each adopted Python body until its C deleter runs under
   the GIL. Focused Python tests cover callback routing, canonical child
-  traversal, recursive destroy order, rejection of double adoption, re-adoption
-  after destroy, stale handles and ref invalidation on document teardown.
+  traversal, pointer-target destruction during bubbling, focus transitions and
+  Tab traversal, recursive destroy order, rejection of double adoption,
+  re-adoption after destroy, stale handles and ref invalidation on document
+  teardown.
 
 ## Phase 2 - Draw List And Renderer Parity
 
@@ -269,7 +289,7 @@ Phase 3 notes:
 - [x] `Splitter`.
 - [x] `GroupBox`.
 - [x] `TabView` / tabs.
-- [ ] Overlay container.
+- [x] Document overlay stack and modal policy.
 - [ ] Dialog root/container.
 - [ ] Menu popup container.
 - [ ] Toolbar layout.
@@ -280,7 +300,7 @@ Acceptance:
 - [ ] Layout tests cover empty, one child, many children.
 - [x] Layout tests cover padding, spacing, min/max, flex distribution.
 - [ ] Paint tests cover clipping.
-- [ ] Event tests cover child order, clipping and overlay precedence.
+- [x] Event tests cover child order and overlay precedence.
 - [ ] Destroy tests prove containers do not leak child widgets.
 
 Phase 4 notes:
@@ -302,22 +322,35 @@ Phase 4 notes:
 - `TabView` supports simple tab headers, selected page layout, body clipping,
   header click switching, selected-page hit-testing and recursive destroy of
   pages.
+- `tc_ui_document` owns an ordered overlay presentation stack without creating
+  a second widget tree or ownership relationship. Overlay entries reference
+  unparented, non-root widgets by generation handle and carry modal,
+  dismiss-on-outside, pointer-transparent and tooltip policy flags.
+- `tc_ui_document_paint` paints ordinary roots followed by overlays in stack
+  order. Hit testing walks overlays top-down before roots; tooltip and other
+  pointer-transparent entries paint but do not intercept input.
+- Modal overlays form an input barrier. Pointer events outside the barrier are
+  consumed, keyboard/text routing cannot escape the active modal scope, and
+  focus traversal includes the modal plus any overlays stacked above it.
+- Tooltip timing remains host-owned. The C core exposes only the pure
+  `tc_ui_tooltip_rect` placement/clamping helper, so clocks and presentation
+  scheduling stay deterministic in tests and appropriate to each host.
 
 ## Phase 5 - Input, Focus And Interaction
 
 - [x] Pointer move/down/up/wheel event ABI and basic dispatch.
-- [ ] Hover enter/leave callbacks.
-- [ ] Pressed state lifecycle.
+- [x] Hover enter/leave callbacks.
+- [x] Pressed state lifecycle.
 - [x] Pointer capture API.
 - [x] Focusable flag and direct focus assignment.
-- [ ] Tab focus traversal.
+- [x] Tab focus traversal.
 - [x] Keyboard event ABI.
 - [x] Text input ABI.
-- [ ] Parent-chain event bubbling.
+- [x] Parent-chain event bubbling.
 - [ ] Shortcut routing.
-- [ ] Modal overlay input capture.
-- [ ] Dismiss-on-outside behavior.
-- [ ] Disabled state and event blocking.
+- [x] Modal overlay input capture.
+- [x] Dismiss-on-outside and Escape behavior.
+- [x] Disabled state and event blocking.
 - [ ] Cursor request API.
 
 ## Phase 6 - Theme And Style
