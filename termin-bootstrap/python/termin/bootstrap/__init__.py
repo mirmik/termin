@@ -67,9 +67,9 @@ def _shutdown_glsl_preprocessor() -> None:
     import sys
 
     if "termin.shader_runtime" in sys.modules:
-        from termin.shader_runtime import unregister_glsl_preprocessor_fallback
+        from termin.shader_runtime import unregister_glsl_preprocessor
 
-        unregister_glsl_preprocessor_fallback()
+        unregister_glsl_preprocessor()
         return
 
     from termin.materials import unregister_glsl_preprocessor

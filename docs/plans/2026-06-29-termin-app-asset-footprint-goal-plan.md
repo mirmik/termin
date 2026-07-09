@@ -121,9 +121,10 @@ cleanup should use the active composition root, not create a new global manager.
 
 Then migrate runtime-ish app helpers:
 
-- `termin-app/termin/shader_runtime.py`: `_glsl_fallback_loader()` should use
-  `termin_assets.get_resource_manager()` first. If no manager is configured,
-  log an error and return `False`. Avoid importing `termin.assets.resources`.
+- `termin.shader_runtime`: the old GLSL ResourceManager fallback loader was
+  removed. Source hosts may still register the GLSL preprocessor callback for
+  explicitly loaded `.glsl` include assets, but missing includes are now hard
+  errors instead of lazy ResourceManager lookups.
 - `termin-glb/python/termin/glb/scene_animation_repair.py`: remove the fallback import of
   `termin.assets.resources.ResourceManager`. The function already accepts an
   injected manager and already tries `termin_assets.get_resource_manager()`.

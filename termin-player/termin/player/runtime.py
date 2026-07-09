@@ -292,10 +292,10 @@ class PlayerRuntime:
         else:
             self._scan_project_assets()
 
-        # Ensure GLSL fallback loader is set up for app ResourceManager includes.
-        from termin.shader_runtime import configure_glsl_preprocessor_fallback
+        # Register GLSL include preprocessing for explicitly loaded .glsl assets.
+        from termin.shader_runtime import configure_glsl_preprocessor
 
-        configure_glsl_preprocessor_fallback()
+        configure_glsl_preprocessor()
 
         # Create default pipeline and configure RenderingManager
         pipeline = RenderingManager.instance().create_pipeline("Default")

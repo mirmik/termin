@@ -18,6 +18,7 @@ extern "C" {
 namespace termin::rendering_manager_detail {
 
 void present_display(RenderingManager& manager, tc_display* display) {
+    (void)manager;
     if (!display) return;
     bool profile = tc_profiler_enabled();
     if (profile) tc_profiler_begin_section("Present Display");
@@ -106,13 +107,7 @@ void present_display(RenderingManager& manager, tc_display* display) {
             src_w = tc_render_target_get_width(rt);
             src_h = tc_render_target_get_height(rt);
         } else {
-            ViewportRenderState* state = manager.get_viewport_state(viewport);
-            if (!state || !state->has_output()) {
-                continue;
-            }
-            src_color = state->output_color_tex;
-            src_w = state->output_width;
-            src_h = state->output_height;
+            continue;
         }
 
         if (!src_color || src_w == 0 || src_h == 0) {
