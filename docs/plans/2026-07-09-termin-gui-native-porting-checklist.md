@@ -325,8 +325,11 @@ Phase 11 notes:
   `Splitter`, `GroupBox`, grid palette, `Separator`, `TextInput`, `ScrollArea`
   and `TabView`.
 - The showcase tree is built by shared `build_showcase(Document&)` code used by
-  both the SDL example and `termin_gui_native_showcase_test`. The snapshot test
-  fixes draw-list command totals by type after an 800x600 layout.
+  both the SDL examples and `termin_gui_native_showcase_test`. The dedicated
+  `termin_gui_native_showcase` example is the primary manual visual smoke entry
+  point; `termin_gui_native_rect_window` remains as a compatibility wrapper.
+  The snapshot test fixes draw-list command totals by type after an 800x600
+  layout.
 
 ## Phase 12 - Editor Migration Slices
 
