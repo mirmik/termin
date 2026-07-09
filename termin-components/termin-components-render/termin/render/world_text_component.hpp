@@ -58,7 +58,7 @@ private:
 
     TcMaterial effective_material() const;
     tc_material_phase* sync_material_phase() const;
-    tgfx::FontAtlas* ensure_font() const;
+    tgfx::FontAtlas* ensure_font(const char* captured_font_path) const;
 
 public:
     explicit WorldTextComponent(const char* type_name = "WorldTextComponent");

@@ -575,8 +575,12 @@ tc_material_phase* WorldTextComponent::sync_material_phase() const {
     return phase;
 }
 
-tgfx::FontAtlas* WorldTextComponent::ensure_font() const {
-    std::string path = font_path.empty() ? find_default_font_path() : font_path;
+tgfx::FontAtlas* WorldTextComponent::ensure_font(const char* captured_font_path) const {
+    const std::string captured_path =
+        captured_font_path && captured_font_path[0] != '\0'
+            ? std::string(captured_font_path)
+            : std::string();
+    std::string path = captured_path.empty() ? find_default_font_path() : captured_path;
     if (path.empty()) {
         tc::Log::error("[WorldTextComponent] no font_path set and no default system font found");
         return nullptr;
@@ -688,7 +692,7 @@ bool WorldTextComponent::encode_render_item_tgfx2(
         return true;
     }
 
-    tgfx::FontAtlas* font = ensure_font();
+    tgfx::FontAtlas* font = ensure_font(item.payload.text_batch.font_path);
     if (!font) {
         return true;
     }
