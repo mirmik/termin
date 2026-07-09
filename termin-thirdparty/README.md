@@ -18,6 +18,19 @@ Current contents:
   header-level integration smoke.
 - `sdl2`: SDL2 source submodule used as the default Windows SDL provider for
   editor/window/input builds; Linux builds continue to prefer system SDL2.
+- `zlib`: zlib v1.3.2, commit `da607da739fa6047df13e66a2af6b8bec7c2a498`,
+  used by bundled libpng for `termin-image`, Zlib license.
+- `libpng`: libpng v1.6.58, commit `3061454d980de7d53608f594194cfac722721d2a`,
+  used by `termin-image` PNG decoding, libpng license.
+- `libjpeg-turbo`: libjpeg-turbo 3.2.0, commit
+  `c85e6b905bf237038faa936dab160ebfc5da0344`, used by `termin-image`
+  JPEG decoding, BSD-style/IJG/zlib licenses.
+- `libwebp`: libwebp v1.6.0, commit `4fa21912338357f89e4fd51cf2368325b59e9bd9`,
+  used by `termin-image` WebP decoding, BSD-style license.
 
 `termin-csg` builds Manifold and Clipper2 statically into `libtermin_csg.so`; it
 does not build Manifold Python, C, JS bindings or tests.
+
+`termin-image` links PNG/JPEG/WebP codecs privately. Linux builds prefer system
+packages by default; Windows builds prefer the bundled static codec submodules
+so SDK users do not need a separate codec SDK next to Termin.
