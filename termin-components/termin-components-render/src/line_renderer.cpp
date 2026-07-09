@@ -151,6 +151,9 @@ bool accepts_phase(const std::string& phase_mark, bool cast_shadow) {
     return true;
 }
 
+TcShader get_line_material_fragment_shader(TcShader original_shader);
+TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_variant);
+
 struct TcShaderHash {
     size_t operator()(const TcShader& shader) const {
         return std::hash<uint32_t>()(shader.handle.index)
@@ -165,10 +168,218 @@ struct TcShaderEqual {
     }
 };
 
+struct LineBatchEncoderState {
+    std::unique_ptr<tgfx::ScreenSpaceLineRenderer> screen_space_renderer;
+    std::unique_ptr<tgfx::WorldSpaceLineRenderer> world_space_renderer;
+    std::unique_ptr<tgfx::WorldTubeLineRenderer> world_tube_renderer;
+};
+
 static_assert(sizeof(tc_render_item_vec3) == sizeof(tc_vec3),
               "tc_render_item_vec3 must match tc_vec3 storage");
 static_assert(alignof(tc_render_item_vec3) == alignof(tc_vec3),
               "tc_render_item_vec3 must match tc_vec3 alignment");
+
+bool encode_line_batch_render_item_tgfx2(
+    tgfx::RenderContext2& ctx,
+    const tc_render_item& item,
+    const RenderItemDrawSubmitRequest& request,
+    LineBatchEncoderState& state)
+{
+    if (item.kind != TC_RENDER_ITEM_KIND_LINE_BATCH) {
+        tc::Log::error(
+            "[LineRenderer] line encoder received unsupported item kind %u",
+            item.kind);
+        return false;
+    }
+    if (!request.draw_context) {
+        tc::Log::error("[LineRenderer] cannot encode line batch without draw context");
+        return false;
+    }
+
+    const RenderContext& context = *request.draw_context;
+    const char* phase_mark_c = request.phase_mark
+        ? request.phase_mark
+        : context.phase.c_str();
+    const std::string phase_mark = phase_mark_c ? phase_mark_c : "";
+    tc_material_phase* phase = request.material_phase
+        ? request.material_phase
+        : item.material_phase;
+
+    LineRenderMode mode = LineRenderMode::WorldBillboard;
+    if (!decode_line_render_mode(item.payload.line_batch.render_mode, mode)) {
+        tc::Log::error(
+            "[LineRenderer] cannot encode line batch with invalid render mode %u",
+            item.payload.line_batch.render_mode);
+        return false;
+    }
+    if (!is_direct_line_mode(mode)) {
+        return false;
+    }
+    if (!accepts_phase(phase_mark, true)) {
+        return false;
+    }
+    if (!item.payload.line_batch.points || item.payload.line_batch.point_count < 2) {
+        return true;
+    }
+
+    std::vector<tgfx::LinePoint3> world_points;
+    world_points.reserve(item.payload.line_batch.point_count);
+    for (size_t i = 0; i < item.payload.line_batch.point_count; ++i) {
+        const tc_render_item_vec3& point = item.payload.line_batch.points[i];
+        world_points.push_back(transform_line_point(
+            context.model,
+            tc_vec3{point.x, point.y, point.z}));
+    }
+
+    Mat44f view_projection = context.projection * context.view;
+    std::array<float, 4> color = phase_color(phase);
+    const bool has_item_override_color =
+        (item.flags & TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR) != 0u;
+    if (context.has_override_color) {
+        color = {
+            static_cast<float>(context.override_color.x),
+            static_cast<float>(context.override_color.y),
+            static_cast<float>(context.override_color.z),
+            static_cast<float>(context.override_color.w),
+        };
+    } else if (has_item_override_color) {
+        color = {
+            static_cast<float>(item.override_color.x),
+            static_cast<float>(item.override_color.y),
+            static_cast<float>(item.override_color.z),
+            static_cast<float>(item.override_color.w),
+        };
+    }
+    const bool has_override_color = context.has_override_color || has_item_override_color;
+
+    tgfx::ShaderHandle material_fragment_shader{};
+    MaterialPipelineShaderBinding tube_body_shader{};
+    MaterialPipelineShaderBinding tube_cap_shader{};
+    const bool use_material_fragment =
+        uses_material_fragment_variant_for_pass(mode, context.pass_contract);
+    if (!has_override_color && mode == LineRenderMode::WorldTube
+        && use_material_fragment) {
+        TcShader material_shader(phase ? phase->shader : tc_shader_handle_invalid());
+        TcShader body_variant = get_line_tube_material_shader(material_shader, false);
+        TcShader cap_variant = get_line_tube_material_shader(material_shader, true);
+        if (!body_variant.is_valid() || !cap_variant.is_valid()) {
+            tc::Log::error("[LineRenderer] failed to create line tube material shader variants");
+            return false;
+        }
+
+        if (!ensure_material_pipeline_shader(
+                ctx,
+                ctx.device(),
+                body_variant.handle,
+                "LineRenderer/WorldTubeBody",
+                tube_body_shader) ||
+            !ensure_material_pipeline_shader(
+                ctx,
+                ctx.device(),
+                cap_variant.handle,
+                "LineRenderer/WorldTubeCap",
+                tube_cap_shader)) {
+            tc::Log::error("[LineRenderer] failed to prepare line tube material shader variants");
+            return false;
+        }
+    } else if (!has_override_color && use_material_fragment) {
+        tc_shader* shader = context.current_tc_shader.get();
+        if (!shader) {
+            tc::Log::error(
+                "[LineRenderer] cannot draw line with material fragment: current shader is invalid");
+            return false;
+        }
+        if (!tc_shader_ensure_tgfx2(shader, &ctx.device(), nullptr, &material_fragment_shader)
+            || !material_fragment_shader) {
+            tc::Log::error(
+                "[LineRenderer] failed to compile material fragment shader variant for '%s'",
+                shader->name ? shader->name : shader->uuid);
+            return false;
+        }
+    }
+
+    if (mode == LineRenderMode::WorldTube) {
+        if (!state.world_tube_renderer) {
+            state.world_tube_renderer = std::make_unique<tgfx::WorldTubeLineRenderer>();
+        }
+        tgfx::WorldTubeLineStyle style;
+        style.width = std::max(item.payload.line_batch.width, 0.0f);
+        style.color = color;
+        style.up_hint = to_line_point(tc_vec3{
+            item.payload.line_batch.up_hint.x,
+            item.payload.line_batch.up_hint.y,
+            item.payload.line_batch.up_hint.z,
+        });
+        style.sides = std::clamp(item.payload.line_batch.tube_sides, 3, 32);
+
+        tgfx::WorldTubeLineParams params;
+        params.view_projection = to_tgfx_matrix(view_projection);
+        params.lighting_enabled = !has_override_color;
+        params.fragment_shader = material_fragment_shader;
+        if (tube_body_shader.shader && tube_cap_shader.shader) {
+            params.body_vertex_shader = tube_body_shader.vertex;
+            params.body_fragment_shader = tube_body_shader.fragment;
+            params.body_shader_layout = tube_body_shader.shader;
+            params.cap_vertex_shader = tube_cap_shader.vertex;
+            params.cap_fragment_shader = tube_cap_shader.fragment;
+            params.cap_shader_layout = tube_cap_shader.shader;
+            params.bind_resources =
+                [&request, phase](tgfx::RenderContext2& line_ctx, const tc_shader* shader_layout) {
+                    RenderItemDrawSubmitRequest line_request = request;
+                    line_request.material_phase = phase;
+                    bind_render_item_common_resources(line_ctx, shader_layout, line_request);
+                };
+        }
+
+        state.world_tube_renderer->draw_polyline(ctx, world_points, style, params);
+        return true;
+    }
+
+    if (mode == LineRenderMode::WorldBillboard) {
+        if (!state.world_space_renderer) {
+            state.world_space_renderer = std::make_unique<tgfx::WorldSpaceLineRenderer>();
+        }
+        tgfx::WorldSpaceLineStyle style;
+        style.width = std::max(item.payload.line_batch.width, 0.0f);
+        style.color = color;
+        style.cap = tgfx::LineCapStyle::Round;
+        style.join = tgfx::LineJoinStyle::Round;
+        style.round_segments = 12;
+
+        tgfx::WorldSpaceLineParams params;
+        params.view_projection = to_tgfx_matrix(view_projection);
+        params.camera_position = {
+            static_cast<float>(context.camera_position.x),
+            static_cast<float>(context.camera_position.y),
+            static_cast<float>(context.camera_position.z),
+        };
+        params.lighting_enabled = !has_override_color;
+        params.fragment_shader = material_fragment_shader;
+
+        ctx.set_cull(tgfx::CullMode::None);
+        state.world_space_renderer->draw_polyline(ctx, world_points, style, params);
+        return true;
+    }
+
+    if (!state.screen_space_renderer) {
+        state.screen_space_renderer = std::make_unique<tgfx::ScreenSpaceLineRenderer>();
+    }
+    tgfx::ScreenSpaceLineStyle style;
+    style.width_px = std::max(item.payload.line_batch.width, 0.0f);
+    style.color = color;
+    style.cap = tgfx::LineCapStyle::Round;
+    style.join = tgfx::LineJoinStyle::Round;
+    style.round_segments = 12;
+
+    tgfx::ScreenSpaceLineParams params;
+    params.view_projection = to_tgfx_matrix(view_projection);
+    params.viewport_width = static_cast<float>(std::max(context.viewport_width, 1));
+    params.viewport_height = static_cast<float>(std::max(context.viewport_height, 1));
+
+    ctx.set_cull(tgfx::CullMode::None);
+    state.screen_space_renderer->draw_polyline(ctx, world_points, style, params);
+    return true;
+}
 
 bool line_render_item_draw_encoder(
     tgfx::RenderContext2& ctx,
@@ -176,35 +387,32 @@ bool line_render_item_draw_encoder(
     const RenderItemDrawSubmitRequest& request,
     void* user_data)
 {
-    (void)user_data;
-    if (item.kind != TC_RENDER_ITEM_KIND_LINE_BATCH) {
-        tc::Log::error(
-            "[LineRenderer] line encoder received unsupported item kind %u",
-            item.kind);
+    auto* state = static_cast<LineBatchEncoderState*>(user_data);
+    if (!state) {
+        tc::Log::error("[LineRenderer] line encoder has no state");
         return false;
     }
-    CxxComponent* component = CxxComponent::from_tc(item.component);
-    auto* renderer = dynamic_cast<LineRenderer*>(component);
-    if (!renderer) {
-        const char* type_name = component ? component->type_name() : "<null>";
-        tc::Log::error(
-            "[LineRenderer] line RenderItem component is not LineRenderer: type='%s'",
-            type_name ? type_name : "<unknown>");
-        return false;
-    }
-    return renderer->encode_render_item_tgfx2(ctx, item, request);
+    return encode_line_batch_render_item_tgfx2(ctx, item, request, *state);
 }
 
 void ensure_line_render_item_encoder_registered()
 {
     static bool registered = false;
+    static LineBatchEncoderState state;
     if (registered) {
         return;
     }
 
     RenderItemDrawEncoderDesc desc{};
     desc.encode = line_render_item_draw_encoder;
+    desc.user_data = &state;
     desc.debug_name = "LineRenderer";
+    desc.capabilities.pass_semantic_mask =
+        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
+        | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow)
+        | render_item_pass_semantic_bit(RenderItemPassSemantic::Id);
+    desc.capabilities.requires_draw_context = true;
+    desc.capabilities.consumes_common_resources = true;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_LINE_BATCH, desc);
 }
 
@@ -432,6 +640,192 @@ TcShader get_line_tube_material_shader(TcShader original_shader, bool cap_varian
 
 } // namespace
 
+bool emit_line_batch_render_items(
+    tc_component* component,
+    const tc_render_item_collect_context& context,
+    tc_render_item_sink& sink,
+    const LineBatchRenderItemDesc& desc)
+{
+    if (!component) {
+        tc::Log::error("[LineBatchRenderItem] cannot emit from null component");
+        return false;
+    }
+    if (!sink.emit) {
+        tc::Log::error("[LineBatchRenderItem] cannot emit with null sink");
+        return false;
+    }
+    if (!context.phase_mark || context.phase_mark[0] == '\0') {
+        tc::Log::error("[LineBatchRenderItem] cannot emit without phase mark");
+        return false;
+    }
+    if (!desc.points || desc.point_count < 2) {
+        return true;
+    }
+
+    const std::string phase_mark = context.phase_mark;
+    if (!accepts_phase(phase_mark, desc.cast_shadow)) {
+        return true;
+    }
+
+    LineRenderMode mode = LineRenderMode::WorldBillboard;
+    if (!decode_line_render_mode(static_cast<int>(desc.render_mode), mode)) {
+        tc::Log::error(
+            "[LineBatchRenderItem] cannot emit line batch with invalid render mode %d",
+            static_cast<int>(desc.render_mode));
+        return false;
+    }
+    if (!is_direct_line_mode(mode)) {
+        tc::Log::error(
+            "[LineBatchRenderItem] render mode %d is not a direct line batch mode",
+            static_cast<int>(mode));
+        return false;
+    }
+
+    tc_material* raw = desc.material.get();
+    if (!raw) {
+        return true;
+    }
+
+    const bool allow_missing_material_phase =
+        (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u;
+    bool emitted = false;
+
+    auto emit_phase = [&](tc_material_phase* phase) -> bool {
+        if (!phase && !allow_missing_material_phase) {
+            return true;
+        }
+
+        tc_render_item item{};
+        item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
+        item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
+        item.component = component;
+        item.geometry_id = desc.geometry_id;
+        item.material_phase = phase;
+        item.material = tc_material_handle_invalid();
+        item.material_phase_index = SIZE_MAX;
+        item.payload.line_batch.points =
+            reinterpret_cast<const tc_render_item_vec3*>(desc.points);
+        item.payload.line_batch.point_count = desc.point_count;
+        item.payload.line_batch.width = desc.width;
+        item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
+        item.payload.line_batch.up_hint = {
+            desc.up_hint.x,
+            desc.up_hint.y,
+            desc.up_hint.z,
+        };
+        item.payload.line_batch.tube_sides = desc.tube_sides;
+
+        if (phase) {
+            item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+            tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+        }
+        if (desc.has_override_color) {
+            item.flags |= TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR;
+            item.override_color = desc.override_color;
+        }
+
+        std::memcpy(item.model_matrix, desc.model_matrix.data, sizeof(float) * 16);
+        emitted = true;
+        return sink.emit(&item, sink.user_data);
+    };
+
+    bool found_shadow_phase = false;
+    for (size_t i = 0; i < raw->phase_count; ++i) {
+        tc_material_phase* phase = &raw->phases[i];
+        const std::string draw_phase_mark = phase->phase_mark;
+        if (!accepts_phase(draw_phase_mark, desc.cast_shadow)) {
+            continue;
+        }
+        if (draw_phase_mark == "shadow") {
+            found_shadow_phase = true;
+        }
+        if (phase_mark == draw_phase_mark && !emit_phase(phase)) {
+            return false;
+        }
+    }
+
+    if (desc.cast_shadow && phase_mark == "shadow" && !found_shadow_phase) {
+        if (!emit_phase(find_phase(desc.shadow_fallback_material.get(), "shadow"))) {
+            return false;
+        }
+    }
+
+    if (!emitted && allow_missing_material_phase) {
+        return emit_phase(nullptr);
+    }
+
+    return true;
+}
+
+TcShader override_line_batch_shader(
+    const ShaderOverrideContext& context,
+    LineRenderMode mode,
+    bool cast_shadow)
+{
+    TcShader original_shader = context.original_shader;
+    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
+        || !accepts_phase(context.phase_mark, cast_shadow)) {
+        return original_shader;
+    }
+
+    if (mode == LineRenderMode::WorldTube) {
+        TcShader variant = get_line_tube_material_shader(original_shader, false);
+        return variant.is_valid() ? variant : original_shader;
+    }
+
+    TcShader variant = get_line_material_fragment_shader(original_shader);
+    return variant.is_valid() ? variant : original_shader;
+}
+
+void collect_line_batch_shader_usages(
+    const ShaderOverrideContext& context,
+    LineRenderMode mode,
+    bool cast_shadow,
+    const std::function<void(TcShader)>& emit)
+{
+    if (!emit) {
+        return;
+    }
+
+    TcShader original_shader = context.original_shader;
+    if (original_shader.is_valid()) {
+        emit(original_shader);
+    }
+
+    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
+        || !accepts_phase(context.phase_mark, cast_shadow)) {
+        return;
+    }
+
+    if (mode == LineRenderMode::WorldTube) {
+        TcShader body = get_line_tube_material_shader(original_shader, false);
+        if (body.is_valid()) {
+            emit(body);
+        }
+        TcShader cap = get_line_tube_material_shader(original_shader, true);
+        if (cap.is_valid()) {
+            emit(cap);
+        }
+        return;
+    }
+
+    TcShader variant = get_line_material_fragment_shader(original_shader);
+    if (variant.is_valid()) {
+        emit(variant);
+    }
+}
+
+bool line_batch_needs_lighting_ubo_tgfx2(
+    const std::string& phase_mark,
+    LineRenderMode mode,
+    bool cast_shadow)
+{
+    if (!accepts_phase(phase_mark, cast_shadow)) {
+        return false;
+    }
+    return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
+}
+
 LineRenderer::LineRenderer(const char* type_name)
     : Component(type_name)
 {
@@ -441,6 +835,7 @@ LineRenderer::LineRenderer(const char* type_name)
 void LineRenderer::register_type() {
     ensure_line_render_item_encoder_registered();
     register_component_type<LineRenderer>("LineRenderer", "Component");
+    ComponentRegistry::instance().set_category("LineRenderer", "Rendering");
     tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, TcMaterial>(
         "LineRenderer",
         "material",
@@ -834,26 +1229,11 @@ TcShader LineRenderer::override_shader(
 TcShader LineRenderer::override_shader_with_context(
     const ShaderOverrideContext& context
 ) {
-    const std::string& phase_mark = context.phase_mark;
-    const int geometry_id = context.geometry_id;
-    (void)geometry_id;
-    TcShader original_shader = context.original_shader;
     LineRenderMode mode = LineRenderMode::WorldBillboard;
     if (!effective_render_mode(mode)) {
-        return original_shader;
+        return context.original_shader;
     }
-    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
-        || !accepts_phase(phase_mark, cast_shadow)) {
-        return original_shader;
-    }
-
-    if (mode == LineRenderMode::WorldTube) {
-        TcShader variant = get_line_tube_material_shader(original_shader, false);
-        return variant.is_valid() ? variant : original_shader;
-    }
-
-    TcShader variant = get_line_material_fragment_shader(original_shader);
-    return variant.is_valid() ? variant : original_shader;
+    return override_line_batch_shader(context, mode, cast_shadow);
 }
 
 void LineRenderer::collect_shader_usages(
@@ -874,40 +1254,14 @@ void LineRenderer::collect_shader_usages_with_context(
     const ShaderOverrideContext& context,
     const std::function<void(TcShader)>& emit
 ) {
-    if (!emit) {
-        return;
-    }
-
-    TcShader original_shader = context.original_shader;
-    if (original_shader.is_valid()) {
-        emit(original_shader);
-    }
-
     LineRenderMode mode = LineRenderMode::WorldBillboard;
     if (!effective_render_mode(mode)) {
-        return;
-    }
-    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
-        || !accepts_phase(context.phase_mark, cast_shadow)) {
-        return;
-    }
-
-    if (mode == LineRenderMode::WorldTube) {
-        TcShader body = get_line_tube_material_shader(original_shader, false);
-        if (body.is_valid()) {
-            emit(body);
-        }
-        TcShader cap = get_line_tube_material_shader(original_shader, true);
-        if (cap.is_valid()) {
-            emit(cap);
+        if (emit && context.original_shader.is_valid()) {
+            emit(context.original_shader);
         }
         return;
     }
-
-    TcShader variant = get_line_material_fragment_shader(original_shader);
-    if (variant.is_valid()) {
-        emit(variant);
-    }
+    collect_line_batch_shader_usages(context, mode, cast_shadow, emit);
 }
 
 bool LineRenderer::collect_render_items(
@@ -1013,69 +1367,19 @@ bool LineRenderer::collect_render_items(
         return true;
     }
 
-    auto emit_phase = [&](tc_material_phase* phase) -> bool {
-        if (!phase && !allow_missing_material_phase) {
-            return true;
-        }
-
-        tc_render_item item{};
-        item.kind = TC_RENDER_ITEM_KIND_LINE_BATCH;
-        item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
-        item.component = this->tc_component_ptr();
-        item.geometry_id = 0;
-        item.material_phase = phase;
-        item.material = tc_material_handle_invalid();
-        item.material_phase_index = SIZE_MAX;
-        item.payload.line_batch.points =
-            reinterpret_cast<const tc_render_item_vec3*>(points_.data());
-        item.payload.line_batch.point_count = points_.size();
-        item.payload.line_batch.width = width;
-        item.payload.line_batch.render_mode = static_cast<uint32_t>(mode);
-        item.payload.line_batch.up_hint = {
-            up_hint.x,
-            up_hint.y,
-            up_hint.z,
-        };
-        item.payload.line_batch.tube_sides = tube_sides;
-
-        if (phase) {
-            item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-            tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
-        }
-
-        Mat44f model = get_model_matrix(entity());
-        std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
-        emitted = true;
-        return sink.emit(&item, sink.user_data);
-    };
-
-    bool found_shadow_phase = false;
-    for (size_t i = 0; i < raw->phase_count; ++i) {
-        tc_material_phase* phase = &raw->phases[i];
-        const std::string draw_phase_mark = phase->phase_mark;
-        if (!accepts_phase(draw_phase_mark, cast_shadow)) {
-            continue;
-        }
-        if (draw_phase_mark == "shadow") {
-            found_shadow_phase = true;
-        }
-        if (phase_mark == draw_phase_mark && !emit_phase(phase)) {
-            return false;
-        }
-    }
-
-    if (cast_shadow && phase_mark == "shadow" && !found_shadow_phase) {
-        TcMaterial fallback = default_material();
-        if (!emit_phase(find_phase(fallback.get(), "shadow"))) {
-            return false;
-        }
-    }
-
-    if (!emitted && allow_missing_material_phase) {
-        return emit_phase(nullptr);
-    }
-
-    return true;
+    LineBatchRenderItemDesc desc;
+    desc.points = points_.data();
+    desc.point_count = points_.size();
+    desc.material = mat;
+    desc.shadow_fallback_material = default_material();
+    desc.width = width;
+    desc.render_mode = mode;
+    desc.cast_shadow = cast_shadow;
+    desc.up_hint = up_hint;
+    desc.tube_sides = tube_sides;
+    desc.geometry_id = 0;
+    desc.model_matrix = get_model_matrix(entity());
+    return emit_line_batch_render_items(this->tc_component_ptr(), context, sink, desc);
 }
 
 bool LineRenderer::encode_render_item_tgfx2(
@@ -1083,200 +1387,8 @@ bool LineRenderer::encode_render_item_tgfx2(
     const tc_render_item& item,
     const RenderItemDrawSubmitRequest& request)
 {
-    if (item.kind != TC_RENDER_ITEM_KIND_LINE_BATCH) {
-        tc::Log::error(
-            "[LineRenderer] cannot encode item kind %u as line batch",
-            item.kind);
-        return false;
-    }
-    if (!request.draw_context) {
-        tc::Log::error("[LineRenderer] cannot encode line batch without draw context");
-        return false;
-    }
-
-    const RenderContext& context = *request.draw_context;
-    const char* phase_mark_c = request.phase_mark
-        ? request.phase_mark
-        : context.phase.c_str();
-    const std::string phase_mark = phase_mark_c ? phase_mark_c : "";
-    tc_material_phase* phase = request.material_phase
-        ? request.material_phase
-        : item.material_phase;
-
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!decode_line_render_mode(item.payload.line_batch.render_mode, mode)) {
-        tc::Log::error(
-            "[LineRenderer] cannot encode line batch with invalid render mode %u",
-            item.payload.line_batch.render_mode);
-        return false;
-    }
-    if (!is_direct_line_mode(mode)) {
-        return false;
-    }
-    if (!accepts_phase(phase_mark, cast_shadow)) {
-        return false;
-    }
-    if (!item.payload.line_batch.points || item.payload.line_batch.point_count < 2) {
-        return true;
-    }
-
-    std::vector<tgfx::LinePoint3> world_points;
-    world_points.reserve(item.payload.line_batch.point_count);
-    for (size_t i = 0; i < item.payload.line_batch.point_count; ++i) {
-        const tc_render_item_vec3& point = item.payload.line_batch.points[i];
-        world_points.push_back(transform_line_point(
-            context.model,
-            tc_vec3{point.x, point.y, point.z}));
-    }
-
-    Mat44f view_projection = context.projection * context.view;
-    std::array<float, 4> color = phase_color(phase);
-    const bool has_item_override_color =
-        (item.flags & TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR) != 0u;
-    if (context.has_override_color) {
-        color = {
-            static_cast<float>(context.override_color.x),
-            static_cast<float>(context.override_color.y),
-            static_cast<float>(context.override_color.z),
-            static_cast<float>(context.override_color.w),
-        };
-    } else if (has_item_override_color) {
-        color = {
-            static_cast<float>(item.override_color.x),
-            static_cast<float>(item.override_color.y),
-            static_cast<float>(item.override_color.z),
-            static_cast<float>(item.override_color.w),
-        };
-    }
-    const bool has_override_color = context.has_override_color || has_item_override_color;
-
-    tgfx::ShaderHandle material_fragment_shader{};
-    MaterialPipelineShaderBinding tube_body_shader{};
-    MaterialPipelineShaderBinding tube_cap_shader{};
-    const bool use_material_fragment =
-        uses_material_fragment_variant_for_pass(mode, context.pass_contract);
-    if (!has_override_color && mode == LineRenderMode::WorldTube
-        && use_material_fragment) {
-        TcShader material_shader(phase ? phase->shader : tc_shader_handle_invalid());
-        TcShader body_variant = get_line_tube_material_shader(material_shader, false);
-        TcShader cap_variant = get_line_tube_material_shader(material_shader, true);
-        if (!body_variant.is_valid() || !cap_variant.is_valid()) {
-            tc::Log::error("[LineRenderer] failed to create line tube material shader variants");
-            return false;
-        }
-
-        if (!ensure_material_pipeline_shader(
-                ctx2,
-                ctx2.device(),
-                body_variant.handle,
-                "LineRenderer/WorldTubeBody",
-                tube_body_shader) ||
-            !ensure_material_pipeline_shader(
-                ctx2,
-                ctx2.device(),
-                cap_variant.handle,
-                "LineRenderer/WorldTubeCap",
-                tube_cap_shader)) {
-            tc::Log::error("[LineRenderer] failed to prepare line tube material shader variants");
-            return false;
-        }
-    } else if (!has_override_color && use_material_fragment) {
-        tc_shader* shader = context.current_tc_shader.get();
-        if (!shader) {
-            tc::Log::error(
-                "[LineRenderer] cannot draw line with material fragment: current shader is invalid");
-            return false;
-        }
-        if (!tc_shader_ensure_tgfx2(shader, &ctx2.device(), nullptr, &material_fragment_shader)
-            || !material_fragment_shader) {
-            tc::Log::error(
-                "[LineRenderer] failed to compile material fragment shader variant for '%s'",
-                shader->name ? shader->name : shader->uuid);
-            return false;
-        }
-    }
-
-    if (mode == LineRenderMode::WorldTube) {
-        if (!world_tube_renderer_) {
-            world_tube_renderer_ = std::make_unique<tgfx::WorldTubeLineRenderer>();
-        }
-        tgfx::WorldTubeLineStyle style;
-        style.width = std::max(item.payload.line_batch.width, 0.0f);
-        style.color = color;
-        style.up_hint = to_line_point(tc_vec3{
-            item.payload.line_batch.up_hint.x,
-            item.payload.line_batch.up_hint.y,
-            item.payload.line_batch.up_hint.z,
-        });
-        style.sides = std::clamp(item.payload.line_batch.tube_sides, 3, 32);
-
-        tgfx::WorldTubeLineParams params;
-        params.view_projection = to_tgfx_matrix(view_projection);
-        params.lighting_enabled = !has_override_color;
-        params.fragment_shader = material_fragment_shader;
-        if (tube_body_shader.shader && tube_cap_shader.shader) {
-            params.body_vertex_shader = tube_body_shader.vertex;
-            params.body_fragment_shader = tube_body_shader.fragment;
-            params.body_shader_layout = tube_body_shader.shader;
-            params.cap_vertex_shader = tube_cap_shader.vertex;
-            params.cap_fragment_shader = tube_cap_shader.fragment;
-            params.cap_shader_layout = tube_cap_shader.shader;
-            params.bind_resources =
-                [&request, phase](tgfx::RenderContext2& line_ctx, const tc_shader* shader_layout) {
-                    if (request.prepare_material_resources) {
-                        request.prepare_material_resources(line_ctx, shader_layout, phase);
-                    }
-                };
-        }
-
-        world_tube_renderer_->draw_polyline(ctx2, world_points, style, params);
-        return true;
-    }
-
-    if (mode == LineRenderMode::WorldBillboard) {
-        if (!world_space_renderer_) {
-            world_space_renderer_ = std::make_unique<tgfx::WorldSpaceLineRenderer>();
-        }
-        tgfx::WorldSpaceLineStyle style;
-        style.width = std::max(item.payload.line_batch.width, 0.0f);
-        style.color = color;
-        style.cap = tgfx::LineCapStyle::Round;
-        style.join = tgfx::LineJoinStyle::Round;
-        style.round_segments = 12;
-
-        tgfx::WorldSpaceLineParams params;
-        params.view_projection = to_tgfx_matrix(view_projection);
-        params.camera_position = {
-            static_cast<float>(context.camera_position.x),
-            static_cast<float>(context.camera_position.y),
-            static_cast<float>(context.camera_position.z),
-        };
-        params.lighting_enabled = !has_override_color;
-        params.fragment_shader = material_fragment_shader;
-
-        ctx2.set_cull(tgfx::CullMode::None);
-        world_space_renderer_->draw_polyline(ctx2, world_points, style, params);
-        return true;
-    }
-
-    if (!screen_space_renderer_) {
-        screen_space_renderer_ = std::make_unique<tgfx::ScreenSpaceLineRenderer>();
-    }
-    tgfx::ScreenSpaceLineStyle style;
-    style.width_px = std::max(item.payload.line_batch.width, 0.0f);
-    style.color = color;
-    style.cap = tgfx::LineCapStyle::Round;
-    style.join = tgfx::LineJoinStyle::Round;
-    style.round_segments = 12;
-
-    tgfx::ScreenSpaceLineParams params;
-    params.view_projection = to_tgfx_matrix(view_projection);
-    params.viewport_width = static_cast<float>(std::max(context.viewport_width, 1));
-    params.viewport_height = static_cast<float>(std::max(context.viewport_height, 1));
-
-    ctx2.set_cull(tgfx::CullMode::None);
-    screen_space_renderer_->draw_polyline(ctx2, world_points, style, params);
-    return true;
+    static LineBatchEncoderState state;
+    return encode_line_batch_render_item_tgfx2(ctx2, item, request, state);
 }
 
 bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int geometry_id) const {
@@ -1285,10 +1397,7 @@ bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int g
     if (!effective_render_mode(mode)) {
         return false;
     }
-    if (!accepts_phase(phase_mark, cast_shadow)) {
-        return false;
-    }
-    return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
+    return line_batch_needs_lighting_ubo_tgfx2(phase_mark, mode, cast_shadow);
 }
 
 TcMesh LineRenderer::get_mesh() {

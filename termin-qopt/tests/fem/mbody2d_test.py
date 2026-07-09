@@ -8,6 +8,7 @@ from termin.fem.multibody2d_3 import (
     RigidBody2D, ForceOnBody2D, FixedRotationJoint2D, RevoluteJoint2D
 )
 from numpy import linalg
+from termin.geombase import Vec2
 from termin.geombase.screw import Screw2
 from termin.geombase.pose2 import Pose2
 from termin.fem.inertia2d import SpatialInertia2D
@@ -79,7 +80,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         _force = ForceOnBody2D(
             body=body,
-            wrench=Screw2(ang=0.0, lin=np.array([6.0, 0.0])),
+            wrench=Screw2(ang=0.0, lin=Vec2(6.0, 0.0)),
             assembler=assembler)
 
         index_map = assembler.index_map()
@@ -110,7 +111,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
 
         _force = ForceOnBody2D(
             body=body,
-            wrench=Screw2(ang=16.0, lin=np.array([0.0, 0.0])),
+            wrench=Screw2(ang=16.0, lin=Vec2(0.0, 0.0)),
             assembler=assembler)
 
         index_map = assembler.index_map()
@@ -139,7 +140,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             gravity=np.array([0.0, -10.00]),
             assembler=assembler)
 
-        body.set_pose(Pose2(lin=[1.0, 0.0], ang=0.0))
+        body.set_pose(Pose2(lin=Vec2(1.0, 0.0), ang=0.0))
 
         joint = FixedRotationJoint2D(
             body=body,
@@ -176,7 +177,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             gravity=np.array([0.0, 0.0]),
             assembler=assembler)
 
-        body.set_pose(Pose2(lin=[1.0, 0.0], ang=0.0))
+        body.set_pose(Pose2(lin=Vec2(1.0, 0.0), ang=0.0))
         body.velocity_var.set_value([0.0, 6.0, 6.0]) 
 
         _joint = FixedRotationJoint2D(
@@ -203,7 +204,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             gravity=np.array([0.0, -10.00]),
             assembler=assembler)
 
-        body.set_pose(Pose2(lin=[0.0, -1.0], ang=0.0))
+        body.set_pose(Pose2(lin=Vec2(0.0, -1.0), ang=0.0))
 
         _joint = FixedRotationJoint2D(
             body=body,
@@ -229,7 +230,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             gravity=np.array([0.0, -10.00]),
             assembler=assembler)
 
-        body.set_pose(Pose2(lin=np.array([1.0, 0.0]), ang=0.0)) # это установка позиции (хотя может показаться, что это скорость. но это позиция)
+        body.set_pose(Pose2(lin=Vec2(1.0, 0.0), ang=0.0)) # это установка позиции (хотя может показаться, что это скорость. но это позиция)
 
         _joint = FixedRotationJoint2D(
             body=body,
@@ -270,7 +271,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             gravity=np.array([0.0, -10.00]),
             assembler=assembler)
 
-        body.set_pose(Pose2(lin=np.array([0.75, 0.0]), ang=0.0))
+        body.set_pose(Pose2(lin=Vec2(0.75, 0.0), ang=0.0))
 
         _joint = FixedRotationJoint2D(
             body=body,
@@ -300,7 +301,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             assembler=assembler,
             name="body1")
 
-        body1.set_pose(Pose2(lin=np.array([0.0, -2.0]), ang=0.0))
+        body1.set_pose(Pose2(lin=Vec2(0.0, -2.0), ang=0.0))
 
         _joint1 = FixedRotationJoint2D(
             body=body1,
@@ -312,7 +313,7 @@ class TestIntegrationMultibody2D(unittest.TestCase):
             assembler=assembler,
             name="body2")
 
-        body2.set_pose(Pose2(lin=np.array([0.0, -4.0]), ang=0.0))
+        body2.set_pose(Pose2(lin=Vec2(0.0, -4.0), ang=0.0))
 
         _joint2 = RevoluteJoint2D(
             bodyA=body1,

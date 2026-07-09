@@ -23,6 +23,8 @@ class UIComponent(InputComponent):
     Multiple UIComponents can exist in a scene, rendered by priority.
     """
 
+    component_category = "UI"
+
     inspect_fields = {
         "ui_layout": InspectField(
             path="ui_layout",

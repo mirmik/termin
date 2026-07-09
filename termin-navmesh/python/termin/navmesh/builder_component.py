@@ -49,6 +49,8 @@ class NavMeshBuilderComponent(DrawableComponent):
     Voxels are not saved to file - they are intermediate data.
     """
 
+    component_category = "Navigation"
+
     inspect_fields = {
         "navmesh_name": InspectField(
             path="navmesh_name",

@@ -152,8 +152,8 @@ void bind_shadow_camera_helpers(nb::module_& m) {
     }, nb::arg("params"), "Compute combined light space matrix (projection * view)");
 
     m.def("compute_frustum_corners", [](
-        nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
-        nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj
+        nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> view,
+        nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> proj
     ) {
         Mat44f view_mat, proj_mat;
         for (int row = 0; row < 4; ++row) {
@@ -177,8 +177,8 @@ void bind_shadow_camera_helpers(nb::module_& m) {
        "Compute 8 corners of view frustum in world space");
 
     m.def("fit_shadow_frustum_to_camera", [](
-        nb::ndarray<nb::numpy, double, nb::shape<4, 4>> view,
-        nb::ndarray<nb::numpy, double, nb::shape<4, 4>> proj,
+        nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> view,
+        nb::ndarray<double, nb::shape<4, 4>, nb::c_contig, nb::device::cpu> proj,
         const Vec3& light_direction,
         double padding,
         int shadow_map_resolution,

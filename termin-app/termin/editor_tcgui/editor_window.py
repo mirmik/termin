@@ -424,6 +424,7 @@ class EditorWindowTcgui:
             dialog_service=self._dialog_service,
             on_object_selected=self._on_tree_object_selected,
             request_viewport_update=self._request_viewport_update,
+            collapse_all_button=widgets.scene_collapse_all_button,
         )
 
         # Setup inspector controller

@@ -106,6 +106,8 @@ class NavMeshDisplayComponent(DrawableComponent):
     Использует TcNavMesh для поддержки hot-reload.
     """
 
+    component_category = "Navigation"
+
     inspect_fields = {
         "navmesh": InspectField(
             path="navmesh",

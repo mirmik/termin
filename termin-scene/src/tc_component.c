@@ -27,6 +27,8 @@ typedef struct tc_component_facet_payload {
     void* factory_userdata;
     tc_component_kind kind;
     bool is_abstract;
+    const char* display_name;
+    const char* category;
     uint64_t capability_mask;
     const char** requirements;
     size_t requirement_count;
@@ -586,6 +588,59 @@ bool tc_component_registry_has_requirement(
 tc_component_kind tc_component_registry_get_kind(const char* type_name) {
     tc_component_facet_payload* facet = component_facet(type_name);
     return facet ? facet->kind : TC_CXX_COMPONENT;
+}
+
+bool tc_component_registry_is_abstract(const char* type_name) {
+    tc_component_facet_payload* facet = component_facet(type_name);
+    return facet ? facet->is_abstract : false;
+}
+
+void tc_component_registry_set_display_name(
+    const char* type_name,
+    const char* display_name
+) {
+    if (!type_name || !g_component_registry) return;
+
+    tc_component_facet_payload* facet = component_facet(type_name);
+    if (!facet) return;
+
+    facet->display_name = (display_name && display_name[0])
+        ? tc_intern_string(display_name)
+        : NULL;
+}
+
+const char* tc_component_registry_get_display_name(const char* type_name) {
+    tc_component_facet_payload* facet = component_facet(type_name);
+    if (facet && facet->display_name && facet->display_name[0]) {
+        return facet->display_name;
+    }
+    return type_name ? type_name : "";
+}
+
+void tc_component_registry_set_category(
+    const char* type_name,
+    const char* category
+) {
+    if (!type_name || !g_component_registry) return;
+
+    tc_component_facet_payload* facet = component_facet(type_name);
+    if (!facet) return;
+
+    facet->category = (category && category[0])
+        ? tc_intern_string(category)
+        : NULL;
+}
+
+const char* tc_component_registry_get_category(const char* type_name) {
+    const char* current = type_name;
+    for (size_t depth = 0; current && depth < 64; ++depth) {
+        tc_component_facet_payload* facet = component_facet(current);
+        if (facet && facet->category && facet->category[0]) {
+            return facet->category;
+        }
+        current = tc_runtime_type_registry_get_parent(current);
+    }
+    return "Other";
 }
 
 typedef struct {

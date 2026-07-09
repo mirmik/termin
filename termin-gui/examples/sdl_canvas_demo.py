@@ -2,7 +2,7 @@
 
 Demonstrates: Canvas widget, pan/zoom, overlay drawing, coordinate transforms.
 
-Requirements: tcbase, tgfx, tcgui, PySDL2, Pillow (or numpy-only fallback)
+Requirements: tcbase, tgfx, tcgui, termin-display, numpy
 Run: python3 examples/sdl_canvas_demo.py
 """
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+from tcgui.widgets.icon_button import IconButton
 from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.label import Label
 from tcgui.widgets.menu import Menu, MenuItem
@@ -38,6 +39,7 @@ class SceneTreeControllerTcgui:
         dialog_service: DialogService,
         on_object_selected: Callable[[object | None], None],
         request_viewport_update: Optional[Callable[[], None]] = None,
+        collapse_all_button: IconButton | None = None,
     ) -> None:
         self._tree = tree_widget
         self._scene = scene
@@ -48,10 +50,13 @@ class SceneTreeControllerTcgui:
 
         self._tree.draggable = True
         self._tree.on_select = self._on_tree_select
+        self._tree.on_delete = self._on_tree_delete
         self._tree.on_drop = self._on_drop
         self._tree.on_external_drag = self._on_external_drag
         self._tree.on_external_drop = self._on_external_drop
         self._tree.on_context_menu = self._on_tree_context_menu
+        if collapse_all_button is not None:
+            collapse_all_button.on_click = self.collapse_all
 
         self._ctx_menu = Menu()
         self._rebuild_context_menu(None)
@@ -77,6 +82,17 @@ class SceneTreeControllerTcgui:
     def set_scene(self, scene) -> None:
         self._scene = scene
         self._ops.set_scene(scene)
+
+    def collapse_all(self) -> None:
+        """Collapse every node in the scene hierarchy."""
+        for root in self._tree.root_nodes:
+            self._collapse_recursive(root)
+        self._tree._dirty = True
+
+    def _collapse_recursive(self, node: TreeNode) -> None:
+        node.expanded = False
+        for child in node.subnodes:
+            self._collapse_recursive(child)
 
     def rebuild(self, select_obj: object | None = None) -> None:
         """Rebuild the full tree from the current scene."""
@@ -317,6 +333,11 @@ class SceneTreeControllerTcgui:
             self._on_object_selected(None)
         else:
             self._on_object_selected(node.data)
+
+    def _on_tree_delete(self, node: TreeNode) -> None:
+        entity = node.data
+        if isinstance(entity, Entity):
+            self._ops.delete_entity(entity)
 
     def _on_tree_context_menu(self, node: TreeNode | None, x: float, y: float) -> None:
         entity = node.data if node is not None else None

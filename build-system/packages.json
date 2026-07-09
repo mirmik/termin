@@ -19,6 +19,13 @@
       ]
     },
     {
+      "path": "termin-image",
+      "distribution": "termin-image",
+      "native_extensions": [
+        {"extension": "termin.image._image_native", "target": "_image_native"}
+      ]
+    },
+    {
       "path": "termin-assets",
       "distribution": "termin-assets"
     },
@@ -65,6 +72,13 @@
     {
       "path": "termin-gui",
       "distribution": "tcgui"
+    },
+    {
+      "path": "termin-gui-native",
+      "distribution": "termin-gui-native",
+      "native_extensions": [
+        {"extension": "termin.gui_native._gui_native", "target": "_gui_native"}
+      ]
     },
     {
       "path": "termin-inspect",

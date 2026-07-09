@@ -134,6 +134,7 @@ ColliderComponent::ColliderComponent()
 void ColliderComponent::register_type() {
     MeshComponent::register_type();
     register_component_type<ColliderComponent>("ColliderComponent", "Component");
+    ComponentRegistry::instance().set_category("ColliderComponent", "Collision");
     register_collider_component_inspect_fields();
 }
 

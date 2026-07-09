@@ -14,6 +14,7 @@ from termin.input._input_native import (
 class InputComponent(PythonComponent):
     """Component capable of handling input events."""
 
+    component_category = "Input"
     is_input_handler: bool = True
     default_input_priority: int = 0
     default_input_source_mask: int = INPUT_SOURCE_RUNTIME

@@ -22,6 +22,7 @@ RotatorComponent::RotatorComponent()
 void RotatorComponent::register_type() {
     KinematicUnitComponent::register_type();
     register_component_type<RotatorComponent>("RotatorComponent", "KinematicUnitComponent");
+    ComponentRegistry::instance().set_category("RotatorComponent", "Kinematic");
     register_rotator_axis_scale_field();
 }
 

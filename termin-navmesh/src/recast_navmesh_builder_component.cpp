@@ -85,6 +85,7 @@ void RecastNavMeshBuilderComponent::register_type() {
         "RecastNavMeshBuilderComponent",
         "Component"
     );
+    ComponentRegistry::instance().set_category("RecastNavMeshBuilderComponent", "Navigation");
     register_component_requirement("RecastNavMeshBuilderComponent", "NavMeshKeeperComponent");
     tc::register_inspect_field(
         &RecastNavMeshBuilderComponent::agent_type_name,

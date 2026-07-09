@@ -14,6 +14,7 @@ SkeletonController::SkeletonController()
 
 void SkeletonController::register_type() {
     register_component_type<SkeletonController>("SkeletonController", "Component");
+    ComponentRegistry::instance().set_category("SkeletonController", "Animation");
     tc::register_inspect_field(
         &SkeletonController::skeleton,
         "SkeletonController",

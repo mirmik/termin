@@ -17,6 +17,7 @@ AnimationPlayer::AnimationPlayer()
 void AnimationPlayer::register_type() {
     SkeletonController::register_type();
     register_component_type<AnimationPlayer>("AnimationPlayer", "Component");
+    ComponentRegistry::instance().set_category("AnimationPlayer", "Animation");
     tc::register_inspect_field(
         &AnimationPlayer::clips,
         "AnimationPlayer",

@@ -126,6 +126,7 @@ void IdPass::execute_with_data_tgfx2(
     tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
+    const Vec3& camera_position,
     uint64_t layer_mask
 ) {
     if (!ctx.ctx2) {
@@ -258,27 +259,50 @@ void IdPass::execute_with_data_tgfx2(
         push.u_pickColor[2] = pick_b;
         push.u_pickColor[3] = 1.0f;
 
-        std::array<MaterialPipelineUniformData, 2> base_draw_uniforms{{
+        std::array<RenderItemNamedUniformBinding, 2> base_draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
             {"id_draw", &push, static_cast<uint32_t>(sizeof(push))},
         }};
 
-        MaterialPipelineResourceContext draw_resources{};
-        draw_resources.uniforms = base_draw_uniforms;
+        MaterialPipelineResourceView draw_material_resources{};
+        RenderItemResourceBinding resource_binding{};
+        resource_binding.material_resources = &draw_material_resources;
+        resource_binding.named_uniforms = base_draw_uniforms.data();
+        resource_binding.named_uniform_count = static_cast<uint32_t>(base_draw_uniforms.size());
+
+        RenderContext draw_context;
+        draw_context.view = view;
+        draw_context.projection = projection;
+        std::memcpy(draw_context.model.data, push.u_model, sizeof(push.u_model));
+        draw_context.phase = "pick";
+        draw_context.pass_contract = shader_pass_contract();
+        draw_context.current_tc_shader = TcShader(dc.final_shader);
+        draw_context.layer_mask = layer_mask;
+        draw_context.render_category_mask = ctx.render_category_mask;
+        draw_context.camera_position = camera_position;
+        draw_context.viewport_width = rect.width;
+        draw_context.viewport_height = rect.height;
+        draw_context.has_override_color = true;
+        draw_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
+
         RenderItemDrawSubmitRequest encode_request{};
         encode_request.shader_handle = dc.final_shader;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
-        encode_request.material_resources = &draw_resources;
+        encode_request.draw_context = &draw_context;
+        encode_request.resources = &resource_binding;
         encode_request.debug_pass_name = "IdPass";
         encode_request.debug_entity_name = name;
-        if (!submit_render_item_draw(
+        const bool submitted = submit_render_item_draw(
             *ctx.ctx2,
             item,
-            encode_request)) {
+            encode_request);
+        restore_id_raster_state();
+        if (!submitted) {
             return;
         }
         capture_debug_symbol(name);
+        restore_id_raster_state();
     };
 
     for (const DrawCall& dc : cached_draw_calls_) {
@@ -346,6 +370,7 @@ void IdPass::execute(ExecuteContext& ctx) {
         scene,
         view,
         projection,
+        camera->get_position(),
         ctx.layer_mask
     );
 }

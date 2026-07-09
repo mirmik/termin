@@ -135,6 +135,8 @@ Source of truth: [termin-gui docs](../termin-gui/docs/index.md)
 
 Рендеринг виджетов должен использовать facade из [termin-graphics](#termin-graphics), а не дублировать низкоуровневые GPU primitives.
 
+`termin-gui-native` — экспериментальный C ABI/C++ прототип будущего native UI document; он не заменяет текущий Python `termin-gui`, пока контракт владения, handles и polyglot widget vtable не будет проверен на базовых виджетах.
+
 ### tcplot
 
 Source of truth: [tcplot docs](../tcplot/docs/index.md)

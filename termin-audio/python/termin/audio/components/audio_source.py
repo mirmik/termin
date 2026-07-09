@@ -20,6 +20,8 @@ class AudioSource(PythonComponent):
     Supports 2D and 3D spatial audio with distance attenuation.
     """
 
+    component_category = "Audio"
+
     inspect_fields = {
         "clip": InspectField(
             path="clip",

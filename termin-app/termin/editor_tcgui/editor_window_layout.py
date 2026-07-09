@@ -8,6 +8,7 @@ from typing import Callable
 from tcgui.widgets.button import Button
 from tcgui.widgets.file_grid_widget import FileGridWidget
 from tcgui.widgets.hstack import HStack
+from tcgui.widgets.icon_button import IconButton
 from tcgui.widgets.label import Label
 from tcgui.widgets.menu_bar import MenuBar
 from tcgui.widgets.scroll_area import ScrollArea
@@ -30,6 +31,7 @@ class EditorWindowWidgets:
     root: VStack
     menu_bar: MenuBar
     scene_tree: TreeWidget
+    scene_collapse_all_button: IconButton
     viewport_list: ViewportListWidgetTcgui
     left_tabs: TabView
     left_splitter: Splitter
@@ -85,6 +87,26 @@ def build_editor_window_layout(callbacks: EditorWindowLayoutCallbacks) -> Editor
 
     scene_tab_content = VStack()
     scene_tab_content.spacing = 4
+
+    scene_toolbar = HStack()
+    scene_toolbar.preferred_height = px(30)
+    scene_toolbar.spacing = 4
+    scene_toolbar.alignment = "center"
+
+    scene_title = Label()
+    scene_title.text = "Hierarchy"
+    scene_title.stretch = True
+    scene_title.mouse_transparent = True
+    scene_toolbar.add_child(scene_title)
+
+    scene_collapse_all_button = IconButton()
+    scene_collapse_all_button.icon = "<<"
+    scene_collapse_all_button.tooltip = "Collapse all"
+    scene_collapse_all_button.size = 24
+    scene_collapse_all_button.font_size = 13
+    scene_toolbar.add_child(scene_collapse_all_button)
+
+    scene_tab_content.add_child(scene_toolbar)
 
     scene_tree = TreeWidget()
     scene_tree.stretch = True
@@ -249,6 +271,7 @@ def build_editor_window_layout(callbacks: EditorWindowLayoutCallbacks) -> Editor
         root=root,
         menu_bar=menu_bar,
         scene_tree=scene_tree,
+        scene_collapse_all_button=scene_collapse_all_button,
         viewport_list=viewport_list,
         left_tabs=left_tabs,
         left_splitter=left_splitter,

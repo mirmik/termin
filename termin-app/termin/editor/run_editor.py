@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import sys
-import warnings
-
-warnings.filterwarnings("ignore", message="Using SDL2 binaries from pysdl2-dll")
 
 
 def _parse_editor_args() -> tuple[str | None, str | None]:

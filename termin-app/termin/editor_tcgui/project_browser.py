@@ -101,6 +101,7 @@ class ProjectBrowserTcgui:
         self._dir_tree.on_context_menu = self._on_dir_context_menu
         self._file_list.on_select = self._on_file_selected
         self._file_list.on_activate = self._on_file_activated
+        self._file_list.on_delete = self._on_file_delete
         self._file_list.on_context_menu = self._on_file_context_menu
         self._file_list.drag_enabled = True
         self._file_list.drag_payload_factory = self._make_file_drag_payload
@@ -343,6 +344,12 @@ class ProjectBrowserTcgui:
         if self.on_file_activated is not None:
             self.on_file_activated(str(path))
 
+    def _on_file_delete(self, index: int, item: dict) -> None:
+        path: Path | None = item.get("data")
+        if path is None:
+            return
+        self._delete_item(path)
+
     def _on_file_context_menu(self, index: int, item: dict, x: float, y: float) -> None:
         if self._root_path is None or self._selected_dir is None:
             return
@@ -381,6 +388,7 @@ class ProjectBrowserTcgui:
             items.append(MenuItem.sep())
 
         items.append(MenuItem("Create: Directory...", on_click=self._create_directory))
+        items.append(MenuItem("Create: File...", on_click=self._create_file))
         items.append(MenuItem("Create: Material...", on_click=self._create_material))
         items.append(MenuItem("Create: Shader...", on_click=self._create_shader))
         items.append(MenuItem("Create: Component...", on_click=self._create_component))
@@ -412,6 +420,7 @@ class ProjectBrowserTcgui:
         items.append(MenuItem("Copy Absolute Path", on_click=lambda p=directory: self._copy_absolute_path(p)))
         items.append(MenuItem("Show in Explorer", on_click=lambda p=directory: self._reveal_in_explorer(p)))
         items.append(MenuItem("Create: Directory...", on_click=lambda d=directory: self._create_directory_in(d)))
+        items.append(MenuItem("Create: File...", on_click=lambda d=directory: self._create_file_in(d)))
         items.append(MenuItem("Refresh", on_click=self.refresh))
         menu.items = items
         menu.show(ui, x, y)
@@ -464,6 +473,15 @@ class ProjectBrowserTcgui:
 
     def _create_directory(self) -> None:
         self._ops.create_directory(self._selected_dir, self.refresh)
+
+    def _create_directory_in(self, directory: Path) -> None:
+        self._ops.create_directory(directory, self.refresh)
+
+    def _create_file(self) -> None:
+        self._ops.create_file(self._selected_dir, self.refresh)
+
+    def _create_file_in(self, directory: Path) -> None:
+        self._ops.create_file(directory, self.refresh)
 
     def _delete_item(self, path: Path) -> None:
         self._ops.delete_item(path, self.refresh)

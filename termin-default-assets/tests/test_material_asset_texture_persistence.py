@@ -1,8 +1,8 @@
 import json
 import numpy as np
 import pytest
-from PIL import Image
 
+from termin.image import write_png_rgba8_file
 from termin.default_assets.render.material_asset import _parse_material_content, _save_material_file
 from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.default_assets.render.shader_asset import ShaderAsset
@@ -62,7 +62,7 @@ def test_material_load_resolves_texture_uuid_with_lazy_loaded_texture_asset(tmp_
 
     texture_uuid = "texture-load-uuid"
     texture_path = tmp_path / "albedo.png"
-    Image.fromarray(np.full((1, 1, 4), 255, dtype=np.uint8), mode="RGBA").save(texture_path)
+    write_png_rgba8_file(texture_path, np.full((1, 1, 4), 255, dtype=np.uint8))
 
     texture_asset = TextureAsset(
         texture_data=None,

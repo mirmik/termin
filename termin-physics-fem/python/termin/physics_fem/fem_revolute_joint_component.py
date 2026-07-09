@@ -29,6 +29,8 @@ class FEMRevoluteJointComponent(PythonComponent):
     Позиция самого entity игнорируется.
     """
 
+    component_category = "Physics"
+
     inspect_fields = {
         "body_a_entity_name": InspectField(
             path="body_a_entity_name",

@@ -105,44 +105,40 @@ class TextureAsset(DataAsset[TcTexture]):
 
     # --- Content parsing ---
 
-    def _parse_content(self, content: bytes) -> TcTexture | None:
-        """Parse image bytes into TcTexture."""
-        import io
-
-        import numpy as np
-        from PIL import Image
-
-        image = Image.open(io.BytesIO(content)).convert("RGBA")
-        data = np.array(image, dtype=np.uint8)
-        width, height = image.size
-
+    def _texture_from_decoded(self, decoded, source_path: str = "") -> TcTexture:
+        data = decoded.to_numpy(copy=True)
         return TcTexture.from_data(
             data=data,
-            width=width,
-            height=height,
-            channels=4,
+            width=decoded.width,
+            height=decoded.height,
+            channels=decoded.channels,
             flip_x=self._flip_x,
             flip_y=self._flip_y,
             transpose=self._transpose,
             name=self._name,
-            source_path=str(self._source_path) if self._source_path else "",
+            source_path=source_path,
             uuid=self.uuid,
         )
+
+    def _parse_content(self, content: bytes) -> TcTexture | None:
+        """Parse image bytes into TcTexture."""
+        from termin.image import decode_rgba8
+
+        source_path = str(self._source_path) if self._source_path else ""
+        decoded = decode_rgba8(content, source_path or self._name)
+        return self._texture_from_decoded(decoded, source_path)
 
     # --- Factory methods ---
 
     @classmethod
     def from_file(cls, path: str | Path, name: str | None = None) -> "TextureAsset":
         """Create TextureAsset from image file."""
-        import numpy as np
-        from PIL import Image
         from termin.default_assets.render.texture_spec import TextureSpec
+        from termin.image import decode_rgba8_file
 
         path = Path(path)
         spec = TextureSpec.for_texture_file(path)
-        image = Image.open(path).convert("RGBA")
-        data = np.array(image, dtype=np.uint8)
-        width, height = image.size
+        decoded = decode_rgba8_file(path)
 
         texture_name = name or path.stem
         asset = cls(
@@ -153,19 +149,7 @@ class TextureAsset(DataAsset[TcTexture]):
         asset._flip_x = spec.flip_x
         asset._flip_y = spec.flip_y
         asset._transpose = spec.transpose
-        texture_data = TcTexture.from_data(
-            data=data,
-            width=width,
-            height=height,
-            channels=4,
-            flip_x=spec.flip_x,
-            flip_y=spec.flip_y,
-            transpose=spec.transpose,
-            name=texture_name,
-            source_path=str(path),
-            uuid=asset.uuid,
-        )
-        asset.texture_data = texture_data
+        asset.texture_data = asset._texture_from_decoded(decoded, str(path))
         return asset
 
     @classmethod

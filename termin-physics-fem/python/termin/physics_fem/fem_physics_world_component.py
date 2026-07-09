@@ -29,6 +29,8 @@ class FEMPhysicsWorldComponent(PythonComponent):
     3. Синхронизировать трансформы обратно в сущности
     """
 
+    component_category = "Physics"
+
     inspect_fields = {
         "gravity": InspectField(
             path="gravity",

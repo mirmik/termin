@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <set>
 #include <string>
 #include <utility>
@@ -10,27 +9,10 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/render/drawable.hpp>
+#include <termin/render/line_batch_render_item.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
-
-namespace termin {
-
-enum class LineRenderMode {
-    WorldBillboard = 0,
-    ScreenSpace = 1,
-    WorldMesh = 2,
-    RawLines = 3,
-    WorldTube = 4,
-};
-
-} // namespace termin
-
-namespace tgfx {
-class ScreenSpaceLineRenderer;
-class WorldSpaceLineRenderer;
-class WorldTubeLineRenderer;
-} // namespace tgfx
 
 namespace termin {
 
@@ -47,9 +29,6 @@ public:
 private:
     std::vector<tc_vec3> points_;
     TcMesh mesh_;
-    mutable std::unique_ptr<tgfx::ScreenSpaceLineRenderer> screen_space_renderer_;
-    mutable std::unique_ptr<tgfx::WorldSpaceLineRenderer> world_space_renderer_;
-    mutable std::unique_ptr<tgfx::WorldTubeLineRenderer> world_tube_renderer_;
     bool dirty_ = true;
 
     static TcMaterial default_material();

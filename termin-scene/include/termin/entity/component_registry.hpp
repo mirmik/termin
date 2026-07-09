@@ -40,6 +40,10 @@ public:
     bool has(const std::string& name) const;
     bool is_native(const std::string& name) const;
     bool is_a(const std::string& name, const std::string& base_name) const;
+    void set_display_name(const std::string& name, const std::string& display_name);
+    std::string display_name_of(const std::string& name) const;
+    void set_category(const std::string& name, const std::string& category);
+    std::string category_of(const std::string& name) const;
 
     // Listing
     std::vector<std::string> list_all() const;

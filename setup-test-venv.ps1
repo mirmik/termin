@@ -70,7 +70,8 @@ if ($LASTEXITCODE -ne 0) { throw "build dependency install failed" }
 
 Write-Host ""
 Write-Host "--- installing runtime and test dependencies ---"
-python -m pip install numpy scipy Pillow pytest PyYAML pysdl2 pysdl2-dll ruff
+$RequirementsPath = Join-Path $ScriptDir "termin-app\requirements.txt"
+python -m pip install -r $RequirementsPath pytest ruff
 if ($LASTEXITCODE -ne 0) { throw "runtime/test dependency install failed" }
 
 function Test-TerminSdk {

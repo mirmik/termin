@@ -9,6 +9,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 include(GNUInstallDirs)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(TerminRpath)
+include(TerminSDL2)
 
 # Project root - either from parent CMakeLists.txt or compute from here
 if(NOT DEFINED TERMIN_ROOT)
@@ -207,58 +208,9 @@ else()
 endif()
 
 # ============== SDL2 (optional) ==============
-option(USE_SYSTEM_SDL2 "Use system SDL2 library (disable to use pysdl2)" ON)
+option(USE_SYSTEM_SDL2 "Use native SDL2 library" ON)
 
-if(USE_SYSTEM_SDL2)
-    if(WIN32)
-        set(SDL2_SEARCH_PATHS
-            "C:/SDL2"
-            "$ENV{SDL2_DIR}"
-            "$ENV{PROGRAMFILES}/SDL2"
-        )
-        find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
-            PATH_SUFFIXES include
-            PATHS ${SDL2_SEARCH_PATHS}
-        )
-        find_library(SDL2_LIBRARY
-            NAMES SDL2
-            PATH_SUFFIXES lib/x64 lib
-            PATHS ${SDL2_SEARCH_PATHS}
-        )
-        find_library(SDL2MAIN_LIBRARY
-            NAMES SDL2main
-            PATH_SUFFIXES lib/x64 lib
-            PATHS ${SDL2_SEARCH_PATHS}
-        )
-        if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARY)
-            set(SDL2_FOUND TRUE)
-            set(SDL2_LIBRARIES ${SDL2_LIBRARY})
-            if(SDL2MAIN_LIBRARY)
-                list(APPEND SDL2_LIBRARIES ${SDL2MAIN_LIBRARY})
-            endif()
-            get_filename_component(SDL2_LIB_DIR ${SDL2_LIBRARY} DIRECTORY)
-            find_file(SDL2_DLL
-                NAMES SDL2.dll
-                PATHS ${SDL2_LIB_DIR} ${SDL2_LIB_DIR}/../bin ${SDL2_LIB_DIR}/..
-                NO_DEFAULT_PATH
-            )
-            message(STATUS "Found SDL2: ${SDL2_INCLUDE_DIRS}")
-            message(STATUS "SDL2 DLL: ${SDL2_DLL}")
-        else()
-            message(STATUS "SDL2 not found, disabling SDL2 support (use pysdl2 instead)")
-            set(SDL2_FOUND FALSE)
-        endif()
-    else()
-        find_package(SDL2 QUIET)
-        if(NOT SDL2_FOUND)
-            find_package(PkgConfig REQUIRED)
-            pkg_check_modules(SDL2 REQUIRED sdl2)
-        endif()
-    endif()
-else()
-    set(SDL2_FOUND FALSE)
-    message(STATUS "System SDL2 disabled, using pysdl2")
-endif()
+termin_configure_sdl2()
 
 # ============== Python bindings (nanobind) ==============
 if(TERMIN_BUILD_PYTHON)
@@ -389,7 +341,7 @@ if(BUILD_TESTS)
 endif()
 
 if(WIN32 AND SDL2_DLL)
-    install(FILES ${SDL2_DLL} DESTINATION ${CMAKE_INSTALL_BINDIR})
+    termin_install_sdl2_runtime(${CMAKE_INSTALL_BINDIR})
 endif()
 
 # Install termin-app Python sources (editor, launcher, project tooling, facades).
