@@ -22,6 +22,7 @@ XrOriginComponent::XrOriginComponent()
 
 void XrOriginComponent::register_type() {
     register_component_type<XrOriginComponent>("XrOriginComponent", "CxxComponent");
+    ComponentRegistry::instance().set_category("XrOriginComponent", "Rendering");
 
     auto& inspect = tc::InspectRegistry::instance();
     if (!inspect.find_field("XrOriginComponent", "near_clip")) {

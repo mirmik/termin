@@ -37,50 +37,13 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
+include(TerminSDL2)
 
 # ── SDL2 (optional) ──
 option(USE_SYSTEM_SDL2 "Use system SDL2 library" ON)
 set(TERMIN_DISPLAY_HAS_SDL OFF)
 
-if(USE_SYSTEM_SDL2)
-    if(WIN32)
-        set(SDL2_SEARCH_PATHS
-            "C:/SDL2"
-            "$ENV{SDL2_DIR}"
-            "$ENV{PROGRAMFILES}/SDL2"
-        )
-        find_path(SDL2_INCLUDE_DIRS SDL2/SDL.h
-            PATH_SUFFIXES include
-            PATHS ${SDL2_SEARCH_PATHS}
-        )
-        find_library(SDL2_LIBRARY
-            NAMES SDL2
-            PATH_SUFFIXES lib/x64 lib
-            PATHS ${SDL2_SEARCH_PATHS}
-        )
-        if(SDL2_INCLUDE_DIRS AND SDL2_LIBRARY)
-            set(SDL2_FOUND TRUE)
-            set(SDL2_LIBRARIES ${SDL2_LIBRARY})
-            get_filename_component(SDL2_LIB_DIR ${SDL2_LIBRARY} DIRECTORY)
-            find_file(SDL2_DLL
-                NAMES SDL2.dll
-                PATHS ${SDL2_LIB_DIR} ${SDL2_LIB_DIR}/../bin ${SDL2_LIB_DIR}/..
-            )
-        else()
-            set(SDL2_FOUND FALSE)
-        endif()
-    else()
-        find_package(SDL2 QUIET)
-        if(NOT SDL2_FOUND)
-            find_package(PkgConfig QUIET)
-            if(PkgConfig_FOUND)
-                pkg_check_modules(SDL2 QUIET sdl2)
-            endif()
-        endif()
-    endif()
-else()
-    set(SDL2_FOUND FALSE)
-endif()
+termin_configure_sdl2()
 
 if(SDL2_FOUND)
     set(TERMIN_DISPLAY_HAS_SDL ON)
@@ -336,7 +299,7 @@ if(TERMIN_DISPLAY_HAS_SDL)
         DESTINATION include/termin/platform
     )
     if(WIN32 AND SDL2_DLL)
-        install(FILES ${SDL2_DLL} DESTINATION bin)
+        termin_install_sdl2_runtime(bin)
     endif()
 endif()
 
@@ -375,12 +338,7 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
             PRIVATE termin_display ${SDL2_LIBRARIES})
         target_include_directories(backend_window_d3d11_present
             PRIVATE ${SDL2_INCLUDE_DIRS})
-        if(WIN32 AND SDL2_DLL)
-            add_custom_command(TARGET backend_window_d3d11_present POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${SDL2_DLL}"
-                    "$<TARGET_FILE_DIR:backend_window_d3d11_present>")
-        endif()
+        termin_copy_sdl2_runtime(backend_window_d3d11_present)
         add_test(NAME backend_window_d3d11_present COMMAND backend_window_d3d11_present)
         set_tests_properties(backend_window_d3d11_present PROPERTIES
             TIMEOUT 10

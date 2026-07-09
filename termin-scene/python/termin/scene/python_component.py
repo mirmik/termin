@@ -27,6 +27,41 @@ def _remember_registered_type(names: list[str], type_name: str) -> None:
         names.append(type_name)
 
 
+def _humanize_component_name(name: str) -> str:
+    if not name:
+        return ""
+    result = [name[0]]
+    for i, ch in enumerate(name[1:], start=1):
+        prev = name[i - 1]
+        next_ch = name[i + 1] if i + 1 < len(name) else ""
+        if (
+            ch.isupper()
+            and (
+                prev.islower()
+                or prev.isdigit()
+                or (prev.isupper() and next_ch.islower())
+            )
+        ):
+            result.append(" ")
+        result.append(ch)
+    return "".join(result)
+
+
+def _component_category_for_class(cls: type) -> str:
+    for klass in cls.__mro__:
+        value = klass.__dict__.get("component_category")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "Project"
+
+
+def _component_display_name_for_class(cls: type) -> str:
+    value = cls.__dict__.get("component_display_name")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return _humanize_component_name(cls.__name__) or cls.__name__
+
+
 def shutdown_python_components() -> None:
     """Unregister Python-backed component and inspect types."""
     component_names = list(reversed(_registered_python_component_types))
@@ -79,6 +114,9 @@ class PythonComponent:
     """
 
     # Class-level inspect fields - enabled is inherited by all subclasses
+    component_category = "Project"
+    component_display_name = ""
+
     inspect_fields: Dict[str, Any] = {
         "display_name": InspectField(
             path="display_name",
@@ -130,7 +168,7 @@ class PythonComponent:
 
         # Register only own fields (not inherited). Empty own fields still
         # register the subclass as Python-backed before parent inheritance is set.
-        own_fields = cls.__dict__.get('inspect_fields', {})
+        own_fields = cls.__dict__.get("inspect_fields", {})
         registry.register_python_fields(cls.__name__, own_fields)
         _remember_registered_type(_registered_python_inspect_types, cls.__name__)
         if record_inspect_type is not None:
@@ -152,7 +190,10 @@ class PythonComponent:
                 record_inspect_type(cls.__name__)
 
         # Register factory in C++ ComponentRegistry
-        ComponentRegistry.instance().register_python(cls.__name__, cls, parent_name)
+        component_registry = ComponentRegistry.instance()
+        component_registry.register_python(cls.__name__, cls, parent_name)
+        component_registry.set_category(cls.__name__, _component_category_for_class(cls))
+        component_registry.set_display_name(cls.__name__, _component_display_name_for_class(cls))
         _remember_registered_type(_registered_python_component_types, cls.__name__)
         if record_component is not None:
             record_component(cls.__name__)

@@ -14,6 +14,8 @@ class AudioListener(PythonComponent):
     only one active AudioListener in a scene.
     """
 
+    component_category = "Audio"
+
     inspect_fields = {
         "volume": InspectField(
             path="volume",

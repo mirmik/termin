@@ -25,14 +25,18 @@ termin::TcMesh make_test_mesh()
         0.0f, 1.0f, 0.0f,
     };
     const uint32_t indices[] = {0, 1, 2};
-    return termin::TcMesh::from_interleaved(
+    tc_vertex_layout layout = tc_vertex_layout_pos();
+
+    termin::TcMeshCreateInfo create_info;
+    create_info.data = termin::TcMeshInterleavedDataView{
         vertices,
         3,
         indices,
         3,
-        tc_vertex_layout_pos(),
-        "foliage-render-item-test-mesh",
-        "foliage-render-item-test-mesh");
+        &layout};
+    create_info.name = "foliage-render-item-test-mesh";
+    create_info.uuid_hint = "foliage-render-item-test-mesh";
+    return termin::TcMesh::from_interleaved(create_info);
 }
 
 } // namespace

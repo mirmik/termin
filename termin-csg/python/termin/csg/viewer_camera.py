@@ -7,6 +7,15 @@ import math
 import numpy as np
 
 from termin.geombase import OrbitCamera as _NativeOrbitCamera
+from termin.geombase import Vec3
+
+
+def _vec3(value) -> Vec3:
+    return Vec3(float(value[0]), float(value[1]), float(value[2]))
+
+
+def _array3(value) -> np.ndarray:
+    return np.array((float(value[0]), float(value[1]), float(value[2])), dtype=np.float32)
 
 
 def normalize(v):
@@ -53,13 +62,14 @@ class OrbitCamera:
         self._camera.far = 100.0
 
     @property
-    def target(self):
-        return np.asarray(self._camera.target, dtype=np.float32)
+    def target(self) -> Vec3:
+        return self._camera.target
 
     @target.setter
-    def target(self, value) -> None:
-        v = np.asarray(value, dtype=np.float32).reshape(3)
-        self._camera.target = (float(v[0]), float(v[1]), float(v[2]))
+    def target(self, value: Vec3) -> None:
+        if not isinstance(value, Vec3):
+            raise TypeError("OrbitCamera.target expects termin.geombase.Vec3")
+        self._camera.target = value
 
     @property
     def distance(self) -> float:
@@ -125,30 +135,51 @@ class OrbitCamera:
         self._camera.pan(float(dx), float(dy))
 
     def screen_axes(self):
-        eye = self.eye()
-        forward = normalize(self.target - eye)
+        eye = _array3(self.eye())
+        target = _array3(self.target)
+        forward = normalize(target - eye)
         world_up = np.array((0.0, 0.0, 1.0), dtype=np.float32)
         right = normalize(np.cross(forward, world_up))
         up = normalize(np.cross(right, forward))
         return right, up
 
     def fit_bounds(self, lo, hi) -> None:
+        lo = _array3(lo)
+        hi = _array3(hi)
         center = (lo + hi) * 0.5
         extent = hi - lo
         radius = max(float(np.linalg.norm(extent)) * 0.65, 1.0)
-        self.target = center.astype(np.float32)
+        self.target = _vec3(center)
         self.distance = radius * 2.6
         self._camera.fitted_radius = radius
         self.far = max(self.distance * 20.0, 100.0)
         self.near = 0.01
 
-    def eye(self):
-        return np.asarray(self._camera.eye, dtype=np.float32)
+    def eye(self) -> Vec3:
+        return self._camera.eye
 
     def view_projection(self, width, height):
         aspect = max(float(width) / max(float(height), 1.0), 0.001)
         flat = np.asarray(self._camera.mvp(aspect), dtype=np.float32)
         return flat.reshape((4, 4), order="F")
+
+    def project_world_to_screen(self, point: Vec3, width: int, height: int):
+        if not isinstance(point, Vec3):
+            raise TypeError("project_world_to_screen expects termin.geombase.Vec3")
+        aspect = max(float(width) / max(float(height), 1.0), 0.001)
+        m = self._camera.mvp(aspect)
+        x = float(point[0])
+        y = float(point[1])
+        z = float(point[2])
+        clip_x = float(m[0]) * x + float(m[4]) * y + float(m[8]) * z + float(m[12])
+        clip_y = float(m[1]) * x + float(m[5]) * y + float(m[9]) * z + float(m[13])
+        clip_w = float(m[3]) * x + float(m[7]) * y + float(m[11]) * z + float(m[15])
+        if clip_w <= 1.0e-8:
+            return None
+        return (
+            float((clip_x / clip_w + 1.0) * 0.5 * float(width)),
+            float((clip_y / clip_w + 1.0) * 0.5 * float(height)),
+        )
 
     def view_matrix(self):
         flat = np.asarray(self._camera.view_matrix(), dtype=np.float64)

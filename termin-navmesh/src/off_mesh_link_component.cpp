@@ -6,6 +6,7 @@ namespace termin {
 
 void OffMeshLinkComponent::register_type() {
     register_component_type<OffMeshLinkComponent>("OffMeshLinkComponent", "Component");
+    ComponentRegistry::instance().set_category("OffMeshLinkComponent", "Navigation");
     tc::register_inspect_field(
         &OffMeshLinkComponent::enabled,
         "OffMeshLinkComponent",

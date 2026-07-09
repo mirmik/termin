@@ -206,6 +206,10 @@ void ensure_world_text_render_item_encoder_registered()
     RenderItemDrawEncoderDesc desc{};
     desc.encode = world_text_render_item_draw_encoder;
     desc.debug_name = "WorldTextComponent";
+    desc.capabilities.pass_semantic_mask =
+        render_item_pass_semantic_bit(RenderItemPassSemantic::Color);
+    desc.capabilities.requires_draw_context = true;
+    desc.capabilities.consumes_common_resources = false;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_TEXT_BATCH, desc);
 }
 
@@ -220,6 +224,7 @@ WorldTextComponent::WorldTextComponent(const char* type_name)
 void WorldTextComponent::register_type() {
     ensure_world_text_render_item_encoder_registered();
     register_component_type<WorldTextComponent>("WorldTextComponent", "Component");
+    ComponentRegistry::instance().set_category("WorldTextComponent", "Rendering");
     auto& inspect = tc::InspectRegistry::instance();
     inspect.add_with_callbacks<WorldTextComponent, std::string>(
         "WorldTextComponent",

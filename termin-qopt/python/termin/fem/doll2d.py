@@ -20,8 +20,21 @@ import numpy as np
 from typing import List, Dict, Optional
 from termin.fem.assembler import Variable, Contribution
 from termin.fem.inertia2d import SpatialInertia2D
+from termin.geombase import Vec2
 from termin.geombase.pose2 import Pose2
 from termin.geombase.screw import Screw2
+
+
+def _vec2(value) -> Vec2:
+    return Vec2(float(value[0]), float(value[1]))
+
+
+def _array2(value) -> np.ndarray:
+    return np.array([float(value[0]), float(value[1])], dtype=float)
+
+
+def _zero_screw2() -> Screw2:
+    return Screw2(ang=0.0, lin=Vec2(0.0, 0.0))
 
 
 class Doll2D(Contribution):
@@ -80,7 +93,7 @@ class Doll2D(Contribution):
         """
         if self.base:
             base_pose = Pose2.identity()
-            base_twist = Screw2(ang=np.array([0.0]), lin=np.zeros(2))
+            base_twist = _zero_screw2()
             self._update_link_kinematics(self.base, base_pose, base_twist)
     
     def _update_link_kinematics(self, link: 'DollLink2D',
@@ -240,7 +253,7 @@ class DollLink2D:
         
         # Кинематическое состояние
         self.pose = Pose2.identity()
-        self.twist = Screw2(ang=np.array([0.0]), lin=np.zeros(2))
+        self.twist = _zero_screw2()
     
     def add_child(self, child: 'DollLink2D', joint: DollJoint2D):
         """
@@ -267,9 +280,9 @@ class DollLink2D:
             Вренч гравитации (момент + сила) в точке привязки звена
         """
         if not self.inertia:
-            return Screw2(ang=np.array([0.0]), lin=np.zeros(2))
+            return _zero_screw2()
         
-        return self.inertia.gravity_wrench(self.pose, gravity)
+        return self.inertia.transform_by(self.pose).gravity_wrench(gravity)
     
     def local_wrench(self, gravity: np.ndarray) -> Screw2:
         """
@@ -300,7 +313,7 @@ class DollLink2D:
             return None
 
         ω = float(self.twist.ang)
-        v = self.twist.lin
+        v = _array2(self.twist.lin)
 
         # если скорости нулевые — можно не считать
         if abs(ω) < 1e-12 and np.linalg.norm(v) < 1e-12:
@@ -318,7 +331,7 @@ class DollLink2D:
         # Момент относительно точки привязки
         M_c = r_c[0] * F_c[1] - r_c[1] * F_c[0]
 
-        return Screw2(ang=np.array([M_c]), lin=F_c)
+        return Screw2(ang=float(M_c), lin=_vec2(F_c))
     
     def contribute_subtree_forces(self, gravity: np.ndarray, 
                                   b: np.ndarray, 
@@ -525,8 +538,8 @@ class DollRotatorJoint2D(DollJoint2D):
             Твист шарнира в его системе координат
         """
         return Screw2(
-            ang=self.omega.value,
-            lin=np.zeros(2)
+            ang=float(self.omega.value[0]),
+            lin=Vec2(0.0, 0.0),
         )
 
     def twist_after_joint(self, parent_twist: Screw2) -> Screw2:
@@ -559,7 +572,7 @@ class DollRotatorJoint2D(DollJoint2D):
         Args:
             dt: Шаг по времени [с]
         """
-        self.angle += self.omega.value * dt
+        self.angle += float(self.omega.value[0]) * dt
     
     def __repr__(self):
-        return f"DollRotatorJoint2D({self.name}, angle={self.angle:.3f}, omega={self.omega.value:.3f})"
+        return f"DollRotatorJoint2D({self.name}, angle={self.angle:.3f}, omega={float(self.omega.value[0]):.3f})"

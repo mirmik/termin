@@ -10,9 +10,26 @@
 from typing import List, Dict
 import numpy as np
 from termin.fem.assembler import Variable, Contribution
+from termin.geombase import Vec2, Vec3
 from termin.geombase.pose2 import Pose2
 from termin.geombase.screw import Screw2
 from termin.fem.inertia2d import SpatialInertia2D
+
+
+def _vec2(value) -> Vec2:
+    return Vec2(float(value[0]), float(value[1]))
+
+
+def _array2(value) -> np.ndarray:
+    return np.array([float(value[0]), float(value[1])], dtype=float)
+
+
+def _vec3(value) -> Vec3:
+    return Vec3(float(value[0]), float(value[1]), float(value[2]))
+
+
+def _array3(value) -> np.ndarray:
+    return np.array([float(value[0]), float(value[1]), float(value[2])], dtype=float)
 
 
 class RigidBody2D(Contribution):
@@ -34,7 +51,7 @@ class RigidBody2D(Contribution):
         self.local_pose_var = Variable(name + "_pos", size=3, tag="position")              # [x, y, θ]_local (для интеграции лок. движения)
 
         # глобальная поза тела (Pose2)
-        self.global_pose = Pose2(lin=np.zeros(2), ang=0.0)
+        self.global_pose = Pose2(lin=Vec2(0.0, 0.0), ang=0.0)
 
         self.inertia = inertia
         self.angle_normalize = angle_normalize
@@ -63,14 +80,14 @@ class RigidBody2D(Contribution):
         b = matrices["load"]
         a_idx = index_maps["acceleration"][self.acceleration_var]
 
-        v_local = Screw2.from_vector_vw_order(self.velocity_var.value)
+        v_local = Screw2.from_vector_vw_order(_vec3(self.velocity_var.value))
         bias = self.inertia.bias_wrench(v_local)
 
         # гравитация в локальной СК тела
-        g_local = self.global_pose.inverse().rotate_vector(self.gravity)
+        g_local = _array2(self.global_pose.inverse().rotate_vector(_vec2(self.gravity)))
         grav = self.inertia.gravity_wrench(g_local)
 
-        b[a_idx] += np.asarray(bias.to_vector_vw_order()) + np.asarray(grav.to_vector_vw_order())
+        b[a_idx] += _array3(bias.to_vector_vw_order()) + _array3(grav.to_vector_vw_order())
 
     def contribute_for_constraints_correction(self, matrices, index_maps):
         self.contribute_to_mass_matrix(matrices, index_maps)
@@ -97,7 +114,7 @@ class RigidBody2D(Contribution):
 
         # локальное приращение позы (интеграция по локальной СК)
         delta_pose_local = Pose2(
-            lin=v[0:2] * dt,
+            lin=Vec2(float(v[0] * dt), float(v[1] * dt)),
             ang=v[2] * dt,
         )
 
@@ -115,7 +132,10 @@ class RigidBody2D(Contribution):
         После коррекции позиций сбрасываем локальную позу.
         """
         self.global_pose = self.global_pose @ Pose2(
-            lin=self.local_pose_var.value[0:2],
+            lin=Vec2(
+                float(self.local_pose_var.value[0]),
+                float(self.local_pose_var.value[1]),
+            ),
             ang=self.local_pose_var.value[2],
         )
         self.local_pose_var.value[:] = 0.0
@@ -132,7 +152,7 @@ class ForceOnBody2D(Contribution):
     def contribute(self, matrices, index_maps):
         b = matrices["load"]
         a_indices = index_maps["acceleration"][self.acceleration]
-        b[a_indices] += np.asarray(self.wrench_local.to_vector_vw_order())
+        b[a_indices] += _array3(self.wrench_local.to_vector_vw_order())
 
 
 class FixedRotationJoint2D(Contribution):
@@ -149,9 +169,9 @@ class FixedRotationJoint2D(Contribution):
         self.internal_force = Variable("F_joint", size=2, tag="force")
 
         pose = self.body.pose()
-        self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else pose.lin.copy()
+        self.coords_of_joint = coords_of_joint.copy() if coords_of_joint is not None else _array2(pose.lin)
         # фиксируем локальные координаты точки шарнира на теле
-        self.r_local = pose.inverse_transform_point(self.coords_of_joint)
+        self.r_local = _array2(pose.inverse_transform_point(_vec2(self.coords_of_joint)))
         
         super().__init__([body.acceleration_var, self.internal_force], assembler=assembler)
 
@@ -170,8 +190,7 @@ class FixedRotationJoint2D(Contribution):
     def radius(self) -> np.ndarray:
         """Радиус шарнира в глобальной СК."""
         pose = self.body.pose()
-        r_world = pose.rotate_vector(self.r_local)
-        return r_world
+        return _array2(pose.rotate_vector(_vec2(self.r_local)))
 
     def contribute_to_holonomic_matrix(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):
         """
@@ -204,7 +223,10 @@ class FixedRotationJoint2D(Contribution):
         F_idx = index_maps["force"][self.internal_force]
 
         pose = self.body.pose()        
-        perr = pose.inverse_rotate_vector(pose.lin - self.coords_of_joint)  + self.r_local
+        pose_lin = _array2(pose.lin)
+        perr = _array2(
+            pose.inverse_rotate_vector(_vec2(pose_lin - self.coords_of_joint))
+        ) + self.r_local
         poserr[F_idx] -= perr
 
 
@@ -220,7 +242,7 @@ class RevoluteJoint2D(Contribution):
                  coords_of_joint: np.ndarray = None,
                  assembler=None):
 
-        cW = coords_of_joint.copy() if coords_of_joint is not None else bodyA.pose().lin.copy()
+        cW = coords_of_joint.copy() if coords_of_joint is not None else _array2(bodyA.pose().lin)
 
         self.bodyA = bodyA
         self.bodyB = bodyB
@@ -232,8 +254,8 @@ class RevoluteJoint2D(Contribution):
         poseB = self.bodyB.pose()
 
         # локальные координаты точки шарнира на каждом теле
-        self.rA_local = poseA.inverse_transform_point(cW)  # в СК A
-        self.rB_local = poseB.inverse_transform_point(cW)  # в СК B
+        self.rA_local = _array2(poseA.inverse_transform_point(_vec2(cW)))  # в СК A
+        self.rB_local = _array2(poseB.inverse_transform_point(_vec2(cW)))  # в СК B
 
         # кэш для rB, выраженного в СК A, и для R_AB
         #self.R_AB = np.eye(2)
@@ -259,7 +281,9 @@ class RevoluteJoint2D(Contribution):
         #R_B = np.array([[cB, -sB],[sB, cB]])
         #self.R_AB = R_A.T @ R_B
         self.poseAB = poseA.inverse() @ poseB
-        self.rB_in_A = self.poseAB.rotate_vector(self.rB_local)  # r_B, выраженный в СК A
+        self.rB_in_A = _array2(
+            self.poseAB.rotate_vector(_vec2(self.rB_local))
+        )  # r_B, выраженный в СК A
 
     def contribute(self, matrices, index_maps: Dict[str, Dict[Variable, List[int]]]):
         self.update_local_view()
@@ -302,7 +326,9 @@ class RevoluteJoint2D(Contribution):
 
         # блок по aB, выраженный в СК A:
         # - [ R,  R * perp(rB) ], где perp(r) = [-r_y, r_x]
-        col_alphaB = self.poseAB.rotate_vector(self._perp_col(self.rB_local))  # = R_AB @ perp(rB_local)
+        col_alphaB = _array2(
+            self.poseAB.rotate_vector(_vec2(self._perp_col(self.rB_local)))
+        )  # = R_AB @ perp(rB_local)
         H[np.ix_(F, aB)] += np.array([
             [-R[0,0], -R[0,1], -col_alphaB[0]],
             [-R[1,0], -R[1,1], -col_alphaB[1]],
@@ -320,8 +346,8 @@ class RevoluteJoint2D(Contribution):
         poserr = matrices["position_error"]
         F = index_maps["force"][self.internal_force]
 
-        pA = self.bodyA.pose().lin
-        pB = self.bodyB.pose().lin
+        pA = _array2(self.bodyA.pose().lin)
+        pB = _array2(self.bodyB.pose().lin)
 
         poseA = self.bodyA.pose()
         R_A_T = np.asarray(poseA.inverse().rotation_matrix())

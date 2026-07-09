@@ -8,7 +8,6 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 import numpy as np
-from PIL import Image
 from tcbase import log
 
 
@@ -231,7 +230,14 @@ class EditorFramegraphDebuggerService:
             image_array = np.frombuffer(data, dtype=np.uint8).reshape(
                 (int(height), int(width))
             )
-            Image.fromarray(image_array, mode="L").save(path)
+            alpha = np.full((int(height), int(width), 1), 255, dtype=np.uint8)
+            rgba8 = np.concatenate(
+                [image_array[:, :, None], image_array[:, :, None], image_array[:, :, None], alpha],
+                axis=2,
+            )
+            from termin.image import write_png_rgba8_file
+
+            write_png_rgba8_file(path, rgba8)
         else:
             pixels = np.empty(width * height * 4, dtype=np.float32)
             if not device.read_texture_rgba_float(capture.capture_tex, pixels):
@@ -244,7 +250,9 @@ class EditorFramegraphDebuggerService:
                 highlight_hdr=model.highlight_hdr,
             )
             rgba8 = np.clip(rgba * 255.0, 0.0, 255.0).astype(np.uint8)
-            Image.fromarray(rgba8, mode="RGBA").save(path)
+            from termin.image import write_png_rgba8_file
+
+            write_png_rgba8_file(path, rgba8)
 
         log.info(f"[FramegraphDebuggerService] exported framegraph capture: {path}")
         payload: dict[str, object] = {

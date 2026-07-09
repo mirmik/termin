@@ -15,8 +15,8 @@ setup(
     install_requires=[
         "tcbase",
         "tgfx",
+        "termin-image",
         "numpy",
-        "Pillow",
         "PyYAML",
     ],
     zip_safe=False,

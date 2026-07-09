@@ -15,6 +15,7 @@ setup(
     package_dir={"": "python"},
     install_requires=[
         "termin-assets",
+        "termin-image",
         "termin-audio",
         "termin-prefab",
         "termin-navmesh",

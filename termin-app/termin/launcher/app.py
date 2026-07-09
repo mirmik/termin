@@ -7,13 +7,11 @@ import os
 import subprocess
 import sys
 
-import sdl2
-
 from tcgui.widgets.ui import UI
 from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
 from tcgui.widgets.containers import HStack, VStack, Panel
 from tcgui.widgets.units import px, pct
-from tcbase import Key, log
+from tcbase import Key, MouseButton, log
 from termin.editor_tcgui.shader_runtime import configure_sdk_shader_runtime
 from termin.launcher.recent import RecentProjects, write_launch_project
 from termin.project import create_project
@@ -28,41 +26,20 @@ def _get_drawable_size_from_backend(window) -> tuple[int, int]:
     return window.framebuffer_size()
 
 
-def _translate_sdl_key(scancode: int) -> int:
-    _MAP = {
-        sdl2.SDL_SCANCODE_BACKSPACE: Key.BACKSPACE,
-        sdl2.SDL_SCANCODE_DELETE: Key.DELETE,
-        sdl2.SDL_SCANCODE_LEFT: Key.LEFT,
-        sdl2.SDL_SCANCODE_RIGHT: Key.RIGHT,
-        sdl2.SDL_SCANCODE_HOME: Key.HOME,
-        sdl2.SDL_SCANCODE_END: Key.END,
-        sdl2.SDL_SCANCODE_RETURN: Key.ENTER,
-        sdl2.SDL_SCANCODE_ESCAPE: Key.ESCAPE,
-        sdl2.SDL_SCANCODE_TAB: Key.TAB,
-        sdl2.SDL_SCANCODE_SPACE: Key.SPACE,
-    }
-    if scancode in _MAP:
-        return _MAP[scancode]
-    keycode = sdl2.SDL_GetKeyFromScancode(scancode)
-    if ord('a') <= keycode <= ord('z'):
-        keycode -= 32
-    if 0 <= keycode < 128:
-        try:
-            return Key(keycode)
-        except ValueError:
-            log.debug(f"Unrecognized SDL keycode {keycode} for scancode {scancode}")
-    return Key.UNKNOWN
+def _event_key(value: int) -> Key:
+    try:
+        return Key(int(value))
+    except ValueError:
+        log.debug(f"Unrecognized native key value {value}")
+        return Key.UNKNOWN
 
 
-def _translate_sdl_mods(sdl_mods: int) -> int:
-    result = 0
-    if sdl_mods & (sdl2.KMOD_LSHIFT | sdl2.KMOD_RSHIFT):
-        result |= 0x0001
-    if sdl_mods & (sdl2.KMOD_LCTRL | sdl2.KMOD_RCTRL):
-        result |= 0x0002
-    if sdl_mods & (sdl2.KMOD_LALT | sdl2.KMOD_RALT):
-        result |= 0x0004
-    return result
+def _event_button(value: int) -> MouseButton:
+    try:
+        return MouseButton(int(value))
+    except ValueError:
+        log.debug(f"Unrecognized native mouse button value {value}")
+        return MouseButton.LEFT
 
 
 # ---------------------------------------------------------------------------
@@ -646,7 +623,12 @@ def run():
 
     # Route the window through BackendWindow so the launcher runs on
     # whichever backend TERMIN_BACKEND selects (OpenGL or Vulkan).
-    from termin.display._platform_native import SDLBackendWindow
+    from termin.display._platform_native import (
+        SDLBackendWindow,
+        quit_sdl,
+        start_text_input,
+        wait_sdl_events_timeout,
+    )
     from tgfx import Tgfx2Context
 
     window = SDLBackendWindow("Termin Launcher", 1024, 640)
@@ -673,51 +655,58 @@ def run():
     app.ui.on_present_requested = present_ui
     present_ui()
 
-    sdl2.SDL_StartTextInput()
-
-    event = sdl2.SDL_Event()
+    start_text_input()
     running = True
 
     def dispatch_event(ev):
         nonlocal running
-        etype = ev.type
-        if etype == sdl2.SDL_QUIT:
+        etype = ev.get("type")
+        if etype == "quit":
             running = False
-        elif etype == sdl2.SDL_WINDOWEVENT:
-            if ev.window.event == sdl2.SDL_WINDOWEVENT_CLOSE:
-                running = False
-        elif etype == sdl2.SDL_MOUSEMOTION:
-            app.ui.mouse_move(float(ev.motion.x), float(ev.motion.y))
-        elif etype == sdl2.SDL_MOUSEBUTTONDOWN:
-            app.ui.mouse_down(float(ev.button.x), float(ev.button.y))
-        elif etype == sdl2.SDL_MOUSEBUTTONUP:
-            app.ui.mouse_up(float(ev.button.x), float(ev.button.y))
-        elif etype == sdl2.SDL_KEYDOWN:
-            scancode = ev.key.keysym.scancode
-            key = _translate_sdl_key(scancode)
-            mods = _translate_sdl_mods(sdl2.SDL_GetModState())
-            app.ui.key_down(key, mods)
-        elif etype == sdl2.SDL_TEXTINPUT:
-            text = ev.text.text.decode('utf-8')
-            app.ui.text_input(text)
+        elif etype == "window_close":
+            running = False
+        elif etype == "mouse_move":
+            app.ui.mouse_move(
+                float(ev.get("x", 0.0)),
+                float(ev.get("y", 0.0)),
+                int(ev.get("mods", 0)),
+            )
+        elif etype == "mouse_down":
+            app.ui.mouse_down(
+                float(ev.get("x", 0.0)),
+                float(ev.get("y", 0.0)),
+                _event_button(int(ev.get("button", MouseButton.LEFT.value))),
+                int(ev.get("mods", 0)),
+            )
+        elif etype == "mouse_up":
+            app.ui.mouse_up(
+                float(ev.get("x", 0.0)),
+                float(ev.get("y", 0.0)),
+                _event_button(int(ev.get("button", MouseButton.LEFT.value))),
+                int(ev.get("mods", 0)),
+            )
+        elif etype == "key_down":
+            app.ui.key_down(
+                _event_key(int(ev.get("key", Key.UNKNOWN.value))),
+                int(ev.get("mods", 0)),
+            )
+        elif etype == "text_input":
+            app.ui.text_input(str(ev.get("text", "")))
 
     while running:
         if app.should_quit:
             break
 
         # Block until event arrives or 500ms timeout (for cursor blink)
-        if sdl2.SDL_WaitEventTimeout(ctypes.byref(event), 500):
+        for event in wait_sdl_events_timeout(500):
             dispatch_event(event)
-            # Drain remaining queued events
-            while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
-                dispatch_event(event)
 
         if not running:
             break
 
         present_ui()
 
-    sdl2.SDL_Quit()
+    quit_sdl()
 
 
 if __name__ == "__main__":

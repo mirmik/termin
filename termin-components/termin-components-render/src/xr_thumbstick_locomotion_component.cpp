@@ -41,6 +41,7 @@ void XrThumbstickLocomotionComponent::register_type() {
         "XrThumbstickLocomotionComponent",
         "CxxComponent"
     );
+    ComponentRegistry::instance().set_category("XrThumbstickLocomotionComponent", "Input");
     register_component_requirement("XrThumbstickLocomotionComponent", "XrOriginComponent");
 
     auto& inspect = tc::InspectRegistry::instance();

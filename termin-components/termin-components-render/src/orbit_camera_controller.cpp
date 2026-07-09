@@ -37,6 +37,7 @@ OrbitCameraController::OrbitCameraController(
 
 void OrbitCameraController::register_type() {
     register_component_type<OrbitCameraController>("OrbitCameraController", "CxxComponent");
+    ComponentRegistry::instance().set_category("OrbitCameraController", "Input");
     tc::register_inspect_field(
         &OrbitCameraController::radius,
         "OrbitCameraController",
