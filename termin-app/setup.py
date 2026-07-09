@@ -134,7 +134,6 @@ if __name__ == "__main__":
             "termin-nanobind",
             "numpy",
             "packaging",
-            "PyOpenGL>=3.1",
             "glfw>=2.5.0",
             "Pillow>=9.0",
         ],

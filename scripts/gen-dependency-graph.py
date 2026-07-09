@@ -89,7 +89,7 @@ PYTHON_PKG_TO_DIR = {
 
 # External deps to skip
 EXTERNAL_PKGS = {
-    "numpy", "scipy", "Pillow", "PyOpenGL", "glfw", "pyassimp",
+    "numpy", "scipy", "Pillow", "glfw", "pyassimp",
     "PyYAML", "sdl2", "pysdl2-dll",
 }
 

@@ -153,10 +153,8 @@ if(BUNDLE_PYTHON)
         PIL
         Pillow
         glfw
-        OpenGL
         packaging
         pyassimp
-        pyopengl
         sdl2
         yaml
         watchdog
