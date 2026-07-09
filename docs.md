@@ -29,5 +29,6 @@
 
 ## Рабочие заметки
 
+- [Repository Control Plane Audit](docs/analysis/2026-07-09-repository-control-plane-audit.md) - полнота Python test discovery, CI gates и публикации документации.
 - [Plans](docs/plans/index.md) - временные планы и миграционные заметки.
 - [Architecture TODO](docs/architecture/2026-03-16-architecture-todo.md) - открытые архитектурные вопросы.

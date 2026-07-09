@@ -101,7 +101,7 @@ The common state required by language-neutral systems belongs in `tc_widget`:
 
 ```text
 identity/lifetime    vtable, deleter, body, language, document, handle
-tree                 parent, ordered children
+tree                 direct tc_widget parent and ordered child pointers
 layout               computed bounds, common min/preferred/max constraints
 state                visible, enabled, mouse-transparent, focusable, dirty flags
 diagnostics          stable id, name, debug name
@@ -112,14 +112,17 @@ but they remain one allocation and one widget object. Widget-specific state such
 as text, scroll offset, selected tab, padding or a collection model stays in the
 language-specific implementation. Layout metadata that describes a relation
 between a container and a child (grow/shrink, grid cell, tab title) stays in the
-container and refers to the child by handle; the generic `tc_widget` child list
-remains the canonical structural tree.
+container and may refer to the child by handle; the generic `tc_widget` child
+pointer list remains the canonical structural tree. Direct pointers are safe
+inside the tree because adopted widget addresses are stable and tree mutation
+is validated against the shared document. Handles remain the external and
+cross-subsystem reference format.
 
 Behavior can still be divided into internal systems without introducing a
 second widget record:
 
 ```text
-UiDocument      adoption, handles, generations, create/destroy
+UiDocument (C)  adoption, handles, generations, create/destroy
 tc_widget       common state and canonical parent/children/order
 UiLayoutEngine  measure/layout passes
 UiInputRouter   hit-test, focus, capture, hover

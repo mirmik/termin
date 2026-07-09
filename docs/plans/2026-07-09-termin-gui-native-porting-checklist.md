@@ -88,11 +88,11 @@ Already started in `termin-gui-native`:
 - [x] Add callback/signal storage pattern for C++ widgets.
 - [x] Add stable widget id/name/debug metadata.
 - [x] Add dirty flags: layout dirty, paint dirty, state dirty.
-- [ ] Move common computed bounds and size constraints into `tc_widget`.
-- [ ] Add canonical parent/ordered-children links and mutation APIs to
+- [x] Move common computed bounds and size constraints into `tc_widget`.
+- [x] Add canonical parent/ordered-children links and mutation APIs to
   `tc_widget` without making tree links imply recursive ownership.
-- [ ] Add common visible, enabled and mouse-transparent flags.
-- [ ] Make layout, hit testing, event routing and debug inspection consume the
+- [x] Add common visible, enabled and mouse-transparent flags.
+- [x] Make layout, hit testing and event routing consume the
   common `tc_widget` state without parallel container-specific copies.
 - [ ] Add theme/style structs and make built-in widgets consume them.
 - [ ] Add font provider or measurement service so `Label` measure uses real
@@ -102,6 +102,23 @@ Already started in `termin-gui-native`:
 - [x] Add tests for focus handoff and keyboard routing.
 
 Phase 1 notes:
+
+- `tc_ui_document`, its generation slots, roots and interaction handles are
+  implemented in C. Slots contain only `tc_widget*`, generation and transient
+  destroy state; they are not a parallel widget record.
+- `tc_widget` now owns common geometry, size constraints, state flags, a direct
+  parent pointer and an ordered child pointer array. Tree mutation validates
+  adoption, document identity and cycles; attaching performs atomic reparenting
+  and removes the child from explicit roots.
+- Plain destroy detaches a widget and orphans its children. Explicit recursive
+  destroy walks canonical children and no longer asks widget vtables for a
+  competing recursive-destroy list. Common child storage is released by the C
+  core before the optional language deleter runs; a null deleter represents a
+  borrowed/static widget.
+- Built-in containers register their children in the canonical tree. Box paint,
+  layout, hit testing and events follow canonical order; grid relationship
+  metadata is filtered by canonical membership; single-content, splitter and
+  tab membership is derived from canonical children.
 
 - Child layout policy is implemented in
   `termin-gui-native/include/termin/gui_native/widgets.hpp` and
