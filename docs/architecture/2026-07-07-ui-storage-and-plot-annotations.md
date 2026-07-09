@@ -23,15 +23,24 @@ The remaining issue is ownership and domain boundaries:
 
 ## Decision
 
-Use an explicit UI storage model for retained widgets.
+Use an explicit intrusive widget model for retained UI. This is a specialization
+of the common multilingual lifetime model described in
+[Multilanguage component lifetime model](2026-07-09-multilanguage-component-lifetime-model.md):
+`tc_widget`, `tc_component` and `tc_pass` embed their neutral C structure into
+the language-specific implementation and are adopted by one owning container.
 
 The core concept is a per-document storage owner:
 
 ```text
 UiStorage / UiDocument
-    owns widget slots and generations
+    adopts tc_widget instances through their language-specific deleters
+    owns handle slots and generations
     returns WidgetHandle values
+
+tc_widget
+    is embedded into a C++, Python or other language implementation
     stores common widget state and tree links
+    dispatches language-specific behavior through a vtable
 
 WidgetHandle
     index + generation
@@ -41,7 +50,9 @@ Ui systems
     layout, input routing, rendering and debugging operate over storage
 ```
 
-`UiStorage` is a lifetime/storage domain, not a closed application framework.
+There is no separate `WidgetRecord` carrying a second copy of widget state.
+The document handle slot resolves directly to the adopted `tc_widget`. The
+document is a lifetime and indexing domain, not a closed application framework.
 It must not own windows, render devices, framegraph passes, plot data or
 application state. Hosts provide input events, render contexts and presentation.
 
@@ -53,8 +64,8 @@ termin-graphics
     line renderers, texture and GPU utilities
 
 termin-gui
-    UiStorage / UiDocument, widget tree, layout, input routing, focus/capture,
-    overlays, theme/style state, Python wrappers for widget handles
+    UiDocument, intrusive tc_widget tree, layout, input routing, focus/capture,
+    overlays, theme/style state, multilingual factories and bindings
 
 tcplot
     plot data, axes, transforms, plot annotation layers, markers, labels,
@@ -66,32 +77,79 @@ termin-display / host application
 
 ## UI Storage Model
 
-The preferred ownership model is handle-based:
+The preferred ownership model combines an intrusive C object with handle-based
+references:
 
-- A UI document owns all widget records in a slot storage.
-- Public references are `WidgetHandle` values, not raw owning pointers.
+- A language-specific implementation embeds one `tc_widget` C structure.
+- A UI document adopts that `tc_widget` and registers its pointer in a
+  generation-checked handle slot.
+- The slot is an index and lifetime guard, not another widget state object.
+- External and cross-widget references use `WidgetHandle`, not owning pointers.
 - A handle contains at least slot index and generation.
 - Destroying a widget invalidates existing handles through generation mismatch.
-- Parent-child links describe tree structure, but do not hide lifetime rules.
+- Parent-child links live in `tc_widget` and describe structure, but do not hide
+  lifetime rules or imply recursive destruction.
 - Subtree destruction is an explicit API operation.
-- Python/C#/other language wrappers hold a document reference plus a handle.
-  They observe or command C++ storage; they do not become the primary owners of
-  native widget lifetime.
+- The creator supplies the deleter used when the document releases the widget:
+  C++ heap widgets use `delete`, Python widgets retain the Python object and use
+  `Py_DECREF`, and borrowed/static widgets use an explicitly non-owning policy.
+- A Python-defined widget embeds `tc_widget` just as a C++ widget does. A Python
+  wrapper around an already-native widget may instead hold a document reference
+  plus a handle.
 
-The storage can be implemented as one owner object with internal subsystems or
-as separate components:
+The common state required by language-neutral systems belongs in `tc_widget`:
 
 ```text
-UiStorage       handles, generations, create/destroy
-UiTree          parent/children/order
+identity/lifetime    vtable, deleter, body, language, document, handle
+tree                 parent, ordered children
+layout               computed bounds, common min/preferred/max constraints
+state                visible, enabled, mouse-transparent, focusable, dirty flags
+diagnostics          stable id, name, debug name
+```
+
+The physical C structure may group these fields into embedded substructures,
+but they remain one allocation and one widget object. Widget-specific state such
+as text, scroll offset, selected tab, padding or a collection model stays in the
+language-specific implementation. Layout metadata that describes a relation
+between a container and a child (grow/shrink, grid cell, tab title) stays in the
+container and refers to the child by handle; the generic `tc_widget` child list
+remains the canonical structural tree.
+
+Behavior can still be divided into internal systems without introducing a
+second widget record:
+
+```text
+UiDocument      adoption, handles, generations, create/destroy
+tc_widget       common state and canonical parent/children/order
 UiLayoutEngine  measure/layout passes
 UiInputRouter   hit-test, focus, capture, hover
 UiRenderer      traversal through Canvas2DRenderer
 UiTheme         style tokens and inherited style state
 ```
 
-The important constraint is explicit lifetime and inspectability. The exact
-class names can change during implementation.
+These systems operate on `tc_widget` resolved from a handle. They must not keep
+parallel copies of bounds, flags or tree links. The important constraints are
+explicit lifetime, a single source of widget state and inspectability.
+
+## Multilanguage Lifecycle And Factories
+
+`tc_widget` should converge with `tc_component` and `tc_pass` on shared
+infrastructure where practical:
+
+- one adopting container and one creator-supplied deleter;
+- composition-based inheritance through an embedded C structure and vtable;
+- language runtime factories capable of creating registered widget types;
+- neutral inspect metadata and serialization hooks;
+- deterministic invalidation during destroy and hot reload.
+
+Moving widgets between documents is not a required operation. A widget has no
+meaning outside its owning document, and document transfer would complicate
+handles, tree consistency and language lifetime without a current use case.
+
+The C ABI is expected to evolve during active development. Before supporting
+independently versioned binary plugins, the embedded structure must gain an
+explicit compatibility contract such as ABI version/structure size, or plugins
+must be required to rebuild against exactly the same SDK.
 
 ## Debugging Contract
 
@@ -144,16 +202,18 @@ without `termin-gui`.
 ## Migration Direction
 
 1. Keep `termin-graphics` as the reusable GPU/rendering substrate.
-2. Introduce a C++ UI storage/document layer in `termin-gui`.
-3. Port basic widgets to native C++ records/classes behind `WidgetHandle`.
-4. Add Python wrappers as thin handle references over the C++ storage.
+2. Complete `tc_ui_document` as the owning container and move all common tree,
+   layout and state fields into the embedded `tc_widget` contract.
+3. Port basic widgets as C++ implementations embedding `tc_widget`.
+4. Add Python-defined widgets that embed the same `tc_widget`, plus thin handle
+   wrappers for already-native widgets.
 5. Build plot annotation storage and APIs in `tcplot`.
 6. Add optional `termin-gui` plot embedding after `tcplot` annotations are
    independent.
 
 The older `termin-gui/docs/c-core-migration-analysis.md` remains useful as an
-inventory of current Python widget responsibilities, but its language-owned
-`body`/vtable sketch is not the preferred final ownership model. Native C++
-widget storage should be the primary path; language callbacks and custom
-widgets are extension points.
-
+inventory of current Python widget responsibilities. Its embedded C
+structure/body/vtable direction is retained, while ownership is clarified:
+`tc_ui_document` adopts the complete multilingual widget through a single
+deleter and handles refer directly to that object. There is no separate native
+widget record that would make Python widgets second-class implementations.
