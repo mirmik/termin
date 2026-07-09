@@ -105,7 +105,7 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
                 "termin/display/__init__.py": "VALUE = 'display seed'\n",
                 "termin/viewport/__init__.py": "VALUE = 'viewport seed'\n",
             },
-            ["Pillow", "optional-extra; extra == 'debug'"],
+            ["termin-image", "optional-extra; extra == 'debug'"],
         ),
         "termin-engine": ({"termin/engine/__init__.py": "VALUE = 'engine seed'\n"}, []),
         "termin-render": ({"termin/render/__init__.py": "VALUE = 'render seed'\n"}, []),
@@ -121,7 +121,7 @@ def _write_fake_player_runtime_distributions(site_packages: Path) -> None:
         "tgfx": ({"tgfx/__init__.py": "VALUE = 'tgfx seed'\n"}, []),
         "tcgui": ({"tcgui/__init__.py": "VALUE = 'tcgui seed'\n"}, []),
         "numpy": ({"numpy/__init__.py": "VALUE = 'numpy seed'\n"}, []),
-        "Pillow": ({"PIL/__init__.py": "VALUE = 'pillow seed'\n"}, []),
+        "termin-image": ({"termin/image/__init__.py": "VALUE = 'image seed'\n"}, []),
         "scipy": ({"scipy/__init__.py": "VALUE = 'scipy dependency'\n"}, []),
         "termin-qopt": ({"termin/fem/__init__.py": "VALUE = 'qopt fem seed'\n"}, ["scipy"]),
         "termin-skeleton": ({"termin/skeleton/__init__.py": "VALUE = 'skeleton seed'\n"}, []),
@@ -820,7 +820,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         / "__init__.py"
     ).exists()
     assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "tcbase" / "__init__.py").exists()
-    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "PIL" / "__init__.py").exists()
+    assert (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "image" / "__init__.py").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin_build").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "optional_extra").exists()
     assert not (result.dist_dir / "lib" / "python3.10" / "site-packages" / "termin" / "physics_fem").exists()
@@ -919,7 +919,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
     assert {
-        "name": "Pillow",
+        "name": "termin-image",
         "version": "1.0",
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
@@ -973,7 +973,7 @@ def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> 
         / "__init__.py"
     ).exists()
     assert (dist_dir / "python" / "Lib" / "site-packages" / "tcbase" / "__init__.py").exists()
-    assert (dist_dir / "python" / "Lib" / "site-packages" / "PIL" / "__init__.py").exists()
+    assert (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "image" / "__init__.py").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin_build").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "optional_extra").exists()
     assert not (dist_dir / "python" / "Lib" / "site-packages" / "termin" / "physics_fem").exists()

@@ -1,7 +1,6 @@
 numpy
 packaging
 glfw>=2.5.0
-Pillow>=9.0
 pyassimp
 PyYAML>=6.0
 watchdog>=3.0

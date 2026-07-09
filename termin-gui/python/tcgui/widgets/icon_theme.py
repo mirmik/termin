@@ -1,4 +1,4 @@
-"""Cross-platform file icons drawn with PIL.
+"""Cross-platform file icons drawn into RGBA numpy arrays.
 
 All icons are rendered as RGBA numpy arrays and uploaded to GPU on first use.
 """
@@ -8,7 +8,6 @@ import mimetypes
 from typing import TYPE_CHECKING
 
 import numpy as np
-from PIL import Image, ImageDraw
 
 if TYPE_CHECKING:
     pass
@@ -107,56 +106,42 @@ _FILE_COLORS: dict[str, tuple] = {
 
 def _draw_folder(size: int) -> np.ndarray:
     s = size
-    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
+    img = np.zeros((s, s, 4), dtype=np.uint8)
     c = _FOLDER_COLOR
     light = _shade(c, 1.18)
 
     tab_w = s * 9 // 20
     tab_h = s * 5 // 20
 
-    # Tab (slight trapezoid with angled right edge)
-    d.polygon([
-        (0, tab_h),
-        (0, 2),
-        (2, 0),
-        (tab_w - 2, 0),
-        (tab_w, tab_h),
-    ], fill=c)
+    tab_top = min(2, max(0, s - 1))
+    img[tab_top:tab_h, 0:tab_w] = c
 
-    # Body
-    d.rectangle([0, tab_h, s - 1, s - 2], fill=c)
+    body_bottom = max(tab_h + 1, s - 1)
+    img[tab_h:body_bottom, :] = c
 
-    # Top highlight on body
-    d.line([(0, tab_h), (s - 1, tab_h)], fill=light, width=1)
+    if 0 <= tab_h < s:
+        img[tab_h, :] = light
 
-    return np.array(img, dtype=np.uint8)
+    return img
 
 
 def _draw_file(size: int, icon_type: str) -> np.ndarray:
     s = size
-    img = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
+    img = np.zeros((s, s, 4), dtype=np.uint8)
     c = _FILE_COLORS.get(icon_type, _FILE_COLORS["file"])
     fold = max(3, s * 5 // 20)
 
-    # Main body
-    d.polygon([
-        (0, 0),
-        (s - 1 - fold, 0),
-        (s - 1, fold),
-        (s - 1, s - 1),
-        (0, s - 1),
-    ], fill=c)
+    img[:, :] = c
+    shade = _shade(c, 0.55)
+    for y in range(min(fold, s)):
+        x0 = max(0, s - fold + y)
+        img[y, x0:s] = (0, 0, 0, 0)
+    for y in range(min(fold, s)):
+        x0 = max(0, s - fold)
+        x1 = min(s, s - fold + y + 1)
+        img[y, x0:x1] = shade
 
-    # Fold triangle (darker)
-    d.polygon([
-        (s - 1 - fold, 0),
-        (s - 1, fold),
-        (s - 1 - fold, fold),
-    ], fill=_shade(c, 0.55))
-
-    return np.array(img, dtype=np.uint8)
+    return img
 
 
 # ---------------------------------------------------------------------------

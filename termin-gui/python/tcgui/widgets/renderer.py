@@ -925,7 +925,6 @@ class UIRenderer:
 
     def load_image(self, path: str) -> Tgfx2TextureHandle:
         """Load an image file and upload it as a GPU texture."""
-        from PIL import Image
-        img = Image.open(path).convert("RGBA")
-        data = np.array(img, dtype=np.uint8)
-        return self.upload_texture(data)
+        from termin.image import decode_rgba8_file
+        decoded = decode_rgba8_file(path)
+        return self.upload_texture(decoded.to_numpy())

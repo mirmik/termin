@@ -89,7 +89,7 @@ PYTHON_PKG_TO_DIR = {
 
 # External deps to skip
 EXTERNAL_PKGS = {
-    "numpy", "scipy", "Pillow", "glfw", "pyassimp",
+    "numpy", "scipy", "glfw", "pyassimp",
     "PyYAML",
 }
 

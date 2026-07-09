@@ -150,8 +150,6 @@ if(BUNDLE_PYTHON)
         numpy
         sip
         sipbuild
-        PIL
-        Pillow
         glfw
         packaging
         pyassimp
@@ -227,8 +225,8 @@ if(BUNDLE_PYTHON)
         )
     endif()
 
-    # Copy .libs directories (numpy.libs, pillow.libs contain vendored shared libs)
-    foreach(pkg numpy pillow Pillow)
+    # Copy .libs directories used by external binary Python packages.
+    foreach(pkg numpy)
         if(EXISTS "${PYTHON_SITEPACKAGES}/${pkg}.libs")
             install(DIRECTORY "${PYTHON_SITEPACKAGES}/${pkg}.libs"
                 DESTINATION ${SITEPACKAGES_INSTALL_DIR}
