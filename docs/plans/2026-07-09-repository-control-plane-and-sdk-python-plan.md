@@ -68,8 +68,16 @@ does not expose an equivalent standalone SDK Python CLI.
 The investigation in
 [SDK Python host environment leakage](../analysis/2026-06-08-sdk-python-host-environment-leakage.md)
 remains relevant. SDK population still uses the host interpreter and can inspect
-or copy packages from host `site-packages`. Making the SDK the base of all tests
-must not make host leakage the base of all tests too.
+or copy packages from host `site-packages`. A fresh Linux build on 2026-07-09
+reported resolver conflicts against unrelated host tools including `aider-chat`,
+`open-interpreter`, and `simple-lama-inpainting`. Making the SDK the base of all
+tests must not make host leakage the base of all tests too.
+
+The same verification found that `pip --target --force-reinstall` leaves files
+removed by a newer distribution version in place. SDK target refresh now removes
+files owned by the previous wheel `RECORD` before reinstalling, with path-escape
+protection and regression tests. This closes stale-file replacement for known
+distributions; it does not replace the remaining hermetic population work.
 
 ### A declared repository policy is currently red
 
@@ -342,6 +350,17 @@ deriving Python-backed identities from canonical `packages.json`, an initial
 `check`/`list`/`plan` operations with stable JSON output. Cross-manifest module,
 profile, executor, platform, root-path, and filesystem references are validated.
 Suite population and orphan-test enforcement remain the separate #262 stream.
+
+Python inventory status, 2026-07-09: #262 now declares 46 pytest suites owning
+all 212 repository test files matching `test_*.py` or `*_test.py`. Discovery
+exclusions and executor defaults are manifest data. `check` fails on orphaned or
+multiply-owned tests. Linux and PowerShell runners obtain their default suite
+plans from `termin_build.repository_control`; the old root lists were deleted.
+The Linux full profile, import smoke, and Ruff pass. Inventory expansion exposed
+and fixed binding, dependency, packaging, and test-contract defects, including
+an editable namespace collision between `termin-tween` and
+`termin-components-tween`. PowerShell parser/runtime verification remains
+required on Windows before #262 can close.
 
 - Add module and test-suite schemas.
 - Populate the initial module catalog from current package, CMake, and docs data.

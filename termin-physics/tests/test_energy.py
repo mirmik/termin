@@ -26,7 +26,7 @@ def compute_total_energy(world: PhysicsWorld, gravity_z: float) -> float:
 
         # Угловая КЭ (упрощённо, в СК тела инерция диагональная)
         # Для точности нужно преобразовать omega в СК тела
-        R = body.pose.rotation_matrix()  # numpy array (3,3)
+        R = np.asarray(body.pose.rotation_matrix(), dtype=float)
 
         # omega_body = R^T @ omega_world
         omega_arr = np.array([omega.x, omega.y, omega.z])

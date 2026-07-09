@@ -37,7 +37,7 @@ def assert_valid_ray(ray, expected_direction):
 
 
 def test_entity_pose_constructor_rejects_legacy_pose3():
-    with pytest.raises(RuntimeError, match="GeneralPose3"):
+    with pytest.raises(TypeError, match="GeneralPose3"):
         Entity(pose=Pose3.identity(), name="legacy_pose")
 
 

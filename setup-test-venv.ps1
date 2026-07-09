@@ -71,7 +71,7 @@ if ($LASTEXITCODE -ne 0) { throw "build dependency install failed" }
 Write-Host ""
 Write-Host "--- installing runtime and test dependencies ---"
 $RequirementsPath = Join-Path $ScriptDir "termin-app\requirements.txt"
-python -m pip install -r $RequirementsPath pytest ruff
+python -m pip install -r $RequirementsPath pytest ruff scipy
 if ($LASTEXITCODE -ne 0) { throw "runtime/test dependency install failed" }
 
 function Test-TerminSdk {
