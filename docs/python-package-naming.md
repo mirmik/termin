@@ -43,6 +43,7 @@ repo-directory вроде `termin-graphics`, хотя устанавливаем
 | `termin-build-tools` | `termin-build-tools` | `termin_build` | Build-time helpers. |
 | `termin-nanobind-sdk` | `termin-nanobind` | `termin_nanobind` | Distribution keeps historical short SDK name. |
 | `termin-base` | `tcbase` | `tcbase`, `termin.geombase` | Legacy short distribution/import name. |
+| `termin-image` | `termin-image` | `termin.image` | Native image codecs for texture/tooling paths. |
 | `termin-assets` | `termin-assets` | `termin_assets` | Asset runtime contracts. |
 | `termin-tween` | `termin-tween` | `termin.tween` | Core tween runtime. |
 | `termin-audio` | `termin-audio` | `termin.audio`, `termin.audio.components`, `termin_audio_component_specs` | Audio runtime and component specs. |

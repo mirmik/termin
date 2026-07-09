@@ -9,6 +9,7 @@
 #include <functional>
 #include <cstring>
 #include <cstdint>
+#include <stdexcept>
 #include <unordered_map>
 
 #include <tcbase/tc_log.hpp>
@@ -74,10 +75,22 @@ static nos::trent py_object_to_trent(nb::object data) {
 }
 
 static tc_scene_handle scene_handle_from_py(nb::object scene) {
-    if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
-        return nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
+    if (scene.is_none()) return TC_SCENE_HANDLE_INVALID;
+    return nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
+}
+
+static tc_entity_pool* entity_pool_from_py_scene(nb::object scene) {
+    if (scene.is_none()) return nullptr;
+    uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
+    return reinterpret_cast<tc_entity_pool*>(pool_ptr);
+}
+
+static std::string component_type_name_from_class(nb::object type_class) {
+    std::string target_type = nb::cast<std::string>(type_class.attr("__name__"));
+    if (target_type.empty()) {
+        throw std::runtime_error("Component class has empty __name__");
     }
-    return TC_SCENE_HANDLE_INVALID;
+    return target_type;
 }
 
 // Forward-declare TcComponentRef (defined in tc_component_ref_bindings.cpp, registered in same module)
@@ -322,23 +335,13 @@ void bind_entity_class(nb::module_& m) {
         }, nb::arg("type_name"))
         .def("get_component", [](Entity& e, nb::object type_class) -> nb::object {
             if (!e.valid()) return nb::none();
-            std::string target_type;
-            if (nb::hasattr(type_class, "__name__")) {
-                target_type = nb::cast<std::string>(type_class.attr("__name__"));
-            }
-            if (target_type.empty()) return nb::none();
+            std::string target_type = component_type_name_from_class(type_class);
             tc_component* tc = e.get_component_by_type_name(target_type);
             if (!tc) return nb::none();
             return tc_component_to_python(tc);
         }, nb::arg("component_type"))
         .def("find_component", [](Entity& e, nb::object type_class) -> nb::object {
-            std::string target_type;
-            if (nb::hasattr(type_class, "__name__")) {
-                target_type = nb::cast<std::string>(type_class.attr("__name__"));
-            }
-            if (target_type.empty()) {
-                throw std::runtime_error("Component class has no __name__");
-            }
+            std::string target_type = component_type_name_from_class(type_class);
             tc_component* tc = e.get_component_by_type_name(target_type);
             if (!tc) {
                 throw std::runtime_error("Component not found: " + target_type);
@@ -579,13 +582,9 @@ void bind_entity_class(nb::module_& m) {
 
                 tc_entity_pool* pool = nullptr;
                 TcSceneRef c_scene;
-                if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
-                    if (nb::hasattr(scene, "entity_pool_ptr")) {
-                        uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
-                        pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
-                    }
-                    tc_scene_handle sh = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
-                    c_scene = TcSceneRef(sh);
+                if (!scene.is_none()) {
+                    pool = entity_pool_from_py_scene(scene);
+                    c_scene = TcSceneRef(scene_handle_from_py(scene));
                 }
                 if (!pool) pool = get_standalone_pool();
                 if (!pool) {
@@ -704,9 +703,8 @@ void bind_entity_class(nb::module_& m) {
                 if (dict_data.contains("uuid")) uuid_str = nb::cast<std::string>(dict_data["uuid"]);
 
                 tc_entity_pool* pool = nullptr;
-                if (!scene.is_none() && nb::hasattr(scene, "entity_pool_ptr")) {
-                    uintptr_t pool_ptr = nb::cast<uintptr_t>(scene.attr("entity_pool_ptr")());
-                    pool = reinterpret_cast<tc_entity_pool*>(pool_ptr);
+                if (!scene.is_none()) {
+                    pool = entity_pool_from_py_scene(scene);
                 }
                 if (!pool) pool = get_standalone_pool();
                 if (!pool) {
@@ -778,9 +776,8 @@ void bind_entity_class(nb::module_& m) {
                 nb::list components = nb::cast<nb::list>(comp_list_obj);
 
                 TcSceneRef scene_ref;
-                if (!scene.is_none() && nb::hasattr(scene, "scene_handle")) {
-                    tc_scene_handle sh = nb::cast<tc_scene_handle>(scene.attr("scene_handle")());
-                    scene_ref = TcSceneRef(sh);
+                if (!scene.is_none()) {
+                    scene_ref = TcSceneRef(scene_handle_from_py(scene));
                 }
 
                 for (size_t i = 0; i < nb::len(components); ++i) {

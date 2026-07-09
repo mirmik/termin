@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Generic, TypeVar
 
+from tcbase import log
 from termin_assets.asset import Asset
 
 T = TypeVar("T")
@@ -23,6 +24,25 @@ def get_resource_manager() -> object | None:
     if _resource_manager_factory is None:
         return None
     return _resource_manager_factory()
+
+
+def _resource_manager_getter(resource_manager: object, getter_name: str) -> Callable:
+    try:
+        getter = getattr(resource_manager, getter_name)
+    except AttributeError:
+        log.error(
+            f"Resource manager {type(resource_manager).__name__} does not expose {getter_name}()",
+            exc_info=True,
+        )
+        raise
+    if not callable(getter):
+        log.error(
+            f"Resource manager {type(resource_manager).__name__}.{getter_name} is not callable"
+        )
+        raise TypeError(
+            f"Resource manager {type(resource_manager).__name__}.{getter_name} is not callable"
+        )
+    return getter
 
 
 class ResourceHandle(Generic[T, AssetT]):
@@ -47,9 +67,7 @@ class ResourceHandle(Generic[T, AssetT]):
         resource_manager = get_resource_manager()
         if resource_manager is None:
             return cls()
-        getter = getattr(resource_manager, cls._asset_getter, None)
-        if getter is None:
-            return cls()
+        getter = _resource_manager_getter(resource_manager, cls._asset_getter)
 
         asset = getter(name)
         if asset is not None:
@@ -71,9 +89,7 @@ class ResourceHandle(Generic[T, AssetT]):
         resource_manager = get_resource_manager()
         if resource_manager is None:
             return cls()
-        getter = getattr(resource_manager, cls._asset_by_uuid_getter, None)
-        if getter is None:
-            return cls()
+        getter = _resource_manager_getter(resource_manager, cls._asset_by_uuid_getter)
 
         asset = getter(uuid)
         if asset is not None:
