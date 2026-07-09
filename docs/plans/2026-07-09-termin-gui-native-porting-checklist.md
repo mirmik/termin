@@ -169,6 +169,17 @@ Phase 1 notes:
   is available on the host display backend.
 - C++ test executables now undefine `NDEBUG`, so `assert`-based headless
   contracts run in Release as well as Debug builds.
+- Python-defined widgets now dispatch measure, layout, paint, pointer, hit-test,
+  key, text and destroy callbacks through a complete `tc_widget_vtable`.
+  `WidgetRef` exposes common state, canonical parent/children and mutation via
+  document plus handle without copying widget fields or owning the document.
+- Initial Python document factories construct native C++ `HStack`, `VStack`,
+  `Panel`, `Label` and `Button` widgets and return the same `WidgetRef` used by
+  Python-defined widgets.
+- The document retains each adopted Python body until its C deleter runs under
+  the GIL. Focused Python tests cover callback routing, canonical child
+  traversal, recursive destroy order, rejection of double adoption, re-adoption
+  after destroy, stale handles and ref invalidation on document teardown.
 
 ## Phase 2 - Draw List And Renderer Parity
 

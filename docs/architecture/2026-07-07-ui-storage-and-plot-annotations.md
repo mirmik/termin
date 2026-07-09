@@ -97,6 +97,15 @@ references:
   wrapper around an already-native widget may instead hold a document reference
   plus a handle.
 
+The Python bridge implements this without a second widget record. Its adopted
+shim contains the single `tc_widget` plus a retained Python body and releases
+that body from the C deleter under the GIL. Python-facing `WidgetRef` values
+contain a shared invalidation state and a generation-checked handle; the state
+does not own `tc_ui_document`. Widget and document destruction therefore make
+all outstanding refs stale without extending container lifetime. Python
+callback failures are logged at the C boundary, retained for the duration of
+the traversal, and rethrown by the calling Python `Document`/`WidgetRef` API.
+
 The common state required by language-neutral systems belongs in `tc_widget`:
 
 ```text
