@@ -20,6 +20,7 @@ COLUMN_NAMES = {
     2: "In Progress",
     3: "On Test",
     4: "Done",
+    14: "Ready",
 }
 SWIMLANE_NAMES = {
     1: "Common",
@@ -142,7 +143,7 @@ def cmd_list(client: KanboardClient, args: argparse.Namespace) -> int:
         swimlane_id = resolve_named_id(args.swimlane, swimlanes, "swimlane")
         tasks = [task for task in tasks if int(task["swimlane_id"]) == swimlane_id]
 
-    tasks = sorted(tasks, key=task_sort_key)
+    tasks = sort_tasks_by_board_order(tasks, columns, swimlanes)
     if args.json:
         print_json({"tasks": tasks, "columns": columns, "swimlanes": swimlanes})
         return 0
@@ -197,12 +198,14 @@ def cmd_show(client: KanboardClient, args: argparse.Namespace) -> int:
 
 def cmd_export(client: KanboardClient, args: argparse.Namespace) -> int:
     tasks = fetch_tasks(client, args.project_id, args.status)
+    columns = fetch_columns(client, args.project_id)
+    swimlanes = fetch_swimlanes(client, args.project_id)
     payload: dict[str, Any] = {
         "project_id": args.project_id,
         "status": args.status,
-        "columns": fetch_columns(client, args.project_id),
-        "swimlanes": fetch_swimlanes(client, args.project_id),
-        "tasks": sorted(tasks, key=task_sort_key),
+        "columns": columns,
+        "swimlanes": swimlanes,
+        "tasks": sort_tasks_by_board_order(tasks, columns, swimlanes),
     }
     if args.comments:
         comments_by_task: dict[str, Any] = {}
@@ -482,10 +485,30 @@ def swimlane_title(swimlane_id: int, swimlanes: list[dict[str, Any]]) -> str:
     return SWIMLANE_NAMES.get(swimlane_id, f"swimlane:{swimlane_id}")
 
 
-def task_sort_key(task: dict[str, Any]) -> tuple[int, int, int, int]:
+def sort_tasks_by_board_order(
+    tasks: list[dict[str, Any]],
+    columns: list[dict[str, Any]],
+    swimlanes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    column_positions = record_position_map(columns)
+    swimlane_positions = record_position_map(swimlanes)
+    return sorted(tasks, key=lambda task: task_sort_key(task, column_positions, swimlane_positions))
+
+
+def record_position_map(records: list[dict[str, Any]]) -> dict[int, int]:
+    return {int(record["id"]): int(record["position"]) for record in records}
+
+
+def task_sort_key(
+    task: dict[str, Any],
+    column_positions: dict[int, int],
+    swimlane_positions: dict[int, int],
+) -> tuple[int, int, int, int]:
+    swimlane_id = int(task["swimlane_id"])
+    column_id = int(task["column_id"])
     return (
-        int(task["swimlane_id"]),
-        int(task["column_id"]),
+        swimlane_positions.get(swimlane_id, swimlane_id),
+        column_positions.get(column_id, column_id),
         int(task.get("position") or 0),
         int(task["id"]),
     )
