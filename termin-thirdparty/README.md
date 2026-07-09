@@ -16,6 +16,8 @@ Current contents:
   builder and pathfinding integration, commit `1078bfe346d9bb560faa748c8fde2e7aae73a3ab`.
 - `openxr-sdk`: Khronos OpenXR SDK submodule used by `termin-openxr` for
   header-level integration smoke.
+- `sdl2`: SDL2 source submodule used as the default Windows SDL provider for
+  editor/window/input builds; Linux builds continue to prefer system SDL2.
 
 `termin-csg` builds Manifold and Clipper2 statically into `libtermin_csg.so`; it
 does not build Manifold Python, C, JS bindings or tests.

@@ -21,7 +21,6 @@
 #ifdef __linux__
 #include <unistd.h>
 #include <linux/limits.h>
-#include <link.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -43,73 +42,6 @@ static fs::path get_executable_dir() {
     return fs::current_path();
 #endif
 }
-
-#ifdef _WIN32
-static void configure_windows_sdl_dll_path(const fs::path& exe_dir,
-                                           const fs::path& python_stdlib) {
-    // PySDL2 otherwise imports the SDL2.dll bundled by pysdl2-dll, while
-    // termin_display is linked to the SDK SDL2.dll next to this executable.
-    // Two SDL runtimes in one process have independent event queues, which
-    // leaves the C++-owned window without a message pump on Windows.
-    if (std::getenv("PYSDL2_DLL_PATH") == nullptr) {
-        std::string dll_path = exe_dir.string();
-        fs::path pysdl2_dll_dir = python_stdlib / "site-packages" / "sdl2dll" / "dll";
-        if (!python_stdlib.empty() && fs::exists(pysdl2_dll_dir)) {
-            dll_path += ";";
-            dll_path += pysdl2_dll_dir.string();
-        }
-        _putenv_s("PYSDL2_DLL_PATH", dll_path.c_str());
-    }
-}
-#endif
-
-#ifdef __linux__
-static bool should_override_pysdl2_dll_path(const char* current) {
-    if (current == nullptr || current[0] == '\0') {
-        return true;
-    }
-    std::string value(current);
-    return value.find("/site-packages/sdl2dll/dll") != std::string::npos
-        || value.find("\\site-packages\\sdl2dll\\dll") != std::string::npos;
-}
-
-static int find_loaded_sdl2_callback(dl_phdr_info* info, size_t, void* userdata) {
-    if (info == nullptr || info->dlpi_name == nullptr || info->dlpi_name[0] == '\0') {
-        return 0;
-    }
-
-    fs::path library_path(info->dlpi_name);
-    std::string filename = library_path.filename().string();
-    if (filename.rfind("libSDL2", 0) != 0) {
-        return 0;
-    }
-
-    auto* result = static_cast<std::string*>(userdata);
-    fs::path parent = library_path.parent_path();
-    if (!parent.empty()) {
-        *result = parent.string();
-        return 1;
-    }
-    return 0;
-}
-
-static void configure_linux_sdl_dll_path() {
-    const char* current = std::getenv("PYSDL2_DLL_PATH");
-    if (!should_override_pysdl2_dll_path(current)) {
-        return;
-    }
-
-    std::string sdl_dir;
-    dl_iterate_phdr(find_loaded_sdl2_callback, &sdl_dir);
-    if (sdl_dir.empty()) {
-        std::cerr << "Could not locate loaded libSDL2 for PySDL2; "
-                  << "Python may load pysdl2-dll's private SDL runtime" << std::endl;
-        return;
-    }
-
-    setenv("PYSDL2_DLL_PATH", sdl_dir.c_str(), 1);
-}
-#endif
 
 static fs::path find_python_stdlib(const fs::path& install_root) {
 #ifdef _WIN32
@@ -162,11 +94,6 @@ int main(int argc, char* argv[]) {
     bool bundled_python = false;
 
     fs::path python_stdlib = find_python_stdlib(install_root);
-#ifdef _WIN32
-    configure_windows_sdl_dll_path(exe_dir, python_stdlib);
-#elif defined(__linux__)
-    configure_linux_sdl_dll_path();
-#endif
 
     fs::path termin_path;
     bool sdk_python_tree = false;
