@@ -30,8 +30,9 @@ through generated layout metadata.
 - `termin-render-passes/include/termin/lighting/lighting_ubo.hpp` — `LightingUBOData`.
 - `termin-render/include/termin/render/frame_uniforms.hpp` — `EnginePerFrameStd140`.
 - `termin-render-passes/src/color_pass.cpp` — `ShadowBlockStd140`.
-- `termin-materials/src/shader_parser.cpp` — generated `MaterialParams`, `PerFrame`,
-  and `draw_data` GLSL compatibility blocks.
+- `termin-materials/src/shader_parser.cpp` — generated Slang `MaterialParams`,
+  `PerFrame`, and `draw_data` compatibility constant buffers for migrated
+  `.shader` materials.
 - `termin-render-passes/src/{shadow,id}_pass.cpp`,
   `termin-components/termin-components-render/src/{depth,normal}_pass.cpp` —
   per-pass `PerFrame` + `PushStd140` variants.
@@ -237,8 +238,9 @@ must receive the same data through a small per-draw cbuffer. Reserve
 3. **For Slang, do not author backend layout attributes.** Add the resource
    declaration by name, annotate explicit scope with `[[TerminScope("...")]]`
    from the Termin Slang prelude, and let artifact layout metadata carry
-   backend placement. Parser-generated GLSL metadata is a compatibility
-   artifact only; do not add new fixed-slot layout policy.
+   backend placement. Raw GLSL sources are not scanned for historical engine
+   fixed slots; if a raw shader remains, its owner must provide explicit
+   resource layout metadata or avoid bind-by-name engine resources.
 4. **Pick the narrowest `stageFlags`** you can. Skinning only writes from
    VS, so `BoneBlock` is `VK_SHADER_STAGE_VERTEX_BIT` only.
 5. **Document the struct here** with offsets and a `static_assert(sizeof(...)

@@ -12,13 +12,10 @@ using termin::MaterialProperty;
 using termin::MaterialUboLayout;
 using termin::ShaderMultyPhaseProgramm;
 using termin::compute_std140_layout;
-using termin::inject_after_version;
 using termin::parse_shader_text;
-using termin::rewrite_engine_uniforms_for_stage_source;
 using termin::std140_pack;
 using termin::std140_size_align;
 using termin::strip_uniform_decls;
-using termin::synthesize_material_ubo_glsl;
 using termin::synthesize_material_ubo_slang;
 using termin::TcShader;
 using termin::get_skinned_shader;
@@ -177,22 +174,6 @@ TEST_CASE("std140: Texture properties are skipped")
     CHECK_EQ(layout.block_size, 32u);
 }
 
-TEST_CASE("synthesize: emits GLSL block with correct types and order")
-{
-    std::vector<MaterialProperty> props = {
-        mk("u_strength", "Float"),
-        mk("u_tint",     "Color"),
-    };
-    MaterialUboLayout layout = compute_std140_layout(props);
-    std::string glsl = synthesize_material_ubo_glsl(layout);
-
-    CHECK(glsl.find("layout(std140, binding = 1) uniform MaterialParams") != std::string::npos);
-    CHECK(glsl.find("float u_strength;") != std::string::npos);
-    CHECK(glsl.find("vec4 u_tint;") != std::string::npos);
-    // u_strength declared before u_tint (order preserved).
-    CHECK(glsl.find("u_strength") < glsl.find("u_tint"));
-}
-
 TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and order")
 {
     std::vector<MaterialProperty> props = {
@@ -217,7 +198,6 @@ TEST_CASE("synthesize: emits Slang MaterialParams block with correct types and o
 TEST_CASE("synthesize: empty layout yields empty string")
 {
     MaterialUboLayout layout;
-    CHECK_EQ(synthesize_material_ubo_glsl(layout), std::string{});
     CHECK_EQ(synthesize_material_ubo_slang(layout), std::string{});
 }
 
@@ -288,128 +268,6 @@ TEST_CASE("strip_uniform_decls: partial prefix match is not removed")
     // u_strength2 must survive, only the exact u_strength line is dropped.
     CHECK(out.find("u_strength2") != std::string::npos);
     CHECK(out.find("u_strength;") == std::string::npos);
-}
-
-TEST_CASE("inject_after_version: places block right after #version")
-{
-    std::string src =
-        "#version 330 core\n"
-        "void main() { }\n";
-    std::string out = inject_after_version(src, "INJECTED\n");
-    // Block must come immediately after the version line.
-    size_t version_end = out.find('\n', out.find("#version")) + 1;
-    CHECK_EQ(out.substr(version_end, 9), std::string("INJECTED\n"));
-}
-
-TEST_CASE("inject_after_version: prepends when there is no version line")
-{
-    std::string src = "void main() { }\n";
-    std::string out = inject_after_version(src, "INJECTED\n");
-    CHECK_EQ(out.substr(0, 18), std::string("#version 450 core\n"));
-    CHECK_EQ(out.substr(18, 9), std::string("INJECTED\n"));
-}
-
-TEST_CASE("raw material stages rewrite engine uniforms for Vulkan")
-{
-    std::string src =
-        "#version 330 core\n"
-        "uniform mat4 u_model;\n"
-        "uniform mat4 u_view;\n"
-        "uniform mat4 u_projection;\n"
-        "void main() {\n"
-        "    gl_Position = u_projection * u_view * u_model * vec4(0.0, 0.0, 0.0, 1.0);\n"
-        "}\n";
-
-    std::string out = rewrite_engine_uniforms_for_stage_source(src, "vertex");
-    CHECK(out.find("#version 450 core") != std::string::npos);
-    CHECK(out.find("uniform mat4 u_model;") == std::string::npos);
-    CHECK(out.find("uniform mat4 u_view;") == std::string::npos);
-    CHECK(out.find("uniform mat4 u_projection;") == std::string::npos);
-    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
-    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") != std::string::npos);
-    CHECK(out.find("#define u_model draw_data._u_model") != std::string::npos);
-}
-
-TEST_CASE("raw material engine uniform rewrite is idempotent")
-{
-    std::string src =
-        "#version 330 core\n"
-        "uniform mat4 u_model;\n"
-        "void main() { gl_Position = u_model * vec4(0.0, 0.0, 0.0, 1.0); }\n";
-
-    std::string once = rewrite_engine_uniforms_for_stage_source(src, "vertex");
-    std::string twice = rewrite_engine_uniforms_for_stage_source(once, "vertex");
-
-    CHECK_EQ(twice.find("uniform PerFrame"), twice.rfind("uniform PerFrame"));
-    CHECK_EQ(twice.find("struct ColorPushData"), twice.rfind("struct ColorPushData"));
-    CHECK_EQ(twice.find("#define u_model draw_data._u_model"),
-             twice.rfind("#define u_model draw_data._u_model"));
-}
-
-TEST_CASE("raw material engine uniform rewrite ignores push-constant struct fields")
-{
-    std::string src =
-        "#version 330 core\n"
-        "struct IdPushData {\n"
-        "    mat4 u_model;\n"
-        "    vec4 u_pickColor;\n"
-        "};\n"
-        "#ifdef VULKAN\n"
-        "layout(push_constant) uniform IdPushBlock { IdPushData pc; };\n"
-        "#else\n"
-        "layout(std140, binding = 14) uniform IdPushBlock { IdPushData pc; };\n"
-        "#endif\n"
-        "layout(location=0) out vec4 fragColor;\n"
-        "void main() { fragColor = vec4(pc.u_pickColor.rgb, 1.0); }\n";
-
-    std::string out = rewrite_engine_uniforms_for_stage_source(src, "fragment");
-
-    CHECK(out.find("#version 450 core") != std::string::npos);
-    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") == std::string::npos);
-    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") == std::string::npos);
-    CHECK(out.find("#define u_model draw_data._u_model") == std::string::npos);
-    CHECK(out.find("mat4 u_model;") != std::string::npos);
-    CHECK(out.find("pc._u_model") == std::string::npos);
-}
-
-TEST_CASE("raw material engine uniform rewrite only injects model macro for model uniform decl")
-{
-    std::string src =
-        "#version 330 core\n"
-        "uniform vec3 u_camera_position;\n"
-        "struct LocalData { mat4 u_model; };\n"
-        "out vec4 FragColor;\n"
-        "void main() { FragColor = vec4(u_camera_position, 1.0); }\n";
-
-    std::string out = rewrite_engine_uniforms_for_stage_source(src, "fragment");
-
-    CHECK(out.find("#version 450 core") != std::string::npos);
-    CHECK(out.find("uniform vec3 u_camera_position;") == std::string::npos);
-    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
-    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") == std::string::npos);
-    CHECK(out.find("#define u_model draw_data._u_model") == std::string::npos);
-    CHECK(out.find("mat4 u_model;") != std::string::npos);
-}
-
-TEST_CASE("raw material engine uniform rewrite injects PerFrame for stdlib u_view usage")
-{
-    std::string src =
-        "#version 330 core\n"
-        "in vec3 v_world_pos;\n"
-        "out vec4 FragColor;\n"
-        "float view_depth() {\n"
-        "    vec4 view_pos = u_view * vec4(v_world_pos, 1.0);\n"
-        "    return view_pos.y;\n"
-        "}\n"
-        "void main() { FragColor = vec4(view_depth()); }\n";
-
-    std::string out = rewrite_engine_uniforms_for_stage_source(src, "fragment");
-
-    CHECK(out.find("#version 450 core") != std::string::npos);
-    CHECK(out.find("layout(std140, binding = 2) uniform PerFrame") != std::string::npos);
-    CHECK(out.find("mat4 u_view;") != std::string::npos);
-    CHECK(out.find("layout(std140, binding = 24) uniform DrawData") == std::string::npos);
-    CHECK(out.find("#define u_model draw_data._u_model") == std::string::npos);
 }
 
 TEST_CASE("skinned shader variants reject parser-owned GLSL skinning injection")
@@ -1032,10 +890,10 @@ TEST_CASE("std140_pack: Mat4 followed by Vec4 aligns vec4 right after mat4")
     CHECK_EQ(layout.block_size, 80u);
 }
 
-TEST_CASE("synthesize: Mat4 emits mat4 type")
+TEST_CASE("synthesize: Mat4 emits Slang column-major matrix type")
 {
     std::vector<MaterialProperty> props = { mk("u_view", "Mat4") };
     MaterialUboLayout layout = compute_std140_layout(props);
-    std::string glsl = synthesize_material_ubo_glsl(layout);
-    CHECK(glsl.find("mat4 u_view;") != std::string::npos);
+    std::string slang = synthesize_material_ubo_slang(layout);
+    CHECK(slang.find("column_major float4x4 u_view;") != std::string::npos);
 }
