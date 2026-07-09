@@ -376,9 +376,13 @@ unclassified test fails the check profile.
 Linux implementation status, 2026-07-09: #141 now provides a native
 SDK-relative `termin_python` launcher based on `PyConfig`, hostile-environment
 verification in the SDK doctor, and a bundled `libpython` restoration step after
-bindings staging. Runtime population is still performed by host pip, so the
-lock/manifest/offline population portion of this phase remains open. Windows
-launcher acceptance also remains to be run on Windows.
+bindings staging. Runtime and build dependencies now have separate exact locks.
+A disposable pinned build environment materializes external and Termin wheels;
+SDK population then runs offline with `--no-index --no-deps`. The generated
+`sdk/python-runtime-manifest.json` records ABI, lock hash, distributions and
+RECORD hashes, and the SDK doctor rejects undeclared, missing or modified
+payload. Linux offline population and installed import smoke pass. Windows
+launcher/population acceptance remains to be run on Windows.
 
 - Isolate SDK Python population from host packages.
 - Introduce runtime constraints/lock and installed-distribution manifest.
