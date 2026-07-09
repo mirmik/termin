@@ -614,15 +614,13 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             }
         }
 
-        if (!tc_render_target_handle_valid(rt)) {
-            rt = tc_render_target_new(rt_name.empty() ? vp_name.c_str() : rt_name.c_str());
-            tc_render_target_set_scene(rt, scene);
-            tc_render_target_set_dynamic_resolution(rt, true);
-            register_managed_render_target(rt);
-        }
-
         if (tc_render_target_handle_valid(rt)) {
             tc_viewport_set_render_target(viewport, rt);
+        } else if (!rt_name.empty()) {
+            tc_log(TC_LOG_WARN,
+                   "[RenderingManager] viewport '%s' references missing render target '%s'",
+                   vp_name.c_str(),
+                   rt_name.c_str());
         }
 
         tc_display_add_viewport(display, viewport);
@@ -863,28 +861,6 @@ void RenderingManager::render_all_offscreen() {
         render_viewport_offscreen(vp);
         rendering_manager_detail::append_unique_render_target(rendered_viewport_targets, rt);
     }
-
-    // 4. Render legacy viewports without render targets. RT-backed viewports
-    // are presentation-only after the target render passes above.
-    auto render_unmanaged = [this](const std::vector<tc_display*>& disp_list) {
-        for (tc_display* display : disp_list) {
-            if (!tc_display_get_enabled(display)) continue;
-
-            tc_viewport_handle vp = tc_display_get_first_viewport(display);
-            while (tc_viewport_handle_valid(vp)) {
-                if (tc_viewport_get_enabled(vp)) {
-                    const char* managed_by = tc_viewport_get_managed_by(vp);
-                    tc_render_target_handle rt = tc_viewport_get_render_target(vp);
-                    if ((!managed_by || managed_by[0] == '\0') && !tc_render_target_handle_valid(rt)) {
-                        render_viewport_offscreen(vp);
-                    }
-                }
-                vp = tc_viewport_get_display_next(vp);
-            }
-        }
-    };
-    render_unmanaged(display_registry_->displays());
-    render_unmanaged(display_registry_->editor_displays());
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(

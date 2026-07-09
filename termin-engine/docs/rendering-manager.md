@@ -8,7 +8,7 @@
 - `src/rendering_manager.cpp` - публичный фасад и orchestration.
 - `src/render_display_registry.cpp` - scene/editor display списки и display input routers.
 - `src/render_frame_planner.cpp` - обновление viewport rects и план render target на offscreen-кадр.
-- `src/render_state_store.cpp` - runtime GPU output state для viewport/render target.
+- `src/render_state_store.cpp` - runtime GPU output state helpers.
 - `src/render_target_context_builder.cpp` - сбор `RenderTargetContext` для 2D и provider-backed render target.
 - `src/scene_pipeline_manager.cpp` - compiled scene pipelines и target viewport mappings.
 - `src/display_presenter.cpp` - presentation/blit display surfaces.

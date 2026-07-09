@@ -824,6 +824,50 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
     tc_scene_free(scene);
 }
 
+TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty without render target")
+{
+    RenderingManager manager;
+
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+    tc_scene_set_name(scene, "rendering-manager-empty-viewport-scene-test");
+    tc_scene_render_mount_extension_init();
+
+    manager.set_display_factory([](const std::string& name) {
+        return tc_display_new(name.c_str(), nullptr);
+    });
+
+    const size_t baseline_targets = tc_render_target_pool_count();
+
+    tc_viewport_config config;
+    tc_viewport_config_init(&config);
+    config.name = "EmptyViewport";
+    config.display_name = "Display0";
+    config.region[0] = 0.0f;
+    config.region[1] = 0.0f;
+    config.region[2] = 1.0f;
+    config.region[3] = 1.0f;
+    config.enabled = true;
+    tc_scene_add_viewport_config(scene, &config);
+
+    auto viewports = manager.attach_scene_full(scene);
+    REQUIRE_EQ(viewports.size(), 1u);
+
+    tc_display* display = manager.get_display_by_name("Display0");
+    REQUIRE(display != nullptr);
+    REQUIRE_EQ(tc_display_get_viewport_count(display), 1u);
+
+    tc_viewport_handle viewport = tc_display_get_first_viewport(display);
+    REQUIRE(tc_viewport_handle_valid(viewport));
+    CHECK(tc_scene_handle_eq(tc_viewport_get_scene(viewport), scene));
+    CHECK(!tc_render_target_handle_valid(tc_viewport_get_render_target(viewport)));
+    CHECK_EQ(manager.managed_render_targets().size(), 0u);
+    CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
+
+    manager.detach_scene_full(scene);
+    tc_scene_free(scene);
+}
+
 TEST_CASE("Viewport references render target without owning it")
 {
     tc_viewport_handle viewport = tc_viewport_new("flat-viewport", TC_SCENE_HANDLE_INVALID);
