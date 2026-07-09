@@ -166,6 +166,12 @@ call SDL/Python directly. Text editor caret and selection positions are UTF-8
 byte offsets normalized to codepoint boundaries, which keeps the C ABI stable
 and gives C++, Python and future runtimes identical editing semantics.
 
+Native media widgets also stop at the host-service boundary. They retain only
+non-owning tgfx2 texture ids plus logical intrinsic dimensions; decoding,
+upload, partial update and GPU destruction belong to the render host. Canvas
+custom painting records ordinary backend-neutral draw-list commands, so media
+widgets do not acquire a renderer/device lifetime or backend branch.
+
 These systems operate on `tc_widget` resolved from a handle. They must not keep
 parallel copies of bounds, flags or tree links. The important constraints are
 explicit lifetime, a single source of widget state and inspectability.
