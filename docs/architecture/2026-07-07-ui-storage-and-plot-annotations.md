@@ -139,6 +139,14 @@ UiRenderer      traversal through Canvas2DRenderer
 UiTheme         style tokens and inherited style state
 ```
 
+Text measurement is a document service rather than widget-local arithmetic.
+The C ABI callback accepts UTF-8 data with an explicit byte length and returns
+advance width, ascent, descent and line height. Providers are non-owning and
+must outlive layout/paint calls that use them; the graphics adapter binds the
+same `FontAtlas` used to render draw-list text. This keeps font implementation
+details outside `tc_widget` while making C++, Python and future language
+widgets consume one metric contract.
+
 These systems operate on `tc_widget` resolved from a handle. They must not keep
 parallel copies of bounds, flags or tree links. The important constraints are
 explicit lifetime, a single source of widget state and inspectability.

@@ -95,7 +95,7 @@ Already started in `termin-gui-native`:
 - [x] Make layout, hit testing and event routing consume the
   common `tc_widget` state without parallel container-specific copies.
 - [ ] Add theme/style structs and make built-in widgets consume them.
-- [ ] Add font provider or measurement service so `Label` measure uses real
+- [x] Add font provider or measurement service so `Label` measure uses real
   font metrics.
 - [x] Add tests for stale child handles inside containers.
 - [x] Add tests for event propagation order and capture release.
@@ -169,6 +169,9 @@ Phase 1 notes:
   is available on the host display backend.
 - C++ test executables now undefine `NDEBUG`, so `assert`-based headless
   contracts run in Release as well as Debug builds.
+- `tc_ui_document` exposes a C text-measure service callback with explicit UTF-8
+  byte lengths. `UiDrawListRenderer` binds its `FontAtlas` as the production
+  provider, while headless tests install deterministic proportional metrics.
 - Python-defined widgets now dispatch measure, layout, paint, pointer, hit-test,
   key, text and destroy callbacks through a complete `tc_widget_vtable`.
   `WidgetRef` exposes common state, canonical parent/children and mutation via
@@ -247,9 +250,14 @@ Phase 3 notes:
 
 - `Separator` emits a deterministic fill command and participates in
   preferred-size layout.
-- `TextInput` is a focusable single-line skeleton with text insertion,
-  backspace/delete, caret movement and submit signal. It uses approximate
-  glyph advance until the font measurement service lands.
+- `TextInput` is a focusable single-line control with text insertion,
+  backspace/delete, caret movement and submit signal. Font metrics drive
+  preferred size, pointer-to-caret mapping and caret paint. Long text remains
+  inside an inner clip and scrolls horizontally to keep the caret visible.
+- TextInput caret offsets remain byte offsets at the C++ API boundary, but are
+  normalized to UTF-8 codepoint boundaries. Left/right, backspace and delete
+  operate on whole codepoints; invalid UTF-8 initial/set/event text is rejected
+  and logged. Selection and clipboard remain in #253.
 
 ## Phase 4 - Layout And Containers
 
