@@ -134,7 +134,7 @@ Status values:
 | reviewed | cpp | `termin-graphics/tests/test_tgfx2_vulkan_smoke.cpp` | Offscreen Vulkan smoke checks upload/readback parity, depth readback, triangle pixels, transient vertex ring, and optional Slang artifact path with concrete pass/fail conditions. Verified by graphics CTest batch. |
 | reviewed | cpp | `termin-graphics/tests/test_tgfx2_vulkan_window.cpp` | On-screen Vulkan swapchain/present smoke is bounded and CTest-skippable for missing runtime support; keeps end-to-end window/swapchain path covered. Verified by graphics CTest batch. |
 | reviewed | cpp | `termin-graphics/tests/tests_log.cpp` | Covers log callback capture, filtering, shorthand levels, formatting, explicit levels, and no-callback branch. Verified through `tgfx_tests`. |
-| reviewed | cpp | `termin-graphics/tests/tests_shader_resource_layout.cpp` | Checks resource-layout known-empty state, raw GLSL engine binding inference, and stage entry-point hashing. Verified through `tgfx_tests`. |
+| reviewed | cpp | `termin-graphics/tests/tests_shader_resource_layout.cpp` | Checks resource-layout known-empty state, absence of raw GLSL engine binding inference, and stage entry-point hashing. Verified through `tgfx_tests`. |
 | reviewed | cpp | `termin-graphics/tests/tests_vertex_layout.cpp` | Vertex layout stride/offset/max/null/predefined-layout checks are low-level but concrete for the C API. Verified through `tgfx_tests`. |
 | reviewed | python-support | `termin-gui/python/tests/__init__.py` | Empty package marker. |
 | reviewed | python-support | `termin-gui/python/tests/conftest.py` | Shared layout helpers only; no test logic to prune. |

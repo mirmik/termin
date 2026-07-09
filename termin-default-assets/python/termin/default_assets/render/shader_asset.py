@@ -9,24 +9,10 @@ from typing import TYPE_CHECKING
 
 from termin_assets import DataAsset
 from tcbase import log
-from tgfx import TcShader
+from tgfx import ShaderArtifactPolicy, ShaderLanguage, TcShader
 
 if TYPE_CHECKING:
     from termin.materials import ShaderMultyPhaseProgramm
-
-_GLSL_MATERIAL_BINDING = 1
-_GLSL_PER_FRAME_BINDING = 2
-_GLSL_DRAW_DATA_BINDING = 24
-_GLSL_MATERIAL_TEXTURE_BINDING_BASE = 4
-
-_RESOURCE_CONSTANT_BUFFER = 1
-_RESOURCE_TEXTURE = 2
-_SCOPE_FRAME = 1
-_SCOPE_MATERIAL = 3
-_SCOPE_DRAW = 4
-_SET_DEFAULT = 0
-_STAGE_ALL_GRAPHICS = 0x7
-
 
 def _phase_slug(phase_mark: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", phase_mark.strip()).strip("-")
@@ -63,16 +49,19 @@ def make_phase_uuid(shader_uuid: str, phase_mark: str) -> str:
 
 
 def shader_language_enum(language: str):
-    table = {
-        "glsl": 0,
-        "slang": 1,
-        "hlsl": 2,
-    }
     key = language.lower()
-    if key not in table:
-        log.error(f"[ShaderAsset] Unsupported shader language: {language}")
-        raise ValueError(f"Unsupported shader language: {language}")
-    return table[key]
+    if key == "slang":
+        return ShaderLanguage.SLANG
+    log.error(f"[ShaderAsset] Unsupported .shader language: {language}")
+    raise ValueError(f"Unsupported .shader language: {language}")
+
+
+def shader_artifact_policy_for_language(language: str):
+    key = language.lower()
+    if key == "slang":
+        return ShaderArtifactPolicy.REQUIRED
+    log.error(f"[ShaderAsset] Unsupported .shader language: {language}")
+    raise ValueError(f"Unsupported .shader language: {language}")
 
 
 def update_material_shader(material, program, shader_name: str, shader_uuid: str) -> None:
@@ -228,6 +217,7 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
         source_path = str(self._source_path) if self._source_path else ""
 
         tc.set_language(shader_language_enum(self._data.language))
+        tc.set_artifact_policy(shader_artifact_policy_for_language(self._data.language))
         tc.set_sources_with_entries(
             vertex_src,
             fragment_src,
@@ -244,60 +234,8 @@ class ShaderAsset(DataAsset["ShaderMultyPhaseProgramm"]):
             if feature == "lighting_ubo":
                 tc.set_feature(1)
 
-        layout = phase.material_ubo_layout
-        if self._data.language.lower() == "glsl" and layout is not None and layout.block_size > 0:
-            entries = [
-                (e.name, e.property_type, e.offset, e.size)
-                for e in layout.entries
-            ]
-            tc.set_material_ubo_layout(entries, layout.block_size)
-            resource_layout = [
-                (
-                    "material",
-                    _RESOURCE_CONSTANT_BUFFER,
-                    _SCOPE_MATERIAL,
-                    _SET_DEFAULT,
-                    _GLSL_MATERIAL_BINDING,
-                    _STAGE_ALL_GRAPHICS,
-                    layout.block_size,
-                )
-            ]
-        else:
-            tc.set_material_ubo_layout([], 0)
-            resource_layout = []
-
-        if self._data.language.lower() == "glsl":
-            if phase.uses_engine_per_frame:
-                resource_layout.append((
-                    "per_frame",
-                    _RESOURCE_CONSTANT_BUFFER,
-                    _SCOPE_FRAME,
-                    _SET_DEFAULT,
-                    _GLSL_PER_FRAME_BINDING,
-                    _STAGE_ALL_GRAPHICS,
-                    0,
-                ))
-            if phase.uses_engine_draw_data:
-                resource_layout.append((
-                    "draw_data",
-                    _RESOURCE_CONSTANT_BUFFER,
-                    _SCOPE_DRAW,
-                    _SET_DEFAULT,
-                    _GLSL_DRAW_DATA_BINDING,
-                    _STAGE_ALL_GRAPHICS,
-                    64,
-                ))
-            for index, name in enumerate(phase.material_texture_resources):
-                resource_layout.append((
-                    name,
-                    _RESOURCE_TEXTURE,
-                    _SCOPE_MATERIAL,
-                    _SET_DEFAULT,
-                    _GLSL_MATERIAL_TEXTURE_BINDING_BASE + index,
-                    _STAGE_ALL_GRAPHICS,
-                    0,
-                ))
-        tc.set_resource_layout(resource_layout)
+        tc.set_material_ubo_layout([], 0)
+        tc.set_resource_layout([])
 
     def _update_tc_shaders(self) -> None:
         """Update tc_shader registry for hot-reload.
