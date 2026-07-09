@@ -303,6 +303,39 @@ public static class TerminCore
     );
 
     // ========================================================================
+    // Render Target (tc_render_target) - handle-based API
+    // ========================================================================
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_new", CharSet = CharSet.Ansi)]
+    public static extern TcRenderTargetHandle RenderTargetNew(string? name);
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_free")]
+    public static extern void RenderTargetFree(TcRenderTargetHandle renderTarget);
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_alive")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool RenderTargetAlive(TcRenderTargetHandle renderTarget);
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_set_scene")]
+    public static extern void RenderTargetSetScene(TcRenderTargetHandle renderTarget, TcSceneHandle scene);
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_set_camera")]
+    public static extern void RenderTargetSetCamera(TcRenderTargetHandle renderTarget, IntPtr cameraComponent);
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_set_pipeline")]
+    public static extern void RenderTargetSetPipeline(TcRenderTargetHandle renderTarget, TcPipelineHandle pipeline);
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_set_dynamic_resolution")]
+    public static extern void RenderTargetSetDynamicResolution(
+        TcRenderTargetHandle renderTarget,
+        [MarshalAs(UnmanagedType.U1)] bool dynamicResolution);
+
+    [DllImport(RENDER_DLL, EntryPoint = "tc_render_target_set_enabled")]
+    public static extern void RenderTargetSetEnabled(
+        TcRenderTargetHandle renderTarget,
+        [MarshalAs(UnmanagedType.U1)] bool enabled);
+
+    // ========================================================================
     // Mesh Registry
     // ========================================================================
 
@@ -778,6 +811,9 @@ public static class TerminCore
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate nuint RenderSurfaceShareGroupKeyDelegate(IntPtr surface);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate uint RenderSurfaceGetTgfxColorTexIdDelegate(IntPtr surface);
+
     // VTable structure (must match tc_render_surface_vtable in C)
     [StructLayout(LayoutKind.Sequential)]
     public struct RenderSurfaceVTable
@@ -794,6 +830,7 @@ public static class TerminCore
         public IntPtr get_cursor_pos;
         public IntPtr destroy;
         public IntPtr share_group_key;
+        public IntPtr get_tgfx_color_tex_id;
     }
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_render_surface_new_external")]
@@ -897,6 +934,12 @@ public static class TerminCore
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_get_scene")]
     public static extern TcSceneHandle ViewportGetScene(TcViewportHandle viewport);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_set_render_target")]
+    public static extern void ViewportSetRenderTarget(TcViewportHandle viewport, TcRenderTargetHandle renderTarget);
+
+    [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_get_render_target")]
+    public static extern TcRenderTargetHandle ViewportGetRenderTarget(TcViewportHandle viewport);
 
     [DllImport(DISPLAY_DLL, EntryPoint = "tc_viewport_set_rect")]
     public static extern void ViewportSetRect(TcViewportHandle viewport, float x, float y, float w, float h);
@@ -1193,4 +1236,3 @@ public static class CSharpOwnerRef
         }
     }
 }
-

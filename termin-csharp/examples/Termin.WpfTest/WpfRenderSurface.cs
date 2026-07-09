@@ -39,6 +39,7 @@ public class WpfRenderSurface : IDisposable
     private TerminCore.RenderSurfaceGetCursorPosDelegate? _getCursorPos;
     private TerminCore.RenderSurfaceDestroyDelegate? _destroy;
     private TerminCore.RenderSurfaceShareGroupKeyDelegate? _shareGroupKey;
+    private TerminCore.RenderSurfaceGetTgfxColorTexIdDelegate? _getTgfxColorTexId;
 
     // VTable must be kept alive
     private TerminCore.RenderSurfaceVTable _vtable;
@@ -77,6 +78,7 @@ public class WpfRenderSurface : IDisposable
         _getCursorPos = GetCursorPosCallback;
         _destroy = DestroyCallback;
         _shareGroupKey = ShareGroupKeyCallback;
+        _getTgfxColorTexId = GetTgfxColorTexIdCallback;
 
         // Build vtable
         _vtable = new TerminCore.RenderSurfaceVTable
@@ -93,6 +95,7 @@ public class WpfRenderSurface : IDisposable
             get_cursor_pos = Marshal.GetFunctionPointerForDelegate(_getCursorPos),
             destroy = Marshal.GetFunctionPointerForDelegate(_destroy),
             share_group_key = Marshal.GetFunctionPointerForDelegate(_shareGroupKey),
+            get_tgfx_color_tex_id = Marshal.GetFunctionPointerForDelegate(_getTgfxColorTexId),
         };
 
         // Create native surface
@@ -177,6 +180,11 @@ public class WpfRenderSurface : IDisposable
     {
         // All WPF controls share one GL context
         return 1;
+    }
+
+    private static uint GetTgfxColorTexIdCallback(IntPtr surface)
+    {
+        return 0;
     }
 
     private static void PollEventsCallback(IntPtr surface)

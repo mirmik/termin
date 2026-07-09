@@ -27,6 +27,7 @@ extern "C" {
 #include "render/tc_rendering_manager.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_render_target.h"
+#include "render/tc_render_surface.h"
 }
 
 #include <algorithm>
@@ -861,6 +862,63 @@ void RenderingManager::render_all_offscreen() {
         render_viewport_offscreen(vp);
         rendering_manager_detail::append_unique_render_target(rendered_viewport_targets, rt);
     }
+}
+
+void RenderingManager::render_display(tc_display* display) {
+    if (!display) return;
+    if (!tc_display_get_enabled(display)) return;
+
+    tc_render_surface* surface = tc_display_get_surface(display);
+    if (!surface) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_display: surface is null");
+        return;
+    }
+
+    tc_render_surface_make_current(surface);
+
+    int width = 0;
+    int height = 0;
+    tc_render_surface_get_size(surface, &width, &height);
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+
+    RenderEngine* engine = render_engine();
+    if (!engine) {
+        tc_log(TC_LOG_WARN, "[RenderingManager] render_display: no render engine");
+        return;
+    }
+
+    std::vector<tc_display*> displays{display};
+    rendering_manager_detail::update_viewport_rects_for_displays(displays);
+    rendering_manager_detail::sync_viewport_render_target_resolutions(displays);
+
+    rendering_manager_detail::OffscreenRenderPlan render_plan =
+        rendering_manager_detail::build_offscreen_render_plan(displays, {});
+
+    for (tc_scene_handle scene : attached_scenes_) {
+        if (!tc_scene_alive(scene)) continue;
+
+        std::vector<std::string> pipeline_names = get_pipeline_names(scene);
+        for (const std::string& pipeline_name : pipeline_names) {
+            tc_pipeline_handle pipeline = get_scene_pipeline(scene, pipeline_name);
+            if (tc_pipeline_handle_valid(pipeline)) {
+                render_scene_pipeline_offscreen(scene, pipeline_name, pipeline);
+            }
+        }
+    }
+
+    std::vector<tc_render_target_handle> rendered_viewport_targets =
+        render_plan.scene_pipeline_render_targets;
+    for (tc_viewport_handle vp : render_plan.viewport_render_target_viewports) {
+        tc_render_target_handle rt = tc_viewport_get_render_target(vp);
+        if (!tc_render_target_handle_valid(rt)) continue;
+        if (rendering_manager_detail::contains_render_target(rendered_viewport_targets, rt)) continue;
+        render_viewport_offscreen(vp);
+        rendering_manager_detail::append_unique_render_target(rendered_viewport_targets, rt);
+    }
+
+    present_display(display);
 }
 
 void RenderingManager::render_scene_pipeline_offscreen(

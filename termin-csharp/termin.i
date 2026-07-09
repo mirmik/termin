@@ -373,6 +373,11 @@ struct tc_pipeline_handle {
     unsigned int generation;
 };
 
+struct tc_render_target_handle {
+    unsigned int index;
+    unsigned int generation;
+};
+
 struct tc_scene_handle {
     unsigned int index;
     unsigned int generation;
@@ -687,14 +692,19 @@ public:
     void render_all(bool present = true);
     void render_all_offscreen();
     void present_all();
+    void render_display(tc_display* display);
 
     // Shutdown
     void shutdown();
 };
 
 // ============================================================================
-// PullRenderingManager - pull-based rendering for WPF/Qt style
+// PullRenderingManager - deprecated pull-based rendering compatibility wrapper
 // ============================================================================
+
+%typemap(csclassmodifiers) PullRenderingManager %{
+[System.Obsolete("Use RenderingManager.render_display(SWIGTYPE_p_tc_display) instead.")]
+public class%}
 
 class PullRenderingManager {
 public:

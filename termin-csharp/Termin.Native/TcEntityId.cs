@@ -112,6 +112,22 @@ public struct TcPipelineHandle
 }
 
 /// <summary>
+/// Render target handle matching tc_render_target_handle in C.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct TcRenderTargetHandle
+{
+    public uint Index;
+    public uint Generation;
+
+    public static readonly TcRenderTargetHandle Invalid = new() { Index = 0xFFFFFFFF, Generation = 0 };
+
+    public bool IsValid => Index != 0xFFFFFFFF;
+
+    public override string ToString() => $"RenderTarget({Index}:{Generation})";
+}
+
+/// <summary>
 /// Entity pool handle matching tc_entity_pool_handle in C.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
