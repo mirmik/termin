@@ -1,6 +1,3 @@
-numpy
-packaging
-glfw>=2.5.0
-pyassimp
-PyYAML>=6.0
-watchdog>=3.0
+# Compatibility entry point. The canonical SDK runtime lock is owned by the
+# repository build system rather than the editor package.
+-r ../build-system/python-runtime-lock.txt
