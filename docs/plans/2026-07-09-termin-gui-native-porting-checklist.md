@@ -42,8 +42,8 @@ Already started in `termin-gui-native`:
 
 ## Phase 1 - Core Contracts
 
-- [ ] Define child layout policy per child: fixed, preferred, flex, stretch.
-- [ ] Add child metadata storage without making parent/child imply memory
+- [x] Define child layout policy per child: fixed, preferred, flex, stretch.
+- [x] Add child metadata storage without making parent/child imply memory
   ownership.
 - [ ] Add max-size constraints and overflow behavior.
 - [ ] Add hit-test helper API for root and containers.
@@ -61,6 +61,18 @@ Already started in `termin-gui-native`:
 - [ ] Add tests for stale child handles inside containers.
 - [ ] Add tests for event propagation order and capture release.
 - [ ] Add tests for focus handoff and keyboard routing.
+
+Phase 1 notes:
+
+- Child layout policy is implemented in
+  `termin-gui-native/include/termin/gui_native/widgets.hpp` and
+  `termin-gui-native/src/widgets.cpp` via `LayoutPolicy`, `LayoutItem` and
+  typed `BoxLayout::add_*_child` helpers. Containers still store handles plus
+  metadata only; document ownership remains centralized in `tc_ui_document`.
+- Headless coverage: `termin_gui_native_widgets_test` checks default stretch
+  layout compatibility and mixed fixed/preferred/flex distribution.
+- Visual verification remains deferred until the SDL/offscreen renderer smoke
+  is available on the host display backend.
 
 ## Phase 2 - Draw List And Renderer Parity
 
