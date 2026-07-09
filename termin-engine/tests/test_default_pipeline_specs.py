@@ -63,7 +63,7 @@ def test_resolve_pass_serialized_schema_has_no_strategy():
     frame_pass = ResolvePass()
 
     with pytest.raises(AttributeError):
-        frame_pass.strategy
+        _ = frame_pass.strategy
     assert "strategy" not in frame_pass._tc_pass.serialize_data()
 
     frame_pass._tc_pass.deserialize_data({"strategy": "average"})

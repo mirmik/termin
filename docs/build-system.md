@@ -114,7 +114,7 @@ Script-level `--pch` applies to selected C++ targets with broad STL-heavy includ
 
 ```
 sdk/
-├── bin/            # Исполняемые файлы + shared libraries на Windows (.dll)
+├── bin/            # Исполняемые файлы, включая termin_python; DLL на Windows
 ├── lib/            # Import libraries (.lib), shared libraries на Linux (.so), cmake configs
 │   ├── cmake/      # find_package() конфиги для каждого модуля
 │   └── python3.10/site-packages/
@@ -123,6 +123,65 @@ sdk/
 └── python/Lib/site-packages/
     # Python-пакеты на Windows; Windows stdlib живёт в sdk/python/Lib/
 ```
+
+### Bundled Python и тестовый контур
+
+`sdk/bin/termin_python` — SDK-relative isolated launcher. Он игнорирует
+`PYTHONHOME`, `PYTHONPATH` и user site-packages, использует bundled stdlib и
+site-packages, а `--termin-info` печатает диагностический JSON с SDK root,
+Python ABI и активными путями.
+
+Runtime population разделён на build и install:
+
+- `build-system/python-sdk-build-requirements.txt` фиксирует инструменты
+  disposable build environment `build/python-runtime/build-env`;
+- `build-system/python-runtime-lock.txt` содержит exact pins только для
+  third-party runtime distributions;
+- external wheels материализуются в `build/python-runtime/external-wheels`
+  (sdist-only `pyassimp` собирается в wheel на этой стадии);
+- все Termin wheels собираются из `build-system/packages.json` в
+  `build/python-runtime/termin-wheels`;
+- SDK `site-packages` очищается и устанавливается одним offline-проходом с
+  `--no-index --no-deps`;
+- `sdk/python-runtime-manifest.json` фиксирует Python ABI, lock hash, полный
+  набор distributions и hashes их `RECORD`.
+
+SDK verification сверяет manifest с фактическими metadata и payload hashes и
+падает на лишнем, отсутствующем или изменённом distribution. Копирование
+runtime-пакетов из host `site-packages` запрещено. После первичного заполнения
+wheelhouse population можно проверить без сети:
+
+```bash
+TERMIN_PYTHON_RUNTIME_OFFLINE=1 \
+  PYTHONPATH=termin-build-tools \
+  python -m termin_build.sdk --repo-root . install-python
+```
+
+Developer/test environment не является вторым runtime venv. Команда
+
+```bash
+./setup-sdk-python-env.sh
+```
+
+создаёт disposable слой `build/python-envs/test`: pinned pytest/Ruff/test-only
+dependencies и `overlay.json`. Manifest-driven finder загружает Python-исходники
+Termin из checkout, но ищет native extensions прежде всего в соответствующем
+SDK. Overlay привязан к hash `sdk/termin-artifacts.json` и Python ABI; устаревший
+overlay завершается ошибкой вместо неявного смешивания сборок.
+
+Прямые режимы запуска:
+
+```bash
+# Разработка и тесты из checkout поверх SDK runtime
+sdk/bin/termin_python --termin-overlay build/python-envs/test/overlay.json -m pytest
+
+# Проверка только установленного SDK, без checkout overlay
+sdk/bin/termin_python -c "import tcbase, termin.engine"
+```
+
+`setup-test-venv.sh` пока является compatibility wrapper. Новый workflow не
+копирует `.so`/`.pyd` в source tree и не требует `--force` после пересборки
+bindings; после изменения SDK нужно лишь перегенерировать overlay.
 
 ---
 
@@ -416,6 +475,35 @@ Window tests настроены так, чтобы пропускаться в h
 ```bash
 ./run-tests.sh --full
 ```
+
+Python suite roots больше не перечисляются в `run-tests-python.sh` и
+`run-tests-python.ps1`. Их source of truth — `build-system/test-suites.json`.
+Локальные runners вызывают `termin_build.repository_control`: профиль `pr`
+применяет pytest-выражение `not full`, а `linux-full` и `windows-d3d11`
+снимают этот фильтр на соответствующей платформе. Каждая suite запускается
+отдельно; planner продолжает прогон после ошибки и печатает общий список
+упавших suites.
+
+Проверка manifests и orphan-test gate не требует запуска самих тестов:
+
+```bash
+PYTHONPATH=termin-build-tools \
+python3 -m termin_build.repository_control --repo-root . check
+```
+
+Gate сканирует repository-owned `test_*.py` и `*_test.py`. Каждый найденный
+файл обязан принадлежать ровно одному объявленному pytest root. Generated,
+SDK, venv и third-party roots исключены явно в manifest. План можно проверить
+до исполнения:
+
+```bash
+PYTHONPATH=termin-build-tools \
+python3 -m termin_build.repository_control --repo-root . \
+plan pr --platform linux --json
+```
+
+Focused-вызов `run-tests-python.* <pytest-target ...>` остаётся прямым pytest
+запуском и не меняет repository inventory.
 
 Полный набор дополнительно запускает editor-process smoke tests для hot reload
 модулей:
