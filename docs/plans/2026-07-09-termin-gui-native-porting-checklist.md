@@ -211,22 +211,33 @@ Phase 1 notes:
 - [x] Line command.
 - [x] Clip push/pop commands.
 - [x] Text command.
-- [ ] Rounded rect command, or renderer-level radius support in command data.
-- [ ] Texture/image command.
-- [ ] Polyline command.
-- [ ] Circle/arc command.
-- [ ] Path command, if plot annotations need it.
+- [x] Rounded fill/stroke commands and renderer-level radius support.
+- [x] Texture/image command.
+- [x] Polyline command with draw-list-owned point storage.
+- [x] Filled/stroked circle and arc commands.
+- [x] Explicitly exclude arbitrary path commands from current UI parity. The
+  legacy painter and current widget set do not require them; path verbs,
+  winding/fill rules, joins/caps and tessellation ownership need a separate
+  plot-driven contract rather than an underspecified command.
 - [ ] Nine-slice or border-image command for scalable panels.
 - [ ] Per-command debug label for renderer diagnostics.
 - [ ] Optional command bounds for test/debug inspection.
-- [ ] Renderer smoke into offscreen target with pixel readback.
+- [x] Renderer smoke into offscreen target with pixel readback.
 - [x] Python binding tests for every command type.
 
 Phase 2 notes:
 
 - Python coverage in `termin-gui-native/python/tests/test_gui_native.py` now
-  exercises `PushClip`, `FillRect`, `StrokeRect`, `Line`, `Text` and `PopClip`
-  through the bound `PaintContext` and validates the resulting command fields.
+  exercises rect, rounded rect, circle, arc, polyline, clip, line and text
+  commands through the bound `PaintContext` and validates the resulting
+  command fields and copied point storage.
+- Draw lists own text and polyline backing storage. Texture commands hold a
+  non-owning backend-neutral `TextureHandle` id; the device resource must stay
+  alive until `UiDrawListRenderer::render` returns.
+- `termin_gui_native_renderer_pixel_smoke` renders through
+  `UiDrawListRenderer` and `Canvas2DRenderer` into a Vulkan offscreen target.
+  Pixel readback covers sampled texture output, text signal, rounded corners,
+  circle fill and the intersection of nested clips.
 - Packaging note: standalone `cmake --install` for `termin-gui-native` can
   install the fresh Python module under `sdk/lib/python`, while the active SDK
   import path resolves `termin.gui_native` from
@@ -433,7 +444,8 @@ Port only after layout, focus and events are reliable.
   splitter, group box, grid palette, scroll area and tabs.
 - [ ] Python showcase mirrors the C++ showcase.
 - [x] Headless draw-list snapshot test for showcase structure.
-- [ ] Offscreen renderer pixel smoke for text + rect + clip.
+- [x] Offscreen renderer pixel smoke for text + texture + rounded geometry +
+  nested clip intersection.
 - [ ] Manual SDL smoke once visual verification is available.
 - [ ] Screenshot capture path for future visual regression checks.
 
