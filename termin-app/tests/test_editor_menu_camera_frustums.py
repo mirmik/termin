@@ -33,7 +33,6 @@ def _menu_config() -> EditorMenuSpecConfig:
                 load_material=_noop,
                 load_components=_noop,
                 deploy_stdlib=_noop,
-                migrate_spec_to_meta=_noop,
                 exit=_noop,
             ),
             edit=EditMenuActions(

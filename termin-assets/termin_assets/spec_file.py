@@ -23,23 +23,11 @@ def read_spec_file(path: str) -> dict | None:
 
 
 def write_spec_file(path: str, data: dict) -> bool:
-    """Write a resource .meta sidecar and remove a legacy .spec sidecar."""
+    """Write a resource .meta sidecar."""
     meta_path = path + ".meta"
     try:
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-
-        old_spec_path = path + ".spec"
-        if os.path.exists(old_spec_path):
-            try:
-                os.remove(old_spec_path)
-            except Exception:
-                logger.warning(
-                    "Failed to remove legacy asset spec file: %s",
-                    old_spec_path,
-                    exc_info=True,
-                )
-
         return True
     except Exception:
         logger.error("Failed to write asset meta file: %s", meta_path, exc_info=True)

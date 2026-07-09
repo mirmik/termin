@@ -53,15 +53,15 @@ def _make_controller(
     )
 
 
-def test_project_file_actions_activate_legacy_scene_and_prefab() -> None:
+def test_project_file_actions_activate_scene_and_prefab() -> None:
     recorder = _Recorder()
     controller = _make_controller(recorder)
 
-    controller.activate_file("/project/Main.tc_scene")
-    controller.activate_file("/project/Tree.tc_prefab")
+    controller.activate_file("/project/Main.scene")
+    controller.activate_file("/project/Tree.prefab")
 
-    assert recorder.scene_path == "/project/Main.tc_scene"
-    assert recorder.prefab_path == "/project/Tree.tc_prefab"
+    assert recorder.scene_path == "/project/Main.scene"
+    assert recorder.prefab_path == "/project/Tree.prefab"
 
 
 def test_project_file_actions_activate_scene_file() -> None:
@@ -89,7 +89,7 @@ def test_project_file_actions_select_files_for_inspector() -> None:
     recorder = _Recorder()
     controller = _make_controller(recorder)
 
-    controller.select_file("/project/material.tc_mat")
+    controller.select_file("/project/material.material")
     controller.select_file("/project/render.scene_pipeline")
     controller.select_file("/project/albedo.png")
     controller.select_file("/project/mesh.obj")
@@ -98,7 +98,7 @@ def test_project_file_actions_select_files_for_inspector() -> None:
     controller.select_file("/project/mesh.stl")
     controller.select_file("/project/model.glb")
 
-    assert recorder.inspector.material_path == "/project/material.tc_mat"
+    assert recorder.inspector.material_path == "/project/material.material"
     assert recorder.inspector.pipeline_path == "/project/render.scene_pipeline"
     assert recorder.inspector.texture_path == "/project/albedo.png"
     assert recorder.inspector.mesh_path == "/project/mesh.stl"

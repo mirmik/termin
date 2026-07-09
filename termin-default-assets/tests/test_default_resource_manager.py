@@ -49,14 +49,10 @@ def test_default_resource_manager_exposes_builtin_asset_registration() -> None:
     assert white_texture.uuid == "__white_1x1__"
     assert normal_texture.uuid == "__normal_1x1__"
     assert manager.get_handle_by_uuid("tc_texture", "__white_1x1__").uuid == "__white_1x1__"
-    assert TcTexture.from_uuid("5fb7972ad02ddfad").is_valid
-    assert TcTexture.from_uuid("07151644d3bb92c7").is_valid
-    assert manager.get_texture_asset_by_uuid("5fb7972ad02ddfad") is manager.get_texture_asset(
-        "__white_1x1__"
-    )
-    assert manager.get_texture_asset_by_uuid("07151644d3bb92c7") is manager.get_texture_asset(
-        "__normal_1x1__"
-    )
+    assert not TcTexture.from_uuid("5fb7972ad02ddfad").is_valid
+    assert not TcTexture.from_uuid("07151644d3bb92c7").is_valid
+    assert manager.get_texture_asset_by_uuid("5fb7972ad02ddfad") is None
+    assert manager.get_texture_asset_by_uuid("07151644d3bb92c7") is None
     assert set(registered_meshes) == {"Cube", "Sphere", "Plane", "Cylinder"}
     assert manager.get_mesh_asset("Cube") is not None
 
