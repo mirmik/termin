@@ -335,6 +335,14 @@ their real coverage.
 
 ### Phase 1: Catalog and read-only planner
 
+Foundation status, 2026-07-09: implemented under Kanboard #268. The repository
+now has `build-system/modules.json` for non-Python module identities while
+deriving Python-backed identities from canonical `packages.json`, an initial
+`build-system/test-suites.json`, and `termin_build.repository_control`
+`check`/`list`/`plan` operations with stable JSON output. Cross-manifest module,
+profile, executor, platform, root-path, and filesystem references are validated.
+Suite population and orphan-test enforcement remain the separate #262 stream.
+
 - Add module and test-suite schemas.
 - Populate the initial module catalog from current package, CMake, and docs data.
 - Implement `check`, `list`, and `plan` without changing existing runners.
