@@ -60,7 +60,15 @@ void bind_editor_interaction(nb::module_& m) {
         }, nb::arg("vp_index"), nb::arg("vp_generation"), nb::arg("display_ptr"))
         .def("tc_input_manager_ptr", [](EditorViewportInputManager& s) {
             return reinterpret_cast<uintptr_t>(s.tc_input_manager_ptr());
-        });
+        })
+        .def("rebind", [](EditorViewportInputManager& self,
+                           uint32_t vp_index, uint32_t vp_generation,
+                           uintptr_t display_ptr) {
+            return self.rebind(
+                tc_viewport_handle{vp_index, vp_generation},
+                reinterpret_cast<tc_display*>(display_ptr));
+        }, nb::arg("vp_index"), nb::arg("vp_generation"), nb::arg("display_ptr"))
+        .def("detach", &EditorViewportInputManager::detach);
 
     nb::class_<SurfacePickResult>(m, "SurfacePickResult")
         .def(nb::init<>())

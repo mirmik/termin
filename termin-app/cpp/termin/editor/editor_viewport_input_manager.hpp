@@ -28,7 +28,10 @@ private:
 
 public:
     EditorViewportInputManager(tc_viewport_handle viewport, tc_display* display);
-    ~EditorViewportInputManager() = default;
+    ~EditorViewportInputManager();
+
+    bool rebind(tc_viewport_handle viewport, tc_display* display);
+    void detach();
 
     tc_input_manager* tc_input_manager_ptr() { return &_tc_im; }
     tc_viewport_handle viewport() const { return _viewport; }
