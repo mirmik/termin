@@ -43,6 +43,7 @@ from termin.editor_core.navigation_settings_model import NavigationSettingsContr
 from termin.editor_core.spacemouse_controller import SpaceMouseController
 from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
 from termin.editor_core.scene_manager_model import SceneManagerController
+from termin.editor_core.editor_scene_session import EditorSceneSession
 from termin.editor_core.viewport_list_model import ViewportListController
 from termin.editor_native.component_extensions import (
     NativeComponentExtensionContext,
@@ -140,6 +141,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     from termin.editor_core.resource_manager import ResourceManager
 
     resource_manager = ResourceManager.instance()
+    from termin.editor_core.resource_loader import register_editor_builtin_resources
+
+    register_editor_builtin_resources(resource_manager)
     engine = EngineCore.instance()
     if engine is None:
         raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")
@@ -187,6 +191,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         return Rect(0.0, 0.0, float(width), float(height))
 
     initial_scene = None if no_scene else create_scene(name="default")
+    active_scene = [initial_scene]
+
+    def current_scene():
+        return active_scene[0]
+
     editor_scene_name = "untitled"
     if initial_scene is not None:
         engine.scene_manager.register_scene(
@@ -209,28 +218,36 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     scene_properties_dialog = None
     scene_names_dialog = None
     shadow_settings_dialog = None
+    scene_properties_controller = None
+    scene_names_controller = None
+    shadow_settings_controller = None
     if initial_scene is not None:
+        scene_properties_controller = ScenePropertiesController(
+            initial_scene,
+            resource_manager=resource_manager,
+            push_undo_command=push_undo_command,
+            on_changed=request_editor_render,
+        )
         scene_properties_dialog = build_native_scene_properties_dialog(
             host.document,
-            ScenePropertiesController(
-                initial_scene,
-                resource_manager=resource_manager,
-                push_undo_command=push_undo_command,
-                on_changed=request_editor_render,
-            ),
+            scene_properties_controller,
             dialog_service=dialog_service,
             viewport=editor_viewport,
             request_render=request_editor_render,
         )
+        scene_names_controller = SceneNamesController(initial_scene)
         scene_names_dialog = build_native_scene_names_dialog(
             host.document,
-            SceneNamesController(initial_scene),
+            scene_names_controller,
             viewport=editor_viewport,
             request_render=request_editor_render,
         )
+        shadow_settings_controller = ShadowSettingsController(
+            initial_scene, on_changed=request_editor_render
+        )
         shadow_settings_dialog = build_native_shadow_settings_dialog(
             host.document,
-            ShadowSettingsController(initial_scene, on_changed=request_editor_render),
+            shadow_settings_controller,
             viewport=editor_viewport,
             request_render=request_editor_render,
         )
@@ -411,11 +428,12 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_editor_render()
 
     def add_viewport(display) -> None:
-        if initial_scene is None or native_viewport is None or display_workspace is None:
+        scene = current_scene()
+        if scene is None or native_viewport is None or display_workspace is None:
             dialog_service.show_error("Add Viewport", "No scene is attached.")
             return
         viewport = display.create_viewport(
-            scene=initial_scene,
+            scene=scene,
             camera=native_viewport.camera,
             rect=(0.0, 0.0, 1.0, 1.0),
         )
@@ -475,8 +493,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         name = "XRStereoTarget" if kind == "xr_stereo" else "RenderTarget"
         target = render_target_new(name)
         target.kind = kind
-        if initial_scene is not None:
-            target.scene = initial_scene
+        scene = current_scene()
+        if scene is not None:
+            target.scene = scene
         engine.rendering_manager.register_managed_render_target(target)
         sync_viewport_list()
         request_editor_render()
@@ -486,7 +505,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
         RenderingModel(engine.rendering_manager).remove_render_target(
             target,
-            scene=initial_scene,
+            scene=current_scene(),
         )
         sync_viewport_list()
         request_editor_render()
@@ -570,6 +589,59 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         shell.spacemouse_settings_command,
         spacemouse_settings_dialog,
     )
+    editor_scene_session = None
+    if (
+        native_viewport is not None
+        and scene_properties_controller is not None
+        and scene_names_controller is not None
+        and shadow_settings_controller is not None
+    ):
+        def dismiss_scene_dialogs() -> None:
+            for scene_dialog in (
+                scene_properties_dialog,
+                scene_names_dialog,
+                shadow_settings_dialog,
+            ):
+                if scene_dialog is not None and scene_dialog.dialog.open:
+                    scene_dialog.dialog.close()
+
+        def clear_scene_selection() -> None:
+            nonlocal selected_entity
+            selected_entity = None
+            extension_session.clear()
+            entity_inspector.set_target(None)
+            native_viewport.select_scene_object(None)
+
+        def scene_switched(scene) -> None:
+            active_scene[0] = scene
+            sync_viewport_list()
+            request_editor_render()
+
+        editor_scene_session = EditorSceneSession(
+            native_viewport.attachment,
+            scene_hierarchy=scene_hierarchy_controller,
+            entity_inspector=entity_inspector_controller,
+            scene_properties=scene_properties_controller,
+            scene_names=scene_names_controller,
+            shadow_settings=shadow_settings_controller,
+            clear_selection=clear_scene_selection,
+            before_switch=dismiss_scene_dialogs,
+            on_switched=scene_switched,
+        )
+
+    def attach_editor_scene(name: str):
+        if editor_scene_session is None:
+            raise RuntimeError("native editor scene attachment is unavailable")
+        scene = engine.scene_manager.get_scene(name)
+        if scene is None:
+            raise ValueError(f"scene '{name}' does not exist")
+        return editor_scene_session.attach(scene)
+
+    def detach_editor_scene():
+        if editor_scene_session is None:
+            raise RuntimeError("native editor scene attachment is unavailable")
+        return editor_scene_session.detach(save_state=True)
+
     scene_manager_dialog = build_native_scene_manager_dialog(
         host.document,
         SceneManagerController(
@@ -577,6 +649,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             get_editor_attachment=lambda: (
                 None if native_viewport is None else native_viewport.attachment
             ),
+            on_editor_attach=attach_editor_scene if editor_scene_session is not None else None,
+            on_editor_detach=detach_editor_scene if editor_scene_session is not None else None,
             on_changed=request_editor_render,
         ),
         dialog_service=dialog_service,
@@ -772,8 +846,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     executor = EditorPythonExecutor(
         lambda: {
             "editor": host,
-            "scene": initial_scene,
-            "current_scene": initial_scene,
+            "scene": current_scene(),
+            "current_scene": current_scene(),
             "selected_entity": selected_entity,
             "scene_hierarchy_controller": scene_hierarchy_controller,
             "scene_tree": scene_tree,
@@ -822,6 +896,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "spacemouse": spacemouse,
             "spacemouse_settings_dialog": spacemouse_settings_dialog,
             "scene_manager_dialog": scene_manager_dialog,
+            "editor_scene_session": editor_scene_session,
             "native_viewport": native_viewport,
             "project_path": (
                 str(project_browser_controller.root_path) if project_browser_controller.root_path is not None else None

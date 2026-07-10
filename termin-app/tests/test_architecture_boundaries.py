@@ -414,6 +414,7 @@ def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
         "settings_model.py",
         "scene_settings_model.py",
         "scene_manager_model.py",
+        "editor_scene_session.py",
         "spacemouse_settings_model.py",
         "undo_history_model.py",
     )

@@ -48,3 +48,24 @@ def test_scene_manager_controller_checks_callback_results():
             controller.render_attach_selected()
     finally:
         manager.close_all_scenes()
+
+
+def test_scene_manager_controller_editor_attachment_actions_are_idempotent():
+    manager = SceneManager()
+    scene = manager.create_scene("Editor", [])
+    attachment = type("Attachment", (), {"scene": scene})()
+    calls = []
+    controller = SceneManagerController(
+        manager,
+        get_editor_attachment=lambda: attachment,
+        on_editor_attach=lambda name: calls.append(("attach", name)),
+        on_editor_detach=lambda: calls.append(("detach", None)),
+    )
+    try:
+        controller.refresh()
+        controller.editor_attach_selected()
+        assert calls == []
+        controller.editor_detach()
+        assert calls == [("detach", None)]
+    finally:
+        manager.close_all_scenes()

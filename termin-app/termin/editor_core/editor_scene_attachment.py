@@ -238,6 +238,7 @@ class EditorSceneAttachment:
         """Detach and release the attachment-owned target and pipeline."""
         self.detach(save_state=save_state)
         if self._render_target is not None:
+            self._render_target.locked = False
             self._render_target.free()
             self._render_target = None
         if self._pipeline is not None:

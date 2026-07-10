@@ -192,11 +192,19 @@ class SceneManagerController:
         return self._invoke_selected(self._on_render_detach, "render detach")
 
     def editor_attach_selected(self) -> SceneManagerSnapshot:
+        selected = self._require_selected()
+        scene = self._scene_manager.get_scene(selected)
+        attachment = self._get_editor_attachment() if self._get_editor_attachment else None
+        if attachment is not None and _same_scene(attachment.scene, scene):
+            return self.refresh()
         return self._invoke_selected(self._on_editor_attach, "editor attach")
 
     def editor_detach(self) -> SceneManagerSnapshot:
         if self._on_editor_detach is None:
             raise RuntimeError("editor detach is unavailable")
+        attachment = self._get_editor_attachment() if self._get_editor_attachment else None
+        if attachment is None or attachment.scene is None:
+            return self.refresh()
         self._require_success(self._on_editor_detach(), "editor detach failed")
         return self._changed()
 
