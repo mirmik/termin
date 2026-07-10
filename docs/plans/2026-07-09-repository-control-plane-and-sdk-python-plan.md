@@ -458,6 +458,9 @@ writes the corresponding suite execution manifest.
 The termin-app installed-bundle acceptance is also declared as a separate
 sdk-installed process-smoke suite, preserving its distinct import contract
 without a pytest root list in workflow YAML.
+The focused D3D11 Windows smoke is likewise a declared Windows process-smoke
+suite; CI consumes its Windows plan artifact and publishes a suite execution
+manifest. Runtime acceptance still depends on the Windows runner.
 
 - Generate CI matrices from planner JSON.
 - Remove pytest/CTest root lists from workflow YAML.
