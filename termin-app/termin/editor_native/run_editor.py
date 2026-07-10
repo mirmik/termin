@@ -125,7 +125,7 @@ from termin.editor_native.registry_viewer import (
     connect_registry_viewer_command,
 )
 from termin.editor_native.scene_tree import build_native_scene_tree
-from termin.editor_native.shell import build_native_editor_shell
+from termin.editor_native.shell import NativeMenuActivationRoute, build_native_editor_shell
 from termin.editor_native.ui_host import NativeUiHost
 from termin.editor_native.viewport_list import build_native_viewport_list
 from termin.gui_native import Rect, WidgetRef
@@ -170,6 +170,13 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     window.maximize()
     host = NativeUiHost(window)
     shell = build_native_editor_shell(host.document)
+    file_menu = NativeMenuActivationRoute(shell.menu_bar, 0)
+    edit_menu = NativeMenuActivationRoute(shell.menu_bar, 1)
+    view_menu = NativeMenuActivationRoute(shell.menu_bar, 2)
+    scene_menu = NativeMenuActivationRoute(shell.menu_bar, 3)
+    game_menu = NativeMenuActivationRoute(shell.menu_bar, 4)
+    debug_menu = NativeMenuActivationRoute(shell.menu_bar, 5)
+    help_menu = NativeMenuActivationRoute(shell.menu_bar, 6)
 
     def request_editor_render() -> None:
         engine.scene_manager.request_render()
@@ -187,7 +194,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     profiler_panel.root.visible = False
 
     connect_profiler_menu_toggle(
-        shell.menu_bar,
+        debug_menu,
         shell.profiler_command,
         profiler_panel,
         request_editor_render,
@@ -271,7 +278,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             (shell.scene_names_command, scene_names_dialog),
             (shell.shadow_settings_command, shadow_settings_dialog),
         ):
-            connect_scene_settings_command(shell.menu_bar, command_id, scene_dialog)
+            connect_scene_settings_command(scene_menu, command_id, scene_dialog)
 
     undo_history_dialog = build_native_undo_history_dialog(
         host.document,
@@ -280,7 +287,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_diagnostic_command(
-        shell.menu_bar,
+        debug_menu,
         shell.undo_history_command,
         undo_history_dialog,
     )
@@ -292,7 +299,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_diagnostic_command(
-        shell.menu_bar,
+        debug_menu,
         shell.audio_debugger_command,
         audio_debugger_dialog,
     )
@@ -307,7 +314,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         apply_font_size=host.apply_font_size,
     )
     connect_settings_command(
-        shell.menu_bar,
+        edit_menu,
         shell.settings_command,
         settings_dialog,
     )
@@ -319,7 +326,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         viewport=editor_viewport,
         request_render=request_editor_render,
     )
-    connect_about_command(shell.menu_bar, shell.about_command, about_dialog)
+    connect_about_command(help_menu, shell.about_command, about_dialog)
     selected_entity = None
     display_workspace: NativeDisplayWorkspace | None = None
     native_viewport: NativeEditorViewport | None = None
@@ -616,7 +623,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_spacemouse_settings_command(
-        shell.menu_bar,
+        view_menu,
         shell.spacemouse_settings_command,
         spacemouse_settings_dialog,
     )
@@ -691,7 +698,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_scene_manager_command(
-        shell.menu_bar,
+        debug_menu,
         shell.scene_manager_command,
         scene_manager_dialog,
     )
@@ -703,7 +710,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_registry_viewer_command(
-        shell.menu_bar,
+        debug_menu,
         shell.inspect_registry_command,
         registry_viewer,
     )
@@ -720,7 +727,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_registry_viewer_command(
-        shell.menu_bar,
+        debug_menu,
         shell.core_registry_command,
         core_registry_viewer,
     )
@@ -837,7 +844,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         if callback is not None:
             callback()
 
-    shell.menu_bar.connect_activated(on_scene_file_command)
+    file_menu.connect_activated(on_scene_file_command)
 
     def on_toolbar_scene_file_command(_index: int, command_id: int, _command) -> None:
         if command_id == shell.toolbar_save_command:
@@ -880,7 +887,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         if callback is not None:
             callback()
 
-    shell.menu_bar.connect_activated(on_project_build_command)
+    game_menu.connect_activated(on_project_build_command)
 
     pipeline_editor_controller = PipelineEditorController()
     pipeline_directory = project_browser_controller.root_path or Path.cwd()
@@ -893,7 +900,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         default_directory=pipeline_directory,
     )
     connect_pipeline_editor_command(
-        shell.menu_bar,
+        debug_menu,
         shell.pipeline_editor_command,
         pipeline_editor,
     )
@@ -913,7 +920,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         remove_pre_render_callback=host.remove_pre_render_callback,
     )
     connect_framegraph_debugger_command(
-        shell.menu_bar,
+        debug_menu,
         shell.framegraph_debugger_command,
         framegraph_debugger,
     )
@@ -991,7 +998,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         )
         game_mode_controller = NativeGameModeController(
             game_mode_model,
-            menu_bar=shell.menu_bar,
+            menu_bar=game_menu,
             game_menu_model=shell.game_menu_model,
             game_play_command=shell.game_play_command,
             tool_bar=shell.tool_bar,
@@ -1021,7 +1028,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_project_settings_command(
-        shell.menu_bar,
+        edit_menu,
         shell.project_settings_command,
         project_settings_dialog,
     )
@@ -1040,10 +1047,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_navigation_settings_command(
-        shell.menu_bar, shell.agent_types_command, agent_types_dialog
+        scene_menu, shell.agent_types_command, agent_types_dialog
     )
     connect_navigation_settings_command(
-        shell.menu_bar, shell.navmesh_areas_command, navmesh_areas_dialog
+        scene_menu, shell.navmesh_areas_command, navmesh_areas_dialog
     )
 
     resource_manager_controller = RegistryCatalogController(
@@ -1058,7 +1065,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_registry_viewer_command(
-        shell.menu_bar,
+        debug_menu,
         shell.resource_manager_command,
         resource_manager_viewer,
     )
@@ -1136,7 +1143,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_python_console_command(
-        shell.menu_bar,
+        debug_menu,
         shell.python_console_command,
         python_console,
     )

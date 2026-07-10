@@ -15,6 +15,21 @@ from termin.gui_native import (
 )
 
 
+class NativeMenuActivationRoute:
+    """Expose activations from exactly one MenuBar entry."""
+
+    def __init__(self, menu_bar, menu_index: int) -> None:
+        self._menu_bar = menu_bar
+        self._menu_index = menu_index
+
+    def connect_activated(self, callback):
+        def routed(menu_index: int, command_id: int, command) -> None:
+            if menu_index == self._menu_index:
+                callback(menu_index, command_id, command)
+
+        return self._menu_bar.connect_activated(routed)
+
+
 @dataclass(frozen=True)
 class NativeEditorShell:
     root: WidgetRef
@@ -268,4 +283,8 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     )
 
 
-__all__ = ["NativeEditorShell", "build_native_editor_shell"]
+__all__ = [
+    "NativeEditorShell",
+    "NativeMenuActivationRoute",
+    "build_native_editor_shell",
+]
