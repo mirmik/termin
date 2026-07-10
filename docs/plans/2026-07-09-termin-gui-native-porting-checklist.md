@@ -42,7 +42,9 @@ Already started in `termin-gui-native`:
 - `UiDrawListRenderer` renders draw-list commands through `Canvas2DRenderer`.
 - The C++ widget layer includes the basic controls, text editors, value/media
   widgets, core containers and a virtualized `ListWidget` over reusable
-  collection/selection models.
+  collection/selection models, a virtualized `TreeWidget` over stable-ID
+  hierarchy/expansion models and a virtualized `TableWidget` with independent
+  stable row and column models.
 - Native and Python tests cover ownership, recursive destroy, paint output,
   layout, input routing, mixed-language lifetime and large-model virtualization.
 
@@ -335,10 +337,10 @@ Phase 3 notes:
 - [x] `GroupBox`.
 - [x] `TabView` / tabs.
 - [x] Document overlay stack and modal policy.
-- [ ] Dialog root/container.
-- [ ] Menu popup container.
-- [ ] Toolbar layout.
-- [ ] Status bar layout.
+- [x] Dialog root/container.
+- [x] Menu popup container.
+- [x] Toolbar layout.
+- [x] Status bar layout.
 
 Acceptance:
 
@@ -384,6 +386,7 @@ Phase 4 notes:
 ## Phase 5 - Input, Focus And Interaction
 
 - [x] Pointer move/down/up/wheel event ABI and basic dispatch.
+- [x] Host-supplied deterministic click-count ABI and double-click activation.
 - [x] Hover enter/leave callbacks.
 - [x] Pressed state lifecycle.
 - [x] Pointer capture API.
@@ -418,14 +421,13 @@ Start with data structures and tests; postpone visual tuning.
 Port only after layout, focus and events are reliable.
 
 - [x] `ListWidget`.
-- [ ] `TreeWidget`.
-- [ ] `TableWidget`.
-- [ ] `FileGridWidget`.
-- [x] Virtualized flat collection model and list presentation; table-specific
-  columns remain in the `TableWidget` slice.
+- [x] `TreeWidget`.
+- [x] `TableWidget`.
+- [x] `FileGridWidget`.
+- [x] Virtualized flat collection and table presentation.
 - [x] Selection model: single, multi, range.
-- [ ] Expand/collapse model for tree.
-- [ ] Header/column resize model for table.
+- [x] Expand/collapse model for tree.
+- [x] Header/column resize model for table.
 - [x] Keyboard navigation.
 - [x] Scroll integration.
 
@@ -442,31 +444,175 @@ Phase 7 notes:
   items reject direct selection and are skipped by keyboard navigation.
 - The shared model is retained by the widget and released when the widget is
   destroyed. C++ and Python lifetime tests cover both sides of that contract.
+- `TreeModel` owns stable numeric node IDs, validated parent/ordered-child
+  relationships and cycle-safe move/reorder operations. `TreeExpansionModel`
+  keeps presentation state separate from hierarchy data and reconciles erased
+  IDs.
+- `TreeWidget` caches a flattened visible-row projection only when hierarchy
+  or expansion revisions change. Layout and paint operate on a bounded viewport
+  range without creating one widget per node; 10,100-node C++ and Python tests
+  fix that contract. Pointer toggles/selection, scrolling, disabled-node skip,
+  Up/Down/Home/End/Left/Right navigation, activation and delete requests share
+  the same C++/Python implementation.
+- Tree reparent/reorder semantics are available through `TreeModel::move`.
+  External OS/editor drag payload transport remains an explicit future host
+  input boundary rather than a tree-specific fallback event API.
+- `TableModel` gives each row an internal stable numeric ID and emits typed
+  reset/insert/update/erase changes. `TableColumnModel` owns unique stable
+  column IDs, fixed/stretch sizing, min/max constraints and explicit resize
+  mutations; header clicks are signals so sorting remains a host/model concern.
+- `TableWidget` reuses `SelectionModel`, paints only its bounded visible row
+  range, skips disabled rows and supports Home/End/arrow navigation and Enter
+  activation. Resize uses document pointer capture and remains active outside
+  widget bounds. C++ and Python tests cover 10,000 rows, sizing, mutation,
+  callbacks and shared-model lifetime.
+- SDL button sequence counts propagate through `tc_input_manager`,
+  `tc_mouse_button_event`, `tc_ui_pointer_event` and both Python bridges.
+  List/tree/table/file-grid widgets activate exactly on count 2. The editor's
+  former `high_resolution_clock` double-click detector was removed, so every
+  consumer now shares the host-defined sequence with no local timing fallback.
+- `FileGridWidget` shares `CollectionModel` and `SelectionModel` with the list;
+  `CollectionItem` carries an optional backend-neutral texture ID for grid/icon
+  presentation without embedding asset loading in the widget. Responsive
+  column/row layout, bounded visible-range paint, disabled-item navigation,
+  wheel scrolling, scrollbar pointer capture, context-menu requests,
+  activation and delete requests use the same C++/Python implementation.
+- Native and Python tests cover a 10,000-item responsive grid, bounded draw
+  output, texture commands, model mutation/lifetime, callback errors,
+  scrollbar dragging outside the widget and deterministic double-click
+  activation. External drag payload transport stays a host input boundary.
 
 ## Phase 8 - Menus, Dialogs And Overlays
 
-- [ ] `Menu`.
-- [ ] `MenuBar`.
-- [ ] `ToolBar`.
-- [ ] `Dialog`.
-- [ ] `MessageBox`.
-- [ ] `InputDialog`.
-- [ ] `FileDialogOverlay`.
-- [ ] `ColorDialog`.
-- [ ] Popup placement.
-- [ ] Modal stack.
-- [ ] Escape/enter/default-button behavior.
+- [x] `Menu`.
+- [x] `MenuBar`.
+- [x] `ToolBar`.
+- [x] `StatusBar`.
+- [x] `Dialog`.
+- [x] `MessageBox`.
+- [x] `InputDialog`.
+- [x] `FileDialogOverlay`.
+- [x] `ColorDialog`.
+- [x] Popup placement for menu and submenu overlays.
+- [x] Modal stack.
+- [x] Escape/enter/default-button behavior.
+
+Phase 8 chrome notes:
+
+- `CommandModel` owns stable command IDs and validated UTF-8 action/separator
+  descriptors, including enabled/checkable/checked state, icon text or texture,
+  shortcut/tooltip metadata and an optional nested command model. Typed model
+  changes keep toolbar, future menus and shortcut consumers on one state source.
+- `ToolBar` computes deterministic action/separator geometry directly from the
+  shared model, paints without per-action widgets, uses pointer capture for
+  press/release semantics and updates checkable state before emitting activation.
+  Tooltip scheduling remains a host concern exposed through hovered metadata.
+- `StatusBar` has persistent and temporary message state with explicit
+  `clear_message`. Timeout scheduling belongs to the host event loop instead of
+  a nondeterministic widget-local monotonic clock.
+- `Menu` is a document overlay backed by `CommandModel`: it clamps root and
+  fallback-left submenu placement to an explicit viewport, bounds tall content
+  with wheel/keyboard scrolling, skips disabled/separator entries, toggles
+  checkable commands before activation and owns teardown of its entire submenu
+  overlay chain. Ancestor-model tracking rejects cyclic submenu expansion.
+- `MenuBar` owns exactly one root popup, keeps its title strip inside the popup
+  hit scope for adjacent hover switching, and exposes cycle-safe shortcut
+  dispatch over the same command graph. Outside/Escape dismissal, nested
+  keyboard navigation, switching, shortcut activation and Python callback
+  parity are covered by C++ and bundled-Python tests.
+- `Dialog` owns one canonical content subtree plus validated stable-ID actions,
+  centers and clamps itself inside an explicit viewport, uses the document
+  modal stack for pointer/focus containment, restores the previous modal/root
+  focus on dismissal and emits one typed result per show cycle. Escape maps to
+  the declared cancel action; Enter activates the focused button or bubbles to
+  the declared default action. `MessageBox` and `InputDialog` build their
+  content on this same core, including text-submit acceptance and optional
+  input results. C++ tests cover nested modal focus/lifecycle and the showcase
+  draw snapshot paints an open message box; Python exercises the same APIs.
+- `FileDialogModel` separates path/filter/history/confirmation policy from UI
+  and filesystem access. Its injected `FileDialogFileSystem` makes failure and
+  navigation behavior deterministic in tests, while
+  `NativeFileDialogFileSystem` is the production `std::filesystem` provider.
+  `FileDialogOverlay` composes navigation, list, filter and save-name controls
+  on `Dialog`; the dialog's pre-action validation hook keeps invalid accepts
+  open and emits exactly one optional path per show cycle. Open-file,
+  save-file and open-directory modes have C++ and bundled-Python coverage.
+  `FileDialogService` separately defines the asynchronous host/platform picker
+  boundary: a host chooses it or the overlay explicitly, with no implicit
+  fallback between them.
+- `ColorPickerModel` owns validated RGB/HSV/alpha conversion and revisioned
+  change flags. `ColorPicker` owns renderer-neutral 64x64/1x64 RGBA CPU
+  surfaces and invalidation signals, while GPU texture allocation/update/free
+  remains a host responsibility represented by explicit texture IDs. Without
+  those IDs it paints bounded draw-list gradients, so headless and non-GPU
+  hosts retain the complete picker. SV, hue and optional alpha drag paths use
+  document pointer capture; old/new checkerboard previews and hex text share
+  the same paint path. `ColorDialog` composes the picker on `Dialog` and emits
+  exactly one optional typed color per show cycle. C++/Python tests cover HSV
+  conversion, surface revisions, both paint paths, capture outside bounds and
+  accept/cancel delivery.
 
 ## Phase 9 - Rich And Specialized Widgets
 
-- [ ] `RichTextView`.
-- [ ] `FrameTimeGraph`.
-- [ ] `Viewport3D`.
-- [ ] `SceneView` / graphics item bridge decision.
+- [x] `RichTextView`.
+- [x] `FrameTimeGraph`.
+- [x] `Viewport3D`.
+- [x] `SceneView` / graphics item bridge decision.
 - [ ] Plot annotation widgets or shared plot overlay primitives.
 - [ ] Texture preview widget.
-- [ ] Profiler panel primitives.
-- [ ] Registry/table inspector primitives.
+- [x] Profiler panel primitives.
+- [x] Registry/table inspector primitives.
+
+Phase 9 rich-text notes:
+
+- `RichTextModel` owns validated UTF-8 lines and styled segments independently
+  of the widget. Optional color plus bold/italic flags are explicit native
+  values; the small HTML adapter recognizes `br`, `pre`/`p`, `b`/`strong`,
+  `i`/`em`, span color/font-weight/font-style and common/numeric entities.
+- `RichTextView` wraps through the document text-measurement service, clips and
+  virtualizes visible rows, scrolls by wheel or captured scrollbar drag, and
+  uses the document clipboard service for read-only selection/copy. Selection
+  offsets refer to source UTF-8 bytes, so visual wrapping never inserts false
+  newlines into copied text. C++ and Python share the same model lifetime.
+- `FrameTimeModel` is an explicitly host-fed, bounded sample history; it has no
+  profiler singleton or clock dependency. `FrameTimeGraph` owns only native
+  draw-list presentation, configurable ordered target/warning thresholds and
+  empty-state rendering. Its right-aligned history, 60/30 FPS guides and
+  green/yellow/red ranges have matching C++/Python model-lifetime tests.
+- `termin.editor_core.ProfilerController` is the UI-neutral sampling boundary:
+  it selects only closed frames, deduplicates revisions, owns smoothing and
+  exposes typed section rows. Both native and temporary `tcgui` profiler views
+  consume it, so the migration does not maintain two profiler policies.
+- Registry/collection production paths use native table/tree/grid models with
+  stable IDs, live filtering, activation and right-click context signals.
+  `TextInput` exposes changed/submitted signals to Python; `TableWidget` and
+  `TreeWidget` expose context-menu requests without toolkit callbacks in core.
+  Tests cover 10,000 registry rows and 2,000 project files while bounding the
+  painted range to visible rows/tiles.
+- `Viewport3D` depends only on the backend-neutral `ViewportSurfaceHost`
+  contract: validity, texture identity, framebuffer size/resize and typed
+  pointer/wheel/key/text dispatch. It retains the host explicitly, paints a
+  placeholder for detached/stale surfaces, and releases the host on detach or
+  document destruction. Resize ordering is deterministic (`before_resize`,
+  then host resize), including late surface attachment after layout.
+  `termin.display.FBOSurface` supplies typed dispatch methods backed by its
+  attached `tc_input_manager`; the new path never transports a native pointer
+  as a Python integer. External drag enter/move/leave/drop uses a separate
+  MIME/payload/local-coordinate host contract. Headless C++ and Python tests
+  cover compositing, ordering, complete input routing, drag/drop, stale
+  surfaces, detach and destruction lifetime.
+- `GraphicsScene` is a retained 2D tool-scene, not a plot annotation or render
+  scene model. It exclusively owns shared item roots; items exclusively own
+  children through strong child/weak parent links, reject cycles and expose
+  stable z-order, custom local hit tests and draw-list paint callbacks.
+  `SceneView` owns only camera/interaction state and a shared scene: anchored
+  zoom, captured pan/drag, selection, hover and explicit pointer/key/text
+  adapter handlers. Embedded widgets remain generation-checked document
+  handles and are attached as canonical `tc_widget` children; removal/view
+  destruction detaches without silently destroying caller-owned widgets.
+  The current production consumer is `tcnodegraph`'s pipeline editor; its
+  atomic switch follows the editor-root migration because a native child
+  cannot live inside the legacy `tcgui` tree.
 
 ## Phase 10 - Python Bridge And Mixed-Language Use
 
@@ -479,13 +625,58 @@ Phase 7 notes:
 - [x] Implement handle wrappers for already-native widgets without creating a
   second widget state object.
 - [x] Add Python tests for stale handles and document-destroy behavior.
-- [ ] Add Python showcase that uses native layouts/widgets instead of custom
+- [x] Add Python showcase that uses native layouts/widgets instead of custom
   Python paint-only widgets.
 - [ ] Decide migration path for existing `tcgui.widgets.Widget`.
-- [ ] Define multilingual widget factory registration and creation.
-- [ ] Expose common inspect metadata and document/tree snapshots.
-- [ ] Define serialization identity and state hooks for registered widgets.
-- [ ] Define widget hot-reload invalidation/recreation behavior.
+- [x] Define multilingual widget factory registration and creation.
+- [x] Expose common inspect metadata and document/tree snapshots.
+- [x] Define serialization identity and state hooks for registered widgets.
+- [x] Define widget hot-reload invalidation/recreation behavior.
+
+Phase 10 factory notes:
+
+- Registered widget factories are a lifecycle facet of the shared
+  `tc_runtime_type_registry`. They carry ABI version, implementation language,
+  module owner and parent type; created widgets link into the same runtime
+  instance lists used by other polyglot types.
+- Factory results choose exactly one explicit lifetime policy: owned widgets
+  provide a deleter, while borrowed widgets do not. The document remains the
+  sole handle-slot owner in both cases.
+- Unregistering a widget type recursively destroys all of its live widget trees
+  across documents before factory userdata is released. Existing handles become
+  stale and a later registration creates instances with fresh generations.
+- Python registration retains the callable in factory userdata, binds the
+  returned high-level object to the adopted native handle, and propagates
+  constructor/bind failures after rolling back adoption.
+- The document inspect snapshot is an owned neutral C value: widget records are
+  in stable slot order, while child, root and overlay order are represented
+  explicitly with generation handles. It includes copied identity strings,
+  language/ownership, geometry, flags, dirty/style state, theme revision and
+  hover/press/capture/focus handles.
+- C++ owns snapshots through move-only `DocumentSnapshot`; Python converts the
+  same data to detached dict/list/value structures through
+  `Document.inspect_snapshot()`. Snapshot tests mutate and destroy the live tree
+  afterward to prove there are no borrowed widget or string references.
+- Widget factory ABI v2 owns optional paired state hooks in the same runtime
+  facet and exchanges strict `tc_value` dictionaries. Common stable id/name/
+  debug identity moved into `tc_widget`-owned copied storage, removing the
+  previous C++/Python string-lifetime split.
+- Versioned `termin.gui.document` schema v1 stores registered type names,
+  common geometry/constraints/behavior/style state, per-type state and
+  record-index child/root/overlay topology. Runtime handles, dirty flags and
+  interaction state are not persisted.
+- Restore requires an empty document, creates instances through registered
+  factories, restores state before topology, and rolls every created instance
+  back on malformed relations or hook failure. C++ uses owning `tc::trent`;
+  Python uses detached strict primitive/list/dict values and explicit hook
+  callables without reflection fallbacks.
+- Owner hot reload deliberately uses explicit invalidation instead of trying to
+  recreate widgets while replacement factories are unavailable. Unregistering
+  an owner invalidates all matching live instances across documents, releases
+  factory userdata only afterward and leaves every stale Python/native handle
+  generation-safe. Recursive document topology takes precedence over module
+  ownership: a foreign-owner descendant is destroyed with an unloaded parent,
+  while its still-registered factory can create a fresh instance.
 
 ## Phase 11 - Showcase And Smoke Gates
 
@@ -493,12 +684,13 @@ Phase 7 notes:
 - [x] C++ showcase uses text, panels, buttons, checkbox, slider, progress,
   text input/area, virtualized list, splitter, group box, grid palette, scroll
   area and tabs.
-- [ ] Python showcase mirrors the C++ showcase.
+- [x] Python showcase exercises equivalent native layout, text, command,
+  collection, status and profiling controls without paint-only stand-ins.
 - [x] Headless draw-list snapshot test for showcase structure.
 - [x] Offscreen renderer pixel smoke for text + texture + rounded geometry +
   nested clip intersection.
-- [ ] Manual SDL smoke once visual verification is available.
-- [ ] Screenshot capture path for future visual regression checks.
+- [x] Manual SDL offscreen OpenGL showcase smoke.
+- [x] Deterministic one-frame desktop screenshot capture path.
 
 Phase 11 notes:
 
@@ -511,20 +703,212 @@ Phase 11 notes:
   point; `termin_gui_native_rect_window` remains as a compatibility wrapper.
   The snapshot test fixes draw-list command totals by type after an 800x600
   layout.
+- `termin.gui_native.build_python_showcase` builds a separate Python-authored
+  native tree with shared command/collection/tree/table/frame-time models. Its
+  installed-SDK test fixes the 800x600 draw-list totals, verifies balanced
+  clipping, long UTF-8 content, selection/model state and focus reachability.
+  `examples/showcase.py` presents the same tree through `SDLBackendWindow`.
+- The C++ SDL showcase accepts `TERMIN_GUI_NATIVE_SCREENSHOT`. It freezes the
+  time-dependent controls, reads back one frame to binary PPM and exits. Two
+  SDL offscreen OpenGL runs produced byte-identical 800x600 captures during
+  implementation; Vulkan continues to use the context-free renderer pixel
+  smoke when the SDL offscreen driver cannot create Vulkan windows.
 
 ## Phase 12 - Editor Migration Slices
 
 Do not start these until basic containers, text, focus and scrolling are
 stable.
 
-- [ ] Replace a small editor utility panel with native UI.
-- [ ] Port registry viewer table skeleton.
-- [ ] Port scene tree skeleton.
-- [ ] Port inspector field widgets.
+- [x] Establish one native editor host/root boundary with SDL event routing,
+  clipboard, SDK font, draw-list rendering and graceful engine-loop shutdown.
+- [x] Replace a small editor utility panel with native UI (Profiler).
+- [x] Port registry viewer table skeleton (Inspect Registry).
+- [x] Port Core Registry and Resource Manager multi-page catalog skeletons.
+- [x] Port project browser collection/tree skeleton.
+- [x] Port scene tree skeleton.
+- [x] Port scalar, boolean, string, enum, vec3, color and action inspector
+  fields plus the production native Entity Inspector shell.
+- [x] Port list and asset/handle inspector fields.
+- [x] Port component catalog plus add/remove actions with undo.
+- [x] Port clip, agent-type and navmesh-area selectors.
+- [ ] Port remaining specialized inspector fields.
+- [x] Port the Foliage brush extension model and native panel projection.
+- [x] Port the ProceduralMesh shared command model and native command panel.
+- [x] Port the ProceduralMesh native document tree and primitive parameter
+  editors from the shared declarative schemas.
+- [x] Port ProceduralMesh extrude, wall and operation-transform parameters.
+- [x] Port wall-corner, sketch-plane, contour and path point parameters.
+- [x] Replace the native workspace placeholder with the production editor
+  viewport chain: `Viewport3D` + `FBOSurface` + editor `Display`, scene
+  attachment, input router, picking/selection callbacks and explicit shutdown.
+- [x] Port ProceduralMesh viewport interaction through the shared core model,
+  native viewport geometry and extension callback boundary.
 - [ ] Port viewport list.
 - [ ] Port build profiles window.
 - [ ] Port framegraph debugger shell.
-- [ ] Decide old `termin.editor_tcgui` coexistence boundary.
+- [x] Decide old `termin.editor_tcgui` coexistence boundary.
+
+Phase 12 host notes:
+
+- The coexistence boundary is entrypoint-level, never two widget trees inside
+  one window. `termin_editor --ui=native` owns one `tc_ui_document`; the
+  temporary default `tcgui` entrypoint remains separate until production
+  slices are usable.
+- `termin.editor_native.NativeUiHost` owns render target resize, layout/paint,
+  SDL pointer/key/text/click-count routing, clipboard, PNG/MCP capture and
+  shutdown. The native Profiler panel is attached to the same root as a fixed
+  right-side slice and is toggled by the Debug/Profiler F7 command. Its toolbar,
+  status, `FrameTimeGraph` and virtualized `TableWidget` are native widgets;
+  a production MCP run verified real `Include UI` section rows and screenshot
+  capture. The key ABI is aligned directly with `tcbase.Key`, and the default
+  font is installed in the SDK.
+- The native minimal shell has stable menu, toolbar, project, workspace,
+  inspector and status roots.
+  Its headless snapshot and event-router tests are complemented by an actual
+  two-frame `sdk/bin/termin_editor --ui=native` SDL offscreen OpenGL smoke.
+- The workspace now owns a real editor viewport rather than a label
+  placeholder. `NativeEditorViewport` composes the native texture surface,
+  editor-only display, `EditorSceneAttachment`, per-viewport editor input
+  manager and display router; the native entrypoint registers the edited scene
+  with `SceneManager`, routes picking selection back into the scene tree and
+  inspector, synchronizes the transform gizmo and pumps extension overlays from
+  the after-render hook. Its idempotent shutdown detaches the surface, releases
+  the attachment-owned render target/pipeline, unregisters and destroys the
+  display, closes the FBO and clears all interaction callbacks atomically.
+  The current automated session cannot repeat the visual production smoke:
+  SDL's offscreen driver has no Vulkan window support and the local X server
+  rejects `DISPLAY=:0` without authorization. Headless lifecycle/input tests
+  and the SDK-backed binding gate cover this slice until an authorized display
+  is available.
+- Executor, MCP server and shader-runtime services moved to `editor_core`.
+  Screenshot capture is provider-injected, so native composed UI and legacy
+  viewport capture use the same owner-thread MCP flow. The end-to-end native
+  gate captured a 1280x720 PNG through the stock MCP client and then stopped
+  the editor through `execute_python_script` with clean server/engine shutdown.
+- `RegistryCollectionController` and `ProjectBrowserController` own filtering,
+  selection/activation, filesystem navigation, ignored paths, breadcrumbs,
+  drag payload data and context actions without importing a widget toolkit.
+- Native screenshot capture synchronously composes the current document and
+  waits for the backend-neutral `Tgfx2Device.wait_idle()` boundary before GPU
+  readback. Live MCP QA caught the OpenGL target still exposing a partially
+  completed frame immediately after a dynamic inspector rebuild; explicit GPU
+  completion makes that first capture deterministic instead of relying on a
+  later presentation frame.
+- `RegistryCatalogController` extends the same collection contract to dynamic
+  multi-page catalogs with per-page filters, selection state, hierarchical
+  parent links and column schemas. Debug/F9 opens eleven public core registry
+  sources: nine flat registries plus virtualized Scene/Entity and
+  Scene/Agent/NavMesh trees. Debug/F10 opens nine public runtime asset
+  registries, project component classes and a hierarchical watched-file page.
+  Resource activation calls the public asset
+  `ensure_loaded()` boundary and refreshes the page instead of reading the
+  legacy viewer's private `_mesh_assets`/`_texture_assets` caches. A bundled
+  runtime bootstrap observed 23 component types, 26 pass types and 65 interned
+  strings; the headless native gate covers page switching, dynamic columns,
+  independent filters and 10,000-row virtualization. Live visual QA for this
+  first catalog increment was unavailable because the active X11 display rejected the
+  process authorization cookie; the earlier Inspect/Project MCP gate remains
+  valid.
+- The native entrypoint now owns the same production `ProjectFileWatcher`
+  composition as tcgui, including 17 module/component/default-asset
+  processors, owner-thread polling and deterministic disable on shutdown. The
+  processor factory moved into `editor_core`; a real project bootstrap produced
+  31 watcher nodes. `NavMeshRegistry.instances()` replaces the legacy viewer's
+  direct access to `_instances`.
+- `SceneHierarchyController` is the toolkit-neutral scene projection and
+  action boundary. The native shell now hosts the production scene tree with
+  stable UUID selection/expansion state, undo-backed create/rename/duplicate/
+  visibility/delete actions, deterministic reparent/reorder projection and
+  `.glb`/`.gltf`/`.prefab` OS drops. `TreeWidget` exposes typed
+  before/inside/after/root drag positions through C++ and Python, retains
+  pointer capture until drop, and paints the active drop target. Widget-originated
+  selection and expansion update controller state without rebuilding the tree
+  from inside the active signal dispatch. The temporary tcgui scene tree now
+  projects the same controller and contains no separate `EntityOperations` or
+  hierarchy action implementation. Root and child order is stored by
+  `tc_entity_pool`, exposed as `Entity.sibling_index`, published as a scene
+  structure event and preserved by scene serialization plus undo/redo.
+- `InspectorFieldsController` is now the single inspect discovery, inherited
+  field, layout metadata, conditional visibility and mixed-value contract used
+  by both frontends. Native typed projections cover scalar spin boxes, bool,
+  string, enum, vec3, color and action fields; `Button` and `Checkbox` now have
+  typed Python refs/signals. `EntityInspectorController` owns entity name/layer,
+  descendant layer application, component selection and undo-backed component
+  field writes. The production native shell attaches this panel to its stable
+  right-side inspector host and scene-tree selection drives it directly.
+  Rebuilding dynamic field rows recursively destroys the old native subtree,
+  with a headless lifetime test preventing retained widget trees. The next
+  increment added a Python `ScrollArea` bridge and fixed `BoxLayout.measure()`
+  to honor preferred/min/max constraints, so dynamically sized inspector
+  content scrolls rather than being compressed into the viewport. Native
+  fields now cover 64-bit `layer_mask` through a lifetime-safe modal selector,
+  generic typed lists with selection/reorder/remove and undo, and resource
+  handle kinds through the UI-neutral `InspectorResourceCatalog` with none,
+  select and create workflows. Production `slider` and `interval_slider`
+  fields now use native slider/edit composites; interval bounds remain
+  editable and clamp the current value through the same mergeable undo path.
+  The specialized `list[vec3]` projection adds point selection, direct XYZ
+  editing, insertion, reorder and removal instead of stringifying coordinates.
+  `EntityInspectorController` now also projects
+  the component catalog and owns undo-backed add/remove operations; the native
+  inspector presents the categorized submenu and reconciles selection after
+  external undo so stale `TcComponentRef` values cannot survive into shutdown.
+  `ComponentEditorExtensionRegistry` and `ComponentEditorExtensionSession`
+  moved out of tcgui into editor-core. They enforce one active extension,
+  detach-before-destroy cleanup and rollback after attach/projector failures.
+  The native entrypoint owns an independent projector registry and a recursively
+  destroyed extension host, while tcgui is an adapter to the same lifecycle.
+  Dynamic clip, navigation-agent and 64-area navmesh choices now come from the
+  UI-neutral `InspectorSpecialChoices` provider and reuse the same typed combo
+  projection plus undo-backed field writes. Clip discovery uses the public
+  component/inspect boundary, while navigation dependencies remain lazy and
+  injected so importing the inspector model cannot bootstrap hidden native
+  registries. The Foliage brush behavior is now a single toolkit-neutral
+  extension model shared by tcgui and native projectors instead of two paint
+  implementations. Its native panel exposes mode, radius, stamp count and
+  asset/instance state; `NativeComponentExtensionContext` owns balanced tool
+  lifetime plus ordered click/key/overlay callback registration, now connected
+  to the native editor viewport's picking and after-render paths. Domain imports
+  stay lazy until post-bootstrap extension registration. ProceduralMesh
+  document ownership, command results, dirty/regenerate behavior and
+  presentation snapshots now live in
+  `ProceduralMeshExtensionModel`; the tcgui extension delegates to that owner.
+  Its native panel exposes draw/close/finish/stop, primitive, boolean,
+  extrude/wall/clear commands and live document/selection/status state. The
+  existing tcgui contour and wall-height drag tests pass through the shared
+  mutation boundary. The native document tree recursively projects the shared
+  `DocumentTreeNode` graph, preserves collapsed state by structural stable IDs
+  and routes selection back through the shared controller. Primitive parameter
+  rows are generated from `PrimitiveSpec.param_schema`; vec3, scalar, integer
+  and boolean edits use native typed controls and the same dirty/regenerate
+  path. A pointer-driven test selects a nested boolean input and increments a
+  native spin box. Extrude vector, wall height/thickness/alignment and shared
+  operation center/rotation now use the same typed controls and controller
+  commands; pointer tests cover each mutation path. Concrete projectors were
+  split into `foliage_extension` and `procedural_mesh_extension`, reducing the
+  lifecycle/context registry module from 568 to 151 lines while preserving
+  post-bootstrap lazy imports. The parameter host now has its own native
+  `ScrollArea`; variable wall-corner offsets, plane origin/x/y axes and
+  contour/path points use the same controller mutation path and survive
+  recursive parameter-subtree replacement. ProceduralMesh ray picking,
+  draw-click fallback, contour/path point dragging, variable wall-height drag
+  and debug overlay rendering now live in
+  `ProceduralMeshViewportInteraction` under `editor_core`; tcgui is a thin
+  presentation adapter to that owner. `ViewportGeometryController` likewise
+  moved to `editor_core`, and `NativeEditorViewport` injects its camera,
+  display, interaction system and native widget bounds through the same
+  geometry contract. Native tests exercise OXY-plane draw fallback and a full
+  pointer down/up contour drag, including balanced viewport-tool lifetime,
+  component regeneration and native status/parameter subtree refresh.
+  Pointer-driven tests cover all parameter families. Headless/full gates
+  passed; live visual QA was attempted but the available X11 `:0` rejected
+  authorization and SDL's fallback offscreen driver cannot create a Vulkan
+  window.
+- The migrated tcgui Core/Inspect/NavMesh/Resource viewer modules, their shared
+  `RegistryViewerDialog`, launcher methods and menu callbacks were deleted.
+  An architecture test fixes their absence. Card #302 remains open only for
+  retiring `ProjectBrowserTcgui` after native becomes the default frontend;
+  removing it earlier would eliminate the default editor's project navigation.
 
 ## Source Widget Inventory From termin-gui
 
@@ -540,8 +924,8 @@ Files under `termin-gui/python/tcgui/widgets` to audit or port:
 - [ ] `dialog.py`
 - [ ] `events.py`
 - [ ] `file_dialog_overlay.py`
-- [ ] `file_grid_widget.py`
-- [ ] `frame_time_graph.py`
+- [x] `file_grid_widget.py`
+- [x] `frame_time_graph.py`
 - [ ] `grid_layout.py`
 - [ ] `group_box.py`
 - [ ] `hstack.py`
@@ -558,7 +942,7 @@ Files under `termin-gui/python/tcgui/widgets` to audit or port:
 - [ ] `panel.py`
 - [ ] `progress_bar.py`
 - [ ] `renderer.py`
-- [ ] `rich_text_view.py`
+- [x] `rich_text_view.py`
 - [ ] `scroll_area.py`
 - [ ] `separator.py`
 - [ ] `shortcuts.py`
@@ -566,14 +950,14 @@ Files under `termin-gui/python/tcgui/widgets` to audit or port:
 - [ ] `slider_edit.py`
 - [ ] `spin_box.py`
 - [ ] `splitter.py`
-- [ ] `status_bar.py`
-- [ ] `table_widget.py`
+- [x] `status_bar.py`
+- [x] `table_widget.py`
 - [ ] `tabs.py`
 - [ ] `text_area.py`
 - [ ] `text_input.py`
 - [ ] `theme.py`
-- [ ] `tool_bar.py`
-- [ ] `tree.py`
+- [x] `tool_bar.py`
+- [x] `tree.py`
 - [ ] `ui.py`
 - [ ] `units.py`
 - [ ] `viewport3d.py`

@@ -99,7 +99,8 @@ static inline tc_viewport_input_manager* vim_from(tc_input_manager* self) {
 // VTable Callbacks
 // ============================================================================
 
-static void vim_on_mouse_button(tc_input_manager* self, int button, int action, int mods) {
+static void vim_on_mouse_button(tc_input_manager* self, int button, int action, int mods,
+                                uint32_t click_count) {
     tc_viewport_input_manager* m = vim_from(self);
     if (!m || !tc_viewport_alive(m->viewport)) return;
 
@@ -111,6 +112,7 @@ static void vim_on_mouse_button(tc_input_manager* self, int button, int action, 
         button,
         action,
         mods,
+        click_count,
         TC_INPUT_SOURCE_RUNTIME
     };
     tc_mouse_button_event_init_source(&event, &info);

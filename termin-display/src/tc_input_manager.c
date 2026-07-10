@@ -39,9 +39,9 @@ void tc_input_manager_free(tc_input_manager* m) {
 // ============================================================================
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_button(
-    tc_input_manager* m, int button, int action, int mods
+    tc_input_manager* m, int button, int action, int mods, uint32_t click_count
 ) {
-    tc_input_manager_on_mouse_button(m, button, action, mods);
+    tc_input_manager_on_mouse_button(m, button, action, mods, click_count);
 }
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_move(

@@ -162,6 +162,8 @@ public:
     void set_parent(const Entity& parent);
     Entity parent() const;
     std::vector<Entity> children() const;
+    size_t sibling_index() const;
+    bool set_sibling_index(size_t index);
     Entity find_child(const std::string& name) const;
     Entity create_child(const std::string& name = "entity");
     void destroy_children();

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from termin.editor_tcgui import shader_runtime
+from termin.editor_core import shader_runtime
 
 
 def test_editor_shader_runtime_uses_local_app_data_cache_root_on_windows(

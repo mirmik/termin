@@ -22,11 +22,16 @@ OffscreenRenderSurface* FBOSurfaceRef::surface() const {
         return offscreen_render_surface_get(handle_);
     }
 
-void FBOSurfaceRef::resize(int width, int height) {
-        if (auto* s = surface()) {
-            s->resize(width, height);
-        }
+bool FBOSurfaceRef::resize(int width, int height) {
+    if (width <= 0 || height <= 0) {
+        return false;
     }
+    if (auto* s = surface()) {
+        s->resize(width, height);
+        return true;
+    }
+    return false;
+}
 
 std::pair<int, int> FBOSurfaceRef::framebuffer_size() const {
         if (auto* s = surface()) {
@@ -77,6 +82,57 @@ void FBOSurfaceRef::set_input_manager(uintptr_t input_manager_ptr) {
         }
     }
 
+bool FBOSurfaceRef::dispatch_pointer_move(double x, double y) {
+    if (auto* s = surface()) {
+        if (tc_input_manager* manager = tc_render_surface_get_input_manager(s->tc_surface())) {
+            tc_input_manager_on_mouse_move(manager, x, y);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FBOSurfaceRef::dispatch_pointer_button(int button, int action, int modifiers,
+                                            uint32_t click_count) {
+    if (auto* s = surface()) {
+        if (tc_input_manager* manager = tc_render_surface_get_input_manager(s->tc_surface())) {
+            tc_input_manager_on_mouse_button(manager, button, action, modifiers, click_count);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FBOSurfaceRef::dispatch_scroll(double x, double y, int modifiers) {
+    if (auto* s = surface()) {
+        if (tc_input_manager* manager = tc_render_surface_get_input_manager(s->tc_surface())) {
+            tc_input_manager_on_scroll(manager, x, y, modifiers);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FBOSurfaceRef::dispatch_key(int key, int scancode, int action, int modifiers) {
+    if (auto* s = surface()) {
+        if (tc_input_manager* manager = tc_render_surface_get_input_manager(s->tc_surface())) {
+            tc_input_manager_on_key(manager, key, scancode, action, modifiers);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FBOSurfaceRef::dispatch_text(uint32_t codepoint) {
+    if (auto* s = surface()) {
+        if (tc_input_manager* manager = tc_render_surface_get_input_manager(s->tc_surface())) {
+            tc_input_manager_on_char(manager, codepoint);
+            return true;
+        }
+    }
+    return false;
+}
+
 void FBOSurfaceRef::make_current() {}
 void FBOSurfaceRef::swap_buffers() {}
 bool FBOSurfaceRef::should_close() const { return false; }
@@ -108,6 +164,15 @@ void bind_offscreen_render_surface(nb::module_& m) {
         .def("get_tgfx_color_tex_id", &FBOSurfaceRef::get_tgfx_color_tex_id)
         .def("get_framebuffer_id", &FBOSurfaceRef::get_framebuffer_id)
         .def("set_input_manager", &FBOSurfaceRef::set_input_manager, nb::arg("input_manager_ptr"))
+        .def("dispatch_pointer_move", &FBOSurfaceRef::dispatch_pointer_move, nb::arg("x"),
+             nb::arg("y"))
+        .def("dispatch_pointer_button", &FBOSurfaceRef::dispatch_pointer_button, nb::arg("button"),
+             nb::arg("action"), nb::arg("modifiers"), nb::arg("click_count") = 1)
+        .def("dispatch_scroll", &FBOSurfaceRef::dispatch_scroll, nb::arg("x"), nb::arg("y"),
+             nb::arg("modifiers"))
+        .def("dispatch_key", &FBOSurfaceRef::dispatch_key, nb::arg("key"), nb::arg("scancode"),
+             nb::arg("action"), nb::arg("modifiers"))
+        .def("dispatch_text", &FBOSurfaceRef::dispatch_text, nb::arg("codepoint"))
         .def("make_current", &FBOSurfaceRef::make_current)
         .def("swap_buffers", &FBOSurfaceRef::swap_buffers)
         .def("should_close", &FBOSurfaceRef::should_close)

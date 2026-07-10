@@ -134,6 +134,7 @@ nb::object translate_sdl_event(const SDL_Event& event) {
             result["x"] = static_cast<double>(event.button.x);
             result["y"] = static_cast<double>(event.button.y);
             result["button"] = SDLWindow::translate_mouse_button(event.button.button);
+            result["click_count"] = static_cast<int>(event.button.clicks);
             result["mods"] = SDLWindow::translate_sdl_mods(SDL_GetModState());
             return result;
         }
@@ -308,9 +309,10 @@ void bind_sdl(nb::module_& m) {
                 self.set_mouse_button_callback(nullptr);
             } else {
                 self.set_mouse_button_callback(
-                    [callback](SDLWindow* win, int button, int action, int mods) {
+                    [callback](SDLWindow* win, int button, int action, int mods,
+                               uint32_t click_count) {
                         nb::gil_scoped_acquire gil;
-                        callback(win, button, action, mods);
+                        callback(win, button, action, mods, click_count);
                     }
                 );
             }

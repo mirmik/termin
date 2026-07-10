@@ -35,7 +35,7 @@ public:
     tc_display* display() const { return _display; }
 
     // vtable event handlers
-    void on_mouse_button(int button, int action, int mods);
+    void on_mouse_button(int button, int action, int mods, uint32_t click_count);
     void on_mouse_move(double x, double y);
     void on_scroll(double xoffset, double yoffset, int mods);
     void on_key(int key, int scancode, int action, int mods);
