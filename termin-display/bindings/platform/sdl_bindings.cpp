@@ -115,6 +115,18 @@ nb::object translate_sdl_event(const SDL_Event& event) {
             if (event.window.event == SDL_WINDOWEVENT_CLOSE) {
                 return make_base_event("window_close", event);
             }
+            switch (event.window.event) {
+                case SDL_WINDOWEVENT_SHOWN:
+                case SDL_WINDOWEVENT_EXPOSED:
+                case SDL_WINDOWEVENT_RESIZED:
+                case SDL_WINDOWEVENT_SIZE_CHANGED:
+                case SDL_WINDOWEVENT_RESTORED:
+                case SDL_WINDOWEVENT_MAXIMIZED:
+                case SDL_WINDOWEVENT_FOCUS_GAINED:
+                    return make_base_event("window_refresh", event);
+                default:
+                    break;
+            }
             return nb::none();
 
         case SDL_MOUSEMOTION: {

@@ -134,6 +134,10 @@ from termin.gui_native import Rect, WidgetRef
 _logger = logging.getLogger(__name__)
 
 
+def _game_mode_requires_continuous_render(game_mode_controller) -> bool:
+    return game_mode_controller is not None and game_mode_controller.model.is_game_mode
+
+
 def _smoke_frame_limit() -> int:
     value = os.environ.get("TERMIN_EDITOR_NATIVE_SMOKE_FRAMES", "0")
     try:
@@ -1204,6 +1208,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         framegraph_debugger.update()
         if profiler_panel.root.visible and profiler_panel.update():
             host.request_render_update()
+        if _game_mode_requires_continuous_render(game_mode_controller):
+            # The engine renders the playing scene after this UI callback. Compose
+            # every loop so the frame produced at the end of the previous loop is
+            # presented, and keep the scene render scheduler active for the next one.
+            request_editor_render()
         if host.render_requested:
             host.render()
         frame_count += 1

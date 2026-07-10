@@ -99,6 +99,8 @@ class NativeUiEventRouter:
             return RouteResult(keep_running=event_window_id != self.window_id)
         if event_window_id not in (0, self.window_id):
             return RouteResult()
+        if event_type == "window_refresh":
+            return RouteResult(routed=True)
 
         if event_type in ("mouse_move", "mouse_down", "mouse_up", "mouse_wheel"):
             pointer = PointerEvent()
@@ -210,6 +212,10 @@ class NativeUiHost:
         width, height = self.window.framebuffer_size()
         if width <= 0 or height <= 0:
             return False
+        # Consume the request that led to this frame before composition. Any
+        # layout/pre-render callback may request a follow-up frame; do not erase
+        # that new request after present.
+        self._render_requested = False
         if self._color_target is None or self._target_size != (width, height):
             if self._color_target is not None:
                 self.context.destroy_texture(self._color_target)
@@ -238,7 +244,6 @@ class NativeUiHost:
         self.context.end_pass()
         self.context.end_frame()
         self.window.present(self._color_target)
-        self._render_requested = False
         return True
 
     def add_pre_render_callback(self, callback: PreRenderCallback) -> None:

@@ -136,10 +136,28 @@ def test_native_ui_event_router_preserves_click_keys_text_and_file_drop():
     ).routed
     assert drops == [("/tmp/scene.glb", 20.0, 30.0, 1)]
 
+    assert router.route({"type": "window_refresh", "window_id": 17}).routed
+    assert not router.route({"type": "window_refresh", "window_id": 18}).routed
     assert not router.route({"type": "mouse_move", "window_id": 18}).routed
     assert router.route({"type": "window_close", "window_id": 18}).keep_running
     assert not router.route({"type": "window_close", "window_id": 17}).keep_running
     assert not router.route({"type": "quit"}).keep_running
+
+
+def test_native_editor_continuously_composes_only_in_game_mode():
+    from termin.editor_native.run_editor import _game_mode_requires_continuous_render
+
+    class Model:
+        is_game_mode = False
+
+    class Controller:
+        model = Model()
+
+    controller = Controller()
+    assert not _game_mode_requires_continuous_render(None)
+    assert not _game_mode_requires_continuous_render(controller)
+    controller.model.is_game_mode = True
+    assert _game_mode_requires_continuous_render(controller)
 
 
 def test_native_ui_font_resolution_honors_explicit_path(tmp_path: Path):
@@ -320,11 +338,16 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
     host._color_target = None
     host._target_size = (0, 0)
     host._render_requested = True
-    host._pre_render_callbacks = [lambda _context: calls.append("pre-render")]
+    def pre_render(_context):
+        calls.append("pre-render")
+        host.request_render_update()
+
+    host._pre_render_callbacks = [pre_render]
 
     assert host.render()
     assert calls.index("begin-frame") < calls.index("pre-render") < calls.index("paint")
     assert calls[-1] == ("present", "target")
+    assert host.render_requested
 
 
 def test_native_ui_host_applies_font_size_to_all_theme_roles():
