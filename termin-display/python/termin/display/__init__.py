@@ -10,8 +10,10 @@ try:
     from termin.display._platform_native import (
         BackendWindow,
         SDLBackendWindow,
+        get_clipboard_text,
         poll_sdl_events,
         quit_sdl,
+        set_clipboard_text,
         start_text_input,
         stop_text_input,
         wait_sdl_events_timeout,
@@ -20,8 +22,10 @@ except ImportError as e:
     _logger.debug("Platform native module not available (optional): %s", e)
     BackendWindow = None
     SDLBackendWindow = None
+    get_clipboard_text = None
     poll_sdl_events = None
     quit_sdl = None
+    set_clipboard_text = None
     start_text_input = None
     stop_text_input = None
     wait_sdl_events_timeout = None
@@ -66,8 +70,10 @@ from termin.display.input_manager import BasicDisplayInputManager
 __all__ = [
     "BackendWindow",
     "SDLBackendWindow",
+    "get_clipboard_text",
     "poll_sdl_events",
     "quit_sdl",
+    "set_clipboard_text",
     "start_text_input",
     "stop_text_input",
     "wait_sdl_events_timeout",

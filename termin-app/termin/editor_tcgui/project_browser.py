@@ -17,40 +17,8 @@ from tcgui.widgets.menu import Menu, MenuItem
 
 from termin.editor_core.project_operations import ProjectOperations
 from termin.editor_core.project_context import set_current_project_path
+from termin.editor_core.project_browser_model import file_subtitle as _get_file_subtitle
 from termin.project.ignored_paths import is_path_ignored, project_ignored_roots
-
-
-# File extensions that are recognized as known asset types
-_KNOWN_EXTENSIONS = {
-    ".material": "Material",
-    ".pipeline": "Pipeline",
-    ".prefab": "Prefab",
-    ".scene": "Scene",
-    ".shader": "Shader",
-    ".py": "Python",
-    ".glb": "GLB",
-    ".gltf": "GLTF",
-    ".glsl": "GLSL",
-    ".png": "Texture",
-    ".jpg": "Texture",
-    ".jpeg": "Texture",
-    ".bmp": "Texture",
-    ".hdr": "HDR",
-    ".exr": "EXR",
-    ".stl": "Mesh",
-    ".obj": "Mesh",
-    ".wav": "Audio",
-    ".ogg": "Audio",
-    ".mp3": "Audio",
-    ".terminproj": "Project",
-}
-
-
-def _get_file_subtitle(path: Path) -> str:
-    """Return asset type label for a file, or its extension."""
-    ext = path.suffix.lower()
-    return _KNOWN_EXTENSIONS.get(ext, ext.lstrip(".").upper() if ext else "File")
-
 
 class ProjectBrowserTcgui:
     """Project browser panel: directory tree + file list.

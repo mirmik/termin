@@ -114,6 +114,8 @@ static const char* structure_change_kind_name(tc_scene_structure_change_kind kin
             return "component_added";
         case TC_SCENE_STRUCTURE_COMPONENT_REMOVED:
             return "component_removed";
+        case TC_SCENE_STRUCTURE_SIBLING_ORDER_CHANGED:
+            return "sibling_order_changed";
         default:
             return "unknown";
     }
@@ -291,6 +293,8 @@ void bind_tc_scene_core(nb::module_& m) {
         // Get all entities
         .def("get_all_entities", &TcSceneRef::get_all_entities,
              "Get all entities in scene's pool.")
+        .def("get_root_entities", &TcSceneRef::get_root_entities,
+             "Get root entities in persistent sibling order.")
 
         // Entity migration
         .def("migrate_entity", &TcSceneRef::migrate_entity, nb::arg("entity"),
@@ -545,6 +549,9 @@ void bind_tc_scene_core(nb::module_& m) {
         })
         .def_prop_ro("entities", [](TcSceneRef& self) {
             return self.get_all_entities();
+        })
+        .def_prop_ro("root_entities", [](TcSceneRef& self) {
+            return self.get_root_entities();
         })
 
         // Entity management with callbacks

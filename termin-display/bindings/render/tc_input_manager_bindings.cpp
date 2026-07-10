@@ -32,7 +32,8 @@ struct PyInputManagerVTable {
 };
 
 // C callbacks that dispatch to Python methods via stored vtable
-static void py_on_mouse_button(tc_input_manager* m, int button, int action, int mods) {
+static void py_on_mouse_button(tc_input_manager* m, int button, int action, int mods,
+                               uint32_t click_count) {
     if (!m || !m->body || !m->userdata) return;
     PyInputManagerVTable* vt = static_cast<PyInputManagerVTable*>(m->userdata);
     if (vt->on_mouse_button.is_none()) return;
@@ -40,7 +41,7 @@ static void py_on_mouse_button(tc_input_manager* m, int button, int action, int 
     nb::gil_scoped_acquire gil;
     try {
         nb::object py_obj = nb::borrow<nb::object>(reinterpret_cast<PyObject*>(m->body));
-        vt->on_mouse_button(py_obj, button, action, mods);
+        vt->on_mouse_button(py_obj, button, action, mods, click_count);
     } catch (const std::exception& e) {
         tc::Log::warn("py_on_mouse_button: Python callback threw: %s", e.what());
     }
@@ -168,10 +169,12 @@ void bind_tc_input_manager(nb::module_& m) {
     });
 
     // Direct event dispatch (for forwarding from window)
-    m.def("_input_manager_on_mouse_button", [](uintptr_t ptr, int button, int action, int mods) {
+    m.def("_input_manager_on_mouse_button", [](uintptr_t ptr, int button, int action, int mods,
+                                                uint32_t click_count) {
         tc_input_manager* m = reinterpret_cast<tc_input_manager*>(ptr);
-        tc_input_manager_on_mouse_button(m, button, action, mods);
-    });
+        tc_input_manager_on_mouse_button(m, button, action, mods, click_count);
+    }, nb::arg("ptr"), nb::arg("button"), nb::arg("action"), nb::arg("mods"),
+       nb::arg("click_count") = 1);
 
     m.def("_input_manager_on_mouse_move", [](uintptr_t ptr, double x, double y) {
         tc_input_manager* m = reinterpret_cast<tc_input_manager*>(ptr);

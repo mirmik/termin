@@ -205,8 +205,50 @@ int main() {
 
     double cloned_child_pos[3] = {};
     cloned_child.get_local_position(cloned_child_pos);
-    TEST_ASSERT(cloned_child_pos[0] == 4.0 && cloned_child_pos[1] == 5.0 && cloned_child_pos[2] == 6.0,
+    TEST_ASSERT(cloned_child_pos[0] == 4.0 && cloned_child_pos[1] == 5.0 &&
+                    cloned_child_pos[2] == 6.0,
                 "clone child should preserve local position");
+
+    termin::TcSceneRef order_scene = termin::TcSceneRef::create("sibling-order-test");
+    termin::Entity first = order_scene.create_entity("First");
+    termin::Entity second = order_scene.create_entity("Second");
+    termin::Entity third = order_scene.create_entity("Third");
+    TEST_ASSERT(third.set_sibling_index(0), "root sibling reorder should report a change");
+    std::vector<termin::Entity> roots = order_scene.get_root_entities();
+    TEST_ASSERT(roots.size() == 3, "ordered scene should have three roots");
+    TEST_ASSERT(roots[0] == third && roots[1] == first && roots[2] == second,
+                "root entities should expose explicit sibling order");
+
+    termin::Entity child_a = first.create_child("ChildA");
+    termin::Entity child_b = first.create_child("ChildB");
+    termin::Entity child_c = first.create_child("ChildC");
+    TEST_ASSERT(child_c.set_sibling_index(1), "child sibling reorder should report a change");
+    std::vector<termin::Entity> ordered_children = first.children();
+    TEST_ASSERT(ordered_children[0] == child_a && ordered_children[1] == child_c &&
+                    ordered_children[2] == child_b,
+                "children should expose explicit sibling order");
+
+    nos::trent order_data = order_scene.serialize();
+    TEST_ASSERT(order_data["entities"].as_list()[0]["name"].as_string() == "Third",
+                "scene serialization should preserve root order");
+    TEST_ASSERT(order_data["entities"].as_list()[1]["children"].as_list()[1]["name"].as_string() ==
+                    "ChildC",
+                "scene serialization should preserve child order");
+
+    termin::TcSceneRef restored_order_scene =
+        termin::TcSceneRef::create("sibling-order-restored-test");
+    TEST_ASSERT(restored_order_scene.load_from_data(order_data) == 6,
+                "ordered scene should deserialize every entity");
+    std::vector<termin::Entity> restored_roots = restored_order_scene.get_root_entities();
+    TEST_ASSERT(std::string(restored_roots[0].name()) == "Third" &&
+                    std::string(restored_roots[1].name()) == "First" &&
+                    std::string(restored_roots[2].name()) == "Second",
+                "scene roundtrip should preserve root order");
+    std::vector<termin::Entity> restored_children = restored_roots[1].children();
+    TEST_ASSERT(std::string(restored_children[0].name()) == "ChildA" &&
+                    std::string(restored_children[1].name()) == "ChildC" &&
+                    std::string(restored_children[2].name()) == "ChildB",
+                "scene roundtrip should preserve child order");
 
     return 0;
 }

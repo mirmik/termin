@@ -48,6 +48,27 @@ class _Ops:
         self.prefab_drops.append((path, parent))
 
 
+class _Hierarchy:
+    def __init__(self) -> None:
+        self.operations = _Ops()
+
+    @staticmethod
+    def can_drop_project_file(extension: str) -> bool:
+        return extension in (".glb", ".gltf", ".prefab")
+
+    def drop_project_file(
+        self,
+        path: str,
+        extension: str,
+        _target_id: str | None,
+        _position: str,
+    ) -> None:
+        if extension in (".glb", ".gltf"):
+            self.operations.drop_glb(path, None)
+        else:
+            self.operations.drop_prefab(path, None)
+
+
 def test_ui_external_drop_routes_payload_to_widget() -> None:
     ui = UI.__new__(UI)
     ui._root = Widget()
@@ -79,18 +100,18 @@ def test_viewport_accepts_gltf_drag() -> None:
 
 def test_scene_tree_drops_gltf_as_model() -> None:
     controller = SceneTreeControllerTcgui.__new__(SceneTreeControllerTcgui)
-    controller._ops = _Ops()
+    controller._controller = _Hierarchy()
     event = _project_file_event("/tmp/Bush.gltf", ".gltf")
 
     assert controller._on_external_drag(event, None, "root")
     assert controller._on_external_drop(event, None, "root")
-    assert controller._ops.glb_drops == [("/tmp/Bush.gltf", None)]
-    assert controller._ops.prefab_drops == []
+    assert controller._controller.operations.glb_drops == [("/tmp/Bush.gltf", None)]
+    assert controller._controller.operations.prefab_drops == []
 
 
 def test_scene_tree_drops_prefab_but_not_legacy_tc_prefab() -> None:
     controller = SceneTreeControllerTcgui.__new__(SceneTreeControllerTcgui)
-    controller._ops = _Ops()
+    controller._controller = _Hierarchy()
     prefab_event = _project_file_event("/tmp/Tree.prefab", ".prefab")
     legacy_event = _project_file_event("/tmp/Tree.tc_prefab", ".tc_prefab")
 
@@ -98,4 +119,4 @@ def test_scene_tree_drops_prefab_but_not_legacy_tc_prefab() -> None:
     assert controller._on_external_drop(prefab_event, None, "root")
     assert not controller._on_external_drag(legacy_event, None, "root")
     assert not controller._on_external_drop(legacy_event, None, "root")
-    assert controller._ops.prefab_drops == [("/tmp/Tree.prefab", None)]
+    assert controller._controller.operations.prefab_drops == [("/tmp/Tree.prefab", None)]

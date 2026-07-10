@@ -127,8 +127,11 @@ def read_launch_project() -> str | None:
     try:
         with open(LAUNCH_PROJECT_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        os.remove(LAUNCH_PROJECT_FILE)
-        return data.get("project")
     except Exception as e:
         log.error(f"Failed to read launch project file: {e}")
         return None
+    try:
+        os.remove(LAUNCH_PROJECT_FILE)
+    except OSError as e:
+        log.warning(f"Failed to consume launch project file: {e}")
+    return data.get("project")

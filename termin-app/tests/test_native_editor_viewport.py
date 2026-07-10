@@ -1,0 +1,252 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+from termin.editor_native.editor_viewport import NativeEditorViewport
+from termin.gui_native import Document
+
+
+class _Surface:
+    def __init__(self, device, width: int, height: int) -> None:
+        self.device = device
+        self.size = (width, height)
+        self.input_manager = None
+        self.closed = False
+
+    def is_valid(self) -> bool:
+        return not self.closed
+
+    def get_tgfx_color_tex_id(self) -> int:
+        return 17
+
+    def framebuffer_size(self) -> tuple[int, int]:
+        return self.size
+
+    def resize(self, width: int, height: int) -> bool:
+        self.size = (width, height)
+        return True
+
+    def dispatch_pointer_move(self, _x: float, _y: float) -> bool:
+        return True
+
+    def dispatch_pointer_button(
+        self,
+        _button: int,
+        _action: int,
+        _modifiers: int,
+        _click_count: int,
+    ) -> bool:
+        return True
+
+    def dispatch_scroll(self, _x: float, _y: float, _modifiers: int) -> bool:
+        return True
+
+    def dispatch_key(
+        self,
+        _key: int,
+        _scancode: int,
+        _action: int,
+        _modifiers: int,
+    ) -> bool:
+        return True
+
+    def dispatch_text(self, _codepoint: int) -> bool:
+        return True
+
+    def set_input_manager(self, value: int) -> None:
+        self.input_manager = value
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _Display:
+    def __init__(self, *, surface, name: str, editor_only: bool) -> None:
+        self.surface = surface
+        self.name = name
+        self.editor_only = editor_only
+        self.tc_display_ptr = 41
+        self.destroyed = False
+
+    def destroy(self) -> None:
+        self.destroyed = True
+
+
+class _Selection:
+    def __init__(self) -> None:
+        self.selected = None
+        self.on_selection_changed = None
+        self.on_hover_changed = None
+
+    def clear(self) -> None:
+        self.selected = None
+
+    def select(self, value) -> None:
+        self.selected = value
+
+
+class _Interaction:
+    _instance = None
+
+    def __init__(self) -> None:
+        self.selection = _Selection()
+        self.on_request_update = None
+        self.on_entity_click = None
+        self.on_viewport_pointer_event = None
+        self.on_key = None
+        self.on_transform_end = None
+        self.after_render_count = 0
+        self.gizmo_target = None
+
+    @classmethod
+    def instance(cls):
+        return cls._instance
+
+    @classmethod
+    def set_instance(cls, value) -> None:
+        cls._instance = value
+
+    def after_render(self) -> None:
+        self.after_render_count += 1
+
+    def set_gizmo_target(self, value) -> None:
+        self.gizmo_target = value
+
+    def clear_callbacks(self) -> None:
+        self.on_request_update = None
+        self.on_transform_end = None
+        self.on_key = None
+        self.on_entity_click = None
+        self.on_viewport_pointer_event = None
+        self.selection.on_selection_changed = None
+        self.selection.on_hover_changed = None
+
+
+class _Attachment:
+    instances = []
+
+    def __init__(self, *, display, rendering_controller, make_editor_pipeline) -> None:
+        self.display = display
+        self.rendering_controller = rendering_controller
+        self.make_editor_pipeline = make_editor_pipeline
+        self.viewport = None
+        self.camera = object()
+        self.closed = False
+        self.__class__.instances.append(self)
+
+    def attach(self, scene, restore_state: bool) -> None:
+        self.scene = scene
+        self.restore_state = restore_state
+        self.viewport = SimpleNamespace(_viewport_handle=lambda: (3, 9))
+
+    def close(self, save_state: bool = True) -> None:
+        self.save_state = save_state
+        self.closed = True
+
+
+class _RenderingManager:
+    def __init__(self) -> None:
+        self.added = []
+        self.removed = []
+
+    def add_editor_display(self, display) -> None:
+        self.added.append(display)
+
+    def remove_editor_display(self, display) -> None:
+        self.removed.append(display)
+
+
+def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch):
+    import termin.display
+    import termin.editor._editor_native as editor_native
+    import termin.editor_core.editor_scene_attachment as attachment_module
+
+    class InputManager:
+        def __init__(self, index: int, generation: int, display_ptr: int) -> None:
+            self.args = (index, generation, display_ptr)
+
+    class InputRouter:
+        def __init__(self, display_ptr: int) -> None:
+            self.display_ptr = display_ptr
+            self.tc_input_manager_ptr = 73
+
+    monkeypatch.setattr(termin.display, "FBOSurface", _Surface)
+    monkeypatch.setattr(termin.display, "Display", _Display)
+    monkeypatch.setattr(termin.display, "DisplayInputRouter", InputRouter)
+    monkeypatch.setattr(editor_native, "EditorInteractionSystem", _Interaction)
+    monkeypatch.setattr(editor_native, "EditorViewportInputManager", InputManager)
+    monkeypatch.setattr(attachment_module, "EditorSceneAttachment", _Attachment)
+    _Attachment.instances.clear()
+    _Interaction._instance = None
+
+    document = Document()
+    parent = document.create_vstack("viewport-parent")
+    manager = _RenderingManager()
+    renders = []
+    runtime = NativeEditorViewport.create(
+        document,
+        parent,
+        device="device",
+        rendering_manager=manager,
+        scene="scene",
+        request_render=lambda: renders.append(True),
+    )
+
+    assert runtime.root.stable_id == "editor.viewport"
+    assert manager.added == [runtime.display]
+    assert runtime.attachment.scene == "scene"
+    assert runtime.attachment.restore_state is False
+    assert runtime.input_manager.args == (3, 9, 41)
+    assert runtime.surface.input_manager == 73
+    assert runtime.widget.has_surface
+    assert _Interaction.instance() is runtime.interaction
+
+    overlay_enabled = False
+
+    def draw_overlays() -> bool:
+        return overlay_enabled
+
+    runtime.configure_interaction(
+        on_selection_changed=lambda _entity: None,
+        on_hover_changed=lambda _entity: None,
+        on_entity_click=lambda _event: False,
+        on_pointer=lambda _event: False,
+        on_key=lambda _event: False,
+        draw_overlays=draw_overlays,
+    )
+    runtime.after_render()
+    assert runtime.interaction.after_render_count == 1
+    assert not renders
+    overlay_enabled = True
+    runtime.after_render()
+    assert renders == [True]
+
+    runtime.close()
+    runtime.close()
+    assert not runtime.widget.has_surface
+    assert runtime.surface.input_manager == 0
+    assert runtime.attachment.closed
+    assert manager.removed == [runtime.display]
+    assert runtime.display.destroyed
+    assert runtime.surface.closed
+    assert _Interaction.instance() is None
+
+
+def test_editor_interaction_callbacks_can_be_cleared_for_owner_shutdown():
+    from termin.bootstrap import bootstrap_editor
+    from termin.editor._editor_native import EditorInteractionSystem
+
+    bootstrap_editor()
+    interaction = EditorInteractionSystem()
+    interaction.on_request_update = lambda: None
+    interaction.on_transform_end = lambda _old, _new: None
+    interaction.on_key = lambda _event: None
+    interaction.on_entity_click = lambda _event: False
+    interaction.on_viewport_pointer_event = lambda _event: False
+    interaction.selection.on_selection_changed = lambda _entity: None
+    interaction.selection.on_hover_changed = lambda _entity: None
+
+    interaction.clear_callbacks()
+    assert interaction.on_request_update is None
+    assert interaction.on_transform_end is None
+    assert interaction.on_key is None

@@ -6,8 +6,8 @@ import urllib.request
 
 import pytest
 
-from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
-from termin.editor_tcgui.mcp_server import (
+from termin.editor_core.python_executor import EditorPythonExecutor
+from termin.editor_core.mcp_server import (
     EditorMcpConfig,
     EditorMcpServer,
     editor_mcp_enabled,
@@ -114,11 +114,8 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
 
 
 @requires_loopback_listener
-def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
-    from termin.editor_tcgui import editor_screenshot
-
-    def fake_capture(editor, *, output_path=None, include_image=False):
-        assert editor == "fake-editor"
+def test_editor_mcp_server_captures_screenshot_tool(tmp_path):
+    def fake_capture(*, output_path=None, include_image=False):
         assert output_path == "/tmp/editor-shot.png"
         assert include_image is True
         return {
@@ -129,13 +126,9 @@ def test_editor_mcp_server_captures_screenshot_tool(monkeypatch, tmp_path):
             "base64": "ZmFrZQ==",
         }
 
-    monkeypatch.setattr(
-        editor_screenshot,
-        "capture_editor_viewport_screenshot",
-        fake_capture,
+    executor = EditorPythonExecutor(
+        lambda: {"capture_editor_screenshot": fake_capture}
     )
-
-    executor = EditorPythonExecutor(lambda: {"editor": "fake-editor"})
     config = EditorMcpConfig(
         host="127.0.0.1",
         port=0,

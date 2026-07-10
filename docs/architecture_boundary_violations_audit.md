@@ -431,6 +431,15 @@ from termin.display import _input_manager_on_key
 
 Status 2026-06-20: display/player routing helpers moved to `termin.display.input_manager`; the old app path `termin.visualization.platform.input_manager` was removed. The remaining `Viewport3D` work is a smaller public event-forwarding adapter in `termin.display`, so `Viewport3D` no longer calls native underscored functions directly.
 
+Status 2026-07-10: the native `termin-gui-native` `Viewport3D` boundary is
+implemented. Its core retains a backend-neutral `ViewportSurfaceHost`, and the
+Python bridge calls explicit surface protocol methods. `FBOSurface` now routes
+pointer, wheel, key and text events directly through its attached
+`tc_input_manager`; the native path carries no raw pointer integers. The old
+`tcgui.widgets.Viewport3D` still uses underscored helpers until the editor UI
+migration phase, after which that legacy path can be removed rather than
+extended.
+
 ### 5.2 Component binding targets больше не завязаны на `termin-app/cpp/termin/bindings`
 
 **Где смотреть:**

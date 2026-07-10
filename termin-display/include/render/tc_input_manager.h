@@ -40,8 +40,9 @@ typedef struct tc_input_manager_vtable tc_input_manager_vtable;
 // ============================================================================
 
 struct tc_input_manager_vtable {
-    // Mouse button event (button, action, mods)
-    void (*on_mouse_button)(tc_input_manager* self, int button, int action, int mods);
+    // Mouse button event. click_count is host-supplied (1=single, 2=double).
+    void (*on_mouse_button)(tc_input_manager* self, int button, int action, int mods,
+                            uint32_t click_count);
 
     // Mouse move event (x, y in window pixels)
     void (*on_mouse_move)(tc_input_manager* self, double x, double y);
@@ -91,10 +92,10 @@ static inline void tc_input_manager_init(
 // ============================================================================
 
 static inline void tc_input_manager_on_mouse_button(
-    tc_input_manager* m, int button, int action, int mods
+    tc_input_manager* m, int button, int action, int mods, uint32_t click_count
 ) {
     if (m && m->vtable && m->vtable->on_mouse_button) {
-        m->vtable->on_mouse_button(m, button, action, mods);
+        m->vtable->on_mouse_button(m, button, action, mods, click_count);
     }
 }
 
@@ -152,7 +153,7 @@ TERMIN_DISPLAY_API void tc_input_manager_free(tc_input_manager* m);
 // ============================================================================
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_button(
-    tc_input_manager* m, int button, int action, int mods);
+    tc_input_manager* m, int button, int action, int mods, uint32_t click_count);
 
 TERMIN_DISPLAY_API void tc_input_manager_dispatch_mouse_move(
     tc_input_manager* m, double x, double y);

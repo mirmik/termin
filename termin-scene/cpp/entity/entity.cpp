@@ -461,7 +461,8 @@ Entity Entity::parent() const {
 
 std::vector<Entity> Entity::children() const {
     std::vector<Entity> result;
-    if (!valid()) return result;
+    if (!valid())
+        return result;
 
     size_t count = tc_entity_children_count(_h);
     result.reserve(count);
@@ -475,8 +476,15 @@ std::vector<Entity> Entity::children() const {
     return result;
 }
 
+size_t Entity::sibling_index() const { return valid() ? tc_entity_sibling_index(_h) : SIZE_MAX; }
+
+bool Entity::set_sibling_index(size_t index) {
+    return valid() && tc_entity_set_sibling_index(_h, index);
+}
+
 Entity Entity::find_child(const std::string& name) const {
-    if (!valid()) return Entity();
+    if (!valid())
+        return Entity();
 
     size_t count = tc_entity_children_count(_h);
     for (size_t i = 0; i < count; i++) {

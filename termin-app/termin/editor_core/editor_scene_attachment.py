@@ -234,6 +234,16 @@ class EditorSceneAttachment:
             self._rendering_controller._viewport_list.refresh()
             self._rendering_controller._refresh_render_targets()
 
+    def close(self, save_state: bool = True) -> None:
+        """Detach and release the attachment-owned target and pipeline."""
+        self.detach(save_state=save_state)
+        if self._render_target is not None:
+            self._render_target.free()
+            self._render_target = None
+        if self._pipeline is not None:
+            self._pipeline.destroy()
+            self._pipeline = None
+
     # --- State management ---
 
     def save_state(self) -> None:
