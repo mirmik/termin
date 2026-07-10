@@ -221,6 +221,15 @@ class NativeEditorViewport:
         if self._overlay_drawer is not None and self._overlay_drawer():
             self._request_render()
 
+    def rebind_input_manager(self) -> None:
+        """Attach editor input to the viewport recreated by a scene switch."""
+        viewport = self.attachment.viewport
+        if viewport is None:
+            raise RuntimeError("editor scene attachment has no viewport for input binding")
+        index, generation = viewport._viewport_handle()
+        if not self.input_manager.rebind(index, generation, self.display.tc_display_ptr):
+            raise RuntimeError("failed to rebind editor viewport input manager")
+
     def _on_before_resize(self, _previous, _next) -> None:
         self._request_render()
 
@@ -235,6 +244,7 @@ class NativeEditorViewport:
         self.interaction.clear_callbacks()
         self.widget.detach_surface()
         self.surface.set_input_manager(0)
+        self.input_manager.detach()
         self.attachment.close()
         self.rendering_manager.remove_editor_display(self.display)
         self.display.destroy()

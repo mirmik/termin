@@ -164,6 +164,17 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     class InputManager:
         def __init__(self, index: int, generation: int, display_ptr: int) -> None:
             self.args = (index, generation, display_ptr)
+            self.rebinds = []
+            self.detached = False
+
+        def rebind(self, index: int, generation: int, display_ptr: int) -> bool:
+            self.rebinds.append((index, generation, display_ptr))
+            self.args = (index, generation, display_ptr)
+            self.detached = False
+            return True
+
+        def detach(self) -> None:
+            self.detached = True
 
     class InputRouter:
         def __init__(self, display_ptr: int) -> None:
@@ -201,6 +212,10 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     assert runtime.widget.has_surface
     assert _Interaction.instance() is runtime.interaction
 
+    runtime.attachment.viewport = SimpleNamespace(_viewport_handle=lambda: (7, 11))
+    runtime.rebind_input_manager()
+    assert runtime.input_manager.rebinds == [(7, 11, 41)]
+
     overlay_enabled = False
 
     def draw_overlays() -> bool:
@@ -225,6 +240,7 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     runtime.close()
     assert not runtime.widget.has_surface
     assert runtime.surface.input_manager == 0
+    assert runtime.input_manager.detached
     assert runtime.attachment.closed
     assert manager.removed == [runtime.display]
     assert runtime.display.destroyed

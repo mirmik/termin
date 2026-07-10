@@ -652,6 +652,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
         def scene_switched(scene) -> None:
             active_scene[0] = scene
+            if scene is not None:
+                native_viewport.rebind_input_manager()
             sync_viewport_list()
             request_editor_render()
 
