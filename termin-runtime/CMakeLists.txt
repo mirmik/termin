@@ -158,3 +158,5 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_runtimeConfigVersion.cmake
     DESTINATION lib/cmake/termin_runtime
 )
+
+termin_label_tests_in_directory("termin-runtime")

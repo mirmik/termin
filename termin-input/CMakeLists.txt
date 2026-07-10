@@ -138,3 +138,5 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_inputConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_input
 )
+
+termin_label_tests_in_directory("termin-input")

@@ -230,3 +230,5 @@ if(TERMIN_ENGINE_BUILD_TESTS)
         COMMAND termin_engine_cpp_module_hot_reload_test
     )
 endif()
+
+termin_label_tests_in_directory("termin-engine")

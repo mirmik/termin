@@ -194,3 +194,5 @@ if(TERMIN_MODULES_BUILD_TESTS)
 
     add_test(NAME termin_modules_runtime_test COMMAND termin_modules_runtime_test)
 endif()
+
+termin_label_tests_in_directory("termin-modules")
