@@ -16,6 +16,9 @@ runtime = termin_modules.ModuleRuntime()
 env = termin_modules.ModuleEnvironment()
 env.python_executable = "python3"
 env.sync_live_scenes = True
+# Optional host-controlled root for native shadow-load sessions. By default
+# termin-modules uses the system temporary directory.
+env.native_shadow_root = "/path/to/runtime-cache/native-modules"
 
 runtime.set_environment(env)
 runtime.register_cpp_backend(termin_modules.CppModuleBackend())

@@ -77,6 +77,7 @@ struct ModuleEnvironment {
     std::filesystem::path lib_dir;
     std::filesystem::path project_root;
     std::filesystem::path project_venv_path;
+    std::filesystem::path native_shadow_root;
     std::string python_executable;
     bool use_project_venv = false;
     bool allow_python_package_install = false;

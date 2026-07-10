@@ -10,6 +10,8 @@
 #include <string>
 #include <chrono>
 #include <vector>
+#include <stdexcept>
+#include <thread>
 
 using namespace termin_modules;
 
@@ -115,6 +117,49 @@ void write_text_file(const std::filesystem::path& path, const std::string& text)
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path);
     out << text;
+}
+
+std::filesystem::path write_shadow_test_descriptor(
+    const std::filesystem::path& project_root,
+    const std::string& module_id
+) {
+#ifdef _WIN32
+    const std::filesystem::path artifact = project_root / "build" / "shadow_test_module.dll";
+    const std::string output = "build/shadow_test_module.dll";
+#else
+    const std::filesystem::path artifact = project_root / "build" / "libshadow_test_module.so";
+    const std::string output = "build/libshadow_test_module.so";
+#endif
+    std::filesystem::create_directories(artifact.parent_path());
+    std::filesystem::copy_file(
+        TERMIN_MODULES_TEST_SHADOW_MODULE,
+        artifact,
+        std::filesystem::copy_options::overwrite_existing
+    );
+    const std::filesystem::path dependency_source = TERMIN_MODULES_TEST_SHADOW_DEPENDENCY;
+    std::filesystem::copy_file(
+        dependency_source,
+        artifact.parent_path() / dependency_source.filename(),
+        std::filesystem::copy_options::overwrite_existing
+    );
+    write_text_file(
+        project_root / (module_id + ".module"),
+        "name: " + module_id + "\nbuild:\n  output: " + output + "\n"
+    );
+    return artifact;
+}
+
+size_t count_regular_files(const std::filesystem::path& root) {
+    if (!std::filesystem::exists(root)) {
+        return 0;
+    }
+    size_t result = 0;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
+        if (entry.is_regular_file()) {
+            ++result;
+        }
+    }
+    return result;
 }
 
 std::shared_ptr<FakeCppBackend> make_runtime(ModuleRuntime& runtime, std::vector<ModuleEvent>* events = nullptr) {
@@ -682,6 +727,121 @@ void test_destructor_runs_non_throwing_shutdown() {
     expect(backend->unload_calls[0] == "native", "destructor should unload the active module");
 }
 
+void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
+    TempDir tmp;
+    const std::filesystem::path artifact = write_shadow_test_descriptor(tmp.path, "native");
+    const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(runtime.discover(tmp.path), "shadow cleanup discovery should succeed");
+
+    for (size_t iteration = 0; iteration < 3; ++iteration) {
+        expect(runtime.load_module("native"), "native shadow module should load");
+        const ModuleRecord* record = runtime.find("native");
+        auto handle = std::dynamic_pointer_cast<CppModuleHandle>(record->handle);
+        expect(handle != nullptr, "native shadow handle should be available");
+        expect(handle->loaded_path.parent_path() != artifact.parent_path(), "shadow must not live beside artifact");
+        expect(handle->loaded_path.string().starts_with(shadow_root.string()), "shadow must live under configured root");
+        expect(std::filesystem::exists(handle->loaded_path), "shadow file should exist while loaded");
+        const std::filesystem::path loaded_path = handle->loaded_path;
+
+        expect(runtime.unload_module("native"), "native shadow module should unload");
+        expect(!std::filesystem::exists(loaded_path), "shadow file must be removed after native close");
+        expect(count_regular_files(shadow_root) == 0, "shadow root must contain no files after unload");
+    }
+}
+
+void test_cpp_backend_cleans_shadow_after_post_copy_load_failure() {
+    TempDir tmp;
+    write_shadow_test_descriptor(tmp.path, "failing_native");
+    const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_init = [](const ModuleRecord&) {
+        throw std::runtime_error("injected native init scope failure");
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "failed shadow load discovery should succeed");
+
+    expect(!runtime.load_module("failing_native"), "injected init failure should reject load");
+    expect(runtime.find("failing_native")->handle == nullptr, "failed load must not publish a native handle");
+    expect(count_regular_files(shadow_root) == 0, "failed post-copy load must remove shadow file");
+}
+
+void test_cpp_backend_shadow_sessions_do_not_collide_between_runtimes() {
+    TempDir first;
+    TempDir second;
+    write_shadow_test_descriptor(first.path, "first_native");
+    write_shadow_test_descriptor(second.path, "second_native");
+    const std::filesystem::path shadow_root = first.path / "shared-shadow-cache";
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime first_runtime;
+    ModuleRuntime second_runtime;
+    first_runtime.set_environment(environment);
+    second_runtime.set_environment(environment);
+    first_runtime.register_backend(std::make_shared<CppModuleBackend>());
+    second_runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(first_runtime.discover(first.path), "first concurrent runtime discovery should succeed");
+    expect(second_runtime.discover(second.path), "second concurrent runtime discovery should succeed");
+
+    bool first_loaded = false;
+    bool second_loaded = false;
+    std::thread first_thread([&]() { first_loaded = first_runtime.load_module("first_native"); });
+    std::thread second_thread([&]() { second_loaded = second_runtime.load_module("second_native"); });
+    first_thread.join();
+    second_thread.join();
+    expect(first_loaded && second_loaded, "concurrent runtimes should both load");
+
+    auto first_handle = std::dynamic_pointer_cast<CppModuleHandle>(first_runtime.find("first_native")->handle);
+    auto second_handle = std::dynamic_pointer_cast<CppModuleHandle>(second_runtime.find("second_native")->handle);
+    expect(first_handle && second_handle, "both concurrent handles should exist");
+    expect(first_handle->loaded_path != second_handle->loaded_path, "concurrent shadow paths must be unique");
+    expect(first_handle->loaded_path.parent_path() != second_handle->loaded_path.parent_path(),
+           "concurrent runtimes must own separate session directories");
+
+    expect(first_runtime.shutdown(), "first concurrent runtime should shut down");
+    expect(second_runtime.shutdown(), "second concurrent runtime should shut down");
+    expect(count_regular_files(shadow_root) == 0, "concurrent shutdown must remove every shadow file");
+}
+
+void test_cpp_backend_prunes_only_aged_abandoned_shadow_sessions() {
+    TempDir tmp;
+    write_shadow_test_descriptor(tmp.path, "native");
+    const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
+    const std::filesystem::path abandoned = shadow_root / "session-999999999-old";
+    const std::filesystem::path recent = shadow_root / "session-999999998-recent";
+    std::filesystem::create_directories(abandoned);
+    std::filesystem::create_directories(recent);
+    write_text_file(abandoned / "stale.dll", "stale");
+    write_text_file(recent / "active.dll", "active");
+    std::filesystem::last_write_time(
+        abandoned,
+        std::filesystem::file_time_type::clock::now() - std::chrono::hours(25)
+    );
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(runtime.discover(tmp.path), "abandoned cleanup discovery should succeed");
+    expect(runtime.load_module("native"), "abandoned cleanup trigger module should load");
+    expect(!std::filesystem::exists(abandoned), "aged abandoned session should be removed");
+    expect(std::filesystem::exists(recent / "active.dll"), "recent session must not be pruned");
+    expect(runtime.shutdown(), "abandoned cleanup runtime should shut down");
+}
+
 } // namespace
 
 TEST_CASE("module runtime parses descriptors and discovers modules") {
@@ -746,6 +906,22 @@ TEST_CASE("module runtime shutdown retries failed handles in reverse dependency 
 
 TEST_CASE("module runtime destructor performs non-throwing shutdown") {
     test_destructor_runs_non_throwing_shutdown();
+}
+
+TEST_CASE("cpp backend cleans shadow artifacts after repeated unload") {
+    test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload();
+}
+
+TEST_CASE("cpp backend cleans shadow artifacts after post-copy load failure") {
+    test_cpp_backend_cleans_shadow_after_post_copy_load_failure();
+}
+
+TEST_CASE("cpp backend shadow sessions are collision-free across concurrent runtimes") {
+    test_cpp_backend_shadow_sessions_do_not_collide_between_runtimes();
+}
+
+TEST_CASE("cpp backend prunes only aged abandoned shadow sessions") {
+    test_cpp_backend_prunes_only_aged_abandoned_shadow_sessions();
 }
 
 TEST_CASE("module text diagnostics are sanitized to utf8") {
