@@ -403,7 +403,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         viewport=editor_viewport,
         request_render=request_editor_render,
     )
-    shell.hierarchy_host.add_fixed_child(scene_tree.root, 220.0)
+    shell.hierarchy_host.add_stretch_child(scene_tree.root)
     host.router.file_drop_handler = scene_tree.drop_file
 
     viewport_list_controller = ViewportListController()
@@ -414,7 +414,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
         show_input=dialog_service.show_input,
     )
-    shell.hierarchy_host.add_stretch_child(viewport_list.root)
+    shell.rendering_host.add_stretch_child(viewport_list.root)
 
     def sync_viewport_list() -> None:
         displays = [] if display_workspace is None else list(display_workspace.displays)
