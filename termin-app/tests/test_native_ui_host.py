@@ -191,11 +191,15 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.inspector_host.bounds.x > shell.workspace_host.bounds.x
     assert shell.tool_bar.widget.bounds.x == pytest.approx(shell.workspace_host.bounds.x)
     assert shell.tool_bar.widget.bounds.width == pytest.approx(shell.workspace_host.bounds.width)
+    document.layout_roots(Rect(0.0, 0.0, 2048.0, 1152.0))
+    assert shell.navigation_tabs.widget.bounds.width == pytest.approx(225.0, abs=3.0)
+    assert shell.inspector_host.bounds.width == pytest.approx(344.0, abs=4.0)
+    assert shell.bottom_tabs.widget.bounds.height == pytest.approx(306.0, abs=4.0)
     initial_navigation_width = shell.navigation_tabs.widget.bounds.width
     initial_bottom_height = shell.bottom_tabs.widget.bounds.height
     shell.left_splitter.split_fraction = 0.30
     shell.main_splitter.split_fraction = 0.55
-    document.layout_roots(Rect(0.0, 0.0, 1280.0, 720.0))
+    document.layout_roots(Rect(0.0, 0.0, 2048.0, 1152.0))
     assert shell.navigation_tabs.widget.bounds.width > initial_navigation_width
     assert shell.bottom_tabs.widget.bounds.height > initial_bottom_height
     assert shell.tool_bar.widget.bounds.x == pytest.approx(shell.workspace_host.bounds.x)

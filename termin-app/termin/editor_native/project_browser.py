@@ -237,7 +237,8 @@ def build_native_project_browser(
 
     main = document.create_splitter(True, "project-browser-content-splitter")
     main.widget.stable_id = "editor.project-browser.content-splitter"
-    main.set_split_fraction(0.20)
+    # The legacy directory tree starts near 170 px in a 2048 px-wide project panel.
+    main.set_split_fraction(0.085)
     main.set_min_extents(120.0, 240.0)
     tree_model = TreeModel()
     expansion_model = TreeExpansionModel()

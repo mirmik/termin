@@ -229,14 +229,17 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     right_splitter.widget.stable_id = "editor.right-splitter"
     right_splitter.set_first(workspace_host)
     right_splitter.set_second(inspector_host)
-    right_splitter.set_split_fraction(0.64)
+    # Match the legacy editor's initial 1476:346 workspace/inspector split
+    # at the 2048 px reference window while retaining responsive fractions.
+    right_splitter.set_split_fraction(0.81)
     right_splitter.set_min_extents(360.0, 260.0)
 
     left_splitter = document.create_splitter(True, "native-editor-left-splitter")
     left_splitter.widget.stable_id = "editor.left-splitter"
     left_splitter.set_first(navigation_tabs.widget)
     left_splitter.set_second(right_splitter.widget)
-    left_splitter.set_split_fraction(0.22)
+    # The legacy hierarchy column starts at roughly 225 px in a 2048 px window.
+    left_splitter.set_split_fraction(0.11)
     left_splitter.set_min_extents(180.0, 620.0)
 
     bottom_tabs = document.create_tab_view("native-editor-bottom-tabs")
@@ -257,7 +260,8 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     main_splitter.widget.stable_id = "editor.main-splitter"
     main_splitter.set_first(left_splitter.widget)
     main_splitter.set_second(bottom_tabs.widget)
-    main_splitter.set_split_fraction(0.65)
+    # The legacy bottom panel occupies about 27% of the editor content height.
+    main_splitter.set_split_fraction(0.72)
     main_splitter.set_min_extents(240.0, 120.0)
     central.add_stretch_child(main_splitter.widget)
 
