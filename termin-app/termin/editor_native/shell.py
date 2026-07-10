@@ -34,6 +34,9 @@ class NativeMenuActivationRoute:
 class NativeEditorShell:
     root: WidgetRef
     central: WidgetRef
+    main_splitter: object
+    left_splitter: object
+    right_splitter: object
     navigation_tabs: object
     hierarchy_host: WidgetRef
     rendering_host: WidgetRef
@@ -192,33 +195,14 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     toolbar_model = CommandModel()
     toolbar_play_command = toolbar_model.append(CommandData("play", "Play", icon="▶"))
     tool_bar = document.create_tool_bar(toolbar_model)
-    toolbar_row = document.create_hstack("native-editor-toolbar-row")
-    toolbar_row.set_layout_spacing(0.0)
-    toolbar_left = document.create_hstack("native-editor-toolbar-left-spacer")
-    toolbar_right = document.create_hstack("native-editor-toolbar-right-spacer")
-    toolbar_row.add_fixed_child(toolbar_left, 280.0)
-    toolbar_row.add_stretch_child(tool_bar.widget)
-    toolbar_row.add_fixed_child(toolbar_right, 360.0)
-    _append(document, root, toolbar_row, Size(1280.0, 40.0), fixed_extent=40.0)
 
     central = document.create_vstack("native-editor-central")
     central.stable_id = "editor.central"
     _append(document, root, central, Size(1280.0, 626.0))
 
-    upper = document.create_hstack("native-editor-upper")
-    upper.stable_id = "editor.upper"
-    upper.set_layout_spacing(0.0)
-    _append(document, central, upper, Size(1280.0, 406.0))
-
     navigation_tabs = document.create_tab_view("native-editor-navigation-tabs")
     navigation_tabs.widget.stable_id = "editor.navigation-tabs"
-    _append(
-        document,
-        upper,
-        navigation_tabs.widget,
-        Size(280.0, 406.0),
-        fixed_extent=280.0,
-    )
+    navigation_tabs.widget.preferred_size = Size(280.0, 406.0)
 
     hierarchy_host = document.create_vstack("native-editor-hierarchy-host")
     hierarchy_host.stable_id = "editor.hierarchy-host"
@@ -233,16 +217,31 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     workspace_host = document.create_vstack("native-editor-workspace-host")
     workspace_host.stable_id = "editor.workspace-host"
     workspace_host.set_layout_spacing(0.0)
-    _append(document, upper, workspace_host, Size(640.0, 406.0))
+    workspace_host.preferred_size = Size(640.0, 406.0)
+    workspace_host.add_fixed_child(tool_bar.widget, 40.0)
 
     inspector_host = document.create_vstack("native-editor-inspector-host")
     inspector_host.stable_id = "editor.inspector-host"
     inspector_host.set_layout_spacing(0.0)
-    _append(document, upper, inspector_host, Size(360.0, 406.0), fixed_extent=360.0)
+    inspector_host.preferred_size = Size(360.0, 406.0)
+
+    right_splitter = document.create_splitter(True, "native-editor-right-splitter")
+    right_splitter.widget.stable_id = "editor.right-splitter"
+    right_splitter.set_first(workspace_host)
+    right_splitter.set_second(inspector_host)
+    right_splitter.set_split_fraction(0.64)
+    right_splitter.set_min_extents(360.0, 260.0)
+
+    left_splitter = document.create_splitter(True, "native-editor-left-splitter")
+    left_splitter.widget.stable_id = "editor.left-splitter"
+    left_splitter.set_first(navigation_tabs.widget)
+    left_splitter.set_second(right_splitter.widget)
+    left_splitter.set_split_fraction(0.22)
+    left_splitter.set_min_extents(180.0, 620.0)
 
     bottom_tabs = document.create_tab_view("native-editor-bottom-tabs")
     bottom_tabs.widget.stable_id = "editor.bottom-tabs"
-    _append(document, central, bottom_tabs.widget, Size(1280.0, 220.0), fixed_extent=220.0)
+    bottom_tabs.widget.preferred_size = Size(1280.0, 220.0)
 
     project_host = document.create_vstack("native-editor-project-host")
     project_host.stable_id = "editor.project-host"
@@ -254,11 +253,22 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     console_host.set_layout_spacing(0.0)
     bottom_tabs.add_page("Console", console_host)
 
+    main_splitter = document.create_splitter(False, "native-editor-main-splitter")
+    main_splitter.widget.stable_id = "editor.main-splitter"
+    main_splitter.set_first(left_splitter.widget)
+    main_splitter.set_second(bottom_tabs.widget)
+    main_splitter.set_split_fraction(0.65)
+    main_splitter.set_min_extents(240.0, 120.0)
+    central.add_stretch_child(main_splitter.widget)
+
     status_bar = document.create_status_bar("Ready | Native editor host")
     _append(document, root, status_bar, Size(1280.0, 24.0), fixed_extent=24.0)
     return NativeEditorShell(
         root=root,
         central=central,
+        main_splitter=main_splitter,
+        left_splitter=left_splitter,
+        right_splitter=right_splitter,
         navigation_tabs=navigation_tabs,
         hierarchy_host=hierarchy_host,
         rendering_host=rendering_host,

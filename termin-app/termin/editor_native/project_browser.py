@@ -37,6 +37,7 @@ class NativeProjectBrowser:
     document: Document
     controller: ProjectBrowserController
     root: WidgetRef
+    content_splitter: object
     tree_widget: object
     file_grid: object
     breadcrumb: object
@@ -234,16 +235,18 @@ def build_native_project_browser(
     breadcrumb = document.create_status_bar("No project")
     root.add_fixed_child(_ref(document, breadcrumb), 24.0)
 
-    main = document.create_hstack("project-browser-main")
-    main.set_layout_spacing(6.0)
+    main = document.create_splitter(True, "project-browser-content-splitter")
+    main.widget.stable_id = "editor.project-browser.content-splitter"
+    main.set_split_fraction(0.20)
+    main.set_min_extents(120.0, 240.0)
     tree_model = TreeModel()
     expansion_model = TreeExpansionModel()
     tree = document.create_tree_widget(tree_model, expansion_model)
-    main.add_fixed_child(_ref(document, tree), 170.0)
+    main.set_first(_ref(document, tree))
     file_model = CollectionModel()
     grid = document.create_file_grid_widget(file_model)
-    main.add_stretch_child(_ref(document, grid))
-    root.add_stretch_child(main)
+    main.set_second(_ref(document, grid))
+    root.add_stretch_child(main.widget)
     status = document.create_status_bar("No project is open")
     root.add_fixed_child(_ref(document, status), 24.0)
 
@@ -253,6 +256,7 @@ def build_native_project_browser(
         document=document,
         controller=controller,
         root=root,
+        content_splitter=main,
         tree_widget=tree,
         file_grid=grid,
         breadcrumb=breadcrumb,
