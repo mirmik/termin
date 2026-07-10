@@ -40,10 +40,11 @@ Already started in `termin-gui-native`:
 - `tc_widget` has measure/layout/paint/pointer-event lifecycle hooks.
 - `tc_ui_draw_list` supports rects, lines, clipping and text.
 - `UiDrawListRenderer` renders draw-list commands through `Canvas2DRenderer`.
-- First C++ widget layer exists: `NativeWidget`, `BoxLayout`, `Panel`,
-  `Button`, `Checkbox`, `ProgressBar`, `Slider`, `Swatch`, `Label`, `Spacer`.
-- Existing tests cover document ownership, recursive destroy, paint command
-  output, simple layout and pointer event routing.
+- The C++ widget layer includes the basic controls, text editors, value/media
+  widgets, core containers and a virtualized `ListWidget` over reusable
+  collection/selection models.
+- Native and Python tests cover ownership, recursive destroy, paint output,
+  layout, input routing, mixed-language lifetime and large-model virtualization.
 
 ## Non-Goals For The Blind-Port Phase
 
@@ -410,16 +411,31 @@ Start with data structures and tests; postpone visual tuning.
 
 Port only after layout, focus and events are reliable.
 
-- [ ] `ListWidget`.
+- [x] `ListWidget`.
 - [ ] `TreeWidget`.
 - [ ] `TableWidget`.
 - [ ] `FileGridWidget`.
-- [ ] Virtualized list/table model.
-- [ ] Selection model: single, multi, range.
+- [x] Virtualized flat collection model and list presentation; table-specific
+  columns remain in the `TableWidget` slice.
+- [x] Selection model: single, multi, range.
 - [ ] Expand/collapse model for tree.
 - [ ] Header/column resize model for table.
-- [ ] Keyboard navigation.
-- [ ] Scroll integration.
+- [x] Keyboard navigation.
+- [x] Scroll integration.
+
+Phase 7 notes:
+
+- `CollectionModel` owns UTF-8 item records and emits typed structural changes.
+  `SelectionModel` shifts selected/current/anchor indices on insert and erase,
+  so a shared model can mutate without silently retargeting selection.
+- `ListWidget` is a scroll viewport rather than a container of one widget per
+  row. Layout and paint compute a bounded visible range; native and Python
+  tests exercise a 10,000-item model and assert bounded draw-command output.
+- Selection supports ordinary, Ctrl-toggle, Shift-range and Ctrl+Shift-additive
+  input, plus Home/End/arrow navigation, Ctrl+A and Enter activation. Disabled
+  items reject direct selection and are skipped by keyboard navigation.
+- The shared model is retained by the widget and released when the widget is
+  destroyed. C++ and Python lifetime tests cover both sides of that contract.
 
 ## Phase 8 - Menus, Dialogs And Overlays
 
@@ -448,15 +464,15 @@ Port only after layout, focus and events are reliable.
 
 ## Phase 10 - Python Bridge And Mixed-Language Use
 
-- [ ] Bind native widget handles and core document APIs.
-- [ ] Bind layout APIs.
-- [ ] Bind event structs.
-- [ ] Bind draw text/image commands.
-- [ ] Implement Python-defined widgets with an embedded `tc_widget`, Python
+- [x] Bind native widget handles and core document APIs.
+- [x] Bind layout APIs.
+- [x] Bind event structs.
+- [x] Bind draw text/image commands.
+- [x] Implement Python-defined widgets with an embedded `tc_widget`, Python
   vtable dispatch and an adoption retain/deleter pair.
-- [ ] Implement handle wrappers for already-native widgets without creating a
+- [x] Implement handle wrappers for already-native widgets without creating a
   second widget state object.
-- [ ] Add Python tests for stale handles and document-destroy behavior.
+- [x] Add Python tests for stale handles and document-destroy behavior.
 - [ ] Add Python showcase that uses native layouts/widgets instead of custom
   Python paint-only widgets.
 - [ ] Decide migration path for existing `tcgui.widgets.Widget`.
@@ -469,7 +485,8 @@ Port only after layout, focus and events are reliable.
 
 - [x] C++ showcase compiles with basic widgets.
 - [x] C++ showcase uses text, panels, buttons, checkbox, slider, progress,
-  text input/area, splitter, group box, grid palette, scroll area and tabs.
+  text input/area, virtualized list, splitter, group box, grid palette, scroll
+  area and tabs.
 - [ ] Python showcase mirrors the C++ showcase.
 - [x] Headless draw-list snapshot test for showcase structure.
 - [x] Offscreen renderer pixel smoke for text + texture + rounded geometry +
@@ -527,7 +544,7 @@ Files under `termin-gui/python/tcgui/widgets` to audit or port:
 - [ ] `image_widget.py`
 - [ ] `input_dialog.py`
 - [ ] `label.py`
-- [ ] `list_widget.py`
+- [x] `list_widget.py`
 - [ ] `loader.py`
 - [ ] `menu.py`
 - [ ] `menu_bar.py`
