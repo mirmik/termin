@@ -33,6 +33,7 @@ class GameModeModel:
         self._prepare_code_for_play = prepare_code_for_play or (lambda: True)
 
         self._game_scene_name: str | None = None
+        self._editor_scene_name: str | None = None
         self._saved_tree_expanded_uuids: list[str] | None = None
 
         # Signals
@@ -115,10 +116,12 @@ class GameModeModel:
         if self._render_connector is not None:
             self._render_connector.sync_scene_render_state(editor_scene_name)
 
+        self._editor_scene_name = editor_scene_name
         self._game_scene_name = f"{editor_scene_name}(game)"
         game_scene = self._scene_manager.copy_scene(editor_scene_name, self._game_scene_name)
         if game_scene is None:
             self._game_scene_name = None
+            self._editor_scene_name = None
             return
 
         if self._render_connector is not None:
@@ -167,7 +170,7 @@ class GameModeModel:
             self._scene_manager.close_scene(game_scene_name)
         self._game_scene_name = None
 
-        editor_scene_name = self._get_editor_scene_name()
+        editor_scene_name = self._editor_scene_name
         if editor_scene_name is not None:
             self._scene_manager.set_mode(editor_scene_name, SceneMode.STOP)
             editor_scene = self._scene_manager.get_scene(editor_scene_name)
@@ -188,6 +191,7 @@ class GameModeModel:
         self.state_changed.emit(self)
         self.mode_entered.emit(False, editor_scene, self._saved_tree_expanded_uuids)
         self._saved_tree_expanded_uuids = None
+        self._editor_scene_name = None
 
     # ------------------------------------------------------------------
     # Helpers

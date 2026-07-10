@@ -1062,6 +1062,15 @@ Phase 12 host notes:
   `RenderingManager` callback bindings and now shuts the rendering manager down
   before destroying the native window/context; the three-frame offscreen
   OpenGL run exits cleanly.
+- Native Play/Stop now projects the shared `GameModeModel` through explicit
+  editor/render session adapters. F5 and the toolbar copy the editor scene,
+  transfer the editor attachment and render configuration to the game scene,
+  update their labels/status, then delete the game copy and restore the editor
+  scene and tree expansion state on Stop. The model retains the original editor
+  scene name across the temporary attachment switch instead of asking the
+  active game scene for it. A live MCP run observed `untitled(game)` in PLAY,
+  refreshed executor context to that scene, and restored `untitled` in STOP;
+  shutdown remained clean.
 - The migrated tcgui Core/Inspect/NavMesh/Resource viewer modules, their shared
   `RegistryViewerDialog`, launcher methods and menu callbacks were deleted.
   An architecture test fixes their absence. Card #302 remains open only for

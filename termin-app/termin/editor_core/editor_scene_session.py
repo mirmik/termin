@@ -37,7 +37,13 @@ class EditorSceneSession:
     def scene(self):
         return self._attachment.scene
 
-    def attach(self, scene, *, restore_state: bool = True) -> bool:
+    def attach(
+        self,
+        scene,
+        *,
+        restore_state: bool = True,
+        transfer_camera_state: bool = False,
+    ) -> bool:
         previous = self.scene
         if _same_scene(previous, scene):
             return False
@@ -47,7 +53,11 @@ class EditorSceneSession:
             self._before_switch()
         self._clear_selection()
         try:
-            self._attachment.attach(scene, restore_state=restore_state, transfer_camera_state=False)
+            self._attachment.attach(
+                scene,
+                restore_state=restore_state,
+                transfer_camera_state=transfer_camera_state,
+            )
             self._bind_models(scene)
         except Exception:
             _logger.exception("Editor scene switch failed; restoring previous scene")
