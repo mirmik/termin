@@ -755,12 +755,29 @@ stable.
 - [x] Port Scene Properties, Layers & Flags and Shadow Settings dialogs.
 - [x] Port Project Settings dialog.
 - [x] Port Agent Types and NavMesh Areas dialogs.
+- [x] Port SpaceMouse runtime integration and settings dialog.
+- [ ] Complete Scene Manager native attachment workflows.
 - [x] Decide old `termin.editor_tcgui` coexistence boundary.
 
 Agent Types and NavMesh Areas share a toolkit-neutral staged controller. The
 native Scene-menu dialogs persist the agent list and all 64 area names only on
 OK; Cancel now discards the draft instead of leaking the legacy dialog's live
 singleton mutations.
+
+The native editor now owns the SpaceMouse lifecycle end to end: it opens the
+device against the native editor attachment, polls it from the editor loop and
+closes it during shutdown. Settings project through a toolkit-neutral model to
+the native View-menu dialog and apply live. The controller also uses the public
+`EditorSceneAttachment.camera_manager` boundary rather than its former private
+field access.
+
+Scene Manager has a toolkit-neutral snapshot/action controller and a native
+Debug-menu projection. Scene inspection, selection, mode changes, duplication,
+confirmed unload and lifecycle cleanup are native. Render Attach/Detach and
+Editor Attach/Detach remain disabled until the native runtime can atomically
+rebind its display surfaces and every scene-bound controller; switching only
+the editor viewport would leave inspectors and settings dialogs attached to the
+old scene.
 
 Phase 12 host notes:
 

@@ -71,6 +71,16 @@ from .navigation_settings_dialogs import (
     build_native_navmesh_areas_dialog,
     connect_navigation_settings_command,
 )
+from .spacemouse_settings_dialog import (
+    NativeSpaceMouseSettingsDialog,
+    build_native_spacemouse_settings_dialog,
+    connect_spacemouse_settings_command,
+)
+from .scene_manager_dialog import (
+    NativeSceneManagerDialog,
+    build_native_scene_manager_dialog,
+    connect_scene_manager_command,
+)
 
 __all__ = [
     "NativeUiEventRouter",
@@ -101,6 +111,8 @@ __all__ = [
     "NativeProjectSettingsDialog",
     "NativeAgentTypesDialog",
     "NativeNavMeshAreasDialog",
+    "NativeSpaceMouseSettingsDialog",
+    "NativeSceneManagerDialog",
     "RouteResult",
     "build_native_editor_shell",
     "build_native_profiler_panel",
@@ -136,5 +148,9 @@ __all__ = [
     "build_native_agent_types_dialog",
     "build_native_navmesh_areas_dialog",
     "connect_navigation_settings_command",
+    "build_native_spacemouse_settings_dialog",
+    "connect_spacemouse_settings_command",
+    "build_native_scene_manager_dialog",
+    "connect_scene_manager_command",
     "resolve_native_ui_font",
 ]
