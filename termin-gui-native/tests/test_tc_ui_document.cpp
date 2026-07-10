@@ -769,7 +769,7 @@ static void test_theme_style_resolution_inheritance_and_invalidation() {
     assert(tc_widget_append_child(&parent_a.widget, &child.widget));
     assert(tc_ui_document_add_root(document, parent_a_handle));
     assert(tc_ui_document_resolve_style(document, &child.widget, 0, &style));
-    assert(style.background.r == 0.20f);
+    assert(style.background.r == theme.roles[TC_UI_STYLE_BUTTON].base.background.r);
     assert(style.font_size == 14.0f);
 
     inherited.fields = TC_UI_STYLE_FONT_SIZE | TC_UI_STYLE_FOREGROUND;

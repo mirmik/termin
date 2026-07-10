@@ -54,6 +54,31 @@ static tc_ui_color style_color(float r, float g, float b, float a) {
     return (tc_ui_color){r, g, b, a};
 }
 
+/*
+ * CabanTheme palette — a warm "retrowave" skin over neutral graphite.
+ *
+ * The whole theme has exactly ONE color — the neon #F25F13 — and it lives
+ * only on accents and interaction (buttons, focus, selection, checkmarks,
+ * sliders). Everything else is a three-step neutral graphite scale, so the
+ * neon has something plain to "glow" against without competing for
+ * attention. Ported from the Kanboard web theme (plugins/CabanTheme in the
+ * caban-kanban project): same "one accent, everything follows it" idea —
+ * edit the neon/graphite values here and the whole theme shifts at once.
+ *
+ * Values are the web theme's hex converted to 0..1 float (channel / 255).
+ */
+static const tc_ui_color caban_neon         = {0.949f, 0.373f, 0.075f, 1.0f}; /* #F25F13 neon */
+static const tc_ui_color caban_neon_bright  = {1.000f, 0.569f, 0.322f, 1.0f}; /* #ff9152 brighter */
+static const tc_ui_color caban_neon_dim     = {0.478f, 0.227f, 0.075f, 1.0f}; /* #7a3a13 dimmer */
+static const tc_ui_color caban_ink          = {0.094f, 0.094f, 0.094f, 1.0f}; /* #181818 graphite background */
+static const tc_ui_color caban_surface_1    = {0.125f, 0.125f, 0.125f, 1.0f}; /* #202020 panel */
+static const tc_ui_color caban_surface_2    = {0.153f, 0.153f, 0.153f, 1.0f}; /* #272727 raised surface */
+static const tc_ui_color caban_surface_warm = {0.180f, 0.114f, 0.055f, 1.0f}; /* warm graphite — selected/active */
+static const tc_ui_color caban_line         = {0.227f, 0.227f, 0.227f, 1.0f}; /* #3a3a3a borders/dividers */
+static const tc_ui_color caban_text         = {0.925f, 0.925f, 0.925f, 1.0f}; /* #ececec primary text */
+static const tc_ui_color caban_text_muted   = {0.431f, 0.431f, 0.431f, 1.0f}; /* #6e6e6e muted text */
+static const tc_ui_color caban_on_neon      = {0.110f, 0.051f, 0.020f, 1.0f}; /* #1c0d05 dark text on filled neon */
+
 static bool valid_style_color(tc_ui_color color) {
     return isfinite(color.r) && isfinite(color.g) && isfinite(color.b) && isfinite(color.a) &&
         color.r >= 0.0f && color.r <= 1.0f &&
@@ -156,9 +181,9 @@ static tc_ui_style default_base_style(void) {
     tc_ui_style style;
     memset(&style, 0, sizeof(style));
     style.background = style_color(0.0f, 0.0f, 0.0f, 0.0f);
-    style.foreground = style_color(0.90f, 0.92f, 0.96f, 1.0f);
-    style.border = style_color(0.32f, 0.34f, 0.38f, 1.0f);
-    style.accent = style_color(0.25f, 0.58f, 0.88f, 1.0f);
+    style.foreground = caban_text;
+    style.border = caban_line;
+    style.accent = caban_neon;
     style.border_width = 1.0f;
     style.font_size = 14.0f;
     style.font_role = TC_UI_FONT_BODY;
@@ -193,19 +218,21 @@ void tc_ui_theme_init_default(tc_ui_theme* theme) {
         theme->roles[index].base = base;
         theme->roles[index].disabled = color_override(
             TC_UI_STYLE_FOREGROUND,
-            style_color(0.52f, 0.54f, 0.58f, 1.0f)
+            caban_text_muted
         );
     }
 
-    theme->roles[TC_UI_STYLE_PANEL].base.background = style_color(0.16f, 0.17f, 0.19f, 1.0f);
+    theme->roles[TC_UI_STYLE_PANEL].base.background = caban_surface_1;
     theme->roles[TC_UI_STYLE_PANEL].base.min_width = 96.0f;
     theme->roles[TC_UI_STYLE_PANEL].base.min_height = 64.0f;
 
     theme->roles[TC_UI_STYLE_LABEL].base.font_size = 15.0f;
 
-    theme->roles[TC_UI_STYLE_BUTTON].base.background = style_color(0.20f, 0.38f, 0.64f, 1.0f);
-    theme->roles[TC_UI_STYLE_BUTTON].base.foreground = style_color(0.94f, 0.97f, 1.0f, 1.0f);
-    theme->roles[TC_UI_STYLE_BUTTON].base.border = style_color(0.80f, 0.88f, 1.0f, 1.0f);
+    /* button — a "neon sign": dark graphite surface, neon text and a
+       dim-neon border; it fills with neon while pressed. */
+    theme->roles[TC_UI_STYLE_BUTTON].base.background = caban_surface_2;
+    theme->roles[TC_UI_STYLE_BUTTON].base.foreground = caban_neon_bright;
+    theme->roles[TC_UI_STYLE_BUTTON].base.border = caban_neon_dim;
     theme->roles[TC_UI_STYLE_BUTTON].base.padding_left = 12.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.padding_top = 8.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.padding_right = 12.0f;
@@ -213,27 +240,31 @@ void tc_ui_theme_init_default(tc_ui_theme* theme) {
     theme->roles[TC_UI_STYLE_BUTTON].base.border_width = 2.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.min_width = 96.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.min_height = 36.0f;
+    /* hover — the button "warms up": fill with dim neon */
     theme->roles[TC_UI_STYLE_BUTTON].hovered = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.24f, 0.45f, 0.72f, 1.0f)
+        caban_neon_dim
     );
+    /* press — the button "lights up": full neon fill + dark text on top */
     theme->roles[TC_UI_STYLE_BUTTON].pressed = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.14f, 0.29f, 0.50f, 1.0f)
+        caban_neon
     );
+    theme->roles[TC_UI_STYLE_BUTTON].pressed.fields |= TC_UI_STYLE_FOREGROUND;
+    theme->roles[TC_UI_STYLE_BUTTON].pressed.value.foreground = caban_on_neon;
     theme->roles[TC_UI_STYLE_BUTTON].focused = color_override(
         TC_UI_STYLE_BORDER,
-        style_color(0.48f, 0.72f, 1.0f, 1.0f)
+        caban_neon_bright
     );
     theme->roles[TC_UI_STYLE_BUTTON].disabled = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.20f, 0.21f, 0.23f, 1.0f)
+        caban_surface_1
     );
     theme->roles[TC_UI_STYLE_BUTTON].disabled.fields |= TC_UI_STYLE_FOREGROUND;
-    theme->roles[TC_UI_STYLE_BUTTON].disabled.value.foreground = style_color(0.55f, 0.57f, 0.61f, 1.0f);
+    theme->roles[TC_UI_STYLE_BUTTON].disabled.value.foreground = caban_text_muted;
 
-    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.background = style_color(0.08f, 0.09f, 0.11f, 1.0f);
-    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.foreground = style_color(0.94f, 0.96f, 0.98f, 1.0f);
+    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.background = caban_ink;
+    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.foreground = caban_text;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.padding_left = 8.0f;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.padding_top = 2.0f;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.padding_right = 8.0f;
@@ -242,49 +273,53 @@ void tc_ui_theme_init_default(tc_ui_theme* theme) {
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.min_height = 34.0f;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].focused = color_override(
         TC_UI_STYLE_BORDER,
-        style_color(0.38f, 0.62f, 0.92f, 1.0f)
+        caban_neon
     );
     theme->roles[TC_UI_STYLE_TEXT_INPUT].focused.fields |= TC_UI_STYLE_BORDER_WIDTH;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].focused.value.border_width = 2.0f;
 
-    theme->roles[TC_UI_STYLE_GROUP_BOX].base.background = style_color(0.11f, 0.12f, 0.14f, 1.0f);
+    theme->roles[TC_UI_STYLE_GROUP_BOX].base.background = caban_ink;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_left = 10.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_top = 8.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_right = 10.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_bottom = 10.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.font_size = 13.0f;
 
-    theme->roles[TC_UI_STYLE_TAB].base.background = style_color(0.13f, 0.14f, 0.16f, 1.0f);
-    theme->roles[TC_UI_STYLE_TAB].base.foreground = style_color(0.88f, 0.91f, 0.96f, 1.0f);
-    theme->roles[TC_UI_STYLE_TAB].base.border = style_color(0.34f, 0.36f, 0.40f, 1.0f);
+    theme->roles[TC_UI_STYLE_TAB].base.background = caban_surface_1;
+    theme->roles[TC_UI_STYLE_TAB].base.foreground = caban_text;
+    theme->roles[TC_UI_STYLE_TAB].base.border = caban_line;
     theme->roles[TC_UI_STYLE_TAB].base.padding_left = 8.0f;
     theme->roles[TC_UI_STYLE_TAB].base.font_size = 13.0f;
+    /* active tab — warm graphite (nudged toward the neon) */
     theme->roles[TC_UI_STYLE_TAB].checked = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.20f, 0.26f, 0.34f, 1.0f)
+        caban_surface_warm
     );
 
-    theme->roles[TC_UI_STYLE_CHECKBOX].base.background = style_color(0.10f, 0.11f, 0.13f, 1.0f);
-    theme->roles[TC_UI_STYLE_CHECKBOX].base.border = style_color(0.74f, 0.78f, 0.84f, 1.0f);
-    theme->roles[TC_UI_STYLE_CHECKBOX].base.accent = style_color(0.28f, 0.82f, 0.54f, 1.0f);
+    theme->roles[TC_UI_STYLE_CHECKBOX].base.background = caban_ink;
+    /* deliberately lighter than caban_line: an unchecked box on caban_ink
+       would be nearly invisible at the graphite border tone */
+    theme->roles[TC_UI_STYLE_CHECKBOX].base.border = style_color(0.75f, 0.75f, 0.75f, 1.0f);
+    theme->roles[TC_UI_STYLE_CHECKBOX].base.accent = caban_neon; /* checkmark — neon */
     theme->roles[TC_UI_STYLE_CHECKBOX].base.min_width = 32.0f;
     theme->roles[TC_UI_STYLE_CHECKBOX].base.min_height = 32.0f;
     theme->roles[TC_UI_STYLE_CHECKBOX].checked = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.12f, 0.18f, 0.15f, 1.0f)
+        caban_surface_warm
     );
 
-    theme->roles[TC_UI_STYLE_PROGRESS].base.background = style_color(0.09f, 0.10f, 0.12f, 1.0f);
+    theme->roles[TC_UI_STYLE_PROGRESS].base.background = caban_ink;
+    /* the progress fill uses the base style's accent — neon */
     theme->roles[TC_UI_STYLE_PROGRESS].base.min_width = 120.0f;
     theme->roles[TC_UI_STYLE_PROGRESS].base.min_height = 20.0f;
 
-    theme->roles[TC_UI_STYLE_SLIDER].base.border = style_color(0.32f, 0.34f, 0.38f, 1.0f);
-    theme->roles[TC_UI_STYLE_SLIDER].base.accent = style_color(0.88f, 0.66f, 0.24f, 1.0f);
-    theme->roles[TC_UI_STYLE_SLIDER].base.foreground = style_color(0.96f, 0.88f, 0.64f, 1.0f);
+    theme->roles[TC_UI_STYLE_SLIDER].base.border = caban_line;
+    theme->roles[TC_UI_STYLE_SLIDER].base.accent = caban_neon;            /* active portion of the track */
+    theme->roles[TC_UI_STYLE_SLIDER].base.foreground = caban_neon_bright; /* handle */
     theme->roles[TC_UI_STYLE_SLIDER].base.min_width = 140.0f;
     theme->roles[TC_UI_STYLE_SLIDER].base.min_height = 28.0f;
 
-    theme->roles[TC_UI_STYLE_SEPARATOR].base.background = style_color(0.36f, 0.38f, 0.42f, 1.0f);
+    theme->roles[TC_UI_STYLE_SEPARATOR].base.background = caban_line;
 }
 
 tc_widget_slot* tc_ui_internal_resolve_slot(tc_ui_document* document, tc_widget_handle handle) {
