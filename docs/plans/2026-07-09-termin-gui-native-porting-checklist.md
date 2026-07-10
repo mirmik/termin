@@ -1057,8 +1057,11 @@ Phase 12 host notes:
   than `editor_tcgui`. The native File menu supports new/load/save/save-as and
   restores the project's last scene; its Game menu exposes desktop and Android
   builds plus built/standalone launch through the same controller as tcgui.
-  Quest/OpenXR still reports an explicit native-dialog parity gap instead of
-  importing the legacy dialog. The process smoke also fixed nullable
+  Quest/OpenXR build/install/launch now likewise uses one asynchronous
+  `QuestOpenXRBuildController`; native drains its worker notifications from the
+  editor loop, while tcgui projects the same snapshots through `ui.defer`.
+  A live native MCP screenshot verified all five actions, status/log output and
+  dialog teardown without invoking Gradle or adb. The process smoke also fixed nullable
   `RenderingManager` callback bindings and now shuts the rendering manager down
   before destroying the native window/context; the three-frame offscreen
   OpenGL run exits cleanly.
