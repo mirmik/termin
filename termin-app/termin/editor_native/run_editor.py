@@ -62,6 +62,9 @@ from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.display_workspace import NativeDisplayWorkspace
 from termin.editor_native.editor_viewport import NativeEditorViewport
 from termin.editor_native.game_mode_controller import NativeGameModeController
+from termin.editor_native.quest_openxr_build_dialog import (
+    build_native_quest_openxr_build_dialog,
+)
 from termin.editor_native.entity_inspector import build_native_entity_inspector
 from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,
@@ -831,10 +834,14 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     if project_browser_controller.root_path is not None:
         scene_file_controller.load_last_scene()
 
-    def show_quest_openxr_unavailable(_entry) -> None:
-        message = "Quest/OpenXR build dialog has not been ported to the native editor yet."
-        _logger.error(message)
-        dialog_service.show_error("Quest/OpenXR Build", message)
+    quest_openxr_build_dialog = build_native_quest_openxr_build_dialog(
+        host.document,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+
+    def show_quest_openxr_build(entry) -> None:
+        quest_openxr_build_dialog.show_entry(entry, on_log=log_build_message)
 
     project_build_controller = ProjectBuildController(
         scene_manager=engine.scene_manager,
@@ -846,7 +853,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         get_editor_scene_name=active_scene_name,
         save_scene=scene_file_controller.save_scene,
         log_to_console=log_build_message,
-        show_quest_openxr=show_quest_openxr_unavailable,
+        show_quest_openxr=show_quest_openxr_build,
     )
 
     project_build_commands = {
@@ -1056,6 +1063,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "project_build_controller": project_build_controller,
             "scene_file_controller": scene_file_controller,
             "game_mode_controller": game_mode_controller,
+            "quest_openxr_build_dialog": quest_openxr_build_dialog,
             "pipeline_editor_controller": pipeline_editor_controller,
             "pipeline_editor": pipeline_editor,
             "framegraph_debugger": framegraph_debugger_service,
@@ -1145,6 +1153,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             host.request_render_update()
         if executor.process_pending() > 0:
             host.request_render_update()
+        if quest_openxr_build_dialog.poll() > 0:
+            host.request_render_update()
         project_file_watcher.poll()
         spacemouse.poll()
         framegraph_debugger.update()
@@ -1185,6 +1195,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             about_dialog.close()
         except Exception:
             _logger.exception("Native About dialog shutdown cleanup failed")
+        try:
+            quest_openxr_build_dialog.close()
+        except Exception:
+            _logger.exception("Native Quest/OpenXR build dialog shutdown cleanup failed")
         try:
             undo_history_dialog.close()
         except Exception:

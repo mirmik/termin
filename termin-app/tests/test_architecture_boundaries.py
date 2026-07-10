@@ -417,6 +417,7 @@ def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
         "scene_manager_model.py",
         "scene_file_controller.py",
         "game_mode_session_connectors.py",
+        "quest_openxr_build_model.py",
         "editor_scene_session.py",
         "render_scene_session.py",
         "spacemouse_settings_model.py",
