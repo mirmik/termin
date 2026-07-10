@@ -13,6 +13,13 @@
 namespace termin {
 
 class TERMIN_DISPLAY_API SDLBackendWindow : public BackendWindow {
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+    SDL_Window* window_ = nullptr;
+    tc_input_manager* input_manager_ = nullptr;
+    bool should_close_ = false;
+
 public:
     // Create a window + backend device. Throws std::runtime_error on
     // SDL / device failure. The selected render backend is TERMIN_BACKEND.
@@ -46,13 +53,6 @@ public:
     tc_input_manager* input_manager() const { return input_manager_; }
     std::pair<int, int> framebuffer_size() const override;
     void present(tgfx::TextureHandle color_tex) override;
-
-private:
-    struct Impl;
-    std::unique_ptr<Impl> impl_;
-    SDL_Window* window_ = nullptr;
-    tc_input_manager* input_manager_ = nullptr;
-    bool should_close_ = false;
 };
 
 } // namespace termin

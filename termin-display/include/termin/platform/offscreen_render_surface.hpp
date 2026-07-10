@@ -28,6 +28,7 @@ private:
     int width_ = 0;
     int height_ = 0;
     uint32_t ref_count_ = 0;
+    static const tc_render_surface_vtable s_vtable;
 
 public:
     OffscreenRenderSurface(tgfx::IRenderDevice* device, int width, int height);
@@ -65,8 +66,6 @@ private:
     static void vtable_destroy(tc_render_surface* self);
     static uintptr_t vtable_share_group_key(tc_render_surface* self);
     static uint32_t vtable_get_tgfx_color_tex_id(tc_render_surface* self);
-
-    static const tc_render_surface_vtable s_vtable;
 };
 
 TERMIN_DISPLAY_API bool offscreen_render_surface_handle_valid(OffscreenRenderSurfaceHandle handle);
