@@ -413,6 +413,9 @@ editor-process reload smokes.
 
 ## Состояние Kanboard после аудита
 
+Активные задачи по module runtime, reload, registration ownership и degraded
+placeholders собраны в отдельном swimlane **Modules & Hot Reload**.
+
 - **#172** закрыта: конкретная `UnknownComponent -> enabled=false` регрессия
   исправлена и повторно проверена C++/Python tests.
 - **#105** оставлена On Test и дополнена owner-thread/GIL/C++ reload рисками.
