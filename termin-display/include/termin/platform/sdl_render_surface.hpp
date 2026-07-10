@@ -18,6 +18,7 @@ private:
     bool needs_render_;
     int last_width_;
     int last_height_;
+    static const tc_render_surface_vtable s_vtable;
 
 public:
     SDLWindowRenderSurface(
@@ -80,8 +81,6 @@ private:
     static void vtable_set_should_close(tc_render_surface* self, bool value);
     static void vtable_get_cursor_pos(tc_render_surface* self, double* x, double* y);
     static void vtable_destroy(tc_render_surface* self);
-
-    static const tc_render_surface_vtable s_vtable;
 
     // Get SDLWindowRenderSurface* from tc_render_surface*
     static SDLWindowRenderSurface* from_tc_surface(tc_render_surface* s) {

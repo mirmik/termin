@@ -249,6 +249,10 @@ class SDLWindowRenderSurface;
  * SDL2 window backend - manages SDL initialization and windows.
  */
 class TERMIN_DISPLAY_API SDLWindowBackend {
+private:
+    std::unordered_map<uint32_t, std::weak_ptr<SDLWindow>> windows_;
+    std::unordered_map<uint32_t, SDLWindowRenderSurface*> surfaces_;
+
 public:
     SDLWindowBackend() {
         // Ensure SDL video is initialized (safe to call multiple times)
@@ -286,9 +290,6 @@ public:
     }
 
 private:
-    std::unordered_map<uint32_t, std::weak_ptr<SDLWindow>> windows_;
-    std::unordered_map<uint32_t, SDLWindowRenderSurface*> surfaces_;
-
     void dispatch_event_to_surface(SDLWindowRenderSurface* surface, const SDL_Event& event);
 };
 
