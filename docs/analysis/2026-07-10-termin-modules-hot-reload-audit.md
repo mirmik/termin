@@ -461,7 +461,8 @@ placeholders собраны в отдельном swimlane **Modules & Hot Reloa
 
 - **#172** закрыта: конкретная `UnknownComponent -> enabled=false` регрессия
   исправлена и повторно проверена C++/Python tests.
-- **#105** оставлена On Test и дополнена owner-thread/GIL/C++ reload рисками.
+- **#105** закрыта после #285: explicit dirty/apply и Play-gate workflow повторно
+  прошли editor-process smokes без новых UX/policy дефектов.
 - **#285** закрыта: build изолирован в subprocess, live commit confined к owner thread.
 - **#286** закрыта: Python unload получил fallible prepare/commit contract.
 - **#287** закрыта: discovery/shutdown больше не теряют активные handles.
