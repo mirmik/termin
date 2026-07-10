@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import gc
 from pathlib import Path
 
 import pytest
@@ -253,6 +254,9 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
 
         runtime.run_frames(frames=1, dt=0.01)
         assert component.value == 6
+        del component
+        del components
+        gc.collect()
 
         _write_hot_reload_component_sources(tmp_path, step=10, mtime=1_800_000_010)
 
@@ -262,7 +266,6 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         reloaded_components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(reloaded_components) == 1
         reloaded = reloaded_components[0]
-        assert reloaded is not component
         assert reloaded.value == 6
         assert reloaded.step == 10
         assert runtime.scene.get_component_type_counts().get("UnknownComponent") is None
@@ -270,6 +273,9 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         runtime.run_frames(frames=1, dt=0.01)
         assert reloaded.value == 16
         assert reloaded.step == 10
+        del reloaded
+        del reloaded_components
+        gc.collect()
     finally:
         scene_manager.unregister_scene("Main.scene")
         runtime.shutdown()
@@ -300,6 +306,8 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         assert len(components) == 1
         runtime.run_frames(frames=1, dt=0.01)
         assert components[0].value == 6
+        del components
+        gc.collect()
 
         _write_broken_hot_reload_component_source(tmp_path, mtime=1_800_000_020)
 
@@ -324,6 +332,9 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
 
         runtime.run_frames(frames=1, dt=0.01)
         assert reloaded.value == 16
+        del reloaded
+        del reloaded_components
+        gc.collect()
     finally:
         scene_manager.unregister_scene("Main.scene")
         runtime.shutdown()

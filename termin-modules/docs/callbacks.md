@@ -112,6 +112,12 @@
 - `before_unload`
   - снять runtime-ссылки на Python objects, если они мешают reload
 
+- `before_module_remove`
+  - fallible prepare-фаза перед изменением registries, `sys.modules` и `sys.path`
+  - возвращает `false` и диагностическое сообщение, если хотя бы один live
+    object/type нельзя безопасно подготовить
+  - при отказе backend unload не вызывается, handle и loaded state сохраняются
+
 - `after_unload`
   - завершить cleanup после удаления модулей из `sys.modules`
 

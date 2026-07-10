@@ -3,7 +3,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 from termin.project_modules.runtime import ProjectModulesRuntime
+from termin_modules import module_context
 
 
 def _write_python_module(
@@ -104,3 +107,59 @@ def test_invalid_descriptor_reload_keeps_module_loaded_and_dirty(tmp_path: Path)
     )
     assert runtime.close()
     assert "sample_module" not in sys.modules
+
+
+def test_module_registration_commit_failure_is_propagated_and_retryable() -> None:
+    module_id = "registration_commit_failure_probe"
+    module_context.begin_module_import(module_id)
+    module_context.record_component("RegistrationCommitFailureProbe")
+    module_context.end_module_import(module_id)
+
+    original_cleanup = module_context._unregister_python_component_classes
+
+    def fail_cleanup(registrations: module_context.ModuleOwnedRegistrations) -> None:
+        del registrations
+        raise RuntimeError("injected registration cleanup failure")
+
+    module_context._unregister_python_component_classes = fail_cleanup
+    try:
+        with pytest.raises(RuntimeError, match="injected registration cleanup failure"):
+            module_context.unregister_module_owner(module_id)
+        assert module_context.registrations_for_owner(module_id).components == {
+            "RegistrationCommitFailureProbe"
+        }
+    finally:
+        module_context._unregister_python_component_classes = original_cleanup
+
+    module_context.unregister_module_owner(module_id)
+    assert module_context.registrations_for_owner(module_id).components == set()
+
+
+def test_python_backend_commit_failure_keeps_sys_modules_and_loaded_handle(
+    tmp_path: Path,
+) -> None:
+    _write_python_module(tmp_path)
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    assert runtime.load_project(tmp_path)
+
+    original_cleanup = module_context._unregister_python_component_classes
+
+    def fail_cleanup(registrations: module_context.ModuleOwnedRegistrations) -> None:
+        del registrations
+        raise RuntimeError("injected backend registration commit failure")
+
+    module_context._unregister_python_component_classes = fail_cleanup
+    try:
+        assert not runtime.unload_module("sample")
+        assert "injected backend registration commit failure" in runtime.last_error
+        assert "sample_module" in sys.modules
+        record = runtime.find("sample")
+        assert record is not None
+        assert record.state.name == "Loaded"
+    finally:
+        module_context._unregister_python_component_classes = original_cleanup
+
+    assert runtime.unload_module("sample")
+    assert "sample_module" not in sys.modules
+    assert runtime.close()

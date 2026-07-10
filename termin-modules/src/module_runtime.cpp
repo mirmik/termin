@@ -542,6 +542,17 @@ bool ModuleRuntime::unload_module_impl(
         if (_python_callbacks.before_unload) {
             _python_callbacks.before_unload(*target);
         }
+        if (_python_callbacks.before_module_remove) {
+            std::string error;
+            if (!_python_callbacks.before_module_remove(*target, error)) {
+                target->error_message = error.empty()
+                    ? "Python module unload preparation failed"
+                    : error;
+                _last_error = target->error_message;
+                emit(ModuleEventKind::Failed, module_id, target->error_message);
+                return false;
+            }
+        }
     }
 
     bool unload_ok = true;
@@ -565,7 +576,9 @@ bool ModuleRuntime::unload_module_impl(
         if (target->error_message.empty()) {
             target->error_message = "Backend unload failed";
         }
-        target->state = ModuleState::Failed;
+        target->state = target->spec.kind == ModuleKind::Python && target->handle
+            ? ModuleState::Loaded
+            : ModuleState::Failed;
         _last_error = target->error_message;
         emit(ModuleEventKind::Failed, module_id, target->error_message);
         return false;

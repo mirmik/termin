@@ -54,12 +54,18 @@ bool prepare_component_unload_for_runtime_type(
     }
 
     if (!unload_context->scenes || unload_context->scenes->empty()) {
-        tc::Log::warn(
-            "TermModulesIntegration: no scenes available to prepare component type '%s' for module '%s'",
+        const size_t remaining = tc_runtime_type_registry_instance_count(type_name);
+        if (remaining == 0) {
+            return true;
+        }
+        tc::Log::error(
+            "TermModulesIntegration: cannot prepare component type '%s' for module '%s': "
+            "no managed scenes are available while %zu live instance(s) remain",
             type_name,
-            unload_context->module_id ? unload_context->module_id : "<unknown>"
+            unload_context->module_id ? unload_context->module_id : "<unknown>",
+            remaining
         );
-        return true;
+        return false;
     }
 
     const std::vector<std::string> type_names{type_name};
@@ -168,6 +174,39 @@ bool cleanup_module_registrations(
     }
 }
 
+bool prepare_module_registration_unload(
+    const termin_modules::ModuleRecord& record,
+    std::string& error,
+    bool sync_live_scenes
+) {
+    error.clear();
+    try {
+        std::vector<TcSceneRef> scenes;
+        if (sync_live_scenes) {
+            scenes = collect_scenes();
+        }
+        ComponentUnloadContext context{
+            sync_live_scenes,
+            &scenes,
+            record.spec.id.c_str()
+        };
+        if (!tc_runtime_type_registry_prepare_owner_unload(record.spec.id.c_str(), &context)) {
+            error = "Failed to prepare module registrations for unload: '" + record.spec.id + "'";
+            tc::Log::error("TermModulesIntegration: %s", error.c_str());
+            return false;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        error = "Failed to prepare module registrations for '" + record.spec.id + "': " + e.what();
+        tc::Log::error("TermModulesIntegration: %s", error.c_str());
+        return false;
+    } catch (...) {
+        error = "Failed to prepare module registrations for '" + record.spec.id + "'";
+        tc::Log::error("TermModulesIntegration: %s", error.c_str());
+        return false;
+    }
+}
+
 void upgrade_module_components(const termin_modules::ModuleRecord& record) {
     const std::vector<std::string> type_names = module_component_types(record);
     if (type_names.empty()) {
@@ -215,13 +254,6 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     );
 
     auto cpp_before_unload = [](const termin_modules::ModuleRecord&) {};
-    auto python_before_unload = [sync_live_scenes](const termin_modules::ModuleRecord& record) {
-        std::string error;
-        if (!cleanup_module_registrations(record, error, sync_live_scenes) &&
-            !error.empty()) {
-            tc::Log::error("TermModulesIntegration: %s", error.c_str());
-        }
-    };
     auto after_load = [sync_live_scenes](const termin_modules::ModuleRecord& record) {
         if (sync_live_scenes) {
             upgrade_module_components(record);
@@ -284,7 +316,11 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         cleanup_module_registrations(record, error, false);
         end_module_registration_scope(record);
     };
-    python_callbacks.before_unload = python_before_unload;
+    python_callbacks.before_module_remove = [sync_live_scenes](
+                                                  const termin_modules::ModuleRecord& record,
+                                                  std::string& error) {
+        return prepare_module_registration_unload(record, error, sync_live_scenes);
+    };
     python_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
         end_module_registration_scope(record);
         after_load(record);

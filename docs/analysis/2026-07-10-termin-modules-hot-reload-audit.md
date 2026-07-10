@@ -199,6 +199,14 @@ Python cleanup дополнительно:
 
 Трекинг: **#286** `[modules/python] Make unload failure atomic`.
 
+Статус 2026-07-10: **исправлено в #286**. Для Python добавлен fallible
+`before_module_remove`; runtime-type owner cleanup разделён на полную prepare и
+отдельную commit-фазы. Prepare failure происходит до backend mutation и
+сохраняет registrations, `sys.modules`, handle и `Loaded` state. Исключения
+Python registry commit больше не проглатываются, package removal не начинается,
+а повторный unload остаётся возможен. Success path и injected prepare/commit
+failures покрыты native, Python lifecycle и headless reload тестами.
+
 ### 3. Descriptor refresh работает fail-open
 
 Статус 2026-07-10: **исправлено в #290**. Runtime теперь сначала разбирает все
