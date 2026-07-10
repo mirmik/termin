@@ -19,6 +19,7 @@ from termin.gui_native import (
 class NativeEditorShell:
     root: WidgetRef
     central: WidgetRef
+    hierarchy_host: WidgetRef
     project_host: WidgetRef
     workspace_host: WidgetRef
     inspector_host: WidgetRef
@@ -179,27 +180,41 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     tool_bar = document.create_tool_bar(toolbar_model)
     _append(document, root, tool_bar, Size(1280.0, 40.0), fixed_extent=40.0)
 
-    central = document.create_hstack("native-editor-central")
+    central = document.create_vstack("native-editor-central")
     central.stable_id = "editor.central"
     _append(document, root, central, Size(1280.0, 626.0))
-    project_host = document.create_vstack("native-editor-project-host")
-    project_host.stable_id = "editor.project-host"
-    project_host.set_layout_spacing(0.0)
-    _append(document, central, project_host, Size(420.0, 626.0), fixed_extent=420.0)
+
+    upper = document.create_hstack("native-editor-upper")
+    upper.stable_id = "editor.upper"
+    upper.set_layout_spacing(0.0)
+    _append(document, central, upper, Size(1280.0, 406.0))
+
+    hierarchy_host = document.create_vstack("native-editor-hierarchy-host")
+    hierarchy_host.stable_id = "editor.hierarchy-host"
+    hierarchy_host.set_layout_spacing(0.0)
+    _append(document, upper, hierarchy_host, Size(280.0, 406.0), fixed_extent=280.0)
+
     workspace_host = document.create_vstack("native-editor-workspace-host")
     workspace_host.stable_id = "editor.workspace-host"
     workspace_host.set_layout_spacing(0.0)
-    _append(document, central, workspace_host, Size(500.0, 626.0))
+    _append(document, upper, workspace_host, Size(640.0, 406.0))
+
     inspector_host = document.create_vstack("native-editor-inspector-host")
     inspector_host.stable_id = "editor.inspector-host"
     inspector_host.set_layout_spacing(0.0)
-    _append(document, central, inspector_host, Size(360.0, 626.0), fixed_extent=360.0)
+    _append(document, upper, inspector_host, Size(360.0, 406.0), fixed_extent=360.0)
+
+    project_host = document.create_vstack("native-editor-project-host")
+    project_host.stable_id = "editor.project-host"
+    project_host.set_layout_spacing(0.0)
+    _append(document, central, project_host, Size(1280.0, 220.0), fixed_extent=220.0)
 
     status_bar = document.create_status_bar("Ready | Native editor host")
     _append(document, root, status_bar, Size(1280.0, 24.0), fixed_extent=24.0)
     return NativeEditorShell(
         root=root,
         central=central,
+        hierarchy_host=hierarchy_host,
         project_host=project_host,
         workspace_host=workspace_host,
         inspector_host=inspector_host,

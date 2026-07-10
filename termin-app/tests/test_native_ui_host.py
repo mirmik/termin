@@ -146,12 +146,17 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
 
     assert shell.root.stable_id == "editor.root"
     assert shell.central.stable_id == "editor.central"
+    assert shell.hierarchy_host.stable_id == "editor.hierarchy-host"
     assert shell.project_host.stable_id == "editor.project-host"
     assert shell.workspace_host.stable_id == "editor.workspace-host"
     assert shell.inspector_host.stable_id == "editor.inspector-host"
     assert shell.menu_bar.entries[0].stable_id == "file"
     assert shell.tool_bar.model.command_count == 3
     assert shell.status_bar.displayed_text == "Ready | Native editor host"
+    assert shell.project_host.bounds.y > shell.workspace_host.bounds.y
+    assert shell.project_host.bounds.width == pytest.approx(shell.central.bounds.width)
+    assert shell.workspace_host.bounds.x > shell.hierarchy_host.bounds.x
+    assert shell.inspector_host.bounds.x > shell.workspace_host.bounds.x
     assert draw_list.command_count > 20
     assert any(command.type == DrawCommandType.Text for command in draw_list.commands)
 
