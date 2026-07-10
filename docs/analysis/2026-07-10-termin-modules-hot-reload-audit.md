@@ -2,6 +2,16 @@
 
 Дата: 2026-07-10.
 
+## Статус устранения замечаний
+
+- **#287 закрыта (2026-07-10):** `ModuleRuntime` получил explicit fallible
+  `shutdown()`, non-throwing destructor policy и запрет discovery поверх
+  активных backend handles. Shutdown обрабатывает `Failed` records с handles в
+  обратном порядке зависимостей; `ProjectModulesRuntime` использует этот
+  контракт вместо собственного state-based обхода. Regression coverage
+  проверяет retry retained C++ handles, normal/error cleanup Python imports и
+  безопасное добавление нового descriptor через полный lifecycle boundary.
+
 ## Резюме
 
 `termin-modules` уже пригоден как developer/editor hot-reload beta. Основные

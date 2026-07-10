@@ -1,7 +1,12 @@
 #include "termin_modules/module_runtime.hpp"
 
+#include <tcbase/tc_log.hpp>
+
+#include <exception>
 #include <filesystem>
+#include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace termin_modules {
 namespace {
@@ -50,14 +55,14 @@ bool is_same_or_child_path(
     return true;
 }
 
-std::vector<std::string> collect_loaded_dependents(
+std::vector<std::string> collect_active_dependents(
     const std::vector<ModuleRecord>& records,
     const std::string& module_id
 ) {
     std::vector<std::string> dependents;
 
     for (const ModuleRecord& record : records) {
-        if (record.state != ModuleState::Loaded) {
+        if (record.state != ModuleState::Loaded && record.handle == nullptr) {
             continue;
         }
 
@@ -76,7 +81,79 @@ bool is_loaded_or_holding_handle(const ModuleRecord& record) {
     return record.state == ModuleState::Loaded || record.handle != nullptr;
 }
 
+std::vector<std::string> build_shutdown_order(const std::vector<ModuleRecord>& records) {
+    std::unordered_set<std::string> remaining;
+    for (const ModuleRecord& record : records) {
+        if (is_loaded_or_holding_handle(record)) {
+            remaining.insert(record.spec.id);
+        }
+    }
+
+    std::vector<std::string> ordered;
+    ordered.reserve(remaining.size());
+    while (!remaining.empty()) {
+        bool made_progress = false;
+        for (const ModuleRecord& candidate : records) {
+            if (!remaining.contains(candidate.spec.id)) {
+                continue;
+            }
+
+            bool has_active_dependent = false;
+            for (const ModuleRecord& possible_dependent : records) {
+                if (!remaining.contains(possible_dependent.spec.id)) {
+                    continue;
+                }
+                for (const std::string& dependency : possible_dependent.spec.dependencies) {
+                    if (dependency == candidate.spec.id) {
+                        has_active_dependent = true;
+                        break;
+                    }
+                }
+                if (has_active_dependent) {
+                    break;
+                }
+            }
+
+            if (!has_active_dependent) {
+                ordered.push_back(candidate.spec.id);
+                remaining.erase(candidate.spec.id);
+                made_progress = true;
+            }
+        }
+
+        if (made_progress) {
+            continue;
+        }
+
+        // Invalid/cyclic descriptor graphs must not make destruction throw or
+        // silently discard handles. Keep deterministic record order and let
+        // unload guards produce actionable diagnostics for every survivor.
+        for (const ModuleRecord& record : records) {
+            if (remaining.erase(record.spec.id) > 0) {
+                ordered.push_back(record.spec.id);
+            }
+        }
+    }
+
+    return ordered;
+}
+
 } // namespace
+
+ModuleRuntime::~ModuleRuntime() noexcept {
+    try {
+        if (!shutdown()) {
+            tc::Log::error(
+                "ModuleRuntime: shutdown during destruction failed; active module handles are being abandoned: %s",
+                _last_error.c_str()
+            );
+        }
+    } catch (const std::exception& e) {
+        tc::Log::error(e, "ModuleRuntime: exception during non-throwing destruction shutdown");
+    } catch (...) {
+        tc::Log::error("ModuleRuntime: unknown exception during non-throwing destruction shutdown");
+    }
+}
 
 void ModuleRuntime::set_environment(ModuleEnvironment environment) {
     _environment = std::move(environment);
@@ -124,7 +201,15 @@ void ModuleRuntime::register_backend(std::shared_ptr<IModuleBackend> backend) {
     _backends[backend->kind()] = std::move(backend);
 }
 
-void ModuleRuntime::discover(const std::filesystem::path& project_root) {
+bool ModuleRuntime::discover(const std::filesystem::path& project_root) {
+    for (const ModuleRecord& record : _records) {
+        if (is_loaded_or_holding_handle(record)) {
+            _last_error = "Cannot discover modules while active backend handles exist; call shutdown first";
+            emit(ModuleEventKind::Failed, record.spec.id, _last_error);
+            return false;
+        }
+    }
+
     _records.clear();
     _last_error.clear();
 
@@ -134,7 +219,7 @@ void ModuleRuntime::discover(const std::filesystem::path& project_root) {
 
     if (!std::filesystem::exists(project_root)) {
         _last_error = "Project root does not exist: " + project_root.string();
-        return;
+        return false;
     }
 
     std::filesystem::recursive_directory_iterator it(project_root);
@@ -196,6 +281,71 @@ void ModuleRuntime::discover(const std::filesystem::path& project_root) {
         emit(ModuleEventKind::Discovered, _records.back().spec.id, entry.path().string());
         ++it;
     }
+
+    return _last_error.empty();
+}
+
+bool ModuleRuntime::shutdown() {
+    const std::vector<std::string> ordered = build_shutdown_order(_records);
+    if (ordered.empty()) {
+        _last_error.clear();
+        return true;
+    }
+
+    std::vector<std::string> failures;
+    for (const std::string& module_id : ordered) {
+        bool unloaded = false;
+        try {
+            unloaded = unload_module_impl(module_id, false);
+        } catch (const std::exception& e) {
+            failures.push_back(module_id + ": " + e.what());
+            tc::Log::error(e, "ModuleRuntime: exception while shutting down module '%s'", module_id.c_str());
+            continue;
+        } catch (...) {
+            failures.push_back(module_id + ": unknown exception");
+            tc::Log::error("ModuleRuntime: unknown exception while shutting down module '%s'", module_id.c_str());
+            continue;
+        }
+
+        if (!unloaded) {
+            const ModuleRecord* record = find(module_id);
+            const std::string error = record && !record->error_message.empty()
+                ? record->error_message
+                : _last_error;
+            failures.push_back(module_id + ": " + (error.empty() ? "unload failed" : error));
+        }
+    }
+
+    for (const ModuleRecord& record : _records) {
+        if (!is_loaded_or_holding_handle(record)) {
+            continue;
+        }
+        const std::string prefix = record.spec.id + ": ";
+        bool already_reported = false;
+        for (const std::string& failure : failures) {
+            if (failure.starts_with(prefix)) {
+                already_reported = true;
+                break;
+            }
+        }
+        if (!already_reported) {
+            failures.push_back(prefix + "active handle remains after shutdown");
+        }
+    }
+
+    if (failures.empty()) {
+        _last_error.clear();
+        return true;
+    }
+
+    std::ostringstream message;
+    message << "Module runtime shutdown failed";
+    for (const std::string& failure : failures) {
+        message << "; " << failure;
+    }
+    _last_error = message.str();
+    tc::Log::error("ModuleRuntime: %s", _last_error.c_str());
+    return false;
 }
 
 bool ModuleRuntime::load_all() {
@@ -321,21 +471,30 @@ bool ModuleRuntime::load_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::unload_module(const std::string& module_id) {
+    return unload_module_impl(module_id, true);
+}
+
+bool ModuleRuntime::unload_module_impl(
+    const std::string& module_id,
+    bool refresh_descriptor
+) {
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
-    refresh_spec(*target);
+    if (refresh_descriptor) {
+        refresh_spec(*target);
+    }
 
     if (target->state != ModuleState::Loaded && !target->handle) {
         target->state = ModuleState::Unloaded;
         return true;
     }
 
-    const std::vector<std::string> dependents = collect_loaded_dependents(_records, module_id);
+    const std::vector<std::string> dependents = collect_active_dependents(_records, module_id);
     if (!dependents.empty()) {
-        target->error_message = "Loaded dependents prevent unload: ";
+        target->error_message = "Active dependents prevent unload: ";
         for (size_t i = 0; i < dependents.size(); ++i) {
             if (i > 0) {
                 target->error_message += ", ";

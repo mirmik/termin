@@ -119,6 +119,7 @@ NB_MODULE(_termin_modules_native, m) {
         })
         .def("set_discovery_ignored_roots", &ModuleRuntime::set_discovery_ignored_roots, nb::arg("roots"))
         .def("discover", &ModuleRuntime::discover, nb::arg("project_root"), nb::call_guard<nb::gil_scoped_release>())
+        .def("shutdown", &ModuleRuntime::shutdown)
         .def("load_all", &ModuleRuntime::load_all)
         .def("load_module", &ModuleRuntime::load_module, nb::arg("module_id"))
         .def("unload_module", &ModuleRuntime::unload_module, nb::arg("module_id"))

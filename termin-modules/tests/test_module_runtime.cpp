@@ -603,6 +603,83 @@ void test_staged_cpp_unload_keeps_handle_when_cleanup_fails() {
     const size_t order_after_failed_unload = backend->order.size();
     expect(!runtime.load_module("native"), "load should be blocked while failed module retains handle");
     expect(backend->order.size() == order_after_failed_unload, "blocked load must not call backend load");
+
+    CppModuleCallbacks retry_callbacks;
+    retry_callbacks.before_native_close = [](const ModuleRecord&, std::string&) {
+        return true;
+    };
+    runtime.set_cpp_callbacks(std::move(retry_callbacks));
+    expect(runtime.shutdown(), "retained staged handle should be releasable on retry");
+}
+
+void test_discovery_rejects_active_handles_without_losing_records() {
+    TempDir first;
+    TempDir second;
+    write_text_file(first.path / "active.module", "name: active\nbuild:\n  output: build/libactive.so\n");
+    write_text_file(second.path / "replacement.module", "name: replacement\nbuild:\n  output: build/libreplacement.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(first.path), "initial discovery should succeed");
+    expect(runtime.load_module("active"), "active module should load");
+
+    expect(!runtime.discover(second.path), "rediscovery over an active handle must fail");
+    expect(runtime.find("active") != nullptr, "active record must survive rejected rediscovery");
+    expect(runtime.find("active")->handle != nullptr, "active handle must survive rejected rediscovery");
+    expect(runtime.find("replacement") == nullptr, "rejected rediscovery must not publish replacement records");
+    expect(backend->unload_calls.empty(), "rediscovery must not implicitly unload modules");
+
+    expect(runtime.shutdown(), "explicit shutdown should unload the active module");
+    expect(runtime.discover(second.path), "discovery should succeed after shutdown");
+    expect(runtime.find("replacement") != nullptr, "replacement should be visible after safe discovery");
+}
+
+void test_shutdown_unloads_reverse_dependencies_and_retries_failed_handles() {
+    TempDir tmp;
+    write_text_file(tmp.path / "core.module", "name: core\nbuild:\n  output: build/libcore.so\n");
+    write_text_file(
+        tmp.path / "game.module",
+        "name: game\ndependencies: [core]\nbuild:\n  output: build/libgame.so\n"
+    );
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "shutdown test discovery should succeed");
+    expect(runtime.load_all(), "shutdown test modules should load");
+
+    backend->fail_unload_module = "game";
+    expect(!runtime.shutdown(), "shutdown must report retained failed handle");
+    expect(backend->unload_calls.size() == 1, "dependency guard must keep core backend untouched");
+    expect(backend->unload_calls[0] == "game", "shutdown must unload dependent first");
+    expect(runtime.find("game")->state == ModuleState::Failed, "failed shutdown record should be retryable");
+    expect(runtime.find("game")->handle != nullptr, "failed shutdown must retain backend handle");
+    expect(runtime.find("core")->handle != nullptr, "dependency stays active while dependent handle remains");
+
+    backend->fail_unload_module.clear();
+    backend->unload_calls.clear();
+    expect(runtime.shutdown(), "second shutdown should retry retained handles");
+    expect(backend->unload_calls.size() == 2, "retry should unload both retained handles");
+    expect(backend->unload_calls[0] == "game", "retry keeps reverse dependency order");
+    expect(backend->unload_calls[1] == "core", "retry unloads dependency last");
+    expect(runtime.find("game")->handle == nullptr, "retry clears dependent handle");
+    expect(runtime.find("core")->handle == nullptr, "retry clears dependency handle");
+}
+
+void test_destructor_runs_non_throwing_shutdown() {
+    TempDir tmp;
+    write_text_file(tmp.path / "native.module", "name: native\nbuild:\n  output: build/libnative.so\n");
+
+    auto backend = std::make_shared<FakeCppBackend>();
+    {
+        ModuleRuntime runtime;
+        runtime.set_environment(ModuleEnvironment{});
+        runtime.register_backend(backend);
+        expect(runtime.discover(tmp.path), "destructor test discovery should succeed");
+        expect(runtime.load_module("native"), "destructor test module should load");
+    }
+
+    expect(backend->unload_calls.size() == 1, "destructor must attempt runtime shutdown");
+    expect(backend->unload_calls[0] == "native", "destructor should unload the active module");
 }
 
 } // namespace
@@ -657,6 +734,18 @@ TEST_CASE("module runtime stages C++ unload cleanup before native close") {
 
 TEST_CASE("module runtime keeps native handle loaded when C++ cleanup fails") {
     test_staged_cpp_unload_keeps_handle_when_cleanup_fails();
+}
+
+TEST_CASE("module runtime rejects discovery over active backend handles") {
+    test_discovery_rejects_active_handles_without_losing_records();
+}
+
+TEST_CASE("module runtime shutdown retries failed handles in reverse dependency order") {
+    test_shutdown_unloads_reverse_dependencies_and_retries_failed_handles();
+}
+
+TEST_CASE("module runtime destructor performs non-throwing shutdown") {
+    test_destructor_runs_non_throwing_shutdown();
 }
 
 TEST_CASE("module text diagnostics are sanitized to utf8") {

@@ -31,6 +31,14 @@ private:
     std::string _last_error;
 
 public:
+    ModuleRuntime() = default;
+    ~ModuleRuntime() noexcept;
+
+    ModuleRuntime(const ModuleRuntime&) = delete;
+    ModuleRuntime& operator=(const ModuleRuntime&) = delete;
+    ModuleRuntime(ModuleRuntime&&) = delete;
+    ModuleRuntime& operator=(ModuleRuntime&&) = delete;
+
     void set_environment(ModuleEnvironment environment);
     void set_cpp_callbacks(CppModuleCallbacks callbacks);
     void set_python_callbacks(PythonModuleCallbacks callbacks);
@@ -40,7 +48,8 @@ public:
     void set_discovery_ignored_roots(std::vector<std::filesystem::path> roots);
     void register_backend(std::shared_ptr<IModuleBackend> backend);
 
-    void discover(const std::filesystem::path& project_root);
+    bool discover(const std::filesystem::path& project_root);
+    bool shutdown();
 
     bool load_all();
     bool load_module(const std::string& module_id);
@@ -89,6 +98,7 @@ private:
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;
     bool is_discovery_ignored(const std::filesystem::path& path) const;
+    bool unload_module_impl(const std::string& module_id, bool refresh_descriptor);
 };
 
 } // namespace termin_modules

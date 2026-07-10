@@ -21,8 +21,14 @@ runtime.set_environment(env)
 runtime.register_cpp_backend(termin_modules.CppModuleBackend())
 runtime.register_python_backend(termin_modules.PythonModuleBackend())
 
-runtime.discover("/path/to/project")
+if not runtime.discover("/path/to/project"):
+    raise RuntimeError(runtime.last_error)
 runtime.load_all()
+
+# Explicitly release C++ libraries, Python imports and their search paths.
+# A failed shutdown retains the records/handles and can be retried.
+if not runtime.shutdown():
+    raise RuntimeError(runtime.last_error)
 ```
 
 Доступные типы:
