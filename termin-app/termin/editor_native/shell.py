@@ -30,6 +30,10 @@ class NativeEditorShell:
     save_scene_command: int
     save_scene_as_command: int
     toolbar_save_command: int
+    game_menu_model: CommandModel
+    game_play_command: int
+    toolbar_model: CommandModel
+    toolbar_play_command: int
     debug_menu_model: CommandModel
     profiler_command: int
     inspect_registry_command: int
@@ -123,7 +127,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     agent_types_command = scene_menu.append(CommandData("agent-types", "Agent Types..."))
     navmesh_areas_command = scene_menu.append(CommandData("navmesh-areas", "NavMesh Areas..."))
     game_menu = CommandModel()
-    game_menu.append(CommandData("play", "Play", shortcut="F5", enabled=False))
+    game_play_command = game_menu.append(CommandData("play", "Play", shortcut="F5"))
     build_project_command = game_menu.append(CommandData("build-project", "Build Project..."))
     build_android_command = game_menu.append(
         CommandData("build-android", "Build Android APK...")
@@ -171,7 +175,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         CommandData("save", "Save", icon="S", shortcut="Ctrl+S")
     )
     toolbar_model.append(CommandData("separator", kind=CommandKind.Separator))
-    toolbar_model.append(CommandData("play", "Play", icon="▶", enabled=False))
+    toolbar_play_command = toolbar_model.append(CommandData("play", "Play", icon="▶"))
     tool_bar = document.create_tool_bar(toolbar_model)
     _append(document, root, tool_bar, Size(1280.0, 40.0), fixed_extent=40.0)
 
@@ -207,6 +211,10 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         save_scene_command=save_scene_command,
         save_scene_as_command=save_scene_as_command,
         toolbar_save_command=toolbar_save_command,
+        game_menu_model=game_menu,
+        game_play_command=game_play_command,
+        toolbar_model=toolbar_model,
+        toolbar_play_command=toolbar_play_command,
         debug_menu_model=debug_menu,
         profiler_command=profiler_command,
         inspect_registry_command=inspect_registry_command,

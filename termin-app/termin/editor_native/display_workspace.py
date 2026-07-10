@@ -108,6 +108,10 @@ class NativeDisplayWorkspace:
     def displays(self) -> tuple[object, ...]:
         return (self.editor_viewport.display, *(page.display for page in self._pages))
 
+    @property
+    def editor_display(self):
+        return self.editor_viewport.display
+
     def contains_display(self, display: object) -> bool:
         pointer = self._display_pointer(display)
         return any(self._display_pointer(candidate) == pointer for candidate in self.displays)

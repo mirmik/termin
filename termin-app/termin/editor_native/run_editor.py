@@ -41,6 +41,11 @@ from termin.editor_core.scene_settings_model import (
 from termin.editor_core.project_settings_model import ProjectSettingsController
 from termin.editor_core.project_build_controller import ProjectBuildController
 from termin.editor_core.scene_file_controller import SceneFileController
+from termin.editor_core.game_mode_model import GameModeModel
+from termin.editor_core.game_mode_session_connectors import (
+    EditorGameModeConnector,
+    RenderGameModeConnector,
+)
 from termin.editor_core.navigation_settings_model import NavigationSettingsController
 from termin.editor_core.spacemouse_controller import SpaceMouseController
 from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
@@ -56,6 +61,7 @@ from termin.editor_native.component_extensions import (
 from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.display_workspace import NativeDisplayWorkspace
 from termin.editor_native.editor_viewport import NativeEditorViewport
+from termin.editor_native.game_mode_controller import NativeGameModeController
 from termin.editor_native.entity_inspector import build_native_entity_inspector
 from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,
@@ -909,6 +915,52 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     if project_browser_controller.root_path is not None:
         project_file_watcher.watch_directory(str(project_browser_controller.root_path))
 
+    def prepare_code_for_play() -> bool:
+        from termin.project_modules.runtime import get_project_modules_runtime
+
+        modules_runtime = get_project_modules_runtime()
+        if not modules_runtime.prepare_changed_modules_for_play():
+            _logger.error(
+                "Native module update before Play failed: %s",
+                modules_runtime.last_error,
+            )
+            return False
+        if not component_file_processor.reload_dirty_components():
+            _logger.error("Native loose Python component update before Play failed")
+            return False
+        return True
+
+    game_mode_controller = None
+    if (
+        editor_scene_session is not None
+        and render_scene_session is not None
+        and display_workspace is not None
+    ):
+        game_mode_model = GameModeModel(
+            scene_manager=engine.scene_manager,
+            editor_connector=EditorGameModeConnector(
+                engine.scene_manager,
+                editor_scene_session,
+            ),
+            rendering_controller=display_workspace,
+            get_editor_scene_name=active_scene_name,
+            scene_tree_controller=scene_hierarchy_controller,
+            render_connector=RenderGameModeConnector(render_scene_session),
+            prepare_code_for_play=prepare_code_for_play,
+        )
+        game_mode_controller = NativeGameModeController(
+            game_mode_model,
+            menu_bar=shell.menu_bar,
+            game_menu_model=shell.game_menu_model,
+            game_play_command=shell.game_play_command,
+            tool_bar=shell.tool_bar,
+            toolbar_model=shell.toolbar_model,
+            toolbar_play_command=shell.toolbar_play_command,
+            scene_hierarchy=scene_hierarchy_controller,
+            status_bar=shell.status_bar,
+            request_render=request_editor_render,
+        )
+
     def on_project_resource_settings_changed() -> None:
         try:
             project_file_watcher.rescan()
@@ -1003,6 +1055,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "project_browser": project_browser,
             "project_build_controller": project_build_controller,
             "scene_file_controller": scene_file_controller,
+            "game_mode_controller": game_mode_controller,
             "pipeline_editor_controller": pipeline_editor_controller,
             "pipeline_editor": pipeline_editor,
             "framegraph_debugger": framegraph_debugger_service,
@@ -1117,6 +1170,13 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             extension_session.clear()
         except Exception:
             _logger.exception("Native component extension shutdown cleanup failed")
+        if game_mode_controller is not None:
+            try:
+                if game_mode_controller.model.is_game_mode:
+                    game_mode_controller.model.toggle_game_mode()
+                game_mode_controller.close()
+            except Exception:
+                _logger.exception("Native game mode shutdown cleanup failed")
         extension_context.on_viewport_tool_state_changed = None
         extension_context.viewport_geometry = None
         engine.scene_manager.set_on_after_render(None)

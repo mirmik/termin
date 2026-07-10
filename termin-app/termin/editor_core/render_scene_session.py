@@ -41,14 +41,19 @@ class RenderSceneSession:
         self._publish()
         return True
 
-    def detach(self, name: str) -> bool:
+    def detach(self, name: str, *, save_state: bool = True) -> bool:
         scene = self._require_scene(name)
-        self._rendering_model.sync_viewport_configs_to_scene(scene)
-        self._rendering_model.sync_render_target_configs_to_scene(scene)
+        if save_state:
+            self.sync_scene_render_state(name)
         emptied = self._rendering_model.detach_scene(scene)
         self._remove_empty_displays(emptied)
         self._publish()
         return True
+
+    def sync_scene_render_state(self, name: str) -> None:
+        scene = self._require_scene(name)
+        self._rendering_model.sync_viewport_configs_to_scene(scene)
+        self._rendering_model.sync_render_target_configs_to_scene(scene)
 
     def _require_scene(self, name: str):
         scene = self._scene_manager.get_scene(name)
