@@ -349,6 +349,9 @@ bool ModuleRuntime::shutdown() {
 }
 
 bool ModuleRuntime::load_all() {
+    if (!refresh_descriptor_snapshot()) {
+        return false;
+    }
     std::vector<ModuleRecord*> ordered;
     std::string error;
     if (!build_load_order(ordered, error)) {
@@ -358,7 +361,7 @@ bool ModuleRuntime::load_all() {
 
     bool success = true;
     for (ModuleRecord* record : ordered) {
-        if (!load_module(record->spec.id)) {
+        if (!load_module_impl(record->spec.id, false)) {
             success = false;
         }
     }
@@ -367,6 +370,16 @@ bool ModuleRuntime::load_all() {
 }
 
 bool ModuleRuntime::load_module(const std::string& module_id) {
+    return load_module_impl(module_id, true);
+}
+
+bool ModuleRuntime::load_module_impl(
+    const std::string& module_id,
+    bool refresh_descriptors
+) {
+    if (refresh_descriptors && !refresh_descriptor_snapshot()) {
+        return false;
+    }
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {
         _last_error = "Module not found: " + module_id;
@@ -484,7 +497,14 @@ bool ModuleRuntime::unload_module_impl(
         return false;
     }
     if (refresh_descriptor) {
-        refresh_spec(*target);
+        if (!refresh_descriptor_snapshot()) {
+            return false;
+        }
+        target = find_mutable_record(_records, module_id);
+        if (target == nullptr) {
+            _last_error = "Module not found after descriptor refresh: " + module_id;
+            return false;
+        }
     }
 
     if (target->state != ModuleState::Loaded && !target->handle) {
@@ -568,8 +588,9 @@ bool ModuleRuntime::unload_module_impl(
 }
 
 bool ModuleRuntime::reload_module(const std::string& module_id) {
-    ModuleRecord* mutable_target = find_mutable_record(_records, module_id);
-    if (mutable_target) refresh_spec(*mutable_target);
+    if (!refresh_descriptor_snapshot()) {
+        return false;
+    }
 
     emit(ModuleEventKind::Reloading, module_id);
 
@@ -582,11 +603,11 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
     std::shared_ptr<IModuleReloadState> reload_state = capture_reload_state(*current);
 
     const bool was_loaded = is_loaded_or_holding_handle(*current);
-    if (was_loaded && !unload_module(module_id)) {
+    if (was_loaded && !unload_module_impl(module_id, false)) {
         return false;
     }
 
-    if (!load_module(module_id)) {
+    if (!load_module_impl(module_id, false)) {
         return false;
     }
 
@@ -594,6 +615,9 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) {
+    if (!refresh_descriptor_snapshot()) {
+        return false;
+    }
     std::vector<std::string> ordered;
     std::string error;
     if (!build_reload_order_with_loaded_dependents(module_id, ordered, error)) {
@@ -610,7 +634,6 @@ bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) 
             emit(ModuleEventKind::Failed, affected_id, _last_error);
             return false;
         }
-        refresh_spec(*record);
         emit(ModuleEventKind::Reloading, affected_id);
         reload_states.emplace(affected_id, capture_reload_state(*record));
     }
@@ -622,13 +645,13 @@ bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) 
             emit(ModuleEventKind::Failed, *it, _last_error);
             return false;
         }
-        if (is_loaded_or_holding_handle(*record) && !unload_module(*it)) {
+        if (is_loaded_or_holding_handle(*record) && !unload_module_impl(*it, false)) {
             return false;
         }
     }
 
     for (const std::string& affected_id : ordered) {
-        if (!load_module(affected_id)) {
+        if (!load_module_impl(affected_id, false)) {
             return false;
         }
 
@@ -644,9 +667,9 @@ bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) 
 }
 
 bool ModuleRuntime::needs_rebuild(const std::string& module_id) {
+    if (!refresh_descriptor_snapshot()) return false;
     ModuleRecord* mutable_target = find_mutable_record(_records, module_id);
     if (mutable_target == nullptr) return false;
-    refresh_spec(*mutable_target);
 
     IModuleBackend* backend = get_backend(mutable_target->spec.kind);
     if (backend == nullptr) return false;
@@ -655,13 +678,14 @@ bool ModuleRuntime::needs_rebuild(const std::string& module_id) {
 }
 
 bool ModuleRuntime::build_module(const std::string& module_id) {
+    if (!refresh_descriptor_snapshot()) {
+        return false;
+    }
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
-    refresh_spec(*target);
-
     IModuleBackend* backend = get_backend(target->spec.kind);
     if (backend == nullptr) {
         _last_error = "Backend is not registered";
@@ -686,13 +710,14 @@ bool ModuleRuntime::build_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::clean_module(const std::string& module_id) {
+    if (!refresh_descriptor_snapshot()) {
+        return false;
+    }
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
-    refresh_spec(*target);
-
     if (target->state == ModuleState::Loaded) {
         _last_error = "Cannot clean loaded module, unload first: " + module_id;
         return false;
@@ -716,13 +741,14 @@ bool ModuleRuntime::clean_module(const std::string& module_id) {
 }
 
 bool ModuleRuntime::rebuild_module(const std::string& module_id) {
+    if (!refresh_descriptor_snapshot()) {
+        return false;
+    }
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
-    refresh_spec(*target);
-
     const bool was_loaded = target->state == ModuleState::Loaded;
     if (was_loaded && !unload_module(module_id)) {
         return false;
@@ -787,8 +813,6 @@ bool ModuleRuntime::build_reload_order_with_loaded_dependents(
         error = "Module not found: " + module_id;
         return false;
     }
-    refresh_spec(*target);
-
     std::unordered_map<std::string, bool> affected;
     std::vector<std::string> pending;
     affected.emplace(module_id, true);
@@ -916,22 +940,103 @@ void ModuleRuntime::emit(ModuleEventKind kind, const std::string& module_id, con
     }
 }
 
-void ModuleRuntime::refresh_spec(ModuleRecord& record) {
-    if (!_parser) return;
-    if (record.spec.descriptor_path.empty()) return;
-    if (!std::filesystem::exists(record.spec.descriptor_path)) return;
-
-    std::string error;
-    auto new_spec = _parser->parse(record.spec.descriptor_path, error);
-    if (!new_spec.has_value()) {
-        emit(ModuleEventKind::Failed, record.spec.id, "Failed to re-parse descriptor: " + error);
-        return;
+bool ModuleRuntime::refresh_descriptor_snapshot() {
+    if (!_parser || _records.empty()) {
+        return true;
     }
 
-    // Preserve id and descriptor_path, update everything else
-    new_spec->id = record.spec.id;
-    new_spec->descriptor_path = record.spec.descriptor_path;
-    record.spec = std::move(*new_spec);
+    std::vector<ModuleSpec> snapshot;
+    snapshot.reserve(_records.size());
+    std::unordered_map<std::string, size_t> indices;
+
+    auto fail = [this](const std::string& module_id, const std::string& message) {
+        _last_error = message;
+        emit(ModuleEventKind::Failed, module_id, message);
+        tc::Log::error("ModuleRuntime: descriptor snapshot rejected: %s", message.c_str());
+        return false;
+    };
+
+    for (size_t index = 0; index < _records.size(); ++index) {
+        const ModuleRecord& record = _records[index];
+        const std::filesystem::path descriptor = record.spec.descriptor_path;
+        if (descriptor.empty()) {
+            return fail(record.spec.id, "Module '" + record.spec.id + "' has no descriptor path");
+        }
+
+        std::string error;
+        auto parsed = _parser->parse(descriptor, error);
+        if (!parsed.has_value()) {
+            return fail(
+                record.spec.id,
+                "Failed to parse descriptor '" + descriptor.string() + "': " + error
+            );
+        }
+        const auto [existing, inserted] = indices.emplace(parsed->id, index);
+        if (!inserted) {
+            return fail(
+                parsed->id,
+                "Duplicate module id '" + parsed->id + "' in descriptors '" +
+                    snapshot[existing->second].descriptor_path.string() + "' and '" +
+                    descriptor.string() + "'"
+            );
+        }
+        snapshot.push_back(std::move(*parsed));
+    }
+
+    for (size_t index = 0; index < snapshot.size(); ++index) {
+        const ModuleRecord& record = _records[index];
+        const ModuleSpec& parsed = snapshot[index];
+        if (parsed.id != record.spec.id) {
+            return fail(
+                record.spec.id,
+                "Descriptor identity changed at '" + parsed.descriptor_path.string() + "': expected '" +
+                    record.spec.id + "', got '" + parsed.id + "'"
+            );
+        }
+        if (is_loaded_or_holding_handle(record) && parsed.kind != record.spec.kind) {
+            return fail(
+                record.spec.id,
+                "Descriptor kind changed while module '" + record.spec.id + "' is loaded: " +
+                    parsed.descriptor_path.string()
+            );
+        }
+    }
+
+    std::vector<int> marks(snapshot.size(), 0);
+    std::function<bool(size_t)> visit = [&](size_t index) {
+        if (marks[index] == 2) return true;
+        if (marks[index] == 1) {
+            return fail(
+                snapshot[index].id,
+                "Dependency cycle detected at module '" + snapshot[index].id + "' in descriptor '" +
+                    snapshot[index].descriptor_path.string() + "'"
+            );
+        }
+        marks[index] = 1;
+        for (const std::string& dependency : snapshot[index].dependencies) {
+            const auto dependency_it = indices.find(dependency);
+            if (dependency_it == indices.end()) {
+                return fail(
+                    snapshot[index].id,
+                    "Missing dependency '" + dependency + "' for module '" + snapshot[index].id +
+                        "' in descriptor '" + snapshot[index].descriptor_path.string() + "'"
+                );
+            }
+            if (!visit(dependency_it->second)) return false;
+        }
+        marks[index] = 2;
+        return true;
+    };
+
+    for (size_t index = 0; index < snapshot.size(); ++index) {
+        if (!visit(index)) return false;
+    }
+
+    for (size_t index = 0; index < snapshot.size(); ++index) {
+        _records[index].spec = std::move(snapshot[index]);
+    }
+    _last_error.clear();
+    return true;
 }
 
 std::shared_ptr<IModuleReloadState> ModuleRuntime::capture_reload_state(const ModuleRecord& record) const {

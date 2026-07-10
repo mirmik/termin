@@ -201,6 +201,14 @@ Python cleanup дополнительно:
 
 ### 3. Descriptor refresh работает fail-open
 
+Статус 2026-07-10: **исправлено в #290**. Runtime теперь сначала разбирает все
+известные descriptors во временный snapshot, проверяет identity, duplicate ids,
+missing dependencies и cycles и только затем единым commit обновляет specs.
+Reload closure строится уже по новому graph. Любая ошибка возвращается до
+unload/build/clean, сохраняет последний валидный graph и dirty state; диагностика
+содержит путь проблемного descriptor. Ниже оставлен исходный риск как контекст
+решения.
+
 `refresh_spec()` возвращает `void`. Если descriptor не читается, содержит
 невалидный YAML или нарушает schema, runtime публикует `Failed` event, но
 продолжает build/unload/reload со старым cached `ModuleSpec`.
@@ -436,6 +444,10 @@ placeholders собраны в отдельном swimlane **Modules & Hot Reloa
 - **#172** закрыта: конкретная `UnknownComponent -> enabled=false` регрессия
   исправлена и повторно проверена C++/Python tests.
 - **#105** оставлена On Test и дополнена owner-thread/GIL/C++ reload рисками.
+- **#287** закрыта: discovery/shutdown больше не теряют активные handles.
+- **#288** реализована и находится On Test: shadow artifacts изолированы и
+  очищаются backend-ом; остаётся Windows DLL verification.
+- **#290** закрыта: descriptor refresh стал fail-closed atomic graph snapshot.
 - Созданы отдельные недублирующиеся задачи:
 
 | Карточка | Назначение |

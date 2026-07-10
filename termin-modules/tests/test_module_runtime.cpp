@@ -405,6 +405,90 @@ void test_cascade_reload_stops_on_dependent_load_failure() {
     expect(runtime.find("ui")->state == ModuleState::Unloaded, "later dependent remains unloaded");
 }
 
+void test_reload_rejects_invalid_descriptor_before_unload() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "discovery should succeed");
+    expect(runtime.load_all(), "load_all should succeed before descriptor corruption");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    write_text_file(tmp.path / "game.module", "name: game\ndependencies: [\n");
+
+    expect(!runtime.reload_module_with_dependents("core"), "invalid descriptor must reject cascade reload");
+    expect(runtime.last_error().find((tmp.path / "game.module").string()) != std::string::npos,
+           "descriptor error should identify the invalid file");
+    expect(backend->unload_calls.empty(), "descriptor validation must finish before any unload");
+    expect(backend->load_calls.empty(), "descriptor validation failure must not load modules");
+    expect(runtime.find("core")->state == ModuleState::Loaded, "core must remain loaded");
+    expect(runtime.find("game")->state == ModuleState::Loaded, "game must remain loaded");
+    expect(runtime.find("game")->spec.dependencies.size() == 1,
+           "failed snapshot must preserve the last valid descriptor graph");
+}
+
+void test_cascade_reload_uses_atomic_updated_dependency_graph() {
+    TempDir tmp;
+    write_text_file(tmp.path / "core.module", "name: core\nbuild:\n  output: build/libcore.so\n");
+    write_text_file(tmp.path / "game.module", "name: game\nbuild:\n  output: build/libgame.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "discovery should succeed");
+    expect(runtime.load_all(), "independent modules should load");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    write_text_file(
+        tmp.path / "game.module",
+        "name: game\ndependencies: [core]\nbuild:\n  output: build/libgame.so\n"
+    );
+
+    expect(runtime.reload_module_with_dependents("core"), runtime.last_error());
+    expect(backend->unload_calls.size() == 2, "new dependent edge must expand the reload closure");
+    expect(backend->unload_calls[0] == "game", "new dependent must unload before its dependency");
+    expect(backend->unload_calls[1] == "core", "target must unload after its new dependent");
+    expect(backend->load_calls.size() == 2, "both modules must reload using the new graph");
+    expect(backend->load_calls[0] == "core" && backend->load_calls[1] == "game",
+           "new dependency order must be used for loading");
+}
+
+void test_reload_rejects_duplicate_ids_and_simultaneous_cycle_atomically() {
+    TempDir tmp;
+    write_text_file(tmp.path / "a.module", "name: a\nbuild:\n  output: build/liba.so\n");
+    write_text_file(tmp.path / "b.module", "name: b\nbuild:\n  output: build/libb.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "discovery should succeed");
+    expect(runtime.load_all(), "modules should load before edits");
+    backend->unload_calls.clear();
+
+    write_text_file(tmp.path / "b.module", "name: a\nbuild:\n  output: build/libb.so\n");
+    expect(!runtime.reload_module("a"), "duplicate module ids must reject reload");
+    expect(runtime.last_error().find("Duplicate module id 'a'") != std::string::npos,
+           "duplicate id diagnostic expected");
+    expect(backend->unload_calls.empty(), "duplicate validation must happen before unload");
+    expect(runtime.find("b") != nullptr, "failed duplicate snapshot must preserve old identity");
+
+    write_text_file(
+        tmp.path / "a.module",
+        "name: a\ndependencies: [b]\nbuild:\n  output: build/liba.so\n"
+    );
+    write_text_file(
+        tmp.path / "b.module",
+        "name: b\ndependencies: [a]\nbuild:\n  output: build/libb.so\n"
+    );
+    expect(!runtime.reload_module_with_dependents("a"), "simultaneous cyclic edits must reject reload");
+    expect(runtime.last_error().find("Dependency cycle detected") != std::string::npos,
+           "cycle diagnostic expected");
+    expect(backend->unload_calls.empty(), "cycle validation must happen before unload");
+    expect(runtime.find("a")->spec.dependencies.empty() && runtime.find("b")->spec.dependencies.empty(),
+           "failed cyclic snapshot must preserve the entire old graph");
+}
+
 void test_cycle_detection() {
     TempDir tmp;
 
@@ -866,6 +950,18 @@ TEST_CASE("module runtime cascade reload does not load inactive dependents") {
 
 TEST_CASE("module runtime cascade reload stops on dependent load failure") {
     test_cascade_reload_stops_on_dependent_load_failure();
+}
+
+TEST_CASE("module runtime rejects invalid descriptor snapshots before unload") {
+    test_reload_rejects_invalid_descriptor_before_unload();
+}
+
+TEST_CASE("module runtime cascade reload uses updated dependency snapshot") {
+    test_cascade_reload_uses_atomic_updated_dependency_graph();
+}
+
+TEST_CASE("module runtime rejects duplicate ids and simultaneous cycles atomically") {
+    test_reload_rejects_duplicate_ids_and_simultaneous_cycle_atomically();
 }
 
 TEST_CASE("module runtime rejects dependency cycles") {

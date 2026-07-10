@@ -157,10 +157,20 @@ factory/accessor callbacks перед `dlclose`/`FreeLibrary`.
 
 `ModuleRuntime::reload_module(name)` сейчас реализован как orchestration-операция:
 
-1. публикуется событие `Reloading`
-2. если модуль был загружен, выполняется `unload_module(name)`
-3. затем выполняется `load_module(name)`
-4. после успешной перезагрузки вызывается integration hook `after_reload`
+1. все известные descriptors заново разбираются во временный snapshot
+2. snapshot целиком проверяется на duplicate ids, missing dependencies и cycles
+3. только после успешной проверки новые specs атомарно заменяют предыдущий graph
+4. публикуется событие `Reloading`
+5. если модуль был загружен, выполняется unload
+6. затем выполняется load
+7. после успешной перезагрузки вызывается integration hook `after_reload`
+
+Descriptor identity считается стабильной на протяжении жизни runtime: изменение
+`name` отклоняется и требует полного lifecycle boundary/discovery. Смена backend
+kind загруженного модуля также отклоняется. Ошибка чтения или validation любого
+descriptor завершает операцию до unload/build/clean, оставляет live handles и
+последний валидный graph нетронутыми и сообщает путь через `last_error`/`Failed`
+event. Editor-level dirty flag очищается только после успешного reload.
 
 То есть сейчас у backend-ов нет отдельного специализированного `reload`; runtime собирает его из `unload + load`.
 
@@ -169,7 +179,7 @@ factory/accessor callbacks перед `dlclose`/`FreeLibrary`.
 ошибкой. Для hot reload dependency-модулей используется отдельная операция
 `ModuleRuntime::reload_module_with_dependents(name)`:
 
-1. runtime собирает `name` и все транзитивные dependents, которые сейчас
+1. после atomic descriptor snapshot runtime собирает `name` и все транзитивные dependents, которые сейчас
    находятся в `Loaded` или всё ещё держат backend handle
 2. выгружает affected-модули в обратном dependency order: сначала самые верхние
    dependents, затем их dependencies

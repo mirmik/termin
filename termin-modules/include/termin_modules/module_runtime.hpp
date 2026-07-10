@@ -88,7 +88,7 @@ private:
         std::vector<ModuleRecord*>& ordered,
         std::string& error
     );
-    void refresh_spec(ModuleRecord& record);
+    bool refresh_descriptor_snapshot();
     std::shared_ptr<IModuleReloadState> capture_reload_state(const ModuleRecord& record) const;
     bool restore_reload_state(
         const std::string& module_id,
@@ -98,6 +98,7 @@ private:
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;
     bool is_discovery_ignored(const std::filesystem::path& path) const;
+    bool load_module_impl(const std::string& module_id, bool refresh_descriptors);
     bool unload_module_impl(const std::string& module_id, bool refresh_descriptor);
 };
 

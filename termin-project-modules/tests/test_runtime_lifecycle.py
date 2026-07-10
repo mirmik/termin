@@ -81,3 +81,26 @@ def test_loading_new_descriptor_rebuilds_runtime_without_orphaning_handles(
     assert runtime.close()
     assert "sample_module" not in sys.modules
     assert "second_module" not in sys.modules
+
+
+def test_invalid_descriptor_reload_keeps_module_loaded_and_dirty(tmp_path: Path) -> None:
+    _write_python_module(tmp_path)
+    descriptor = tmp_path / "sample.pymodule"
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    assert runtime.load_project(tmp_path)
+
+    assert runtime.mark_modules_dirty_for_path(descriptor) == ["sample"]
+    descriptor.write_text("name: sample\npackages: [\n", encoding="utf-8")
+
+    assert not runtime.reload_dirty_modules()
+    assert "sample" in runtime.dirty_modules()
+    assert "sample_module" in sys.modules
+    assert str(descriptor) in runtime.last_error
+
+    descriptor.write_text(
+        "name: sample\nroot: Scripts\npackages: [sample_module]\n",
+        encoding="utf-8",
+    )
+    assert runtime.close()
+    assert "sample_module" not in sys.modules
