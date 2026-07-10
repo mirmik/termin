@@ -112,12 +112,12 @@ void bind_rendering_manager(nb::module_& m) {
                      nb::rv_policy::reference,
                      "Access the engine's RenderEngine (tgfx2_ctx lives on it)")
 
-        .def("set_make_current_callback", [](RenderingManager& self, nb::callable callback) {
+        .def("set_make_current_callback", [](RenderingManager& self, nb::object callback) {
             if (callback.is_none()) {
                 self.set_make_current_callback(nullptr);
             } else {
                 // Store callback preventing GC
-                nb::callable stored = callback;
+                nb::object stored = callback;
                 self.set_make_current_callback([stored]() {
                     nb::gil_scoped_acquire gil;
                     stored();
@@ -126,11 +126,11 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("callback").none(),
            "Set callback to activate GL context before rendering")
 
-        .def("set_display_factory", [](RenderingManager& self, nb::callable factory) {
+        .def("set_display_factory", [](RenderingManager& self, nb::object factory) {
             if (factory.is_none()) {
                 self.set_display_factory(nullptr);
             } else {
-                nb::callable stored = factory;
+                nb::object stored = factory;
                 self.set_display_factory([stored](const std::string& name) -> tc_display* {
                     nb::gil_scoped_acquire gil;
                     nb::object result = stored(name);
@@ -140,11 +140,11 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("factory").none(),
            "Set factory for creating displays on demand")
 
-        .def("set_pipeline_factory", [](RenderingManager& self, nb::callable factory) {
+        .def("set_pipeline_factory", [](RenderingManager& self, nb::object factory) {
             if (factory.is_none()) {
                 self.set_pipeline_factory(nullptr);
             } else {
-                nb::callable stored = factory;
+                nb::object stored = factory;
                 self.set_pipeline_factory([stored](const std::string& name) -> tc_pipeline_handle {
                     nb::gil_scoped_acquire gil;
                     nb::object result = stored(name);
@@ -154,11 +154,11 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("factory").none(),
            "Set factory for creating pipelines by special name")
 
-        .def("set_render_request_callback", [](RenderingManager& self, nb::callable callback) {
+        .def("set_render_request_callback", [](RenderingManager& self, nb::object callback) {
             if (callback.is_none()) {
                 self.set_render_request_callback(nullptr);
             } else {
-                nb::callable stored = callback;
+                nb::object stored = callback;
                 self.set_render_request_callback([stored]() {
                     nb::gil_scoped_acquire gil;
                     stored();
@@ -170,11 +170,11 @@ void bind_rendering_manager(nb::module_& m) {
         .def("request_render_update", &RenderingManager::request_render_update,
            "Request another render frame through the registered host callback")
 
-        .def("set_display_removed_callback", [](RenderingManager& self, nb::callable callback) {
+        .def("set_display_removed_callback", [](RenderingManager& self, nb::object callback) {
             if (callback.is_none()) {
                 self.set_display_removed_callback(nullptr);
             } else {
-                nb::callable stored = callback;
+                nb::object stored = callback;
                 self.set_display_removed_callback([stored](tc_display* display) {
                     nb::gil_scoped_acquire gil;
                     // Wrap in non-owning TcDisplay for Python
