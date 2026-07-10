@@ -39,6 +39,8 @@ from termin.editor_core.scene_settings_model import (
     ShadowSettingsController,
 )
 from termin.editor_core.project_settings_model import ProjectSettingsController
+from termin.editor_core.project_build_controller import ProjectBuildController
+from termin.editor_core.scene_file_controller import SceneFileController
 from termin.editor_core.navigation_settings_model import NavigationSettingsController
 from termin.editor_core.spacemouse_controller import SpaceMouseController
 from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
@@ -646,18 +648,18 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             on_switched=scene_switched,
         )
 
-    def attach_editor_scene(name: str):
+    def attach_editor_scene(name: str, *, restore_state: bool = True, **_options):
         if editor_scene_session is None:
             raise RuntimeError("native editor scene attachment is unavailable")
         scene = engine.scene_manager.get_scene(name)
         if scene is None:
             raise ValueError(f"scene '{name}' does not exist")
-        return editor_scene_session.attach(scene)
+        return editor_scene_session.attach(scene, restore_state=restore_state)
 
-    def detach_editor_scene():
+    def detach_editor_scene(*, save_state: bool = True, **_options):
         if editor_scene_session is None:
             raise RuntimeError("native editor scene attachment is unavailable")
-        return editor_scene_session.detach(save_state=True)
+        return editor_scene_session.detach(save_state=save_state)
 
     scene_manager_dialog = build_native_scene_manager_dialog(
         host.document,
@@ -746,6 +748,115 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             project_browser.set_root(project_path.parent)
         else:
             _logger.error("Native editor ignored invalid startup project: %s", project_file)
+
+    def active_scene_name() -> str | None:
+        scene = current_scene()
+        if scene is None:
+            return None
+        handle = scene.scene_handle()
+        for name in engine.scene_manager.scene_names():
+            candidate = engine.scene_manager.get_scene(name)
+            if candidate is None:
+                continue
+            candidate_handle = candidate.scene_handle()
+            if (
+                candidate_handle.index == handle.index
+                and candidate_handle.generation == handle.generation
+            ):
+                return name
+        _logger.error("Native editor active scene is not registered in SceneManager")
+        return None
+
+    def log_build_message(message: str) -> None:
+        _logger.info("Project build: %s", message)
+        shell.status_bar.text = message
+        request_editor_render()
+
+    scene_file_controller = SceneFileController(
+        scene_manager=engine.scene_manager,
+        get_dialog_service=lambda: dialog_service,
+        get_editor_scene_name=active_scene_name,
+        set_editor_scene_name=lambda _name: None,
+        get_scene=current_scene,
+        get_project_path=lambda: (
+            None
+            if project_browser_controller.root_path is None
+            else str(project_browser_controller.root_path)
+        ),
+        get_editor_state_io=lambda: None,
+        has_editor_attachment=lambda: editor_scene_session is not None,
+        detach_editor_from_scene=detach_editor_scene,
+        detach_scene_from_render=lambda name, **_options: (
+            False if render_scene_session is None else render_scene_session.detach(name)
+        ),
+        attach_editor_to_scene=attach_editor_scene,
+        attach_scene_to_render=lambda name: (
+            False if render_scene_session is None else render_scene_session.attach(name)
+        ),
+        get_scene_tree_controller=lambda: scene_hierarchy_controller,
+        get_inspector_controller=lambda: entity_inspector_controller,
+        observe_scene_events=lambda _scene: None,
+        on_rendering_changed=sync_viewport_list,
+        request_viewport_update=request_editor_render,
+        update_window_title=lambda: None,
+        log_to_console=log_build_message,
+    )
+
+    scene_file_commands = {
+        shell.new_scene_command: scene_file_controller.new_scene,
+        shell.load_scene_command: scene_file_controller.load_scene,
+        shell.save_scene_command: scene_file_controller.save_scene,
+        shell.save_scene_as_command: scene_file_controller.save_scene_as,
+    }
+
+    def on_scene_file_command(_menu_index: int, command_id: int, _command) -> None:
+        callback = scene_file_commands.get(command_id)
+        if callback is not None:
+            callback()
+
+    shell.menu_bar.connect_activated(on_scene_file_command)
+
+    def on_toolbar_scene_file_command(_index: int, command_id: int, _command) -> None:
+        if command_id == shell.toolbar_save_command:
+            scene_file_controller.save_scene()
+
+    shell.tool_bar.connect_activated(on_toolbar_scene_file_command)
+
+    if project_browser_controller.root_path is not None:
+        scene_file_controller.load_last_scene()
+
+    def show_quest_openxr_unavailable(_entry) -> None:
+        message = "Quest/OpenXR build dialog has not been ported to the native editor yet."
+        _logger.error(message)
+        dialog_service.show_error("Quest/OpenXR Build", message)
+
+    project_build_controller = ProjectBuildController(
+        scene_manager=engine.scene_manager,
+        get_current_project_path=lambda: (
+            None
+            if project_browser_controller.root_path is None
+            else str(project_browser_controller.root_path)
+        ),
+        get_editor_scene_name=active_scene_name,
+        save_scene=scene_file_controller.save_scene,
+        log_to_console=log_build_message,
+        show_quest_openxr=show_quest_openxr_unavailable,
+    )
+
+    project_build_commands = {
+        shell.build_project_command: project_build_controller.build_project,
+        shell.build_android_command: project_build_controller.build_android,
+        shell.build_quest_openxr_command: project_build_controller.show_quest_openxr_build_dialog,
+        shell.run_build_command: project_build_controller.run_build,
+        shell.run_standalone_command: project_build_controller.run_standalone,
+    }
+
+    def on_project_build_command(_menu_index: int, command_id: int, _command) -> None:
+        callback = project_build_commands.get(command_id)
+        if callback is not None:
+            callback()
+
+    shell.menu_bar.connect_activated(on_project_build_command)
 
     pipeline_editor_controller = PipelineEditorController()
     pipeline_directory = project_browser_controller.root_path or Path.cwd()
@@ -890,6 +1001,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "component_file_processor": component_file_processor,
             "project_browser_controller": project_browser_controller,
             "project_browser": project_browser,
+            "project_build_controller": project_build_controller,
+            "scene_file_controller": scene_file_controller,
             "pipeline_editor_controller": pipeline_editor_controller,
             "pipeline_editor": pipeline_editor,
             "framegraph_debugger": framegraph_debugger_service,
@@ -1075,6 +1188,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
                 _logger.exception("Native display workspace shutdown cleanup failed")
         if initial_scene is not None:
             engine.scene_manager.unregister_scene(editor_scene_name)
+        try:
+            engine.rendering_manager.shutdown()
+        except Exception:
+            _logger.exception("Native rendering manager shutdown failed")
         host.close()
         quit_sdl()
 

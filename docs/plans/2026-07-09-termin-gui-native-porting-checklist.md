@@ -1053,6 +1053,15 @@ Phase 12 host notes:
   same owner. Repository audit found no legacy Build Profiles window to port:
   that unchecked item is new UI over the existing
   `termin.project_build.profile_build` backend, not a frontend migration.
+- Project build and scene-file orchestration now live in `editor_core` rather
+  than `editor_tcgui`. The native File menu supports new/load/save/save-as and
+  restores the project's last scene; its Game menu exposes desktop and Android
+  builds plus built/standalone launch through the same controller as tcgui.
+  Quest/OpenXR still reports an explicit native-dialog parity gap instead of
+  importing the legacy dialog. The process smoke also fixed nullable
+  `RenderingManager` callback bindings and now shuts the rendering manager down
+  before destroying the native window/context; the three-frame offscreen
+  OpenGL run exits cleanly.
 - The migrated tcgui Core/Inspect/NavMesh/Resource viewer modules, their shared
   `RegistryViewerDialog`, launcher methods and menu callbacks were deleted.
   An architecture test fixes their absence. Card #302 remains open only for

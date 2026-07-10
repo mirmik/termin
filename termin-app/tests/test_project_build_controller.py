@@ -3,8 +3,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import termin.project_build as project_build
-from termin.editor_tcgui import project_build_controller as project_build_module
-from termin.editor_tcgui.project_build_controller import ProjectBuildController
+from termin.editor_core import project_build_controller as project_build_module
+from termin.editor_core.project_build_controller import ProjectBuildController
 
 
 class _SceneManager:
@@ -25,14 +25,15 @@ def _make_controller(
     scene_manager: _SceneManager,
     logs: list[str],
     save_calls: list[bool],
+    show_quest_openxr=None,
 ) -> ProjectBuildController:
     return ProjectBuildController(
         scene_manager=scene_manager,
         get_current_project_path=lambda: str(project_root),
         get_editor_scene_name=lambda: scene_name,
-        get_ui=lambda: None,
         save_scene=lambda: save_calls.append(True),
         log_to_console=logs.append,
+        show_quest_openxr=show_quest_openxr,
     )
 
 
@@ -195,3 +196,29 @@ def test_run_build_launches_desktop_bundle_launcher(monkeypatch, tmp_path) -> No
     assert save_calls == [True]
     assert popen_calls == [([str(launcher)], str(launcher.parent))]
     assert logs[-1] == f"Launching build: {launcher}"
+
+
+def test_quest_openxr_action_projects_prepared_entry_to_frontend(tmp_path) -> None:
+    project_root = tmp_path / "Project"
+    scene_path = project_root / "Scenes" / "Main.scene"
+    scene_path.parent.mkdir(parents=True)
+    scene_path.write_text("{}", encoding="utf-8")
+    logs: list[str] = []
+    save_calls: list[bool] = []
+    entries = []
+    controller = _make_controller(
+        project_root=project_root,
+        scene_name="Main",
+        scene_manager=_SceneManager({"Main": scene_path}),
+        logs=logs,
+        save_calls=save_calls,
+        show_quest_openxr=entries.append,
+    )
+
+    controller.show_quest_openxr_build_dialog()
+
+    assert save_calls == [True]
+    assert len(entries) == 1
+    assert entries[0].project_root == project_root.resolve()
+    assert entries[0].scene_rel_path == Path("Scenes/Main.scene")
+    assert entries[0].output_dir == project_root / "dist" / "quest_openxr" / "Project"

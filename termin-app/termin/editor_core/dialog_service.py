@@ -52,3 +52,25 @@ class DialogService(ABC):
         dismissed the dialog. ``cancel`` names the label that counts as a
         dismissal — useful for keyboard Esc.
         """
+
+    def show_open_file(
+        self,
+        title: str,
+        directory: str,
+        filter_string: str,
+        on_result: Callable[[str | None], None],
+    ) -> None:
+        """Choose an existing file asynchronously."""
+        raise NotImplementedError("this dialog service does not support opening files")
+
+    def show_save_file(
+        self,
+        title: str,
+        directory: str,
+        filter_string: str,
+        on_result: Callable[[str | None], None],
+        *,
+        default_name: str = "",
+    ) -> None:
+        """Choose a destination file asynchronously."""
+        raise NotImplementedError("this dialog service does not support saving files")

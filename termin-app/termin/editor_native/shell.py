@@ -25,6 +25,11 @@ class NativeEditorShell:
     menu_bar: object
     tool_bar: object
     status_bar: object
+    new_scene_command: int
+    load_scene_command: int
+    save_scene_command: int
+    save_scene_as_command: int
+    toolbar_save_command: int
     debug_menu_model: CommandModel
     profiler_command: int
     inspect_registry_command: int
@@ -44,6 +49,11 @@ class NativeEditorShell:
     navmesh_areas_command: int
     settings_command: int
     project_settings_command: int
+    build_project_command: int
+    build_android_command: int
+    build_quest_openxr_command: int
+    run_build_command: int
+    run_standalone_command: int
     about_command: int
     command_models: tuple[CommandModel, ...]
 
@@ -72,14 +82,21 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         raise RuntimeError("failed to add native editor root")
 
     file_menu = CommandModel()
-    file_menu.set_commands(
-        [
-            CommandData("new-scene", "New Scene", shortcut="Ctrl+N"),
-            CommandData("open-project", "Open Project"),
-            CommandData("separator", kind=CommandKind.Separator),
-            CommandData("quit", "Quit", shortcut="Ctrl+Q"),
-        ]
+    new_scene_command = file_menu.append(
+        CommandData("new-scene", "New Scene", shortcut="Ctrl+N")
     )
+    load_scene_command = file_menu.append(
+        CommandData("load-scene", "Load Scene...", shortcut="Ctrl+O")
+    )
+    save_scene_command = file_menu.append(
+        CommandData("save-scene", "Save Scene", shortcut="Ctrl+S")
+    )
+    save_scene_as_command = file_menu.append(
+        CommandData("save-scene-as", "Save Scene As...", shortcut="Ctrl+Shift+S")
+    )
+    file_menu.append(CommandData("open-project", "Open Project"))
+    file_menu.append(CommandData("separator", kind=CommandKind.Separator))
+    file_menu.append(CommandData("quit", "Quit", shortcut="Ctrl+Q"))
     view_menu = CommandModel()
     view_menu.set_commands(
         [
@@ -105,6 +122,19 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     )
     agent_types_command = scene_menu.append(CommandData("agent-types", "Agent Types..."))
     navmesh_areas_command = scene_menu.append(CommandData("navmesh-areas", "NavMesh Areas..."))
+    game_menu = CommandModel()
+    game_menu.append(CommandData("play", "Play", shortcut="F5", enabled=False))
+    build_project_command = game_menu.append(CommandData("build-project", "Build Project..."))
+    build_android_command = game_menu.append(
+        CommandData("build-android", "Build Android APK...")
+    )
+    build_quest_openxr_command = game_menu.append(
+        CommandData("build-quest-openxr", "Quest/OpenXR Build...")
+    )
+    run_build_command = game_menu.append(CommandData("run-build", "Run Build..."))
+    run_standalone_command = game_menu.append(
+        CommandData("run-standalone", "Run Standalone...")
+    )
     debug_menu = CommandModel()
     profiler_command = debug_menu.append(CommandData("profiler", "Profiler", shortcut="F7", checkable=True))
     inspect_registry_command = debug_menu.append(CommandData("inspect-registry", "Inspect Registry...", shortcut="F8"))
@@ -130,19 +160,18 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         MenuBarEntry("edit", "Edit", edit_menu),
         MenuBarEntry("view", "View", view_menu),
         MenuBarEntry("scene", "Scene", scene_menu),
+        MenuBarEntry("game", "Game", game_menu),
         MenuBarEntry("debug", "Debug", debug_menu),
         MenuBarEntry("help", "Help", help_menu),
     ]
     _append(document, root, menu_bar, Size(1280.0, 30.0), fixed_extent=30.0)
 
     toolbar_model = CommandModel()
-    toolbar_model.set_commands(
-        [
-            CommandData("save", "Save", icon="S", shortcut="Ctrl+S"),
-            CommandData("separator", kind=CommandKind.Separator),
-            CommandData("play", "Play", icon="▶"),
-        ]
+    toolbar_save_command = toolbar_model.append(
+        CommandData("save", "Save", icon="S", shortcut="Ctrl+S")
     )
+    toolbar_model.append(CommandData("separator", kind=CommandKind.Separator))
+    toolbar_model.append(CommandData("play", "Play", icon="▶", enabled=False))
     tool_bar = document.create_tool_bar(toolbar_model)
     _append(document, root, tool_bar, Size(1280.0, 40.0), fixed_extent=40.0)
 
@@ -173,6 +202,11 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         menu_bar=menu_bar,
         tool_bar=tool_bar,
         status_bar=status_bar,
+        new_scene_command=new_scene_command,
+        load_scene_command=load_scene_command,
+        save_scene_command=save_scene_command,
+        save_scene_as_command=save_scene_as_command,
+        toolbar_save_command=toolbar_save_command,
         debug_menu_model=debug_menu,
         profiler_command=profiler_command,
         inspect_registry_command=inspect_registry_command,
@@ -192,12 +226,18 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         navmesh_areas_command=navmesh_areas_command,
         settings_command=settings_command,
         project_settings_command=project_settings_command,
+        build_project_command=build_project_command,
+        build_android_command=build_android_command,
+        build_quest_openxr_command=build_quest_openxr_command,
+        run_build_command=run_build_command,
+        run_standalone_command=run_standalone_command,
         about_command=about_command,
         command_models=(
             file_menu,
             edit_menu,
             view_menu,
             scene_menu,
+            game_menu,
             debug_menu,
             help_menu,
             toolbar_model,

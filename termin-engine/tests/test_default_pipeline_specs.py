@@ -69,3 +69,11 @@ def test_resolve_pass_serialized_schema_has_no_strategy():
     frame_pass._tc_pass.deserialize_data({"strategy": "average"})
 
     assert "strategy" not in frame_pass._tc_pass.serialize_data()
+
+
+def test_rendering_manager_nullable_callbacks_accept_none(rendering_manager):
+    rendering_manager.set_make_current_callback(None)
+    rendering_manager.set_display_factory(None)
+    rendering_manager.set_pipeline_factory(None)
+    rendering_manager.set_render_request_callback(None)
+    rendering_manager.set_display_removed_callback(None)

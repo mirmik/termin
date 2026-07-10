@@ -48,10 +48,10 @@ from termin.editor_tcgui.menu_bar_controller import (
     MenuBarControllerStateGetters,
     MenuBarControllerTcgui,
 )
-from termin.editor_tcgui.project_build_controller import ProjectBuildController
+from termin.editor_core.project_build_controller import ProjectBuildController
 from termin.editor_tcgui.project_session_controller import ProjectSessionController
 from termin.editor_core.shader_runtime import resolve_slangc, resolve_termin_shaderc
-from termin.editor_tcgui.scene_file_controller import SceneFileController
+from termin.editor_core.scene_file_controller import SceneFileController
 from termin.editor_tcgui.editor_window_layout import (
     EditorWindowLayoutCallbacks,
     build_editor_window_layout,
@@ -302,9 +302,12 @@ class EditorWindowTcgui:
             resolve_termin_shaderc=resolve_termin_shaderc,
             resolve_slangc=resolve_slangc,
         )
+        from termin.editor_tcgui.tcgui_dialog_service import TcguiDialogService
+
+        self._dialog_service = TcguiDialogService()
         self._scene_file_controller = SceneFileController(
             scene_manager=self.scene_manager,
-            get_ui=lambda: self._ui,
+            get_dialog_service=lambda: self._dialog_service,
             get_editor_scene_name=lambda: self._editor_scene_name,
             set_editor_scene_name=self._set_editor_scene_name,
             get_scene=lambda: self.scene,
@@ -323,13 +326,29 @@ class EditorWindowTcgui:
             update_window_title=self._update_window_title,
             log_to_console=self._log_to_console,
         )
+        def show_quest_openxr_build(entry) -> None:
+            if self._ui is None:
+                log.error("Quest/OpenXR build dialog requested before tcgui UI exists")
+                return
+            from termin.editor_tcgui.dialogs.quest_openxr_build_dialog import (
+                show_quest_openxr_build_dialog,
+            )
+
+            show_quest_openxr_build_dialog(
+                self._ui,
+                project_root=entry.project_root,
+                entry_scene=entry.scene_rel_path,
+                output_dir=entry.output_dir,
+                on_log=self._log_to_console,
+            )
+
         self._project_build_controller = ProjectBuildController(
             scene_manager=self.scene_manager,
             get_current_project_path=self._get_project_path,
             get_editor_scene_name=lambda: self._editor_scene_name,
-            get_ui=lambda: self._ui,
             save_scene=self._save_scene,
             log_to_console=self._log_to_console,
+            show_quest_openxr=show_quest_openxr_build,
         )
 
         # Editor interaction system
@@ -401,9 +420,6 @@ class EditorWindowTcgui:
         self._setup_viewport()
 
         # Dialog service (shared between controllers)
-        from termin.editor_tcgui.tcgui_dialog_service import TcguiDialogService
-
-        self._dialog_service = TcguiDialogService()
         self._dialog_service.ui = ui
 
         # Setup scene tree controller

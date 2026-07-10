@@ -70,3 +70,41 @@ class TcguiDialogService(DialogService):
             buttons=choices,
             on_result=_on_button,
         )
+
+    def show_open_file(
+        self,
+        title: str,
+        directory: str,
+        filter_string: str,
+        on_result: Callable[[str | None], None],
+    ) -> None:
+        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
+
+        show_open_file_dialog(
+            self.ui,
+            title=title,
+            directory=directory,
+            filter_str=filter_string,
+            on_result=on_result,
+            windowed=True,
+        )
+
+    def show_save_file(
+        self,
+        title: str,
+        directory: str,
+        filter_string: str,
+        on_result: Callable[[str | None], None],
+        *,
+        default_name: str = "",
+    ) -> None:
+        from tcgui.widgets.file_dialog_overlay import show_save_file_dialog
+
+        show_save_file_dialog(
+            self.ui,
+            title=title,
+            directory=directory,
+            filter_str=filter_string,
+            on_result=on_result,
+            windowed=True,
+        )
