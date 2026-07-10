@@ -1,4 +1,4 @@
-"""Compatibility entry point for the tcgui editor."""
+"""Canonical editor entry point with native UI as the production default."""
 
 from __future__ import annotations
 
@@ -19,12 +19,12 @@ def _parse_editor_args() -> tuple[str | None, str | None, str]:
         print()
         print("Options:")
         print("  --debug-resource RES Open framegraph debugger with this resource")
-        print("  --ui=BACKEND        Select tcgui or the native migration host")
+        print("  --ui=BACKEND        Select native (default) or legacy tcgui")
         print("  -h, --help           Show this help message and exit")
-        return "__help__", None, "tcgui"
+        return "__help__", None, "native"
 
     debug_resource = None
-    ui_backend = "tcgui"
+    ui_backend = "native"
     positional: list[str] = []
     i = 0
     while i < len(args):
@@ -56,7 +56,7 @@ def _parse_editor_args() -> tuple[str | None, str | None, str]:
 
 
 def init_editor(debug_resource: str | None = None, no_scene: bool = False) -> None:
-    """Initialize the tcgui editor and setup callbacks."""
+    """Initialize the selected editor frontend and setup callbacks."""
     cli_project, cli_debug, ui_backend = _parse_editor_args()
     if cli_project in ("__help__", "__error__"):
         sys.exit(0 if cli_project == "__help__" else 1)
@@ -67,18 +67,18 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False) -> No
 
         write_launch_project(cli_project)
 
-    if ui_backend == "native":
-        from termin.editor_native.run_editor import init_editor_native
-
-        init_editor_native(debug_resource=debug_resource, no_scene=no_scene)
-    else:
+    if ui_backend == "tcgui":
         from termin.editor_tcgui.run_editor import init_editor_tcgui
 
         init_editor_tcgui(debug_resource=debug_resource, no_scene=no_scene)
+    else:
+        from termin.editor_native.run_editor import init_editor_native
+
+        init_editor_native(debug_resource=debug_resource, no_scene=no_scene)
 
 
 def run_editor(debug_resource: str | None = None, no_scene: bool = False) -> None:
-    """Run the tcgui editor from the embedded C++ entry point."""
+    """Run the selected editor frontend from the embedded C++ entry point."""
     from termin.engine import EngineCore
 
     engine = EngineCore.instance()

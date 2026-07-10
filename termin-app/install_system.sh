@@ -76,7 +76,8 @@ DESKTOP
     echo "Installation complete."
     echo "  Run: termin               (launcher)"
     echo "  Run: termin_editor        (editor directly)"
-    echo "  Run: termin_editor --ui=tcgui  (new UI)"
+    echo "  Run: termin_editor             (native UI)"
+    echo "       termin_editor --ui=tcgui  (legacy UI)"
 }
 
 case "${1:-}" in

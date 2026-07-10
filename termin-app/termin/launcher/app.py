@@ -568,7 +568,7 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
         print("Without PROJECT, opens the launcher UI.")
         print()
         print("Options:")
-        print("  --ui=tcgui      Accepted for compatibility; tcgui is the only editor UI")
+        print("  --ui=tcgui      Explicitly select the current launcher UI")
         print("  -h, --help      Show this help message and exit")
         print()
         print("Environment:")
@@ -584,7 +584,11 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
         if a.startswith('--ui='):
             ui_backend = a.split('=', 1)[1]
             if ui_backend != "tcgui":
-                print(f"Error: unsupported UI backend '{ui_backend}'. Only tcgui is available.", flush=True)
+                print(
+                    f"Error: unsupported launcher UI backend '{ui_backend}'. "
+                    "Only tcgui is available for the launcher.",
+                    flush=True,
+                )
                 return "__error__", None
         elif not a.startswith('-'):
             positional.append(a)

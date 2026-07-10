@@ -48,12 +48,12 @@ layout no longer depends on running from a source checkout; an explicit broken
 6. Port remaining dialogs/launcher chrome, make native the only production
    entrypoint and remove `tcgui`/`termin.editor_tcgui` dependencies.
 
-`termin_editor --ui=native` currently exercises the host through the normal
+`termin_editor` now exercises the host through the normal
 C++ embedded-Python `EngineCore` entrypoint. `TERMIN_EDITOR_NATIVE_SMOKE_FRAMES`
 is a deterministic test-only frame limit used to prove graceful startup,
-render/present and shutdown while migration slices are still incomplete. The
-default remains `tcgui` until enough production functionality has moved; this
-is a temporary entrypoint choice, not a mixed-tree fallback.
+render/present and shutdown. The default is `native`; the temporary
+`--ui=tcgui` compatibility path is an entrypoint choice during legacy
+retirement, not a mixed-tree fallback.
 
 The production MCP gate starts this entrypoint with an ephemeral loopback port,
 captures the composed native UI through `capture_editor_screenshot`, then uses
@@ -168,6 +168,6 @@ set, and `sibling_order_changed` is published through the scene structure
 event. Scene serialization walks ordered roots and ordered children, so native
 before/after drops survive save/load; `ReparentEntityCommand` restores both the
 parent and prior index on undo. The legacy scene-tree frontend remains only
-because tcgui is still the default entrypoint during staged migration. Its
-controller is now a thin `SceneHierarchyController` projection and no longer
+while tcgui is an explicit compatibility entrypoint during staged retirement.
+Its controller is now a thin `SceneHierarchyController` projection and no longer
 owns a second `EntityOperations` or hierarchy policy implementation.

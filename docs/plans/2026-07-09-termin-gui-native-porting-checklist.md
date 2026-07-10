@@ -804,9 +804,9 @@ separately as Kanboard #310.
 Phase 12 host notes:
 
 - The coexistence boundary is entrypoint-level, never two widget trees inside
-  one window. `termin_editor --ui=native` owns one `tc_ui_document`; the
-  temporary default `tcgui` entrypoint remains separate until production
-  slices are usable.
+  one window. The default `termin_editor` owns one `tc_ui_document`; the
+  temporary `--ui=tcgui` compatibility entrypoint remains separate during
+  legacy retirement.
 - `termin.editor_native.NativeUiHost` owns render target resize, layout/paint,
   SDL pointer/key/text/click-count routing, clipboard, PNG/MCP capture and
   shutdown. The native Profiler panel is attached to the same root as a fixed
@@ -996,9 +996,8 @@ Phase 12 host notes:
   destroys the dialog, graph parameter subtree and separately owned context
   overlay. Controller, projection, F11 wiring, file roundtrip and lifetime are
   covered by bundled-Python tests. The legacy tcgui `NodeGraphView` remains only
-  because tcgui is still the temporary default frontend; it can be deleted when
-  the entrypoint flips to native rather than removing pipeline editing from the
-  current default editor prematurely.
+  because tcgui remains an explicit compatibility frontend; it can now be
+  deleted together with that frontend.
 - Framegraph debugging now reuses one `FramegraphDebuggerModel` and one
   `EditorFramegraphDebuggerService` for native UI, MCP inspection and capture
   export. The automation service moved from `editor_tcgui` to `editor_core`;
@@ -1074,11 +1073,15 @@ Phase 12 host notes:
   active game scene for it. A live MCP run observed `untitled(game)` in PLAY,
   refreshed executor context to that scene, and restored `untitled` in STOP;
   shutdown remained clean.
+- The canonical `termin_editor` entrypoint now defaults to native UI. Launcher
+  project activation inherits that default because it invokes the editor without
+  a backend override; `--ui=tcgui` is retained only as an explicit compatibility
+  route during legacy retirement. An SDK-backed three-frame offscreen OpenGL
+  smoke passed through the no-flag production command.
 - The migrated tcgui Core/Inspect/NavMesh/Resource viewer modules, their shared
   `RegistryViewerDialog`, launcher methods and menu callbacks were deleted.
   An architecture test fixes their absence. Card #302 remains open only for
-  retiring `ProjectBrowserTcgui` after native becomes the default frontend;
-  removing it earlier would eliminate the default editor's project navigation.
+  retiring `ProjectBrowserTcgui` with the explicit legacy frontend.
 
 ## Source Widget Inventory From termin-gui
 
