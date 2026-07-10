@@ -84,6 +84,7 @@ protected:
     );
 
 public:
+    static void register_type();
     std::vector<std::string> get_internal_symbols() const override;
     void collect_shader_usages(
         tc_scene_handle scene,

@@ -43,7 +43,14 @@ void PresentToScreenPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->blit(in_it->second, out_it->second);
 }
 
-TC_REGISTER_FRAME_PASS(PresentToScreenPass);
+TC_DEFINE_FRAME_PASS_FACTORY(PresentToScreenPass);
+
+void PresentToScreenPass::register_type() {
+    register_frame_pass_PresentToScreenPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_metadata_graph();
+}
 
 BlitPass::BlitPass(
     const std::string& input,
@@ -96,6 +103,14 @@ void BlitPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->blit(in_it->second, out_it->second);
 }
 
-TC_REGISTER_FRAME_PASS(BlitPass);
+TC_DEFINE_FRAME_PASS_FACTORY(BlitPass);
+
+void BlitPass::register_type() {
+    register_frame_pass_BlitPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_output_res_target();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

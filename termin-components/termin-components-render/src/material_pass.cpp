@@ -322,6 +322,16 @@ void MaterialPass::destroy() {
     extra_resources.clear();
 }
 
-TC_REGISTER_FRAME_PASS(MaterialPass);
+TC_DEFINE_FRAME_PASS_FACTORY(MaterialPass);
+
+void MaterialPass::register_type() {
+    register_frame_pass_MaterialPass();
+    _register_inspect_material();
+    _register_inspect_output_res();
+    _register_inspect_output_res_target();
+    _register_inspect_metadata_graph();
+    register_serialize_MaterialPass_texture_resources();
+    register_serialize_MaterialPass_extra_resources();
+}
 
 } // namespace termin

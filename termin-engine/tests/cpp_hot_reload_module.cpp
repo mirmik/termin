@@ -17,6 +17,7 @@ public:
 
 class HotReloadNativeProbePass : public termin::CxxFramePass {
 public:
+    static void register_type();
     int exposure = 0;
 
     HotReloadNativeProbePass() {
@@ -30,35 +31,17 @@ public:
     }
 };
 
-TC_REGISTER_FRAME_PASS_DERIVED(HotReloadNativeProbePass, CxxFramePass);
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(HotReloadNativeProbePass, CxxFramePass);
 
-class EngineHeaderSideEffectProbe {
-public:
-    int value = 0;
-};
-
-class EngineHeaderSideEffectComponentProbe : public termin::CxxComponent {
-public:
-    EngineHeaderSideEffectComponentProbe()
-        : termin::CxxComponent("EngineOwnedProbeComponent") {}
-};
-
-static termin::ComponentRegistrar<EngineHeaderSideEffectComponentProbe>
-    engine_header_side_effect_component_registrar("EngineOwnedProbeComponent", "CxxComponent");
-
-struct EngineHeaderSideEffectInspectRegistration {
-    EngineHeaderSideEffectInspectRegistration() {
-        tc::InspectRegistry::instance().add<EngineHeaderSideEffectProbe, int>(
-            "EngineOwnedProbeType",
-            &EngineHeaderSideEffectProbe::value,
-            "value",
-            "Value From Module Header Side Effect",
-            "int"
-        );
-    }
-};
-
-static EngineHeaderSideEffectInspectRegistration engine_header_side_effect_inspect_registration;
+void HotReloadNativeProbePass::register_type() {
+    register_frame_pass_HotReloadNativeProbePass();
+    TC_MODULE_INSPECT_FIELD(
+        HotReloadNativeProbePass,
+        exposure,
+        "Exposure",
+        "int"
+    );
+}
 
 } // namespace
 
@@ -66,17 +49,12 @@ int32_t native_probe_init(
     const termin_native_module_host_v1*,
     termin_native_module_error*
 ) {
+    HotReloadNativeProbePass::register_type();
     TC_MODULE_REGISTER_COMPONENT(HotReloadNativeProbeComponent, CxxComponent);
     TC_MODULE_INSPECT_FIELD(
         HotReloadNativeProbeComponent,
         value,
         "Value",
-        "int"
-    );
-    TC_MODULE_INSPECT_FIELD(
-        HotReloadNativeProbePass,
-        exposure,
-        "Exposure",
         "int"
     );
     return 0;

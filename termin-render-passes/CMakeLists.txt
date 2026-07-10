@@ -61,6 +61,7 @@ include(TerminRpath)
 
 set(TERMIN_RENDER_PASSES_SOURCES
     src/termin_render_passes_version.c
+    src/bootstrap.cpp
     src/bloom_pass.cpp
     src/collider_gizmo_pass.cpp
     src/color_pass.cpp
@@ -82,6 +83,7 @@ set(TERMIN_RENDER_PASSES_HEADERS
     include/termin/render_passes/export.h
     include/termin/render_passes/termin_render_passes.h
     include/termin/render_passes/version.h
+    include/termin/render_passes/bootstrap.hpp
     include/termin/lighting/lighting_ubo.hpp
     include/termin/lighting/lighting_upload.hpp
     include/termin/render/bloom_pass.hpp

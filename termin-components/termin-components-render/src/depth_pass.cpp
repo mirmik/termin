@@ -963,9 +963,41 @@ void ColorToDepthPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->end_pass();
 }
 
-TC_REGISTER_FRAME_PASS_DERIVED(DepthPass, GeometryPassBase);
-TC_REGISTER_FRAME_PASS_DERIVED(DepthOnlyPass, CxxFramePass);
-TC_REGISTER_FRAME_PASS_DERIVED(DepthToColorPass, CxxFramePass);
-TC_REGISTER_FRAME_PASS_DERIVED(ColorToDepthPass, CxxFramePass);
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(DepthPass, GeometryPassBase);
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(DepthOnlyPass, CxxFramePass);
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(DepthToColorPass, CxxFramePass);
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(ColorToDepthPass, CxxFramePass);
+
+void DepthPass::register_type() {
+    register_frame_pass_DepthPass();
+    _register_inspect_pass_phase_mark();
+    _register_inspect_depth_encoding();
+    _register_inspect_clear();
+}
+
+void DepthOnlyPass::register_type() {
+    register_frame_pass_DepthOnlyPass();
+    _register_inspect_output_res();
+    _register_inspect_output_res_target();
+    _register_inspect_camera_name();
+    _register_inspect_pass_phase_mark();
+    _register_inspect_metadata_graph();
+}
+
+void DepthToColorPass::register_type() {
+    register_frame_pass_DepthToColorPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_output_res_target();
+    _register_inspect_metadata_graph();
+}
+
+void ColorToDepthPass::register_type() {
+    register_frame_pass_ColorToDepthPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_output_res_target();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

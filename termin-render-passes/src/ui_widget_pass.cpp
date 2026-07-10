@@ -50,7 +50,15 @@ void UIWidgetPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->blit(in_it->second, out_it->second);
 }
 
-TC_REGISTER_FRAME_PASS(UIWidgetPass);
+TC_DEFINE_FRAME_PASS_FACTORY(UIWidgetPass);
+
+void UIWidgetPass::register_type() {
+    register_frame_pass_UIWidgetPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_include_internal_entities();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin
 

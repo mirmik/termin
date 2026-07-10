@@ -45,6 +45,7 @@ private:
 
 public:
     MaterialPass();
+    static void register_type();
     ~MaterialPass() override;
 
     void set_texture_resource(const std::string& uniform_name, const std::string& resource_name);
