@@ -1,0 +1,8 @@
+#!/bin/bash
+# Verify the installed termin-app bundle through the active CI/runtime Python.
+
+set -euo pipefail
+
+python -c "from pathlib import Path; import termin.voxels.voxel_shader as vs; path = Path(vs.__file__).resolve(); expected = Path('termin-app/install/lib/python').resolve(); print(f'termin.voxels.voxel_shader={path}'); assert expected in path.parents, f'expected termin-app install path first, got {path}'"
+python -c "from tgfx import TcShader; shader = TcShader.from_builtin_catalog('termin-engine-voxel-display'); assert shader.is_valid, 'termin-engine-voxel-display failed preflight'"
+python -m pytest termin-app/tests/ -v
