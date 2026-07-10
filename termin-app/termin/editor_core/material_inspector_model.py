@@ -60,6 +60,25 @@ def material_vector(value: Any, size: int, *, color: bool = False) -> tuple[floa
     return tuple(values)
 
 
+def material_from_inspect_value(value: Any):
+    """Resolve the serialized projection returned by native inspect fields."""
+    if value is None or not isinstance(value, dict):
+        return value
+
+    uuid = value.get("uuid")
+    if not isinstance(uuid, str) or not uuid:
+        _logger.error("Serialized material inspect value has no valid UUID: %r", value)
+        return None
+
+    from termin.materials import TcMaterial
+
+    material = TcMaterial.from_uuid(uuid)
+    if not material.is_valid:
+        _logger.error("Serialized material inspect value references unknown UUID '%s'", uuid)
+        return None
+    return material
+
+
 class MaterialInspectorController:
     """Own material discovery, edits, persistence and immutable UI snapshots."""
 
@@ -91,7 +110,7 @@ class MaterialInspectorController:
         self._render_target_texture = resolver
 
     def set_target(self, material) -> MaterialInspectorSnapshot:
-        self._material = material
+        self._material = material_from_inspect_value(material)
         return self.refresh()
 
     def refresh(self) -> MaterialInspectorSnapshot:
@@ -297,5 +316,6 @@ __all__ = [
     "MaterialInspectorSnapshot",
     "MaterialPropertySnapshot",
     "MaterialTextureValue",
+    "material_from_inspect_value",
     "material_vector",
 ]

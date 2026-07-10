@@ -129,15 +129,9 @@ class InlineMaterialFieldWidget(FieldWidget):
             self._inspector.set_scene_getter(getter)
 
     def _material_from_value(self, value: Any):
-        if value is None:
-            return None
-        if isinstance(value, dict):
-            uuid = value.get("uuid")
-            if isinstance(uuid, str) and uuid:
-                from termin.materials import TcMaterial
-                return TcMaterial.from_uuid(uuid)
-            return None
-        return value
+        from termin.editor_core.material_inspector_model import material_from_inspect_value
+
+        return material_from_inspect_value(value)
 
     def _on_material_changed(self) -> None:
         self._emit()

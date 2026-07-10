@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from uuid import uuid4
 
 import pytest
 
@@ -110,6 +111,20 @@ def test_material_inspector_snapshot_and_property_edits_share_one_controller():
         assert tuple(phase.params["direction"]) == pytest.approx((4.0, 5.0, 6.0))
         assert tuple(phase.params["tint"]) == pytest.approx((0.1, 0.2, 0.3, 1.0))
     assert len(changes) == 4
+
+
+def test_material_inspector_resolves_native_inspect_projection():
+    from termin.materials import TcMaterial
+
+    material = TcMaterial.create("InspectProjection", str(uuid4()))
+    controller = MaterialInspectorController(_Resources())
+
+    snapshot = controller.set_target(material.serialize())
+
+    assert controller.material.is_valid
+    assert controller.material.uuid == material.uuid
+    assert snapshot.has_material
+    assert snapshot.name == "InspectProjection"
 
 
 def test_material_inspector_file_texture_and_name_edits():
