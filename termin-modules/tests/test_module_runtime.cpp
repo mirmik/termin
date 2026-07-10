@@ -97,6 +97,33 @@ public:
     }
 };
 
+class FakePythonBackend final : public IModuleBackend {
+public:
+    int load_calls = 0;
+    int unload_calls = 0;
+    bool fail_unload = false;
+
+    ModuleKind kind() const override {
+        return ModuleKind::Python;
+    }
+
+    bool load(ModuleRecord& record, const ModuleEnvironment&) override {
+        load_calls++;
+        record.handle = std::make_shared<PythonModuleHandle>();
+        return true;
+    }
+
+    bool unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        unload_calls++;
+        if (fail_unload) {
+            record.error_message = "injected Python backend commit failure";
+            return false;
+        }
+        record.handle.reset();
+        return true;
+    }
+};
+
 class TempDir {
 public:
     std::filesystem::path path;
@@ -487,6 +514,50 @@ void test_reload_rejects_duplicate_ids_and_simultaneous_cycle_atomically() {
     expect(backend->unload_calls.empty(), "cycle validation must happen before unload");
     expect(runtime.find("a")->spec.dependencies.empty() && runtime.find("b")->spec.dependencies.empty(),
            "failed cyclic snapshot must preserve the entire old graph");
+}
+
+void test_python_unload_prepare_failure_preserves_loaded_handle() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "sample.pymodule",
+        "name: sample\nroot: Scripts\npackages: [sample]\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakePythonBackend>();
+    runtime.register_backend(backend);
+    PythonModuleCallbacks callbacks;
+    callbacks.before_module_remove = [](const ModuleRecord&, std::string& error) {
+        error = "injected Python unload prepare failure";
+        return false;
+    };
+    runtime.set_python_callbacks(std::move(callbacks));
+
+    expect(runtime.discover(tmp.path), "Python module discovery should succeed");
+    expect(runtime.load_module("sample"), "Python module load should succeed");
+    const std::shared_ptr<IModuleHandle> loaded_handle = runtime.find("sample")->handle;
+
+    expect(!runtime.unload_module("sample"), "fallible Python prepare must abort unload");
+    expect(runtime.last_error() == "injected Python unload prepare failure",
+           "prepare error must cross the runtime boundary");
+    expect(backend->unload_calls == 0, "backend must not remove sys.modules after prepare failure");
+    expect(runtime.find("sample")->state == ModuleState::Loaded, "module must remain loaded");
+    expect(runtime.find("sample")->handle == loaded_handle, "retryable backend handle must be retained");
+
+    PythonModuleCallbacks retry_callbacks;
+    retry_callbacks.before_module_remove = [](const ModuleRecord&, std::string&) { return true; };
+    runtime.set_python_callbacks(std::move(retry_callbacks));
+    backend->fail_unload = true;
+    expect(!runtime.unload_module("sample"), "backend commit failure must abort Python unload");
+    expect(runtime.find("sample")->state == ModuleState::Loaded,
+           "Python backend commit failure must preserve coherent loaded state");
+    expect(runtime.find("sample")->handle == loaded_handle,
+           "Python backend commit failure must retain the handle");
+
+    backend->fail_unload = false;
+    expect(runtime.unload_module("sample"), "retry should unload after prepare succeeds");
+    expect(backend->unload_calls == 2, "failed backend commit and retry must each run once");
 }
 
 void test_cycle_detection() {
@@ -962,6 +1033,10 @@ TEST_CASE("module runtime cascade reload uses updated dependency snapshot") {
 
 TEST_CASE("module runtime rejects duplicate ids and simultaneous cycles atomically") {
     test_reload_rejects_duplicate_ids_and_simultaneous_cycle_atomically();
+}
+
+TEST_CASE("module runtime keeps Python module loaded when unload preparation fails") {
+    test_python_unload_prepare_failure_preserves_loaded_handle();
 }
 
 TEST_CASE("module runtime rejects dependency cycles") {

@@ -119,12 +119,14 @@ collision-safe session directory, поэтому параллельные runtim
 
 1. проверяет, что модуль находится в состоянии `Loaded` или всё ещё держит backend handle
 2. вызывает integration hook `before_unload`
-3. для staged backend-ов вызывает `begin_unload(...)`
-4. вызывает integration hook, который должен очистить регистрации до закрытия native handle
-5. вызывает `finish_unload(...)`
-6. очищает `handle`
-7. переводит модуль в `Unloaded`
-8. публикует событие
+3. для Python вызывает fallible `before_module_remove`, который подготавливает
+   все owner registrations, не удаляя их
+4. для staged native backend-ов вызывает `begin_unload(...)`
+5. вызывает integration hook, который должен очистить регистрации до закрытия native handle
+6. вызывает backend commit (`finish_unload` либо Python registry/module removal)
+7. очищает `handle`
+8. переводит модуль в `Unloaded`
+9. публикует событие
 
 Для C++:
 
@@ -138,6 +140,12 @@ collision-safe session directory, поэтому параллельные runtim
 
 Для Python:
 
+- runtime-type registry сначала вызывает prepare-unload lifecycle у всех типов
+  владельца и не удаляет ни один type/facet, пока весь owner set не подготовлен
+- ошибка prepare прерывает операцию до Python backend: handle, registrations,
+  `sys.modules` и `sys.path` остаются на месте, state остаётся `Loaded`
+- после успешного prepare `module_context` commit-ит Python-side registries и
+  runtime types; исключение не проглатывается и сохраняет retryable handle/state
 - импортированный package subtree удаляется из `sys.modules`
 - добавленные пути удаляются из `sys.path`
 - регистрации, выполненные под module import context, снимаются по `module_id`

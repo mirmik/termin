@@ -30,6 +30,7 @@ struct PythonModuleCallbacks {
     std::function<void(const ModuleRecord&)> before_load;
     std::function<void(const ModuleRecord&)> after_load;
     std::function<void(const ModuleRecord&)> before_unload;
+    std::function<bool(const ModuleRecord&, std::string&)> before_module_remove;
     std::function<void(const ModuleRecord&)> after_unload;
     std::function<void(const ModuleRecord&)> after_reload;
     std::function<void(const ModuleRecord&, const std::string&)> after_failed_load;
