@@ -415,6 +415,19 @@ intended paths, and installed-mode tests reject checkout leakage.
 
 ### Phase 4: Native/process inventories and local runner
 
+Initial native inventory status, 2026-07-10: `test-suites.json` now owns every
+repository-native C/C++ test translation unit and its CTest module suite.
+Configured CTest registrations receive stable `termin:module`, `termin:tier`,
+and `termin:capability` labels. `termin_build.repository_control check-ctest`
+validates CTest JSON plus `compile_commands.json`; an unclassified source that
+does not reach the configured CMake graph is an error. Sources conditional on
+windowing, D3D11, or Python bindings have explicit profile/capability/reason
+classifications, so a headless PR configuration may omit only declared
+inapplicable sources. `run-tests-cpp.sh` runs this gate after configuring CMake.
+The Linux `pr` and `linux-full` configurations have passed the inventory gate.
+Per-test capability labels and process/device/manual executor inventory remain
+to be completed before this phase can close.
+
 - Add consistent CTest labels and CTest JSON validation.
 - Detect native test sources/modules omitted from the top-level CMake graph.
 - Classify editor-process, device, and manual gates.
