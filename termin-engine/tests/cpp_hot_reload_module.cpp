@@ -3,6 +3,7 @@
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/render/frame_pass.hpp>
+#include <termin_modules/native_module_abi.h>
 
 namespace {
 
@@ -61,13 +62,10 @@ static EngineHeaderSideEffectInspectRegistration engine_header_side_effect_inspe
 
 } // namespace
 
-#ifdef _WIN32
-    #define TERMIN_TEST_MODULE_API __declspec(dllexport)
-#else
-    #define TERMIN_TEST_MODULE_API __attribute__((visibility("default")))
-#endif
-
-extern "C" TERMIN_TEST_MODULE_API void module_init() {
+int32_t native_probe_init(
+    const termin_native_module_host_v1*,
+    termin_native_module_error*
+) {
     TC_MODULE_REGISTER_COMPONENT(HotReloadNativeProbeComponent, CxxComponent);
     TC_MODULE_INSPECT_FIELD(
         HotReloadNativeProbeComponent,
@@ -81,9 +79,25 @@ extern "C" TERMIN_TEST_MODULE_API void module_init() {
         "Exposure",
         "int"
     );
+    return 0;
 }
 
-extern "C" TERMIN_TEST_MODULE_API void module_shutdown() {
+int32_t native_probe_shutdown(
+    const termin_native_module_host_v1*,
+    termin_native_module_error*
+) {
     // Intentionally do not unregister anything here. The integration test
     // verifies module-owner cleanup before dlclose/FreeLibrary.
+    return 0;
 }
+
+TERMIN_NATIVE_MODULE_DESCRIPTOR_V1(
+    "native_probe",
+    "1.0.0",
+    "termin-engine-native-probe",
+    TERMIN_NATIVE_MODULE_CAP_COMPONENTS |
+        TERMIN_NATIVE_MODULE_CAP_FRAME_PASSES |
+        TERMIN_NATIVE_MODULE_CAP_INSPECT_TYPES,
+    native_probe_init,
+    native_probe_shutdown
+);

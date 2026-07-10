@@ -176,6 +176,26 @@ std::filesystem::path write_shadow_test_descriptor(
     return artifact;
 }
 
+std::filesystem::path write_native_abi_descriptor(
+    const std::filesystem::path& project_root,
+    const std::string& module_id,
+    const std::filesystem::path& source_artifact
+) {
+    const std::filesystem::path artifact =
+        project_root / "build" / source_artifact.filename();
+    std::filesystem::create_directories(artifact.parent_path());
+    std::filesystem::copy_file(
+        source_artifact,
+        artifact,
+        std::filesystem::copy_options::overwrite_existing
+    );
+    write_text_file(
+        project_root / (module_id + ".module"),
+        "name: " + module_id + "\nbuild:\n  output: " + artifact.string() + "\n"
+    );
+    return artifact;
+}
+
 size_t count_regular_files(const std::filesystem::path& root) {
     if (!std::filesystem::exists(root)) {
         return 0;
@@ -913,7 +933,7 @@ void test_destructor_runs_non_throwing_shutdown() {
 
 void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
     TempDir tmp;
-    const std::filesystem::path artifact = write_shadow_test_descriptor(tmp.path, "native");
+    const std::filesystem::path artifact = write_shadow_test_descriptor(tmp.path, "shadow_test");
     const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
 
     ModuleEnvironment environment;
@@ -924,8 +944,8 @@ void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
     expect(runtime.discover(tmp.path), "shadow cleanup discovery should succeed");
 
     for (size_t iteration = 0; iteration < 3; ++iteration) {
-        expect(runtime.load_module("native"), "native shadow module should load");
-        const ModuleRecord* record = runtime.find("native");
+        expect(runtime.load_module("shadow_test"), "native shadow module should load");
+        const ModuleRecord* record = runtime.find("shadow_test");
         auto handle = std::dynamic_pointer_cast<CppModuleHandle>(record->handle);
         expect(handle != nullptr, "native shadow handle should be available");
         expect(handle->loaded_path.parent_path() != artifact.parent_path(), "shadow must not live beside artifact");
@@ -933,7 +953,7 @@ void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
         expect(std::filesystem::exists(handle->loaded_path), "shadow file should exist while loaded");
         const std::filesystem::path loaded_path = handle->loaded_path;
 
-        expect(runtime.unload_module("native"), "native shadow module should unload");
+        expect(runtime.unload_module("shadow_test"), "native shadow module should unload");
         expect(!std::filesystem::exists(loaded_path), "shadow file must be removed after native close");
         expect(count_regular_files(shadow_root) == 0, "shadow root must contain no files after unload");
     }
@@ -941,7 +961,7 @@ void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
 
 void test_cpp_backend_cleans_shadow_after_post_copy_load_failure() {
     TempDir tmp;
-    write_shadow_test_descriptor(tmp.path, "failing_native");
+    write_shadow_test_descriptor(tmp.path, "shadow_test");
     const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
 
     ModuleEnvironment environment;
@@ -956,16 +976,16 @@ void test_cpp_backend_cleans_shadow_after_post_copy_load_failure() {
     runtime.set_cpp_callbacks(std::move(callbacks));
     expect(runtime.discover(tmp.path), "failed shadow load discovery should succeed");
 
-    expect(!runtime.load_module("failing_native"), "injected init failure should reject load");
-    expect(runtime.find("failing_native")->handle == nullptr, "failed load must not publish a native handle");
+    expect(!runtime.load_module("shadow_test"), "injected init failure should reject load");
+    expect(runtime.find("shadow_test")->handle == nullptr, "failed load must not publish a native handle");
     expect(count_regular_files(shadow_root) == 0, "failed post-copy load must remove shadow file");
 }
 
 void test_cpp_backend_shadow_sessions_do_not_collide_between_runtimes() {
     TempDir first;
     TempDir second;
-    write_shadow_test_descriptor(first.path, "first_native");
-    write_shadow_test_descriptor(second.path, "second_native");
+    write_shadow_test_descriptor(first.path, "shadow_test");
+    write_shadow_test_descriptor(second.path, "shadow_test");
     const std::filesystem::path shadow_root = first.path / "shared-shadow-cache";
 
     ModuleEnvironment environment;
@@ -981,14 +1001,14 @@ void test_cpp_backend_shadow_sessions_do_not_collide_between_runtimes() {
 
     bool first_loaded = false;
     bool second_loaded = false;
-    std::thread first_thread([&]() { first_loaded = first_runtime.load_module("first_native"); });
-    std::thread second_thread([&]() { second_loaded = second_runtime.load_module("second_native"); });
+    std::thread first_thread([&]() { first_loaded = first_runtime.load_module("shadow_test"); });
+    std::thread second_thread([&]() { second_loaded = second_runtime.load_module("shadow_test"); });
     first_thread.join();
     second_thread.join();
     expect(first_loaded && second_loaded, "concurrent runtimes should both load");
 
-    auto first_handle = std::dynamic_pointer_cast<CppModuleHandle>(first_runtime.find("first_native")->handle);
-    auto second_handle = std::dynamic_pointer_cast<CppModuleHandle>(second_runtime.find("second_native")->handle);
+    auto first_handle = std::dynamic_pointer_cast<CppModuleHandle>(first_runtime.find("shadow_test")->handle);
+    auto second_handle = std::dynamic_pointer_cast<CppModuleHandle>(second_runtime.find("shadow_test")->handle);
     expect(first_handle && second_handle, "both concurrent handles should exist");
     expect(first_handle->loaded_path != second_handle->loaded_path, "concurrent shadow paths must be unique");
     expect(first_handle->loaded_path.parent_path() != second_handle->loaded_path.parent_path(),
@@ -1001,7 +1021,7 @@ void test_cpp_backend_shadow_sessions_do_not_collide_between_runtimes() {
 
 void test_cpp_backend_prunes_only_aged_abandoned_shadow_sessions() {
     TempDir tmp;
-    write_shadow_test_descriptor(tmp.path, "native");
+    write_shadow_test_descriptor(tmp.path, "shadow_test");
     const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
     const std::filesystem::path abandoned = shadow_root / "session-999999999-old";
     const std::filesystem::path recent = shadow_root / "session-999999998-recent";
@@ -1020,10 +1040,125 @@ void test_cpp_backend_prunes_only_aged_abandoned_shadow_sessions() {
     runtime.set_environment(environment);
     runtime.register_backend(std::make_shared<CppModuleBackend>());
     expect(runtime.discover(tmp.path), "abandoned cleanup discovery should succeed");
-    expect(runtime.load_module("native"), "abandoned cleanup trigger module should load");
+    expect(runtime.load_module("shadow_test"), "abandoned cleanup trigger module should load");
     expect(!std::filesystem::exists(abandoned), "aged abandoned session should be removed");
     expect(std::filesystem::exists(recent / "active.dll"), "recent session must not be pruned");
     expect(runtime.shutdown(), "abandoned cleanup runtime should shut down");
+}
+
+void test_native_abi_rejects_missing_descriptor_before_init_scope() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_missing",
+        TERMIN_MODULES_TEST_ABI_MISSING
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    int init_scope_calls = 0;
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_init = [&](const ModuleRecord&) { ++init_scope_calls; };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "missing ABI descriptor discovery should succeed");
+    expect(!runtime.load_module("abi_missing"), "missing ABI descriptor must reject load");
+    expect(init_scope_calls == 0, "missing ABI descriptor must fail before registration scope");
+    expect(runtime.last_error().find("missing native module descriptor") != std::string::npos,
+           "missing ABI descriptor diagnostic should be actionable");
+}
+
+void test_native_abi_rejects_version_mismatch_before_init_scope() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_mismatch",
+        TERMIN_MODULES_TEST_ABI_MISMATCH
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    int init_scope_calls = 0;
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_init = [&](const ModuleRecord&) { ++init_scope_calls; };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "ABI mismatch discovery should succeed");
+    expect(!runtime.load_module("abi_mismatch"), "ABI mismatch must reject load");
+    expect(init_scope_calls == 0, "ABI mismatch must fail before registration scope");
+    expect(runtime.last_error().find("native module ABI mismatch") != std::string::npos,
+           "ABI mismatch diagnostic should include module and host versions");
+}
+
+void test_native_abi_propagates_structured_init_failure_once() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_init_failure",
+        TERMIN_MODULES_TEST_ABI_INIT_FAILURE
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    int failure_callbacks = 0;
+    CppModuleCallbacks callbacks;
+    callbacks.after_failed_load = [&](const ModuleRecord&, const std::string&) {
+        ++failure_callbacks;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "structured init failure discovery should succeed");
+    expect(!runtime.load_module("abi_init_failure"), "structured init failure must reject load");
+    expect(failure_callbacks == 1, "in-process init failure cleanup callback must run exactly once");
+    expect(runtime.last_error().find("status 17") != std::string::npos,
+           "structured init failure should preserve status");
+    expect(runtime.last_error().find("injected structured init failure") != std::string::npos,
+           "structured init failure should preserve message");
+    expect(runtime.find("abi_init_failure")->handle == nullptr,
+           "failed init must not publish native handle");
+}
+
+void test_native_abi_shutdown_failure_is_retryable_and_metadata_is_exposed() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_shutdown_retry",
+        TERMIN_MODULES_TEST_ABI_SHUTDOWN_RETRY
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(runtime.discover(tmp.path), "shutdown retry discovery should succeed");
+    expect(runtime.load_module("abi_shutdown_retry"), "compatible ABI module should load");
+
+    auto handle = std::dynamic_pointer_cast<CppModuleHandle>(
+        runtime.find("abi_shutdown_retry")->handle
+    );
+    expect(handle && handle->descriptor, "loaded handle should expose validated descriptor");
+    expect(std::string(handle->descriptor->module_version) == "1.0.0",
+           "module version metadata should be available to host");
+    expect(std::string(handle->descriptor->build_id) == "abi-shutdown-retry-test",
+           "module build identity should be available to host");
+
+    expect(!runtime.unload_module("abi_shutdown_retry"),
+           "fallible shutdown must keep library loaded on failure");
+    expect(runtime.find("abi_shutdown_retry")->handle != nullptr,
+           "failed shutdown must preserve retryable handle");
+    expect(runtime.last_error().find("status 23") != std::string::npos,
+           "shutdown failure should preserve structured status");
+    expect(runtime.unload_module("abi_shutdown_retry"),
+           "idempotent shutdown retry should complete unload");
+    expect(runtime.find("abi_shutdown_retry")->handle == nullptr,
+           "successful shutdown retry should release handle");
 }
 
 } // namespace
@@ -1126,6 +1261,22 @@ TEST_CASE("cpp backend shadow sessions are collision-free across concurrent runt
 
 TEST_CASE("cpp backend prunes only aged abandoned shadow sessions") {
     test_cpp_backend_prunes_only_aged_abandoned_shadow_sessions();
+}
+
+TEST_CASE("native ABI rejects missing descriptor before registration") {
+    test_native_abi_rejects_missing_descriptor_before_init_scope();
+}
+
+TEST_CASE("native ABI rejects version mismatch before registration") {
+    test_native_abi_rejects_version_mismatch_before_init_scope();
+}
+
+TEST_CASE("native ABI propagates structured init failure exactly once") {
+    test_native_abi_propagates_structured_init_failure_once();
+}
+
+TEST_CASE("native ABI exposes metadata and retries fallible shutdown") {
+    test_native_abi_shutdown_failure_is_retryable_and_metadata_is_exposed();
 }
 
 TEST_CASE("module text diagnostics are sanitized to utf8") {
