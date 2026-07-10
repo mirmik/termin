@@ -46,3 +46,30 @@ def test_native_python_console_f6_executes_clears_reopens_and_releases():
     gc.collect()
     assert console_ref() is None
     assert renders
+
+
+def test_native_python_console_embeds_in_bottom_tab_and_f6_activates_it():
+    document = Document()
+    shell = build_native_editor_shell(document)
+    controller = PythonConsoleController(EditorPythonExecutor(lambda: {}))
+    console = build_native_python_console(
+        document,
+        controller,
+        viewport=lambda: Rect(0.0, 0.0, 1280.0, 720.0),
+        request_render=lambda: None,
+        embedded=True,
+        activate_embedded=lambda: _select_console_tab(shell),
+    )
+    shell.console_host.add_stretch_child(console.root)
+    connect_python_console_command(shell.menu_bar, shell.python_console_command, console)
+
+    assert console.dialog is None
+    assert shell.bottom_tabs.selected_index == 0
+    assert shell.menu_bar.dispatch_shortcut(Key.F6.value, 0)
+    assert shell.bottom_tabs.selected_index == 1
+    assert console.root.parent.handle == shell.console_host.handle
+    console.close()
+
+
+def _select_console_tab(shell) -> None:
+    shell.bottom_tabs.selected_index = 1

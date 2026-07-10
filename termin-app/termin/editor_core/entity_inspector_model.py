@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import math
 from typing import Callable
 
 from termin.editor_core.editor_commands import (
@@ -14,7 +15,9 @@ from termin.editor_core.editor_commands import (
     RemoveComponentCommand,
     RemoveSoAComponentCommand,
     RecursiveLayerChangeCommand,
+    TransformEditCommand,
 )
+from termin.geombase import GeneralPose3, Quat, Vec3
 from termin.editor_core.inspector_fields_model import (
     InspectorFieldsController,
     InspectorFieldsSnapshot,
@@ -62,6 +65,14 @@ class EntityInspectorComponentType:
     category: str
 
 
+@dataclass(frozen=True)
+class EntityTransformSnapshot:
+    enabled: bool
+    position: tuple[float, float, float]
+    rotation_degrees: tuple[float, float, float]
+    scale: tuple[float, float, float]
+
+
 ComponentTypeCollector = Callable[[], tuple[EntityInspectorComponentType, ...]]
 
 
@@ -107,6 +118,7 @@ class EntityInspectorSnapshot:
     layer_names: tuple[str, ...]
     components: tuple[EntityInspectorComponent, ...]
     selected_component: int
+    transform: EntityTransformSnapshot
     fields: InspectorFieldsSnapshot
 
 
@@ -206,6 +218,31 @@ class EntityInspectorController:
         new_layer = int(self._entity.layer)
         if any(old_layer != new_layer for _entity, old_layer in descendants):
             self._execute(RecursiveLayerChangeCommand(descendants, new_layer))
+        return self.refresh()
+
+    def set_transform(
+        self,
+        position: tuple[float, float, float],
+        rotation_degrees: tuple[float, float, float],
+        scale: tuple[float, float, float],
+    ) -> EntityInspectorSnapshot:
+        entity = self._entity
+        if entity is None or entity.transform is None:
+            return self._snapshot
+        old_pose = entity.transform.local_pose()
+        x_degrees, y_degrees, z_degrees = rotation_degrees
+        qz = Quat.from_axis_angle(Vec3.unit_z(), math.radians(z_degrees))
+        qy = Quat.from_axis_angle(Vec3.unit_y(), math.radians(y_degrees))
+        qx = Quat.from_axis_angle(Vec3.unit_x(), math.radians(x_degrees))
+        new_pose = GeneralPose3(
+            lin=Vec3(*position),
+            ang=(qz * qy * qx).normalized(),
+            scale=Vec3(*scale),
+        )
+        self._execute(
+            TransformEditCommand(entity.transform, old_pose, new_pose),
+            merge=True,
+        )
         return self.refresh()
 
     def select_component(self, index: int) -> EntityInspectorSnapshot:
@@ -366,6 +403,12 @@ class EntityInspectorController:
                 layer_names=layer_names,
                 components=(),
                 selected_component=-1,
+                transform=EntityTransformSnapshot(
+                    enabled=False,
+                    position=(0.0, 0.0, 0.0),
+                    rotation_degrees=(0.0, 0.0, 0.0),
+                    scale=(1.0, 1.0, 1.0),
+                ),
                 fields=self.fields.snapshot,
             )
         components = []
@@ -397,7 +440,34 @@ class EntityInspectorController:
             layer_names=layer_names,
             components=tuple(components),
             selected_component=self._selected_component,
+            transform=self._transform_snapshot(entity),
             fields=self.fields.snapshot,
+        )
+
+    def _transform_snapshot(self, entity: Entity) -> EntityTransformSnapshot:
+        transform = entity.transform
+        if transform is None:
+            return EntityTransformSnapshot(
+                enabled=False,
+                position=(0.0, 0.0, 0.0),
+                rotation_degrees=(0.0, 0.0, 0.0),
+                scale=(1.0, 1.0, 1.0),
+            )
+        pose = transform.local_pose()
+        quat = pose.ang
+        t0 = 2.0 * (quat.w * quat.z + quat.x * quat.y)
+        t1 = 1.0 - 2.0 * (quat.y * quat.y + quat.z * quat.z)
+        z_degrees = math.degrees(math.atan2(t0, t1))
+        t2 = max(-1.0, min(1.0, 2.0 * (quat.w * quat.y - quat.z * quat.x)))
+        y_degrees = math.degrees(math.asin(t2))
+        t3 = 2.0 * (quat.w * quat.x + quat.y * quat.z)
+        t4 = 1.0 - 2.0 * (quat.x * quat.x + quat.y * quat.y)
+        x_degrees = math.degrees(math.atan2(t3, t4))
+        return EntityTransformSnapshot(
+            enabled=True,
+            position=tuple(float(value) for value in pose.lin),
+            rotation_degrees=(x_degrees, y_degrees, z_degrees),
+            scale=tuple(float(value) for value in pose.scale),
         )
 
     def _layer_name(self, index: int) -> str:
@@ -417,5 +487,6 @@ __all__ = [
     "ComponentSelectionHandler",
     "EntityInspectorController",
     "EntityInspectorSnapshot",
+    "EntityTransformSnapshot",
     "collect_component_types",
 ]

@@ -41,6 +41,7 @@ class NativeEntityInspector:
     uuid_value: object
     layer_combo: object
     apply_layer_button: object
+    transform_boxes: tuple[tuple[object, object, object], ...]
     component_model: CollectionModel
     component_list: object
     add_component_button: object
@@ -69,6 +70,15 @@ class NativeEntityInspector:
             self.layer_combo.selected_index = snapshot.layer
             self.layer_combo.widget.enabled = snapshot.entity is not None
             self.apply_layer_button.widget.enabled = snapshot.entity is not None
+            transform_values = (
+                snapshot.transform.position,
+                snapshot.transform.rotation_degrees,
+                snapshot.transform.scale,
+            )
+            for boxes, values in zip(self.transform_boxes, transform_values, strict=True):
+                for box, value in zip(boxes, values, strict=True):
+                    box.value = value
+                    box.widget.enabled = snapshot.transform.enabled
             self.add_component_button.widget.enabled = snapshot.entity is not None
             self.remove_component_button.widget.enabled = snapshot.selected_component >= 0
             self.component_model.set_items(
@@ -190,6 +200,28 @@ def build_native_entity_inspector(
     layer_row.add_fixed_child(apply_layer_button.widget, 32.0)
     root.add_fixed_child(layer_row, 30.0)
 
+    transform_boxes = []
+    for key, label_text in (
+        ("position", "Position"),
+        ("rotation", "Rotation (deg)"),
+        ("scale", "Scale"),
+    ):
+        row = document.create_hstack(f"native-inspector-transform-{key}")
+        row.set_layout_spacing(3.0)
+        label = document.create_label(label_text, f"native-inspector-transform-{key}-label")
+        row.add_fixed_child(label, 104.0)
+        boxes = []
+        for axis in "xyz":
+            box = document.create_spin_box(1.0 if key == "scale" else 0.0)
+            box.set_range(-1.0e6, 1.0e6)
+            box.step = 0.1
+            box.decimals = 3
+            box.widget.stable_id = f"editor.inspector.transform.{key}.{axis}"
+            row.add_stretch_child(box.widget)
+            boxes.append(box)
+        transform_boxes.append(tuple(boxes))
+        root.add_fixed_child(row, 30.0)
+
     component_label = document.create_label("Components", "native-inspector-components-label")
     root.add_fixed_child(component_label, 26.0)
     component_model = CollectionModel()
@@ -242,6 +274,7 @@ def build_native_entity_inspector(
         uuid_value=uuid_value,
         layer_combo=layer_combo,
         apply_layer_button=apply_layer_button,
+        transform_boxes=tuple(transform_boxes),
         component_model=component_model,
         component_list=component_list,
         add_component_button=add_component_button,
@@ -281,6 +314,17 @@ def build_native_entity_inspector(
         if owner is not None and not owner.updating:
             owner.controller.apply_layer_to_descendants()
 
+    def on_transform_changed(_value: float) -> None:
+        owner = current()
+        if owner is None or owner.updating:
+            return
+        values = tuple(
+            tuple(box.value for box in boxes)
+            for boxes in owner.transform_boxes
+        )
+        owner.controller.set_transform(values[0], values[1], values[2])
+        owner.request_render()
+
     def on_component_selection(selected: list[int]) -> None:
         owner = current()
         if owner is not None and not owner.updating:
@@ -307,6 +351,9 @@ def build_native_entity_inspector(
     name_input.connect_submitted(on_name_submitted)
     layer_combo.connect_changed(on_layer_changed)
     apply_layer_button.connect_clicked(on_apply_layer)
+    for boxes in inspector.transform_boxes:
+        for box in boxes:
+            box.connect_changed(on_transform_changed)
     component_list.connect_selection_changed(on_component_selection)
     add_component_button.connect_clicked(on_add_component)
     remove_component_button.connect_clicked(on_remove_component)

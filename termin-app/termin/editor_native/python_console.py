@@ -18,7 +18,7 @@ def _ref(document: Document, reference) -> WidgetRef:
 class NativePythonConsole:
     document: Document
     controller: PythonConsoleController
-    dialog: object
+    dialog: object | None
     root: WidgetRef
     output_model: RichTextModel
     prompt: object
@@ -26,11 +26,19 @@ class NativePythonConsole:
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
     changed_callback: Callable[[PythonConsoleSnapshot], None]
+    activate_embedded: Callable[[], None] | None = None
     _closed: bool = False
 
     def show(self) -> bool:
         if self._closed:
             raise RuntimeError("native Python console is closed")
+        if self.dialog is None:
+            if self.activate_embedded is None:
+                raise RuntimeError("embedded native Python console has no activation callback")
+            self.apply_snapshot(self.controller.snapshot)
+            self.activate_embedded()
+            self.request_render()
+            return True
         if self.dialog.open:
             return False
         self.apply_snapshot(self.controller.snapshot)
@@ -59,9 +67,9 @@ class NativePythonConsole:
             return
         self._closed = True
         self.controller.changed.disconnect(self.changed_callback)
-        if self.dialog.open:
+        if self.dialog is not None and self.dialog.open:
             self.dialog.close()
-        if self.document.is_alive(self.dialog.handle):
+        if self.dialog is not None and self.document.is_alive(self.dialog.handle):
             self.document.destroy_widget_recursive(self.dialog.handle)
 
 
@@ -71,6 +79,8 @@ def build_native_python_console(
     *,
     viewport: Callable[[], Rect],
     request_render: Callable[[], None],
+    embedded: bool = False,
+    activate_embedded: Callable[[], None] | None = None,
 ) -> NativePythonConsole:
     root = document.create_vstack("native-python-console")
     root.stable_id = "editor.python-console"
@@ -93,9 +103,14 @@ def build_native_python_console(
     clear = document.create_button("Clear")
     input_row.add_fixed_child(_ref(document, clear), 66.0)
     root.add_fixed_child(input_row, 32.0)
-    dialog = document.create_dialog("Python Console")
-    dialog.actions = [DialogAction("close", "Close", is_default=False, is_cancel=True)]
-    dialog.set_content(root)
+    dialog = None
+    if embedded:
+        if activate_embedded is None:
+            raise ValueError("embedded native Python console requires an activation callback")
+    else:
+        dialog = document.create_dialog("Python Console")
+        dialog.actions = [DialogAction("close", "Close", is_default=False, is_cancel=True)]
+        dialog.set_content(root)
     placeholder = lambda _snapshot: None
     result = NativePythonConsole(
         document=document,
@@ -108,6 +123,7 @@ def build_native_python_console(
         viewport=viewport,
         request_render=request_render,
         changed_callback=placeholder,
+        activate_embedded=activate_embedded,
     )
     weak_result = weakref.ref(result)
 

@@ -56,6 +56,20 @@ def test_entity_inspector_properties_components_fields_and_undo(scene):
     assert snapshot.layer == 0
     assert len(snapshot.layer_names) == 64
     assert [component.type_name for component in snapshot.components] == ["Component"]
+    assert snapshot.transform.enabled
+    assert snapshot.transform.position == pytest.approx((0.0, 0.0, 0.0))
+    assert snapshot.transform.rotation_degrees == pytest.approx((0.0, 0.0, 0.0))
+    assert snapshot.transform.scale == pytest.approx((1.0, 1.0, 1.0))
+
+    controller.set_transform(
+        (1.0, 2.0, 3.0),
+        (10.0, 20.0, 30.0),
+        (2.0, 3.0, 4.0),
+    )
+    snapshot = controller.snapshot
+    assert snapshot.transform.position == pytest.approx((1.0, 2.0, 3.0))
+    assert snapshot.transform.rotation_degrees == pytest.approx((10.0, 20.0, 30.0))
+    assert snapshot.transform.scale == pytest.approx((2.0, 3.0, 4.0))
 
     controller.set_name("renamed")
     controller.set_layer(5)
@@ -79,6 +93,8 @@ def test_entity_inspector_properties_components_fields_and_undo(scene):
     assert entity.layer == 0
     stack.undo()
     assert entity.name == "source"
+    stack.undo()
+    assert tuple(entity.transform.local_pose().lin) == pytest.approx((0.0, 0.0, 0.0))
 
 
 def test_entity_inspector_clears_fields_for_non_component_or_missing_target(scene):

@@ -171,16 +171,23 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.navigation_tabs.page_title(1) == "Rendering"
     assert shell.navigation_tabs.page_handle(0) == shell.hierarchy_host.handle
     assert shell.navigation_tabs.page_handle(1) == shell.rendering_host.handle
+    assert shell.bottom_tabs.widget.stable_id == "editor.bottom-tabs"
+    assert shell.bottom_tabs.page_count == 2
+    assert shell.bottom_tabs.page_title(0) == "Project"
+    assert shell.bottom_tabs.page_title(1) == "Console"
     assert shell.project_host.stable_id == "editor.project-host"
+    assert shell.console_host.stable_id == "editor.console-host"
     assert shell.workspace_host.stable_id == "editor.workspace-host"
     assert shell.inspector_host.stable_id == "editor.inspector-host"
     assert shell.menu_bar.entries[0].stable_id == "file"
-    assert shell.tool_bar.model.command_count == 3
+    assert shell.tool_bar.model.command_count == 1
     assert shell.status_bar.displayed_text == "Ready | Native editor host"
     assert shell.project_host.bounds.y > shell.workspace_host.bounds.y
     assert shell.project_host.bounds.width == pytest.approx(shell.central.bounds.width)
     assert shell.workspace_host.bounds.x > shell.hierarchy_host.bounds.x
     assert shell.inspector_host.bounds.x > shell.workspace_host.bounds.x
+    assert shell.tool_bar.widget.bounds.x == pytest.approx(shell.workspace_host.bounds.x)
+    assert shell.tool_bar.widget.bounds.width == pytest.approx(shell.workspace_host.bounds.width)
     assert draw_list.command_count > 20
     assert any(command.type == DrawCommandType.Text for command in draw_list.commands)
 

@@ -37,7 +37,9 @@ class NativeEditorShell:
     navigation_tabs: object
     hierarchy_host: WidgetRef
     rendering_host: WidgetRef
+    bottom_tabs: object
     project_host: WidgetRef
+    console_host: WidgetRef
     workspace_host: WidgetRef
     inspector_host: WidgetRef
     menu_bar: object
@@ -47,7 +49,6 @@ class NativeEditorShell:
     load_scene_command: int
     save_scene_command: int
     save_scene_as_command: int
-    toolbar_save_command: int
     game_menu_model: CommandModel
     game_play_command: int
     toolbar_model: CommandModel
@@ -189,13 +190,16 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     _append(document, root, menu_bar, Size(1280.0, 30.0), fixed_extent=30.0)
 
     toolbar_model = CommandModel()
-    toolbar_save_command = toolbar_model.append(
-        CommandData("save", "Save", icon="S", shortcut="Ctrl+S")
-    )
-    toolbar_model.append(CommandData("separator", kind=CommandKind.Separator))
     toolbar_play_command = toolbar_model.append(CommandData("play", "Play", icon="▶"))
     tool_bar = document.create_tool_bar(toolbar_model)
-    _append(document, root, tool_bar, Size(1280.0, 40.0), fixed_extent=40.0)
+    toolbar_row = document.create_hstack("native-editor-toolbar-row")
+    toolbar_row.set_layout_spacing(0.0)
+    toolbar_left = document.create_hstack("native-editor-toolbar-left-spacer")
+    toolbar_right = document.create_hstack("native-editor-toolbar-right-spacer")
+    toolbar_row.add_fixed_child(toolbar_left, 280.0)
+    toolbar_row.add_stretch_child(tool_bar.widget)
+    toolbar_row.add_fixed_child(toolbar_right, 360.0)
+    _append(document, root, toolbar_row, Size(1280.0, 40.0), fixed_extent=40.0)
 
     central = document.create_vstack("native-editor-central")
     central.stable_id = "editor.central"
@@ -236,10 +240,19 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     inspector_host.set_layout_spacing(0.0)
     _append(document, upper, inspector_host, Size(360.0, 406.0), fixed_extent=360.0)
 
+    bottom_tabs = document.create_tab_view("native-editor-bottom-tabs")
+    bottom_tabs.widget.stable_id = "editor.bottom-tabs"
+    _append(document, central, bottom_tabs.widget, Size(1280.0, 220.0), fixed_extent=220.0)
+
     project_host = document.create_vstack("native-editor-project-host")
     project_host.stable_id = "editor.project-host"
     project_host.set_layout_spacing(0.0)
-    _append(document, central, project_host, Size(1280.0, 220.0), fixed_extent=220.0)
+    bottom_tabs.add_page("Project", project_host)
+
+    console_host = document.create_vstack("native-editor-console-host")
+    console_host.stable_id = "editor.console-host"
+    console_host.set_layout_spacing(0.0)
+    bottom_tabs.add_page("Console", console_host)
 
     status_bar = document.create_status_bar("Ready | Native editor host")
     _append(document, root, status_bar, Size(1280.0, 24.0), fixed_extent=24.0)
@@ -249,7 +262,9 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         navigation_tabs=navigation_tabs,
         hierarchy_host=hierarchy_host,
         rendering_host=rendering_host,
+        bottom_tabs=bottom_tabs,
         project_host=project_host,
+        console_host=console_host,
         workspace_host=workspace_host,
         inspector_host=inspector_host,
         menu_bar=menu_bar,
@@ -259,7 +274,6 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         load_scene_command=load_scene_command,
         save_scene_command=save_scene_command,
         save_scene_as_command=save_scene_as_command,
-        toolbar_save_command=toolbar_save_command,
         game_menu_model=game_menu,
         game_play_command=game_play_command,
         toolbar_model=toolbar_model,
