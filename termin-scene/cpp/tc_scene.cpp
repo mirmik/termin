@@ -294,14 +294,34 @@ void TcSceneRef::metadata_from_json(const std::string& json_str) {
 std::vector<Entity> TcSceneRef::get_all_entities() const {
     std::vector<Entity> result;
     tc_entity_pool* pool = entity_pool();
-    if (!pool) return result;
+    if (!pool)
+        return result;
 
-    tc_entity_pool_foreach(pool, [](tc_entity_pool* p, tc_entity_id id, void* user_data) -> bool {
-        auto* vec = static_cast<std::vector<Entity>*>(user_data);
-        vec->push_back(Entity(p, id));
-        return true;
-    }, &result);
+    tc_entity_pool_foreach(
+        pool,
+        [](tc_entity_pool* p, tc_entity_id id, void* user_data) -> bool {
+            auto* vec = static_cast<std::vector<Entity>*>(user_data);
+            vec->push_back(Entity(p, id));
+            return true;
+        },
+        &result);
 
+    return result;
+}
+
+std::vector<Entity> TcSceneRef::get_root_entities() const {
+    std::vector<Entity> result;
+    tc_entity_pool* pool = entity_pool();
+    if (!pool)
+        return result;
+    const size_t count = tc_entity_pool_root_count(pool);
+    result.reserve(count);
+    for (size_t index = 0; index < count; ++index) {
+        const tc_entity_id id = tc_entity_pool_root_at(pool, index);
+        if (tc_entity_id_valid(id)) {
+            result.emplace_back(pool, id);
+        }
+    }
     return result;
 }
 
@@ -385,9 +405,7 @@ nos::trent TcSceneRef::serialize() const {
     // Root entities (no parent)
     nos::trent entities;
     entities.init(nos::trent::type::list);
-    for (const Entity& e : get_all_entities()) {
-        if (e.parent().valid()) continue;
-
+    for (const Entity& e : get_root_entities()) {
         nos::trent ent_data = serialize_entity_recursive(e);
         if (!ent_data.is_nil()) {
             entities.push_back(std::move(ent_data));

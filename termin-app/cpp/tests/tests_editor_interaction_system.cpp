@@ -15,6 +15,7 @@ TEST_CASE("EditorInteractionSystem ignores release without scene press")
         0,
         TC_INPUT_RELEASE,
         0,
+        1,
         12.0f,
         34.0f,
         TC_VIEWPORT_HANDLE_INVALID,

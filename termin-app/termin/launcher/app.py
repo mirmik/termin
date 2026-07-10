@@ -12,7 +12,7 @@ from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
 from tcgui.widgets.containers import HStack, VStack, Panel
 from tcgui.widgets.units import px, pct
 from tcbase import Key, MouseButton, log
-from termin.editor_tcgui.shader_runtime import configure_sdk_shader_runtime
+from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
 from termin.launcher.recent import RecentProjects, write_launch_project
 from termin.project import create_project
 

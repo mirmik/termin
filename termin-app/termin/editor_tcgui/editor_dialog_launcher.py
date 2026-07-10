@@ -198,38 +198,6 @@ class EditorDialogLauncher:
         else:
             self._set_spacemouse(None)
 
-    def show_resource_manager_viewer(self) -> None:
-        ui = self._get_ui()
-        if ui is None:
-            return
-        from termin.editor_tcgui.dialogs.resource_manager_viewer import show_resource_manager_viewer
-
-        show_resource_manager_viewer(ui, project_file_watcher=self._get_project_file_watcher())
-
-    def show_core_registry_viewer(self) -> None:
-        ui = self._get_ui()
-        if ui is None:
-            return
-        from termin.editor_tcgui.dialogs.core_registry_viewer import show_core_registry_viewer
-
-        show_core_registry_viewer(ui)
-
-    def show_inspect_registry_viewer(self) -> None:
-        ui = self._get_ui()
-        if ui is None:
-            return
-        from termin.editor_tcgui.dialogs.inspect_registry_viewer import show_inspect_registry_viewer
-
-        show_inspect_registry_viewer(ui)
-
-    def show_navmesh_registry_viewer(self) -> None:
-        ui = self._get_ui()
-        if ui is None:
-            return
-        from termin.editor_tcgui.dialogs.navmesh_registry_viewer import show_navmesh_registry_viewer
-
-        show_navmesh_registry_viewer(ui)
-
     def show_framegraph_debugger(self) -> None:
         ui = self._get_ui()
         if ui is None:

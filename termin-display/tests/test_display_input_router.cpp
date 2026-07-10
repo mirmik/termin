@@ -19,6 +19,7 @@ struct CountingInput {
     tc_input_manager manager;
     int presses = 0;
     int releases = 0;
+    uint32_t last_click_count = 0;
 };
 
 void surface_get_size(tc_render_surface* self, int* width, int* height)
@@ -32,7 +33,7 @@ void surface_get_size(tc_render_surface* self, int* width, int* height)
     }
 }
 
-void count_mouse_button(tc_input_manager* self, int, int action, int)
+void count_mouse_button(tc_input_manager* self, int, int action, int, uint32_t click_count)
 {
     auto* input = reinterpret_cast<CountingInput*>(self->userdata);
     if (action == TC_INPUT_PRESS) {
@@ -40,6 +41,7 @@ void count_mouse_button(tc_input_manager* self, int, int action, int)
     } else if (action == TC_INPUT_RELEASE) {
         input->releases += 1;
     }
+    input->last_click_count = click_count;
 }
 
 const tc_render_surface_vtable fixed_surface_vtable = {
@@ -54,6 +56,7 @@ void init_counting_input(CountingInput* input)
 {
     input->presses = 0;
     input->releases = 0;
+    input->last_click_count = 0;
     tc_input_manager_init(&input->manager, &counting_input_vtable);
     input->manager.userdata = input;
 }
@@ -91,12 +94,13 @@ int main()
     assert(input != nullptr);
 
     tc_input_manager_on_mouse_move(input, 25.0, 50.0);
-    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0);
+    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0, 2);
     tc_input_manager_on_mouse_move(input, 75.0, 50.0);
-    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_RELEASE, 0);
+    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_RELEASE, 0, 2);
 
     if (left_input.presses != 1 || left_input.releases != 1 ||
-        right_input.presses != 0 || right_input.releases != 0) {
+        right_input.presses != 0 || right_input.releases != 0 ||
+        left_input.last_click_count != 2) {
         std::fprintf(stderr,
                      "unexpected routing: left press=%d release=%d, right press=%d release=%d\n",
                      left_input.presses,

@@ -196,17 +196,30 @@ class EntityOperations:
     # Reparent
     # ------------------------------------------------------------------
 
-    def reparent_entity(self, entity: Entity, new_parent: Entity | None) -> None:
+    def reparent_entity(
+        self,
+        entity: Entity,
+        new_parent: Entity | None,
+        *,
+        sibling_index: int | None = None,
+    ) -> None:
         if not isinstance(entity, Entity):
             return
 
         old_parent_t = entity.transform.parent if entity.transform else None
         new_parent_t = new_parent.transform if new_parent else None
 
-        if old_parent_t is new_parent_t:
+        if old_parent_t is new_parent_t and (
+            sibling_index is None or sibling_index == entity.sibling_index
+        ):
             return
 
-        cmd = ReparentEntityCommand(entity, old_parent_t, new_parent_t)
+        cmd = ReparentEntityCommand(
+            entity,
+            old_parent_t,
+            new_parent_t,
+            new_sibling_index=sibling_index,
+        )
         self._undo_handler(cmd, False)
 
         self._view.move_entity(entity, new_parent)

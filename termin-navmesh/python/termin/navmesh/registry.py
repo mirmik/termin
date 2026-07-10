@@ -56,6 +56,11 @@ class NavMeshRegistry:
         """Remove cached instance for scene."""
         cls._instances.pop(scene_uuid, None)
 
+    @classmethod
+    def instances(cls) -> tuple[tuple[str, "NavMeshRegistry"], ...]:
+        """Return a stable snapshot of active per-scene registries."""
+        return tuple(sorted(cls._instances.items()))
+
     def register(self, agent_type: str, navmesh: "NavMesh", entity: "Entity") -> None:
         """
         Register NavMesh from a source.

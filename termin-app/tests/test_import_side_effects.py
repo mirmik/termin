@@ -156,6 +156,30 @@ print(json.dumps({
     assert "nanobind: leaked" not in result.stderr
 
 
+def test_native_component_extension_projection_keeps_domain_extensions_lazy() -> None:
+    script = """
+import sys
+
+import termin.editor_native.component_extensions
+
+assert "termin.foliage" not in sys.modules
+assert "termin.editor_core.foliage_layer_editor_extension" not in sys.modules
+assert "termin.editor_core.procedural_mesh_editor_extension" not in sys.modules
+assert "termin.csg.operation_specs" not in sys.modules
+assert "termin.editor_native.foliage_extension" not in sys.modules
+assert "termin.editor_native.procedural_mesh_extension" not in sys.modules
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        env=_subprocess_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "nanobind: leaked" not in result.stderr
+
+
 def test_removed_app_asset_resource_paths_do_not_resolve() -> None:
     script = """
 import importlib

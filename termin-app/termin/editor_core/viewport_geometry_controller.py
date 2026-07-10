@@ -50,10 +50,7 @@ class ViewportGeometryController:
             return False
         scene_tree_controller = self._get_scene_tree_controller()
         if scene_tree_controller is None:
-            log.error(
-                "[ViewportGeometryController] GLTF viewport drop failed: "
-                "scene tree controller is not available"
-            )
+            log.error("[ViewportGeometryController] GLTF viewport drop failed: scene tree controller is not available")
             return False
         world_pos = self.world_position_for_viewport_drop(event.x, event.y)
         scene_tree_controller.operations.drop_glb(path, None, world_position=world_pos)
@@ -149,16 +146,10 @@ class ViewportGeometryController:
         camera = self._get_camera()
         viewport_widget = self._get_viewport_widget()
         if camera is None or camera.entity is None:
-            log.error(
-                "[ViewportGeometryController] viewport projection failed: "
-                "editor camera is not available"
-            )
+            log.error("[ViewportGeometryController] viewport projection failed: editor camera is not available")
             return None
         if viewport_widget is None:
-            log.error(
-                "[ViewportGeometryController] viewport projection failed: "
-                "viewport widget is not available"
-            )
+            log.error("[ViewportGeometryController] viewport projection failed: viewport widget is not available")
             return None
         width = float(max(1.0, viewport_widget.width))
         height = float(max(1.0, viewport_widget.height))
@@ -176,10 +167,7 @@ class ViewportGeometryController:
             try:
                 camera.set_aspect(previous_aspect)
             except Exception as e:
-                log.error(
-                    "[ViewportGeometryController] viewport projection aspect "
-                    f"restore failed: {e}"
-                )
+                log.error(f"[ViewportGeometryController] viewport projection aspect restore failed: {e}")
         w = float(clip.w)
         if abs(w) <= 1.0e-8:
             return None
@@ -199,16 +187,10 @@ class ViewportGeometryController:
         camera = self._get_camera()
         viewport_widget = self._get_viewport_widget()
         if camera is None or camera.entity is None:
-            log.error(
-                f"[ViewportGeometryController] {label} pick failed: "
-                "editor camera is not available"
-            )
+            log.error(f"[ViewportGeometryController] {label} pick failed: editor camera is not available")
             return None
         if viewport_widget is None:
-            log.error(
-                f"[ViewportGeometryController] {label} pick failed: "
-                "viewport widget is not available"
-            )
+            log.error(f"[ViewportGeometryController] {label} pick failed: viewport widget is not available")
             return None
 
         viewport_rect = self._viewport_rect(viewport_widget)
@@ -218,10 +200,7 @@ class ViewportGeometryController:
             direction = ray.direction
             denom = direction.dot(plane_normal)
             if abs(denom) < 1e-9:
-                log.error(
-                    f"[ViewportGeometryController] {label} pick failed: "
-                    "ray is parallel to plane"
-                )
+                log.error(f"[ViewportGeometryController] {label} pick failed: ray is parallel to plane")
                 return None
             t = (plane_origin - origin).dot(plane_normal) / denom
             return origin + direction * t
@@ -236,10 +215,7 @@ class ViewportGeometryController:
         entity,
     ) -> Vec3 | None:
         if entity is None or not entity.valid():
-            log.error(
-                "[ViewportGeometryController] entity local OXY plane pick "
-                "failed: entity is not available"
-            )
+            log.error("[ViewportGeometryController] entity local OXY plane pick failed: entity is not available")
             return None
         pose = entity.transform.global_pose()
         origin = pose.point_to_global(Vec3(0.0, 0.0, 0.0))
