@@ -163,7 +163,14 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
 
     assert shell.root.stable_id == "editor.root"
     assert shell.central.stable_id == "editor.central"
+    assert shell.navigation_tabs.widget.stable_id == "editor.navigation-tabs"
     assert shell.hierarchy_host.stable_id == "editor.hierarchy-host"
+    assert shell.rendering_host.stable_id == "editor.rendering-host"
+    assert shell.navigation_tabs.page_count == 2
+    assert shell.navigation_tabs.page_title(0) == "Scene"
+    assert shell.navigation_tabs.page_title(1) == "Rendering"
+    assert shell.navigation_tabs.page_handle(0) == shell.hierarchy_host.handle
+    assert shell.navigation_tabs.page_handle(1) == shell.rendering_host.handle
     assert shell.project_host.stable_id == "editor.project-host"
     assert shell.workspace_host.stable_id == "editor.workspace-host"
     assert shell.inspector_host.stable_id == "editor.inspector-host"

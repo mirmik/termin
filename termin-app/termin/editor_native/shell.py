@@ -34,7 +34,9 @@ class NativeMenuActivationRoute:
 class NativeEditorShell:
     root: WidgetRef
     central: WidgetRef
+    navigation_tabs: object
     hierarchy_host: WidgetRef
+    rendering_host: WidgetRef
     project_host: WidgetRef
     workspace_host: WidgetRef
     inspector_host: WidgetRef
@@ -204,10 +206,25 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     upper.set_layout_spacing(0.0)
     _append(document, central, upper, Size(1280.0, 406.0))
 
+    navigation_tabs = document.create_tab_view("native-editor-navigation-tabs")
+    navigation_tabs.widget.stable_id = "editor.navigation-tabs"
+    _append(
+        document,
+        upper,
+        navigation_tabs.widget,
+        Size(280.0, 406.0),
+        fixed_extent=280.0,
+    )
+
     hierarchy_host = document.create_vstack("native-editor-hierarchy-host")
     hierarchy_host.stable_id = "editor.hierarchy-host"
     hierarchy_host.set_layout_spacing(0.0)
-    _append(document, upper, hierarchy_host, Size(280.0, 406.0), fixed_extent=280.0)
+    navigation_tabs.add_page("Scene", hierarchy_host)
+
+    rendering_host = document.create_vstack("native-editor-rendering-host")
+    rendering_host.stable_id = "editor.rendering-host"
+    rendering_host.set_layout_spacing(0.0)
+    navigation_tabs.add_page("Rendering", rendering_host)
 
     workspace_host = document.create_vstack("native-editor-workspace-host")
     workspace_host.stable_id = "editor.workspace-host"
@@ -229,7 +246,9 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     return NativeEditorShell(
         root=root,
         central=central,
+        navigation_tabs=navigation_tabs,
         hierarchy_host=hierarchy_host,
+        rendering_host=rendering_host,
         project_host=project_host,
         workspace_host=workspace_host,
         inspector_host=inspector_host,
