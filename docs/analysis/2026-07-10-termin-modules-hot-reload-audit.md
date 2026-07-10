@@ -11,6 +11,13 @@
   контракт вместо собственного state-based обхода. Regression coverage
   проверяет retry retained C++ handles, normal/error cleanup Python imports и
   безопасное добавление нового descriptor через полный lifecycle boundary.
+- **#288 реализована (2026-07-10):** native shadow copies перенесены из project
+  build tree в отдельные backend-owned session directories. Collision-safe
+  naming работает между параллельными runtimes; файлы удаляются после native
+  close и на post-copy failure paths, а abandoned sessions очищаются только
+  после проверки возраста и завершения владеющего PID. Linux regression tests
+  покрывают repeated reload, injected init failure, concurrent runtimes и
+  scoped abandoned cleanup; Windows gate остаётся обязательным перед закрытием.
 
 ## Резюме
 

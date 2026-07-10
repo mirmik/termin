@@ -3,10 +3,14 @@
 
 #include <tcbase/tc_log.hpp>
 
+#include <cerrno>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <exception>
 #include <filesystem>
+#include <optional>
 #include <sstream>
 
 #ifdef _WIN32
@@ -20,13 +24,131 @@
     #define popen _popen
     #define pclose _pclose
 #else
+    #include <csignal>
     #include <dlfcn.h>
+    #include <unistd.h>
 #endif
 
 namespace termin_modules {
 namespace {
 
 using InitFn = void (*)();
+
+constexpr auto kAbandonedShadowAge = std::chrono::hours(24);
+
+uint64_t process_id() {
+#ifdef _WIN32
+    return static_cast<uint64_t>(GetCurrentProcessId());
+#else
+    return static_cast<uint64_t>(getpid());
+#endif
+}
+
+bool process_is_alive(uint64_t pid) {
+#ifdef _WIN32
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, static_cast<DWORD>(pid));
+    if (process == nullptr) {
+        return false;
+    }
+    DWORD exit_code = 0;
+    const bool alive = GetExitCodeProcess(process, &exit_code) != 0 && exit_code == STILL_ACTIVE;
+    CloseHandle(process);
+    return alive;
+#else
+    if (kill(static_cast<pid_t>(pid), 0) == 0) {
+        return true;
+    }
+    return errno == EPERM;
+#endif
+}
+
+std::optional<uint64_t> shadow_session_process_id(const std::filesystem::path& path) {
+    const std::string name = path.filename().string();
+    constexpr const char* prefix = "session-";
+    if (!name.starts_with(prefix)) {
+        return std::nullopt;
+    }
+    const size_t begin = std::char_traits<char>::length(prefix);
+    const size_t end = name.find('-', begin);
+    if (end == std::string::npos) {
+        return std::nullopt;
+    }
+    try {
+        return std::stoull(name.substr(begin, end - begin));
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+bool is_dynamic_library_file(const std::filesystem::path& path) {
+    std::string name = path.filename().string();
+#ifdef _WIN32
+    for (char& ch : name) {
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    return path.extension() == ".dll" || name.ends_with(".dll");
+#elif defined(__APPLE__)
+    return name.ends_with(".dylib");
+#else
+    const size_t so = name.find(".so");
+    return so != std::string::npos && (so + 3 == name.size() || name[so + 3] == '.');
+#endif
+}
+
+void prune_abandoned_shadow_sessions(const std::filesystem::path& base_dir) {
+    std::error_code ec;
+    std::filesystem::directory_iterator it(base_dir, ec);
+    if (ec) {
+        tc::Log::error(
+            "CppModuleBackend: failed to enumerate native shadow root '%s': %s",
+            base_dir.string().c_str(),
+            ec.message().c_str()
+        );
+        return;
+    }
+
+    const auto now = std::filesystem::file_time_type::clock::now();
+    for (const auto& entry : it) {
+        if (!entry.is_directory(ec) || ec) {
+            ec.clear();
+            continue;
+        }
+
+        const std::optional<uint64_t> owner_pid = shadow_session_process_id(entry.path());
+        if (!owner_pid.has_value() || process_is_alive(*owner_pid)) {
+            continue;
+        }
+
+        const auto modified = entry.last_write_time(ec);
+        if (ec) {
+            tc::Log::warn(
+                "CppModuleBackend: cannot inspect abandoned shadow session '%s': %s",
+                entry.path().string().c_str(),
+                ec.message().c_str()
+            );
+            ec.clear();
+            continue;
+        }
+        if (now - modified < kAbandonedShadowAge) {
+            continue;
+        }
+
+        std::filesystem::remove_all(entry.path(), ec);
+        if (ec) {
+            tc::Log::error(
+                "CppModuleBackend: failed to remove abandoned shadow session '%s': %s",
+                entry.path().string().c_str(),
+                ec.message().c_str()
+            );
+            ec.clear();
+        } else {
+            tc::Log::info(
+                "CppModuleBackend: removed abandoned native shadow session '%s'",
+                entry.path().string().c_str()
+            );
+        }
+    }
+}
 
 std::string shell_quote(const std::filesystem::path& path) {
     const std::string text = path.string();
@@ -250,6 +372,169 @@ void* resolve_symbol(void* handle, const char* name) {
 
 } // namespace
 
+CppModuleBackend::~CppModuleBackend() noexcept {
+    if (_shadow_session_dir.empty()) {
+        return;
+    }
+
+    std::error_code ec;
+    const bool removed = std::filesystem::remove(_shadow_session_dir, ec);
+    if (ec) {
+        tc::Log::error(
+            "CppModuleBackend: failed to remove native shadow session directory '%s': %s",
+            _shadow_session_dir.string().c_str(),
+            ec.message().c_str()
+        );
+        return;
+    }
+    const bool still_exists = std::filesystem::exists(_shadow_session_dir, ec);
+    if (ec) {
+        tc::Log::error(
+            "CppModuleBackend: failed to inspect native shadow session directory '%s': %s",
+            _shadow_session_dir.string().c_str(),
+            ec.message().c_str()
+        );
+        return;
+    }
+    if (!removed && still_exists) {
+        tc::Log::error(
+            "CppModuleBackend: native shadow session directory is not empty at destruction: '%s'",
+            _shadow_session_dir.string().c_str()
+        );
+        return;
+    }
+
+    std::filesystem::remove(_shadow_base_dir, ec);
+}
+
+bool CppModuleBackend::ensure_shadow_session(
+    const ModuleEnvironment& environment,
+    std::string& error
+) {
+    std::lock_guard<std::mutex> lock(_shadow_mutex);
+    if (!_shadow_session_dir.empty()) {
+        return true;
+    }
+
+    std::error_code ec;
+    _shadow_base_dir = environment.native_shadow_root.empty()
+        ? std::filesystem::temp_directory_path(ec) / "termin-modules-shadow"
+        : environment.native_shadow_root;
+    if (ec) {
+        error = "Failed to resolve native shadow root: " + ec.message();
+        return false;
+    }
+
+    std::filesystem::create_directories(_shadow_base_dir, ec);
+    if (ec) {
+        error = "Failed to create native shadow root '" + _shadow_base_dir.string() + "': " + ec.message();
+        return false;
+    }
+    prune_abandoned_shadow_sessions(_shadow_base_dir);
+
+    static std::atomic<uint64_t> session_counter{0};
+    const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    for (size_t attempt = 0; attempt < 100; ++attempt) {
+        const uint64_t sequence = session_counter.fetch_add(1, std::memory_order_relaxed);
+        const std::string name =
+            "session-" + std::to_string(process_id()) + "-" +
+            std::to_string(now) + "-" + std::to_string(sequence);
+        const std::filesystem::path candidate = _shadow_base_dir / name;
+        if (std::filesystem::create_directory(candidate, ec)) {
+            _shadow_session_dir = candidate;
+            return true;
+        }
+        if (ec) {
+            error = "Failed to create native shadow session '" + candidate.string() + "': " + ec.message();
+            return false;
+        }
+    }
+
+    error = "Failed to allocate a collision-free native shadow session under '" +
+        _shadow_base_dir.string() + "'";
+    return false;
+}
+
+std::filesystem::path CppModuleBackend::next_shadow_path(
+    const std::filesystem::path& artifact_path,
+    const ModuleEnvironment& environment,
+    std::string& error
+) {
+    if (!ensure_shadow_session(environment, error)) {
+        return {};
+    }
+
+    const uint64_t sequence = _shadow_counter.fetch_add(1, std::memory_order_relaxed);
+    const std::filesystem::path load_dir = _shadow_session_dir / ("load-" + std::to_string(sequence));
+    std::error_code ec;
+    if (!std::filesystem::create_directory(load_dir, ec)) {
+        error = "Failed to create native shadow load directory '" + load_dir.string() + "': " +
+            (ec ? ec.message() : "path already exists");
+        return {};
+    }
+    return load_dir / artifact_path.filename();
+}
+
+bool CppModuleBackend::stage_sibling_libraries(
+    ModuleRecord& record,
+    const std::filesystem::path& artifact_path,
+    const std::filesystem::path& load_dir
+) {
+    std::error_code ec;
+    std::filesystem::directory_iterator it(artifact_path.parent_path(), ec);
+    if (ec) {
+        record.error_message = "Failed to enumerate native module dependency directory '" +
+            artifact_path.parent_path().string() + "': " + ec.message();
+        return false;
+    }
+
+    for (const auto& entry : it) {
+        if (!entry.is_regular_file(ec) || ec) {
+            ec.clear();
+            continue;
+        }
+        if (entry.path().filename() == artifact_path.filename() ||
+            !is_dynamic_library_file(entry.path())) {
+            continue;
+        }
+
+        const std::filesystem::path destination = load_dir / entry.path().filename();
+        std::filesystem::copy_file(entry.path(), destination, std::filesystem::copy_options::none, ec);
+        if (ec) {
+            record.error_message = "Failed to stage native module dependency '" +
+                entry.path().string() + "': " + ec.message();
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CppModuleBackend::remove_shadow_artifacts(
+    ModuleRecord& record,
+    const std::filesystem::path& path
+) {
+    if (path.empty()) {
+        return true;
+    }
+
+    std::error_code ec;
+    const std::filesystem::path load_dir = path.parent_path();
+    std::filesystem::remove_all(load_dir, ec);
+    if (!ec) {
+        return true;
+    }
+
+    const std::string cleanup_error = "Failed to remove native shadow load directory '" +
+        load_dir.string() + "': " + ec.message();
+    tc::Log::error("CppModuleBackend: %s", cleanup_error.c_str());
+    if (record.error_message.empty()) {
+        record.error_message = cleanup_error;
+    } else {
+        record.error_message += "; " + cleanup_error;
+    }
+    return false;
+}
+
 bool CppModuleBackend::needs_rebuild(
     const ModuleRecord& record,
     const ModuleEnvironment& environment
@@ -362,18 +647,31 @@ bool CppModuleBackend::load(
         return false;
     }
 
-    // Copy artifact to a unique path to avoid dlopen cache
-    static int load_counter = 0;
-    std::filesystem::path load_path = config->artifact_path;
-    load_path += ".loaded." + std::to_string(++load_counter);
+    // Copy the artifact into this backend's private session directory to avoid
+    // loader caching without polluting the project build tree.
+    std::string shadow_error;
+    const std::filesystem::path load_path = next_shadow_path(
+        config->artifact_path,
+        environment,
+        shadow_error
+    );
+    if (load_path.empty()) {
+        record.error_message = shadow_error;
+        return false;
+    }
     try {
         std::filesystem::copy_file(
             config->artifact_path, load_path,
-            std::filesystem::copy_options::overwrite_existing
+            std::filesystem::copy_options::none
         );
     } catch (const std::exception& e) {
         record.error_message = "Failed to copy artifact for loading: ";
         record.error_message += e.what();
+        remove_shadow_artifacts(record, load_path);
+        return false;
+    }
+    if (!stage_sibling_libraries(record, config->artifact_path, load_path.parent_path())) {
+        remove_shadow_artifacts(record, load_path);
         return false;
     }
 
@@ -381,6 +679,7 @@ bool CppModuleBackend::load(
     void* native_handle = load_shared_library(load_path, error);
     if (native_handle == nullptr) {
         record.error_message = "Failed to load shared library: " + error;
+        remove_shadow_artifacts(record, load_path);
         return false;
     }
 
@@ -406,11 +705,13 @@ bool CppModuleBackend::load(
             unload_shared_library(native_handle);
             record.error_message = "module_init failed: ";
             record.error_message += e.what();
+            remove_shadow_artifacts(record, load_path);
             return false;
         } catch (...) {
             end_init_scope();
             unload_shared_library(native_handle);
             record.error_message = "module_init failed with unknown exception";
+            remove_shadow_artifacts(record, load_path);
             return false;
         }
     }
@@ -468,7 +769,7 @@ bool CppModuleBackend::finish_unload(
 
     unload_shared_library(handle->native_handle);
     handle->native_handle = nullptr;
-    return true;
+    return remove_shadow_artifacts(record, handle->loaded_path);
 }
 
 bool CppModuleBackend::clean(

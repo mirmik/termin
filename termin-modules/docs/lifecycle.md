@@ -76,11 +76,21 @@ records. Деструктор выполняет ту же попытку shutdo
    `LoadLibrary` для artifact
 5. на Linux при провале validation добавляет отфильтрованный `ldd -r | c++filt`
    вывод в diagnostics
-6. копирует artifact во временный `.loaded.N` путь, чтобы обойти cache `dlopen`
+6. создаёт уникальную backend-owned load directory под системным temp root и
+   копирует туда artifact вместе с соседними dynamic libraries, сохраняя
+   loader-origin dependency lookup без загрязнения project build tree
 7. загружает shared library через `dlopen` или `LoadLibrary`
 8. ищет символ `module_init`
 9. если символ найден, вызывает его внутри native-init callback scope
 10. сохраняет native handle в `CppModuleHandle`
+
+Shadow artifact удаляется только после `dlclose`/`FreeLibrary`. Все failure
+paths после копирования также удаляют его; ошибка удаления логируется и при
+обычном unload оставляет record retryable. Каждый backend получает отдельную
+collision-safe session directory, поэтому параллельные runtimes не используют
+общие имена. При создании новой session удаляются только directories старше 24
+часов, владеющий PID которых уже не существует. Для тестов или host policy root
+можно явно задать через `ModuleEnvironment::native_shadow_root`.
 
 Важно:
 

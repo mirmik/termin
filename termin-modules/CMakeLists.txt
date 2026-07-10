@@ -174,6 +174,21 @@ install(FILES
 if(TERMIN_MODULES_BUILD_TESTS)
     enable_testing()
 
+    add_library(termin_modules_shadow_test_dependency SHARED
+        tests/shadow_test_dependency.cpp
+    )
+    add_library(termin_modules_shadow_test_module SHARED
+        tests/shadow_test_module.cpp
+    )
+    target_link_libraries(
+        termin_modules_shadow_test_module
+        PRIVATE termin_modules_shadow_test_dependency
+    )
+    set_target_properties(
+        termin_modules_shadow_test_module
+        PROPERTIES BUILD_RPATH "$ORIGIN"
+    )
+
     add_executable(termin_modules_runtime_test
         tests/test_module_runtime.cpp
     )
@@ -183,10 +198,16 @@ if(TERMIN_MODULES_BUILD_TESTS)
     )
 
     target_link_libraries(termin_modules_runtime_test PRIVATE termin_modules)
-    add_dependencies(termin_modules_runtime_test termin_module_native_validator)
+    add_dependencies(
+        termin_modules_runtime_test
+        termin_module_native_validator
+        termin_modules_shadow_test_module
+    )
     target_compile_definitions(termin_modules_runtime_test PRIVATE
         TERMIN_MODULES_TEST_BUILD_ROOT="${CMAKE_BINARY_DIR}"
         TERMIN_MODULES_TEST_CXX_COMPILER="${CMAKE_CXX_COMPILER}"
+        TERMIN_MODULES_TEST_SHADOW_MODULE="$<TARGET_FILE:termin_modules_shadow_test_module>"
+        TERMIN_MODULES_TEST_SHADOW_DEPENDENCY="$<TARGET_FILE:termin_modules_shadow_test_dependency>"
     )
     set_target_properties(termin_modules_runtime_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
