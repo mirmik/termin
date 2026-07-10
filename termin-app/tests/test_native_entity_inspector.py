@@ -123,6 +123,9 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
         inspector.clear_extension_panel()
         assert not inspector.extension_host.visible
         assert not document.is_alive(extension_panel.handle)
+        controller.clear()
+        assert controller.snapshot.entity is None
+        assert controller.snapshot.selected_component == -1
         assert renders
         renderer.release_gpu()
     finally:
