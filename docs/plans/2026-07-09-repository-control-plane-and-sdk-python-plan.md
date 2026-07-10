@@ -455,6 +455,9 @@ that validates manifests and publishes the pr/Linux plan JSON. The C++ and
 Python test jobs download that artifact and pass it to planner-backed runners.
 CTest uploads its selection, JUnit, and execution manifest; the Python runner
 writes the corresponding suite execution manifest.
+The verify-pr-linux-plan job consumes both manifests and fails if the PR plan
+has an unaccounted Python suite or native module, or if either executor reports
+a failed entry.
 The termin-app installed-bundle acceptance is also declared as a separate
 sdk-installed process-smoke suite, preserving its distinct import contract
 without a pytest root list in workflow YAML.
