@@ -218,7 +218,7 @@ class SpaceMouseController:
         """Get current orbit controller from editor attachment."""
         if self._editor_attachment is None:
             return None
-        cm = self._editor_attachment._camera_manager
+        cm = self._editor_attachment.camera_manager
         if cm is None:
             return None
         return cm.orbit_controller

@@ -30,11 +30,13 @@ class NativeEditorShell:
     inspect_registry_command: int
     core_registry_command: int
     resource_manager_command: int
+    scene_manager_command: int
     pipeline_editor_command: int
     framegraph_debugger_command: int
     python_console_command: int
     undo_history_command: int
     audio_debugger_command: int
+    spacemouse_settings_command: int
     scene_properties_command: int
     scene_names_command: int
     shadow_settings_command: int
@@ -85,6 +87,9 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
             CommandData("inspector", "Inspector", checkable=True, checked=True),
         ]
     )
+    spacemouse_settings_command = view_menu.append(
+        CommandData("spacemouse-settings", "SpaceMouse Settings...")
+    )
     edit_menu = CommandModel()
     settings_command = edit_menu.append(CommandData("settings", "Settings..."))
     project_settings_command = edit_menu.append(
@@ -105,6 +110,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     inspect_registry_command = debug_menu.append(CommandData("inspect-registry", "Inspect Registry...", shortcut="F8"))
     core_registry_command = debug_menu.append(CommandData("core-registry", "Core Registry...", shortcut="F9"))
     resource_manager_command = debug_menu.append(CommandData("resource-manager", "Resource Manager...", shortcut="F10"))
+    scene_manager_command = debug_menu.append(CommandData("scene-manager", "Scene Manager..."))
     pipeline_editor_command = debug_menu.append(
         CommandData("pipeline-editor", "Pipeline Editor...", shortcut="F11")
     )
@@ -172,11 +178,13 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         inspect_registry_command=inspect_registry_command,
         core_registry_command=core_registry_command,
         resource_manager_command=resource_manager_command,
+        scene_manager_command=scene_manager_command,
         pipeline_editor_command=pipeline_editor_command,
         framegraph_debugger_command=framegraph_debugger_command,
         python_console_command=python_console_command,
         undo_history_command=undo_history_command,
         audio_debugger_command=audio_debugger_command,
+        spacemouse_settings_command=spacemouse_settings_command,
         scene_properties_command=scene_properties_command,
         scene_names_command=scene_names_command,
         shadow_settings_command=shadow_settings_command,

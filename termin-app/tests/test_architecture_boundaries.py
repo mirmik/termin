@@ -413,6 +413,8 @@ def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
         "navigation_settings_model.py",
         "settings_model.py",
         "scene_settings_model.py",
+        "scene_manager_model.py",
+        "spacemouse_settings_model.py",
         "undo_history_model.py",
     )
     for filename in shared_models:
@@ -428,6 +430,8 @@ def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
         "termin-app/termin/editor_native/settings_dialog.py",
         "termin-app/termin/editor_native/diagnostic_dialogs.py",
         "termin-app/termin/editor_native/scene_settings_dialogs.py",
+        "termin-app/termin/editor_native/scene_manager_dialog.py",
+        "termin-app/termin/editor_native/spacemouse_settings_dialog.py",
         "termin-app/termin/editor_tcgui/dialogs/about_dialog.py",
         "termin-app/termin/editor_tcgui/python_console_panel.py",
         "termin-app/termin/editor_tcgui/dialogs/project_settings_dialog.py",

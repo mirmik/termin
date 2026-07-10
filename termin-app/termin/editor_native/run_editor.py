@@ -40,6 +40,9 @@ from termin.editor_core.scene_settings_model import (
 )
 from termin.editor_core.project_settings_model import ProjectSettingsController
 from termin.editor_core.navigation_settings_model import NavigationSettingsController
+from termin.editor_core.spacemouse_controller import SpaceMouseController
+from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
+from termin.editor_core.scene_manager_model import SceneManagerController
 from termin.editor_core.viewport_list_model import ViewportListController
 from termin.editor_native.component_extensions import (
     NativeComponentExtensionContext,
@@ -90,6 +93,14 @@ from termin.editor_native.navigation_settings_dialogs import (
     build_native_agent_types_dialog,
     build_native_navmesh_areas_dialog,
     connect_navigation_settings_command,
+)
+from termin.editor_native.spacemouse_settings_dialog import (
+    build_native_spacemouse_settings_dialog,
+    connect_spacemouse_settings_command,
+)
+from termin.editor_native.scene_manager_dialog import (
+    build_native_scene_manager_dialog,
+    connect_scene_manager_command,
 )
 from termin.editor_native.project_browser import build_native_project_browser
 from termin.editor_native.registry_viewer import (
@@ -545,6 +556,39 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         engine.scene_manager.set_on_after_render(native_viewport.after_render)
         sync_viewport_list()
 
+    spacemouse = SpaceMouseController()
+    if native_viewport is not None:
+        spacemouse.open(native_viewport.attachment, request_editor_render)
+    spacemouse_settings_dialog = build_native_spacemouse_settings_dialog(
+        host.document,
+        SpaceMouseSettingsController(spacemouse, on_changed=request_editor_render),
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_spacemouse_settings_command(
+        shell.menu_bar,
+        shell.spacemouse_settings_command,
+        spacemouse_settings_dialog,
+    )
+    scene_manager_dialog = build_native_scene_manager_dialog(
+        host.document,
+        SceneManagerController(
+            engine.scene_manager,
+            get_editor_attachment=lambda: (
+                None if native_viewport is None else native_viewport.attachment
+            ),
+            on_changed=request_editor_render,
+        ),
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_scene_manager_command(
+        shell.menu_bar,
+        shell.scene_manager_command,
+        scene_manager_dialog,
+    )
+
     registry_viewer = build_native_registry_viewer(
         host.document,
         registry_controller,
@@ -775,6 +819,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "project_settings_dialog": project_settings_dialog,
             "agent_types_dialog": agent_types_dialog,
             "navmesh_areas_dialog": navmesh_areas_dialog,
+            "spacemouse": spacemouse,
+            "spacemouse_settings_dialog": spacemouse_settings_dialog,
+            "scene_manager_dialog": scene_manager_dialog,
             "native_viewport": native_viewport,
             "project_path": (
                 str(project_browser_controller.root_path) if project_browser_controller.root_path is not None else None
@@ -826,6 +873,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             project_settings_dialog,
             agent_types_dialog,
             navmesh_areas_dialog,
+            spacemouse_settings_dialog,
+            scene_manager_dialog,
             scene_tree,
             viewport_list,
             display_workspace,
@@ -839,6 +888,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         if executor.process_pending() > 0:
             host.request_render_update()
         project_file_watcher.poll()
+        spacemouse.poll()
         framegraph_debugger.update()
         if profiler_panel.root.visible and profiler_panel.update():
             host.request_render_update()
@@ -900,6 +950,15 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
                 navigation_dialog.close()
             except Exception:
                 _logger.exception("Native %s dialog shutdown cleanup failed", name)
+        try:
+            spacemouse_settings_dialog.close()
+            spacemouse.close()
+        except Exception:
+            _logger.exception("Native SpaceMouse shutdown cleanup failed")
+        try:
+            scene_manager_dialog.close()
+        except Exception:
+            _logger.exception("Native Scene Manager shutdown cleanup failed")
         try:
             settings_dialog.close()
         except Exception:
