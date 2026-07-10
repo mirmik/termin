@@ -36,6 +36,10 @@ class SceneNamesController:
     def __init__(self, scene) -> None:
         self._scene = scene
 
+    def set_scene(self, scene) -> SceneNamesSnapshot | None:
+        self._scene = scene
+        return None if scene is None else self.load()
+
     def load(self) -> SceneNamesSnapshot:
         return SceneNamesSnapshot(
             tuple(str(self._scene.layer_names.get(index, "")) for index in range(_NAME_COUNT)),
@@ -68,6 +72,13 @@ class ShadowSettingsController:
         self._scene = scene
         self._mirror_scenes = tuple(item for item in mirror_scenes if item is not None and item is not scene)
         self._on_changed = on_changed
+
+    def set_scene(self, scene, *, mirror_scenes=()) -> ShadowSettingsSnapshot | None:
+        self._scene = scene
+        self._mirror_scenes = tuple(
+            item for item in mirror_scenes if item is not None and item is not scene
+        )
+        return None if scene is None else self.load()
 
     def load(self) -> ShadowSettingsSnapshot:
         settings = _render_state(self._scene).shadow_settings
@@ -134,6 +145,10 @@ class ScenePropertiesController:
         self._resources = resource_manager
         self._push_undo_command = push_undo_command
         self._on_changed = on_changed
+
+    def set_scene(self, scene) -> ScenePropertiesSnapshot | None:
+        self._scene = scene
+        return None if scene is None else self.load()
 
     def load(self) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)

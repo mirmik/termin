@@ -48,3 +48,11 @@ def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_
         )
     finally:
         engine_destroy_scene(scene)
+def test_scene_manager_callbacks_accept_none_for_shutdown_cleanup():
+    from termin.engine import SceneManager
+
+    manager = SceneManager()
+    manager.set_on_after_render(lambda: None)
+    manager.set_on_after_render(None)
+    manager.set_on_before_scene_close(lambda _scene: None)
+    manager.set_on_before_scene_close(None)

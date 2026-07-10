@@ -756,7 +756,8 @@ stable.
 - [x] Port Project Settings dialog.
 - [x] Port Agent Types and NavMesh Areas dialogs.
 - [x] Port SpaceMouse runtime integration and settings dialog.
-- [ ] Complete Scene Manager native attachment workflows.
+- [x] Complete Scene Manager native editor-attachment workflow.
+- [ ] Complete Scene Manager native render-attachment workflow.
 - [x] Decide old `termin.editor_tcgui` coexistence boundary.
 
 Agent Types and NavMesh Areas share a toolkit-neutral staged controller. The
@@ -773,11 +774,25 @@ field access.
 
 Scene Manager has a toolkit-neutral snapshot/action controller and a native
 Debug-menu projection. Scene inspection, selection, mode changes, duplication,
-confirmed unload and lifecycle cleanup are native. Render Attach/Detach and
-Editor Attach/Detach remain disabled until the native runtime can atomically
-rebind its display surfaces and every scene-bound controller; switching only
-the editor viewport would leave inspectors and settings dialogs attached to the
-old scene.
+confirmed unload and lifecycle cleanup are native. The initial projection kept
+all attachment actions capability-disabled until their owner graphs could be
+switched atomically.
+
+Editor Attach/Detach now routes through `EditorSceneSession`: the viewport
+attachment, scene hierarchy, entity inspector and all three scene-settings
+controllers switch as one operation, selection/extensions are cleared, open
+scene dialogs are dismissed and a failed switch rolls back to the previous
+scene. Dynamic editor commands and Python executor context resolve the active
+scene rather than retaining the startup scene. Render Attach/Detach remains
+disabled pending native display-config to tab/surface reconciliation.
+
+The offscreen OpenGL editor process smoke also exposed and fixed three startup
+and shutdown gaps: native startup now registers Python builtin component specs
+before creating editor entities, nullable SceneManager callbacks are accepted
+by their nanobind contract, and the attachment-owned render target is unlocked
+after viewport removal before it is freed. The process now reaches and exits
+its main loop cleanly. Missing packaged editor shader sources remain tracked
+separately as Kanboard #310.
 
 Phase 12 host notes:
 
