@@ -12,7 +12,7 @@
 Основные части:
 
 - `ModuleRuntime`: orchestration, порядок зависимостей и состояние модулей
-- `CppModuleBackend`: build command, загрузка shared library и вызов `module_init`
+- `CppModuleBackend`: build command, проверка versioned native ABI и lifecycle shared library
 - `PythonModuleBackend`: управление `sys.path` и импорт Python-пакетов
 - `ModuleDescriptorParser`: разбор дескрипторов через `nos::trent`
 
@@ -23,6 +23,14 @@
 3. Зарегистрировать `CppModuleBackend` и `PythonModuleBackend`
 4. Вызвать `discover(project_root)`
 5. Вызвать `load_all()` или `load_module(name)`
+
+Проектный C++ модуль обязан экспортировать descriptor ABI v1 через
+`TERMIN_NATIVE_MODULE_DESCRIPTOR_V1` из
+`<termin_modules/native_module_abi.h>`. Descriptor содержит identity/version,
+совместимость SDK/compiler/runtime, capabilities и обязательные fallible
+`init`/`shutdown`. Helper `termin_module_native_validator --inspect` позволяет
+проверить artifact и получить эти метаданные в JSON, не запуская lifecycle
+модуля.
 
 Консольный прогрев проектных модулей:
 

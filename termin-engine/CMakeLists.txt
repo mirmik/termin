@@ -200,6 +200,7 @@ if(TERMIN_ENGINE_BUILD_TESTS)
             termin_scene::termin_scene
             termin_inspect::termin_inspect
             termin_render::termin_render
+            termin_modules::termin_modules
     )
     set_target_properties(termin_engine_cpp_hot_reload_test_module PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

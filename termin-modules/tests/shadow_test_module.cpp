@@ -1,14 +1,34 @@
-#ifdef _WIN32
-    #define TERMIN_MODULE_TEST_EXPORT __declspec(dllexport)
-#else
-    #define TERMIN_MODULE_TEST_EXPORT __attribute__((visibility("default")))
-#endif
+#include <termin_modules/native_module_abi.h>
 
 extern "C" int termin_shadow_test_dependency_value();
 
-extern "C" TERMIN_MODULE_TEST_EXPORT void module_init() {
+namespace {
+
+int32_t shadow_init(
+    const termin_native_module_host_v1*,
+    termin_native_module_error* error
+) {
     if (termin_shadow_test_dependency_value() != 42) {
-        throw "shadow test dependency mismatch";
+        termin_native_module_set_error(error, "shadow test dependency mismatch");
+        return 1;
     }
+    return 0;
 }
-extern "C" TERMIN_MODULE_TEST_EXPORT void module_shutdown() {}
+
+int32_t shadow_shutdown(
+    const termin_native_module_host_v1*,
+    termin_native_module_error*
+) {
+    return 0;
+}
+
+} // namespace
+
+TERMIN_NATIVE_MODULE_DESCRIPTOR_V1(
+    "shadow_test",
+    "1.0.0",
+    "termin-modules-shadow-test",
+    TERMIN_NATIVE_MODULE_CAP_NONE,
+    shadow_init,
+    shadow_shutdown
+);

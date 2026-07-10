@@ -457,9 +457,20 @@ bool ModuleRuntime::load_module_impl(
     }
 
     ModuleEnvironment load_environment = _environment;
+    bool cpp_load_failure_handled = false;
     if (target->spec.kind == ModuleKind::Cpp) {
         load_environment.before_cpp_module_init = _cpp_callbacks.before_native_init;
         load_environment.after_cpp_module_init = _cpp_callbacks.after_native_init;
+        load_environment.on_cpp_module_load_failure =
+            [this, &cpp_load_failure_handled](
+                const ModuleRecord& record,
+                const std::string& error
+            ) {
+                cpp_load_failure_handled = true;
+                if (_cpp_callbacks.after_failed_load) {
+                    _cpp_callbacks.after_failed_load(record, error);
+                }
+            };
     }
 
     if (!backend->load(*target, load_environment)) {
@@ -469,7 +480,7 @@ bool ModuleRuntime::load_module_impl(
         }
         _last_error = target->error_message;
         if (target->spec.kind == ModuleKind::Cpp) {
-            if (_cpp_callbacks.after_failed_load) {
+            if (!cpp_load_failure_handled && _cpp_callbacks.after_failed_load) {
                 _cpp_callbacks.after_failed_load(*target, target->error_message);
             }
         } else {

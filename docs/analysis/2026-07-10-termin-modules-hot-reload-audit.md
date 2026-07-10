@@ -311,28 +311,20 @@ Rediscovery или exceptional shutdown могут потерять единст
 
 Трекинг: **#287** `[modules/runtime] Make discovery and shutdown handle-safe`.
 
-### 6. У native module API отсутствует versioned ABI
+### 6. Versioned native module ABI — реализовано (#291)
 
-Native validator доказывает только, что library можно открыть и разрешить её
-relocations. `module_init` и `module_shutdown` являются optional `void()`
-symbols. Library вообще без `module_init` считается успешно загруженным модулем.
+Native modules теперь экспортируют единственный C-compatible descriptor ABI v1.
+Он фиксирует module identity/version/build id, SDK ABI/version,
+compiler/runtime/pointer compatibility, capabilities и обязательные fallible
+init/shutdown. Host передаёт versioned API table с explicit context; structured
+status/message не требуют исключений через ABI boundary.
 
-Не определены:
-
-- ABI/API version;
-- SDK build identity;
-- compiler/runtime compatibility;
-- structured module descriptor/capabilities;
-- fallible init result;
-- host function table/context;
-- обязательность и идемпотентность shutdown.
-
-Так как module code обменивается с host C++ types и registry callbacks, успешный
-`dlopen` не доказывает ABI compatibility. Несовместимый SDK/compiler может дать
-process corruption вместо понятной ошибки.
-
-Production contract должен иметь узкую versioned C ABI entry point, explicit
-host API table и проверку compatibility до in-process registrations.
+Отдельный validator проверяет descriptor и может вывести metadata через
+`--inspect`, не запуская init. Backend выполняет эту проверку до in-process
+registration scope и повторяет её после shadow load. Missing entry point и
+несовместимость поэтому завершаются диагностикой до регистрации. Ошибка init
+проходит owner cleanup и best-effort shutdown до `dlclose`; ошибка shutdown
+сохраняет handle для безопасного retry.
 
 Трекинг: **#291** `[modules/cpp] Define versioned native module ABI`.
 

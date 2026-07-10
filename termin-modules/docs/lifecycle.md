@@ -73,16 +73,21 @@ records. Деструктор выполняет ту же попытку shutdo
 4. если в `ModuleEnvironment.sdk_prefix` доступен
    `bin/termin_module_native_validator`, запускает отдельный helper-процесс,
    который делает clean-process `dlopen(..., RTLD_NOW | RTLD_LOCAL)` /
-   `LoadLibrary` для artifact
+   `LoadLibrary`, находит descriptor ABI v1 и проверяет identity и совместимость
+   artifact, не вызывая его lifecycle
 5. на Linux при провале validation добавляет отфильтрованный `ldd -r | c++filt`
    вывод в diagnostics
 6. создаёт уникальную backend-owned load directory под системным temp root и
    копирует туда artifact вместе с соседними dynamic libraries, сохраняя
    loader-origin dependency lookup без загрязнения project build tree
 7. загружает shared library через `dlopen` или `LoadLibrary`
-8. ищет символ `module_init`
-9. если символ найден, вызывает его внутри native-init callback scope
-10. сохраняет native handle в `CppModuleHandle`
+8. ищет обязательный символ `termin_module_descriptor_v1` и повторяет проверку
+   descriptor до открытия registration scope
+9. формирует стабильную host API table/context и вызывает обязательный fallible
+   `descriptor.init` внутри native-init callback scope
+10. при ошибке init вызывает cleanup callback и best-effort shutdown до закрытия
+    library; при успехе сохраняет descriptor, host API и native handle в
+    `CppModuleHandle`
 
 Shadow artifact удаляется только после `dlclose`/`FreeLibrary`. Все failure
 paths после копирования также удаляют его; ошибка удаления логируется и при
@@ -95,9 +100,10 @@ collision-safe session directory, поэтому параллельные runtim
 Важно:
 
 - глобальные статические конструкторы shared library вызываются загрузчиком ОС при `dlopen`/`LoadLibrary`
-- `module_init` это дополнительная явная точка входа поверх static initialization
+- ABI v1 descriptor и обе lifecycle-функции обязательны; legacy
+  `module_init`/`module_shutdown` больше не являются точками входа
 - integration layer включает owner scope регистрации только на время
-  `module_init`; C++ component/inspect registrations, сделанные в static
+  `descriptor.init`; C++ component/inspect registrations, сделанные в static
   constructors при `dlopen`/`LoadLibrary`, считаются legacy side effects и не
   получают module ownership
 - project C++ artifact должен быть самодостаточным на уровне DT_NEEDED/RUNPATH;
@@ -130,7 +136,9 @@ collision-safe session directory, поэтому параллельные runtim
 
 Для C++:
 
-- если найден `module_shutdown`, он вызывается
+- обязательный fallible `descriptor.shutdown` вызывается ровно один раз для
+  успешной попытки unload; ошибка оставляет handle и descriptor доступными для
+  повторной попытки
 - затем `termin-engine` снимает module-owned `InspectRegistry` и `ComponentRegistry`
   registrations по `module_id`
 - затем shared library выгружается

@@ -1,5 +1,6 @@
 #include "termin_modules/module_cpp_backend.hpp"
 #include "termin_modules/text_encoding.hpp"
+#include "termin_modules/native_module_validation.hpp"
 
 #include <tcbase/tc_log.hpp>
 
@@ -32,9 +33,28 @@
 namespace termin_modules {
 namespace {
 
-using InitFn = void (*)();
-
 constexpr auto kAbandonedShadowAge = std::chrono::hours(24);
+
+void native_module_host_log(void*, int level, const char* message) {
+    const char* text = message ? message : "";
+    switch (level) {
+        case TERMIN_NATIVE_MODULE_LOG_DEBUG: tc::Log::debug("[NativeModule] %s", text); break;
+        case TERMIN_NATIVE_MODULE_LOG_INFO: tc::Log::info("[NativeModule] %s", text); break;
+        case TERMIN_NATIVE_MODULE_LOG_WARN: tc::Log::warn("[NativeModule] %s", text); break;
+        default: tc::Log::error("[NativeModule] %s", text); break;
+    }
+}
+
+std::string native_module_error_message(
+    int32_t status,
+    const char* phase,
+    const char* buffer
+) {
+    std::string result = std::string(phase) + " failed with status " +
+        std::to_string(status);
+    if (buffer && buffer[0]) result += ": " + std::string(buffer);
+    return result;
+}
 
 uint64_t process_id() {
 #ifdef _WIN32
@@ -295,7 +315,9 @@ bool validate_native_artifact(
 
     std::string output;
     std::string error;
-    const std::string command = shell_quote(validator) + " " + shell_quote(artifact_path) + " 2>&1";
+    const std::string command = shell_quote(validator) + " " +
+        shell_quote(artifact_path) + " " +
+        shell_quote(std::filesystem::path(record.spec.id)) + " 2>&1";
     if (run_shell_command_capture(command, artifact_path.parent_path(), output, error)) {
         return true;
     }
@@ -628,6 +650,7 @@ bool CppModuleBackend::load(
     ModuleRecord& record,
     const ModuleEnvironment& environment
 ) {
+    record.error_message.clear();
     if (!build(record, environment)) {
         return false;
     }
@@ -683,43 +706,97 @@ bool CppModuleBackend::load(
         return false;
     }
 
-    InitFn init_fn = reinterpret_cast<InitFn>(resolve_symbol(native_handle, "module_init"));
-    if (init_fn != nullptr) {
-        bool init_scope_started = false;
-        auto end_init_scope = [&]() {
-            if (init_scope_started && environment.after_cpp_module_init) {
-                environment.after_cpp_module_init(record);
-            }
-            init_scope_started = false;
-        };
-
-        try {
-            if (environment.before_cpp_module_init) {
-                init_scope_started = true;
-                environment.before_cpp_module_init(record);
-            }
-            init_fn();
-            end_init_scope();
-        } catch (const std::exception& e) {
-            end_init_scope();
-            unload_shared_library(native_handle);
-            record.error_message = "module_init failed: ";
-            record.error_message += e.what();
-            remove_shadow_artifacts(record, load_path);
-            return false;
-        } catch (...) {
-            end_init_scope();
-            unload_shared_library(native_handle);
-            record.error_message = "module_init failed with unknown exception";
-            remove_shadow_artifacts(record, load_path);
-            return false;
-        }
+    const auto* descriptor = reinterpret_cast<
+        const termin_native_module_descriptor_v1_data*>(
+            resolve_symbol(native_handle, TERMIN_NATIVE_MODULE_DESCRIPTOR_SYMBOL));
+    const NativeModuleValidationResult descriptor_validation =
+        validate_native_module_descriptor_v1(descriptor, record.spec.id);
+    if (!descriptor_validation.compatible) {
+        record.error_message = descriptor_validation.error;
+        unload_shared_library(native_handle);
+        remove_shadow_artifacts(record, load_path);
+        return false;
     }
 
     auto handle = std::make_shared<CppModuleHandle>();
     handle->artifact_path = config->artifact_path;
     handle->loaded_path = load_path;
     handle->native_handle = native_handle;
+    handle->module_id = record.spec.id;
+    handle->host_api = make_native_module_host_v1(
+        handle->module_id.c_str(),
+        handle.get()
+    );
+    handle->host_api.log = native_module_host_log;
+    handle->descriptor = descriptor;
+
+    bool init_scope_started = false;
+    auto end_init_scope = [&]() {
+        if (init_scope_started && environment.after_cpp_module_init) {
+            environment.after_cpp_module_init(record);
+        }
+        init_scope_started = false;
+    };
+    char error_buffer[2048] = {};
+    termin_native_module_error init_error{
+        sizeof(termin_native_module_error),
+        error_buffer,
+        sizeof(error_buffer)
+    };
+    int32_t init_status = -1;
+    try {
+        if (environment.before_cpp_module_init) {
+            init_scope_started = true;
+            environment.before_cpp_module_init(record);
+        }
+        init_status = descriptor->init(&handle->host_api, &init_error);
+        end_init_scope();
+    } catch (const std::exception& e) {
+        end_init_scope();
+        record.error_message = std::string("native module init crossed C ABI with exception: ") + e.what();
+    } catch (...) {
+        end_init_scope();
+        record.error_message = "native module init crossed C ABI with unknown exception";
+    }
+    if (init_status != 0 || !record.error_message.empty()) {
+        if (record.error_message.empty()) {
+            record.error_message = native_module_error_message(
+                init_status,
+                "native module init",
+                error_buffer
+            );
+        }
+        char shutdown_buffer[2048] = {};
+        termin_native_module_error shutdown_error{
+            sizeof(termin_native_module_error),
+            shutdown_buffer,
+            sizeof(shutdown_buffer)
+        };
+        try {
+            const int32_t shutdown_status = descriptor->shutdown(
+                &handle->host_api,
+                &shutdown_error
+            );
+            if (shutdown_status != 0) {
+                record.diagnostics += "\n" + native_module_error_message(
+                    shutdown_status,
+                    "cleanup after failed native module init",
+                    shutdown_buffer
+                );
+            }
+        } catch (...) {
+            record.diagnostics += "\ncleanup after failed native module init threw across C ABI";
+        }
+        if (environment.on_cpp_module_load_failure) {
+            environment.on_cpp_module_load_failure(record, record.error_message);
+        }
+        unload_shared_library(native_handle);
+        handle->native_handle = nullptr;
+        handle->descriptor = nullptr;
+        remove_shadow_artifacts(record, load_path);
+        return false;
+    }
+
     record.handle = handle;
     return true;
 }
@@ -748,9 +825,33 @@ bool CppModuleBackend::begin_unload(
         return true;
     }
 
-    InitFn shutdown_fn = reinterpret_cast<InitFn>(resolve_symbol(handle->native_handle, "module_shutdown"));
-    if (shutdown_fn != nullptr) {
-        shutdown_fn();
+    if (!handle->descriptor || !handle->descriptor->shutdown) {
+        record.error_message = "native module handle lost its ABI descriptor before shutdown";
+        return false;
+    }
+    char error_buffer[2048] = {};
+    termin_native_module_error shutdown_error{
+        sizeof(termin_native_module_error),
+        error_buffer,
+        sizeof(error_buffer)
+    };
+    int32_t status = -1;
+    try {
+        status = handle->descriptor->shutdown(&handle->host_api, &shutdown_error);
+    } catch (const std::exception& e) {
+        record.error_message = std::string("native module shutdown crossed C ABI with exception: ") + e.what();
+        return false;
+    } catch (...) {
+        record.error_message = "native module shutdown crossed C ABI with unknown exception";
+        return false;
+    }
+    if (status != 0) {
+        record.error_message = native_module_error_message(
+            status,
+            "native module shutdown",
+            error_buffer
+        );
+        return false;
     }
     handle->shutdown_called = true;
     return true;
@@ -769,6 +870,7 @@ bool CppModuleBackend::finish_unload(
 
     unload_shared_library(handle->native_handle);
     handle->native_handle = nullptr;
+    handle->descriptor = nullptr;
     return remove_shadow_artifacts(record, handle->loaded_path);
 }
 
