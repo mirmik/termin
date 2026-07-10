@@ -214,7 +214,13 @@ TC_POOL_API tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_en
 TC_POOL_API void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent);
 
 TC_POOL_API size_t tc_entity_pool_children_count(const tc_entity_pool* pool, tc_entity_id id);
-TC_POOL_API tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id, size_t index);
+TC_POOL_API tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id,
+                                                 size_t index);
+TC_POOL_API size_t tc_entity_pool_root_count(const tc_entity_pool* pool);
+TC_POOL_API tc_entity_id tc_entity_pool_root_at(const tc_entity_pool* pool, size_t index);
+TC_POOL_API size_t tc_entity_pool_sibling_index(const tc_entity_pool* pool, tc_entity_id id);
+TC_POOL_API bool tc_entity_pool_set_sibling_index(tc_entity_pool* pool, tc_entity_id id,
+                                                  size_t index);
 
 // ============================================================================
 // Components
@@ -483,11 +489,23 @@ static inline size_t tc_entity_children_count(tc_entity_handle h) {
     return pool ? tc_entity_pool_children_count(pool, h.id) : 0;
 }
 
+static inline size_t tc_entity_sibling_index(tc_entity_handle h) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_sibling_index(pool, h.id) : SIZE_MAX;
+}
+
+static inline bool tc_entity_set_sibling_index(tc_entity_handle h, size_t index) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool && tc_entity_pool_set_sibling_index(pool, h.id, index);
+}
+
 static inline tc_entity_handle tc_entity_child_at(tc_entity_handle h, size_t index) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
-    if (!pool) return TC_ENTITY_HANDLE_INVALID;
+    if (!pool)
+        return TC_ENTITY_HANDLE_INVALID;
     tc_entity_id child_id = tc_entity_pool_child_at(pool, h.id, index);
-    if (!tc_entity_id_valid(child_id)) return TC_ENTITY_HANDLE_INVALID;
+    if (!tc_entity_id_valid(child_id))
+        return TC_ENTITY_HANDLE_INVALID;
     return tc_entity_handle_make(h.pool, child_id);
 }
 

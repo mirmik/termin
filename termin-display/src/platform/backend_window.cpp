@@ -522,7 +522,8 @@ void SDLBackendWindow::poll_events() {
                     input_manager_,
                     SDLWindow::translate_mouse_button(ev.button.button),
                     TC_INPUT_PRESS,
-                    SDLWindow::translate_sdl_mods(SDL_GetModState())
+                    SDLWindow::translate_sdl_mods(SDL_GetModState()),
+                    ev.button.clicks
                 );
                 break;
 
@@ -532,7 +533,8 @@ void SDLBackendWindow::poll_events() {
                     input_manager_,
                     SDLWindow::translate_mouse_button(ev.button.button),
                     TC_INPUT_RELEASE,
-                    SDLWindow::translate_sdl_mods(SDL_GetModState())
+                    SDLWindow::translate_sdl_mods(SDL_GetModState()),
+                    ev.button.clicks
                 );
                 break;
 

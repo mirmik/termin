@@ -1,35 +1,26 @@
-"""Scene tree controller for tcgui editor."""
+"""tcgui projection for the shared scene hierarchy controller."""
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
+from tcgui.widgets.events import DragEvent
 from tcgui.widgets.icon_button import IconButton
-from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.label import Label
 from tcgui.widgets.menu import Menu, MenuItem
-from tcgui.widgets.events import DragEvent
+from tcgui.widgets.tree import TreeNode, TreeWidget
 
-from termin.editor_core.undo_stack import UndoCommand
 from termin.editor_core.dialog_service import DialogService
-from termin.editor_core.entity_operations import EntityOperations
+from termin.editor_core.scene_hierarchy_model import (
+    SceneHierarchyController,
+    SceneHierarchySnapshot,
+)
+from termin.editor_core.undo_stack import UndoCommand
 from termin.scene import Entity
-
-_GLTF_MODEL_EXTENSIONS = (".glb", ".gltf")
-_SCENE_TREE_EXTERNAL_EXTENSIONS = _GLTF_MODEL_EXTENSIONS + (".prefab",)
 
 
 class SceneTreeControllerTcgui:
-    """Manages tcgui TreeWidget for the scene.
-
-    Holds:
-    - tree-view state (node <-> entity map, expansion, selection)
-    - context menu routing into EntityOperations
-    - drag-drop dispatch into EntityOperations.reparent_entity
-
-    Business logic (create/delete/rename/reparent/duplicate/drops) lives in
-    EntityOperations.
-    """
+    """Render shared hierarchy state into the temporary legacy frontend."""
 
     def __init__(
         self,
@@ -38,15 +29,20 @@ class SceneTreeControllerTcgui:
         undo_handler: Callable[[UndoCommand, bool], None],
         dialog_service: DialogService,
         on_object_selected: Callable[[object | None], None],
-        request_viewport_update: Optional[Callable[[], None]] = None,
+        request_viewport_update: Callable[[], None] | None = None,
         collapse_all_button: IconButton | None = None,
     ) -> None:
         self._tree = tree_widget
-        self._scene = scene
-        self._on_object_selected = on_object_selected
-        self._request_viewport_update = request_viewport_update
-
         self._entity_to_node: dict[str, TreeNode] = {}
+        self._applying_snapshot = False
+        self._ctx_menu = Menu()
+        self._controller = SceneHierarchyController(
+            scene,
+            undo_handler=undo_handler,
+            dialog_service=dialog_service,
+            on_object_selected=on_object_selected,
+            request_viewport_update=request_viewport_update,
+        )
 
         self._tree.draggable = True
         self._tree.on_select = self._on_tree_select
@@ -55,38 +51,30 @@ class SceneTreeControllerTcgui:
         self._tree.on_external_drag = self._on_external_drag
         self._tree.on_external_drop = self._on_external_drop
         self._tree.on_context_menu = self._on_tree_context_menu
+        self._tree.on_expand = lambda node: self._on_expansion(node, True)
+        self._tree.on_collapse = lambda node: self._on_expansion(node, False)
         if collapse_all_button is not None:
             collapse_all_button.on_click = self.collapse_all
 
-        self._ctx_menu = Menu()
+        self._controller.set_snapshot_changed_handler(self._apply_snapshot)
+        self._apply_snapshot(self._controller.snapshot(), expand_roots=True)
         self._rebuild_context_menu(None)
 
-        self._ops = EntityOperations(
-            scene=scene,
-            undo_handler=undo_handler,
-            dialog_service=dialog_service,
-            view=self,
-            request_viewport_update=request_viewport_update,
-        )
-
-        self.rebuild()
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     @property
-    def operations(self) -> EntityOperations:
-        return self._ops
+    def operations(self):
+        return self._controller.operations
 
     def set_scene(self, scene) -> None:
-        self._scene = scene
-        self._ops.set_scene(scene)
+        self._controller.set_scene(scene)
 
     def collapse_all(self) -> None:
-        """Collapse every node in the scene hierarchy."""
         for root in self._tree.root_nodes:
             self._collapse_recursive(root)
+        self._applying_snapshot = True
+        try:
+            self._controller.collapse_all()
+        finally:
+            self._applying_snapshot = False
         self._tree._dirty = True
 
     def _collapse_recursive(self, node: TreeNode) -> None:
@@ -95,283 +83,135 @@ class SceneTreeControllerTcgui:
             self._collapse_recursive(child)
 
     def rebuild(self, select_obj: object | None = None) -> None:
-        """Rebuild the full tree from the current scene."""
-        expanded_uuids = set(self.get_expanded_entity_uuids())
-
-        self._entity_to_node.clear()
-        self._tree.clear()
-
-        if self._scene is not None:
-            self._build_subtree(parent_node=None, parent_entity=None)
-            if expanded_uuids:
-                self.set_expanded_entity_uuids(list(expanded_uuids))
-            else:
-                for root in self._tree.root_nodes:
-                    root.expanded = True
-
-        if select_obj is not None:
-            self.select_object(select_obj)
-
-    def _build_subtree(self, parent_node: TreeNode | None, parent_entity: Entity | None) -> None:
-        """Recursively build tree nodes for entities under parent_entity."""
-        if self._scene is None:
-            return
-
-        if parent_entity is None:
-            entities = [
-                e for e in self._scene.entities
-                if e.transform is not None and e.transform.parent is None
-            ]
-        else:
-            entities = [
-                c.entity for c in parent_entity.transform.children
-                if c.entity is not None
-            ] if parent_entity.transform else []
-
-        for ent in entities:
-            node = self._make_node(ent)
-            if parent_node is None:
-                self._tree.add_root(node)
-            else:
-                parent_node.add_node(node)
-            self._build_subtree(node, ent)
-
-    def _make_node(self, entity: Entity) -> TreeNode:
-        lbl = Label()
-        lbl.text = entity.name or "(unnamed)"
-        node = TreeNode(lbl)
-        node.data = entity
-        key = self._entity_key(entity)
-        if key is not None:
-            self._entity_to_node[key] = node
-        return node
-
-    def _rebuild_context_menu(self, entity: Entity | None) -> None:
-        if entity is None:
-            self._ctx_menu.items = [
-                MenuItem("Add entity", on_click=lambda: self._ops.create_entity(None)),
-            ]
-        else:
-            self._ctx_menu.items = [
-                MenuItem("Add child entity", on_click=lambda e=entity: self._ops.create_entity(e)),
-                MenuItem("Rename...", on_click=lambda e=entity: self._ops.rename_entity(e)),
-                MenuItem("Duplicate", on_click=lambda e=entity: self._ops.duplicate_entity(e)),
-                MenuItem("Delete", on_click=lambda e=entity: self._ops.delete_entity(e)),
-                MenuItem.sep(),
-                MenuItem("Add root entity", on_click=lambda: self._ops.create_entity(None)),
-            ]
-
-    def _get_parent_node(self, entity: Entity) -> TreeNode | None:
-        if entity.transform and entity.transform.parent:
-            parent_entity = entity.transform.parent.entity
-            if parent_entity:
-                return self._entity_to_node.get(self._entity_key(parent_entity))
-        return None
-
-    def _entity_key(self, entity: Entity | None) -> str | None:
-        if entity is None:
-            return None
-        return entity.uuid if entity.uuid else None
-
-    # ---------- view surface consumed by EntityOperations ----------
-
-    def add_entity(self, entity: Entity) -> None:
-        node = self._make_node(entity)
-        parent_node = self._get_parent_node(entity)
-        if parent_node is None:
-            self._tree.add_root(node)
-        else:
-            parent_node.add_node(node)
-            parent_node.expanded = True
-        self.select_object(entity)
-
-    def add_entity_hierarchy(self, entity: Entity) -> None:
-        parent_node = self._get_parent_node(entity)
-        self._add_hierarchy_recursive(parent_node, entity)
-        self.select_object(entity)
-
-    def _add_hierarchy_recursive(self, parent_node: TreeNode | None, entity: Entity) -> None:
-        node = self._make_node(entity)
-        node.expanded = True
-        if parent_node is None:
-            self._tree.add_root(node)
-        else:
-            parent_node.add_node(node)
-
-        if entity.transform:
-            for child_t in entity.transform.children:
-                child = child_t.entity
-                if child is not None:
-                    self._add_hierarchy_recursive(node, child)
-
-    def remove_entity(self, entity: Entity, select_parent: bool = True) -> None:
-        node = self._entity_to_node.get(self._entity_key(entity))
-        if node is None:
-            return
-
-        parent_node = self._get_parent_node(entity)
-
-        if parent_node is not None:
-            parent_node.remove_node(node)
-        else:
-            self._tree.remove_root(node)
-
-        self._remove_from_map_recursive(node)
-
-        if select_parent and parent_node is not None and parent_node.data is not None:
-            self.select_object(parent_node.data)
-
-    def _remove_from_map_recursive(self, node: TreeNode) -> None:
-        if node.data is not None:
-            self._entity_to_node.pop(self._entity_key(node.data), None)
-        for child in node.subnodes:
-            self._remove_from_map_recursive(child)
-
-    def move_entity(self, entity: Entity, new_parent: Entity | None) -> None:
-        node = self._entity_to_node.get(self._entity_key(entity))
-        if node is None:
-            return
-
-        old_parent_node = self._get_parent_node_by_traversal(node)
-
-        if old_parent_node is not None:
-            old_parent_node.remove_node(node)
-        else:
-            self._tree.remove_root(node)
-
-        new_parent_node = (
-            self._entity_to_node.get(self._entity_key(new_parent))
-            if new_parent is not None else None
-        )
-
-        if new_parent_node is not None:
-            new_parent_node.add_node(node)
-            new_parent_node.expanded = True
-        else:
-            self._tree.add_root(node)
-
-        self.select_object(entity)
-
-    def _get_parent_node_by_traversal(self, target: TreeNode) -> TreeNode | None:
-        for root in self._tree.root_nodes:
-            if root is target:
-                return None
-            found = self._find_parent_recursive(root, target)
-            if found is not None:
-                return found
-        return None
-
-    def _find_parent_recursive(self, node: TreeNode, target: TreeNode) -> TreeNode | None:
-        for child in node.subnodes:
-            if child is target:
-                return node
-            found = self._find_parent_recursive(child, target)
-            if found is not None:
-                return found
-        return None
-
-    def update_entity(self, entity: Entity) -> None:
-        node = self._entity_to_node.get(self._entity_key(entity))
-        if node is None:
-            return
-        if isinstance(node.content, Label):
-            node.content.text = entity.name or "(unnamed)"
-        self._tree._dirty = True
+        expanded = self.get_expanded_entity_uuids()
+        self._controller.set_expanded_entity_uuids(expanded)
+        self._controller.rebuild(select_obj=select_obj)
 
     def select_object(self, obj: object | None) -> None:
-        if not isinstance(obj, Entity):
-            return
-        node = self._entity_to_node.get(self._entity_key(obj))
-        if node is not None:
-            self._expand_ancestors(node)
-            self._tree._rebuild_visible()
-            self._tree._select_node(node)
-            self._tree._ensure_visible(node)
-
-    def _expand_ancestors(self, node: TreeNode) -> None:
-        parent = self._get_parent_node_by_traversal(node)
-        while parent is not None:
-            parent.expanded = True
-            parent = self._get_parent_node_by_traversal(parent)
+        self._controller.select_object(obj)
 
     def get_expanded_entity_uuids(self) -> list[str]:
         result: list[str] = []
-        for root in self._tree.root_nodes:
-            self._collect_expanded_recursive(root, result)
-        return result
-
-    def _collect_expanded_recursive(self, node: TreeNode, out: list[str]) -> None:
-        if node.data is not None and isinstance(node.data, Entity):
-            ent: Entity = node.data
-            if node.expanded and ent.uuid:
-                out.append(ent.uuid)
-        for child in node.subnodes:
-            self._collect_expanded_recursive(child, out)
+        for stable_id, node in self._entity_to_node.items():
+            if node.expanded:
+                result.append(stable_id)
+        return sorted(result)
 
     def set_expanded_entity_uuids(self, uuids: list[str]) -> None:
-        uuid_set = set(uuids)
-        for root in self._tree.root_nodes:
-            self._restore_expanded_recursive(root, uuid_set)
+        self._controller.set_expanded_entity_uuids(uuids)
 
-    def _restore_expanded_recursive(self, node: TreeNode, uuids: set[str]) -> None:
-        if node.data is not None and isinstance(node.data, Entity):
-            ent: Entity = node.data
-            if ent.uuid:
-                node.expanded = ent.uuid in uuids
-        for child in node.subnodes:
-            self._restore_expanded_recursive(child, uuids)
+    def _apply_snapshot(
+        self,
+        snapshot: SceneHierarchySnapshot,
+        *,
+        expand_roots: bool = False,
+    ) -> None:
+        if self._applying_snapshot:
+            return
+        self._applying_snapshot = True
+        try:
+            self._entity_to_node.clear()
+            self._tree.clear()
+            for hierarchy_node in snapshot.nodes:
+                label = Label()
+                label.text = hierarchy_node.name
+                node = TreeNode(label)
+                node.data = self._controller.entity_for_id(hierarchy_node.stable_id)
+                node.expanded = hierarchy_node.stable_id in snapshot.expanded_ids
+                if expand_roots and hierarchy_node.parent_id is None:
+                    node.expanded = True
+                self._entity_to_node[hierarchy_node.stable_id] = node
+                parent_node = self._entity_to_node.get(hierarchy_node.parent_id or "")
+                if parent_node is None:
+                    self._tree.add_root(node)
+                else:
+                    parent_node.add_node(node)
+            selected_node = self._entity_to_node.get(snapshot.selected_id or "")
+            if selected_node is not None:
+                self._expand_ancestors(selected_node)
+                self._tree._rebuild_visible()
+                self._tree._select_node(selected_node)
+                self._tree._ensure_visible(selected_node)
+        finally:
+            self._applying_snapshot = False
+        self._tree._dirty = True
 
-    # ------------------------------------------------------------------
-    # Tree events
-    # ------------------------------------------------------------------
+    def _expand_ancestors(self, node: TreeNode) -> None:
+        parent = self._parent_node(node)
+        while parent is not None:
+            parent.expanded = True
+            parent = self._parent_node(parent)
+
+    def _parent_node(self, target: TreeNode) -> TreeNode | None:
+        for candidate in self._entity_to_node.values():
+            if target in candidate.subnodes:
+                return candidate
+        return None
+
+    @staticmethod
+    def _stable_id(node: TreeNode | None) -> str | None:
+        if node is None or not isinstance(node.data, Entity):
+            return None
+        return node.data.uuid or None
 
     def _on_tree_select(self, node: TreeNode | None) -> None:
-        entity = node.data if node is not None else None
-        entity = entity if isinstance(entity, Entity) else None
+        entity = node.data if node is not None and isinstance(node.data, Entity) else None
         self._rebuild_context_menu(entity)
-        if node is None:
-            self._on_object_selected(None)
-        else:
-            self._on_object_selected(node.data)
+        if self._applying_snapshot:
+            return
+        self._applying_snapshot = True
+        try:
+            self._controller.select_id(self._stable_id(node))
+        finally:
+            self._applying_snapshot = False
+
+    def _on_expansion(self, node: TreeNode, expanded: bool) -> None:
+        if self._applying_snapshot:
+            return
+        stable_id = self._stable_id(node)
+        if stable_id is None:
+            return
+        self._applying_snapshot = True
+        try:
+            self._controller.set_expanded(stable_id, expanded)
+        finally:
+            self._applying_snapshot = False
 
     def _on_tree_delete(self, node: TreeNode) -> None:
-        entity = node.data
-        if isinstance(entity, Entity):
-            self._ops.delete_entity(entity)
+        stable_id = self._stable_id(node)
+        if stable_id is not None:
+            self._controller.execute_context_action("delete", stable_id)
 
     def _on_tree_context_menu(self, node: TreeNode | None, x: float, y: float) -> None:
-        entity = node.data if node is not None else None
-        entity = entity if isinstance(entity, Entity) else None
+        entity = node.data if node is not None and isinstance(node.data, Entity) else None
         self._rebuild_context_menu(entity)
         if self._tree._ui is not None:
             self._ctx_menu.show(self._tree._ui, x, y)
 
+    def _rebuild_context_menu(self, entity: Entity | None) -> None:
+        stable_id = entity.uuid if entity is not None and entity.uuid else None
+        self._ctx_menu.items = [
+            MenuItem(
+                action.label,
+                enabled=action.enabled,
+                on_click=lambda action_id=action.stable_id, target_id=stable_id: (
+                    self._controller.execute_context_action(action_id, target_id)
+                ),
+            )
+            for action in self._controller.context_actions(stable_id)
+        ]
+
     def _on_drop(self, dragged: TreeNode, target: TreeNode | None, position: str) -> None:
-        """Handle drag-drop reparenting within the scene tree."""
-        entity = dragged.data
-        if not isinstance(entity, Entity):
+        dragged_id = self._stable_id(dragged)
+        if dragged_id is None:
             return
-
-        if target is None or position == "root":
-            new_parent_entity = None
-        elif position == "inside":
-            new_parent_entity = target.data if isinstance(target.data, Entity) else None
-        else:
-            if isinstance(target.data, Entity):
-                parent_t = target.data.transform.parent if target.data.transform else None
-                new_parent_entity = parent_t.entity if parent_t else None
-            else:
-                new_parent_entity = None
-
-        self._ops.reparent_entity(entity, new_parent_entity)
+        self._controller.drop_entity(dragged_id, self._stable_id(target), position)
 
     def _on_external_drag(self, event: DragEvent, target: TreeNode | None, position: str) -> bool:
-        if event.payload.kind != "project_file":
+        if event.payload.kind != "project_file" or not isinstance(event.payload.data, dict):
             return False
-        data = event.payload.data
-        if not isinstance(data, dict):
-            return False
-        return data.get("extension") in _SCENE_TREE_EXTERNAL_EXTENSIONS
+        extension = event.payload.data.get("extension")
+        return isinstance(extension, str) and self._controller.can_drop_project_file(extension)
 
     def _on_external_drop(self, event: DragEvent, target: TreeNode | None, position: str) -> bool:
         if not self._on_external_drag(event, target, position):
@@ -380,25 +220,13 @@ class SceneTreeControllerTcgui:
         if not isinstance(data, dict):
             return False
         path = data.get("path")
-        ext = data.get("extension")
-        if not isinstance(path, str) or not isinstance(ext, str):
+        extension = data.get("extension")
+        if not isinstance(path, str) or not isinstance(extension, str):
             return False
-
-        parent_entity = self._drop_parent_entity(target, position)
-        if ext in _GLTF_MODEL_EXTENSIONS:
-            self._ops.drop_glb(path, parent_entity)
-            return True
-        if ext == ".prefab":
-            self._ops.drop_prefab(path, parent_entity)
-            return True
-        return False
-
-    def _drop_parent_entity(self, target: TreeNode | None, position: str) -> Entity | None:
-        if target is None or position == "root":
-            return None
-        if position == "inside":
-            return target.data if isinstance(target.data, Entity) else None
-        if isinstance(target.data, Entity):
-            parent_t = target.data.transform.parent if target.data.transform else None
-            return parent_t.entity if parent_t else None
-        return None
+        self._controller.drop_project_file(
+            path,
+            extension,
+            self._stable_id(target),
+            position,
+        )
+        return True

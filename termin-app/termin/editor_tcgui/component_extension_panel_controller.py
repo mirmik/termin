@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import Callable
 
 from tcbase import log
+from termin.editor_core.component_editor_extension import (
+    ComponentEditorExtensionSession,
+    ComponentExtensionPresentation,
+)
 
 
 class ComponentExtensionPanelController:
@@ -18,63 +22,39 @@ class ComponentExtensionPanelController:
         self._get_editor = get_editor
         self._get_left_tabs = get_left_tabs
         self._get_inspector_controller = get_inspector_controller
-        self._active_extension = None
         self._left_tab_index = -1
-
-    def select_component(self, entity, component_ref) -> None:
-        self.clear()
-        type_name = component_ref.type_name
-        from termin.editor_tcgui.component_editor_extension import (
-            create_component_editor_extension,
+        self._session = ComponentEditorExtensionSession(
+            editor=get_editor,
+            presenter=self._build_presentation,
+            present=self._present,
+            clear_presentation=self._clear_presentation,
         )
 
-        extension = create_component_editor_extension(type_name)
-        if extension is None:
-            return
-
-        try:
-            extension.attach(self._get_editor(), entity, component_ref)
-            panel = extension.build_panel()
-            left_panel = extension.build_left_panel()
-        except Exception as e:
-            log.error(
-                "[ComponentExtensionPanelController] component editor extension attach failed "
-                f"for '{type_name}': {e}"
-            )
-            self._detach_after_attach_error(extension, type_name)
-            return
-
-        self._active_extension = extension
-        self._set_left_panel(self._left_tab_title(type_name), left_panel)
-        inspector_controller = self._get_inspector_controller()
-        if inspector_controller is not None:
-            inspector_controller.set_component_extension_panel(panel)
+    def select_component(self, entity, component_ref) -> None:
+        type_name = component_ref.type_name
+        self._session.select_component(entity, component_ref, type_name)
 
     def clear(self) -> None:
-        extension = self._active_extension
-        self._active_extension = None
+        self._session.clear()
+
+    @staticmethod
+    def _build_presentation(extension, _type_name: str) -> ComponentExtensionPresentation:
+        return ComponentExtensionPresentation(
+            right_panel=extension.build_panel(),
+            left_panel=extension.build_left_panel(),
+        )
+
+    def _present(self, type_name: str, presentation: ComponentExtensionPresentation) -> None:
+        self._set_left_panel(self._left_tab_title(type_name), presentation.left_panel)
+        inspector_controller = self._get_inspector_controller()
+        if inspector_controller is not None:
+            inspector_controller.set_component_extension_panel(presentation.right_panel)
+
+    def _clear_presentation(self) -> None:
         self._clear_left_panel()
         inspector_controller = self._get_inspector_controller()
         if inspector_controller is not None:
             inspector_controller.clear_component_extension_panel()
-        if extension is None:
-            return
-        try:
-            extension.detach()
-        except Exception as e:
-            log.error(
-                "[ComponentExtensionPanelController] component editor extension detach "
-                f"failed: {e}"
-            )
-
-    def _detach_after_attach_error(self, extension, type_name: str) -> None:
-        try:
-            extension.detach()
-        except Exception as detach_error:
-            log.error(
-                "[ComponentExtensionPanelController] component editor extension detach failed "
-                f"after attach error for '{type_name}': {detach_error}"
-            )
 
     def _set_left_panel(self, title: str, panel) -> None:
         self._clear_left_panel()

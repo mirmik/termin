@@ -12,128 +12,11 @@ from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
 
 from termin.inspect import InspectField
+from termin.editor_core.inspector_fields_model import (
+    collect_inspect_fields,
+    collect_inspector_metadata,
+)
 from termin.editor_tcgui.widgets.field_widgets import FieldWidget, FieldWidgetFactory
-
-
-def _collect_inspect_fields(obj: Any) -> dict[str, InspectField]:
-    """Collect inspect_fields from InspectRegistry for obj."""
-    result: dict[str, InspectField] = {}
-    try:
-        from termin.inspect import InspectRegistry, TypeBackend
-        from termin.scene import TcComponentRef
-        registry = InspectRegistry.instance()
-
-        if isinstance(obj, TcComponentRef):
-            type_name = obj.type_name
-            cpp_fields = registry.all_fields(type_name)
-            for info in cpp_fields:
-                if not info.is_inspectable:
-                    continue
-                choices = [(c.value, c.label) for c in info.choices] if info.choices else None
-                def make_getter(path):
-                    def getter(o):
-                        return o.get_field(path)
-                    return getter
-
-                def make_setter(path):
-                    def setter(o, v):
-                        entity = o.entity
-                        if entity is not None and entity.valid():
-                            o.set_field(path, v, entity.scene)
-                        else:
-                            o.set_field(path, v)
-                    return setter
-
-                def make_action(path):
-                    def action(o):
-                        o.action_field(path)
-                    return action
-
-                result[info.path] = InspectField(
-                    path=info.path,
-                    label=info.label,
-                    kind=info.kind,
-                    min=info.min,
-                    max=info.max,
-                    step=info.step,
-                    choices=choices,
-                    action=make_action(info.path) if info.action is not None else None,
-                    metadata={},
-                    getter=make_getter(info.path),
-                    setter=make_setter(info.path),
-                )
-            return result
-
-        cls = obj.__class__
-        type_name = cls.__name__
-
-        if registry.has_type(type_name):
-            backend = registry.get_type_backend(type_name)
-            if backend == TypeBackend.Python:
-                for klass in reversed(cls.__mro__):
-                    fields = klass.inspect_fields
-                    if fields:
-                        for name, field in fields.items():
-                            if not field.is_inspectable:
-                                continue
-                            result[name] = field
-                return result
-
-        cpp_fields = registry.all_fields(type_name)
-        for info in cpp_fields:
-            if not info.is_inspectable:
-                continue
-            choices = [(c.value, c.label) for c in info.choices] if info.choices else None
-            action = info.action if info.action is not None else None
-
-            def make_getter2(path):
-                def getter(o):
-                    return registry.get(o, path)
-                return getter
-
-            def make_setter2(path):
-                def setter(o, v):
-                    registry.set(o, path, v)
-                return setter
-
-            result[info.path] = InspectField(
-                path=info.path,
-                label=info.label,
-                kind=info.kind,
-                min=info.min,
-                max=info.max,
-                step=info.step,
-                choices=choices,
-                action=action,
-                metadata={},
-                getter=make_getter2(info.path),
-                setter=make_setter2(info.path),
-            )
-    except (ImportError, RuntimeError) as e:
-        log.error(f"InspectFieldPanel: failed to collect fields: {e}")
-
-    return result
-
-
-def _type_name_for_target(obj: Any) -> str:
-    from termin.scene import TcComponentRef
-
-    if isinstance(obj, TcComponentRef):
-        return obj.type_name
-    return obj.__class__.__name__
-
-
-def _collect_inspector_metadata(obj: Any) -> dict[str, Any]:
-    try:
-        from termin.inspect import InspectRegistry
-        registry = InspectRegistry.instance()
-        metadata = registry.get_type_metadata(_type_name_for_target(obj))
-        inspector = metadata.get("inspector", {}) if isinstance(metadata, dict) else {}
-        if isinstance(inspector, dict):
-            return inspector
-    except (ImportError, RuntimeError) as e:
-        log.error(f"InspectFieldPanel: failed to collect inspector metadata: {e}")
-    return {}
 
 
 class InspectFieldPanel(VStack):
@@ -179,19 +62,17 @@ class InspectFieldPanel(VStack):
                 self._ui.request_layout()
             return
 
-        fields = _collect_inspect_fields(target)
+        fields = collect_inspect_fields(target)
         if not fields:
             if self._ui is not None:
                 self._ui.request_layout()
             return
 
         self._fields = fields
-        inspector_metadata = _collect_inspector_metadata(target)
+        inspector_metadata = collect_inspector_metadata(target)
         field_metadata = inspector_metadata.get("fields", {})
         if isinstance(field_metadata, dict):
-            self._field_metadata = {
-                str(key): value for key, value in field_metadata.items() if isinstance(value, dict)
-            }
+            self._field_metadata = {str(key): value for key, value in field_metadata.items() if isinstance(value, dict)}
         self._updating_from_model = True
 
         try:

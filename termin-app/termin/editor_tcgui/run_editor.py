@@ -24,7 +24,7 @@ from termin.display._platform_native import (
     start_text_input,
 )
 from termin.editor_tcgui.backend_window_manager import BackendWindowManager
-from termin.editor_tcgui.shader_runtime import configure_sdk_shader_runtime
+from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +220,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     )
     win.build(ui)
 
-    from termin.editor_tcgui.mcp_server import start_editor_mcp_server
+    from termin.editor_core.mcp_server import start_editor_mcp_server
     mcp_server = start_editor_mcp_server(win.python_executor)
 
     # First render

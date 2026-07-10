@@ -28,7 +28,7 @@ public:
     bool is_valid() const;
     OffscreenRenderSurfaceHandle handle() const { return handle_; }
     OffscreenRenderSurface* surface() const;
-    void resize(int width, int height);
+    bool resize(int width, int height);
     std::pair<int, int> framebuffer_size() const;
     std::pair<int, int> window_size() const;
     tgfx::TextureHandle color_tex() const;
@@ -37,6 +37,11 @@ public:
     uint32_t get_tgfx_color_tex_id() const;
     uint32_t get_framebuffer_id() const;
     void set_input_manager(uintptr_t input_manager_ptr);
+    bool dispatch_pointer_move(double x, double y);
+    bool dispatch_pointer_button(int button, int action, int modifiers, uint32_t click_count);
+    bool dispatch_scroll(double x, double y, int modifiers);
+    bool dispatch_key(int key, int scancode, int action, int modifiers);
+    bool dispatch_text(uint32_t codepoint);
     void make_current();
     void swap_buffers();
     bool should_close() const;

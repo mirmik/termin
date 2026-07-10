@@ -23,7 +23,8 @@ public:
     using FramebufferSizeCallback = std::function<void(SDLWindow*, int, int)>;
     using CursorPosCallback = std::function<void(SDLWindow*, double, double)>;
     using ScrollCallback = std::function<void(SDLWindow*, double, double, int)>;  // x, y, mods
-    using MouseButtonCallback = std::function<void(SDLWindow*, int, int, int)>;  // button, action, mods
+    using MouseButtonCallback =
+        std::function<void(SDLWindow*, int, int, int, uint32_t)>; // button, action, mods, clicks
     using KeyCallback = std::function<void(SDLWindow*, int, int, int, int)>;  // key, scancode, action, mods
 
     // Actions
@@ -189,7 +190,7 @@ public:
                 if (mouse_button_callback_) {
                     int button = translate_mouse_button(event.button.button);
                     int mods = translate_sdl_mods(SDL_GetModState());
-                    mouse_button_callback_(this, button, ACTION_PRESS, mods);
+                    mouse_button_callback_(this, button, ACTION_PRESS, mods, event.button.clicks);
                 }
                 break;
 
@@ -197,7 +198,7 @@ public:
                 if (mouse_button_callback_) {
                     int button = translate_mouse_button(event.button.button);
                     int mods = translate_sdl_mods(SDL_GetModState());
-                    mouse_button_callback_(this, button, ACTION_RELEASE, mods);
+                    mouse_button_callback_(this, button, ACTION_RELEASE, mods, event.button.clicks);
                 }
                 break;
 

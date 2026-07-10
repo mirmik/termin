@@ -12,9 +12,11 @@
 namespace termin {
 
 // Vtable callback wrappers
-static void editor_on_mouse_button(tc_input_manager* m, int button, int action, int mods) {
+static void editor_on_mouse_button(tc_input_manager* m, int button, int action, int mods,
+                                   uint32_t click_count) {
     if (m && m->userdata) {
-        static_cast<EditorViewportInputManager*>(m->userdata)->on_mouse_button(button, action, mods);
+        static_cast<EditorViewportInputManager*>(m->userdata)
+            ->on_mouse_button(button, action, mods, click_count);
     }
 }
 
@@ -73,7 +75,8 @@ EditorViewportInputManager::EditorViewportInputManager(tc_viewport_handle viewpo
 // Event Handlers
 // ============================================================================
 
-void EditorViewportInputManager::on_mouse_button(int button, int action, int mods) {
+void EditorViewportInputManager::on_mouse_button(int button, int action, int mods,
+                                                 uint32_t click_count) {
     if (!tc_viewport_alive(_viewport)) return;
 
     double x = _last_cursor_x;
@@ -81,7 +84,8 @@ void EditorViewportInputManager::on_mouse_button(int button, int action, int mod
 
     // Dispatch to viewport-local editor entities, then scene components
     // explicitly opted into editor input via input_source_mask.
-    MouseButtonEvent event(_viewport, x, y, button, action, mods, TC_INPUT_SOURCE_EDITOR);
+    MouseButtonEvent event(_viewport, x, y, button, action, mods, TC_INPUT_SOURCE_EDITOR,
+                           click_count);
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);
@@ -90,7 +94,8 @@ void EditorViewportInputManager::on_mouse_button(int button, int action, int mod
     // Delegate to EditorInteractionSystem for picking/gizmo
     auto* sys = EditorInteractionSystem::instance();
     if (sys) {
-        sys->on_mouse_button(button, action, mods, (float)x, (float)y, _viewport, _display);
+        sys->on_mouse_button(button, action, mods, click_count, (float)x, (float)y, _viewport,
+                             _display);
     }
 }
 
