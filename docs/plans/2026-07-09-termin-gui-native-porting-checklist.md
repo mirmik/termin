@@ -110,6 +110,12 @@ Phase 1 notes:
 - `tc_ui_document`, its generation slots, roots and interaction handles are
   implemented in C. Slots contain only `tc_widget*`, generation and transient
   destroy state; they are not a parallel widget record.
+- The C core is split behind one private `tc_ui_document_internal.h` state
+  definition: `tc_ui_document.c` owns lifecycle/storage/services,
+  `tc_widget.c` owns common widget state and canonical-tree mutation, and
+  `tc_ui_interaction.c` owns paint composition, overlays, hit testing, focus
+  and event routing. Public headers and ABI remain unchanged, and internal
+  cross-module helpers use hidden visibility.
 - `tc_widget` now owns common geometry, size constraints, state flags, a direct
   parent pointer and an ordered child pointer array. Tree mutation validates
   adoption, document identity and cycles; attaching performs atomic reparenting
