@@ -160,6 +160,7 @@ public:
 
     // Get all entities in scene's pool
     std::vector<Entity> get_all_entities() const;
+    std::vector<Entity> get_root_entities() const;
 
     // Migrate entity to this scene's pool
     Entity migrate_entity(Entity& entity);

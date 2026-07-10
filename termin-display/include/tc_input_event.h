@@ -86,6 +86,7 @@ typedef struct tc_mouse_button_event {
     int button;     // 0=left, 1=right, 2=middle
     int action;     // 0=release, 1=press, 2=repeat
     int mods;       // Shift=1, Ctrl=2, Alt=4, Super=8
+    uint32_t click_count; // Host-supplied sequence count (1=single, 2=double).
     uint32_t source; // tc_input_source flag identifying the dispatch origin.
     bool handled;   // Set by a handler to stop further input propagation.
 } tc_mouse_button_event;
@@ -131,6 +132,7 @@ typedef struct tc_mouse_button_event_init_info {
     int button;
     int action;
     int mods;
+    uint32_t click_count;
     uint32_t source;
 } tc_mouse_button_event_init_info;
 
@@ -158,6 +160,7 @@ static inline void tc_mouse_button_event_init_source(
     e->button = info->button;
     e->action = info->action;
     e->mods = info->mods;
+    e->click_count = info->click_count;
     e->source = info->source;
     e->handled = false;
 }
@@ -175,6 +178,7 @@ static inline void tc_mouse_button_event_init(
         button,
         action,
         mods,
+        1,
         TC_INPUT_SOURCE_RUNTIME
     };
     tc_mouse_button_event_init_source(e, &info);

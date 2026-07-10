@@ -14,6 +14,7 @@ namespace {
 struct InputProbe {
     int mouse_buttons = 0;
     uint32_t last_source = 0;
+    uint32_t last_click_count = 0;
 };
 
 InputProbe g_probe;
@@ -22,6 +23,7 @@ void record_mouse_button(tc_component*, tc_mouse_button_event* event)
 {
     g_probe.mouse_buttons += 1;
     g_probe.last_source = event->source;
+    g_probe.last_click_count = event->click_count;
     event->handled = true;
 }
 
@@ -98,8 +100,9 @@ int main()
 
     tc_input_manager* input = &manager->base;
     tc_input_manager_on_mouse_move(input, 10.0, 20.0);
-    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0);
-    if (g_probe.mouse_buttons != 1 || g_probe.last_source != TC_INPUT_SOURCE_RUNTIME) {
+    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0, 2);
+    if (g_probe.mouse_buttons != 1 || g_probe.last_source != TC_INPUT_SOURCE_RUNTIME ||
+        g_probe.last_click_count != 2) {
         std::fprintf(stderr,
                      "runtime input was not delivered with runtime source: count=%d source=%u\n",
                      g_probe.mouse_buttons,
@@ -111,7 +114,7 @@ int main()
                        "failed to set editor-only input source mask")) {
         return 1;
     }
-    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0);
+    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0, 1);
     if (g_probe.mouse_buttons != 1) {
         std::fprintf(stderr,
                      "runtime input reached editor-only component: count=%d\n",
@@ -123,7 +126,7 @@ int main()
                        "failed to restore runtime input source mask")) {
         return 1;
     }
-    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0);
+    tc_input_manager_on_mouse_button(input, TC_MOUSE_BUTTON_LEFT, TC_INPUT_PRESS, 0, 1);
     if (g_probe.mouse_buttons != 2 || g_probe.last_source != TC_INPUT_SOURCE_RUNTIME) {
         std::fprintf(stderr,
                      "runtime input was not delivered after restoring runtime mask: count=%d source=%u\n",

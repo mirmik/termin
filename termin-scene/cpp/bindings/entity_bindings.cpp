@@ -447,6 +447,7 @@ void bind_entity_class(nb::module_& m) {
             return nb::none();
         })
         .def("children", &Entity::children)
+        .def_prop_rw("sibling_index", &Entity::sibling_index, &Entity::set_sibling_index)
         .def("create_child", &Entity::create_child, nb::arg("name") = "entity")
         .def("destroy_children", &Entity::destroy_children)
         .def("serialize_hierarchy", [](Entity& e) -> nb::object {

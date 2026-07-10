@@ -1,0 +1,262 @@
+"""Native implementation of the editor-core asynchronous dialog boundary."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+import logging
+import weakref
+
+from termin.editor_core.dialog_service import DialogService
+from termin.gui_native import Color, DialogAction, Document, EdgeInsets, MessageBoxKind, Rect, Size
+
+
+_logger = logging.getLogger(__name__)
+
+
+class NativeDialogService(DialogService):
+    def __init__(
+        self,
+        document: Document,
+        *,
+        viewport: Callable[[], Rect],
+        request_render: Callable[[], None],
+    ) -> None:
+        self._document = document
+        self._viewport = viewport
+        self._request_render = request_render
+        self._next_key = 1
+        self._active: dict[int, object] = {}
+        self._callbacks: dict[int, Callable] = {}
+
+    @property
+    def active_count(self) -> int:
+        return len(self._active)
+
+    def _retain(self, dialog, callback: Callable) -> int:
+        key = self._next_key
+        self._next_key += 1
+        self._active[key] = dialog
+        self._callbacks[key] = callback
+        return key
+
+    def _finish(self, key: int, value) -> None:
+        callback = self._callbacks.pop(key, None)
+        dialog = self._active.pop(key, None)
+        try:
+            if callback is None:
+                _logger.error("Native dialog finished without callback: %d", key)
+            else:
+                callback(value)
+        finally:
+            self._destroy_dialog(key, dialog)
+            self._request_render()
+
+    def _discard(self, key: int) -> None:
+        self._callbacks.pop(key, None)
+        self._destroy_dialog(key, self._active.pop(key, None))
+
+    def _destroy_dialog(self, key: int, dialog) -> None:
+        if dialog is not None and self._document.is_alive(dialog.handle):
+            if not self._document.destroy_widget_recursive(dialog.handle):
+                _logger.error("Failed to destroy native dialog: %d", key)
+
+    def show_error(
+        self,
+        title: str,
+        message: str,
+        on_close: Callable[[], None] | None = None,
+    ) -> None:
+        dialog = self._document.create_message_box(title, message, MessageBoxKind.Error)
+        key = self._retain(dialog, lambda _result: on_close() if on_close is not None else None)
+        weak_service = weakref.ref(self)
+
+        def finished(_result) -> None:
+            service = weak_service()
+            if service is not None:
+                service._finish(key, None)
+
+        dialog.connect_finished(finished)
+        if not dialog.show(self._viewport()):
+            self._discard(key)
+            raise RuntimeError("failed to show native error dialog")
+        self._request_render()
+
+    def show_input(
+        self,
+        title: str,
+        message: str,
+        default: str,
+        on_result: Callable[[str | None], None],
+    ) -> None:
+        dialog = self._document.create_input_dialog(title, message, default)
+        key = self._retain(dialog, on_result)
+        weak_service = weakref.ref(self)
+
+        def finished(value: str | None) -> None:
+            service = weak_service()
+            if service is not None:
+                service._finish(key, value)
+
+        dialog.connect_value_finished(finished)
+        if not dialog.show(self._viewport()):
+            self._discard(key)
+            raise RuntimeError("failed to show native input dialog")
+        self._request_render()
+
+    def show_choice(
+        self,
+        title: str,
+        message: str,
+        choices: list[str],
+        on_result: Callable[[str | None], None],
+        default: str | None = None,
+        cancel: str | None = None,
+    ) -> None:
+        if not choices:
+            raise ValueError("native choice dialog requires at least one choice")
+        dialog = self._document.create_dialog(title)
+        label = self._document.create_label(message, "native-choice-message")
+        dialog.set_content(self._document.ref(label.handle))
+        action_labels: dict[str, str] = {}
+        actions = []
+        for index, choice in enumerate(choices):
+            action_id = f"choice-{index}"
+            action_labels[action_id] = choice
+            actions.append(
+                DialogAction(
+                    action_id,
+                    choice,
+                    is_default=choice == default,
+                    is_cancel=choice == cancel,
+                )
+            )
+        dialog.actions = actions
+        key = self._retain(dialog, on_result)
+        weak_service = weakref.ref(self)
+
+        def finished(result) -> None:
+            service = weak_service()
+            if service is None:
+                return
+            value = action_labels.get(result.action_id)
+            if value == cancel:
+                value = None
+            service._finish(key, value)
+
+        dialog.connect_finished(finished)
+        if not dialog.show(self._viewport()):
+            self._discard(key)
+            raise RuntimeError("failed to show native choice dialog")
+        self._request_render()
+
+    def show_color(
+        self,
+        initial: tuple[float, float, float, float],
+        on_result: Callable[[tuple[float, float, float, float] | None], None],
+        *,
+        title: str = "Color Picker",
+        show_alpha: bool = True,
+    ) -> None:
+        if len(initial) != 4:
+            raise ValueError("native color dialog requires four color components")
+        dialog = self._document.create_color_dialog(
+            Color(*initial),
+            show_alpha,
+            title,
+        )
+        key = self._retain(dialog, on_result)
+        weak_service = weakref.ref(self)
+
+        def finished(value) -> None:
+            service = weak_service()
+            if service is None:
+                return
+            color = None if value is None else (value.r, value.g, value.b, value.a)
+            service._finish(key, color)
+
+        dialog.connect_color_finished(finished)
+        if not dialog.show(self._viewport()):
+            self._discard(key)
+            raise RuntimeError("failed to show native color dialog")
+        self._request_render()
+
+    def show_layer_mask(
+        self,
+        current_mask: int,
+        layer_names: tuple[str, ...],
+        on_result: Callable[[int | None], None],
+    ) -> None:
+        if len(layer_names) != 64:
+            raise ValueError("native layer mask dialog requires 64 layer names")
+        dialog = self._document.create_dialog("Layer Mask")
+        content = self._document.create_vstack("native-layer-mask-content")
+        content.set_layout_spacing(4.0)
+        content.set_layout_padding(EdgeInsets(4.0, 4.0, 4.0, 4.0))
+        button_row = self._document.create_hstack("native-layer-mask-buttons")
+        button_row.set_layout_spacing(4.0)
+        all_button = self._document.create_button("All", "native-layer-mask-all")
+        none_button = self._document.create_button("None", "native-layer-mask-none")
+        button_row.add_stretch_child(all_button.widget)
+        button_row.add_stretch_child(none_button.widget)
+        content.add_fixed_child(button_row, 30.0)
+
+        layer_list = self._document.create_vstack("native-layer-mask-list")
+        layer_list.set_layout_spacing(2.0)
+        checkboxes = []
+        for index, name in enumerate(layer_names):
+            row = self._document.create_hstack(f"native-layer-mask-row-{index}")
+            row.set_layout_spacing(4.0)
+            checkbox = self._document.create_checkbox(bool(current_mask & (1 << index)))
+            label = self._document.create_label(
+                f"{index}: {name}",
+                f"native-layer-mask-label-{index}",
+            )
+            row.add_fixed_child(checkbox.widget, 26.0)
+            row.add_stretch_child(label)
+            layer_list.add_fixed_child(row, 28.0)
+            checkboxes.append(checkbox)
+        layer_list.preferred_size = Size(320.0, 64.0 * 30.0)
+        scroll = self._document.create_scroll_area("native-layer-mask-scroll")
+        scroll.set_content(layer_list)
+        content.add_stretch_child(scroll.widget)
+        content.preferred_size = Size(340.0, 430.0)
+        dialog.set_content(content)
+        dialog.actions = [
+            DialogAction("ok", "OK", is_default=True),
+            DialogAction("cancel", "Cancel", is_cancel=True),
+        ]
+
+        def select_all() -> None:
+            for checkbox in checkboxes:
+                checkbox.checked = True
+
+        def select_none() -> None:
+            for checkbox in checkboxes:
+                checkbox.checked = False
+
+        all_button.connect_clicked(select_all)
+        none_button.connect_clicked(select_none)
+        key = self._retain(dialog, on_result)
+        weak_service = weakref.ref(self)
+
+        def finished(result) -> None:
+            service = weak_service()
+            if service is None:
+                return
+            if result.action_id != "ok":
+                service._finish(key, None)
+                return
+            mask = 0
+            for index, checkbox in enumerate(checkboxes):
+                if checkbox.checked:
+                    mask |= 1 << index
+            service._finish(key, mask)
+
+        dialog.connect_finished(finished)
+        if not dialog.show(self._viewport()):
+            self._discard(key)
+            raise RuntimeError("failed to show native layer mask dialog")
+        self._request_render()
+
+
+__all__ = ["NativeDialogService"]

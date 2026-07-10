@@ -127,6 +127,7 @@ struct tc_entity_pool {
 
     // Hierarchy
     tc_entity_id* parent_ids;  // TC_ENTITY_ID_INVALID = no parent
+    EntityIdArray roots;
     EntityIdArray* children;
 
     // Components
@@ -232,10 +233,40 @@ static void entity_id_array_push(EntityIdArray* arr, tc_entity_id id) {
 static void entity_id_array_remove(EntityIdArray* arr, tc_entity_id id) {
     for (size_t i = 0; i < arr->count; i++) {
         if (tc_entity_id_eq(arr->items[i], id)) {
-            arr->items[i] = arr->items[--arr->count];
+            if (i + 1 < arr->count) {
+                memmove(&arr->items[i], &arr->items[i + 1],
+                        (arr->count - i - 1) * sizeof(tc_entity_id));
+            }
+            arr->count--;
             return;
         }
     }
+}
+
+static bool entity_id_array_move(EntityIdArray* arr, tc_entity_id id, size_t index) {
+    size_t current = SIZE_MAX;
+    for (size_t i = 0; i < arr->count; i++) {
+        if (tc_entity_id_eq(arr->items[i], id)) {
+            current = i;
+            break;
+        }
+    }
+    if (current == SIZE_MAX)
+        return false;
+    if (index >= arr->count)
+        index = arr->count - 1;
+    if (current == index)
+        return false;
+    tc_entity_id value = arr->items[current];
+    if (current < index) {
+        memmove(&arr->items[current], &arr->items[current + 1],
+                (index - current) * sizeof(tc_entity_id));
+    } else {
+        memmove(&arr->items[index + 1], &arr->items[index],
+                (current - index) * sizeof(tc_entity_id));
+    }
+    arr->items[index] = value;
+    return true;
 }
 
 static void component_array_init(ComponentArray* arr) {
@@ -365,6 +396,7 @@ tc_entity_pool* tc_entity_pool_create(size_t initial_capacity) {
         pool->parent_ids[i] = TC_ENTITY_ID_INVALID;
     }
 
+    entity_id_array_init(&pool->roots);
     pool->children = calloc(initial_capacity, sizeof(EntityIdArray));
     pool->components = calloc(initial_capacity, sizeof(ComponentArray));
 
@@ -443,6 +475,7 @@ void tc_entity_pool_destroy(tc_entity_pool* pool) {
     free(pool->uuids);
     free(pool->runtime_ids);
     free(pool->parent_ids);
+    entity_id_array_free(&pool->roots);
     free(pool->children);
     free(pool->components);
 
@@ -629,6 +662,7 @@ tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* na
     pool->count++;
 
     tc_entity_id result = (tc_entity_id){idx, gen};
+    entity_id_array_push(&pool->roots, result);
 
     // Register in hash maps for O(1) lookup
     tc_str_map_set(pool->by_uuid, pool->uuids[idx], pack_entity_id(result));
@@ -689,6 +723,8 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
     // Remove from parent's children
     if (tc_entity_id_valid(old_parent_id) && tc_entity_pool_alive(pool, old_parent_id)) {
         entity_id_array_remove(&pool->children[old_parent_id.index], id);
+    } else {
+        entity_id_array_remove(&pool->roots, id);
     }
 
     // Orphan children (or could recursively delete)
@@ -696,6 +732,7 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
         tc_entity_id child = pool->children[idx].items[i];
         if (tc_entity_pool_alive(pool, child)) {
             pool->parent_ids[child.index] = TC_ENTITY_ID_INVALID;
+            entity_id_array_push(&pool->roots, child);
         }
     }
     // Clear children array so reused slot doesn't inherit stale children
@@ -1250,59 +1287,106 @@ tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_entity_id id) 
 }
 
 void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("set_parent", id); return; }
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("set_parent", id);
+        return;
+    }
 
     uint32_t idx = id.index;
     tc_entity_id old_parent_id = pool->parent_ids[idx];
-    tc_entity_id new_parent_id = TC_ENTITY_ID_INVALID;
+    tc_entity_id new_parent_id = tc_entity_id_valid(parent) && tc_entity_pool_alive(pool, parent)
+                                     ? parent
+                                     : TC_ENTITY_ID_INVALID;
+    if (tc_entity_id_eq(old_parent_id, new_parent_id))
+        return;
 
     // Remove from old parent's children
     if (tc_entity_id_valid(old_parent_id) && tc_entity_pool_alive(pool, old_parent_id)) {
         entity_id_array_remove(&pool->children[old_parent_id.index], id);
+    } else {
+        entity_id_array_remove(&pool->roots, id);
     }
 
     // Set new parent (store full entity_id including generation)
-    if (tc_entity_id_valid(parent) && tc_entity_pool_alive(pool, parent)) {
-        new_parent_id = parent;
+    if (tc_entity_id_valid(new_parent_id)) {
         pool->parent_ids[idx] = new_parent_id;
         entity_id_array_push(&pool->children[new_parent_id.index], id);
     } else {
         pool->parent_ids[idx] = TC_ENTITY_ID_INVALID;
+        entity_id_array_push(&pool->roots, id);
     }
 
     tc_entity_pool_mark_dirty(pool, id);
 
-    if (old_parent_id.index != new_parent_id.index || old_parent_id.generation != new_parent_id.generation) {
-        publish_structure_changed(
-            pool,
-            TC_SCENE_STRUCTURE_PARENT_CHANGED,
-            id,
-            new_parent_id,
-            NULL
-        );
+    if (old_parent_id.index != new_parent_id.index ||
+        old_parent_id.generation != new_parent_id.generation) {
+        publish_structure_changed(pool, TC_SCENE_STRUCTURE_PARENT_CHANGED, id, new_parent_id, NULL);
     }
 }
 
 size_t tc_entity_pool_children_count(const tc_entity_pool* pool, tc_entity_id id) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("children_count", id); return 0; }
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("children_count", id);
+        return 0;
+    }
     return pool->children[id.index].count;
 }
 
 tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id, size_t index) {
-    if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("child_at", id); return TC_ENTITY_ID_INVALID; }
-    if (index >= pool->children[id.index].count) return TC_ENTITY_ID_INVALID;
+    if (!tc_entity_pool_alive(pool, id)) {
+        WARN_DEAD_ENTITY("child_at", id);
+        return TC_ENTITY_ID_INVALID;
+    }
+    if (index >= pool->children[id.index].count)
+        return TC_ENTITY_ID_INVALID;
     return pool->children[id.index].items[index];
+}
+
+size_t tc_entity_pool_root_count(const tc_entity_pool* pool) {
+    return pool ? pool->roots.count : 0;
+}
+
+tc_entity_id tc_entity_pool_root_at(const tc_entity_pool* pool, size_t index) {
+    if (!pool || index >= pool->roots.count)
+        return TC_ENTITY_ID_INVALID;
+    tc_entity_id id = pool->roots.items[index];
+    return tc_entity_pool_alive(pool, id) ? id : TC_ENTITY_ID_INVALID;
+}
+
+size_t tc_entity_pool_sibling_index(const tc_entity_pool* pool, tc_entity_id id) {
+    if (!tc_entity_pool_alive(pool, id))
+        return SIZE_MAX;
+    tc_entity_id parent = pool->parent_ids[id.index];
+    const EntityIdArray* siblings = tc_entity_id_valid(parent) && tc_entity_pool_alive(pool, parent)
+                                        ? &pool->children[parent.index]
+                                        : &pool->roots;
+    for (size_t i = 0; i < siblings->count; i++) {
+        if (tc_entity_id_eq(siblings->items[i], id))
+            return i;
+    }
+    return SIZE_MAX;
+}
+
+bool tc_entity_pool_set_sibling_index(tc_entity_pool* pool, tc_entity_id id, size_t index) {
+    if (!tc_entity_pool_alive(pool, id))
+        return false;
+    tc_entity_id parent = pool->parent_ids[id.index];
+    EntityIdArray* siblings = tc_entity_id_valid(parent) && tc_entity_pool_alive(pool, parent)
+                                  ? &pool->children[parent.index]
+                                  : &pool->roots;
+    if (!entity_id_array_move(siblings, id, index))
+        return false;
+    publish_structure_changed(pool, TC_SCENE_STRUCTURE_SIBLING_ORDER_CHANGED, id, parent, NULL);
+    return true;
 }
 
 // ============================================================================
 // Components
 // ============================================================================
 
-static tc_component* tc_entity_pool_find_component_assignable_to(
-    tc_entity_pool* pool,
-    tc_entity_id id,
-    const char* required_type_name
-) {
+static tc_component* tc_entity_pool_find_component_assignable_to(tc_entity_pool* pool,
+                                                                 tc_entity_id id,
+                                                                 const char* required_type_name) {
     if (!tc_entity_pool_alive(pool, id) || !required_type_name) {
         return NULL;
     }
@@ -1575,18 +1659,29 @@ tc_entity_id tc_entity_pool_migrate(
 
     // Recursively migrate children
     EntityIdArray* src_children = &src_pool->children[src_idx];
-    for (size_t i = 0; i < src_children->count; i++) {
-        tc_entity_id child_src_id = src_children->items[i];
+    while (src_children->count > 0) {
+        tc_entity_id child_src_id = src_children->items[0];
         if (tc_entity_pool_alive(src_pool, child_src_id)) {
             tc_entity_id child_dst_id = tc_entity_pool_migrate(src_pool, child_src_id, dst_pool);
             if (tc_entity_id_valid(child_dst_id)) {
                 // Set parent in destination pool
                 tc_entity_pool_set_parent(dst_pool, child_dst_id, dst_id);
+            } else {
+                tc_log_error("[tc_entity_pool_migrate] failed to migrate child hierarchy");
+                return TC_ENTITY_ID_INVALID;
             }
+        } else {
+            entity_id_array_remove(src_children, child_src_id);
         }
     }
 
     // Remove source entity from source hash maps
+    tc_entity_id src_parent = src_pool->parent_ids[src_idx];
+    if (tc_entity_id_valid(src_parent) && tc_entity_pool_alive(src_pool, src_parent)) {
+        entity_id_array_remove(&src_pool->children[src_parent.index], src_id);
+    } else {
+        entity_id_array_remove(&src_pool->roots, src_id);
+    }
     if (src_pool->uuids[src_idx]) {
         tc_str_map_remove(src_pool->by_uuid, src_pool->uuids[src_idx]);
     }

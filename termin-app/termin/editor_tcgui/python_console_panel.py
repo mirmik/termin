@@ -12,7 +12,7 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
 
-from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
+from termin.editor_core.python_executor import EditorPythonExecutor
 
 
 class PythonConsolePanel(VStack):

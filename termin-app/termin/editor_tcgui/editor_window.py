@@ -32,15 +32,9 @@ from termin.editor_core.menu_bar_model import (
     ViewMenuActions,
 )
 from termin.engine import SceneManager, default_scene_extensions, scene as engine_scene
-from termin.default_assets.default_preloaders import (
-    register_default_preloaders as register_default_asset_preloaders,
-)
 from termin.editor_core.resource_loader import ResourceLoader, register_editor_builtin_resources
-from termin.editor_core.project_file_watcher import ProjectFileWatcher
-from termin.editor_core.file_processors import (
-    ComponentFileProcessor,
-    ModuleFileProcessor,
-    ModuleInputFileProcessor,
+from termin.editor_core.project_file_watcher import (
+    create_editor_project_file_watcher,
 )
 from termin.editor_core.prefab_edit_controller import PrefabEditController
 from termin.editor_core.settings import EditorSettings
@@ -56,14 +50,14 @@ from termin.editor_tcgui.menu_bar_controller import (
 )
 from termin.editor_tcgui.project_build_controller import ProjectBuildController
 from termin.editor_tcgui.project_session_controller import ProjectSessionController
-from termin.editor_tcgui.shader_runtime import resolve_slangc, resolve_termin_shaderc
+from termin.editor_core.shader_runtime import resolve_slangc, resolve_termin_shaderc
 from termin.editor_tcgui.scene_file_controller import SceneFileController
 from termin.editor_tcgui.editor_window_layout import (
     EditorWindowLayoutCallbacks,
     build_editor_window_layout,
 )
 from termin.editor_tcgui.viewport_interaction_hub import ViewportInteractionHub
-from termin.editor_tcgui.viewport_geometry_controller import (
+from termin.editor_core.viewport_geometry_controller import (
     ViewportGeometryController,
     is_gltf_project_file_drag,
 )
@@ -76,7 +70,7 @@ from termin.editor_tcgui.prefab_toolbar_controller import PrefabToolbarControlle
 from termin.editor_tcgui.game_mode_ui_controller import GameModeUiController
 from termin.editor_tcgui.resource_actions_controller import ResourceActionsController
 from termin.editor_tcgui.editor_dialog_launcher import EditorDialogLauncher
-from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
+from termin.editor_core.python_executor import EditorPythonExecutor
 from termin.editor_tcgui.component_extension_panel_controller import (
     ComponentExtensionPanelController,
 )
@@ -264,9 +258,7 @@ class EditorWindowTcgui:
             get_inspector_controller=lambda: self._inspector_controller,
             get_menu_bar_controller=lambda: self._menu_bar_controller,
             get_editor_display=lambda: self._editor_display,
-            get_active_viewport_tool_count=lambda: (
-                self._viewport_interactions.active_tool_count
-            ),
+            get_active_viewport_tool_count=lambda: self._viewport_interactions.active_tool_count,
             dispatch_viewport_click=self._viewport_interactions.dispatch_click,
             dispatch_viewport_pointer=self._viewport_interactions.dispatch_pointer,
             dispatch_viewport_key=self._viewport_interactions.dispatch_key,
@@ -296,11 +288,10 @@ class EditorWindowTcgui:
             request_viewport_update=self._request_viewport_update,
         )
 
-        self._project_file_watcher = ProjectFileWatcher(
+        self._project_file_watcher, self._component_file_processor = create_editor_project_file_watcher(
+            self.resource_manager,
             on_resource_reloaded=self._on_resource_reloaded,
         )
-        self._component_file_processor: ComponentFileProcessor | None = None
-        self._register_file_processors()
         self._project_session_controller = ProjectSessionController(
             get_ui=lambda: self._ui,
             set_project_state=self._set_project_state,
@@ -343,6 +334,7 @@ class EditorWindowTcgui:
 
         # Editor interaction system
         from termin.editor._editor_native import EditorInteractionSystem
+
         self._interaction_system = EditorInteractionSystem()
         EditorInteractionSystem.set_instance(self._interaction_system)
         self.gizmo_manager = self._interaction_system.gizmo_manager
@@ -410,6 +402,7 @@ class EditorWindowTcgui:
 
         # Dialog service (shared between controllers)
         from termin.editor_tcgui.tcgui_dialog_service import TcguiDialogService
+
         self._dialog_service = TcguiDialogService()
         self._dialog_service.ui = ui
 
@@ -466,6 +459,7 @@ class EditorWindowTcgui:
             from termin.editor_core.editor_pipeline import make_editor_pipeline
             from termin.editor_core.editor_scene_attachment import EditorSceneAttachment
             from termin.editor_tcgui.rendering_controller import RenderingControllerTcgui
+
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
                 viewport_list_widget=self._viewport_list,
@@ -497,6 +491,7 @@ class EditorWindowTcgui:
 
             # GameModeModel owns Play/Stop/Pause state + transitions.
             from termin.editor_core.game_mode_model import GameModeModel
+
             self._game_mode_model = GameModeModel(
                 scene_manager=self.scene_manager,
                 editor_connector=self,
@@ -518,12 +513,8 @@ class EditorWindowTcgui:
             self._editor_state_io.get_displays_data = self._rendering_controller.get_displays_data
             self._editor_state_io.set_displays_data = self._rendering_controller.set_displays_data
             if self.scene_tree_controller is not None:
-                self._editor_state_io.get_expanded_entity_uuids = (
-                    self.scene_tree_controller.get_expanded_entity_uuids
-                )
-                self._editor_state_io.set_expanded_entity_uuids = (
-                    self.scene_tree_controller.set_expanded_entity_uuids
-                )
+                self._editor_state_io.get_expanded_entity_uuids = self.scene_tree_controller.get_expanded_entity_uuids
+                self._editor_state_io.set_expanded_entity_uuids = self.scene_tree_controller.set_expanded_entity_uuids
 
             self._interaction_system.selection.on_selection_changed = self._on_selection_changed
             self._interaction_system.selection.on_hover_changed = self._on_hover_changed
@@ -682,6 +673,7 @@ class EditorWindowTcgui:
 
     def sync_scene_render_state(self, scene_name: str) -> bool:
         from termin.editor_core.render_scene_attachment import RenderSceneAttachment
+
         return RenderSceneAttachment(
             self.scene_manager,
             self._rendering_controller,
@@ -690,6 +682,7 @@ class EditorWindowTcgui:
 
     def attach_scene_to_render(self, scene_name: str) -> bool:
         from termin.editor_core.render_scene_attachment import RenderSceneAttachment
+
         return RenderSceneAttachment(
             self.scene_manager,
             self._rendering_controller,
@@ -702,6 +695,7 @@ class EditorWindowTcgui:
         save_state: bool = True,
     ) -> bool:
         from termin.editor_core.render_scene_attachment import RenderSceneAttachment
+
         return RenderSceneAttachment(
             self.scene_manager,
             self._rendering_controller,
@@ -714,6 +708,7 @@ class EditorWindowTcgui:
 
         try:
             from termin.display import Display
+
             display = Display(surface=self._fbo_surface, name="Editor")
             display.connect_input()
             self._editor_display = display
@@ -782,11 +777,7 @@ class EditorWindowTcgui:
                     toggle_camera_frustums=self._toggle_camera_frustums,
                     show_undo_stack_viewer=self._show_undo_stack_viewer,
                     show_framegraph_debugger=self._show_framegraph_debugger,
-                    show_resource_manager_viewer=self._show_resource_manager_viewer,
                     show_audio_debugger=self._show_audio_debugger,
-                    show_core_registry_viewer=self._show_core_registry_viewer,
-                    show_inspect_registry_viewer=self._show_inspect_registry_viewer,
-                    show_navmesh_registry_viewer=self._show_navmesh_registry_viewer,
                     show_scene_manager_viewer=self._show_scene_manager_viewer,
                     show_python_console=self._show_python_console,
                     toggle_surface_edge_debug_tool=self._toggle_surface_edge_debug_tool,
@@ -927,6 +918,7 @@ class EditorWindowTcgui:
     def _toggle_surface_edge_debug_tool(self) -> None:
         if self._surface_edge_debug_tool is None:
             from termin.editor_tcgui.surface_edge_debug_tool import SurfaceEdgeDebugTool
+
             self._surface_edge_debug_tool = SurfaceEdgeDebugTool(self)
         self._surface_edge_debug_tool.toggle()
         if self._menu_bar_controller is not None:
@@ -940,6 +932,7 @@ class EditorWindowTcgui:
     def _toggle_raw_detour_path_debug_tool(self) -> None:
         if self._raw_detour_path_debug_tool is None:
             from termin.editor_tcgui.raw_detour_path_debug_tool import RawDetourPathDebugTool
+
             self._raw_detour_path_debug_tool = RawDetourPathDebugTool(self)
         self._raw_detour_path_debug_tool.toggle()
         if self._menu_bar_controller is not None:
@@ -1059,13 +1052,11 @@ class EditorWindowTcgui:
     def _on_render_viewport_selected(self, viewport) -> None:
         if self._inspector_controller is None or viewport is None:
             return
-        displays = (
-            self._rendering_controller.displays
-            if self._rendering_controller is not None else None
-        )
+        displays = self._rendering_controller.displays if self._rendering_controller is not None else None
         current_display = None
         if self._rendering_controller is not None:
             from termin.engine import RenderingManager
+
             current_display = RenderingManager.instance().get_display_for_viewport(viewport)
         self._inspector_controller.show_viewport_inspector(
             viewport=viewport,
@@ -1179,6 +1170,7 @@ class EditorWindowTcgui:
         if self._ui is None:
             return
         from tcgui.widgets.file_dialog_overlay import show_save_file_dialog
+
         show_save_file_dialog(
             self._ui,
             title="Create New Project",
@@ -1192,6 +1184,7 @@ class EditorWindowTcgui:
         if self._ui is None:
             return
         from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
+
         show_open_file_dialog(
             self._ui,
             title="Open Project",
@@ -1233,6 +1226,7 @@ class EditorWindowTcgui:
                 return
 
         from tcgui.widgets.menu import Menu
+
         menu = Menu()
         menu.items = [item]
         self._menu_bar_widget.add_menu(menu_name, menu)
@@ -1270,18 +1264,6 @@ class EditorWindowTcgui:
 
     def _show_spacemouse_settings(self) -> None:
         self._dialog_launcher.show_spacemouse_settings()
-
-    def _show_resource_manager_viewer(self) -> None:
-        self._dialog_launcher.show_resource_manager_viewer()
-
-    def _show_core_registry_viewer(self) -> None:
-        self._dialog_launcher.show_core_registry_viewer()
-
-    def _show_inspect_registry_viewer(self) -> None:
-        self._dialog_launcher.show_inspect_registry_viewer()
-
-    def _show_navmesh_registry_viewer(self) -> None:
-        self._dialog_launcher.show_navmesh_registry_viewer()
 
     def _show_framegraph_debugger(self) -> None:
         self._dialog_launcher.show_framegraph_debugger()
@@ -1374,9 +1356,7 @@ class EditorWindowTcgui:
         if self._interaction_system is None:
             log.error("[EditorWindowTcgui] cannot toggle camera frustums: interaction system is unavailable")
             return
-        self._interaction_system.set_camera_frustums_visible(
-            not self._interaction_system.camera_frustums_visible
-        )
+        self._interaction_system.set_camera_frustums_visible(not self._interaction_system.camera_frustums_visible)
         if self._menu_bar_controller is not None:
             self._menu_bar_controller.update_camera_frustums_action()
         self._request_viewport_update()
@@ -1403,11 +1383,16 @@ class EditorWindowTcgui:
 
     def _fullscreen_panels(self) -> list[object | None]:
         return [
-            self._left_tabs, self._left_splitter,
-            self._right_scroll, self._right_splitter,
-            self._bottom_tabs, self._bottom_splitter,
-            self._menu_bar_widget, self._status_bar,
-            self._debug_panel, self._debug_splitter,
+            self._left_tabs,
+            self._left_splitter,
+            self._right_scroll,
+            self._right_splitter,
+            self._bottom_tabs,
+            self._bottom_splitter,
+            self._menu_bar_widget,
+            self._status_bar,
+            self._debug_panel,
+            self._debug_splitter,
         ]
 
     def _update_fullscreen_action(self) -> None:
@@ -1480,7 +1465,24 @@ class EditorWindowTcgui:
             "framegraph_debugger": self.framegraph_debugger,
             "scene_manager": self.scene_manager,
             "project_path": self._get_project_path(),
+            "capture_editor_screenshot": self._capture_editor_screenshot,
         }
+
+    def _capture_editor_screenshot(
+        self,
+        *,
+        output_path: str | None = None,
+        include_image: bool = False,
+    ) -> dict[str, object]:
+        from termin.editor_tcgui.editor_screenshot import (
+            capture_editor_viewport_screenshot,
+        )
+
+        return capture_editor_viewport_screenshot(
+            self,
+            output_path=output_path,
+            include_image=include_image,
+        )
 
     def _set_spacemouse(self, spacemouse) -> None:
         self._spacemouse = spacemouse
@@ -1506,33 +1508,6 @@ class EditorWindowTcgui:
                 self._project_file_watcher.watch_directory(project_path)
             except Exception as e:
                 log.error(f"Resource scan failed: {e}")
-
-    def _register_file_processors(self) -> None:
-        try:
-            self._project_file_watcher.register_processor(
-                ModuleFileProcessor(
-                    self.resource_manager,
-                    on_resource_reloaded=self._on_resource_reloaded,
-                )
-            )
-            self._project_file_watcher.register_processor(
-                ModuleInputFileProcessor(
-                    self.resource_manager,
-                    on_resource_reloaded=self._on_resource_reloaded,
-                )
-            )
-            register_default_asset_preloaders(
-                self._project_file_watcher,
-                self.resource_manager,
-                self._on_resource_reloaded,
-            )
-            self._component_file_processor = ComponentFileProcessor(
-                self.resource_manager,
-                on_resource_reloaded=self._on_resource_reloaded,
-            )
-            self._project_file_watcher.register_processor(self._component_file_processor)
-        except Exception as e:
-            log.error(f"Failed to register default file processors: {e}")
 
     def _prepare_code_for_play(self) -> bool:
         from termin.project_modules.runtime import get_project_modules_runtime

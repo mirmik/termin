@@ -113,6 +113,7 @@ void bind_editor_interaction(nb::module_& m) {
             EditorInteractionSystem::set_instance(
                 obj.is_none() ? nullptr : nb::cast<EditorInteractionSystem*>(obj));
         }, nb::arg("instance").none())
+        .def("clear_callbacks", &EditorInteractionSystem::clear_callbacks)
         .def_prop_ro("selection",
             [](EditorInteractionSystem& s) -> SelectionManager& {
                 return s.selection;

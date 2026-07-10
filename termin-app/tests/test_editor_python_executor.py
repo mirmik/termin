@@ -1,7 +1,7 @@
 import threading
 import time
 
-from termin.editor_tcgui.editor_python_executor import EditorPythonExecutor
+from termin.editor_core.python_executor import EditorPythonExecutor
 
 
 def test_editor_python_executor_captures_output_and_context():
