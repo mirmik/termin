@@ -450,6 +450,12 @@ local profiles execute only their declared inventories.
 
 ### Phase 5: CI consumes the planner
 
+Initial Linux PR migration status, 2026-07-11: CI has a dedicated planner job
+that validates manifests and publishes the pr/Linux plan JSON. The C++ and
+Python test jobs download that artifact and pass it to planner-backed runners.
+CTest uploads its selection, JUnit, and execution manifest; the Python runner
+writes the corresponding suite execution manifest.
+
 - Generate CI matrices from planner JSON.
 - Remove pytest/CTest root lists from workflow YAML.
 - Store execution manifests and test reports as artifacts.
