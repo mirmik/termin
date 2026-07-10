@@ -9,7 +9,8 @@
 // Forward declarations for vtable
 // ============================================================================
 
-static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods);
+static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods,
+                                   uint32_t click_count);
 static void router_on_mouse_move(tc_input_manager* self, double x, double y);
 static void router_on_scroll(tc_input_manager* self, double x, double y, int mods);
 static void router_on_key(tc_input_manager* self, int key, int scancode, int action, int mods);
@@ -86,7 +87,8 @@ static tc_viewport_handle router_viewport_at_cursor(tc_display_input_router* r) 
 // Event handlers
 // ============================================================================
 
-static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods) {
+static void router_on_mouse_button(tc_input_manager* self, int button, int action, int mods,
+                                   uint32_t click_count) {
     tc_display_input_router* r = router_from(self);
     if (!r) return;
 
@@ -108,7 +110,7 @@ static void router_on_mouse_button(tc_input_manager* self, int button, int actio
     if (tc_viewport_handle_valid(viewport) && tc_viewport_alive(viewport)) {
         tc_input_manager* vm = tc_viewport_get_input_manager(viewport);
         if (vm) {
-            tc_input_manager_on_mouse_button(vm, button, action, mods);
+            tc_input_manager_on_mouse_button(vm, button, action, mods, click_count);
         }
     }
 }

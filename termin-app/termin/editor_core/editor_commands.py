@@ -403,6 +403,18 @@ class AddComponentCommand(UndoCommand):
 
         # Создаём и добавляем компонент
         self._ref = entity.add_component_by_name(self._type_name)
+        if self._ref.type_name != self._type_name:
+            actual_type = self._ref.type_name
+            _logger.error(
+                "Component registry created '%s' while '%s' was requested",
+                actual_type,
+                self._type_name,
+            )
+            entity.remove_component_ref(self._ref)
+            self._ref = None
+            raise RuntimeError(
+                f"component registry returned '{actual_type}' for '{self._type_name}'"
+            )
 
         # Применяем сохранённые данные (при redo)
         if self._data is not None and self._ref.valid:
@@ -546,6 +558,9 @@ class EntityPropertyEditCommand(UndoCommand):
             return
         if self._property_name == "layer":
             entity.layer = int(value)
+            return
+        if self._property_name == "visible":
+            entity.visible = bool(value)
             return
         _logger.error("Unsupported entity property for undo command: %s", self._property_name)
         raise RuntimeError(f"Unsupported entity property: {self._property_name}")
@@ -842,6 +857,7 @@ class ReparentEntityCommand(UndoCommand):
         entity: Entity,
         old_parent: GeneralTransform3 | None,
         new_parent: GeneralTransform3 | None,
+        new_sibling_index: int | None = None,
         text: str | None = None,
     ) -> None:
         if text is None:
@@ -854,6 +870,8 @@ class ReparentEntityCommand(UndoCommand):
         self._entity_uuid = _entity_uuid(entity)
         self._old_parent_uuid = _transform_entity_uuid(old_parent)
         self._new_parent_uuid = _transform_entity_uuid(new_parent)
+        self._old_sibling_index = int(entity.sibling_index)
+        self._new_sibling_index = new_sibling_index
         # Сохраняем local pose для undo
         self._old_local_pose = _clone_pose(entity.transform.local_pose())
 
@@ -875,6 +893,8 @@ class ReparentEntityCommand(UndoCommand):
         global_pose = entity.transform.global_pose()
         # Меняем родителя
         entity.transform.set_parent(_resolve_parent_transform(self._scene, self._new_parent_uuid))
+        if self._new_sibling_index is not None:
+            entity.sibling_index = self._new_sibling_index
         # Восстанавливаем global pose (пересчитывает local pose)
         entity.transform.relocate_global(global_pose)
 
@@ -882,6 +902,7 @@ class ReparentEntityCommand(UndoCommand):
         entity = self._current_entity()
         # Возвращаем родителя и восстанавливаем оригинальный local pose
         entity.transform.set_parent(_resolve_parent_transform(self._scene, self._old_parent_uuid))
+        entity.sibling_index = self._old_sibling_index
         entity.transform.relocate(self._old_local_pose)
 
 

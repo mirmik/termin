@@ -27,16 +27,16 @@ struct MouseButtonEvent : public tc_mouse_button_event {
     MouseButtonEvent() {
         viewport = TC_VIEWPORT_HANDLE_INVALID;
         x = 0; y = 0;
-        button = 0; action = 0; mods = 0;
+        button = 0; action = 0; mods = 0; click_count = 1;
         source = TC_INPUT_SOURCE_RUNTIME;
         handled = false;
     }
 
     MouseButtonEvent(tc_viewport_handle vp, double x_, double y_, int btn, int act, int m = 0,
-                     uint32_t source_ = TC_INPUT_SOURCE_RUNTIME) {
+                     uint32_t source_ = TC_INPUT_SOURCE_RUNTIME, uint32_t click_count_ = 1) {
         viewport = vp;
         x = x_; y = y_;
-        button = btn; action = act; mods = m;
+        button = btn; action = act; mods = m; click_count = click_count_;
         source = source_;
         handled = false;
     }
@@ -44,7 +44,7 @@ struct MouseButtonEvent : public tc_mouse_button_event {
     explicit MouseButtonEvent(const tc_mouse_button_event& e) {
         viewport = e.viewport;
         x = e.x; y = e.y;
-        button = e.button; action = e.action; mods = e.mods;
+        button = e.button; action = e.action; mods = e.mods; click_count = e.click_count;
         source = e.source;
         handled = e.handled;
     }

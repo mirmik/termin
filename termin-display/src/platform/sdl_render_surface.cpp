@@ -103,7 +103,8 @@ void SDLWindowBackend::dispatch_event_to_surface(SDLWindowRenderSurface* surface
                 input,
                 SDLWindow::translate_mouse_button(event.button.button),
                 TC_INPUT_PRESS,
-                SDLWindow::translate_sdl_mods(SDL_GetModState())
+                SDLWindow::translate_sdl_mods(SDL_GetModState()),
+                event.button.clicks
             );
             break;
 
@@ -112,7 +113,8 @@ void SDLWindowBackend::dispatch_event_to_surface(SDLWindowRenderSurface* surface
                 input,
                 SDLWindow::translate_mouse_button(event.button.button),
                 TC_INPUT_RELEASE,
-                SDLWindow::translate_sdl_mods(SDL_GetModState())
+                SDLWindow::translate_sdl_mods(SDL_GetModState()),
+                event.button.clicks
             );
             break;
 

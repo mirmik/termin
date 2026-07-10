@@ -29,18 +29,24 @@ void bind_input_events(nb::module_& m) {
         "    mods: Modifier flags (Shift=1, Ctrl=2, Alt=4, Super=8)")
         .def(nb::init<>())
         .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
-                           int button, int action, int mods, uint32_t source) {
-            new (self) MouseButtonEvent(viewport.handle(), x, y, button, action, mods, source);
+                           int button, int action, int mods, uint32_t source,
+                           uint32_t click_count) {
+            new (self) MouseButtonEvent(viewport.handle(), x, y, button, action, mods, source,
+                                        click_count);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0,
-           nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME))
+           nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME),
+           nb::arg("click_count") = 1)
         .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
-                           MouseButton button_enum, Action action_enum, int mods, uint32_t source) {
+                           MouseButton button_enum, Action action_enum, int mods, uint32_t source,
+                           uint32_t click_count) {
             new (self) MouseButtonEvent(viewport.handle(), x, y,
-                static_cast<int>(button_enum), static_cast<int>(action_enum), mods, source);
+                static_cast<int>(button_enum), static_cast<int>(action_enum), mods, source,
+                click_count);
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0,
-           nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME))
+           nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME),
+           nb::arg("click_count") = 1)
         .def_prop_rw("viewport",
             [](const MouseButtonEvent& self) {
                 return TcViewport::from_handle(self.viewport);
@@ -65,6 +71,7 @@ void bind_input_events(nb::module_& m) {
                 self.action = a;
             })
         .def_rw("mods", &MouseButtonEvent::mods)
+        .def_rw("click_count", &MouseButtonEvent::click_count)
         .def_rw("source", &MouseButtonEvent::source)
         .def_rw("handled", &MouseButtonEvent::handled)
         .def("__repr__", [](const MouseButtonEvent& e) {
@@ -75,6 +82,7 @@ void bind_input_events(nb::module_& m) {
                    ", button=" + std::to_string(e.button) +
                    ", action=" + std::to_string(e.action) +
                    ", mods=" + std::to_string(e.mods) +
+                   ", click_count=" + std::to_string(e.click_count) +
                    ", source=" + std::to_string(e.source) +
                    ", handled=" + std::string(e.handled ? "True" : "False") + ")";
         });

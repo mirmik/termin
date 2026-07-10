@@ -82,11 +82,7 @@ class DebugMenuActions:
     toggle_camera_frustums: VoidCallback
     show_undo_stack_viewer: VoidCallback
     show_framegraph_debugger: VoidCallback
-    show_resource_manager_viewer: VoidCallback
     show_audio_debugger: VoidCallback
-    show_core_registry_viewer: VoidCallback
-    show_inspect_registry_viewer: VoidCallback
-    show_navmesh_registry_viewer: VoidCallback
     show_scene_manager_viewer: VoidCallback
     show_python_console: VoidCallback
     toggle_surface_edge_debug_tool: VoidCallback | None = None
@@ -150,56 +146,64 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
         MenuItemSpec("NavMesh Areas...", actions.navigation.show_navmesh_areas),
     ]
     if actions.navigation.toggle_raw_detour_path_debug_tool is not None:
-        navigation_items.extend([
-            None,
-            MenuItemSpec(
-                "Raw Detour Path Debug",
-                actions.navigation.toggle_raw_detour_path_debug_tool,
-                is_checkable=True,
-                state_getter=states.raw_detour_path_debug_tool_enabled,
-                handle_getter=handles.raw_detour_path_debug_tool,
-            ),
-        ])
+        navigation_items.extend(
+            [
+                None,
+                MenuItemSpec(
+                    "Raw Detour Path Debug",
+                    actions.navigation.toggle_raw_detour_path_debug_tool,
+                    is_checkable=True,
+                    state_getter=states.raw_detour_path_debug_tool_enabled,
+                    handle_getter=handles.raw_detour_path_debug_tool,
+                ),
+            ]
+        )
 
     debug_items = [
         MenuItemSpec(
-            "Profiler", actions.debug.toggle_profiler, shortcut="F7",
-            is_checkable=True, state_getter=states.profiler_visible,
+            "Profiler",
+            actions.debug.toggle_profiler,
+            shortcut="F7",
+            is_checkable=True,
+            state_getter=states.profiler_visible,
             handle_getter=handles.profiler,
         ),
         MenuItemSpec(
-            "Modules", actions.debug.toggle_modules, shortcut="F8",
-            is_checkable=True, state_getter=states.modules_visible,
+            "Modules",
+            actions.debug.toggle_modules,
+            shortcut="F8",
+            is_checkable=True,
+            state_getter=states.modules_visible,
             handle_getter=handles.modules,
         ),
         MenuItemSpec(
-            "Camera Frustums", actions.debug.toggle_camera_frustums,
-            is_checkable=True, state_getter=states.camera_frustums_visible,
+            "Camera Frustums",
+            actions.debug.toggle_camera_frustums,
+            is_checkable=True,
+            state_getter=states.camera_frustums_visible,
             handle_getter=handles.camera_frustums,
         ),
         None,
         MenuItemSpec("Undo/Redo Stack...", actions.debug.show_undo_stack_viewer),
         MenuItemSpec("Framegraph Texture Viewer...", actions.debug.show_framegraph_debugger),
-        MenuItemSpec("Resource Manager...", actions.debug.show_resource_manager_viewer),
         MenuItemSpec("Audio Debugger...", actions.debug.show_audio_debugger),
-        MenuItemSpec("Core Registry...", actions.debug.show_core_registry_viewer),
-        MenuItemSpec("Inspect Registry...", actions.debug.show_inspect_registry_viewer),
-        MenuItemSpec("NavMesh Registry...", actions.debug.show_navmesh_registry_viewer),
         MenuItemSpec("Scene Manager...", actions.debug.show_scene_manager_viewer),
         None,
         MenuItemSpec("Python Console...", actions.debug.show_python_console),
     ]
     if actions.debug.toggle_surface_edge_debug_tool is not None:
-        debug_items.extend([
-            None,
-            MenuItemSpec(
-                "Surface Edge Debug Tool",
-                actions.debug.toggle_surface_edge_debug_tool,
-                is_checkable=True,
-                state_getter=states.surface_edge_debug_tool_enabled,
-                handle_getter=handles.surface_edge_debug_tool,
-            ),
-        ])
+        debug_items.extend(
+            [
+                None,
+                MenuItemSpec(
+                    "Surface Edge Debug Tool",
+                    actions.debug.toggle_surface_edge_debug_tool,
+                    is_checkable=True,
+                    state_getter=states.surface_edge_debug_tool_enabled,
+                    handle_getter=handles.surface_edge_debug_tool,
+                ),
+            ]
+        )
 
     return [
         # ── File ───────────────────────────────────────────────────────
@@ -229,11 +233,15 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
             name="Edit",
             items=[
                 MenuItemSpec(
-                    "Undo", actions.edit.undo, shortcut="Ctrl+Z",
+                    "Undo",
+                    actions.edit.undo,
+                    shortcut="Ctrl+Z",
                     handle_getter=handles.undo,
                 ),
                 MenuItemSpec(
-                    "Redo", actions.edit.redo, shortcut="Ctrl+Shift+Z",
+                    "Redo",
+                    actions.edit.redo,
+                    shortcut="Ctrl+Shift+Z",
                     handle_getter=handles.redo,
                 ),
                 None,
@@ -246,8 +254,11 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
             name="View",
             items=[
                 MenuItemSpec(
-                    "Fullscreen", actions.view.toggle_fullscreen, shortcut="F11",
-                    is_checkable=True, state_getter=states.fullscreen,
+                    "Fullscreen",
+                    actions.view.toggle_fullscreen,
+                    shortcut="F11",
+                    is_checkable=True,
+                    state_getter=states.fullscreen,
                     handle_getter=handles.fullscreen,
                 ),
                 None,
@@ -275,7 +286,9 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
             name="Game",
             items=[
                 MenuItemSpec(
-                    "Play", actions.game.toggle_game_mode, shortcut="F5",
+                    "Play",
+                    actions.game.toggle_game_mode,
+                    shortcut="F5",
                     handle_getter=handles.play,
                 ),
                 MenuItemSpec("Build Project...", actions.game.build_project),

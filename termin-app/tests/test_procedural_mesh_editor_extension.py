@@ -239,7 +239,7 @@ def test_procedural_mesh_editor_extension_drags_selected_contour_point_in_viewpo
     extension.build_left_panel()
     extension._apply_controller_result(extension._controller.select_node(("contour", contour.id)))
 
-    assert editor.pointer_handlers == [extension._on_viewport_pointer]
+    assert editor.pointer_handlers == [extension._model.viewport_interaction.on_pointer]
     assert extension._on_viewport_pointer(_pointer("down", 200.0, 200.0, 0, 1, 0)) is True
     assert editor.viewport_tool_count == 1
     assert extension._on_viewport_pointer(_pointer("up", 250.0, 225.0, 0, 0, 0)) is True

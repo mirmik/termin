@@ -111,6 +111,31 @@ class TestEditorUndoCommands(unittest.TestCase):
         stack.undo()
         self.assertEqual(child.transform.parent.entity.uuid, parent_uuid)
 
+    def test_reparent_command_restores_persistent_sibling_order(self) -> None:
+        self.scene.create_entity("first")
+        self.scene.create_entity("second")
+        third = self.scene.create_entity("third")
+        stack = UndoStack()
+
+        stack.push(
+            ReparentEntityCommand(
+                third,
+                None,
+                None,
+                new_sibling_index=0,
+            )
+        )
+        self.assertEqual(
+            [entity.name for entity in self.scene.root_entities],
+            ["third", "first", "second"],
+        )
+
+        stack.undo()
+        self.assertEqual(
+            [entity.name for entity in self.scene.root_entities],
+            ["first", "second", "third"],
+        )
+
     def test_delete_entity_command_restores_subtree_in_one_undo(self) -> None:
         root = self.scene.create_entity("root")
         child = self.scene.create_entity("child")
@@ -242,6 +267,16 @@ class TestEditorUndoCommands(unittest.TestCase):
 
         stack.redo()
         self.assertEqual(entity.name, "renamed")
+
+    def test_entity_property_command_edits_visibility(self) -> None:
+        entity = self.scene.create_entity("entity")
+        stack = UndoStack()
+
+        stack.push(EntityPropertyEditCommand(entity, "visible", True, False))
+        self.assertFalse(entity.visible)
+
+        stack.undo()
+        self.assertTrue(entity.visible)
 
     def test_recursive_layer_command_restores_descendant_layers(self) -> None:
         root = self.scene.create_entity("root")

@@ -1,6 +1,8 @@
+import json
 import os
 
 from termin.launcher import app as launcher_app
+from termin.launcher import recent
 
 
 def _library_env_value(env):
@@ -67,3 +69,17 @@ def test_launch_editor_process_exec_mode(monkeypatch, tmp_path):
     assert file == str(editor)
     assert args == [str(editor), project]
     assert str(tmp_path / "lib") in _library_env_value(env)
+
+
+def test_read_launch_project_returns_path_when_consumption_fails(monkeypatch, tmp_path):
+    launch_file = tmp_path / "launch_project.json"
+    project = str(tmp_path / "Project.terminproj")
+    launch_file.write_text(json.dumps({"project": project}), encoding="utf-8")
+    monkeypatch.setattr(recent, "LAUNCH_PROJECT_FILE", str(launch_file))
+
+    def fail_remove(_path):
+        raise OSError("read-only config directory")
+
+    monkeypatch.setattr(recent.os, "remove", fail_remove)
+
+    assert recent.read_launch_project() == project
