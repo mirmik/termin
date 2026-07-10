@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from termin.editor_tcgui import project_session_controller as session_module
-from termin.editor_tcgui.project_session_controller import ProjectSessionController
+from termin.editor_core import project_session_controller as session_module
+from termin.editor_core.project_session_controller import ProjectSessionController
 
 
 def test_load_project_syncs_stdlib_before_modules_and_resource_scan(tmp_path, monkeypatch) -> None:
@@ -32,7 +32,6 @@ def test_load_project_syncs_stdlib_before_modules_and_resource_scan(tmp_path, mo
     monkeypatch.setattr(ProjectSessionController, "load_project_modules", load_project_modules)
 
     controller = ProjectSessionController(
-        get_ui=lambda: None,
         set_project_state=lambda _project_dir, _project_name: calls.append("set_project_state"),
         log_to_console=lambda _message: calls.append("log_project"),
         rescan_file_resources=lambda: calls.append("rescan_file_resources"),
@@ -50,6 +49,6 @@ def test_load_project_syncs_stdlib_before_modules_and_resource_scan(tmp_path, mo
         "sync_stdlib",
         "configure_shader_runtime",
         "load_project_modules",
-        "rescan_file_resources",
         "set_project_browser_root",
+        "rescan_file_resources",
     ]

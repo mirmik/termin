@@ -35,3 +35,12 @@ def test_make_default_scene_returns_independent_scene_ids():
     second = make_default_scene()
 
     assert first["scene"]["uuid"] != second["scene"]["uuid"]
+
+
+def test_default_scene_uses_canonical_builtin_texture_uuids():
+    serialized = json.dumps(make_default_scene())
+
+    assert "5fb7972ad02ddfad" not in serialized
+    assert "07151644d3bb92c7" not in serialized
+    assert "__white_1x1__" in serialized
+    assert "__normal_1x1__" in serialized

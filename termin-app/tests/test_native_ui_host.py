@@ -177,43 +177,6 @@ def test_editor_cli_keeps_explicit_legacy_tcgui_backend(monkeypatch):
     assert _parse_editor_args() == (None, None, "tcgui")
 
 
-def test_native_startup_project_activates_project_services(monkeypatch, tmp_path):
-    from termin.editor_native.run_editor import _activate_startup_project
-
-    project_file = tmp_path / "PhysicsTest.terminproj"
-    project_file.write_text('{"version": 1}', encoding="utf-8")
-    calls = []
-
-    class Manager:
-        def set_project_path(self, path):
-            calls.append(path)
-
-    class Browser:
-        def set_root(self, path):
-            calls.append(("browser", path))
-
-    monkeypatch.setattr(
-        "termin.editor_core.project_context.set_current_project_path",
-        lambda path: calls.append(("context", path)),
-    )
-    monkeypatch.setattr(
-        "termin.project.settings.ProjectSettingsManager.instance",
-        lambda: Manager(),
-    )
-    monkeypatch.setattr(
-        "termin.navmesh.settings.NavigationSettingsManager.instance",
-        lambda: Manager(),
-    )
-
-    assert _activate_startup_project(str(project_file), Browser())
-    assert calls == [
-        ("context", tmp_path),
-        tmp_path,
-        tmp_path,
-        ("browser", tmp_path),
-    ]
-
-
 def test_native_screenshot_composes_current_document_before_readback(monkeypatch, tmp_path):
     from termin.editor_native.ui_host import NativeUiHost
 

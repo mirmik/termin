@@ -52,13 +52,15 @@ UI-agnostic слой. Модели состояния + сервисы.
 | `inspector_model.py` | `InspectorKind` enum + `InspectorModel` — какой инспектор активен, что в нём target, набор `show_*` методов + `resync_from_selection` (диспатч по типу выделенного объекта). View подписывается на `changed` Signal. |
 | `rendering_model.py` | `RenderingModel` — состояние displays/viewports/render targets: editor_display_ptr, selected_display/viewport, display_input_managers dict. Методы: `attach_scene`, `detach_scene`, `remove_viewports_for_scene`, `sync_viewport_configs_to_scene`, `sync_render_target_configs_to_scene`, `apply_display_input`, `find_viewport_config`. |
 | `prefab_edit_controller.py` | `PrefabEditController` — UI-agnostic isolation mode for editing `.prefab` files. |
+| `project_session_controller.py` | Общий lifecycle проекта: stdlib sync, shader runtime, project modules, `InitScript.py`, resource scan и восстановление project root. UI frontend передаёт callbacks для ошибок и progress presentation. |
 | `spacemouse_controller.py` | `SpaceMouseController` — libspnav integration; polling from the tcgui render loop. |
 | `gizmo/` | Unified gizmo exports and Python collider/constraint helpers used by runtime rendering code. |
 
 ### `termin/editor/` — legacy entrypoint
 
 Содержит только совместимые entrypoint-файлы (`python -m termin.editor`,
-`termin.editor.run_editor`), которые запускают tcgui. UI-код здесь добавлять нельзя.
+`termin.editor.run_editor`). По умолчанию они запускают native UI; tcgui доступен
+явно через `--ui=tcgui` на время миграции. UI-код здесь добавлять нельзя.
 
 ### `termin/editor_tcgui/` — tcgui view
 
@@ -67,7 +69,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 - `inspector_controller.py`
 - `rendering_controller.py`
 - `scene_file_controller.py` — scene new/save/load/close и валидация scene path относительно проекта.
-- `project_session_controller.py` — open/restore project, shader runtime setup, project modules, `InitScript.py`.
+- `project_session_controller.py` — тонкий tcgui adapter над общим controller из `editor_core`.
 - `project_build_controller.py` — run standalone, build package, Android/Quest build entry preparation.
 - `editor_window_layout.py` — создание widget tree главного окна без wiring контроллеров.
 - `viewport_interaction_hub.py` — viewport click/pointer/key handlers, overlay drawers, active tool counter.

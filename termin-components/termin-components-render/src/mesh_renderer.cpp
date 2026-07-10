@@ -497,12 +497,15 @@ void MeshRenderer::apply_pending_override_data() {
                 if (uuid_val && uuid_val->type == TC_VALUE_STRING && uuid_val->data.s) {
                     std::string uuid = uuid_val->data.s;
                     tc_texture_handle tex_h = tc_texture_find(uuid.c_str());
+                    tc_value* name_val = tc_value_dict_get(val, "name");
+                    std::string name = (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s)
+                        ? name_val->data.s : "";
+                    if (tc_texture_handle_is_invalid(tex_h) && !name.empty()) {
+                        tex_h = tc_texture_find(name.c_str());
+                    }
                     if (!tc_texture_handle_is_invalid(tex_h)) {
                         tc_material_phase_set_texture(phase, key, tex_h);
                     } else {
-                        tc_value* name_val = tc_value_dict_get(val, "name");
-                        std::string name = (name_val && name_val->type == TC_VALUE_STRING && name_val->data.s)
-                            ? name_val->data.s : "";
                         tc::Log::warn("[MeshRenderer] Texture not found: uuid=%s name=%s uniform=%s",
                                      uuid.c_str(), name.c_str(), key);
                     }

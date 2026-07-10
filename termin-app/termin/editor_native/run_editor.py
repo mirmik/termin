@@ -40,7 +40,10 @@ from termin.editor_core.scene_settings_model import (
 )
 from termin.editor_core.project_settings_model import ProjectSettingsController
 from termin.editor_core.project_build_controller import ProjectBuildController
+from termin.editor_core.project_session_controller import ProjectSessionController
 from termin.editor_core.scene_file_controller import SceneFileController
+from termin.editor_core.editor_state_io import EditorStateIO
+from termin.editor_core.shader_runtime import resolve_slangc, resolve_termin_shaderc
 from termin.editor_core.game_mode_model import GameModeModel
 from termin.editor_core.game_mode_session_connectors import (
     EditorGameModeConnector,
@@ -129,26 +132,6 @@ from termin.gui_native import Rect, WidgetRef
 
 
 _logger = logging.getLogger(__name__)
-
-
-def _activate_startup_project(project_file: str, project_browser) -> bool:
-    """Activate the project-wide services required before restoring its scene."""
-    project_path = Path(project_file)
-    if not project_path.is_file() or project_path.suffix != ".terminproj":
-        _logger.error("Native editor ignored invalid startup project: %s", project_file)
-        return False
-
-    project_root = project_path.parent
-
-    from termin.editor_core.project_context import set_current_project_path
-    from termin.navmesh.settings import NavigationSettingsManager
-    from termin.project.settings import ProjectSettingsManager
-
-    set_current_project_path(project_root)
-    ProjectSettingsManager.instance().set_project_path(project_root)
-    NavigationSettingsManager.instance().set_project_path(project_root)
-    project_browser.set_root(project_root)
-    return True
 
 
 def _smoke_frame_limit() -> int:
@@ -769,7 +752,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         last_project = EditorSettings.instance().get_last_project_file()
         project_file = str(last_project) if last_project is not None else None
     if project_file is not None:
-        _activate_startup_project(project_file, project_browser)
+        project_path = Path(project_file)
+        if not project_path.is_file() or project_path.suffix != ".terminproj":
+            _logger.error("Native editor ignored invalid startup project: %s", project_file)
+            project_file = None
 
     def active_scene_name() -> str | None:
         scene = current_scene()
@@ -794,6 +780,21 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         shell.status_bar.text = message
         request_editor_render()
 
+    editor_state_io = None
+    if native_viewport is not None:
+        editor_state_io = EditorStateIO(
+            native_viewport.attachment,
+            native_viewport.interaction,
+        )
+        editor_state_io.get_scene = current_scene
+        editor_state_io.on_entity_selected = scene_tree.select_object
+        editor_state_io.get_expanded_entity_uuids = (
+            scene_hierarchy_controller.get_expanded_entity_uuids
+        )
+        editor_state_io.set_expanded_entity_uuids = (
+            scene_hierarchy_controller.set_expanded_entity_uuids
+        )
+
     scene_file_controller = SceneFileController(
         scene_manager=engine.scene_manager,
         get_dialog_service=lambda: dialog_service,
@@ -805,7 +806,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             if project_browser_controller.root_path is None
             else str(project_browser_controller.root_path)
         ),
-        get_editor_state_io=lambda: None,
+        get_editor_state_io=lambda: editor_state_io,
         has_editor_attachment=lambda: editor_scene_session is not None,
         detach_editor_from_scene=detach_editor_scene,
         detach_scene_from_render=lambda name, **_options: (
@@ -843,9 +844,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             scene_file_controller.save_scene()
 
     shell.tool_bar.connect_activated(on_toolbar_scene_file_command)
-
-    if project_browser_controller.root_path is not None:
-        scene_file_controller.load_last_scene()
 
     quest_openxr_build_dialog = build_native_quest_openxr_build_dialog(
         host.document,
@@ -932,8 +930,31 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         resource_manager,
         on_resource_reloaded=on_resource_reloaded,
     )
-    if project_browser_controller.root_path is not None:
-        project_file_watcher.watch_directory(str(project_browser_controller.root_path))
+
+    def rescan_file_resources() -> None:
+        project_root = project_browser_controller.root_path
+        if project_root is None:
+            _logger.error("Native editor cannot scan resources without a project root")
+            return
+        project_file_watcher.watch_directory(str(project_root))
+
+    project_session_controller = ProjectSessionController(
+        set_project_state=lambda _project_dir, _project_name: None,
+        log_to_console=log_build_message,
+        rescan_file_resources=rescan_file_resources,
+        set_project_browser_root=lambda project_dir: project_browser.set_root(
+            Path(project_dir)
+        ),
+        get_init_script_editor=lambda: None,
+        resolve_termin_shaderc=resolve_termin_shaderc,
+        resolve_slangc=resolve_slangc,
+        show_error=dialog_service.show_error,
+    )
+    if project_file is not None:
+        project_session_controller.load_project(
+            project_file,
+            on_complete=scene_file_controller.load_last_scene,
+        )
 
     def prepare_code_for_play() -> bool:
         from termin.project_modules.runtime import get_project_modules_runtime

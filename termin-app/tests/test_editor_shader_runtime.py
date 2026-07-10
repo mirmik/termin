@@ -3,7 +3,7 @@ from pathlib import Path
 
 from termin.editor_tcgui.editor_window import EditorWindowTcgui
 from termin.editor_tcgui import editor_window
-from termin.editor_tcgui import project_session_controller
+from termin.editor_core import project_session_controller
 
 
 def test_editor_project_load_configures_shader_runtime(monkeypatch, tmp_path: Path):

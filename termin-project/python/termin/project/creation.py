@@ -66,13 +66,13 @@ def make_default_scene() -> dict:
                                         {},
                                         {
                                             "u_albedo_texture": {
-                                                "uuid": "5fb7972ad02ddfad",
+                                                "uuid": "__white_1x1__",
                                                 "name": "__white_1x1__",
                                                 "type": "path",
                                                 "path": "__white_1x1__",
                                             },
                                             "u_normal_texture": {
-                                                "uuid": "07151644d3bb92c7",
+                                                "uuid": "__normal_1x1__",
                                                 "name": "__normal_1x1__",
                                                 "type": "path",
                                                 "path": "__normal_1x1__",
@@ -168,13 +168,13 @@ def make_default_scene() -> dict:
                                         {},
                                         {
                                             "u_albedo_texture": {
-                                                "uuid": "5fb7972ad02ddfad",
+                                                "uuid": "__white_1x1__",
                                                 "name": "__white_1x1__",
                                                 "type": "path",
                                                 "path": "__white_1x1__",
                                             },
                                             "u_normal_texture": {
-                                                "uuid": "07151644d3bb92c7",
+                                                "uuid": "__normal_1x1__",
                                                 "name": "__normal_1x1__",
                                                 "type": "path",
                                                 "path": "__normal_1x1__",
