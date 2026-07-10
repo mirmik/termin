@@ -84,6 +84,12 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
         assert inspector.component_model.items[0].subtitle == ""
         assert inspector.component_list.select(0)
         assert "enabled" in inspector.fields.field_widgets
+        assert len(inspector.transform_boxes) == 3
+        inspector.transform_boxes[0][0].value = 2.5
+        assert tuple(entity.transform.local_pose().lin) == pytest.approx((2.5, 0.0, 0.0))
+        stack.undo()
+        controller.refresh()
+        assert inspector.transform_boxes[0][0].value == pytest.approx(0.0)
 
         inspector.fields.field_widgets["enabled"].checked = False
         assert not entity.tc_components[0].enabled

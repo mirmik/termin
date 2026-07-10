@@ -848,12 +848,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
     file_menu.connect_activated(on_scene_file_command)
 
-    def on_toolbar_scene_file_command(_index: int, command_id: int, _command) -> None:
-        if command_id == shell.toolbar_save_command:
-            scene_file_controller.save_scene()
-
-    shell.tool_bar.connect_activated(on_toolbar_scene_file_command)
-
     quest_openxr_build_dialog = build_native_quest_openxr_build_dialog(
         host.document,
         viewport=editor_viewport,
@@ -1138,12 +1132,19 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         }
     )
     python_console_controller = PythonConsoleController(executor)
+
+    def activate_python_console_tab() -> None:
+        shell.bottom_tabs.selected_index = 1
+
     python_console = build_native_python_console(
         host.document,
         python_console_controller,
         viewport=editor_viewport,
         request_render=request_editor_render,
+        embedded=True,
+        activate_embedded=activate_python_console_tab,
     )
+    shell.console_host.add_stretch_child(python_console.root)
     connect_python_console_command(
         debug_menu,
         shell.python_console_command,
