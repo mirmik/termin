@@ -12,6 +12,8 @@
 #include <tc_inspect_cpp.hpp>
 #include <inspect/tc_runtime_type_registry.h>
 
+#include <thread>
+
 namespace termin {
 namespace {
 
@@ -247,6 +249,14 @@ const termin_modules::ModuleEnvironment& TermModulesIntegration::environment() c
 
 void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& runtime) const {
     runtime.set_environment(_environment);
+    const std::thread::id owner_thread = std::this_thread::get_id();
+    runtime.set_mutation_thread_checker([owner_thread](std::string& error) {
+        if (std::this_thread::get_id() == owner_thread) {
+            return true;
+        }
+        error = "Live module mutation must run on the integration owner thread";
+        return false;
+    });
     const bool sync_live_scenes = _environment.sync_live_scenes;
     tc_component_registry_set_prepare_unload_callback(
         prepare_component_unload_for_runtime_type,

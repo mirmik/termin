@@ -341,6 +341,58 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         _reset_project_modules_runtime()
 
 
+def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: Path) -> None:
+    from termin.engine import SceneManager
+
+    _reset_project_modules_runtime()
+    _write_hot_reload_project(tmp_path)
+    scene_manager = SceneManager()
+    runtime = HeadlessRuntime(
+        tmp_path,
+        "Main.scene",
+        load_modules=True,
+        load_assets=False,
+        register_builtin_resources=False,
+    )
+
+    try:
+        runtime.initialize()
+        scene_manager.register_scene("Main.scene", runtime.scene.scene_handle())
+        project_modules = modules_runtime.get_project_modules_runtime()
+        expected_value = 5
+        active_step = 1
+
+        for next_step in (2, 3, 4):
+            components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
+            assert len(components) == 1
+            component = components[0]
+            runtime.run_frames(frames=2, dt=0.01)
+            expected_value += active_step * 2
+            assert component.value == expected_value
+            del component
+            del components
+            gc.collect()
+
+            _write_hot_reload_component_sources(
+                tmp_path,
+                step=next_step,
+                mtime=1_800_000_100 + next_step,
+            )
+            assert project_modules.reload_module("gameplay"), project_modules.last_error
+            active_step = next_step
+
+        final_components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
+        assert len(final_components) == 1
+        assert final_components[0].step == 4
+        assert final_components[0].value == expected_value
+        del final_components
+        gc.collect()
+    finally:
+        scene_manager.unregister_scene("Main.scene")
+        runtime.shutdown()
+        _reset_project_modules_runtime()
+
+
 def test_headless_runtime_ticks_scene_without_render_extensions(tmp_path: Path) -> None:
     _write_scene_with_component(tmp_path)
     runtime = HeadlessRuntime(

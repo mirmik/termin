@@ -19,6 +19,9 @@ def warmup_project_modules(
     project_root: str | Path,
     *,
     module_ids: Sequence[str] = (),
+    build_module_ids: Sequence[str] = (),
+    clean_module_ids: Sequence[str] = (),
+    rebuild_module_ids: Sequence[str] = (),
     runtime: Any | None = None,
 ) -> WarmupResult:
     resolved_project_root = resolve_project_root(Path(project_root))
@@ -27,10 +30,16 @@ def warmup_project_modules(
     if runtime is None:
         previous_sync_live_scenes = modules_runtime.sync_live_scenes
         modules_runtime.set_sync_live_scenes(False)
-    requested = tuple(module_ids)
+    operations = (
+        *((module_id, "warm up", modules_runtime.load_module) for module_id in module_ids),
+        *((module_id, "build", modules_runtime.build_module) for module_id in build_module_ids),
+        *((module_id, "clean", modules_runtime.clean_module) for module_id in clean_module_ids),
+        *((module_id, "rebuild", modules_runtime.rebuild_module) for module_id in rebuild_module_ids),
+    )
+    requested = tuple(module_id for module_id, _, _ in operations)
 
     try:
-        if requested:
+        if operations:
             if not modules_runtime.discover_project(resolved_project_root):
                 _log_error(
                     "[ProjectModulesWarmup] failed to discover project modules for "
@@ -39,14 +48,14 @@ def warmup_project_modules(
                 return WarmupResult(resolved_project_root, requested, False, ())
 
             success = True
-            for module_id in requested:
+            for module_id, operation_name, operation in operations:
                 if modules_runtime.find(module_id) is None:
                     _log_error(f"[ProjectModulesWarmup] unknown project module: {module_id}")
                     success = False
                     continue
-                if not modules_runtime.load_module(module_id):
+                if not operation(module_id):
                     _log_error(
-                        f"[ProjectModulesWarmup] failed to warm up module '{module_id}': "
+                        f"[ProjectModulesWarmup] failed to {operation_name} module '{module_id}': "
                         f"{modules_runtime.last_error}"
                     )
                     success = False
@@ -157,6 +166,27 @@ def _create_parser() -> argparse.ArgumentParser:
         help="Warm up only the specified module id. Repeat for multiple modules.",
     )
     parser.add_argument(
+        "--build-module",
+        dest="build_module_ids",
+        action="append",
+        default=[],
+        help="Build the specified module without loading it. Repeatable.",
+    )
+    parser.add_argument(
+        "--clean-module",
+        dest="clean_module_ids",
+        action="append",
+        default=[],
+        help="Clean artifacts for the specified module. Repeatable.",
+    )
+    parser.add_argument(
+        "--rebuild-module",
+        dest="rebuild_module_ids",
+        action="append",
+        default=[],
+        help="Clean and rebuild the specified module without loading it. Repeatable.",
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Only print errors.",
@@ -201,6 +231,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         result = warmup_project_modules(
             project_path,
             module_ids=tuple(args.module_ids),
+            build_module_ids=tuple(args.build_module_ids),
+            clean_module_ids=tuple(args.clean_module_ids),
+            rebuild_module_ids=tuple(args.rebuild_module_ids),
         )
         runtime = _project_modules_runtime()
     except Exception as exc:

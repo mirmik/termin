@@ -210,6 +210,32 @@ Dependents, которые не были загружены к моменту re
 автоматический rollback, потому что после закрытия native handle старую версию
 модуля нельзя считать безопасно восстанавливаемой.
 
+### Owner-thread boundary в editor
+
+`TermModulesIntegration::configure_runtime()` привязывает live mutation к
+потоку, на котором создана integration. `load`, `unload`, `reload`, `rebuild` и
+shutdown fail-closed до backend/registry вызовов, если их вызвали с другого
+потока; `last_error` содержит operation и thread-contract diagnostic.
+
+Editor progress dialog разделяет операцию на две части:
+
+1. build/clean/rebuild выполняется non-daemon worker-ом через отдельный
+   `sdk/bin/termin_python -m termin.project_modules.warmup` process; у него свой
+   runtime, CWD, Python interpreter и registries
+2. live unload/load, UnknownComponent migration и registry commit ставятся через
+   `UI.defer()` и выполняются после текущего UI/render compose на owner thread
+
+Это сохраняет отзывчивость UI во время native build и исключает изменение CWD,
+scene или process-global registries из module worker. Диалог нельзя закрыть до
+завершения build; worker не daemon. При shutdown незавершённый build может
+закончить только isolated phase, а live commit без обработки owner-thread queue
+не выполняется. Play gate использует ту же prebuild/owner-commit схему.
+
+Python wrappers на module-owned live objects, удерживаемые console/MCP/tooling
+вне управляемой сцены, считаются настоящими live references и блокируют unload.
+Tooling обязано отпустить такие ссылки до commit; editor smoke probe явно
+очищает persistent executor globals перед запросом reload.
+
 Editor watcher не выполняет module reload прямо на filesystem-событии. Изменения
 Python `.pymodule`, `.py` файлов внутри `packages`, C++ `.module` и native
 input-файлов помечают владеющий модуль dirty. Initial scan не пачкает уже
@@ -218,9 +244,10 @@ dirty.
 
 Применение изменений выполняется явным действием (`Reload Changed` /
 `Build & Reload Changed`) или Play-gate перед входом в Game Mode. Play-gate
-вызывает editor-level `prepare_changed_modules_for_play()`: dirty/stale модули
-reload-ятся через dependency-aware cascade, а C++ backend при load выполняет
-build command. Если build/reload падает, Play не стартует, модуль остаётся в
+сначала запускает isolated artifact preparation, затем на owner thread вызывает
+editor-level `prepare_changed_modules_for_play()`: dirty/stale модули
+reload-ятся через dependency-aware cascade, а уже подготовленный C++ artifact
+не требует долгого build в commit phase. Если build/reload падает, Play не стартует, модуль остаётся в
 `Failed`/degraded состоянии с диагностикой.
 
 Loose `.py` файлы вне `.pymodule` являются поддерживаемой editor policy, а не

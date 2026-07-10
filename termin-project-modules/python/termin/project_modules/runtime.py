@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import atexit
 import os
+import subprocess
 import sys
 import weakref
 from dataclasses import dataclass
@@ -70,6 +71,7 @@ class ProjectModulesRuntime:
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
         self._dirty_module_reasons: dict[str, set[str]] = {}
+        self._background_error = ""
         self._closed = False
         self._configure_environment()
         self._configure_runtime()
@@ -84,7 +86,7 @@ class ProjectModulesRuntime:
 
     @property
     def last_error(self) -> str:
-        return self._runtime.last_error
+        return self._background_error or self._runtime.last_error
 
     @property
     def sync_live_scenes(self) -> bool:
@@ -165,6 +167,7 @@ class ProjectModulesRuntime:
 
     def reload_module(self, module_id: str) -> bool:
         self._ensure_open()
+        self._background_error = ""
         success = self._runtime.reload_module_with_dependents(module_id)
         if success:
             self._dirty_module_reasons.pop(module_id, None)
@@ -301,6 +304,7 @@ class ProjectModulesRuntime:
 
     def build_module(self, module_id: str) -> bool:
         self._ensure_open()
+        self._background_error = ""
         return self._runtime.build_module(module_id)
 
     def clean_module(self, module_id: str) -> bool:
@@ -309,7 +313,86 @@ class ProjectModulesRuntime:
 
     def rebuild_module(self, module_id: str) -> bool:
         self._ensure_open()
+        self._background_error = ""
         return self._runtime.rebuild_module(module_id)
+
+    def prepare_module_artifacts(
+        self,
+        *,
+        project_root: str | Path | None = None,
+        operation: str = "warmup",
+        module_id: str | None = None,
+    ) -> bool:
+        """Build project module artifacts in an isolated worker process.
+
+        This method is safe to call from an editor worker: the subprocess owns
+        its own module runtime and cannot mutate this process' scenes or global
+        registries. The editor must perform the subsequent load/reload commit on
+        its owner thread.
+        """
+        self._ensure_open()
+        self._background_error = ""
+        target_root = Path(project_root).resolve() if project_root is not None else self._project_root
+        if target_root is None:
+            self._background_error = "Project root is not set for module artifact preparation"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}")
+            return False
+
+        python_executable = self._integration.environment.python_executable
+        if not python_executable:
+            self._background_error = "SDK Python executable is not configured"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}")
+            return False
+
+        command = [
+            python_executable,
+            "-m",
+            "termin.project_modules.warmup",
+            "warmup",
+            "--project",
+            str(target_root),
+            "--quiet",
+        ]
+        operation_flags = {
+            "warmup": None,
+            "build": "--build-module",
+            "clean": "--clean-module",
+            "rebuild": "--rebuild-module",
+        }
+        if operation not in operation_flags:
+            raise ValueError(f"Unsupported module artifact operation: {operation}")
+        flag = operation_flags[operation]
+        if flag is not None:
+            if not module_id:
+                raise ValueError(f"Module id is required for artifact operation '{operation}'")
+            command.extend([flag, module_id])
+
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=target_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            assert process.stdout is not None
+            for raw_line in process.stdout:
+                line = raw_line.rstrip("\r\n")
+                if line:
+                    self._on_build_output("module-build", line)
+            return_code = process.wait()
+        except Exception as exc:
+            self._background_error = f"Failed to run isolated module build: {exc}"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}", exc_info=True)
+            return False
+
+        if return_code != 0:
+            self._background_error = f"Isolated module build failed with exit code {return_code}"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}")
+            return False
+        return True
 
     def unload_module(self, module_id: str) -> bool:
         self._ensure_open()

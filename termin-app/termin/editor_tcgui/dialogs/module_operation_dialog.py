@@ -23,11 +23,15 @@ def show_module_operation_dialog(
     *,
     title: str,
     start_message: str,
-    action: Callable[[], bool],
+    worker_action: Callable[[], bool] | None = None,
+    owner_action: Callable[[], bool] | None = None,
     on_complete: Callable[[bool], None],
     auto_close: bool = True,
 ) -> None:
-    """Show a windowed progress dialog and run a module runtime action."""
+    """Run isolated build work off-thread and live mutation on the UI owner thread."""
+    if worker_action is None and owner_action is None:
+        raise ValueError("module operation requires worker_action or owner_action")
+    owner_thread_id = threading.get_ident()
     content = VStack()
     content.spacing = 8
     content.preferred_width = px(640)
@@ -57,9 +61,11 @@ def show_module_operation_dialog(
     dlg = Dialog()
     dlg.title = title
     dlg.content = content
-    dlg.buttons = ["Close"]
-    dlg.default_button = "Close"
-    dlg.cancel_button = "Close"
+    # Module operations are not cancellable mid-build. A non-daemon worker owns
+    # no live editor state; its commit is queued back to this UI thread.
+    dlg.buttons = []
+    dlg.default_button = ""
+    dlg.cancel_button = ""
     dlg.min_width = 680
 
     line_count = 0
@@ -84,12 +90,53 @@ def show_module_operation_dialog(
     def on_build_output(module_id: str, line: str) -> None:
         defer(lambda module_id=module_id, line=line: append_log(f"[{module_id}] {line}"))
 
+    def finish(success: bool, error_message: str = "") -> None:
+        if threading.get_ident() != owner_thread_id:
+            log.error(f"{_TAG} finish callback escaped the UI owner thread")
+            success = False
+            error_message = "Module operation completion ran on the wrong thread"
+        progress.value = 1.0 if success else 0.0
+        if success:
+            status_label.text = "Complete"
+            append_log("Complete.", advance_progress=False)
+        else:
+            status_label.text = "Failed"
+            if error_message:
+                append_log(f"Failed: {error_message}", advance_progress=False)
+            else:
+                append_log("Failed.", advance_progress=False)
+        on_complete(success)
+        if auto_close:
+            dlg.close()
+        else:
+            dlg.buttons = ["Close"]
+            dlg.default_button = "Close"
+            dlg.cancel_button = "Close"
+        request_layout()
+
+    def run_owner_action() -> None:
+        if threading.get_ident() != owner_thread_id:
+            finish(False, "Live module commit ran on the wrong thread")
+            return
+        success = False
+        error_message = ""
+        try:
+            assert owner_action is not None
+            success = owner_action()
+            if not success:
+                error_message = runtime.last_error
+        except Exception as exc:
+            error_message = str(exc)
+            log.error(f"{_TAG} {title} failed: {error_message}", exc_info=True)
+        finish(success, error_message)
+
     def worker() -> None:
         success = False
         error_message = ""
         runtime.add_build_output_listener(on_build_output)
         try:
-            success = action()
+            assert worker_action is not None
+            success = worker_action()
             if not success:
                 error_message = runtime.last_error
         except Exception as exc:
@@ -101,24 +148,15 @@ def show_module_operation_dialog(
             except Exception:
                 log.error(f"{_TAG} failed to remove build output listener", exc_info=True)
 
-        def finish() -> None:
-            progress.value = 1.0 if success else 0.0
-            if success:
-                status_label.text = "Complete"
-                append_log("Complete.", advance_progress=False)
-            else:
-                status_label.text = "Failed"
-                if error_message:
-                    append_log(f"Failed: {error_message}", advance_progress=False)
-                else:
-                    append_log("Failed.", advance_progress=False)
-            on_complete(success)
-            if auto_close:
-                dlg.close()
-            request_layout()
-
-        defer(finish)
+        if success and owner_action is not None:
+            defer(run_owner_action)
+        else:
+            defer(lambda: finish(success, error_message))
 
     dlg.show(ui, windowed=False)
-    thread = threading.Thread(target=worker, name=f"ModuleOperation-{title}", daemon=True)
+    if worker_action is None:
+        defer(run_owner_action)
+        return
+
+    thread = threading.Thread(target=worker, name=f"ModuleOperation-{title}", daemon=False)
     thread.start()

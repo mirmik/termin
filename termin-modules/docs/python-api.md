@@ -52,3 +52,16 @@ if not runtime.shutdown():
 восстанавливают их после load/reload. Для консольных сценариев подготовки
 модулей без открытых сцен, например `termin modules warmup`, это поле следует
 выключать.
+
+Editor не выполняет build в live runtime worker thread. Для isolated artifact
+phase используется CLI:
+
+```bash
+termin_python -m termin.project_modules.warmup warmup --project /path/to/project --quiet
+termin_python -m termin.project_modules.warmup warmup --project /path/to/project --build-module gameplay
+termin_python -m termin.project_modules.warmup warmup --project /path/to/project --clean-module gameplay
+termin_python -m termin.project_modules.warmup warmup --project /path/to/project --rebuild-module gameplay
+```
+
+После успешного subprocess build editor выполняет load/reload commit на своём
+owner thread. CLI process не разделяет с editor CWD, interpreter или registries.
