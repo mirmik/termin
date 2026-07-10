@@ -560,6 +560,35 @@ void test_python_unload_prepare_failure_preserves_loaded_handle() {
     expect(backend->unload_calls == 2, "failed backend commit and retry must each run once");
 }
 
+void test_live_mutation_thread_guard_fails_before_backend_calls() {
+    TempDir tmp;
+    write_text_file(tmp.path / "guarded.module", "name: guarded\nbuild:\n  output: build/libguarded.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    const std::thread::id owner_thread = std::this_thread::get_id();
+    runtime.set_mutation_thread_checker([owner_thread](std::string& error) {
+        if (std::this_thread::get_id() == owner_thread) return true;
+        error = "injected wrong-thread mutation";
+        return false;
+    });
+    expect(runtime.discover(tmp.path), "guarded module discovery should succeed");
+
+    bool worker_result = true;
+    std::thread worker([&runtime, &worker_result]() {
+        worker_result = runtime.load_module("guarded");
+    });
+    worker.join();
+
+    expect(!worker_result, "wrong-thread load must fail closed");
+    expect(runtime.last_error().find("injected wrong-thread mutation") != std::string::npos,
+           "wrong-thread diagnostic expected");
+    expect(backend->load_calls.empty(), "thread guard must run before backend load");
+    expect(runtime.find("guarded")->state == ModuleState::Discovered,
+           "wrong-thread attempt must not mutate module state");
+    expect(runtime.load_module("guarded"), "owner-thread load should succeed");
+}
+
 void test_cycle_detection() {
     TempDir tmp;
 
@@ -1037,6 +1066,10 @@ TEST_CASE("module runtime rejects duplicate ids and simultaneous cycles atomical
 
 TEST_CASE("module runtime keeps Python module loaded when unload preparation fails") {
     test_python_unload_prepare_failure_preserves_loaded_handle();
+}
+
+TEST_CASE("module runtime rejects live mutation from a non-owner thread") {
+    test_live_mutation_thread_guard_fails_before_backend_calls();
 }
 
 TEST_CASE("module runtime rejects dependency cycles") {

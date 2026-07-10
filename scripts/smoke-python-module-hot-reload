@@ -165,11 +165,19 @@ def _write_probe(tmp_dir: Path) -> Path:
     probe.write_text(
         textwrap.dedent(
             """
+            import gc
             import json
 
             from termin.project_modules import get_project_modules_runtime
 
             runtime = get_project_modules_runtime()
+
+            # Editor Python executor keeps its globals between probes. Release
+            # wrappers from the previous status read before requesting unload;
+            # live external references intentionally block atomic module cleanup.
+            components = None
+            component = None
+            gc.collect()
 
             poll_error = None
             prepare_success = None

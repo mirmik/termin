@@ -32,6 +32,7 @@ class _FakeRuntime:
         self.loaded_project: Path | None = None
         self.discovered_project: Path | None = None
         self.loaded_modules: list[str] = []
+        self.artifact_operations: list[tuple[str, str]] = []
         self.load_project_result = True
         self.discover_project_result = True
         self.load_module_results: dict[str, bool] = {}
@@ -59,6 +60,18 @@ class _FakeRuntime:
     def load_module(self, module_id: str) -> bool:
         self.loaded_modules.append(module_id)
         return self.load_module_results.get(module_id, True)
+
+    def build_module(self, module_id: str) -> bool:
+        self.artifact_operations.append(("build", module_id))
+        return True
+
+    def clean_module(self, module_id: str) -> bool:
+        self.artifact_operations.append(("clean", module_id))
+        return True
+
+    def rebuild_module(self, module_id: str) -> bool:
+        self.artifact_operations.append(("rebuild", module_id))
+        return True
 
     def set_sync_live_scenes(self, enabled: bool) -> None:
         self.sync_live_scenes = enabled
@@ -122,6 +135,22 @@ def test_warmup_project_modules_fails_on_failed_record(tmp_path: Path) -> None:
 
     assert not result.success
     assert result.failed_modules == ("gameplay",)
+
+
+def test_warmup_cli_runs_isolated_rebuild_without_loading_module(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    _write_project(tmp_path)
+    runtime = _FakeRuntime([_record("native_core", "Discovered")])
+    monkeypatch.setattr(warmup, "_project_modules_runtime", lambda: runtime)
+
+    assert warmup.main(
+        ["warmup", str(tmp_path), "--rebuild-module", "native_core", "--quiet"]
+    ) == 0
+    assert runtime.discovered_project == tmp_path
+    assert runtime.artifact_operations == [("rebuild", "native_core")]
+    assert runtime.loaded_modules == []
 
 
 def test_warmup_project_modules_disables_live_scene_sync(monkeypatch, tmp_path: Path) -> None:

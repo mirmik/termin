@@ -27,16 +27,17 @@ C++, live-компоненты деградируют в `UnknownComponent` пр
 восстанавливаются после исправления модуля. Эти пути покрыты native tests,
 Python tests и editor-process smoke tests.
 
-До production-grade plugin/runtime subsystem система пока не доведена. Главные
-риски находятся не в happy path, а в контрактах вокруг него:
+До production-grade plugin/runtime subsystem система пока не доведена. На
+момент исходного аудита главные риски находились не в happy path, а в контрактах
+вокруг него; список ниже поддерживается как remediation status:
 
-- live reload выполняется из worker thread без scene owner-thread boundary;
-- Python unload не может атомарно отказаться при ошибке cleanup;
-- descriptor refresh работает fail-open и может использовать устаревший graph;
+- owner-thread boundary для live reload закрыт в **#285**;
+- atomic/fallible Python unload закрыт в **#286**;
+- fail-closed descriptor snapshot закрыт в **#290**;
 - `UnknownComponent` upgrade не умеет доказать успешное применение payload;
-- runtime может потерять активные backend handles при rediscovery/shutdown;
+- handle-safe rediscovery/shutdown закрыт в **#287**;
 - у C++ модулей отсутствует versioned ABI handshake;
-- shadow-копии native libraries не удаляются.
+- shadow cleanup реализован в **#288**, остаётся Windows verification gate.
 
 Практическая оценка готовности:
 
@@ -169,6 +170,15 @@ Modules panel временно не читает runtime records во время
 - cancellation/shutdown policy для незавершённой операции.
 
 Трекинг: **#285** `[editor/modules] Confine live module reload to owner thread`.
+
+Статус 2026-07-10: **исправлено в #285**. Editor module operations теперь
+запускают build/clean/rebuild в отдельном SDK Python process, а live commit
+маршалится через `UI.defer()` на scene/UI owner thread. Worker больше не daemon,
+диалог не допускает mid-operation close, а shutdown без owner queue не может
+выполнить отложенный commit. `ModuleRuntime` дополнительно имеет fail-closed
+mutation-thread checker до backend calls. Play gate использует тот же isolated
+prebuild. Тесты проверяют responsive worker, owner-thread commit, wrong-thread
+rejection и repeated reload между активными scene ticks.
 
 ### 2. Python unload не является fallible и атомарным
 
@@ -436,9 +446,9 @@ Python smoke подтвердил последовательность:
 C++ smoke подтвердил unload dependent до dependency, обратный load order и
 сохранение live component value.
 
-Полные `./build-sdk.sh --no-wheels` и `./run-tests.sh` в рамках аудита не
-запускались. Выводы основаны на focused native/Python tests и двух настоящих
-editor-process reload smokes.
+В ходе remediation #285–#290 выполнены полные `./build-sdk.sh --no-wheels` и
+`./run-tests.sh`; focused native/Python tests и настоящие editor-process reload
+smokes остаются дополнительными evidence для соответствующих контрактов.
 
 После выбранного Python прогона nanobind сообщил leaked instances/types/functions
 из geometry bindings. Это не связано непосредственно с `termin-modules` и уже
@@ -452,6 +462,8 @@ placeholders собраны в отдельном swimlane **Modules & Hot Reloa
 - **#172** закрыта: конкретная `UnknownComponent -> enabled=false` регрессия
   исправлена и повторно проверена C++/Python tests.
 - **#105** оставлена On Test и дополнена owner-thread/GIL/C++ reload рисками.
+- **#285** закрыта: build изолирован в subprocess, live commit confined к owner thread.
+- **#286** закрыта: Python unload получил fallible prepare/commit contract.
 - **#287** закрыта: discovery/shutdown больше не теряют активные handles.
 - **#288** реализована и находится On Test: shadow artifacts изолированы и
   очищаются backend-ом; остаётся Windows DLL verification.

@@ -178,7 +178,10 @@ class ModulesPanel(VStack):
             running_message=f"Rescanning project: {project_root}",
             success_message="Rescan complete",
             failure_message="Rescan failed",
-            action=lambda: self._modules_runtime.load_project(project_root),
+            worker_action=lambda: self._modules_runtime.prepare_module_artifacts(
+                project_root=project_root
+            ),
+            owner_action=lambda: self._modules_runtime.load_project(project_root),
         )
 
     def _on_reload_changed_clicked(self) -> None:
@@ -187,7 +190,8 @@ class ModulesPanel(VStack):
             running_message="Reloading changed modules...",
             success_message="Reload changed modules complete",
             failure_message="Reload changed modules failed",
-            action=self._modules_runtime.reload_dirty_modules,
+            worker_action=self._modules_runtime.prepare_module_artifacts,
+            owner_action=self._modules_runtime.reload_dirty_modules,
         )
 
     def _on_build_reload_changed_clicked(self) -> None:
@@ -196,7 +200,8 @@ class ModulesPanel(VStack):
             running_message="Building and reloading changed modules...",
             success_message="Build and reload changed modules complete",
             failure_message="Build and reload changed modules failed",
-            action=self._modules_runtime.prepare_changed_modules_for_play,
+            worker_action=self._modules_runtime.prepare_module_artifacts,
+            owner_action=self._modules_runtime.prepare_changed_modules_for_play,
         )
 
     def _on_reload_clicked(self) -> None:
@@ -212,7 +217,9 @@ class ModulesPanel(VStack):
             running_message=f"Building module '{module_name}'...",
             success_message=f"Build complete: '{module_name}'",
             failure_message="Build failed",
-            action=lambda: self._modules_runtime.build_module(module_name),
+            worker_action=lambda: self._modules_runtime.prepare_module_artifacts(
+                operation="build", module_id=module_name
+            ),
         )
 
     def _on_clean_clicked(self) -> None:
@@ -224,7 +231,9 @@ class ModulesPanel(VStack):
             running_message=f"Cleaning module '{module_name}'...",
             success_message=f"Clean complete: '{module_name}'",
             failure_message="Clean failed",
-            action=lambda: self._modules_runtime.clean_module(module_name),
+            worker_action=lambda: self._modules_runtime.prepare_module_artifacts(
+                operation="clean", module_id=module_name
+            ),
         )
 
     def _on_rebuild_clicked(self) -> None:
@@ -236,7 +245,10 @@ class ModulesPanel(VStack):
             running_message=f"Rebuilding module '{module_name}'...",
             success_message=f"Rebuild complete: '{module_name}'",
             failure_message="Rebuild failed",
-            action=lambda: self._modules_runtime.rebuild_module(module_name),
+            worker_action=lambda: self._modules_runtime.prepare_module_artifacts(
+                operation="rebuild", module_id=module_name
+            ),
+            owner_action=lambda: self._modules_runtime.unload_module(module_name),
         )
 
     def _on_unload_clicked(self) -> None:
@@ -248,7 +260,7 @@ class ModulesPanel(VStack):
             running_message=f"Unloading module '{module_name}'...",
             success_message=f"Unloaded: '{module_name}'",
             failure_message="Unload failed",
-            action=lambda: self._modules_runtime.unload_module(module_name),
+            owner_action=lambda: self._modules_runtime.unload_module(module_name),
         )
 
     def _on_selection_changed(self, node) -> None:
@@ -267,7 +279,8 @@ class ModulesPanel(VStack):
             running_message=f"Reloading module '{module_name}'...",
             success_message=f"Reload complete: '{module_name}'",
             failure_message="Reload failed",
-            action=lambda: self._modules_runtime.reload_module(module_name),
+            worker_action=self._modules_runtime.prepare_module_artifacts,
+            owner_action=lambda: self._modules_runtime.reload_module(module_name),
             on_complete=on_complete,
         )
 
@@ -278,7 +291,8 @@ class ModulesPanel(VStack):
         running_message: str,
         success_message: str,
         failure_message: str,
-        action,
+        worker_action=None,
+        owner_action=None,
         on_complete=None,
     ) -> None:
         if self._operation_running:
@@ -289,7 +303,11 @@ class ModulesPanel(VStack):
         if ui is None:
             log.info(f"{_TAG} {running_message}")
             try:
-                success = action()
+                success = True
+                if worker_action is not None:
+                    success = worker_action()
+                if success and owner_action is not None:
+                    success = owner_action()
             except Exception as e:
                 log.error(f"{_TAG} {failure_message}: {e}", exc_info=True)
                 success = False
@@ -308,7 +326,8 @@ class ModulesPanel(VStack):
             self._modules_runtime,
             title=title,
             start_message=running_message,
-            action=action,
+            worker_action=worker_action,
+            owner_action=owner_action,
             on_complete=lambda success: self._finish_operation(
                 success,
                 success_message,

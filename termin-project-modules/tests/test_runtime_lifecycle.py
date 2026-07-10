@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -162,4 +163,30 @@ def test_python_backend_commit_failure_keeps_sys_modules_and_loaded_handle(
 
     assert runtime.unload_module("sample")
     assert "sample_module" not in sys.modules
+    assert runtime.close()
+
+
+def test_artifact_preparation_runs_isolated_from_live_runtime(tmp_path: Path) -> None:
+    (tmp_path / "Game.terminproj").write_text("{}", encoding="utf-8")
+    _write_python_module(tmp_path)
+    runtime = ProjectModulesRuntime()
+    assert runtime.discover_project(tmp_path)
+    assert runtime.find("sample") is not None
+    assert "sample_module" not in sys.modules
+
+    result: list[bool] = []
+    worker = threading.Thread(
+        target=lambda: result.append(runtime.prepare_module_artifacts()),
+        name="artifact-preparation-test",
+    )
+    worker.start()
+    worker.join(timeout=20.0)
+
+    assert not worker.is_alive()
+    assert result == [True]
+    assert runtime.prepare_module_artifacts(operation="build", module_id="sample")
+    assert "sample_module" not in sys.modules
+    record = runtime.find("sample")
+    assert record is not None
+    assert record.state.name == "Discovered"
     assert runtime.close()
