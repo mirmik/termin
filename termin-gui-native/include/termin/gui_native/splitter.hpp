@@ -31,6 +31,6 @@ private:
     float first_min_extent_ = 32.0f;
     float second_min_extent_ = 32.0f;
     float divider_thickness_ = 6.0f;
-    Color divider_color_ {0.30f, 0.33f, 0.38f, 1.0f};
+    Color divider_color_ {0.133f, 0.220f, 0.259f, 1.0f}; // cyan theme line #223842
 };
 } // namespace termin::gui_native

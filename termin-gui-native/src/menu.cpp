@@ -309,6 +309,7 @@ void Menu::paint(tc_ui_document* document, tc_ui_paint_context* context) {
     if (item_tops_.size() != model_->size() + 1)
         rebuild_geometry(document);
     const tc_ui_style style = computed_style(document);
+    draw_drop_shadow(context, bounds());
     tc_ui_painter_fill_rect(context, bounds(), style.background);
     tc_ui_painter_stroke_rect(context, bounds(), style.border, style.border_width);
     tc_ui_painter_push_clip(context, bounds());

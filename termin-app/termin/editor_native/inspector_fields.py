@@ -141,7 +141,7 @@ class NativeInspectorFields:
                 self.root.add_fixed_child(label, 26.0)
             elif row.kind == "separator":
                 separator = self.document.create_hstack("native-inspector-separator")
-                separator.set_layout_background(Color(0.24, 0.26, 0.31, 1.0))
+                separator.set_layout_background(Color(0.133, 0.220, 0.259, 1.0))  # cyan theme line #223842
                 self.root.add_fixed_child(separator, 1.0)
             elif row.kind == "field":
                 self._append_field(row)

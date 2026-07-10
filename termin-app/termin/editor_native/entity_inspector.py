@@ -131,7 +131,7 @@ class NativeEntityInspector:
         if panel is None:
             return
         separator = self.document.create_hstack("native-component-extension-separator")
-        separator.set_layout_background(Color(0.24, 0.26, 0.31, 1.0))
+        separator.set_layout_background(Color(0.133, 0.220, 0.259, 1.0))  # cyan theme line #223842
         self.extension_host.add_fixed_child(separator, 1.0)
         self.extension_host.add_preferred_child(panel)
         self.extension_host.visible = True

@@ -54,6 +54,35 @@ static tc_ui_color style_color(float r, float g, float b, float a) {
     return (tc_ui_color){r, g, b, a};
 }
 
+/*
+ * Cyan theme — a cool dark editor skin built around cyan.
+ *
+ * The accent is cyan, used in several shades: a deep teal for borders and
+ * hover fills, a solid cyan for selection/press/focus, and a bright cyan
+ * for text on accents, slider handles and focus rings. The neutral scale
+ * is a cool graphite carrying a faint cyan undertone across four
+ * elevations (ink < surface_1 < surface_2 < active), so panels, popups and
+ * selected rows read as depth rather than flat fills. Floating surfaces
+ * (dialogs, dropdowns, menus) additionally cast a soft drop shadow.
+ *
+ * This is the single edit point: tweak the cyan/graphite values here and
+ * the whole theme shifts at once, since every widget resolves its colors
+ * from these roles. Values are hex converted to 0..1 float (channel / 255).
+ */
+/* accent — three shades of cyan, from a deep teal to a bright highlight */
+static const tc_ui_color cy_cyan          = {0.024f, 0.714f, 0.831f, 1.0f}; /* #06b6d4 primary cyan */
+static const tc_ui_color cy_cyan_bright   = {0.404f, 0.910f, 0.976f, 1.0f}; /* #67e8f9 bright cyan */
+static const tc_ui_color cy_cyan_deep     = {0.082f, 0.369f, 0.459f, 1.0f}; /* #155e75 deep teal */
+/* neutrals — cool graphite carrying a faint cyan undertone (four elevations) */
+static const tc_ui_color cy_ink           = {0.043f, 0.078f, 0.090f, 1.0f}; /* #0b1417 deepest — inputs, wells */
+static const tc_ui_color cy_surface_1     = {0.059f, 0.102f, 0.118f, 1.0f}; /* #0f1a1e panels, tabs */
+static const tc_ui_color cy_surface_2     = {0.082f, 0.141f, 0.169f, 1.0f}; /* #15242b raised — buttons, popups */
+static const tc_ui_color cy_surface_active = {0.055f, 0.227f, 0.275f, 1.0f}; /* #0e3a46 cyan-tinted selected/active */
+static const tc_ui_color cy_line          = {0.133f, 0.220f, 0.259f, 1.0f}; /* #223842 borders, dividers */
+static const tc_ui_color cy_text          = {0.859f, 0.914f, 0.929f, 1.0f}; /* #dbe9ed cool near-white text */
+static const tc_ui_color cy_text_muted    = {0.420f, 0.498f, 0.529f, 1.0f}; /* #6b7f87 muted text */
+static const tc_ui_color cy_on_cyan       = {0.016f, 0.133f, 0.165f, 1.0f}; /* #04222a dark text on filled cyan */
+
 static bool valid_style_color(tc_ui_color color) {
     return isfinite(color.r) && isfinite(color.g) && isfinite(color.b) && isfinite(color.a) &&
         color.r >= 0.0f && color.r <= 1.0f &&
@@ -156,9 +185,9 @@ static tc_ui_style default_base_style(void) {
     tc_ui_style style;
     memset(&style, 0, sizeof(style));
     style.background = style_color(0.0f, 0.0f, 0.0f, 0.0f);
-    style.foreground = style_color(0.90f, 0.92f, 0.96f, 1.0f);
-    style.border = style_color(0.32f, 0.34f, 0.38f, 1.0f);
-    style.accent = style_color(0.25f, 0.58f, 0.88f, 1.0f);
+    style.foreground = cy_text;
+    style.border = cy_line;
+    style.accent = cy_cyan;
     style.border_width = 1.0f;
     style.font_size = 14.0f;
     style.font_role = TC_UI_FONT_BODY;
@@ -193,19 +222,21 @@ void tc_ui_theme_init_default(tc_ui_theme* theme) {
         theme->roles[index].base = base;
         theme->roles[index].disabled = color_override(
             TC_UI_STYLE_FOREGROUND,
-            style_color(0.52f, 0.54f, 0.58f, 1.0f)
+            cy_text_muted
         );
     }
 
-    theme->roles[TC_UI_STYLE_PANEL].base.background = style_color(0.16f, 0.17f, 0.19f, 1.0f);
+    theme->roles[TC_UI_STYLE_PANEL].base.background = cy_surface_1;
     theme->roles[TC_UI_STYLE_PANEL].base.min_width = 96.0f;
     theme->roles[TC_UI_STYLE_PANEL].base.min_height = 64.0f;
 
     theme->roles[TC_UI_STYLE_LABEL].base.font_size = 15.0f;
 
-    theme->roles[TC_UI_STYLE_BUTTON].base.background = style_color(0.20f, 0.38f, 0.64f, 1.0f);
-    theme->roles[TC_UI_STYLE_BUTTON].base.foreground = style_color(0.94f, 0.97f, 1.0f, 1.0f);
-    theme->roles[TC_UI_STYLE_BUTTON].base.border = style_color(0.80f, 0.88f, 1.0f, 1.0f);
+    /* button — dark graphite surface with bright-cyan text and a deep-teal
+       border; it fills solid cyan while pressed. */
+    theme->roles[TC_UI_STYLE_BUTTON].base.background = cy_surface_2;
+    theme->roles[TC_UI_STYLE_BUTTON].base.foreground = cy_cyan_bright;
+    theme->roles[TC_UI_STYLE_BUTTON].base.border = cy_cyan_deep;
     theme->roles[TC_UI_STYLE_BUTTON].base.padding_left = 12.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.padding_top = 8.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.padding_right = 12.0f;
@@ -213,27 +244,31 @@ void tc_ui_theme_init_default(tc_ui_theme* theme) {
     theme->roles[TC_UI_STYLE_BUTTON].base.border_width = 2.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.min_width = 96.0f;
     theme->roles[TC_UI_STYLE_BUTTON].base.min_height = 36.0f;
+    /* hover — the button glows: fill with deep teal */
     theme->roles[TC_UI_STYLE_BUTTON].hovered = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.24f, 0.45f, 0.72f, 1.0f)
+        cy_cyan_deep
     );
+    /* press — the button lights up: solid cyan fill + dark text on top */
     theme->roles[TC_UI_STYLE_BUTTON].pressed = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.14f, 0.29f, 0.50f, 1.0f)
+        cy_cyan
     );
+    theme->roles[TC_UI_STYLE_BUTTON].pressed.fields |= TC_UI_STYLE_FOREGROUND;
+    theme->roles[TC_UI_STYLE_BUTTON].pressed.value.foreground = cy_on_cyan;
     theme->roles[TC_UI_STYLE_BUTTON].focused = color_override(
         TC_UI_STYLE_BORDER,
-        style_color(0.48f, 0.72f, 1.0f, 1.0f)
+        cy_cyan_bright
     );
     theme->roles[TC_UI_STYLE_BUTTON].disabled = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.20f, 0.21f, 0.23f, 1.0f)
+        cy_surface_1
     );
     theme->roles[TC_UI_STYLE_BUTTON].disabled.fields |= TC_UI_STYLE_FOREGROUND;
-    theme->roles[TC_UI_STYLE_BUTTON].disabled.value.foreground = style_color(0.55f, 0.57f, 0.61f, 1.0f);
+    theme->roles[TC_UI_STYLE_BUTTON].disabled.value.foreground = cy_text_muted;
 
-    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.background = style_color(0.08f, 0.09f, 0.11f, 1.0f);
-    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.foreground = style_color(0.94f, 0.96f, 0.98f, 1.0f);
+    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.background = cy_ink;
+    theme->roles[TC_UI_STYLE_TEXT_INPUT].base.foreground = cy_text;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.padding_left = 8.0f;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.padding_top = 2.0f;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.padding_right = 8.0f;
@@ -242,49 +277,53 @@ void tc_ui_theme_init_default(tc_ui_theme* theme) {
     theme->roles[TC_UI_STYLE_TEXT_INPUT].base.min_height = 34.0f;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].focused = color_override(
         TC_UI_STYLE_BORDER,
-        style_color(0.38f, 0.62f, 0.92f, 1.0f)
+        cy_cyan
     );
     theme->roles[TC_UI_STYLE_TEXT_INPUT].focused.fields |= TC_UI_STYLE_BORDER_WIDTH;
     theme->roles[TC_UI_STYLE_TEXT_INPUT].focused.value.border_width = 2.0f;
 
-    theme->roles[TC_UI_STYLE_GROUP_BOX].base.background = style_color(0.11f, 0.12f, 0.14f, 1.0f);
+    theme->roles[TC_UI_STYLE_GROUP_BOX].base.background = cy_ink;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_left = 10.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_top = 8.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_right = 10.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.padding_bottom = 10.0f;
     theme->roles[TC_UI_STYLE_GROUP_BOX].base.font_size = 13.0f;
 
-    theme->roles[TC_UI_STYLE_TAB].base.background = style_color(0.13f, 0.14f, 0.16f, 1.0f);
-    theme->roles[TC_UI_STYLE_TAB].base.foreground = style_color(0.88f, 0.91f, 0.96f, 1.0f);
-    theme->roles[TC_UI_STYLE_TAB].base.border = style_color(0.34f, 0.36f, 0.40f, 1.0f);
+    theme->roles[TC_UI_STYLE_TAB].base.background = cy_surface_1;
+    theme->roles[TC_UI_STYLE_TAB].base.foreground = cy_text;
+    theme->roles[TC_UI_STYLE_TAB].base.border = cy_line;
     theme->roles[TC_UI_STYLE_TAB].base.padding_left = 8.0f;
     theme->roles[TC_UI_STYLE_TAB].base.font_size = 13.0f;
+    /* active tab — cyan-tinted graphite (nudged toward the accent) */
     theme->roles[TC_UI_STYLE_TAB].checked = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.20f, 0.26f, 0.34f, 1.0f)
+        cy_surface_active
     );
 
-    theme->roles[TC_UI_STYLE_CHECKBOX].base.background = style_color(0.10f, 0.11f, 0.13f, 1.0f);
-    theme->roles[TC_UI_STYLE_CHECKBOX].base.border = style_color(0.74f, 0.78f, 0.84f, 1.0f);
-    theme->roles[TC_UI_STYLE_CHECKBOX].base.accent = style_color(0.28f, 0.82f, 0.54f, 1.0f);
+    theme->roles[TC_UI_STYLE_CHECKBOX].base.background = cy_ink;
+    /* deliberately lighter than cy_line: an unchecked box on cy_ink
+       would be nearly invisible at the graphite border tone */
+    theme->roles[TC_UI_STYLE_CHECKBOX].base.border = style_color(0.75f, 0.75f, 0.75f, 1.0f);
+    theme->roles[TC_UI_STYLE_CHECKBOX].base.accent = cy_cyan; /* checkmark — cyan */
     theme->roles[TC_UI_STYLE_CHECKBOX].base.min_width = 32.0f;
     theme->roles[TC_UI_STYLE_CHECKBOX].base.min_height = 32.0f;
     theme->roles[TC_UI_STYLE_CHECKBOX].checked = color_override(
         TC_UI_STYLE_BACKGROUND,
-        style_color(0.12f, 0.18f, 0.15f, 1.0f)
+        cy_surface_active
     );
 
-    theme->roles[TC_UI_STYLE_PROGRESS].base.background = style_color(0.09f, 0.10f, 0.12f, 1.0f);
+    theme->roles[TC_UI_STYLE_PROGRESS].base.background = cy_ink;
+    /* the progress fill uses the base style's accent — cyan */
     theme->roles[TC_UI_STYLE_PROGRESS].base.min_width = 120.0f;
     theme->roles[TC_UI_STYLE_PROGRESS].base.min_height = 20.0f;
 
-    theme->roles[TC_UI_STYLE_SLIDER].base.border = style_color(0.32f, 0.34f, 0.38f, 1.0f);
-    theme->roles[TC_UI_STYLE_SLIDER].base.accent = style_color(0.88f, 0.66f, 0.24f, 1.0f);
-    theme->roles[TC_UI_STYLE_SLIDER].base.foreground = style_color(0.96f, 0.88f, 0.64f, 1.0f);
+    theme->roles[TC_UI_STYLE_SLIDER].base.border = cy_line;
+    theme->roles[TC_UI_STYLE_SLIDER].base.accent = cy_cyan;            /* active portion of the track */
+    theme->roles[TC_UI_STYLE_SLIDER].base.foreground = cy_cyan_bright; /* handle */
     theme->roles[TC_UI_STYLE_SLIDER].base.min_width = 140.0f;
     theme->roles[TC_UI_STYLE_SLIDER].base.min_height = 28.0f;
 
-    theme->roles[TC_UI_STYLE_SEPARATOR].base.background = style_color(0.36f, 0.38f, 0.42f, 1.0f);
+    theme->roles[TC_UI_STYLE_SEPARATOR].base.background = cy_line;
 }
 
 tc_widget_slot* tc_ui_internal_resolve_slot(tc_ui_document* document, tc_widget_handle handle) {

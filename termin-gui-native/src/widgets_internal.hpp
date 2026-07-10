@@ -42,6 +42,7 @@ tc_ui_size measure_widget(tc_widget* widget, tc_ui_document* document, tc_ui_con
 NativeWidget* native_widget_body(tc_widget* widget);
 void layout_widget(tc_widget* widget, tc_ui_document* document, tc_ui_rect rect);
 void paint_widget(tc_widget* widget, tc_ui_document* document, tc_ui_paint_context* context);
+void draw_drop_shadow(tc_ui_paint_context* context, tc_ui_rect rect);
 tc_ui_rect inset_rect(tc_ui_rect rect, EdgeInsets padding);
 float primary_size(tc_ui_size size, Orientation orientation);
 float cross_size(tc_ui_size size, Orientation orientation);
