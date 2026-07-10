@@ -425,8 +425,16 @@ windowing, D3D11, or Python bindings have explicit profile/capability/reason
 classifications, so a headless PR configuration may omit only declared
 inapplicable sources. `run-tests-cpp.sh` runs this gate after configuring CMake.
 The Linux `pr` and `linux-full` configurations have passed the inventory gate.
-Per-test capability labels and process/device/manual executor inventory remain
-to be completed before this phase can close.
+Graphics, display, render-pass, and Python-binding CTest registrations carry
+their specific backend/window capability labels in addition to the common
+module/tier labels. The two editor reload smokes are now declared
+`process-smoke` suites and `run-tests.sh --full` dispatches them through the
+planner rather than carrying a second script list. Android, Quest/OpenXR, and
+manual smoke procedures are explicitly classified with requirements and
+reasons; device/manual dispatch remains intentionally unsupported by the local
+automatic runner until it can report real deployment and human-verification
+results. Windows CTest-profile acceptance and device runtime executors remain
+before this phase can close.
 
 - Add consistent CTest labels and CTest JSON validation.
 - Detect native test sources/modules omitted from the top-level CMake graph.

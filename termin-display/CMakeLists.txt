@@ -329,6 +329,8 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
             TIMEOUT 10
             SKIP_RETURN_CODE 77
             SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL")
+        termin_add_test_labels(backend_window_triangle
+            "termin:capability:window")
     endif()
 
     if(TERMIN_DISPLAY_HAS_SDL AND TGFX2_ENABLE_D3D11 AND TERMIN_DISPLAY_BUILD_D3D11_WINDOW_TEST)
@@ -344,6 +346,9 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
             TIMEOUT 10
             SKIP_RETURN_CODE 77
             SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|D3D11CreateDevice failed")
+        termin_add_test_labels(backend_window_d3d11_present
+            "termin:capability:window"
+            "termin:capability:d3d11")
     endif()
 endif()
 
