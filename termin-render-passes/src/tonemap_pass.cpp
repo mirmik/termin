@@ -2,7 +2,7 @@
 //
 // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ,
 // std140 UBO for parameters via bind_uniform_buffer, input texture
-// via bind_sampled_texture. No raw GL. Legacy tgfx1 dual-path
+// via reflected texture binding. No raw GL. Legacy tgfx1 dual-path
 // removed in Stage 8.1.
 #include <termin/render/tonemap_pass.hpp>
 #include "termin/render/execute_context.hpp"

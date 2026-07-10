@@ -20,7 +20,12 @@ import math
 
 import numpy as np
 
-from tgfx import Canvas2DRenderer, TcShader
+from tgfx import (
+    Canvas2DRenderer,
+    ShaderResourceKind,
+    ShaderResourceScope,
+    TcShader,
+)
 from tgfx.font import FontTextureAtlas, get_default_font
 from tgfx._tgfx_native import (
     Tgfx2Context,
@@ -310,6 +315,17 @@ class UIRenderer:
                 UI_SHADER_NAME,
                 "tcgui/widgets/renderer.py",
             )
+            self._ui_tc_shader.set_resource_layout([
+                (
+                    "u_texture",
+                    ShaderResourceKind.TEXTURE,
+                    ShaderResourceScope.TRANSIENT,
+                    0,
+                    4,
+                    2,  # TC_SHADER_STAGE_FRAGMENT
+                    0,
+                ),
+            ])
         pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
         self._ui_vs = pair.vs
         self._ui_fs = pair.fs
@@ -569,6 +585,7 @@ class UIRenderer:
         ctx = self._ctx
         self._ensure_legacy_ui_shader()
         ctx.bind_shader(self._ui_vs, self._ui_fs)
+        ctx.use_shader_resource_layout(self._ui_tc_shader)
         # Projection is row-major in Python but GLSL expects column-major
         # mat4. Transpose here once instead of a shader-side transpose
         # marker (set_uniform_mat4 had a transpose flag; push_constants
@@ -743,7 +760,7 @@ class UIRenderer:
             self._canvas.draw_texture(texture_handle, x, y, w, h, tint)
         else:
             self._push_ui_state(tint, 2)
-            ctx.bind_sampled_texture(4, texture_handle)
+            ctx.bind_texture_by_name("u_texture", texture_handle)
             verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
             ctx.draw_immediate_triangles(verts, 6)
             self._resume_canvas_after_legacy_draw()
@@ -914,7 +931,7 @@ class UIRenderer:
 
         ctx = self._ctx
         self._push_ui_state(tint, 2, channel_mode, highlight_hdr)
-        ctx.bind_sampled_texture(4, handle)
+        ctx.bind_texture_by_name("u_texture", handle)
 
         if flip_v:
             verts = self._emit_quad(x, y, x + w, y + h, 0.0, 1.0, 1.0, 0.0)

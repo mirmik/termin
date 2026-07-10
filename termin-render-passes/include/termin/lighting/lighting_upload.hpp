@@ -4,7 +4,7 @@
 // Legacy TcShader helpers (upload_shadow_maps_to_shader,
 // init_shadow_map_samplers, bind_shadow_textures) were removed in
 // Stage 8.1 — nothing calls them any more, and the ctx2 path binds
-// shadow textures directly via bind_sampled_texture.
+// shadow textures directly via reflected resource names.
 
 #include <vector>
 #include <string>

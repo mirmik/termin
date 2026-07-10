@@ -2,7 +2,7 @@
 //
 // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ,
 // std140 UBO for parameters via bind_uniform_buffer, input texture
-// via bind_sampled_texture. Legacy tgfx1 dual-path removed in Stage 8.1.
+// via reflected texture binding. Legacy tgfx1 dual-path removed in Stage 8.1.
 #include <termin/render/grayscale_pass.hpp>
 #include "termin/render/execute_context.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
