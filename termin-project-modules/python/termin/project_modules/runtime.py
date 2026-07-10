@@ -123,20 +123,23 @@ class ProjectModulesRuntime:
 
     def load_project(self, project_root: str | Path | None = None) -> bool:
         self._ensure_open()
-        if project_root is not None:
-            self._project_root = Path(project_root).resolve()
+        next_project_root = (
+            Path(project_root).resolve() if project_root is not None else self._project_root
+        )
 
-        if self._project_root is None:
+        if next_project_root is None:
             log.error("[ProjectModulesRuntime] project root is not set")
             return False
 
+        if not self._shutdown_runtime():
+            return False
+        self._project_root = next_project_root
         self._update_environment()
-        self._shutdown_runtime()
         self._recreate_runtime()
         self._configure_discovery_ignored_roots()
-        self._runtime.discover(self._project_root)
-        if self._runtime.last_error:
+        if not self._runtime.discover(self._project_root):
             log.error(f"[ProjectModulesRuntime] discover failed: {self._runtime.last_error}")
+            return False
         success = self._runtime.load_all()
         if success:
             self._dirty_module_reasons.clear()
@@ -144,19 +147,21 @@ class ProjectModulesRuntime:
 
     def discover_project(self, project_root: str | Path | None = None) -> bool:
         self._ensure_open()
-        if project_root is not None:
-            self._project_root = Path(project_root).resolve()
+        next_project_root = (
+            Path(project_root).resolve() if project_root is not None else self._project_root
+        )
 
-        if self._project_root is None:
+        if next_project_root is None:
             log.error("[ProjectModulesRuntime] project root is not set")
             return False
 
+        if not self._shutdown_runtime():
+            return False
+        self._project_root = next_project_root
         self._update_environment()
-        self._shutdown_runtime()
         self._recreate_runtime()
         self._configure_discovery_ignored_roots()
-        self._runtime.discover(self._project_root)
-        return not self._runtime.last_error
+        return bool(self._runtime.discover(self._project_root))
 
     def reload_module(self, module_id: str) -> bool:
         self._ensure_open()
@@ -321,9 +326,18 @@ class ProjectModulesRuntime:
         if self._project_root is None:
             self._project_root = descriptor.parent
 
-        self._update_environment()
-        self._configure_discovery_ignored_roots()
-        self._runtime.discover(self._project_root)
+        existing = self.find_by_descriptor(descriptor)
+        if existing is not None:
+            success = self._runtime.load_module(existing.id)
+            if success:
+                self._dirty_module_reasons.pop(existing.id, None)
+            return success
+
+        # A new descriptor changes the dependency graph. Rebuild the runtime
+        # through its explicit shutdown boundary instead of rediscovering over
+        # live backend handles and orphaning the previous records.
+        if not self.load_project(self._project_root):
+            return False
         record = self.find_by_descriptor(descriptor)
         if record is None:
             log.error(f"[ProjectModulesRuntime] descriptor is not part of discovered project: {descriptor}")
@@ -333,17 +347,17 @@ class ProjectModulesRuntime:
             self._dirty_module_reasons.pop(record.id, None)
         return success
 
-    def close(self) -> None:
+    def close(self) -> bool:
         if self._closed:
-            return
+            return True
 
-        try:
-            self._shutdown_runtime()
-        finally:
-            self._detach_runtime_callbacks()
-            self._listeners.clear()
-            self._build_output_listeners.clear()
-            self._closed = True
+        if not self._shutdown_runtime():
+            return False
+        self._detach_runtime_callbacks()
+        self._listeners.clear()
+        self._build_output_listeners.clear()
+        self._closed = True
+        return True
 
     def __enter__(self) -> ProjectModulesRuntime:
         self._ensure_open()
@@ -530,35 +544,11 @@ class ProjectModulesRuntime:
 
         self._runtime.set_discovery_ignored_roots(list(project_ignored_roots(self._project_root)))
 
-    def _shutdown_runtime(self) -> None:
-        records_by_id: dict[str, ModuleRecord] = {}
-        for record in self.records():
-            records_by_id[record.id] = record
-
-        unloaded: set[str] = set()
-
-        def unload_recursive(module_id: str) -> None:
-            if module_id in unloaded:
-                return
-
-            for record in list(records_by_id.values()):
-                if module_id in record.dependencies:
-                    unload_recursive(record.id)
-
-            record = records_by_id.get(module_id)
-            if record is None:
-                unloaded.add(module_id)
-                return
-
-            if record.state.name == "Loaded":
-                if not self._runtime.unload_module(module_id):
-                    log.error(
-                        f"[ProjectModulesRuntime] failed to unload module '{module_id}': {self._runtime.last_error}"
-                    )
-            unloaded.add(module_id)
-
-        for record in list(records_by_id.values()):
-            unload_recursive(record.id)
+    def _shutdown_runtime(self) -> bool:
+        if self._runtime.shutdown():
+            return True
+        log.error(f"[ProjectModulesRuntime] runtime shutdown failed: {self._runtime.last_error}")
+        return False
 
     def _detach_runtime_callbacks(self) -> None:
         self._runtime.clear_callbacks()

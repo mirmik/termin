@@ -675,6 +675,10 @@ bool PythonModuleBackend::load(
         }
 
         Py_DECREF(module);
+        // Keep the handle authoritative after every successful import. A
+        // later package may fail, and the error path must still remove the
+        // complete subtree imported so far.
+        handle->imported_modules = collect_imported_module_subtree(config->packages);
     }
 
     handle->imported_modules = collect_imported_module_subtree(config->packages);
