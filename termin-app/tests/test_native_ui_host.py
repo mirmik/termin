@@ -163,6 +163,20 @@ def test_editor_cli_accepts_explicit_native_backend(monkeypatch):
     assert _parse_editor_args() == (None, None, "native")
 
 
+def test_editor_cli_defaults_to_native_backend(monkeypatch):
+    from termin.editor.run_editor import _parse_editor_args
+
+    monkeypatch.setattr("sys.argv", ["termin_editor"])
+    assert _parse_editor_args() == (None, None, "native")
+
+
+def test_editor_cli_keeps_explicit_legacy_tcgui_backend(monkeypatch):
+    from termin.editor.run_editor import _parse_editor_args
+
+    monkeypatch.setattr("sys.argv", ["termin_editor", "--ui=tcgui"])
+    assert _parse_editor_args() == (None, None, "tcgui")
+
+
 def test_native_screenshot_composes_current_document_before_readback(monkeypatch, tmp_path):
     from termin.editor_native.ui_host import NativeUiHost
 

@@ -1,7 +1,7 @@
 # Native SceneView Bridge
 
 Status: implemented and used by the native pipeline editor; the legacy `tcgui`
-adapter remains only for the temporary default tcgui editor entrypoint.
+adapter remains only for the explicit legacy tcgui editor entrypoint.
 
 ## Decision
 
@@ -82,6 +82,6 @@ The bridge deliberately does not define node, socket, edge, plot annotation or
 and hit callbacks while keeping `Graph`/`GraphController` toolkit-neutral. The
 native editor switches the complete pipeline-editor tree atomically: toolbar,
 file dialogs, context menu, node graph and embedded parameter controls all
-belong to its one `tc_ui_document`. The temporary default tcgui entrypoint still
-uses `tcnodegraph.view`; after the default flips to native that adapter and its
-`tcgui.scene` dependency can be deleted together.
+belong to its one `tc_ui_document`. The explicit legacy tcgui entrypoint still
+uses `tcnodegraph.view`; that adapter and its `tcgui.scene` dependency can be
+deleted together with the compatibility frontend.

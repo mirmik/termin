@@ -21,7 +21,7 @@ cmake_minimum_required(VERSION 3.16)
 project(termin VERSION 0.1.0 LANGUAGES C CXX)
 
 # Options (passed to cpp/CMakeLists.txt)
-option(BUILD_EDITOR_MINIMAL "Build minimal editor (embedded Python, tcgui)" ON)
+option(BUILD_EDITOR_MINIMAL "Build editor with embedded Python" ON)
 option(BUILD_TESTS "Build C++ tests" OFF)
 option(BUNDLE_PYTHON "Bundle Python runtime for standalone distribution" OFF)
 
