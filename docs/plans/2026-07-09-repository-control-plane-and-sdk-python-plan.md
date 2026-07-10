@@ -433,8 +433,11 @@ planner rather than carrying a second script list. Android, Quest/OpenXR, and
 manual smoke procedures are explicitly classified with requirements and
 reasons; device/manual dispatch remains intentionally unsupported by the local
 automatic runner until it can report real deployment and human-verification
-results. Windows CTest-profile acceptance and device runtime executors remain
-before this phase can close.
+results. run-tests-cpp.sh now asks the planner for a concrete CTest
+registration selection, executes only that selection, and writes a JSON
+execution manifest with selected/executed/skipped/failed registrations from
+CTest JUnit output. Windows CTest-profile acceptance and device runtime
+executors remain before this phase can close.
 
 - Add consistent CTest labels and CTest JSON validation.
 - Detect native test sources/modules omitted from the top-level CMake graph.
