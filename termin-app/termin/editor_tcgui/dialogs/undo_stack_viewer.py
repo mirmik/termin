@@ -10,11 +10,13 @@ from tcgui.widgets.list_widget import ListWidget
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
+from termin.editor_core.undo_history_model import UndoHistoryController
 from termin.editor_core.undo_stack import UndoStack
 
 
 def show_undo_stack_viewer(ui, undo_stack: UndoStack, stack_changed_signal=None) -> None:
     """Show non-modal undo stack viewer."""
+    controller = UndoHistoryController(undo_stack)
     content = VStack()
     content.spacing = 4
 
@@ -56,17 +58,13 @@ def show_undo_stack_viewer(ui, undo_stack: UndoStack, stack_changed_signal=None)
     refresh_btn.padding = 6
 
     def _refresh():
-        done_items = []
-        for i, cmd in enumerate(undo_stack.done_commands):
-            text = cmd.text if cmd.text else cmd.__class__.__name__
-            done_items.append({"text": f"[undo #{i}] {text}"})
-        done_list.set_items(done_items)
-
-        undone_items = []
-        for i, cmd in enumerate(undo_stack.undone_commands):
-            text = cmd.text if cmd.text else cmd.__class__.__name__
-            undone_items.append({"text": f"[redo #{i}] {text}"})
-        undone_list.set_items(undone_items)
+        snapshot = controller.snapshot
+        done_list.set_items(
+            [{"text": f"[undo #{entry.index}] {entry.text}"} for entry in snapshot.done]
+        )
+        undone_list.set_items(
+            [{"text": f"[redo #{entry.index}] {entry.text}"} for entry in snapshot.undone]
+        )
 
     _refresh()
     if stack_changed_signal is not None:

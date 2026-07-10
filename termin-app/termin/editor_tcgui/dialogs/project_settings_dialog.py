@@ -15,6 +15,12 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.text_area import TextArea
 from tcgui.widgets.units import px
 
+from termin.editor_core.project_settings_model import (
+    ProjectSettingsController,
+    ProjectSettingsSnapshot,
+    RENDER_SYNC_MODES,
+)
+
 
 def show_project_settings_dialog(
     ui,
@@ -22,7 +28,7 @@ def show_project_settings_dialog(
     on_render_settings_changed: Callable[[], None] | None = None,
 ) -> None:
     """Show project settings dialog. Changes apply immediately."""
-    from termin.project.settings import ProjectSettingsManager, RenderSyncMode
+    from termin.project.settings import ProjectSettingsManager
 
     manager = ProjectSettingsManager.instance()
     if manager is None or manager.project_path is None:
@@ -30,19 +36,15 @@ def show_project_settings_dialog(
         log.warn("No project open - cannot show project settings")
         return
 
-    sync_modes = list(RenderSyncMode)
+    controller = ProjectSettingsController(
+        manager,
+        on_resource_settings_changed=on_resource_settings_changed,
+        on_render_settings_changed=on_render_settings_changed,
+    )
+    snapshot = controller.load()
+    sync_modes = list(RENDER_SYNC_MODES)
     mode_labels = [m.value.capitalize() for m in sync_modes]
-    current_idx = sync_modes.index(manager.settings.render_sync_mode)
-
-    def _resource_settings_snapshot() -> tuple[str, tuple[str, ...]]:
-        return (
-            manager.settings.build_output_dir,
-            tuple(manager.settings.ignored_resource_paths),
-        )
-
-    def _notify_resource_settings_changed(before: tuple[str, tuple[str, ...]]) -> None:
-        if _resource_settings_snapshot() != before and on_resource_settings_changed is not None:
-            on_resource_settings_changed()
+    current_idx = sync_modes.index(snapshot.render_sync_mode)
 
     content = VStack()
     content.spacing = 8
@@ -59,11 +61,7 @@ def show_project_settings_dialog(
 
     def _on_render_sync_changed(idx: int) -> None:
         mode = sync_modes[idx]
-        if manager.settings.render_sync_mode == mode:
-            return
-        manager.set_render_sync_mode(mode)
-        if on_render_settings_changed is not None:
-            on_render_settings_changed()
+        controller.set_render_sync_mode(mode)
 
     combo.on_changed = lambda idx, _text: _on_render_sync_changed(idx)
     row.add_child(combo)
@@ -77,13 +75,12 @@ def show_project_settings_dialog(
     build_row.add_child(build_label)
 
     build_dir_input = TextInput()
-    build_dir_input.text = manager.settings.build_output_dir
+    build_dir_input.text = snapshot.build_output_dir
     build_dir_input.preferred_width = px(180)
 
     def _on_build_dir_changed(text: str) -> None:
-        before = _resource_settings_snapshot()
-        manager.set_build_output_dir(text)
-        _notify_resource_settings_changed(before)
+        build_dir_input.text = text
+        controller.save(_snapshot_from_controls())
 
     build_dir_input.on_submit = _on_build_dir_changed
     build_row.add_child(build_dir_input)
@@ -102,7 +99,7 @@ def show_project_settings_dialog(
     player_window_row.add_child(width_label)
 
     width_spin = SpinBox()
-    width_spin.value = manager.settings.player_window.width
+    width_spin.value = snapshot.player_width
     width_spin.min_value = 1
     width_spin.max_value = 16384
     width_spin.step = 16
@@ -115,7 +112,7 @@ def show_project_settings_dialog(
     player_window_row.add_child(height_label)
 
     height_spin = SpinBox()
-    height_spin.value = manager.settings.player_window.height
+    height_spin.value = snapshot.player_height
     height_spin.min_value = 1
     height_spin.max_value = 16384
     height_spin.step = 16
@@ -125,12 +122,12 @@ def show_project_settings_dialog(
 
     fullscreen_check = Checkbox()
     fullscreen_check.text = "Fullscreen"
-    fullscreen_check.checked = manager.settings.player_window.fullscreen
+    fullscreen_check.checked = snapshot.player_fullscreen
     player_window_row.add_child(fullscreen_check)
     content.add_child(player_window_row)
 
     def _apply_player_window() -> None:
-        manager.set_player_window(
+        controller.set_player_window(
             int(width_spin.value),
             int(height_spin.value),
             fullscreen_check.checked,
@@ -146,7 +143,7 @@ def show_project_settings_dialog(
     content.add_child(ignored_label)
 
     ignored_paths_input = TextArea()
-    ignored_paths_input.text = "\n".join(manager.settings.ignored_resource_paths)
+    ignored_paths_input.text = "\n".join(snapshot.ignored_resource_paths)
     ignored_paths_input.placeholder = "cache\nexternal/generated_assets"
     ignored_paths_input.preferred_width = px(320)
     ignored_paths_input.preferred_height = px(120)
@@ -156,16 +153,18 @@ def show_project_settings_dialog(
     def _ignored_paths_from_text(text: str) -> list[str]:
         return [line.strip() for line in text.splitlines() if line.strip()]
 
-    def _apply_settings(_button: str) -> None:
-        before = _resource_settings_snapshot()
-        manager.set_build_output_dir(build_dir_input.text)
-        manager.set_player_window(
-            int(width_spin.value),
-            int(height_spin.value),
-            fullscreen_check.checked,
+    def _snapshot_from_controls() -> ProjectSettingsSnapshot:
+        return ProjectSettingsSnapshot(
+            render_sync_mode=sync_modes[combo.selected_index],
+            build_output_dir=build_dir_input.text,
+            player_width=int(width_spin.value),
+            player_height=int(height_spin.value),
+            player_fullscreen=fullscreen_check.checked,
+            ignored_resource_paths=tuple(_ignored_paths_from_text(ignored_paths_input.text)),
         )
-        manager.set_ignored_resource_paths(_ignored_paths_from_text(ignored_paths_input.text))
-        _notify_resource_settings_changed(before)
+
+    def _apply_settings(_button: str) -> None:
+        controller.save(_snapshot_from_controls())
 
     dlg = Dialog()
     dlg.title = "Project Settings"

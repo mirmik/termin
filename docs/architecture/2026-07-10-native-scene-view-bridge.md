@@ -1,7 +1,7 @@
 # Native SceneView Bridge
 
-Status: implemented for `termin-gui-native`; the legacy `tcgui` adapter remains
-until the editor root migration can move `tcnodegraph` as one coherent UI tree.
+Status: implemented and used by the native pipeline editor; the legacy `tcgui`
+adapter remains only for the temporary default tcgui editor entrypoint.
 
 ## Decision
 
@@ -78,10 +78,10 @@ The bridge deliberately does not define node, socket, edge, plot annotation or
 
 ## Migration
 
-`tcnodegraph` can build a parallel native adapter using `GraphicsItem` paint
-and hit callbacks while keeping `Graph`/`GraphController` unchanged. The
-production pipeline editor cannot switch just its `NodeGraphView` while its
-window is still a `tcgui` tree: native embedded widgets must belong to the same
-`tc_ui_document`. The consumer switch therefore belongs to the editor UI
-migration phase and should replace the whole pipeline-editor tree atomically,
-after which `tcgui.scene` has no production consumers and can be retired.
+`tcnodegraph.native_view` is the native adapter built from `GraphicsItem` paint
+and hit callbacks while keeping `Graph`/`GraphController` toolkit-neutral. The
+native editor switches the complete pipeline-editor tree atomically: toolbar,
+file dialogs, context menu, node graph and embedded parameter controls all
+belong to its one `tc_ui_document`. The temporary default tcgui entrypoint still
+uses `tcnodegraph.view`; after the default flips to native that adapter and its
+`tcgui.scene` dependency can be deleted together.

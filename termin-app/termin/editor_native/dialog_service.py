@@ -7,7 +7,17 @@ import logging
 import weakref
 
 from termin.editor_core.dialog_service import DialogService
-from termin.gui_native import Color, DialogAction, Document, EdgeInsets, MessageBoxKind, Rect, Size
+from termin.gui_native import (
+    Color,
+    DialogAction,
+    Document,
+    EdgeInsets,
+    FileDialogMode,
+    FileDialogModel,
+    MessageBoxKind,
+    Rect,
+    Size,
+)
 
 
 _logger = logging.getLogger(__name__)
@@ -256,6 +266,69 @@ class NativeDialogService(DialogService):
         if not dialog.show(self._viewport()):
             self._discard(key)
             raise RuntimeError("failed to show native layer mask dialog")
+        self._request_render()
+
+    def show_open_file(
+        self,
+        title: str,
+        directory: str,
+        filter_string: str,
+        on_result: Callable[[str | None], None],
+    ) -> None:
+        self._show_file_dialog(
+            FileDialogMode.OpenFile,
+            title,
+            directory,
+            filter_string,
+            on_result,
+        )
+
+    def show_save_file(
+        self,
+        title: str,
+        directory: str,
+        filter_string: str,
+        on_result: Callable[[str | None], None],
+        *,
+        default_name: str = "",
+    ) -> None:
+        self._show_file_dialog(
+            FileDialogMode.SaveFile,
+            title,
+            directory,
+            filter_string,
+            on_result,
+            default_name=default_name,
+        )
+
+    def _show_file_dialog(
+        self,
+        mode,
+        title: str,
+        directory: str,
+        filter_string: str,
+        on_result: Callable[[str | None], None],
+        *,
+        default_name: str = "",
+    ) -> None:
+        dialog = self._document.create_file_dialog(mode)
+        dialog.widget.debug_name = title
+        dialog.set_initial_directory(directory)
+        dialog.set_filters(FileDialogModel.parse_filter_string(filter_string))
+        if default_name:
+            dialog.set_file_name(default_name)
+        key = self._retain(dialog, on_result)
+        weak_service = weakref.ref(self)
+
+        def finished(path: str | None) -> None:
+            service = weak_service()
+            if service is not None:
+                service._finish(key, path)
+
+        dialog.connect_path_finished(finished)
+        if not dialog.show(self._viewport()):
+            self._discard(key)
+            raise RuntimeError("failed to show native file dialog")
         self._request_render()
 
 

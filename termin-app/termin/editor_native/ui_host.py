@@ -29,12 +29,14 @@ from termin.gui_native import (
     PointerEvent,
     PointerEventType,
     Rect,
+    StyleRole,
 )
 
 
 _logger = logging.getLogger(__name__)
 
 FileDropHandler = Callable[[str, float, float, int], bool]
+PreRenderCallback = Callable[[object], None]
 
 
 @dataclass(frozen=True)
@@ -185,6 +187,7 @@ class NativeUiHost:
         self._target_size = (0, 0)
         self._closed = False
         self._render_requested = True
+        self._pre_render_callbacks: list[PreRenderCallback] = []
         start_text_input()
 
     @property
@@ -213,10 +216,16 @@ class NativeUiHost:
             self._color_target = self.context.create_color_attachment(width, height)
             self._target_size = (width, height)
 
-        self.draw_list.clear()
         self.document.layout_roots(Rect(0.0, 0.0, float(width), float(height)))
-        self.document.paint(self.paint_context)
         self.context.begin_frame()
+        for callback in tuple(self._pre_render_callbacks):
+            try:
+                callback(self.context)
+            except Exception:
+                _logger.exception("Native UI pre-render callback failed")
+                raise
+        self.draw_list.clear()
+        self.document.paint(self.paint_context)
         self.context.begin_pass(
             self._color_target,
             clear_color_enabled=True,
@@ -231,6 +240,37 @@ class NativeUiHost:
         self.window.present(self._color_target)
         self._render_requested = False
         return True
+
+    def add_pre_render_callback(self, callback: PreRenderCallback) -> None:
+        if callback not in self._pre_render_callbacks:
+            self._pre_render_callbacks.append(callback)
+
+    def remove_pre_render_callback(self, callback: PreRenderCallback) -> None:
+        if callback in self._pre_render_callbacks:
+            self._pre_render_callbacks.remove(callback)
+
+    def apply_font_size(self, font_size: float) -> None:
+        size = float(font_size)
+        if not 8.0 <= size <= 32.0:
+            raise ValueError("native UI font size must be in range 8..32")
+        theme = self.document.theme
+        for role in (
+            StyleRole.Generic,
+            StyleRole.Panel,
+            StyleRole.Label,
+            StyleRole.Button,
+            StyleRole.TextInput,
+            StyleRole.GroupBox,
+            StyleRole.Tab,
+            StyleRole.Checkbox,
+            StyleRole.Progress,
+            StyleRole.Slider,
+            StyleRole.Separator,
+        ):
+            role_style = theme.role(role)
+            role_style.base.font_size = size
+        self.document.theme = theme
+        self.request_render_update()
 
     def request_render_update(self) -> None:
         self._render_requested = True
@@ -274,6 +314,7 @@ class NativeUiHost:
         if self._closed:
             return
         self._closed = True
+        self._pre_render_callbacks.clear()
         stop_text_input()
         self.renderer.release_gpu()
         if self._color_target is not None:

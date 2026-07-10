@@ -11,6 +11,8 @@ from tcgui.widgets.tabs import TabView
 from tcgui.widgets.scroll_area import ScrollArea
 from tcgui.widgets.units import px
 
+from termin.editor_core.scene_settings_model import SceneNamesController, SceneNamesSnapshot
+
 _COUNT = 64
 
 
@@ -38,8 +40,10 @@ def _build_names_tab(names: dict, prefix: str) -> tuple[VStack, list[TextInput]]
 
 def show_layers_dialog(ui, scene) -> None:
     """Show modal layers & flags dialog."""
-    layer_names = scene.layer_names
-    flag_names = scene.flag_names
+    controller = SceneNamesController(scene)
+    snapshot = controller.load()
+    layer_names = dict(enumerate(snapshot.layers))
+    flag_names = dict(enumerate(snapshot.flags))
 
     tabs = TabView()
     tabs.preferred_height = px(400)
@@ -65,12 +69,12 @@ def show_layers_dialog(ui, scene) -> None:
     def _on_result(btn: str):
         if btn != "OK":
             return
-        for i in range(_COUNT):
-            name = layer_edits[i].text.strip()
-            scene.set_layer_name(i, name)
-        for i in range(_COUNT):
-            name = flag_edits[i].text.strip()
-            scene.set_flag_name(i, name)
+        controller.save(
+            SceneNamesSnapshot(
+                tuple(edit.text for edit in layer_edits),
+                tuple(edit.text for edit in flag_edits),
+            )
+        )
 
     dlg.on_result = _on_result
     dlg.show(ui, windowed=True)

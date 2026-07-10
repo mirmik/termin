@@ -11,8 +11,11 @@ from tcgui.widgets.label import Label
 from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.spin_box import SpinBox
 
-
-_METHOD_NAMES = ["Hard", "PCF", "Poisson"]
+from termin.editor_core.scene_settings_model import (
+    SHADOW_METHODS,
+    ShadowSettingsController,
+    ShadowSettingsSnapshot,
+)
 
 
 def show_shadow_settings_dialog(
@@ -25,9 +28,12 @@ def show_shadow_settings_dialog(
 
     Uses SceneRenderState.shadow_settings property (read/write).
     """
-    from termin.render import scene_render_state
-    rs = scene_render_state(scene)
-    ss = rs.shadow_settings
+    controller = ShadowSettingsController(
+        scene,
+        mirror_scenes=mirror_scenes or (),
+        on_changed=on_changed,
+    )
+    snapshot = controller.load()
 
     content = VStack()
     content.spacing = 8
@@ -39,8 +45,8 @@ def show_shadow_settings_dialog(
     method_lbl.text = "Method:"
     method_row.add_child(method_lbl)
     method_combo = ComboBox()
-    method_combo.items = _METHOD_NAMES
-    method_combo.selected_index = ss.method
+    method_combo.items = list(SHADOW_METHODS)
+    method_combo.selected_index = snapshot.method
     method_row.add_child(method_combo)
     content.add_child(method_row)
 
@@ -51,7 +57,7 @@ def show_shadow_settings_dialog(
     softness_lbl.text = "Softness:"
     softness_row.add_child(softness_lbl)
     softness_spin = SpinBox()
-    softness_spin.value = ss.softness
+    softness_spin.value = snapshot.softness
     softness_spin.min_value = 0.0
     softness_spin.max_value = 10.0
     softness_spin.step = 0.1
@@ -67,7 +73,7 @@ def show_shadow_settings_dialog(
     bias_lbl.tooltip = "World-space depth compare offset used while sampling shadow maps."
     bias_row.add_child(bias_lbl)
     bias_spin = SpinBox()
-    bias_spin.value = ss.bias
+    bias_spin.value = snapshot.bias
     bias_spin.min_value = 0.0
     bias_spin.max_value = 0.05
     bias_spin.step = 0.0001
@@ -77,18 +83,13 @@ def show_shadow_settings_dialog(
     content.add_child(bias_row)
 
     def _apply():
-        ss = rs.shadow_settings
-        ss.method = method_combo.selected_index
-        ss.softness = softness_spin.value
-        ss.bias = bias_spin.value
-        rs.shadow_settings = ss
-        for mirror_scene in mirror_scenes or []:
-            if mirror_scene is scene:
-                continue
-            mirror_rs = scene_render_state(mirror_scene)
-            mirror_rs.shadow_settings = ss
-        if on_changed:
-            on_changed()
+        controller.apply(
+            ShadowSettingsSnapshot(
+                method_combo.selected_index,
+                softness_spin.value,
+                bias_spin.value,
+            )
+        )
 
     method_combo.on_changed = lambda _idx, _text: _apply()
     softness_spin.on_changed = lambda _val: _apply()

@@ -51,6 +51,10 @@ class InspectorResourceCatalog:
     def __init__(self, resource_manager) -> None:
         self._resource_manager = resource_manager
 
+    @property
+    def resource_manager(self):
+        return self._resource_manager
+
     def choices(self, kind: str) -> InspectorResourceChoices | None:
         accessors = self._resource_manager.get_handle_accessors(kind)
         if accessors is None:
@@ -63,10 +67,7 @@ class InspectorResourceCatalog:
         except Exception:
             _logger.exception("Failed to list inspector resources for kind '%s'", kind)
             raise
-        items.extend(
-            InspectorResourceChoice(name, name, uuid)
-            for name, uuid in resources
-        )
+        items.extend(InspectorResourceChoice(name, name, uuid) for name, uuid in resources)
         return InspectorResourceChoices(
             kind=kind,
             items=tuple(items),

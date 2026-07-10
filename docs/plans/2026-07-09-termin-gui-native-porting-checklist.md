@@ -610,9 +610,11 @@ Phase 9 rich-text notes:
   adapter handlers. Embedded widgets remain generation-checked document
   handles and are attached as canonical `tc_widget` children; removal/view
   destruction detaches without silently destroying caller-owned widgets.
-  The current production consumer is `tcnodegraph`'s pipeline editor; its
-  atomic switch follows the editor-root migration because a native child
-  cannot live inside the legacy `tcgui` tree.
+  `tcnodegraph.native_view` is now the production projection in the native
+  pipeline editor. Its toolbar, dialogs, context menu, graph and embedded
+  controls switch as one tree because a native child cannot live inside the
+  legacy `tcgui` tree. The old projection remains isolated to the temporary
+  tcgui entrypoint until that frontend retires.
 
 ## Phase 10 - Python Bridge And Mixed-Language Use
 
@@ -731,7 +733,7 @@ stable.
 - [x] Port list and asset/handle inspector fields.
 - [x] Port component catalog plus add/remove actions with undo.
 - [x] Port clip, agent-type and navmesh-area selectors.
-- [ ] Port remaining specialized inspector fields.
+- [x] Port remaining specialized inspector fields.
 - [x] Port the Foliage brush extension model and native panel projection.
 - [x] Port the ProceduralMesh shared command model and native command panel.
 - [x] Port the ProceduralMesh native document tree and primitive parameter
@@ -743,10 +745,22 @@ stable.
   attachment, input router, picking/selection callbacks and explicit shutdown.
 - [x] Port ProceduralMesh viewport interaction through the shared core model,
   native viewport geometry and extension callback boundary.
-- [ ] Port viewport list.
+- [x] Port viewport list.
+- [x] Port the pipeline editor and `tcnodegraph` projection to native
+  `SceneView`.
 - [ ] Port build profiles window.
-- [ ] Port framegraph debugger shell.
+- [x] Port framegraph debugger shell.
+- [x] Port editor chrome utility dialogs: Python Console, Settings and About.
+- [x] Port Undo Stack Viewer and Audio Debugger diagnostics.
+- [x] Port Scene Properties, Layers & Flags and Shadow Settings dialogs.
+- [x] Port Project Settings dialog.
+- [x] Port Agent Types and NavMesh Areas dialogs.
 - [x] Decide old `termin.editor_tcgui` coexistence boundary.
+
+Agent Types and NavMesh Areas share a toolkit-neutral staged controller. The
+native Scene-menu dialogs persist the agent list and all 64 area names only on
+OK; Cancel now discards the draft instead of leaking the legacy dialog's live
+singleton mutations.
 
 Phase 12 host notes:
 
@@ -849,6 +863,15 @@ Phase 12 host notes:
   editable and clamp the current value through the same mergeable undo path.
   The specialized `list[vec3]` projection adds point selection, direct XYZ
   editing, insertion, reorder and removal instead of stringifying coordinates.
+  Inline material metadata now projects a native material editor backed by the
+  shared `MaterialInspectorController`; tcgui consumes the same immutable
+  shader-property snapshots and mutation/persistence path. Scalar, vector,
+  color and texture properties are typed, and the UI-neutral
+  `MaterialTextureSourceCatalog` supplies default, asset and live render-target
+  color/depth choices to both frontends. The final stray `AudioSource.clip`
+  schema was migrated from the unsupported `audio_clip` kind to serialized
+  `audio_clip_handle` values, so selecting a clip cannot store a dictionary in
+  the runtime component.
   `EntityInspectorController` now also projects
   the component catalog and owns undo-backed add/remove operations; the native
   inspector presents the categorized submenu and reconciles selection after
@@ -904,6 +927,93 @@ Phase 12 host notes:
   passed; live visual QA was attempted but the available X11 `:0` rejected
   authorization and SDL's fallback offscreen driver cannot create a Vulkan
   window.
+- Viewport-list migration now has one `ViewportListController` in editor-core
+  for display/viewport/internal-entity/render-target snapshots, selection,
+  rename and action requests. Both tcgui and native tree projections consume
+  that contract. The production native shell shows the editor display and
+  managed targets, synchronizes entity selection with the scene tree, and
+  wires display, viewport and render-target add/remove/rename actions.
+  `NativeDisplayWorkspace` owns one native `TabView`, the editor page and every
+  secondary `Display` page. Each secondary page has an explicit `FBOSurface`,
+  `Viewport3D`, `BasicDisplayInputManager` and rendering-manager registration;
+  removal detaches the tab and surface, releases per-viewport input managers,
+  unregisters and destroys the display, closes the FBO and recursively destroys
+  the page. `TabView` now exposes dynamic page removal/title/handle APIs and a
+  typed selection signal through C++ and Python, so list selection and workspace
+  tabs stay synchronized without tcgui ownership. The central gate covers the
+  C++ mutation contract, Python bridge, workspace lifetime and both frontend
+  projections. Live QA was attempted again on 2026-07-10; X11 `:0` rejected the
+  process authorization cookie and SDL's fallback offscreen driver cannot create
+  a Vulkan window, while the backend-neutral renderer pixel smoke remains green.
+- Pipeline editing now has one toolkit-neutral `PipelineEditorController` for
+  graph construction, pass/resource schemas, dynamic material sockets,
+  load/save identity and mutations. Both the temporary tcgui window and the
+  native editor consume that owner; the former no longer carries a duplicate
+  serializer or node factory. `tcnodegraph.native_view` projects the shared
+  graph into native `GraphicsScene` items with socket connection, Bezier edge
+  hit testing, node/group dragging, selection deletion and embedded typed
+  parameter widgets. The production native shell opens the complete editor on
+  F11 with native file/input dialogs and context commands. Explicit close
+  destroys the dialog, graph parameter subtree and separately owned context
+  overlay. Controller, projection, F11 wiring, file roundtrip and lifetime are
+  covered by bundled-Python tests. The legacy tcgui `NodeGraphView` remains only
+  because tcgui is still the temporary default frontend; it can be deleted when
+  the entrypoint flips to native rather than removing pipeline editing from the
+  current default editor prematurely.
+- Framegraph debugging now reuses one `FramegraphDebuggerModel` and one
+  `EditorFramegraphDebuggerService` for native UI, MCP inspection and capture
+  export. The automation service moved from `editor_tcgui` to `editor_core`;
+  both frontends import the canonical owner. The native F12 dialog covers
+  target/mode/pass/symbol/resource selection, stable duplicate-pass indices,
+  pause, channel/HDR controls, schedule/pass JSON/timing/stats, main and depth
+  previews, and startup `--debug-resource` selection. Preview composition uses
+  `FrameGraphPresenter` to render capture textures into explicitly owned color
+  targets before the document draw-list is recorded. `NativeUiHost` exposes a
+  removable pre-render callback boundary so changed targets can never leave a
+  stale texture handle in the current Vulkan draw list. Closing the dialog
+  disconnects debugger passes and releases preview targets; shutdown also
+  unregisters the callback and destroys the dialog tree. Headless tests cover
+  F12, reopen/close, presenter options, resize/release, host ordering, MCP
+  compatibility and render-target deduplication.
+- Editor chrome utilities now share toolkit-neutral owners instead of copying
+  policy between frontends. `PythonConsoleController` owns the transcript,
+  prompt and execution state for the native F6 dialog and the temporary tcgui
+  panel; the canonical executor now accepts the blank line that completes a
+  buffered interactive `for`/`def`/`if` statement. `EditorSettingsController`
+  validates, normalizes and persists editor paths, font sizes and MCP state;
+  the native Settings dialog uses the native file-dialog service and can apply
+  the font size live across every theme role. About data is assembled by one
+  immutable editor-core model and escaped by the native rich-text projection.
+  The Edit, Debug and Help menu commands, reopen/close teardown, callback
+  disconnection and garbage-collection boundaries have bundled-Python tests.
+- Undo/redo and audio diagnostics now likewise use toolkit-neutral immutable
+  snapshots. The native Debug menu opens explicitly owned dialogs for both;
+  undo pushes publish refreshes to an open history view, while the audio model
+  receives a narrow engine diagnostics protocol and lists only active channels.
+  The temporary tcgui dialogs consume the same controllers instead of directly
+  interrogating the undo stack or audio singleton. Headless tests cover active,
+  paused and uninitialized audio states plus undo/redo branches, reopen and
+  recursive teardown.
+- Scene-level settings now have one `ScenePropertiesController`,
+  `SceneNamesController` and `ShadowSettingsController` shared by native and
+  temporary tcgui projections. The controller separates the scene render mount
+  from the resource catalog, fixing the legacy pipeline picker aliasing both as
+  `rm`; add/remove now call the canonical mount API. Fresh scenes explicitly
+  materialize their render-state extension before reading shadow settings, so
+  the dialog no longer receives `None` before the first rendering mutation.
+  Native Scene menu commands cover undoable background/ambient/skybox edits,
+  pipeline membership, all 64 layer/flag names, live shadow method/softness/bias
+  and mirror-scene propagation. Tests cover validation, undo, mirroring,
+  reopen and recursive teardown.
+- Project settings now use one `ProjectSettingsController` for render sync,
+  generated output, standalone window defaults and resource-ignore paths.
+  Resource and render invalidations are distinct: player-window changes do not
+  rescan assets, while output/ignore changes do. The native Edit menu dialog
+  preserves pending text fields while applying live render/window controls and
+  persists through the canonical `ProjectSettingsManager`; tcgui consumes the
+  same owner. Repository audit found no legacy Build Profiles window to port:
+  that unchecked item is new UI over the existing
+  `termin.project_build.profile_build` backend, not a frontend migration.
 - The migrated tcgui Core/Inspect/NavMesh/Resource viewer modules, their shared
   `RegistryViewerDialog`, launcher methods and menu callbacks were deleted.
   An architecture test fixes their absence. Card #302 remains open only for

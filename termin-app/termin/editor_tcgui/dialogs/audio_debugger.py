@@ -11,9 +11,12 @@ from tcgui.widgets.list_widget import ListWidget
 from tcgui.widgets.button import Button
 from tcgui.widgets.units import px
 
+from termin.editor_core.audio_debugger_model import create_audio_debugger_controller
+
 
 def show_audio_debugger(ui) -> None:
     """Show audio debugger dialog."""
+    controller = create_audio_debugger_controller()
     content = VStack()
     content.spacing = 8
 
@@ -54,10 +57,8 @@ def show_audio_debugger(ui) -> None:
     content.add_child(channels_group)
 
     def _refresh():
-        from termin.audio.audio_engine import AudioEngine
-        engine = AudioEngine.instance()
-
-        if not engine.is_initialized:
+        snapshot = controller.snapshot()
+        if not snapshot.initialized:
             engine_status.text = "Not initialized"
             volume_status.text = "—"
             channels_status.text = "—"
@@ -66,31 +67,19 @@ def show_audio_debugger(ui) -> None:
 
         engine_status.text = "Initialized"
 
-        master_vol = engine.get_master_volume()
-        volume_status.text = f"{master_vol * 100:.0f}%"
+        volume_status.text = f"{snapshot.master_volume * 100:.0f}%"
+        items = [
+            {
+                "text": (
+                    f"Ch {channel.channel}  {'Paused' if channel.paused else 'Playing'}  "
+                    f"Vol: {channel.volume * 100:.0f}%  Angle: {channel.angle}\u00b0  "
+                    f"Dist: {channel.distance}"
+                )
+            }
+            for channel in snapshot.channels
+        ]
 
-        active_count = 0
-        items = []
-
-        for ch in range(engine.num_channels):
-            if not engine.is_channel_playing(ch):
-                continue
-
-            active_count += 1
-            vol = engine.get_channel_volume(ch)
-            angle, distance = engine.get_channel_position(ch)
-            paused = engine.is_channel_paused(ch)
-
-            if paused:
-                status = "Paused"
-            else:
-                status = "Playing"
-
-            items.append({
-                "text": f"Ch {ch}  {status}  Vol: {vol * 100:.0f}%  Angle: {angle}\u00b0  Dist: {distance}",
-            })
-
-        channels_status.text = f"{active_count} / {engine.num_channels}"
+        channels_status.text = f"{len(snapshot.channels)} / {snapshot.total_channels}"
         channels_list.set_items(items)
 
     # Refresh button

@@ -1,4 +1,5 @@
 from termin.editor_tcgui.material_inspector import MaterialInspectorTcgui
+from termin.editor_core.material_inspector_model import MaterialInspectorController
 from tgfx import TcTexture
 import pytest
 
@@ -15,7 +16,11 @@ class _Phase:
 class _Material:
     def __init__(self) -> None:
         self.name = "TestMaterial"
+        self.uuid = ""
+        self.shader_name = ""
         self.phases = [_Phase()]
+        self.uniforms = {}
+        self.textures = {}
 
     def set_texture(self, uniform_name: str, texture) -> int:
         applied = 0
@@ -27,6 +32,12 @@ class _Material:
 
 
 class _ResourceManager:
+    def list_shader_names(self):
+        return []
+
+    def get_shader(self, _name):
+        return None
+
     def find_material_name(self, material) -> None:
         return None
 
@@ -45,6 +56,8 @@ def test_material_inspector_default_texture_assigns_expected_builtin_texture(
     inspector = MaterialInspectorTcgui.__new__(MaterialInspectorTcgui)
     inspector._material = _Material()
     inspector._rm = _ResourceManager()
+    inspector._controller = MaterialInspectorController(inspector._rm)
+    inspector._controller.set_target(inspector._material)
     inspector.on_changed = None
 
     inspector._set_texture_all_phases("u_albedo_texture", "default", "", default_texture_kind)

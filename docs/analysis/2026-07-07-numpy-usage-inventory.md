@@ -160,7 +160,7 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-app/termin/editor_core/editor_commands.py` | undo snapshot arrays | keep copy boundary |
 | `termin-app/termin/editor_core/gizmo/base.py` | ray collider math | Vec3 candidate |
 | `termin-app/termin/editor_core/prefab_persistence.py` | JSON numpy encoding | serialization boundary |
-| `termin-app/termin/editor_tcgui/framegraph_debugger_service.py` | frame image buffers | keep ndarray |
+| `termin-app/termin/editor_core/framegraph_debugger_service.py` | frame image buffers | keep ndarray |
 | `termin-app/termin/editor_tcgui/surface_edge_debug_tool.py` | mesh vertex conversion | Vec3 candidate |
 | `termin-app/termin/editor_tcgui/texture_inspector.py` | texture preview buffers | keep ndarray |
 | `termin-app/termin/editor_tcgui/widgets/texture_picker.py` | texture preview buffers | keep ndarray |

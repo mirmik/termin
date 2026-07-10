@@ -30,6 +30,19 @@ class NativeEditorShell:
     inspect_registry_command: int
     core_registry_command: int
     resource_manager_command: int
+    pipeline_editor_command: int
+    framegraph_debugger_command: int
+    python_console_command: int
+    undo_history_command: int
+    audio_debugger_command: int
+    scene_properties_command: int
+    scene_names_command: int
+    shadow_settings_command: int
+    agent_types_command: int
+    navmesh_areas_command: int
+    settings_command: int
+    project_settings_command: int
+    about_command: int
     command_models: tuple[CommandModel, ...]
 
 
@@ -72,16 +85,47 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
             CommandData("inspector", "Inspector", checkable=True, checked=True),
         ]
     )
+    edit_menu = CommandModel()
+    settings_command = edit_menu.append(CommandData("settings", "Settings..."))
+    project_settings_command = edit_menu.append(
+        CommandData("project-settings", "Project Settings...")
+    )
+    scene_menu = CommandModel()
+    scene_properties_command = scene_menu.append(
+        CommandData("scene-properties", "Scene Properties...")
+    )
+    scene_names_command = scene_menu.append(CommandData("scene-names", "Layers & Flags..."))
+    shadow_settings_command = scene_menu.append(
+        CommandData("shadow-settings", "Shadow Settings...")
+    )
+    agent_types_command = scene_menu.append(CommandData("agent-types", "Agent Types..."))
+    navmesh_areas_command = scene_menu.append(CommandData("navmesh-areas", "NavMesh Areas..."))
     debug_menu = CommandModel()
     profiler_command = debug_menu.append(CommandData("profiler", "Profiler", shortcut="F7", checkable=True))
     inspect_registry_command = debug_menu.append(CommandData("inspect-registry", "Inspect Registry...", shortcut="F8"))
     core_registry_command = debug_menu.append(CommandData("core-registry", "Core Registry...", shortcut="F9"))
     resource_manager_command = debug_menu.append(CommandData("resource-manager", "Resource Manager...", shortcut="F10"))
+    pipeline_editor_command = debug_menu.append(
+        CommandData("pipeline-editor", "Pipeline Editor...", shortcut="F11")
+    )
+    framegraph_debugger_command = debug_menu.append(
+        CommandData("framegraph-debugger", "Framegraph Debugger...", shortcut="F12")
+    )
+    python_console_command = debug_menu.append(
+        CommandData("python-console", "Python Console...", shortcut="F6")
+    )
+    undo_history_command = debug_menu.append(CommandData("undo-history", "Undo/Redo Stack..."))
+    audio_debugger_command = debug_menu.append(CommandData("audio-debugger", "Audio Debugger..."))
+    help_menu = CommandModel()
+    about_command = help_menu.append(CommandData("about", "About Termin..."))
     menu_bar = document.create_menu_bar()
     menu_bar.entries = [
         MenuBarEntry("file", "File", file_menu),
+        MenuBarEntry("edit", "Edit", edit_menu),
         MenuBarEntry("view", "View", view_menu),
+        MenuBarEntry("scene", "Scene", scene_menu),
         MenuBarEntry("debug", "Debug", debug_menu),
+        MenuBarEntry("help", "Help", help_menu),
     ]
     _append(document, root, menu_bar, Size(1280.0, 30.0), fixed_extent=30.0)
 
@@ -128,7 +172,28 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         inspect_registry_command=inspect_registry_command,
         core_registry_command=core_registry_command,
         resource_manager_command=resource_manager_command,
-        command_models=(file_menu, view_menu, debug_menu, toolbar_model),
+        pipeline_editor_command=pipeline_editor_command,
+        framegraph_debugger_command=framegraph_debugger_command,
+        python_console_command=python_console_command,
+        undo_history_command=undo_history_command,
+        audio_debugger_command=audio_debugger_command,
+        scene_properties_command=scene_properties_command,
+        scene_names_command=scene_names_command,
+        shadow_settings_command=shadow_settings_command,
+        agent_types_command=agent_types_command,
+        navmesh_areas_command=navmesh_areas_command,
+        settings_command=settings_command,
+        project_settings_command=project_settings_command,
+        about_command=about_command,
+        command_models=(
+            file_menu,
+            edit_menu,
+            view_menu,
+            scene_menu,
+            debug_menu,
+            help_menu,
+            toolbar_model,
+        ),
     )
 
 

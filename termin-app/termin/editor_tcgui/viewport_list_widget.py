@@ -4,11 +4,11 @@ tcgui port of ``termin.editor.viewport_list_widget.ViewportListWidget``.
 Same Signal-based public API so the RenderingController wires it up the
 same way regardless of UI framework.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from tcbase import log
 from tcgui.widgets.button import Button
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.input_dialog import show_input_dialog
@@ -18,29 +18,39 @@ from tcgui.widgets.tree import TreeNode, TreeWidget
 from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
 
-from termin.editor_core.signal import Signal
+from termin.editor_core.viewport_list_model import (
+    ViewportListController,
+    ViewportListNode,
+    ViewportNodeKind,
+)
 
 if TYPE_CHECKING:
     from termin.display import Display
     from termin.viewport import Viewport
-    from termin.scene import Entity
 
 
 class _NodeKind:
-    DISPLAY = "display"
-    VIEWPORT = "viewport"
-    ENTITY = "entity"
-    RENDER_TARGET_GROUP = "rt_group"
-    RENDER_TARGET = "render_target"
+    DISPLAY = ViewportNodeKind.DISPLAY
+    VIEWPORT = ViewportNodeKind.VIEWPORT
+    ENTITY = ViewportNodeKind.ENTITY
+    RENDER_TARGET_GROUP = ViewportNodeKind.RENDER_TARGET_GROUP
+    RENDER_TARGET = ViewportNodeKind.RENDER_TARGET
 
 
 class _NodePayload:
     kind: str
     obj: object | None
+    stable_id: str | None
 
-    def __init__(self, kind: str, obj: object | None = None):
+    def __init__(
+        self,
+        kind: str,
+        obj: object | None = None,
+        stable_id: str | None = None,
+    ):
         self.kind = kind
         self.obj = obj
+        self.stable_id = stable_id
 
 
 class ViewportListWidgetTcgui(VStack):
@@ -54,24 +64,23 @@ class ViewportListWidgetTcgui(VStack):
         super().__init__()
         self.spacing = 4
 
-        self._displays: list["Display"] = []
-        self._display_names: dict[int, str] = {}
-        self._render_targets: list = []
+        self._controller = ViewportListController()
 
         self._ui = None
         self._ctx_menu = Menu()
 
-        self.display_selected = Signal()
-        self.viewport_selected = Signal()
-        self.entity_selected = Signal()
-        self.render_target_selected = Signal()
-        self.display_add_requested = Signal()
-        self.viewport_add_requested = Signal()
-        self.display_remove_requested = Signal()
-        self.viewport_remove_requested = Signal()
-        self.viewport_renamed = Signal()
-        self.render_target_add_requested = Signal()
-        self.render_target_remove_requested = Signal()
+        self.display_selected = self._controller.display_selected
+        self.viewport_selected = self._controller.viewport_selected
+        self.entity_selected = self._controller.entity_selected
+        self.render_target_selected = self._controller.render_target_selected
+        self.display_add_requested = self._controller.display_add_requested
+        self.viewport_add_requested = self._controller.viewport_add_requested
+        self.display_remove_requested = self._controller.display_remove_requested
+        self.viewport_remove_requested = self._controller.viewport_remove_requested
+        self.viewport_renamed = self._controller.viewport_renamed
+        self.render_target_add_requested = self._controller.render_target_add_requested
+        self.render_target_remove_requested = self._controller.render_target_remove_requested
+        self._controller.snapshot_changed.connect(self._rebuild_tree)
 
         self._build_ui()
 
@@ -86,7 +95,7 @@ class ViewportListWidgetTcgui(VStack):
 
         self._add_display_btn = Button()
         self._add_display_btn.text = "+ Display"
-        self._add_display_btn.on_click = lambda: self.display_add_requested.emit()
+        self._add_display_btn.on_click = self._controller.request_add_display
         toolbar.add_child(self._add_display_btn)
 
         self._add_viewport_btn = Button()
@@ -96,12 +105,12 @@ class ViewportListWidgetTcgui(VStack):
 
         self._add_rt_btn = Button()
         self._add_rt_btn.text = "+ RT"
-        self._add_rt_btn.on_click = lambda: self.render_target_add_requested.emit("texture_2d")
+        self._add_rt_btn.on_click = self._controller.request_add_render_target
         toolbar.add_child(self._add_rt_btn)
 
         self._add_xr_rt_btn = Button()
         self._add_xr_rt_btn.text = "+ XR RT"
-        self._add_xr_rt_btn.on_click = lambda: self.render_target_add_requested.emit("xr_stereo")
+        self._add_xr_rt_btn.on_click = lambda: self._controller.request_add_render_target("xr_stereo")
         toolbar.add_child(self._add_xr_rt_btn)
 
         self.add_child(toolbar)
@@ -117,118 +126,46 @@ class ViewportListWidgetTcgui(VStack):
     # ------------------------------------------------------------------
 
     def set_displays(self, displays: list) -> None:
-        self._displays = list(displays)
-        self._rebuild_tree()
+        self._controller.set_displays(displays)
 
     def set_display_name(self, display: "Display", name: str) -> None:
-        self._display_names[display.tc_display_ptr] = name
-        self._rebuild_tree()
+        self._controller.set_display_name(display, name)
 
     def get_display_name(self, display: "Display") -> str:
-        if display.tc_display_ptr in self._display_names:
-            return self._display_names[display.tc_display_ptr]
-        idx = self._displays.index(display) if display in self._displays else 0
-        return f"Display {idx}"
+        return self._controller.get_display_name(display)
 
     def add_display(self, display: "Display", name: str | None = None) -> None:
-        if display not in self._displays:
-            self._displays.append(display)
-            if name is not None:
-                self._display_names[display.tc_display_ptr] = name
-            self._rebuild_tree()
+        self._controller.add_display(display, name)
 
     def remove_display(self, display: "Display") -> None:
-        if display in self._displays:
-            self._displays.remove(display)
-            self._display_names.pop(display.tc_display_ptr, None)
-            self._rebuild_tree()
+        self._controller.remove_display(display)
 
     def set_render_targets(self, render_targets) -> None:
-        self._render_targets = list(render_targets or [])
-        self._rebuild_tree()
+        self._controller.set_render_targets(render_targets)
 
     def refresh(self) -> None:
-        self._rebuild_tree()
+        self._controller.refresh()
 
     # ------------------------------------------------------------------
     # Tree build
     # ------------------------------------------------------------------
 
-    def _rebuild_tree(self) -> None:
+    def _rebuild_tree(self, snapshot=None) -> None:
+        snapshot = snapshot or self._controller.snapshot
         for node in list(self._tree.root_nodes):
             self._tree.remove_root(node)
+        for root in snapshot.roots:
+            self._tree.add_root(self._project_node(root))
 
-        for display in self._displays:
-            if not self._is_display_valid(display):
-                continue
-            display_name = self.get_display_name(display)
-            display_node = self._make_node(display_name, _NodeKind.DISPLAY, display)
-
-            for i, viewport in enumerate(display.viewports):
-                vp_name = viewport.name or f"Viewport {i}"
-                render_target = viewport.render_target
-                render_target_name = "No Render Target"
-                if render_target is not None:
-                    render_target_name = render_target.name or "RenderTarget"
-
-                vp_node = self._make_node(
-                    f"{vp_name} ({render_target_name})",
-                    _NodeKind.VIEWPORT,
-                    viewport,
-                )
-                vp_node.expanded = True
-
-                internal = viewport.internal_entities
-                if internal is not None:
-                    self._add_entity_hierarchy(vp_node, internal)
-
-                display_node.add_node(vp_node)
-
-            display_node.expanded = True
-            self._tree.add_root(display_node)
-
-        if self._render_targets:
-            rt_group = self._make_node("Render Targets", _NodeKind.RENDER_TARGET_GROUP)
-            for rt in self._render_targets:
-                rt_name = self._render_target_label(rt)
-                rt_node = self._make_node(rt_name, _NodeKind.RENDER_TARGET, rt)
-                rt_group.add_node(rt_node)
-            rt_group.expanded = True
-            self._tree.add_root(rt_group)
-
-    def _is_display_valid(self, display) -> bool:
-        try:
-            _ = display.tc_display_ptr
-            return True
-        except Exception as e:
-            log.debug(f"[ViewportListWidgetTcgui] display validity check failed: {e}")
-            return False
-
-    def _make_node(self, text: str, kind: str, obj: object | None = None) -> TreeNode:
+    def _project_node(self, source: ViewportListNode) -> TreeNode:
         lbl = Label()
-        lbl.text = text
+        lbl.text = source.label
         node = TreeNode(lbl)
-        node.data = _NodePayload(kind, obj)
+        node.data = _NodePayload(source.kind, source.value, source.stable_id)
+        for child in source.children:
+            node.add_node(self._project_node(child))
+        node.expanded = bool(source.children)
         return node
-
-    def _render_target_label(self, render_target) -> str:
-        name = render_target.name or "RenderTarget"
-        if render_target.kind == "xr_stereo":
-            return f"{name} [XR Stereo]"
-        return name
-
-    def _add_entity_hierarchy(self, parent_node: TreeNode, entity: "Entity") -> None:
-        if not entity.valid():
-            return
-        entity_name = entity.name or f"Entity ({entity.uuid[:8]})"
-        entity_node = self._make_node(entity_name, _NodeKind.ENTITY, entity)
-        entity_node.expanded = True
-        parent_node.add_node(entity_node)
-
-        for child_tf in entity.transform.children:
-            child_entity = child_tf.entity
-            if child_entity is not None and child_entity.valid():
-                self._add_entity_hierarchy(entity_node, child_entity)
 
     # ------------------------------------------------------------------
     # Selection
@@ -244,29 +181,7 @@ class ViewportListWidgetTcgui(VStack):
 
     def _on_tree_select(self, node: TreeNode | None) -> None:
         payload = self._get_payload(node)
-
-        if payload is None:
-            self.display_selected.emit(None)
-            self.viewport_selected.emit(None)
-            self.entity_selected.emit(None)
-            self.render_target_selected.emit(None)
-            return
-
-        if payload.kind == _NodeKind.ENTITY:
-            ent = payload.obj
-            if ent is not None and ent.valid():
-                self.entity_selected.emit(ent)
-            else:
-                self.entity_selected.emit(None)
-        elif payload.kind == _NodeKind.RENDER_TARGET:
-            self.render_target_selected.emit(payload.obj)
-        elif payload.kind == _NodeKind.VIEWPORT:
-            self.viewport_selected.emit(payload.obj)
-            self.entity_selected.emit(None)
-        elif payload.kind == _NodeKind.DISPLAY:
-            self.display_selected.emit(payload.obj)
-            self.viewport_selected.emit(None)
-            self.entity_selected.emit(None)
+        self._controller.select(None if payload is None else payload.stable_id)
 
     # ------------------------------------------------------------------
     # Context menu
@@ -293,60 +208,78 @@ class ViewportListWidgetTcgui(VStack):
     def _on_tree_context_menu(self, node: TreeNode | None, x: float, y: float) -> None:
         payload = self._get_payload(node)
         items: list[MenuItem] = [
-            MenuItem("Add Display", on_click=lambda: self.display_add_requested.emit()),
+            MenuItem("Add Display", on_click=self._controller.request_add_display),
         ]
 
         if payload is not None:
             if payload.kind == _NodeKind.DISPLAY:
                 display = payload.obj
                 items.append(MenuItem.sep())
-                items.append(MenuItem(
-                    "Add Viewport",
-                    on_click=lambda d=display: self.viewport_add_requested.emit(d),
-                ))
-                items.append(MenuItem(
-                    "Remove Display",
-                    on_click=lambda d=display: self.display_remove_requested.emit(d),
-                ))
+                items.append(
+                    MenuItem(
+                        "Add Viewport",
+                        on_click=lambda d=display: self._controller.request_add_viewport(d),
+                    )
+                )
+                items.append(
+                    MenuItem(
+                        "Remove Display",
+                        on_click=lambda sid=payload.stable_id: self._controller.request_remove(sid),
+                    )
+                )
             elif payload.kind == _NodeKind.VIEWPORT:
                 viewport = payload.obj
                 items.append(MenuItem.sep())
-                items.append(MenuItem(
-                    "Rename...",
-                    on_click=lambda v=viewport: self._rename_viewport(v),
-                ))
+                items.append(
+                    MenuItem(
+                        "Rename...",
+                        on_click=lambda v=viewport: self._rename_viewport(v),
+                    )
+                )
                 parent_node = self._find_parent_node(node) if node is not None else None
                 parent_payload = self._get_payload(parent_node)
                 if parent_payload is not None and parent_payload.kind == _NodeKind.DISPLAY:
-                    items.append(MenuItem(
-                        "Add Viewport",
-                        on_click=lambda d=parent_payload.obj: self.viewport_add_requested.emit(d),
-                    ))
-                items.append(MenuItem(
-                    "Remove Viewport",
-                    on_click=lambda v=viewport: self.viewport_remove_requested.emit(v),
-                ))
+                    items.append(
+                        MenuItem(
+                            "Add Viewport",
+                            on_click=lambda d=parent_payload.obj: self._controller.request_add_viewport(d),
+                        )
+                    )
+                items.append(
+                    MenuItem(
+                        "Remove Viewport",
+                        on_click=lambda sid=payload.stable_id: self._controller.request_remove(sid),
+                    )
+                )
             elif payload.kind == _NodeKind.RENDER_TARGET:
                 rt = payload.obj
                 items.append(MenuItem.sep())
-                items.append(MenuItem(
-                    "Rename...",
-                    on_click=lambda r=rt: self._rename_render_target(r),
-                ))
-                items.append(MenuItem(
-                    "Remove Render Target",
-                    on_click=lambda r=rt: self.render_target_remove_requested.emit(r),
-                ))
+                items.append(
+                    MenuItem(
+                        "Rename...",
+                        on_click=lambda r=rt: self._rename_render_target(r),
+                    )
+                )
+                items.append(
+                    MenuItem(
+                        "Remove Render Target",
+                        on_click=lambda sid=payload.stable_id: self._controller.request_remove(sid),
+                    )
+                )
             elif payload.kind == _NodeKind.RENDER_TARGET_GROUP:
                 items.append(MenuItem.sep())
-                items.append(MenuItem(
-                    "Add Render Target",
-                    on_click=lambda: self.render_target_add_requested.emit("texture_2d"),
-                ))
-                items.append(MenuItem(
-                    "Add XR Stereo Target",
-                    on_click=lambda: self.render_target_add_requested.emit("xr_stereo"),
-                ))
+                items.append(
+                    MenuItem(
+                        "Add Render Target",
+                        on_click=self._controller.request_add_render_target,
+                    )
+                )
+                items.append(
+                    MenuItem(
+                        "Add XR Stereo Target",
+                        on_click=lambda: self._controller.request_add_render_target("xr_stereo"),
+                    )
+                )
 
         self._ctx_menu.items = items
         if self._tree._ui is not None:
@@ -358,24 +291,10 @@ class ViewportListWidgetTcgui(VStack):
 
     def _on_add_viewport_clicked(self) -> None:
         display = self._get_selected_display()
-        if display is not None:
-            self.viewport_add_requested.emit(display)
+        self._controller.request_add_viewport(display)
 
     def _get_selected_display(self) -> "Display | None":
-        node = self._tree.selected_node
-        if node is None:
-            return None
-        payload = self._get_payload(node)
-        if payload is None:
-            return None
-        if payload.kind == _NodeKind.DISPLAY:
-            return payload.obj
-        if payload.kind == _NodeKind.VIEWPORT:
-            parent = self._find_parent_node(node)
-            parent_payload = self._get_payload(parent)
-            if parent_payload is not None and parent_payload.kind == _NodeKind.DISPLAY:
-                return parent_payload.obj
-        return None
+        return self._controller.selected_display()
 
     # ------------------------------------------------------------------
     # Rename dialogs
@@ -399,9 +318,7 @@ class ViewportListWidgetTcgui(VStack):
         new_name = new_name.strip()
         if not new_name or new_name == (viewport.name or ""):
             return
-        viewport.name = new_name
-        self.viewport_renamed.emit(viewport, new_name)
-        self._rebuild_tree()
+        self._controller.rename(self._controller.viewport_stable_id(viewport), new_name)
 
     def _rename_render_target(self, render_target) -> None:
         ui = self._tree._ui
@@ -421,5 +338,4 @@ class ViewportListWidgetTcgui(VStack):
         new_name = new_name.strip()
         if not new_name or new_name == (render_target.name or ""):
             return
-        render_target.name = new_name
-        self._rebuild_tree()
+        self._controller.rename(self._controller.render_target_stable_id(render_target), new_name)

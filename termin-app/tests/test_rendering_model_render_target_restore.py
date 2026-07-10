@@ -523,3 +523,24 @@ def test_managed_render_targets_filters_viewport_owned_targets(monkeypatch):
     manager.displays = [types.SimpleNamespace(viewports=[viewport])]
 
     assert model.managed_render_targets(pool) == [standalone_target]
+
+
+def test_framegraph_targets_do_not_duplicate_viewport_owned_managed_target(monkeypatch):
+    pool = []
+    _install_native_stubs(monkeypatch, pool)
+
+    manager = _Manager()
+    manager.get_display_name = lambda _display: "Display"
+    target = _RenderTarget("MainRT", pool)
+    target.pipeline = _Pipeline("Main")
+    viewport = _Viewport()
+    viewport.managed_by_scene_pipeline = ""
+    viewport.render_target = target
+    manager.displays = [types.SimpleNamespace(viewports=[viewport])]
+    manager.managed_render_targets = [target]
+
+    targets = RenderingModel(manager).get_framegraph_debug_targets_info()
+
+    assert len(targets) == 1
+    assert targets[0].source is target
+    assert targets[0].label == "Display / Viewport / MainRT"

@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
-import os
-from importlib import metadata
-
 from tcgui.widgets.dialog import Dialog
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.units import px
 from tcgui.widgets.vstack import VStack
-
-
-def _package_version() -> str:
-    try:
-        return metadata.version("termin-app")
-    except metadata.PackageNotFoundError:
-        return "development"
+from termin.editor_core.about_model import build_editor_about_info
 
 
 def _value_row(name: str, value: str) -> HStack:
@@ -38,9 +29,7 @@ def _value_row(name: str, value: str) -> HStack:
 
 def show_about_dialog(ui, *, backend_name: str | None = None) -> None:
     """Show the editor About dialog."""
-    env_backend = os.environ.get("TERMIN_BACKEND")
-    resolved_env_backend = env_backend if env_backend else "(unset: compiled default)"
-    resolved_backend_name = backend_name if backend_name else "unknown"
+    info = build_editor_about_info(backend_name=backend_name)
 
     content = VStack()
     content.spacing = 8
@@ -53,9 +42,9 @@ def show_about_dialog(ui, *, backend_name: str | None = None) -> None:
     blurb.text = "A suspiciously practical editor for projects that keep moving."
     content.add_child(blurb)
 
-    content.add_child(_value_row("Version", _package_version()))
-    content.add_child(_value_row("TERMIN_BACKEND", resolved_env_backend))
-    content.add_child(_value_row("Active backend", resolved_backend_name))
+    content.add_child(_value_row("Version", info.version))
+    content.add_child(_value_row("TERMIN_BACKEND", info.configured_backend))
+    content.add_child(_value_row("Active backend", info.active_backend))
 
     dlg = Dialog()
     dlg.title = "About Termin"
