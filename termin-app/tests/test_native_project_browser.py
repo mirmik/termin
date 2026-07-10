@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from termin.editor_core.project_browser_model import ProjectBrowserController
 from termin.editor_native import build_native_project_browser, resolve_native_ui_font
 from termin.gui_native import Document, DrawList, DrawListRenderer, PaintContext, Rect
@@ -53,6 +55,9 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
     document.layout_roots(Rect(0.0, 0.0, 900.0, 600.0))
     assert browser.tree_widget.widget.bounds.width > initial_tree_width
     assert browser.file_grid.widget.bounds.x > browser.tree_widget.widget.bounds.x
+    browser.content_splitter.split_fraction = 0.085
+    document.layout_roots(Rect(0.0, 0.0, 2048.0, 600.0))
+    assert browser.tree_widget.widget.bounds.width == pytest.approx(173.0, abs=3.0)
 
     assets = next(
         index
