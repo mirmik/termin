@@ -632,6 +632,49 @@ int test_unknown_only_auto_upgrade_keeps_default_enabled() {
     return 0;
 }
 
+int test_unknown_upgrade_is_lossless_on_schema_errors() {
+    std::cout << "Testing UnknownComponent lossless restore failures...\n";
+
+    for (size_t case_index = 0; case_index < 2; ++case_index) {
+        termin::TcSceneRef scene = termin::TcSceneRef::create("lossless_restore_failure");
+        termin::Entity entity = scene.create_entity("entity");
+        tc_component* unknown_tc = tc_component_registry_create("UnknownComponent");
+        TEST_ASSERT(unknown_tc != nullptr, "UnknownComponent created for failure case");
+        auto* unknown = static_cast<termin::UnknownComponent*>(
+            termin::CxxComponent::from_tc(unknown_tc));
+        TEST_ASSERT(unknown != nullptr, "UnknownComponent cast for failure case");
+        unknown->original_type = "ReloadableComponent";
+        tc_value_free(&unknown->original_data);
+        unknown->original_data = tc_value_dict_new();
+        if (case_index == 0) {
+            tc_value_dict_set(&unknown->original_data, "value", tc_value_string("not-an-int"));
+        } else {
+            tc_value_dict_set(&unknown->original_data, "value", tc_value_int(41));
+            tc_value_dict_set(&unknown->original_data, "removed_field", tc_value_int(99));
+        }
+        tc_value original_copy = tc_value_copy(&unknown->original_data);
+        entity.add_component_ptr(unknown_tc);
+
+        std::string error;
+        TEST_ASSERT(!termin::upgrade_unknown_component_ref(entity, unknown_tc, &error),
+                    "invalid payload rejected");
+        TEST_ASSERT(!error.empty(), "restore failure has diagnostic");
+        TEST_ASSERT(entity.component_count() == 1, "no partial replacement attached");
+        TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == unknown_tc,
+                    "original placeholder remains attached");
+        TEST_ASSERT(entity.get_component_by_type_name("ReloadableComponent") == nullptr,
+                    "candidate component remains unattached");
+        TEST_ASSERT(tc_value_equals(&unknown->original_data, &original_copy),
+                    "original payload remains byte-for-byte equivalent");
+
+        tc_value_free(&original_copy);
+        scene.destroy();
+    }
+
+    std::cout << "  UnknownComponent lossless restore failures: PASS\n";
+    return 0;
+}
+
 int test_custom_upgrade_strategy() {
     std::cout << "Testing UnknownOnly custom upgrade strategy...\n";
 
@@ -769,6 +812,7 @@ int main() {
     result |= test_requirement_cycle_blocks_add();
     result |= test_unknown_only_deserialization();
     result |= test_unknown_only_auto_upgrade_keeps_default_enabled();
+    result |= test_unknown_upgrade_is_lossless_on_schema_errors();
     result |= test_custom_upgrade_strategy();
     result |= test_custom_upgrade_from_unregistered_source_type();
     result |= test_module_owner_registration_cleanup();

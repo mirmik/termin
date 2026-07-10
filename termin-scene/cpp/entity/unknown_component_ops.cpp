@@ -44,6 +44,45 @@ void apply_component_core_fields(tc_component* component, const tc_value* data) 
     }
 }
 
+bool is_component_core_field(const char* path) {
+    return path != nullptr && (
+        std::string(path) == "display_name" ||
+        std::string(path) == "enabled" ||
+        std::string(path) == "active_in_editor");
+}
+
+bool validate_component_core_field(const char* path, const tc_value* value) {
+    if (std::string(path) == "display_name") {
+        return value != nullptr && value->type == TC_VALUE_STRING;
+    }
+    return value != nullptr && value->type == TC_VALUE_BOOL;
+}
+
+void discard_unattached_component(tc_component* component) {
+    if (component == nullptr) {
+        return;
+    }
+    if (component->factory_retained) {
+        component->factory_retained = false;
+        tc_component_release(component);
+    } else {
+        tc_component_drop(component);
+    }
+}
+
+const char* apply_status_name(tc_inspect_apply_status status) {
+    switch (status) {
+        case TC_INSPECT_APPLY_OK: return "ok";
+        case TC_INSPECT_APPLY_INVALID_ARGUMENT: return "invalid argument";
+        case TC_INSPECT_APPLY_TYPE_NOT_FOUND: return "type not found";
+        case TC_INSPECT_APPLY_NO_FIELDS: return "no fields registered";
+        case TC_INSPECT_APPLY_UNKNOWN_FIELD: return "unknown or non-serializable field";
+        case TC_INSPECT_APPLY_KIND_CONVERSION_FAILED: return "kind conversion failed";
+        case TC_INSPECT_APPLY_SETTER_FAILED: return "setter failed";
+    }
+    return "unknown apply error";
+}
+
 void* component_object_ptr(tc_component* component) {
     if (component == nullptr) {
         return nullptr;
@@ -118,19 +157,65 @@ bool upgrade_unknown_component_ref_impl(const Entity& entity,
 
     void* upgraded_obj = component_object_ptr(upgraded_tc);
     if (upgraded_obj == nullptr) {
+        discard_unattached_component(upgraded_tc);
         if (error) {
             *error = "Created component object pointer is null";
         }
         return false;
     }
 
-    Entity mutable_entity = entity;
-    mutable_entity.add_component_ptr(upgraded_tc);
-
     tc_scene_handle scene_handle = entity.scene().handle();
     tc_scene_inspect_context inspect_ctx = tc_scene_inspect_context_make(scene_handle);
     tc_value empty_data = tc_value_dict_new();
     const tc_value* data_to_apply = target_data != nullptr ? target_data : &empty_data;
+    if (data_to_apply->type != TC_VALUE_DICT) {
+        discard_unattached_component(upgraded_tc);
+        tc_value_free(&empty_data);
+        if (error) {
+            *error = "Component restore payload is not a dictionary";
+        }
+        return false;
+    }
+
+    tc_value inspect_data = tc_value_dict_new();
+    for (size_t i = 0; i < tc_value_dict_size(data_to_apply); ++i) {
+        const char* key = nullptr;
+        tc_value* value = tc_value_dict_get_at(const_cast<tc_value*>(data_to_apply), i, &key);
+        if (is_component_core_field(key)) {
+            if (!validate_component_core_field(key, value)) {
+                discard_unattached_component(upgraded_tc);
+                tc_value_free(&inspect_data);
+                tc_value_free(&empty_data);
+                if (error) {
+                    *error = "Invalid component core field: " + std::string(key);
+                }
+                return false;
+            }
+            continue;
+        }
+        tc_value_dict_set(&inspect_data, key, tc_value_copy(value));
+    }
+
+    const tc_inspect_apply_result apply_result = tc_inspect_deserialize_checked(
+        upgraded_obj,
+        target_type.c_str(),
+        &inspect_data,
+        &inspect_ctx
+    );
+    if (apply_result.status != TC_INSPECT_APPLY_OK) {
+        const std::string failed_field = apply_result.field_path
+            ? " at field '" + std::string(apply_result.field_path) + "'"
+            : std::string();
+        tc_value_free(&inspect_data);
+        discard_unattached_component(upgraded_tc);
+        tc_value_free(&empty_data);
+        if (error) {
+            *error = "Failed to restore " + target_type + failed_field + ": " +
+                apply_status_name(apply_result.status);
+        }
+        return false;
+    }
+    tc_value_free(&inspect_data);
 
     if (preserve_runtime_state && !data_has_field(data_to_apply, "enabled")) {
         upgraded_tc->enabled = component->enabled;
@@ -144,16 +229,10 @@ bool upgrade_unknown_component_ref_impl(const Entity& entity,
 
     apply_component_core_fields(upgraded_tc, data_to_apply);
 
-    tc_inspect_deserialize(
-        upgraded_obj,
-        target_type.c_str(),
-        data_to_apply,
-        &inspect_ctx
-    );
-    if (data_to_apply == &empty_data) {
-        tc_value_free(&empty_data);
-    }
+    tc_value_free(&empty_data);
 
+    Entity mutable_entity = entity;
+    mutable_entity.add_component_ptr(upgraded_tc);
     mutable_entity.remove_component_ptr(component);
     return true;
 }
