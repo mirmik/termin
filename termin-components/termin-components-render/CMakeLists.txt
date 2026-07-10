@@ -173,3 +173,5 @@ if(TERMIN_BUILD_PYTHON)
         DESTINATION ${_py_dest}
     )
 endif()
+
+termin_label_tests_in_directory("termin-components-render")

@@ -314,6 +314,8 @@ install(TARGETS termin_render_passes
 
 install(DIRECTORY include/ DESTINATION include)
 
+termin_label_tests_in_directory("termin-render-passes")
+
 install(EXPORT termin_render_passesTargets
     FILE termin_render_passesTargets.cmake
     NAMESPACE termin_render_passes::

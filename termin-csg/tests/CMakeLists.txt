@@ -11,3 +11,5 @@ target_link_libraries(termin_csg_basic_test PRIVATE
 )
 
 add_test(NAME termin_csg_basic_test COMMAND termin_csg_basic_test)
+
+termin_label_tests_in_directory("termin-csg")

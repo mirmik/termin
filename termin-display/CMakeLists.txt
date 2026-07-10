@@ -372,3 +372,5 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_displayConfigVersion.cmake
     DESTINATION lib/cmake/termin_display
 )
+
+termin_label_tests_in_directory("termin-display")
