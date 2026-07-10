@@ -364,6 +364,14 @@ void ColliderGizmoPass::_draw_convex_hull_internal(
 }
 
 // Register ColliderGizmoPass in tc_pass_registry
-TC_REGISTER_FRAME_PASS(ColliderGizmoPass);
+TC_DEFINE_FRAME_PASS_FACTORY(ColliderGizmoPass);
+
+void ColliderGizmoPass::register_type() {
+    register_frame_pass_ColliderGizmoPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_depth_test();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

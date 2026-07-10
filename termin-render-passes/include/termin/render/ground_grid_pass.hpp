@@ -24,6 +24,7 @@ namespace termin {
  */
 class TERMIN_RENDER_PASSES_API GroundGridPass : public CxxFramePass {
 public:
+    static void register_type();
     std::string input_res = "color";
     std::string output_res = "color";
 

@@ -386,6 +386,18 @@ void BloomPass::destroy() {
     last_tgfx2_mip_levels_ = 0;
 }
 
-TC_REGISTER_FRAME_PASS(BloomPass);
+TC_DEFINE_FRAME_PASS_FACTORY(BloomPass);
+
+void BloomPass::register_type() {
+    register_frame_pass_BloomPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_output_res_target();
+    _register_inspect_threshold();
+    _register_inspect_soft_threshold();
+    _register_inspect_intensity();
+    _register_inspect_mip_levels();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

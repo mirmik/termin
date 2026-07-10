@@ -350,17 +350,23 @@ tree.
 
 ## Известные архитектурные хвосты
 
-### Static registration
+### Static registration — реализовано (#138)
 
-Owner scope для C++ включается непосредственно перед `module_init`, то есть
-static constructors, выполняемые во время `dlopen`, намеренно остаются unowned.
-Это защищает случайно притянутые engine header side effects от удаления, но не
-решает саму проблему неявной регистрации.
+Built-in components и frame passes имеют type-owned `register_type()`, который
+целиком регистрирует factory, parent, inspect/serializable поля и graph metadata.
+Bootstrap знает только список типов и вызывает эти методы в детерминированном
+порядке. `INSPECT_*` в публичных заголовках больше не создают inline static
+registrars, а pass factory macro только определяет factory-функцию без запуска
+кода при загрузке shared library.
 
-Проектные модули должны использовать explicit `TC_MODULE_*` registration из
-`module_init`, а SDK/bootstrap постепенно уходить от header/static side effects.
+Project module вызывает собственные `register_type()` из ABI `init`, поэтому
+owner scope охватывает целостную регистрацию. Регрессионный тест проверяет, что
+простое линкование built-in libraries не создаёт pass/inspect records, повторный
+bootstrap идемпотентен, shutdown очищает factories, а rebootstrap восстанавливает
+их. Остаточные legacy helpers и не относящиеся к runtime types registrars
+зафиксированы в отдельном inventory.
 
-Трекинг: **#138** `[arch/bootstrap] Уйти от static registration`.
+Трекинг: **#138** `[arch/bootstrap] Уйти от static registration` — закрыто.
 
 ### UnknownPass parity — реализовано (#139)
 

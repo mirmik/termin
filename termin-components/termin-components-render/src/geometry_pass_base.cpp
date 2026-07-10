@@ -342,4 +342,11 @@ std::vector<ResourceSpec> GeometryPassBase::make_resource_specs() const {
     return specs;
 }
 
+void GeometryPassBase::register_type() {
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_camera_name();
+    _register_inspect_metadata_graph();
+}
+
 } // namespace termin

@@ -5,6 +5,9 @@
 #include <termin/camera/orbit_camera_controller.hpp>
 #include <termin/lighting/light_component.hpp>
 #include <termin/render/line_renderer.hpp>
+#include <termin/render/material_pass.hpp>
+#include <termin/render/depth_pass.hpp>
+#include <termin/render/normal_pass.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/skinned_mesh_renderer.hpp>
 #include <termin/render/world_text_component.hpp>
@@ -26,6 +29,16 @@ void register_builtin_render_component_types() {
     WorldTextComponent::register_type();
     XrOriginComponent::register_type();
     XrThumbstickLocomotionComponent::register_type();
+}
+
+void register_builtin_render_component_pass_types() {
+    GeometryPassBase::register_type();
+    MaterialPass::register_type();
+    DepthPass::register_type();
+    DepthOnlyPass::register_type();
+    DepthToColorPass::register_type();
+    ColorToDepthPass::register_type();
+    NormalPass::register_type();
 }
 
 } // namespace termin

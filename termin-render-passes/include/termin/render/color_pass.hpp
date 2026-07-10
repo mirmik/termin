@@ -68,6 +68,7 @@ struct ColorPassExecuteData {
  */
 class TERMIN_RENDER_PASSES_API ColorPass : public CxxFramePass {
 public:
+    static void register_type();
     // Pass configuration
     std::string input_res = "empty";
     std::string output_res = "color";

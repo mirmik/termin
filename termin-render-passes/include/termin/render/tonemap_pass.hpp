@@ -28,6 +28,7 @@ enum class TonemapMethod : int {
 // removed in Stage 8.1.
 class TERMIN_RENDER_PASSES_API TonemapPass : public CxxFramePass {
 public:
+    static void register_type();
     std::string input_res = "color";
     std::string output_res = "color";
     std::string output_res_target;

@@ -41,6 +41,7 @@ void set_pass_int(tc_pass* pass, const char* field, int value) {
 
 class UIWidgetPass : public termin::CxxFramePass {
 public:
+    static void register_type();
     std::string input_res = "color";
     std::string output_res = "color+widgets";
 
@@ -91,7 +92,14 @@ public:
     }
 };
 
-TC_REGISTER_FRAME_PASS(UIWidgetPass);
+TC_DEFINE_FRAME_PASS_FACTORY(UIWidgetPass);
+
+inline void UIWidgetPass::register_type() {
+    register_frame_pass_UIWidgetPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_metadata_graph();
+}
 
 termin::RenderPipeline make_openxr_scene_pipeline() {
     tc_pipeline_handle ph = tc_pipeline_create("OpenXRScene");
@@ -339,6 +347,7 @@ void register_openxr_scene_runtime() {
     termin_collision_runtime_init();
     tc::KindRegistryCpp::instance();
     termin::MeshComponent::register_type();
+    UIWidgetPass::register_type();
     termin::XrOriginComponent::register_type();
     termin::XrThumbstickLocomotionComponent::register_type();
 }
