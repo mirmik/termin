@@ -44,6 +44,7 @@ from termin.editor_core.spacemouse_controller import SpaceMouseController
 from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
 from termin.editor_core.scene_manager_model import SceneManagerController
 from termin.editor_core.editor_scene_session import EditorSceneSession
+from termin.editor_core.render_scene_session import RenderSceneSession
 from termin.editor_core.viewport_list_model import ViewportListController
 from termin.editor_native.component_extensions import (
     NativeComponentExtensionContext,
@@ -575,6 +576,22 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         engine.scene_manager.set_on_after_render(native_viewport.after_render)
         sync_viewport_list()
 
+    from termin.editor_core.rendering_model import RenderingModel
+
+    rendering_model = RenderingModel(engine.rendering_manager)
+    if display_workspace is not None:
+        engine.rendering_manager.set_display_factory(display_workspace.create_display)
+
+    render_scene_session = None
+    if display_workspace is not None:
+        render_scene_session = RenderSceneSession(
+            engine.scene_manager,
+            rendering_model,
+            display_workspace,
+            sync_viewports=sync_viewport_list,
+            request_render=request_editor_render,
+        )
+
     spacemouse = SpaceMouseController()
     if native_viewport is not None:
         spacemouse.open(native_viewport.attachment, request_editor_render)
@@ -651,6 +668,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             ),
             on_editor_attach=attach_editor_scene if editor_scene_session is not None else None,
             on_editor_detach=detach_editor_scene if editor_scene_session is not None else None,
+            on_render_attach=None if render_scene_session is None else render_scene_session.attach,
+            on_render_detach=None if render_scene_session is None else render_scene_session.detach,
             on_changed=request_editor_render,
         ),
         dialog_service=dialog_service,
@@ -744,9 +763,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         pipeline_editor,
     )
 
-    from termin.editor_core.rendering_model import RenderingModel
-
-    rendering_model = RenderingModel(engine.rendering_manager)
     framegraph_debugger_service = EditorFramegraphDebuggerService(
         get_rendering_controller=lambda: rendering_model,
         on_request_update=request_editor_render,
@@ -897,6 +913,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "spacemouse_settings_dialog": spacemouse_settings_dialog,
             "scene_manager_dialog": scene_manager_dialog,
             "editor_scene_session": editor_scene_session,
+            "render_scene_session": render_scene_session,
             "native_viewport": native_viewport,
             "project_path": (
                 str(project_browser_controller.root_path) if project_browser_controller.root_path is not None else None
@@ -990,6 +1007,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         extension_context.on_viewport_tool_state_changed = None
         extension_context.viewport_geometry = None
         engine.scene_manager.set_on_after_render(None)
+        engine.rendering_manager.set_display_factory(None)
         try:
             about_dialog.close()
         except Exception:

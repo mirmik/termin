@@ -757,7 +757,7 @@ stable.
 - [x] Port Agent Types and NavMesh Areas dialogs.
 - [x] Port SpaceMouse runtime integration and settings dialog.
 - [x] Complete Scene Manager native editor-attachment workflow.
-- [ ] Complete Scene Manager native render-attachment workflow.
+- [x] Complete Scene Manager native render-attachment workflow.
 - [x] Decide old `termin.editor_tcgui` coexistence boundary.
 
 Agent Types and NavMesh Areas share a toolkit-neutral staged controller. The
@@ -783,8 +783,15 @@ attachment, scene hierarchy, entity inspector and all three scene-settings
 controllers switch as one operation, selection/extensions are cleared, open
 scene dialogs are dismissed and a failed switch rolls back to the previous
 scene. Dynamic editor commands and Python executor context resolve the active
-scene rather than retaining the startup scene. Render Attach/Detach remains
-disabled pending native display-config to tab/surface reconciliation.
+scene rather than retaining the startup scene.
+
+Render Attach/Detach now routes through `RenderSceneSession`. It uses the native
+display workspace as the rendering manager's display factory, restores viewport
+input routing after attach, synchronizes viewport and render-target configs
+before detach, and removes native tabs/displays left empty by the operation. A
+failed attach rolls the partial rendering attachment back. Live editor MCP
+smoke covered attaching a scene into a newly created native display, detaching
+it and switching the editor attachment to another scene and back.
 
 The offscreen OpenGL editor process smoke also exposed and fixed three startup
 and shutdown gaps: native startup now registers Python builtin component specs
