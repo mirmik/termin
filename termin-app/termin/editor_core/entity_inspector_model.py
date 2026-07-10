@@ -168,6 +168,10 @@ class EntityInspectorController:
         self._notify_component_selection(None)
         return self.refresh()
 
+    def clear(self) -> EntityInspectorSnapshot:
+        """Clear the inspected entity while preserving the active scene."""
+        return self.set_target(None)
+
     def refresh(self) -> EntityInspectorSnapshot:
         self._reconcile_component_selection()
         self._snapshot = self._build_snapshot()

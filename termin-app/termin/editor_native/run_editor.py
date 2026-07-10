@@ -131,6 +131,26 @@ from termin.gui_native import Rect, WidgetRef
 _logger = logging.getLogger(__name__)
 
 
+def _activate_startup_project(project_file: str, project_browser) -> bool:
+    """Activate the project-wide services required before restoring its scene."""
+    project_path = Path(project_file)
+    if not project_path.is_file() or project_path.suffix != ".terminproj":
+        _logger.error("Native editor ignored invalid startup project: %s", project_file)
+        return False
+
+    project_root = project_path.parent
+
+    from termin.editor_core.project_context import set_current_project_path
+    from termin.navmesh.settings import NavigationSettingsManager
+    from termin.project.settings import ProjectSettingsManager
+
+    set_current_project_path(project_root)
+    ProjectSettingsManager.instance().set_project_path(project_root)
+    NavigationSettingsManager.instance().set_project_path(project_root)
+    project_browser.set_root(project_root)
+    return True
+
+
 def _smoke_frame_limit() -> int:
     value = os.environ.get("TERMIN_EDITOR_NATIVE_SMOKE_FRAMES", "0")
     try:
@@ -749,14 +769,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         last_project = EditorSettings.instance().get_last_project_file()
         project_file = str(last_project) if last_project is not None else None
     if project_file is not None:
-        project_path = Path(project_file)
-        if project_path.is_file() and project_path.suffix == ".terminproj":
-            from termin.editor_core.project_context import set_current_project_path
-
-            set_current_project_path(project_path.parent)
-            project_browser.set_root(project_path.parent)
-        else:
-            _logger.error("Native editor ignored invalid startup project: %s", project_file)
+        _activate_startup_project(project_file, project_browser)
 
     def active_scene_name() -> str | None:
         scene = current_scene()
