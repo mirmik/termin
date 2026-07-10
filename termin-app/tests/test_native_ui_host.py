@@ -163,6 +163,9 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
 
     assert shell.root.stable_id == "editor.root"
     assert shell.central.stable_id == "editor.central"
+    assert shell.main_splitter.widget.stable_id == "editor.main-splitter"
+    assert shell.left_splitter.widget.stable_id == "editor.left-splitter"
+    assert shell.right_splitter.widget.stable_id == "editor.right-splitter"
     assert shell.navigation_tabs.widget.stable_id == "editor.navigation-tabs"
     assert shell.hierarchy_host.stable_id == "editor.hierarchy-host"
     assert shell.rendering_host.stable_id == "editor.rendering-host"
@@ -186,6 +189,15 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.project_host.bounds.width == pytest.approx(shell.central.bounds.width)
     assert shell.workspace_host.bounds.x > shell.hierarchy_host.bounds.x
     assert shell.inspector_host.bounds.x > shell.workspace_host.bounds.x
+    assert shell.tool_bar.widget.bounds.x == pytest.approx(shell.workspace_host.bounds.x)
+    assert shell.tool_bar.widget.bounds.width == pytest.approx(shell.workspace_host.bounds.width)
+    initial_navigation_width = shell.navigation_tabs.widget.bounds.width
+    initial_bottom_height = shell.bottom_tabs.widget.bounds.height
+    shell.left_splitter.split_fraction = 0.30
+    shell.main_splitter.split_fraction = 0.55
+    document.layout_roots(Rect(0.0, 0.0, 1280.0, 720.0))
+    assert shell.navigation_tabs.widget.bounds.width > initial_navigation_width
+    assert shell.bottom_tabs.widget.bounds.height > initial_bottom_height
     assert shell.tool_bar.widget.bounds.x == pytest.approx(shell.workspace_host.bounds.x)
     assert shell.tool_bar.widget.bounds.width == pytest.approx(shell.workspace_host.bounds.width)
     assert draw_list.command_count > 20

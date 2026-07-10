@@ -48,6 +48,11 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
     assert browser.file_grid.visible_range[1] < 100
     assert browser.breadcrumb.text == tmp_path.name
     assert "2000 files" in browser.status_bar.text
+    initial_tree_width = browser.tree_widget.widget.bounds.width
+    browser.content_splitter.split_fraction = 0.32
+    document.layout_roots(Rect(0.0, 0.0, 900.0, 600.0))
+    assert browser.tree_widget.widget.bounds.width > initial_tree_width
+    assert browser.file_grid.widget.bounds.x > browser.tree_widget.widget.bounds.x
 
     assets = next(
         index
