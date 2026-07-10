@@ -11,8 +11,11 @@
 #include <termin/entity/entity.hpp>
 #include <termin/entity/unknown_component.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin/render/frame_pass.hpp>
+#include <termin/render/unknown_pass.hpp>
 
 #include <inspect/tc_inspect.h>
+#include <render/tc_pipeline.h>
 
 #include <chrono>
 #include <filesystem>
@@ -35,6 +38,8 @@ constexpr const char* kComponentType = "HotReloadNativeProbeComponent";
 constexpr const char* kEngineOwnedProbeType = "EngineOwnedProbeType";
 constexpr const char* kEngineOwnedProbeComponent = "EngineOwnedProbeComponent";
 constexpr const char* kComponentFacet = "termin.scene.component";
+constexpr const char* kPassType = "HotReloadNativeProbePass";
+constexpr const char* kPassFacet = "termin.render.frame_pass";
 
 class EngineOwnedProbe {
 public:
@@ -125,6 +130,25 @@ void set_component_int_field(tc_component* component, const char* path, int fiel
     tc_value data = tc_value_dict_new();
     tc_value_dict_set(&data, path, tc_value_int(field_value));
     tc_inspect_deserialize(object, kComponentType, &data, nullptr);
+    tc_value_free(&data);
+}
+
+int pass_int_field(tc_pass* pass, const char* path) {
+    void* object = termin::CxxFramePass::from_tc(pass);
+    tc_value data = tc_inspect_serialize(object, kPassType);
+    tc_value* value = tc_value_dict_get(&data, path);
+    const int result = value && value->type == TC_VALUE_INT
+        ? static_cast<int>(value->data.i)
+        : -1;
+    tc_value_free(&data);
+    return result;
+}
+
+void set_pass_int_field(tc_pass* pass, const char* path, int field_value) {
+    void* object = termin::CxxFramePass::from_tc(pass);
+    tc_value data = tc_value_dict_new();
+    tc_value_dict_set(&data, path, tc_value_int(field_value));
+    tc_inspect_deserialize(object, kPassType, &data, nullptr);
     tc_value_free(&data);
 }
 
@@ -262,6 +286,13 @@ int run_cpp_module_hot_reload_smoke() {
                 "runtime type inspect facet registered after load");
     TEST_ASSERT(tc::InspectRegistry::instance().find_field(kComponentType, "value") != nullptr,
                 "inspect field registered after load");
+    TEST_ASSERT(tc_pass_registry_has(kPassType), "native pass registered after load");
+    TEST_ASSERT(std::string(tc_runtime_type_registry_get_owner(kPassType)) == kModuleId,
+                "native pass owner captured");
+    TEST_ASSERT(tc_runtime_type_registry_has_facet(kPassType, kPassFacet),
+                "runtime type pass facet registered after load");
+    TEST_ASSERT(tc::InspectRegistry::instance().find_field(kPassType, "exposure") != nullptr,
+                "pass inspect field registered after load");
     std::string engine_probe_error;
     TEST_ASSERT(engine_owned_probe_intact("module load", engine_probe_error),
                 engine_probe_error.c_str());
@@ -276,6 +307,33 @@ int run_cpp_module_hot_reload_smoke() {
     TEST_ASSERT(component != nullptr, "native component instance created");
     set_component_int_field(component, "value", 77);
     entity.add_component_ptr(component);
+
+    const tc_pipeline_handle pipeline = tc_pipeline_create("module-pass-reload");
+    TEST_ASSERT(tc_pipeline_handle_valid(pipeline), "test pipeline created");
+    tc_pass* pass = tc_pass_registry_create(kPassType);
+    TEST_ASSERT(pass != nullptr, "native pass instance created");
+    set_pass_int_field(pass, "exposure", 23);
+    tc_pass_set_name(pass, "module-pass");
+    tc_pipeline_add_pass_take(pipeline, pass);
+
+    tc_pass* externally_held_pass = tc_pipeline_get_pass_at(pipeline, 0);
+    tc_pass_retain(externally_held_pass);
+    TEST_ASSERT(!runtime.unload_module(kModuleId),
+                "module unload must refuse an externally-held pass vtable");
+    TEST_ASSERT(tc_pass_registry_has(kPassType),
+                "refused unload keeps pass registration live");
+    TEST_ASSERT(std::string(tc_pass_type_name(tc_pipeline_get_pass_at(pipeline, 0))) == kPassType,
+                "refused unload rolls pipeline placeholder back to live pass");
+    TEST_ASSERT(pass_int_field(tc_pipeline_get_pass_at(pipeline, 0), "exposure") == 23,
+                "refused unload rollback preserves pass payload");
+    tc_component* rollback_component = entity.get_component_by_type_name(kComponentType);
+    TEST_ASSERT(rollback_component != nullptr,
+                "refused unload rolls component placeholder back to live component");
+    TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "refused unload leaves no component placeholder behind");
+    TEST_ASSERT(component_int_field(rollback_component, "value") == 77,
+                "refused unload rollback preserves component payload");
+    tc_pass_release(externally_held_pass);
 
     TEST_ASSERT(runtime.reload_module(kModuleId), runtime.last_error());
     TEST_ASSERT(termin::ComponentRegistry::instance().has(kComponentType),
@@ -299,6 +357,14 @@ int run_cpp_module_hot_reload_smoke() {
                 "no UnknownComponent remains after successful reload");
     TEST_ASSERT(component_int_field(upgraded, "value") == 77,
                 "component inspect data survives reload roundtrip");
+    tc_pass* upgraded_pass = tc_pipeline_get_pass_at(pipeline, 0);
+    TEST_ASSERT(upgraded_pass != nullptr, "pass remains in pipeline after reload");
+    TEST_ASSERT(std::string(tc_pass_type_name(upgraded_pass)) == kPassType,
+                "UnknownPass upgraded back after reload");
+    TEST_ASSERT(pass_int_field(upgraded_pass, "exposure") == 23,
+                "pass inspect data survives reload roundtrip");
+    TEST_ASSERT(std::string(upgraded_pass->pass_name) == "module-pass",
+                "pass slot identity survives reload roundtrip");
 
     TEST_ASSERT(runtime.unload_module(kModuleId), runtime.last_error());
     TEST_ASSERT(!termin::ComponentRegistry::instance().has(kComponentType),
@@ -315,6 +381,24 @@ int run_cpp_module_hot_reload_smoke() {
                 "live component degraded during unload");
     TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") != nullptr,
                 "UnknownComponent remains after unloaded module");
+    TEST_ASSERT(!tc_pass_registry_has(kPassType), "native pass unregistered before native close");
+    TEST_ASSERT(!tc_runtime_type_registry_has_type(kPassType),
+                "pass runtime type record removed on module unload");
+    tc_pass* unknown_pass = tc_pipeline_get_pass_at(pipeline, 0);
+    TEST_ASSERT(unknown_pass != nullptr, "pipeline slot remains after module unload");
+    TEST_ASSERT(std::string(tc_pass_type_name(unknown_pass)) == "UnknownPass",
+                "live pass degraded during unload");
+    auto* unknown_pass_object = dynamic_cast<termin::UnknownPass*>(
+        termin::CxxFramePass::from_tc(unknown_pass));
+    TEST_ASSERT(unknown_pass_object != nullptr, "UnknownPass object is accessible");
+    TEST_ASSERT(unknown_pass_object->original_type == kPassType,
+                "UnknownPass preserves original type");
+    TEST_ASSERT(unknown_pass_object->original_reads.size() == 1 &&
+                unknown_pass_object->original_reads[0] == "source",
+                "UnknownPass preserves graph reads");
+    TEST_ASSERT(unknown_pass_object->original_writes.size() == 1 &&
+                unknown_pass_object->original_writes[0] == "output",
+                "UnknownPass preserves graph writes");
 
     std::filesystem::path broken_artifact = artifact;
     broken_artifact += ".missing";
@@ -324,6 +408,8 @@ int run_cpp_module_hot_reload_smoke() {
                 "failed load does not restore stale component registry entry");
     TEST_ASSERT(tc::InspectRegistry::instance().find_field(kComponentType, "value") == nullptr,
                 "failed load does not restore stale inspect entry");
+    TEST_ASSERT(std::string(tc_pass_type_name(tc_pipeline_get_pass_at(pipeline, 0))) == "UnknownPass",
+                "failed load keeps UnknownPass in original pipeline slot");
     TEST_ASSERT(engine_owned_probe_intact("failed module load", engine_probe_error),
                 engine_probe_error.c_str());
     TEST_ASSERT(engine_owned_component_probe_intact("failed module load", engine_component_error),
@@ -335,12 +421,18 @@ int run_cpp_module_hot_reload_smoke() {
                 "UnknownComponent upgraded after artifact restore");
     TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
                 "UnknownComponent removed after artifact restore");
+    tc_pass* restored_pass = tc_pipeline_get_pass_at(pipeline, 0);
+    TEST_ASSERT(restored_pass != nullptr && std::string(tc_pass_type_name(restored_pass)) == kPassType,
+                "UnknownPass upgraded after artifact restore");
+    TEST_ASSERT(pass_int_field(restored_pass, "exposure") == 23,
+                "pass payload restored after temporary load failure");
     TEST_ASSERT(engine_owned_probe_intact("artifact restore", engine_probe_error),
                 engine_probe_error.c_str());
     TEST_ASSERT(engine_owned_component_probe_intact("artifact restore", engine_component_error),
                 engine_component_error.c_str());
 
     scene_manager.close_scene("cpp-hot-reload");
+    tc_pipeline_destroy(pipeline);
     runtime.unload_module(kModuleId);
     termin::ComponentRegistry::instance().unregister(kEngineOwnedProbeComponent);
     tc::InspectRegistry::instance().unregister_type(kEngineOwnedProbeType);

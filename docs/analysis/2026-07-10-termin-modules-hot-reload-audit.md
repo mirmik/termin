@@ -370,13 +370,18 @@ static constructors, выполняемые во время `dlopen`, намер
 
 Трекинг: **#138** `[arch/bootstrap] Уйти от static registration`.
 
-### Нет UnknownPass parity
+### UnknownPass parity — реализовано (#139)
 
-Component instances могут перейти в `UnknownComponent`, но frame/pass pipeline
-не имеет симметричного placeholder contract. При failed module reload render
-graph state защищён хуже scene component state.
+Frame/pass pipeline теперь имеет симметричный placeholder contract. `UnknownPass`
+сохраняет slot, core state, inspect payload и статический graph interface;
+prepare-unload заменяет pipeline-owned instances и отказывает в выгрузке при
+оставшихся внешних ссылках. Restore применяет payload к unattached candidate
+через checked inspect API и меняет slot только после полного успеха. Pipeline
+serialization сохраняет original envelope и `_unknown_graph`, а неизвестный тип
+при загрузке создаёт placeholder вместо потери node. C++ module reload smoke
+покрывает unload, временно отсутствующий artifact и последующее восстановление.
 
-Трекинг: **#139** `[render/modules] Добавить UnknownPass для reload failures`.
+Трекинг: **#139** `[render/modules] Добавить UnknownPass для reload failures` — закрыто.
 
 ### Cascade failure и recovery
 
@@ -477,6 +482,9 @@ placeholders собраны в отдельном swimlane **Modules & Hot Reloa
 - **#290** закрыта: descriptor refresh стал fail-closed atomic graph snapshot.
 - **#289** закрыта: restore выполняется через checked apply на unattached candidate;
   schema drift и setter/conversion failures сохраняют исходный placeholder.
+- **#139** закрыта: `UnknownPass` сохраняет pipeline slot, payload и graph
+  contract, участвует в atomic unload prepare/rollback и восстанавливается после
+  временного module load failure.
 - Созданы отдельные недублирующиеся задачи:
 
 | Карточка | Назначение |

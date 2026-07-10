@@ -2,6 +2,7 @@
 
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <termin/render/frame_pass.hpp>
 
 namespace {
 
@@ -12,6 +13,23 @@ public:
 
     int value = 0;
 };
+
+class HotReloadNativeProbePass : public termin::CxxFramePass {
+public:
+    int exposure = 0;
+
+    HotReloadNativeProbePass() {
+        link_to_type_registry("HotReloadNativeProbePass");
+    }
+
+    std::set<const char*> compute_reads() const override { return {"source"}; }
+    std::set<const char*> compute_writes() const override { return {"output"}; }
+    std::vector<termin::ResourceSpec> get_resource_specs() const override {
+        return {termin::ResourceSpec("output", "color_texture")};
+    }
+};
+
+TC_REGISTER_FRAME_PASS_DERIVED(HotReloadNativeProbePass, CxxFramePass);
 
 class EngineHeaderSideEffectProbe {
 public:
@@ -55,6 +73,12 @@ extern "C" TERMIN_TEST_MODULE_API void module_init() {
         HotReloadNativeProbeComponent,
         value,
         "Value",
+        "int"
+    );
+    TC_MODULE_INSPECT_FIELD(
+        HotReloadNativeProbePass,
+        exposure,
+        "Exposure",
         "int"
     );
 }

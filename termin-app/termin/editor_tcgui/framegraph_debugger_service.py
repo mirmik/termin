@@ -179,6 +179,9 @@ class EditorFramegraphDebuggerService:
             "pass_index": resolved_pass_index,
             "pass_name": frame_pass.pass_name,
             "pass_type": frame_pass.type_name,
+            "original_pass_type": (
+                frame_pass.original_type if frame_pass.type_name == "UnknownPass" else None
+            ),
             "symbol": resolved_symbol,
             "symbol_index": resolved_symbol_index,
             "symbols": symbols,
@@ -421,6 +424,10 @@ def _pass_details(
             "index": pass_index,
             "name": pass_name,
             "type": frame_pass.type_name,
+            "original_type": (
+                frame_pass.original_type if frame_pass.type_name == "UnknownPass" else None
+            ),
+            "is_placeholder": frame_pass.type_name == "UnknownPass",
             "reads": reads,
             "writes": writes,
             "internal_symbols": symbols,

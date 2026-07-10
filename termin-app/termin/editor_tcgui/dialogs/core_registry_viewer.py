@@ -458,7 +458,11 @@ def show_core_registry_viewer(ui) -> None:
                     lines.append("--- Passes ---")
                     for p in pipeline_passes:
                         enabled = "enabled" if p.get("enabled", True) else "disabled"
-                        lines.append(f"  {p.get('pass_name', '?')}  type={p.get('type_name', '?')}  [{enabled}]")
+                        pass_type = p.get("type_name", "?")
+                        original_type = p.get("original_type")
+                        if original_type:
+                            pass_type = f"{original_type} (unavailable; UnknownPass)"
+                        lines.append(f"  {p.get('pass_name', '?')}  type={pass_type}  [{enabled}]")
             except Exception as e:
                 log.debug(f"[CoreRegistry] Failed to get pipeline passes for {info.get('name', '?')}: {e}")
 
