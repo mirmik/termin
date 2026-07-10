@@ -8,6 +8,7 @@ from termin.editor_native import (
     build_native_editor_shell,
     resolve_native_ui_font,
 )
+from termin.editor_native.shell import NativeMenuActivationRoute
 from termin.gui_native import (
     Document,
     DrawCommandType,
@@ -44,6 +45,22 @@ class EventProbe(Widget):
         self.text_events.append(text)
         return EventResult.Handled
 
+
+def test_native_menu_activation_route_filters_local_command_id_collisions():
+    class MenuBarProbe:
+        def connect_activated(self, callback):
+            self.callback = callback
+            return 17
+
+    menu_bar = MenuBarProbe()
+    routed = []
+    route = NativeMenuActivationRoute(menu_bar, 1)
+
+    assert route.connect_activated(lambda *args: routed.append(args)) == 17
+    menu_bar.callback(0, 1, "file-command")
+    menu_bar.callback(1, 1, "edit-command")
+
+    assert routed == [(1, 1, "edit-command")]
 
 def test_native_ui_key_codes_match_canonical_platform_values():
     assert KeyCode.Unknown.value == Key.UNKNOWN.value
