@@ -13,6 +13,30 @@ if TYPE_CHECKING:
     from termin.audio.components.audio_listener import AudioListener
 
 
+def _inspect_audio_clip(component: "AudioSource") -> dict[str, str | None] | None:
+    clip = component.clip
+    if clip is None or not clip.is_asset:
+        return None
+    asset = clip.get_asset()
+    if asset is None:
+        return None
+    return {"uuid": asset.uuid, "name": asset.name}
+
+
+def _set_inspect_audio_clip(component: "AudioSource", value: dict[str, str | None] | None) -> None:
+    if value is None:
+        component.set_clip(None)
+        return
+    uuid = value.get("uuid")
+    name = value.get("name")
+    if uuid:
+        component.set_clip(AudioClipHandle.from_uuid(uuid))
+    elif name:
+        component.set_clip(AudioClipHandle.from_name(name))
+    else:
+        component.set_clip(None)
+
+
 class AudioSource(PythonComponent):
     """
     Component for playing audio clips.
@@ -26,8 +50,9 @@ class AudioSource(PythonComponent):
         "clip": InspectField(
             path="clip",
             label="Audio Clip",
-            kind="audio_clip",
-            setter=lambda obj, val: obj.set_clip(val),
+            kind="audio_clip_handle",
+            getter=_inspect_audio_clip,
+            setter=_set_inspect_audio_clip,
         ),
         "volume": InspectField(
             path="volume",

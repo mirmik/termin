@@ -18,6 +18,7 @@ from termin.gui_native import (
     PointerEventType,
     PaintContext,
     Rect,
+    StyleRole,
     Widget,
 )
 
@@ -197,3 +198,79 @@ def test_native_screenshot_composes_current_document_before_readback(monkeypatch
         ("current-target", host.device, 320, 200),
     ]
     assert result == {"path": str(output)}
+
+
+def test_native_ui_host_pre_render_runs_before_document_paint():
+    from termin.editor_native.ui_host import NativeUiHost
+
+    calls = []
+
+    class Window:
+        def framebuffer_size(self):
+            return 320, 200
+
+        def present(self, target):
+            calls.append(("present", target))
+
+    class Context:
+        def create_color_attachment(self, width, height):
+            calls.append(("create", width, height))
+            return "target"
+
+        def begin_frame(self):
+            calls.append("begin-frame")
+
+        def begin_pass(self, target, **_options):
+            calls.append(("begin-pass", target))
+
+        def end_pass(self):
+            calls.append("end-pass")
+
+        def end_frame(self):
+            calls.append("end-frame")
+
+    class Document:
+        def layout_roots(self, _rect):
+            calls.append("layout")
+
+        def paint(self, _context):
+            calls.append("paint")
+
+    class DrawList:
+        def clear(self):
+            calls.append("clear")
+
+    class Renderer:
+        def render(self, _context, _draw_list, width, height):
+            calls.append(("render", width, height))
+
+    host = NativeUiHost.__new__(NativeUiHost)
+    host.window = Window()
+    host.context = Context()
+    host.document = Document()
+    host.draw_list = DrawList()
+    host.paint_context = object()
+    host.renderer = Renderer()
+    host._color_target = None
+    host._target_size = (0, 0)
+    host._render_requested = True
+    host._pre_render_callbacks = [lambda _context: calls.append("pre-render")]
+
+    assert host.render()
+    assert calls.index("begin-frame") < calls.index("pre-render") < calls.index("paint")
+    assert calls[-1] == ("present", "target")
+
+
+def test_native_ui_host_applies_font_size_to_all_theme_roles():
+    from termin.editor_native.ui_host import NativeUiHost
+
+    host = NativeUiHost.__new__(NativeUiHost)
+    host.document = Document()
+    host._render_requested = False
+
+    host.apply_font_size(18.0)
+
+    for style_role in StyleRole:
+        role = host.document.theme.role(style_role)
+        assert role.base.font_size == 18.0
+    assert host.render_requested

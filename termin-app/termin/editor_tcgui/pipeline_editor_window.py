@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from tcbase import log
@@ -16,542 +15,7 @@ from tcgui.widgets.vstack import VStack
 from tcgui.widgets.file_dialog_overlay import show_open_file_dialog, show_save_file_dialog
 from tcgui.widgets.input_dialog import show_input_dialog
 
-
-_TITLE_TO_PASS_CLASS = {
-    "SkyboxPass": "SkyBoxPass",
-    "Present": "PresentToScreenPass",
-}
-_PASS_CLASS_TO_TITLE = {v: k for k, v in _TITLE_TO_PASS_CLASS.items()}
-_SOCKET_PARAM_NAMES = {
-    "input_res",
-    "output_res",
-    "shadow_res",
-    "depth_res",
-    "id_res",
-    "normal_res",
-    "output_res_target",
-}
-_FBO_FORMAT_CHOICES = [
-    ("render_target", "As Output RenderTarget"),
-    ("rgba8", "RGBA8"),
-    ("rgba16f", "RGBA16F"),
-    ("rgba32f", "RGBA32F"),
-    ("r16f", "R16F"),
-    ("r32f", "R32F"),
-]
-_COLOR_TEXTURE_FORMAT_CHOICES = [
-    ("rgba8", "RGBA8"),
-    ("rgba16f", "RGBA16F"),
-    ("rgba32f", "RGBA32F"),
-    ("r16f", "R16F"),
-    ("r32f", "R32F"),
-]
-_DEPTH_TEXTURE_FORMAT_CHOICES = [
-    ("depth32f", "Depth 32F"),
-]
-
-
-def _default_for_param_kind(kind: str, choices) -> object:
-    if choices:
-        first = choices[0]
-        if isinstance(first, tuple) and first:
-            return first[0]
-        return first
-    if kind == "bool":
-        return False
-    if kind == "int":
-        return 0
-    if kind == "float":
-        return 0.0
-    if kind == "tc_material":
-        return "(None)"
-    return ""
-
-
-def _default_for_inspect_field(registry, cls, class_name: str, field_path: str, kind: str, choices) -> object:
-    try:
-        instance = cls()
-        if "." not in field_path:
-            return getattr(instance, field_path)
-        return registry.get(instance, field_path)
-    except Exception as e:
-        log.warn(f"[PipelineEditor] failed to read default for {class_name}.{field_path}: {e}")
-        return _default_for_param_kind(kind, choices)
-
-
-def _material_choices() -> list[tuple[str, str]]:
-    from termin.editor_core.resource_manager import ResourceManager
-
-    rm = ResourceManager.instance()
-    return [("(None)", "(None)")] + [(name, name) for name in rm.list_material_names()]
-
-
-def _normalize_param_spec(kind: str, choices):
-    if kind == "tc_material":
-        return "enum", _material_choices()
-    if choices:
-        return "enum", choices
-    return kind, choices
-
-
-def _add_node_param(
-    node,
-    name: str,
-    label: str,
-    kind: str,
-    default: object,
-    choices=None,
-    min_value=None,
-    max_value=None,
-    step=None,
-) -> None:
-    if name in _SOCKET_PARAM_NAMES:
-        return
-    kind, choices = _normalize_param_spec(kind, choices)
-    if name not in node.params:
-        node.params[name] = default
-    specs = node.data.get("param_specs")
-    if not isinstance(specs, dict):
-        specs = {}
-        node.data["param_specs"] = specs
-    spec = {
-        "label": label or name,
-        "kind": kind,
-    }
-    if choices:
-        items = []
-        for c in choices:
-            if isinstance(c, tuple) and c:
-                value = str(c[0])
-                label = str(c[1]) if len(c) > 1 else value
-                items.append({"value": value, "label": label})
-            else:
-                items.append(str(c))
-        spec["items"] = items
-    if min_value is not None:
-        spec["min"] = min_value
-    if max_value is not None:
-        spec["max"] = max_value
-    if step is not None:
-        spec["step"] = step
-    specs[name] = spec
-
-
-def _add_inspect_params(node, class_name: str, cls, seen: set[str]) -> None:
-    try:
-        from termin.inspect import InspectRegistry
-        registry = InspectRegistry.instance()
-        for info in registry.all_fields(class_name):
-            if not info.is_inspectable:
-                continue
-            if info.path in seen:
-                continue
-            if info.path in _SOCKET_PARAM_NAMES:
-                continue
-            choices = [(c.value, c.label) for c in info.choices] if info.choices else None
-            _add_node_param(
-                node,
-                info.path,
-                info.label,
-                info.kind,
-                _default_for_inspect_field(registry, cls, class_name, info.path, info.kind, choices),
-                choices,
-                info.min,
-                info.max,
-                info.step,
-            )
-            seen.add(info.path)
-    except Exception as e:
-        log.warn(f"[PipelineEditor] failed to collect inspect params for {class_name}: {e}")
-
-
-def _populate_pass_node_params(node, pass_class_name: str) -> None:
-    from termin.editor_core.resource_manager import ResourceManager
-
-    rm = ResourceManager.instance()
-    rm.register_builtin_frame_passes()
-    cls = rm.get_frame_pass(pass_class_name)
-    if cls is None:
-        log.warn(f"[PipelineEditor] pass class not found for node params: {pass_class_name}")
-        return
-
-    seen: set[str] = set()
-    _add_inspect_params(node, pass_class_name, cls, seen)
-
-
-def _populate_resource_node_params(node, graph_type: str) -> None:
-    if graph_type == "Shadow Maps":
-        return
-    if graph_type == "Color Texture":
-        _add_node_param(node, "format", "Format", "enum", "rgba8", _COLOR_TEXTURE_FORMAT_CHOICES)
-    elif graph_type == "Depth Texture":
-        _add_node_param(node, "format", "Format", "enum", "depth32f", _DEPTH_TEXTURE_FORMAT_CHOICES)
-    else:
-        _add_node_param(node, "format", "Format", "enum", "render_target", _FBO_FORMAT_CHOICES)
-        _add_node_param(node, "samples", "MSAA", "enum", "1", [("1", "1"), ("2", "2"), ("4", "4"), ("8", "8")])
-    _add_node_param(node, "filter", "Filter", "enum", "linear", [("linear", "Linear"), ("nearest", "Nearest")])
-    _add_node_param(node, "size_mode", "Size", "enum", "viewport", [("viewport", "Viewport"), ("fixed", "Fixed")])
-    _add_node_param(node, "scale", "Scale", "enum", "1.0", [("0.25", "0.25"), ("0.5", "0.5"), ("1.0", "1.0"), ("2.0", "2.0")])
-    _add_node_param(node, "width", "Width", "int", 1024)
-    _add_node_param(node, "height", "Height", "int", 1024)
-    if graph_type != "FBO":
-        return
-    _add_node_param(node, "has_color", "Color", "bool", True)
-    _add_node_param(node, "has_depth", "Depth", "bool", True)
-    _add_node_param(node, "clear_color", "Clear Color", "bool", False)
-    _add_node_param(node, "clear_color_r", "R", "float", 0.0)
-    _add_node_param(node, "clear_color_g", "G", "float", 0.0)
-    _add_node_param(node, "clear_color_b", "B", "float", 0.0)
-    _add_node_param(node, "clear_color_a", "A", "float", 1.0)
-    _add_node_param(node, "clear_depth", "Clear Depth", "bool", False)
-    _add_node_param(node, "clear_depth_value", "Depth", "float", 1.0)
-
-
-def _pass_class_name(title: str) -> str:
-    return _TITLE_TO_PASS_CLASS.get(title, title)
-
-
-def _graph_title_from_pass_class(pass_class_name: str) -> str:
-    return _PASS_CLASS_TO_TITLE.get(pass_class_name, pass_class_name)
-
-
-def _node_title(node_type: str, graph_type: str, instance_name: str) -> str:
-    if instance_name:
-        return f"{instance_name} ({graph_type})"
-    if node_type == "resource" and graph_type == "FBO":
-        return instance_name or "FBO"
-    return graph_type
-
-
-def _extract_pass_socket_info(pass_class_name: str) -> tuple[list[tuple[str, str]], list[tuple[str, str]], list[tuple[str, str]]]:
-    from termin.editor_core.pipeline_pass_registry import get_pass_inplace_pairs, get_pass_sockets
-
-    inputs, outputs = get_pass_sockets(pass_class_name)
-    inplace_pairs = get_pass_inplace_pairs(pass_class_name)
-    return list(inputs), list(outputs), list(inplace_pairs)
-
-
-def _material_pass_texture_inputs(material_name: object) -> list[tuple[str, str]]:
-    material_text = str(material_name)
-    if not material_text or material_text == "(None)":
-        return []
-    from termin.render_components.material_pass import get_texture_inputs_for_material
-
-    return list(get_texture_inputs_for_material(material_text))
-
-
-def _set_dynamic_input_sockets(graph, node, dynamic_inputs: list[tuple[str, str]], keep_sockets: set[str]) -> None:
-    from tcnodegraph.model import Socket
-
-    filtered_inputs: list[tuple[str, str]] = []
-    for socket_name, socket_type in dynamic_inputs:
-        name = str(socket_name)
-        if not name:
-            continue
-        if name in keep_sockets:
-            log.warn(f"[PipelineEditor] dynamic socket '{name}' conflicts with a static input on {node.title}")
-            continue
-        filtered_inputs.append((name, str(socket_type)))
-
-    wanted = {name for name, _ in filtered_inputs}
-    existing = {socket.name for socket in node.inputs}
-    remove_names = {
-        socket.name
-        for socket in node.inputs
-        if socket.name not in keep_sockets and socket.name not in wanted
-    }
-
-    if remove_names:
-        dead_edges = [
-            edge_id
-            for edge_id, edge in graph.edges.items()
-            if edge.dst_node_id == node.id and edge.dst_socket in remove_names
-        ]
-        for edge_id in dead_edges:
-            del graph.edges[edge_id]
-        node.inputs = [socket for socket in node.inputs if socket.name not in remove_names]
-
-    for socket_name, socket_type in filtered_inputs:
-        if socket_name in existing:
-            for socket in node.inputs:
-                if socket.name == socket_name:
-                    socket.socket_type = socket_type
-                    break
-        else:
-            node.inputs.append(Socket(socket_name, socket_type, is_input=True))
-
-    node.data["dynamic_inputs"] = filtered_inputs
-
-
-def _sync_material_pass_inputs(graph, node) -> bool:
-    if str(node.data.get("graph_type", "")) != "MaterialPass":
-        return False
-    static_inputs, _, _ = _extract_pass_socket_info("MaterialPass")
-    keep_sockets = {name for name, _ in static_inputs}
-    dynamic_inputs = _material_pass_texture_inputs(node.params.get("material", ""))
-    _set_dynamic_input_sockets(graph, node, dynamic_inputs, keep_sockets)
-    return True
-
-
-def _load_graph_from_pipeline_dict(data: dict):
-    from tcnodegraph import Graph, GraphController
-
-    graph = Graph()
-    controller = GraphController(graph)
-    node_ids: list[str] = []
-
-    for i, node_data in enumerate(data.get("nodes", [])):
-        node_type = node_data.get("node_type", "pass")
-        raw_type = node_data.get("type", "Node")
-        instance_name = node_data.get("name", "")
-
-        # Normalize to real class name for pass/effect nodes.
-        if node_type in ("pass", "effect"):
-            graph_type = _pass_class_name(raw_type)
-            display = _graph_title_from_pass_class(graph_type)
-        else:
-            graph_type = raw_type
-            display = graph_type
-
-        title = _node_title(node_type, display, instance_name)
-
-        node = controller.create_node(
-            node_type,
-            title=title,
-            x=float(node_data.get("x", 0.0)),
-            y=float(node_data.get("y", 0.0)),
-            node_id=f"node_{i}",
-        )
-        has_width = "width" in node_data
-        has_height = "height" in node_data
-        node.width = float(node_data.get("width", node.width))
-        node.height = float(node_data.get("height", node.height))
-        node.params.update(dict(node_data.get("params", {})))
-
-        dynamic_inputs = list(node_data.get("dynamic_inputs", []))
-        node.data["graph_type"] = graph_type
-        node.data["instance_name"] = instance_name
-        node.data["node_type"] = node_type
-        node.data["dynamic_inputs"] = dynamic_inputs
-        node.data["explicit_size"] = has_width or has_height
-
-        if node_type == "resource":
-            _populate_resource_node_params(node, graph_type)
-            if graph_type == "Shadow Maps":
-                controller.add_output_socket(node.id, "shadow", "shadow")
-            elif graph_type == "Color Texture":
-                controller.add_output_socket(node.id, "color", "color_texture")
-            elif graph_type == "Depth Texture":
-                controller.add_output_socket(node.id, "depth", "depth_texture")
-            else:
-                controller.add_output_socket(node.id, "fbo", "fbo")
-        elif node_type == "external_rt":
-            controller.add_output_socket(node.id, "fbo", "fbo")
-        elif node_type == "render_target_input":
-            controller.add_output_socket(node.id, "color", "fbo")
-        elif node_type == "pipeline_output":
-            controller.add_input_socket(node.id, "color", "fbo")
-        elif node_type == "output":
-            controller.add_input_socket(node.id, "color", "fbo")
-            controller.add_input_socket(node.id, "depth", "fbo")
-        elif node_type == "fbo_split":
-            controller.add_input_socket(node.id, "fbo", "fbo")
-            controller.add_output_socket(node.id, "color", "color_texture")
-            controller.add_output_socket(node.id, "depth", "depth_texture")
-        elif node_type == "fbo_join":
-            controller.add_input_socket(node.id, "color", "color_texture")
-            controller.add_input_socket(node.id, "depth", "depth_texture")
-            controller.add_output_socket(node.id, "fbo", "fbo")
-        elif node_type in ("pass", "effect"):
-            pass_class = _pass_class_name(graph_type)
-            _populate_pass_node_params(node, pass_class)
-            inputs, outputs, inplace_pairs = _extract_pass_socket_info(pass_class)
-            inplace_outputs = {out_name for _, out_name in inplace_pairs}
-
-            for socket_name, socket_type in inputs:
-                controller.add_input_socket(node.id, socket_name, socket_type)
-            for socket_name, socket_type in outputs:
-                controller.add_output_socket(node.id, socket_name, socket_type)
-                if socket_name not in inplace_outputs:
-                    controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
-
-            for dyn in dynamic_inputs:
-                if len(dyn) != 2:
-                    continue
-                dyn_name = str(dyn[0])
-                dyn_type = str(dyn[1])
-                has_dyn = any(s.name == dyn_name for s in node.inputs)
-                if not has_dyn:
-                    controller.add_input_socket(node.id, dyn_name, dyn_type)
-            _sync_material_pass_inputs(graph, node)
-
-        node_ids.append(node.id)
-
-    for conn in data.get("connections", []):
-        if conn is None:
-            continue
-        from_idx = conn.get("from_node")
-        to_idx = conn.get("to_node")
-        if from_idx is None or to_idx is None:
-            continue
-        if from_idx < 0 or to_idx < 0:
-            continue
-        if from_idx >= len(node_ids) or to_idx >= len(node_ids):
-            continue
-
-        controller.connect(
-            node_ids[from_idx],
-            str(conn.get("from_socket", "")),
-            node_ids[to_idx],
-            str(conn.get("to_socket", "")),
-        )
-
-    for frame in data.get("viewport_frames", []):
-        group = controller.add_group(
-            title=str(frame.get("title", "Viewport")),
-            x=float(frame.get("x", 0.0)),
-            y=float(frame.get("y", 0.0)),
-            width=float(frame.get("width", 600.0)),
-            height=float(frame.get("height", 400.0)),
-        )
-        group.data["viewport_name"] = str(frame.get("viewport_name", "main"))
-
-    return graph
-
-
-def _save_graph_to_pipeline_dict(graph) -> dict:
-    nodes = list(graph.nodes.values())
-    node_to_index = {n.id: i for i, n in enumerate(nodes)}
-
-    out_nodes = []
-    for node in nodes:
-        graph_type = str(node.data.get("graph_type", node.title))
-        node_type = str(node.data.get("node_type", node.kind))
-        instance_name = str(node.data.get("instance_name", ""))
-
-        # Map UI display names back to real class names for pass/effect nodes.
-        if node_type in ("pass", "effect"):
-            graph_type = _pass_class_name(graph_type)
-
-        node_entry = {
-            "type": graph_type,
-            "x": node.x,
-            "y": node.y,
-        }
-        if node_type != "pass":
-            node_entry["node_type"] = node_type
-        if instance_name:
-            node_entry["name"] = instance_name
-        if node.params:
-            node_entry["params"] = dict(node.params)
-        node_entry["width"] = node.width
-        node_entry["height"] = node.height
-
-        dynamic_inputs = node.data.get("dynamic_inputs", [])
-        if dynamic_inputs:
-            node_entry["dynamic_inputs"] = dynamic_inputs
-
-        out_nodes.append(node_entry)
-
-    out_connections = []
-    for edge in graph.edges.values():
-        from_idx = node_to_index.get(edge.src_node_id)
-        to_idx = node_to_index.get(edge.dst_node_id)
-        if from_idx is None or to_idx is None:
-            continue
-        out_connections.append(
-            {
-                "from_node": from_idx,
-                "from_socket": edge.src_socket,
-                "to_node": to_idx,
-                "to_socket": edge.dst_socket,
-            }
-        )
-
-    out_frames = []
-    for group in graph.groups.values():
-        out_frames.append(
-            {
-                "title": group.title,
-                "viewport_name": str(group.data.get("viewport_name", "main")),
-                "x": group.x,
-                "y": group.y,
-                "width": group.width,
-                "height": group.height,
-            }
-        )
-
-    return {
-        "name": "graph_pipeline",
-        "nodes": out_nodes,
-        "connections": out_connections,
-        "viewport_frames": out_frames,
-    }
-
-
-def _pass_list_pipeline_to_graph(data: dict):
-    """Convert pass-list pipeline format (passes) to a node graph.
-
-    Creates nodes for each pass, positioned vertically. Connections are not
-    reconstructed since the pass-list format doesn't store them explicitly.
-    """
-    from tcnodegraph import Graph, GraphController
-
-    graph = Graph()
-    controller = GraphController(graph)
-
-    passes = data.get("passes", [])
-    node_ids: list[str] = []
-
-    for i, pass_data in enumerate(passes):
-        pass_type = pass_data.get("type", "Unknown")
-        pass_name = pass_data.get("pass_name", pass_type)
-        real_class = _pass_class_name(pass_type)
-        display_title = _graph_title_from_pass_class(real_class)
-
-        node = controller.create_node(
-            "pass",
-            title=f"{pass_name} ({display_title})",
-            x=200.0,
-            y=80.0 + i * 140.0,
-            node_id=f"node_{i}",
-        )
-        node.data["graph_type"] = real_class
-        node.data["instance_name"] = pass_name
-        node.data["node_type"] = "pass"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        _populate_pass_node_params(node, real_class)
-
-        inputs, outputs, inplace_pairs = _extract_pass_socket_info(real_class)
-        inplace_outputs = {out_name for _, out_name in inplace_pairs}
-
-        for socket_name, socket_type in inputs:
-            controller.add_input_socket(node.id, socket_name, socket_type)
-        for socket_name, socket_type in outputs:
-            controller.add_output_socket(node.id, socket_name, socket_type)
-            if socket_name not in inplace_outputs:
-                controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
-        _sync_material_pass_inputs(graph, node)
-
-        node_ids.append(node.id)
-
-    return graph
-
-
-def _reload_pipeline_asset(file_path: str) -> None:
-    """Reload the PipelineAsset for the given file so the inspector refreshes."""
-    try:
-        name = Path(file_path).stem
-        from termin.editor_core.resource_manager import ResourceManager
-        rm = ResourceManager.instance()
-        asset = rm.get_pipeline_asset(name)
-        if asset is not None and asset.is_loaded:
-            asset.unload()
-            asset.reload()
-            asset.mark_just_saved()
-    except Exception as e:
-        log.warn(f"[PipelineEditor] Failed to reload pipeline asset: {e}")
+from termin.editor_core.pipeline_editor_model import PipelineEditorController
 
 
 def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, initial_file: str | None = None) -> None:
@@ -571,12 +35,10 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         log.error("[PipelineEditor] failed to create window")
         return
 
-    from tcnodegraph import Graph, NodeGraphView
+    from tcnodegraph import NodeGraphView
 
-    current_file: str | None = None
-    current_file_uuid: str | None = None
-    current_graph = Graph()
-    graph_view = NodeGraphView(current_graph)
+    editor = PipelineEditorController()
+    graph_view = NodeGraphView(editor.graph)
     graph_view.use_param_widgets = True
     graph_view.inline_param_editing = False
     graph_view.preferred_width = pct(100)
@@ -585,9 +47,9 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
     graph_view.offset_y = 320
 
     def _on_graph_param_changed(node, name: str, _value: object) -> None:
-        if name != "material":
-            return
-        if _sync_material_pass_inputs(graph_view.adapter.graph, node):
+        editor.synchronize_param(node)
+        editor.notify_graph_changed()
+        if name == "material":
             graph_view.refresh()
 
     graph_view.on_param_changed = _on_graph_param_changed
@@ -622,158 +84,33 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
     def _set_status(message: str) -> None:
         status_label.text = message
 
-    def _set_file(path: str | None) -> None:
-        nonlocal current_file
-        current_file = path
-        path_label.text = path if path else "(no file)"
+    def _sync_editor_state() -> None:
+        path_label.text = str(editor.file_path) if editor.file_path else "(no file)"
+        _set_status(editor.status)
 
     def _load_path(path: str) -> None:
         if not path:
             return
-        nonlocal current_graph, current_file_uuid
         try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            current_file_uuid = data.get("uuid")
-
-            # Pass-list format: convert passes to graph nodes.
-            if "passes" in data and "nodes" not in data:
-                current_graph = _pass_list_pipeline_to_graph(data)
-                _set_file(path)
-                _set_status(f"Loaded (pass-list, converted): {path}")
-            else:
-                current_graph = _load_graph_from_pipeline_dict(data)
-                _set_file(path)
-                _set_status(f"Loaded: {path}")
-
-            graph_view.set_graph(current_graph)
-        except Exception as e:
-            log.error(f"[PipelineEditor] load failed: {e}")
-            _set_status(f"Load failed: {e}")
+            graph_view.set_graph(editor.load(path))
+            _sync_editor_state()
+        except Exception as error:
+            log.error(f"[PipelineEditor] load failed: {error}")
+            _sync_editor_state()
 
     def _save_to(path: str) -> None:
         if not path:
             return
-        nonlocal current_file_uuid
         try:
             graph_view.adapter.apply_item_positions_to_model()
-            data = _save_graph_to_pipeline_dict(graph_view.adapter.graph)
-            if current_file_uuid:
-                data["uuid"] = current_file_uuid
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            editor.save(path)
+            _sync_editor_state()
+        except Exception as error:
+            log.error(f"[PipelineEditor] save failed: {error}")
+            _sync_editor_state()
 
-            # Reload the corresponding PipelineAsset so inspector picks up changes.
-            _reload_pipeline_asset(path)
-
-            _set_file(path)
-            _set_status(f"Saved: {path}")
-        except Exception as e:
-            log.error(f"[PipelineEditor] save failed: {e}")
-            _set_status(f"Save failed: {e}")
-
-    def _create_resource_node(graph_type: str, wx: float, wy: float) -> None:
-        node = graph_view.controller.create_node("resource", title=graph_type, x=wx, y=wy)
-        node.data["graph_type"] = graph_type
-        node.data["instance_name"] = ""
-        node.data["node_type"] = "resource"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        _populate_resource_node_params(node, graph_type)
-        if graph_type == "Shadow Maps":
-            graph_view.controller.add_output_socket(node.id, "shadow", "shadow")
-        elif graph_type == "Color Texture":
-            graph_view.controller.add_output_socket(node.id, "color", "color_texture")
-        elif graph_type == "Depth Texture":
-            graph_view.controller.add_output_socket(node.id, "depth", "depth_texture")
-        else:
-            graph_view.controller.add_output_socket(node.id, "fbo", "fbo")
-        graph_view.refresh()
-
-    def _create_pass_node(pass_class_name: str, node_type: str, wx: float, wy: float) -> None:
-        display_title = _graph_title_from_pass_class(pass_class_name)
-        node = graph_view.controller.create_node(node_type, title=display_title, x=wx, y=wy)
-        node.data["graph_type"] = pass_class_name
-        node.data["instance_name"] = ""
-        node.data["node_type"] = node_type
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        _populate_pass_node_params(node, pass_class_name)
-        inputs, outputs, inplace_pairs = _extract_pass_socket_info(pass_class_name)
-        inplace_outputs = {out_name for _, out_name in inplace_pairs}
-        for socket_name, socket_type in inputs:
-            graph_view.controller.add_input_socket(node.id, socket_name, socket_type)
-        for socket_name, socket_type in outputs:
-            graph_view.controller.add_output_socket(node.id, socket_name, socket_type)
-            if socket_name not in inplace_outputs:
-                graph_view.controller.add_input_socket(node.id, f"{socket_name}_target", socket_type)
-        _sync_material_pass_inputs(graph_view.adapter.graph, node)
-        graph_view.refresh()
-
-    def _create_output_node(wx: float, wy: float) -> None:
-        node = graph_view.controller.create_node("output", title="Render Target", x=wx, y=wy)
-        node.data["graph_type"] = "RenderTarget"
-        node.data["instance_name"] = ""
-        node.data["node_type"] = "output"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        graph_view.controller.add_input_socket(node.id, "color", "fbo")
-        graph_view.controller.add_input_socket(node.id, "depth", "fbo")
-        graph_view.refresh()
-
-    def _create_render_target_input_node(wx: float, wy: float) -> None:
-        node = graph_view.controller.create_node("render_target_input", title="Render Target Input", x=wx, y=wy)
-        node.data["graph_type"] = "RenderTargetInput"
-        node.data["instance_name"] = ""
-        node.data["node_type"] = "render_target_input"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        graph_view.controller.add_output_socket(node.id, "color", "fbo")
-        graph_view.refresh()
-
-    def _create_pipeline_output_node(wx: float, wy: float) -> None:
-        node = graph_view.controller.create_node("pipeline_output", title="Pipeline Output", x=wx, y=wy)
-        node.data["graph_type"] = "PipelineOutput"
-        node.data["instance_name"] = ""
-        node.data["node_type"] = "pipeline_output"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        graph_view.controller.add_input_socket(node.id, "color", "fbo")
-        graph_view.refresh()
-
-    def _create_external_rt_node(wx: float, wy: float) -> None:
-        node = graph_view.controller.create_node("external_rt", title="External RT", x=wx, y=wy)
-        node.data["graph_type"] = "External RT"
-        node.data["instance_name"] = ""
-        node.data["node_type"] = "external_rt"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        node.params["slot"] = ""
-        graph_view.controller.add_output_socket(node.id, "fbo", "fbo")
-        graph_view.refresh()
-
-    def _create_fbo_split_node(wx: float, wy: float) -> None:
-        node = graph_view.controller.create_node("fbo_split", title="FBO Split", x=wx, y=wy)
-        node.data["graph_type"] = "FBO Split"
-        node.data["instance_name"] = ""
-        node.data["node_type"] = "fbo_split"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        graph_view.controller.add_input_socket(node.id, "fbo", "fbo")
-        graph_view.controller.add_output_socket(node.id, "color", "color_texture")
-        graph_view.controller.add_output_socket(node.id, "depth", "depth_texture")
-        graph_view.refresh()
-
-    def _create_fbo_join_node(wx: float, wy: float) -> None:
-        node = graph_view.controller.create_node("fbo_join", title="FBO Join", x=wx, y=wy)
-        node.data["graph_type"] = "FBO Join"
-        node.data["instance_name"] = ""
-        node.data["node_type"] = "fbo_join"
-        node.data["dynamic_inputs"] = []
-        node.data["explicit_size"] = False
-        graph_view.controller.add_input_socket(node.id, "color", "color_texture")
-        graph_view.controller.add_input_socket(node.id, "depth", "depth_texture")
-        graph_view.controller.add_output_socket(node.id, "fbo", "fbo")
+    def _create_node(node_type: str, graph_type: str, wx: float, wy: float) -> None:
+        editor.create_node(node_type, graph_type, wx, wy)
         graph_view.refresh()
 
     def _build_context_menu(wx: float, wy: float) -> list[MenuItem]:
@@ -788,16 +125,16 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
                 MenuItem("Delete Node", on_click=lambda: (_delete_node(node_id))),
                 MenuItem("Rename", on_click=lambda: _rename_node(node_id)),
                 MenuItem.sep(),
-                MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
-                MenuItem("Add Color Texture", on_click=lambda: _create_resource_node("Color Texture", wx, wy)),
-                MenuItem("Add Depth Texture", on_click=lambda: _create_resource_node("Depth Texture", wx, wy)),
-                MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
-                MenuItem("Add Render Target Input", on_click=lambda: _create_render_target_input_node(wx, wy)),
-                MenuItem("Add Pipeline Output", on_click=lambda: _create_pipeline_output_node(wx, wy)),
-                MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
-                MenuItem("Add FBO Split", on_click=lambda: _create_fbo_split_node(wx, wy)),
-                MenuItem("Add FBO Join", on_click=lambda: _create_fbo_join_node(wx, wy)),
-                MenuItem("Add Output Render Target", on_click=lambda: _create_output_node(wx, wy)),
+                MenuItem("Add FBO", on_click=lambda: _create_node("resource", "FBO", wx, wy)),
+                MenuItem("Add Color Texture", on_click=lambda: _create_node("resource", "Color Texture", wx, wy)),
+                MenuItem("Add Depth Texture", on_click=lambda: _create_node("resource", "Depth Texture", wx, wy)),
+                MenuItem("Add Shadow Maps", on_click=lambda: _create_node("resource", "Shadow Maps", wx, wy)),
+                MenuItem("Add Render Target Input", on_click=lambda: _create_node("render_target_input", "RenderTargetInput", wx, wy)),
+                MenuItem("Add Pipeline Output", on_click=lambda: _create_node("pipeline_output", "PipelineOutput", wx, wy)),
+                MenuItem("Add External RT", on_click=lambda: _create_node("external_rt", "External RT", wx, wy)),
+                MenuItem("Add FBO Split", on_click=lambda: _create_node("fbo_split", "FBO Split", wx, wy)),
+                MenuItem("Add FBO Join", on_click=lambda: _create_node("fbo_join", "FBO Join", wx, wy)),
+                MenuItem("Add Output Render Target", on_click=lambda: _create_node("output", "RenderTarget", wx, wy)),
             ]
             return items
 
@@ -812,43 +149,34 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         return _build_create_menu_items(wx, wy)
 
     def _delete_node(node_id: str) -> None:
-        graph_view.controller.remove_node(node_id)
-        graph_view.refresh()
+        if editor.remove_node(node_id):
+            graph_view.refresh()
 
     def _delete_edge(edge_id: str) -> None:
-        graph_view.controller.remove_edge(edge_id)
-        graph_view.refresh()
+        if editor.remove_edge(edge_id):
+            graph_view.refresh()
 
     def _build_create_menu_items(wx: float, wy: float) -> list[MenuItem]:
         items: list[MenuItem] = [
-            MenuItem("Add Render Target Input", on_click=lambda: _create_render_target_input_node(wx, wy)),
-            MenuItem("Add Pipeline Output", on_click=lambda: _create_pipeline_output_node(wx, wy)),
-            MenuItem("Add Output Render Target", on_click=lambda: _create_output_node(wx, wy)),
+            MenuItem("Add Render Target Input", on_click=lambda: _create_node("render_target_input", "RenderTargetInput", wx, wy)),
+            MenuItem("Add Pipeline Output", on_click=lambda: _create_node("pipeline_output", "PipelineOutput", wx, wy)),
+            MenuItem("Add Output Render Target", on_click=lambda: _create_node("output", "RenderTarget", wx, wy)),
             MenuItem.sep(),
-            MenuItem("Add FBO", on_click=lambda: _create_resource_node("FBO", wx, wy)),
-            MenuItem("Add Color Texture", on_click=lambda: _create_resource_node("Color Texture", wx, wy)),
-            MenuItem("Add Depth Texture", on_click=lambda: _create_resource_node("Depth Texture", wx, wy)),
-            MenuItem("Add Shadow Maps", on_click=lambda: _create_resource_node("Shadow Maps", wx, wy)),
-            MenuItem("Add External RT", on_click=lambda: _create_external_rt_node(wx, wy)),
-            MenuItem("Add FBO Split", on_click=lambda: _create_fbo_split_node(wx, wy)),
-            MenuItem("Add FBO Join", on_click=lambda: _create_fbo_join_node(wx, wy)),
+            MenuItem("Add FBO", on_click=lambda: _create_node("resource", "FBO", wx, wy)),
+            MenuItem("Add Color Texture", on_click=lambda: _create_node("resource", "Color Texture", wx, wy)),
+            MenuItem("Add Depth Texture", on_click=lambda: _create_node("resource", "Depth Texture", wx, wy)),
+            MenuItem("Add Shadow Maps", on_click=lambda: _create_node("resource", "Shadow Maps", wx, wy)),
+            MenuItem("Add External RT", on_click=lambda: _create_node("external_rt", "External RT", wx, wy)),
+            MenuItem("Add FBO Split", on_click=lambda: _create_node("fbo_split", "FBO Split", wx, wy)),
+            MenuItem("Add FBO Join", on_click=lambda: _create_node("fbo_join", "FBO Join", wx, wy)),
             MenuItem.sep(),
         ]
         try:
-            from termin.editor_core.resource_manager import ResourceManager
-            rm = ResourceManager.instance()
-            rm.register_builtin_frame_passes()
-            pass_names = sorted(rm.frame_passes.keys())
-            effect_classes = {"BloomPass", "GrayscalePass", "HighlightPass", "MaterialPass", "TonemapPass"}
-            for cls_name in pass_names:
-                cls = rm.get_frame_pass(cls_name)
-                category = cls.category if cls is not None else "Other"
-                kind = "effect" if (cls_name in effect_classes or str(category).lower().startswith("effect")) else "pass"
-                label = f"{category}: {_graph_title_from_pass_class(cls_name)}"
+            for cls_name, kind, label in editor.available_passes():
                 items.append(
                     MenuItem(
                         label,
-                        on_click=lambda c=cls_name, k=kind: _create_pass_node(c, k, wx, wy),
+                        on_click=lambda c=cls_name, k=kind: _create_node(k, c, wx, wy),
                     )
                 )
         except Exception as e:
@@ -856,7 +184,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         return items
 
     def _rename_node(node_id: str) -> None:
-        node = graph_view.adapter.graph.nodes.get(node_id)
+        node = editor.graph.nodes.get(node_id)
         if node is None or graph_view._ui is None:
             return
         current = str(node.data.get("instance_name", node.title))
@@ -864,12 +192,8 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         def _apply(result: str | None) -> None:
             if result is None:
                 return
-            new_name = result.strip()
-            if not new_name:
-                return
-            node.title = new_name
-            node.data["instance_name"] = new_name
-            graph_view.refresh()
+            if editor.rename_node(node_id, result):
+                graph_view.refresh()
 
         show_input_dialog(
             graph_view._ui,
@@ -881,8 +205,8 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
 
     def _on_open_click() -> None:
         start_dir = directory or str(Path.home())
-        if current_file:
-            start_dir = str(Path(current_file).parent)
+        if editor.file_path:
+            start_dir = str(editor.file_path.parent)
         show_open_file_dialog(
             child,
             title="Open Scene Pipeline",
@@ -893,15 +217,15 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
         )
 
     def _on_save_click() -> None:
-        if current_file:
-            _save_to(current_file)
+        if editor.file_path:
+            _save_to(str(editor.file_path))
             return
         _on_save_as_click()
 
     def _on_save_as_click() -> None:
         start_dir = directory or str(Path.home())
-        if current_file:
-            start_dir = str(Path(current_file).parent)
+        if editor.file_path:
+            start_dir = str(editor.file_path.parent)
         show_save_file_dialog(
             child,
             title="Save Pipeline",

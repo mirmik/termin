@@ -13,6 +13,11 @@ from termin.editor_core.component_editor_extension import (
 )
 from termin.editor_core.entity_inspector_model import EntityInspectorController
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
+from termin.editor_core.pipeline_editor_model import PipelineEditorController
+from termin.editor_core.framegraph_debugger_service import EditorFramegraphDebuggerService
+from termin.editor_core.python_console_model import PythonConsoleController
+from termin.editor_core.settings_model import EditorSettingsController
+from termin.editor_core.about_model import build_editor_about_info
 from termin.editor_core.profiler_model import ProfilerController
 from termin.editor_core.project_browser_model import ProjectBrowserController
 from termin.editor_core.registry_sources import (
@@ -26,17 +31,65 @@ from termin.editor_core.registry_viewer_model import (
 )
 from termin.editor_core.scene_hierarchy_model import SceneHierarchyController
 from termin.editor_core.undo_stack import UndoStack
+from termin.editor_core.undo_history_model import UndoHistoryController
+from termin.editor_core.audio_debugger_model import create_audio_debugger_controller
+from termin.editor_core.scene_settings_model import (
+    SceneNamesController,
+    ScenePropertiesController,
+    ShadowSettingsController,
+)
+from termin.editor_core.project_settings_model import ProjectSettingsController
+from termin.editor_core.navigation_settings_model import NavigationSettingsController
+from termin.editor_core.viewport_list_model import ViewportListController
 from termin.editor_native.component_extensions import (
     NativeComponentExtensionContext,
     NativeComponentExtensionProjectorRegistry,
     register_native_component_extensions,
 )
 from termin.editor_native.dialog_service import NativeDialogService
+from termin.editor_native.display_workspace import NativeDisplayWorkspace
 from termin.editor_native.editor_viewport import NativeEditorViewport
 from termin.editor_native.entity_inspector import build_native_entity_inspector
 from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,
     connect_profiler_menu_toggle,
+)
+from termin.editor_native.pipeline_editor import (
+    build_native_pipeline_editor,
+    connect_pipeline_editor_command,
+)
+from termin.editor_native.framegraph_debugger import (
+    build_native_framegraph_debugger,
+    connect_framegraph_debugger_command,
+)
+from termin.editor_native.python_console import (
+    build_native_python_console,
+    connect_python_console_command,
+)
+from termin.editor_native.settings_dialog import (
+    build_native_settings_dialog,
+    connect_settings_command,
+)
+from termin.editor_native.about_dialog import build_native_about_dialog, connect_about_command
+from termin.editor_native.diagnostic_dialogs import (
+    build_native_audio_debugger_dialog,
+    build_native_undo_history_dialog,
+    connect_diagnostic_command,
+)
+from termin.editor_native.scene_settings_dialogs import (
+    build_native_scene_names_dialog,
+    build_native_scene_properties_dialog,
+    build_native_shadow_settings_dialog,
+    connect_scene_settings_command,
+)
+from termin.editor_native.project_settings_dialog import (
+    build_native_project_settings_dialog,
+    connect_project_settings_command,
+)
+from termin.editor_native.navigation_settings_dialogs import (
+    build_native_agent_types_dialog,
+    build_native_navmesh_areas_dialog,
+    connect_navigation_settings_command,
 )
 from termin.editor_native.project_browser import build_native_project_browser
 from termin.editor_native.registry_viewer import (
@@ -47,6 +100,7 @@ from termin.editor_native.registry_viewer import (
 from termin.editor_native.scene_tree import build_native_scene_tree
 from termin.editor_native.shell import build_native_editor_shell
 from termin.editor_native.ui_host import NativeUiHost
+from termin.editor_native.viewport_list import build_native_viewport_list
 from termin.gui_native import Rect, WidgetRef
 
 
@@ -135,9 +189,98 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         viewport=editor_viewport,
         request_render=request_editor_render,
     )
+    undo_history_controller = UndoHistoryController(undo_stack)
+
+    def push_undo_command(command, merge: bool = False) -> None:
+        undo_stack.push(command, merge=merge)
+        undo_history_controller.refresh()
+
+    scene_properties_dialog = None
+    scene_names_dialog = None
+    shadow_settings_dialog = None
+    if initial_scene is not None:
+        scene_properties_dialog = build_native_scene_properties_dialog(
+            host.document,
+            ScenePropertiesController(
+                initial_scene,
+                resource_manager=resource_manager,
+                push_undo_command=push_undo_command,
+                on_changed=request_editor_render,
+            ),
+            dialog_service=dialog_service,
+            viewport=editor_viewport,
+            request_render=request_editor_render,
+        )
+        scene_names_dialog = build_native_scene_names_dialog(
+            host.document,
+            SceneNamesController(initial_scene),
+            viewport=editor_viewport,
+            request_render=request_editor_render,
+        )
+        shadow_settings_dialog = build_native_shadow_settings_dialog(
+            host.document,
+            ShadowSettingsController(initial_scene, on_changed=request_editor_render),
+            viewport=editor_viewport,
+            request_render=request_editor_render,
+        )
+        for command_id, scene_dialog in (
+            (shell.scene_properties_command, scene_properties_dialog),
+            (shell.scene_names_command, scene_names_dialog),
+            (shell.shadow_settings_command, shadow_settings_dialog),
+        ):
+            connect_scene_settings_command(shell.menu_bar, command_id, scene_dialog)
+
+    undo_history_dialog = build_native_undo_history_dialog(
+        host.document,
+        undo_history_controller,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_diagnostic_command(
+        shell.menu_bar,
+        shell.undo_history_command,
+        undo_history_dialog,
+    )
+    audio_debugger_controller = create_audio_debugger_controller()
+    audio_debugger_dialog = build_native_audio_debugger_dialog(
+        host.document,
+        audio_debugger_controller,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_diagnostic_command(
+        shell.menu_bar,
+        shell.audio_debugger_command,
+        audio_debugger_dialog,
+    )
+    settings_controller = EditorSettingsController()
+    host.apply_font_size(settings_controller.load().font_size)
+    settings_dialog = build_native_settings_dialog(
+        host.document,
+        settings_controller,
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+        apply_font_size=host.apply_font_size,
+    )
+    connect_settings_command(
+        shell.menu_bar,
+        shell.settings_command,
+        settings_dialog,
+    )
+    from tgfx import compiled_backend_name
+
+    about_dialog = build_native_about_dialog(
+        host.document,
+        build_editor_about_info(backend_name=compiled_backend_name()),
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_about_command(shell.menu_bar, shell.about_command, about_dialog)
     selected_entity = None
+    display_workspace: NativeDisplayWorkspace | None = None
     native_viewport: NativeEditorViewport | None = None
-    entity_inspector_controller = EntityInspectorController(undo_handler=undo_stack.push)
+    entity_inspector_controller = EntityInspectorController(undo_handler=push_undo_command)
     entity_inspector_controller.set_scene(initial_scene)
     entity_inspector = build_native_entity_inspector(
         host.document,
@@ -199,7 +342,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
     scene_hierarchy_controller = SceneHierarchyController(
         initial_scene,
-        undo_handler=undo_stack.push,
+        undo_handler=push_undo_command,
         dialog_service=dialog_service,
         on_object_selected=on_scene_object_selected,
         request_viewport_update=request_editor_render,
@@ -210,17 +353,158 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         viewport=editor_viewport,
         request_render=request_editor_render,
     )
-    shell.project_host.add_fixed_child(scene_tree.root, 300.0)
+    shell.project_host.add_fixed_child(scene_tree.root, 220.0)
     host.router.file_drop_handler = scene_tree.drop_file
 
+    viewport_list_controller = ViewportListController()
+    viewport_list = build_native_viewport_list(
+        host.document,
+        viewport_list_controller,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+        show_input=dialog_service.show_input,
+    )
+    shell.project_host.add_fixed_child(viewport_list.root, 190.0)
+
+    def sync_viewport_list() -> None:
+        displays = [] if display_workspace is None else list(display_workspace.displays)
+        display_pointers = {display.tc_display_ptr for display in displays}
+        for display in engine.rendering_manager.displays:
+            if display.tc_display_ptr not in display_pointers:
+                displays.append(display)
+                display_pointers.add(display.tc_display_ptr)
+        viewport_list_controller.set_displays(displays)
+        viewport_list_controller.set_render_targets(engine.rendering_manager.managed_render_targets)
+
+    def on_viewport_list_entity_selected(entity) -> None:
+        scene_tree.select_object(entity)
+
+    def on_viewport_list_display_selected(display) -> None:
+        if display is not None and display_workspace is not None:
+            display_workspace.select_display(display)
+        shell.status_bar.text = (
+            "Ready | Display: none" if display is None else f"Ready | Display: {display.name or 'unnamed'}"
+        )
+        request_editor_render()
+
+    def on_viewport_list_viewport_selected(viewport) -> None:
+        shell.status_bar.text = (
+            "Ready | Viewport: none" if viewport is None else f"Ready | Viewport: {viewport.name or 'unnamed'}"
+        )
+        request_editor_render()
+
+    def on_viewport_list_target_selected(target) -> None:
+        shell.status_bar.text = (
+            "Ready | Render target: none" if target is None else f"Ready | Render target: {target.name or 'unnamed'}"
+        )
+        request_editor_render()
+
+    def add_viewport(display) -> None:
+        if initial_scene is None or native_viewport is None or display_workspace is None:
+            dialog_service.show_error("Add Viewport", "No scene is attached.")
+            return
+        viewport = display.create_viewport(
+            scene=initial_scene,
+            camera=native_viewport.camera,
+            rect=(0.0, 0.0, 1.0, 1.0),
+        )
+        try:
+            display_workspace.configure_viewport_input(display, viewport)
+        except Exception:
+            _logger.exception("Native workspace failed to configure viewport input")
+            display.remove_viewport(viewport)
+            dialog_service.show_error("Add Viewport", "Failed to configure viewport input.")
+            return
+        sync_viewport_list()
+        request_editor_render()
+
+    def remove_viewport(viewport) -> None:
+        editor_owned = None if native_viewport is None else native_viewport.attachment.viewport
+        if editor_owned is not None and viewport._viewport_handle() == editor_owned._viewport_handle():
+            dialog_service.show_error(
+                "Remove Viewport",
+                "The production editor viewport is owned by the editor host and cannot be removed.",
+            )
+            return
+        display = engine.rendering_manager.get_display_for_viewport(viewport)
+        if display is None:
+            _logger.error("Native viewport list cannot find owner display for removal")
+            return
+        if display_workspace is not None:
+            display_workspace.release_viewport_input(display, viewport)
+        display.remove_viewport(viewport)
+        sync_viewport_list()
+        request_editor_render()
+
+    def add_display() -> None:
+        if display_workspace is None:
+            _logger.error("Native viewport list requested a display before workspace creation")
+            return
+        display_workspace.create_display()
+        sync_viewport_list()
+        request_editor_render()
+
+    def remove_display(display) -> None:
+        if display_workspace is None:
+            _logger.error("Native viewport list requested display removal without a workspace")
+            return
+        if display_workspace.is_editor_display(display):
+            dialog_service.show_error(
+                "Remove Display",
+                "The editor display is owned by the native workspace and cannot be removed.",
+            )
+            return
+        if display_workspace.remove_display(display):
+            sync_viewport_list()
+            request_editor_render()
+
+    def add_render_target(kind: str) -> None:
+        from termin.render_framework._render_framework_native import render_target_new
+
+        name = "XRStereoTarget" if kind == "xr_stereo" else "RenderTarget"
+        target = render_target_new(name)
+        target.kind = kind
+        if initial_scene is not None:
+            target.scene = initial_scene
+        engine.rendering_manager.register_managed_render_target(target)
+        sync_viewport_list()
+        request_editor_render()
+
+    def remove_render_target(target) -> None:
+        from termin.editor_core.rendering_model import RenderingModel
+
+        RenderingModel(engine.rendering_manager).remove_render_target(
+            target,
+            scene=initial_scene,
+        )
+        sync_viewport_list()
+        request_editor_render()
+
+    viewport_list_controller.entity_selected.connect(on_viewport_list_entity_selected)
+    viewport_list_controller.display_selected.connect(on_viewport_list_display_selected)
+    viewport_list_controller.viewport_selected.connect(on_viewport_list_viewport_selected)
+    viewport_list_controller.render_target_selected.connect(on_viewport_list_target_selected)
+    viewport_list_controller.display_add_requested.connect(add_display)
+    viewport_list_controller.display_remove_requested.connect(remove_display)
+    viewport_list_controller.viewport_add_requested.connect(add_viewport)
+    viewport_list_controller.viewport_remove_requested.connect(remove_viewport)
+    viewport_list_controller.render_target_add_requested.connect(add_render_target)
+    viewport_list_controller.render_target_remove_requested.connect(remove_render_target)
+    viewport_list_controller.viewport_renamed.connect(lambda _viewport, _name: request_editor_render())
+    viewport_list_controller.render_target_renamed.connect(lambda _target, _name: request_editor_render())
+
     if initial_scene is not None:
-        native_viewport = NativeEditorViewport.create(
+        display_workspace = NativeDisplayWorkspace.create(
             host.document,
             shell.workspace_host,
             device=host.device,
             rendering_manager=engine.rendering_manager,
             scene=initial_scene,
             request_render=request_editor_render,
+        )
+        native_viewport = display_workspace.editor_viewport
+        display_workspace.on_display_selected = lambda display: viewport_list_controller.select(
+            viewport_list_controller.display_stable_id(display)
         )
 
         def on_viewport_selection_changed(entity: object) -> None:
@@ -236,7 +520,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             transform_gizmo = native_viewport.interaction.transform_gizmo
             if transform_gizmo is None or not transform_gizmo.target.valid():
                 return
-            undo_stack.push(
+            push_undo_command(
                 TransformEditCommand(
                     transform=transform_gizmo.target.transform,
                     old_pose=old_pose,
@@ -259,6 +543,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         extension_context.on_viewport_tool_state_changed = native_viewport.sync_gizmo_target
         extension_context.viewport_geometry = native_viewport.geometry
         engine.scene_manager.set_on_after_render(native_viewport.after_render)
+        sync_viewport_list()
 
     registry_viewer = build_native_registry_viewer(
         host.document,
@@ -325,6 +610,47 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         else:
             _logger.error("Native editor ignored invalid startup project: %s", project_file)
 
+    pipeline_editor_controller = PipelineEditorController()
+    pipeline_directory = project_browser_controller.root_path or Path.cwd()
+    pipeline_editor = build_native_pipeline_editor(
+        host.document,
+        pipeline_editor_controller,
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+        default_directory=pipeline_directory,
+    )
+    connect_pipeline_editor_command(
+        shell.menu_bar,
+        shell.pipeline_editor_command,
+        pipeline_editor,
+    )
+
+    from termin.editor_core.rendering_model import RenderingModel
+
+    rendering_model = RenderingModel(engine.rendering_manager)
+    framegraph_debugger_service = EditorFramegraphDebuggerService(
+        get_rendering_controller=lambda: rendering_model,
+        on_request_update=request_editor_render,
+    )
+    framegraph_debugger = build_native_framegraph_debugger(
+        host.document,
+        framegraph_debugger_service.model,
+        context=host.context,
+        device=host.device,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+        add_pre_render_callback=host.add_pre_render_callback,
+        remove_pre_render_callback=host.remove_pre_render_callback,
+    )
+    connect_framegraph_debugger_command(
+        shell.menu_bar,
+        shell.framegraph_debugger_command,
+        framegraph_debugger,
+    )
+    if debug_resource is not None:
+        framegraph_debugger.show_resource(debug_resource)
+
     from termin.editor_core.project_file_watcher import create_editor_project_file_watcher
 
     def on_resource_reloaded(name: str, kind: str) -> None:
@@ -337,6 +663,50 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     )
     if project_browser_controller.root_path is not None:
         project_file_watcher.watch_directory(str(project_browser_controller.root_path))
+
+    def on_project_resource_settings_changed() -> None:
+        try:
+            project_file_watcher.rescan()
+        except Exception:
+            _logger.exception("Native project settings resource rescan failed")
+        request_editor_render()
+
+    project_settings_controller = ProjectSettingsController(
+        on_resource_settings_changed=on_project_resource_settings_changed,
+        on_render_settings_changed=request_editor_render,
+    )
+    project_settings_dialog = build_native_project_settings_dialog(
+        host.document,
+        project_settings_controller,
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_project_settings_command(
+        shell.menu_bar,
+        shell.project_settings_command,
+        project_settings_dialog,
+    )
+    agent_types_dialog = build_native_agent_types_dialog(
+        host.document,
+        NavigationSettingsController(on_changed=request_editor_render),
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    navmesh_areas_dialog = build_native_navmesh_areas_dialog(
+        host.document,
+        NavigationSettingsController(on_changed=request_editor_render),
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_navigation_settings_command(
+        shell.menu_bar, shell.agent_types_command, agent_types_dialog
+    )
+    connect_navigation_settings_command(
+        shell.menu_bar, shell.navmesh_areas_command, navmesh_areas_dialog
+    )
 
     resource_manager_controller = RegistryCatalogController(
         build_resource_manager_pages(resource_manager, project_file_watcher),
@@ -363,6 +733,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "selected_entity": selected_entity,
             "scene_hierarchy_controller": scene_hierarchy_controller,
             "scene_tree": scene_tree,
+            "viewport_list_controller": viewport_list_controller,
+            "viewport_list": viewport_list,
+            "display_workspace": display_workspace,
             "entity_inspector_controller": entity_inspector_controller,
             "entity_inspector": entity_inspector,
             "component_extension_session": extension_session,
@@ -383,11 +756,42 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "component_file_processor": component_file_processor,
             "project_browser_controller": project_browser_controller,
             "project_browser": project_browser,
+            "pipeline_editor_controller": pipeline_editor_controller,
+            "pipeline_editor": pipeline_editor,
+            "framegraph_debugger": framegraph_debugger_service,
+            "framegraph_debugger_model": framegraph_debugger_service.model,
+            "framegraph_debugger_view": framegraph_debugger,
+            "settings_controller": settings_controller,
+            "settings_dialog": settings_dialog,
+            "about_dialog": about_dialog,
+            "undo_history_controller": undo_history_controller,
+            "undo_history_dialog": undo_history_dialog,
+            "audio_debugger_controller": audio_debugger_controller,
+            "audio_debugger_dialog": audio_debugger_dialog,
+            "scene_properties_dialog": scene_properties_dialog,
+            "scene_names_dialog": scene_names_dialog,
+            "shadow_settings_dialog": shadow_settings_dialog,
+            "project_settings_controller": project_settings_controller,
+            "project_settings_dialog": project_settings_dialog,
+            "agent_types_dialog": agent_types_dialog,
+            "navmesh_areas_dialog": navmesh_areas_dialog,
             "native_viewport": native_viewport,
             "project_path": (
                 str(project_browser_controller.root_path) if project_browser_controller.root_path is not None else None
             ),
         }
+    )
+    python_console_controller = PythonConsoleController(executor)
+    python_console = build_native_python_console(
+        host.document,
+        python_console_controller,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+    )
+    connect_python_console_command(
+        shell.menu_bar,
+        shell.python_console_command,
+        python_console,
     )
     mcp_server = start_editor_mcp_server(executor)
     if initial_scene is not None:
@@ -409,7 +813,22 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             core_registry_viewer,
             resource_manager_viewer,
             project_browser,
+            pipeline_editor,
+            framegraph_debugger,
+            python_console,
+            settings_dialog,
+            about_dialog,
+            undo_history_dialog,
+            audio_debugger_dialog,
+            scene_properties_dialog,
+            scene_names_dialog,
+            shadow_settings_dialog,
+            project_settings_dialog,
+            agent_types_dialog,
+            navmesh_areas_dialog,
             scene_tree,
+            viewport_list,
+            display_workspace,
             entity_inspector,
         )
         keep_running, routed = host.poll_events()
@@ -420,6 +839,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         if executor.process_pending() > 0:
             host.request_render_update()
         project_file_watcher.poll()
+        framegraph_debugger.update()
         if profiler_panel.root.visible and profiler_panel.update():
             host.request_render_update()
         if host.render_requested:
@@ -445,11 +865,62 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         extension_context.on_viewport_tool_state_changed = None
         extension_context.viewport_geometry = None
         engine.scene_manager.set_on_after_render(None)
-        if native_viewport is not None:
+        try:
+            about_dialog.close()
+        except Exception:
+            _logger.exception("Native About dialog shutdown cleanup failed")
+        try:
+            undo_history_dialog.close()
+        except Exception:
+            _logger.exception("Native undo history dialog shutdown cleanup failed")
+        try:
+            audio_debugger_dialog.close()
+        except Exception:
+            _logger.exception("Native audio debugger shutdown cleanup failed")
+        for name, scene_dialog in (
+            ("scene properties", scene_properties_dialog),
+            ("scene names", scene_names_dialog),
+            ("shadow settings", shadow_settings_dialog),
+        ):
+            if scene_dialog is None:
+                continue
             try:
-                native_viewport.close()
+                scene_dialog.close()
             except Exception:
-                _logger.exception("Native editor viewport shutdown cleanup failed")
+                _logger.exception("Native %s dialog shutdown cleanup failed", name)
+        try:
+            project_settings_dialog.close()
+        except Exception:
+            _logger.exception("Native project settings dialog shutdown cleanup failed")
+        for name, navigation_dialog in (
+            ("agent types", agent_types_dialog),
+            ("NavMesh areas", navmesh_areas_dialog),
+        ):
+            try:
+                navigation_dialog.close()
+            except Exception:
+                _logger.exception("Native %s dialog shutdown cleanup failed", name)
+        try:
+            settings_dialog.close()
+        except Exception:
+            _logger.exception("Native settings dialog shutdown cleanup failed")
+        try:
+            python_console.close()
+        except Exception:
+            _logger.exception("Native Python console shutdown cleanup failed")
+        try:
+            framegraph_debugger.close()
+        except Exception:
+            _logger.exception("Native framegraph debugger shutdown cleanup failed")
+        try:
+            pipeline_editor.close()
+        except Exception:
+            _logger.exception("Native pipeline editor shutdown cleanup failed")
+        if display_workspace is not None:
+            try:
+                display_workspace.close()
+            except Exception:
+                _logger.exception("Native display workspace shutdown cleanup failed")
         if initial_scene is not None:
             engine.scene_manager.unregister_scene(editor_scene_name)
         host.close()

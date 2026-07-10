@@ -210,6 +210,8 @@ class RenderingModel:
                 ))
 
         for render_target in self._manager.managed_render_targets:
+            if (render_target.index, render_target.generation) in owned_keys:
+                continue
             rt_name = render_target.name or "RenderTarget"
             result.append(FramegraphDebugTarget(
                 source=render_target,

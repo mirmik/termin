@@ -88,3 +88,26 @@ def test_native_dialog_service_layer_mask_roundtrip_and_lifetime() -> None:
     assert values == [0b101]
     assert service.active_count == 0
     assert document.live_widget_count == 0
+
+
+def test_native_dialog_service_save_file_delivers_path_and_releases_dialog(tmp_path) -> None:
+    document = Document()
+    service = NativeDialogService(
+        document,
+        viewport=lambda: Rect(0.0, 0.0, 800.0, 600.0),
+        request_render=lambda: None,
+    )
+    values: list[str | None] = []
+
+    service.show_save_file(
+        "Save Pipeline",
+        str(tmp_path),
+        "Pipeline | *.pipeline",
+        values.append,
+        default_name="main.pipeline",
+    )
+    assert service.active_count == 1
+    assert document.dispatch_key_event(_key(KeyCode.Enter))
+    assert values == [str(tmp_path / "main.pipeline")]
+    assert service.active_count == 0
+    assert document.live_widget_count == 0

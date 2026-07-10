@@ -17,45 +17,17 @@ from tcgui.widgets.button import Button
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.separator import Separator
 from tcgui.widgets.units import px
+from termin.editor_core.material_inspector_model import (
+    MaterialInspectorController,
+    MaterialPropertySnapshot,
+    material_vector,
+)
 from termin.editor_tcgui.widgets.texture_picker import TexturePickerWidget, find_rt_texture
 
 
 def _to_vec_list(value: Any, n: int, color_mode: bool = False) -> list[float]:
-    """Convert various vector-like values to a list of N floats."""
-    vals: list[float] = []
-
-    if isinstance(value, (list, tuple)):
-        vals = [float(v) for v in value[:n]]
-    else:
-        try:
-            vals = [float(v) for v in value]
-            vals = vals[:n]
-        except Exception as e:
-            log.debug(f"[MaterialInspectorTcgui] _to_vec_list: iterable conversion failed for {type(value).__name__}: {e}")
-            vals = []
-
-        # Native Vec3/Vec4 path (nanobind object with x/y/z/w fields)
-        if not vals:
-            try:
-                vals = [float(value.x), float(value.y), float(value.z)]
-                if n >= 4:
-                    try:
-                        vals.append(float(value.w))
-                    except Exception as e:
-                        log.debug(f"[MaterialInspectorTcgui] _to_vec_list: Vec4.w access failed for {type(value).__name__}: {e}")
-                        vals.append(1.0 if color_mode else 0.0)
-            except Exception as e:
-                log.debug(f"[MaterialInspectorTcgui] _to_vec_list: native Vec access failed for {type(value).__name__}: {e}")
-                vals = []
-
-    if len(vals) < n:
-        fill = 1.0 if color_mode and n == 4 and len(vals) == 3 else 0.0
-        vals.extend([fill] * (n - len(vals)))
-
-    if color_mode:
-        vals = [max(0.0, min(1.0, v)) for v in vals]
-
-    return vals[:n]
+    """Compatibility helper backed by the shared material value contract."""
+    return list(material_vector(value, n, color=color_mode))
 
 
 class _VecEditor(HStack):
@@ -154,6 +126,7 @@ class _ColorEditor(HStack):
         finally:
             self._updating = False
 
+
 class MaterialInspectorTcgui(VStack):
     """Inspector for TcMaterial with editable uniforms."""
 
@@ -161,6 +134,11 @@ class MaterialInspectorTcgui(VStack):
         super().__init__()
         self.spacing = 4
         self._rm = resource_manager
+        self._controller = MaterialInspectorController(
+            resource_manager,
+            changed=self._on_controller_changed,
+            render_target_texture=find_rt_texture,
+        )
         self._material = None
         self._updating = False
         self.on_changed: Optional[Callable[[], None]] = None
@@ -229,6 +207,7 @@ class MaterialInspectorTcgui(VStack):
 
     def set_target(self, material, subtitle: str = "") -> None:
         self._material = material
+        self._controller.set_target(material)
         self._subtitle.text = subtitle
         self._refresh()
 
@@ -243,6 +222,7 @@ class MaterialInspectorTcgui(VStack):
     def _refresh(self) -> None:
         self._updating = True
         try:
+            snapshot = self._controller.refresh()
             mat = self._material
             self._uniform_grid.clear()
             self._uniform_rows.clear()
@@ -251,39 +231,39 @@ class MaterialInspectorTcgui(VStack):
                 return
 
             self._set_visible_state(True)
-            self._name_input.text = mat.name or ""
-            self._uuid_label.text = mat.uuid if mat.uuid else "—"
+            self._name_input.text = snapshot.name
+            self._uuid_label.text = snapshot.uuid or "—"
 
             self._shader_combo.clear()
-            shader_names = self._rm.list_shader_names()
+            shader_names = snapshot.shader_choices
             selected_idx = -1
             for i, shader_name in enumerate(shader_names):
                 self._shader_combo.add_item(shader_name)
-                if shader_name == mat.shader_name:
+                if shader_name == snapshot.shader_name:
                     selected_idx = i
             self._shader_combo.selected_index = selected_idx
 
-            phase_count = len(mat.phases) if mat.phases else 0
-            self._phases_info.text = f"Phases: {phase_count}"
-            self._build_uniform_rows()
+            self._phases_info.text = f"Phases: {snapshot.phase_count}"
+            self._build_uniform_rows(snapshot.properties, snapshot.message)
         finally:
             self._updating = False
             if self._ui is not None:
                 self._ui.request_layout()
 
-    def _build_uniform_rows(self) -> None:
-        if self._material is None:
-            return
-        program = self._rm.get_shader(self._material.shader_name)
-        if program is None or not program.phases:
+    def _build_uniform_rows(
+        self,
+        properties: tuple[MaterialPropertySnapshot, ...],
+        message: str,
+    ) -> None:
+        if message:
             msg = Label()
-            msg.text = "Shader metadata unavailable."
+            msg.text = message
             msg.color = (0.7, 0.55, 0.4, 1.0)
             self._uniform_grid.add(msg, 0, 0, 1, 2)
             return
 
         row = 0
-        for prop in program.material_properties:
+        for prop in properties:
             name = prop.name
             label = Label()
             label.text = (prop.label or name) + ":"
@@ -294,48 +274,8 @@ class MaterialInspectorTcgui(VStack):
             self._uniform_grid.add(editor, row, 1)
             row += 1
 
-    def _get_uniform_value(self, uniform_name: str, default: Any) -> Any:
-        if self._material is None:
-            return default
-        material_uniforms = self._material.uniforms
-        if uniform_name in material_uniforms:
-            return material_uniforms[uniform_name]
-        return default
-
-    def _get_texture_value(self, uniform_name: str):
-        """Return the material-level texture value for a shader property."""
-        if self._material is None:
-            return None
-
-        textures = self._material.textures
-        tex = textures.get(uniform_name)
-        if tex is None:
-            log.info(
-                f"[MaterialInspectorTcgui] material texture slot empty: "
-                f"material='{self._material.name}' uniform='{uniform_name}' "
-                f"available={list(textures.keys())}"
-            )
-            return None
-        if not tex.is_valid:
-            log.warning(
-                f"[MaterialInspectorTcgui] material texture slot invalid: "
-                f"material='{self._material.name}' uniform='{uniform_name}'"
-            )
-            return None
-
-        log.info(
-            f"[MaterialInspectorTcgui] material texture slot found: "
-            f"material='{self._material.name}' uniform='{uniform_name}' "
-            f"tc_uuid={tex.uuid} tc_name='{tex.name}'"
-        )
-        return tex
-
     def _set_uniform_all_phases(self, uniform_name: str, value: Any) -> None:
-        if self._material is None:
-            return
-        for phase in self._material.phases:
-            phase.set_param(uniform_name, value)
-        self._emit_changed()
+        self._controller.set_property(uniform_name, value)
 
     def _set_texture_all_phases(
         self,
@@ -344,71 +284,17 @@ class MaterialInspectorTcgui(VStack):
         texture_name: str,
         default_tex: str = "white",
     ) -> None:
-        if self._material is None:
-            return
-        from termin.render.texture_handle import (
-            get_white_texture_handle,
-            get_normal_texture_handle,
+        self._controller.set_texture(
+            uniform_name,
+            tag,
+            texture_name,
+            default_kind=default_tex,
         )
 
-        if tag == "default" or not texture_name:
-            tc_tex = (
-                get_normal_texture_handle()
-                if default_tex == "normal"
-                else get_white_texture_handle()
-            )
-            if tc_tex is not None:
-                if not tc_tex.is_valid:
-                    log.error(f"[MaterialInspectorTcgui] default texture is invalid: {default_tex}")
-                    return
-                applied = self._material.set_texture(uniform_name, tc_tex)
-                log.info(
-                    f"[MaterialInspectorTcgui] applied default texture: "
-                    f"material='{self._material.name}' uniform='{uniform_name}' "
-                    f"default='{default_tex}' phases={applied}"
-                )
-            self._emit_changed()
-            return
-
-        if tag == "file":
-            tc_tex = self._rm.get_texture_handle(texture_name)
-            if tc_tex is None:
-                log.error(f"[MaterialInspectorTcgui] texture not found: {texture_name}")
-                return
-            if not tc_tex.is_valid:
-                log.error(f"[MaterialInspectorTcgui] texture is invalid: {texture_name}")
-                return
-            applied = self._material.set_texture(uniform_name, tc_tex)
-            log.info(
-                f"[MaterialInspectorTcgui] applied file texture: "
-                f"material='{self._material.name}' uniform='{uniform_name}' "
-                f"texture='{texture_name}' tc_uuid={tc_tex.uuid} phases={applied}"
-            )
-            self._emit_changed()
-            return
-
-        if tag in ("rt_color", "rt_depth"):
-            channel = "depth" if tag == "rt_depth" else "color"
-            tc_tex = find_rt_texture(texture_name, channel)
-            if tc_tex is None or not tc_tex.is_valid:
-                log.error(f"[MaterialInspectorTcgui] RT texture not found: {texture_name}/{channel}")
-                return
-            applied = self._material.set_texture(uniform_name, tc_tex)
-            log.info(
-                f"[MaterialInspectorTcgui] applied render target texture: "
-                f"material='{self._material.name}' uniform='{uniform_name}' "
-                f"target='{texture_name}' channel='{channel}' phases={applied}"
-            )
-            self._emit_changed()
-            return
-
-        log.error(f"[MaterialInspectorTcgui] Unknown texture tag: {tag}")
-
-    def _create_editor(self, prop) -> object:
-        ptype = prop.property_type
+    def _create_editor(self, prop: MaterialPropertySnapshot) -> object:
+        ptype = prop.kind
         name = prop.name
-        default = prop.default
-        current = self._get_uniform_value(name, default)
+        current = prop.value
 
         if ptype == "Bool":
             cb = Checkbox()
@@ -420,8 +306,8 @@ class MaterialInspectorTcgui(VStack):
             sb = SpinBox()
             sb.decimals = 3
             sb.step = 0.1
-            sb.min_value = float(prop.range_min) if prop.range_min is not None else -1e6
-            sb.max_value = float(prop.range_max) if prop.range_max is not None else 1e6
+            sb.min_value = prop.minimum if prop.minimum is not None else -1e6
+            sb.max_value = prop.maximum if prop.maximum is not None else 1e6
             sb.value = float(current) if current is not None else 0.0
             sb.on_changed = lambda v, n=name: self._set_uniform_all_phases(n, float(v))
             return sb
@@ -430,8 +316,8 @@ class MaterialInspectorTcgui(VStack):
             sb = SpinBox()
             sb.decimals = 0
             sb.step = 1.0
-            sb.min_value = float(prop.range_min) if prop.range_min is not None else -1e6
-            sb.max_value = float(prop.range_max) if prop.range_max is not None else 1e6
+            sb.min_value = prop.minimum if prop.minimum is not None else -1e6
+            sb.max_value = prop.maximum if prop.maximum is not None else 1e6
             sb.value = int(current) if current is not None else 0
             sb.on_changed = lambda v, n=name: self._set_uniform_all_phases(n, int(v))
             return sb
@@ -448,53 +334,10 @@ class MaterialInspectorTcgui(VStack):
             return editor
 
         if ptype in ("Texture", "Texture2D"):
-            selected_name = ""
-            selected_tag = "default"
-            if self._material is not None and self._material.phases:
-                tex = self._get_texture_value(name)
-                if tex is not None and tex.is_valid:
-                    tname = self._rm.find_texture_name(tex)
-                    log.info(
-                        f"[MaterialInspectorTcgui] texture slot read: "
-                        f"material='{self._material.name}' uniform='{name}' "
-                        f"tc_uuid={tex.uuid} tc_name='{tex.name}' "
-                        f"found_asset_name='{tname}' registered_textures={len(self._rm.list_texture_names())}"
-                    )
-                    if tname and tname != "__white_1x1__":
-                        selected_name = tname
-                        selected_tag = "file"
-                    else:
-                        from termin.default_assets.render.material_asset import _classify_render_target_texture
-                        ref = _classify_render_target_texture(tex)
-                        if ref is not None:
-                            selected_tag = f"rt_{ref['channel']}"
-                            selected_name = ref["target"]
-                            log.info(
-                                f"[MaterialInspectorTcgui] texture slot classified as render target: "
-                                f"material='{self._material.name}' uniform='{name}' "
-                                f"tag='{selected_tag}' name='{selected_name}'"
-                            )
-                        else:
-                            log.warning(
-                                f"[MaterialInspectorTcgui] texture slot has valid TcTexture but no asset/RT match: "
-                                f"material='{self._material.name}' uniform='{name}' "
-                                f"tc_uuid={tex.uuid} tc_name='{tex.name}'"
-                            )
-                else:
-                    log.info(
-                        f"[MaterialInspectorTcgui] texture slot empty: "
-                        f"material='{self._material.name}' uniform='{name}'"
-                    )
-            else:
-                material_name = "<none>" if self._material is None else self._material.name
-                log.warning(
-                    f"[MaterialInspectorTcgui] texture editor created without material phases: "
-                    f"material='{material_name}' uniform='{name}'"
-                )
-
-            default_tex = "white"
-            if isinstance(default, str) and default in ("white", "normal"):
-                default_tex = default
+            texture = prop.texture
+            selected_name = "" if texture is None else texture.name
+            selected_tag = "default" if texture is None else texture.tag
+            default_tex = "white" if texture is None else texture.default_kind
 
             editor = TexturePickerWidget(
                 self._rm,
@@ -517,17 +360,7 @@ class MaterialInspectorTcgui(VStack):
         return unknown
 
     def _on_vec_changed(self, uniform_name: str, ptype: str, arr: list[float]) -> None:
-        from termin.geombase import Vec3, Vec4
-        if ptype == "Vec2":
-            self._set_uniform_all_phases(uniform_name, [float(arr[0]), float(arr[1])])
-            return
-        if ptype == "Vec3":
-            self._set_uniform_all_phases(uniform_name, Vec3(float(arr[0]), float(arr[1]), float(arr[2])))
-            return
-        self._set_uniform_all_phases(
-            uniform_name,
-            Vec4(float(arr[0]), float(arr[1]), float(arr[2]), float(arr[3])),
-        )
+        self._controller.set_property(uniform_name, arr)
 
     def _on_name_submitted(self, text: str) -> None:
         if self._updating or self._material is None:
@@ -536,8 +369,7 @@ class MaterialInspectorTcgui(VStack):
         if not new_name:
             return
         if self._material.name != new_name:
-            self._material.name = new_name
-            self._emit_changed()
+            self._controller.set_name(new_name)
             self._refresh()
 
     def _on_shader_changed(self, index: int, shader_name: str) -> None:
@@ -548,40 +380,11 @@ class MaterialInspectorTcgui(VStack):
         if shader_name == self._material.shader_name:
             return
         try:
-            from termin.default_assets.render.shader_asset import update_material_shader
-            program = self._rm.get_shader(shader_name)
-            if program is None:
-                log.error(f"[MaterialInspectorTcgui] Shader not found: {shader_name}")
-                return
-            shader_asset = self._rm.get_shader_asset(shader_name)
-            shader_uuid = shader_asset.uuid if shader_asset is not None else ""
-            update_material_shader(self._material, program, shader_name, shader_uuid)
-            self._emit_changed()
+            self._controller.set_shader(shader_name)
             self._refresh()
         except Exception as e:
             log.error(f"[MaterialInspectorTcgui] Failed to apply shader '{shader_name}': {e}")
 
-    def _emit_changed(self) -> None:
-        self._save_material_asset()
+    def _on_controller_changed(self) -> None:
         if self.on_changed is not None:
             self.on_changed()
-
-    def _save_material_asset(self) -> None:
-        if self._material is None:
-            return
-        material_name = self._rm.find_material_name(self._material)
-        if material_name is None:
-            log.warning(
-                f"[MaterialInspectorTcgui] material changes are runtime-only: "
-                f"material='{self._material.name}' has no registered MaterialAsset"
-            )
-            return
-        asset = self._rm.get_material_asset(material_name)
-        if asset is None:
-            log.warning(
-                f"[MaterialInspectorTcgui] material changes are runtime-only: "
-                f"material='{self._material.name}' resolved name='{material_name}' has no MaterialAsset"
-            )
-            return
-        if not asset.save_to_file():
-            log.error(f"[MaterialInspectorTcgui] Failed to save material asset '{material_name}'")

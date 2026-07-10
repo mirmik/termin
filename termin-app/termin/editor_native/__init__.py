@@ -15,9 +15,62 @@ from .registry_viewer import (
 )
 from .project_browser import NativeProjectBrowser, build_native_project_browser
 from .inspector_fields import NativeInspectorFields, build_native_inspector_fields
+from .material_inspector import NativeMaterialInspector, build_native_material_inspector
 from .entity_inspector import NativeEntityInspector, build_native_entity_inspector
 from .scene_tree import NativeSceneTree, build_native_scene_tree
 from .editor_viewport import NativeEditorViewport
+from .display_workspace import NativeDisplayPage, NativeDisplayWorkspace
+from .viewport_list import NativeViewportList, build_native_viewport_list
+from .pipeline_editor import (
+    NativePipelineEditor,
+    build_native_pipeline_editor,
+    connect_pipeline_editor_command,
+)
+from .framegraph_debugger import (
+    NativeFramegraphDebugger,
+    NativeFramegraphPreviewSurface,
+    build_native_framegraph_debugger,
+    connect_framegraph_debugger_command,
+)
+from .python_console import (
+    NativePythonConsole,
+    build_native_python_console,
+    connect_python_console_command,
+)
+from .settings_dialog import (
+    NativeSettingsDialog,
+    build_native_settings_dialog,
+    connect_settings_command,
+)
+from .about_dialog import NativeAboutDialog, build_native_about_dialog, connect_about_command
+from .diagnostic_dialogs import (
+    NativeAudioDebuggerDialog,
+    NativeUndoHistoryDialog,
+    build_native_audio_debugger_dialog,
+    build_native_undo_history_dialog,
+    connect_diagnostic_command,
+)
+from .scene_settings_dialogs import (
+    NativeSceneNamesDialog,
+    NativeScenePropertiesDialog,
+    NativeShadowSettingsDialog,
+    build_native_scene_names_dialog,
+    build_native_scene_properties_dialog,
+    build_native_shadow_settings_dialog,
+    connect_scene_settings_command,
+)
+from .project_settings_dialog import (
+    NativeProjectSettingsDialog,
+    build_native_project_settings_dialog,
+    connect_project_settings_command,
+)
+from .navigation_settings_dialogs import (
+    NativeAgentTypesDialog,
+    NativeNavMeshAreasDialog,
+    build_native_agent_types_dialog,
+    build_native_navmesh_areas_dialog,
+    connect_navigation_settings_command,
+)
 
 __all__ = [
     "NativeUiEventRouter",
@@ -27,9 +80,27 @@ __all__ = [
     "NativeRegistryViewer",
     "NativeProjectBrowser",
     "NativeInspectorFields",
+    "NativeMaterialInspector",
     "NativeEntityInspector",
     "NativeSceneTree",
     "NativeEditorViewport",
+    "NativeDisplayPage",
+    "NativeDisplayWorkspace",
+    "NativeViewportList",
+    "NativePipelineEditor",
+    "NativeFramegraphDebugger",
+    "NativeFramegraphPreviewSurface",
+    "NativePythonConsole",
+    "NativeSettingsDialog",
+    "NativeAboutDialog",
+    "NativeAudioDebuggerDialog",
+    "NativeUndoHistoryDialog",
+    "NativeSceneNamesDialog",
+    "NativeScenePropertiesDialog",
+    "NativeShadowSettingsDialog",
+    "NativeProjectSettingsDialog",
+    "NativeAgentTypesDialog",
+    "NativeNavMeshAreasDialog",
     "RouteResult",
     "build_native_editor_shell",
     "build_native_profiler_panel",
@@ -39,7 +110,31 @@ __all__ = [
     "connect_registry_viewer_command",
     "build_native_project_browser",
     "build_native_inspector_fields",
+    "build_native_material_inspector",
     "build_native_entity_inspector",
     "build_native_scene_tree",
+    "build_native_viewport_list",
+    "build_native_pipeline_editor",
+    "connect_pipeline_editor_command",
+    "build_native_framegraph_debugger",
+    "connect_framegraph_debugger_command",
+    "build_native_python_console",
+    "connect_python_console_command",
+    "build_native_settings_dialog",
+    "connect_settings_command",
+    "build_native_about_dialog",
+    "connect_about_command",
+    "build_native_audio_debugger_dialog",
+    "build_native_undo_history_dialog",
+    "connect_diagnostic_command",
+    "build_native_scene_names_dialog",
+    "build_native_scene_properties_dialog",
+    "build_native_shadow_settings_dialog",
+    "connect_scene_settings_command",
+    "build_native_project_settings_dialog",
+    "connect_project_settings_command",
+    "build_native_agent_types_dialog",
+    "build_native_navmesh_areas_dialog",
+    "connect_navigation_settings_command",
     "resolve_native_ui_font",
 ]

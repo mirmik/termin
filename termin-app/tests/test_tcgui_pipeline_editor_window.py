@@ -1,7 +1,7 @@
-from termin.editor_tcgui.pipeline_editor_window import (
-    _load_graph_from_pipeline_dict,
-    _pass_list_pipeline_to_graph,
-    _save_graph_to_pipeline_dict,
+from termin.editor_core.pipeline_editor_model import (
+    load_pipeline_graph as _load_graph_from_pipeline_dict,
+    pass_list_to_pipeline_graph as _pass_list_pipeline_to_graph,
+    save_pipeline_graph as _save_graph_to_pipeline_dict,
 )
 from tcgui.scene import GraphicsWidgetItem
 from tcnodegraph import NodeGraphView

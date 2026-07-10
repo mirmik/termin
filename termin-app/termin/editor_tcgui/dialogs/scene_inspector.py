@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from copy import copy
 from typing import TYPE_CHECKING, Callable
 
 from tcgui.widgets.dialog import Dialog
@@ -17,7 +16,8 @@ from tcgui.widgets.group_box import GroupBox
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
-from termin.editor_core.editor_commands import ScenePropertyEditCommand, SkyboxTypeEditCommand
+from termin.editor_core.resource_manager import ResourceManager
+from termin.editor_core.scene_settings_model import ScenePropertiesController
 from termin.scene import TcScene as Scene
 from termin.render import scene_render_mount, scene_render_state
 from tcbase import log
@@ -80,6 +80,11 @@ def show_scene_properties_dialog(
     """Show scene properties dialog."""
     rs = scene_render_state(scene)
     rm = scene_render_mount(scene)
+    controller = ScenePropertiesController(
+        scene,
+        resource_manager=ResourceManager.instance(),
+        push_undo_command=push_undo_command,
+    )
     updating = [False]
 
     def _emit():
@@ -113,13 +118,8 @@ def show_scene_properties_dialog(
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = copy(rs.background_color)
             new_value = (rgba[0] / 255.0, rgba[1] / 255.0, rgba[2] / 255.0, float(current[3]))
-            if push_undo_command is not None:
-                cmd = ScenePropertyEditCommand(scene, "background_color", old_value, new_value)
-                push_undo_command(cmd, False)
-            else:
-                rs.background_color = new_value
+            controller.set_background_color(new_value)
             _update_color_button(bg_btn, rgba)
             _emit()
 
@@ -149,13 +149,8 @@ def show_scene_properties_dialog(
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = copy(rs.ambient_color)
             new_value = _rgba255_to_float3(rgba)
-            if push_undo_command is not None:
-                cmd = ScenePropertyEditCommand(scene, "ambient_color", old_value, new_value)
-                push_undo_command(cmd, False)
-            else:
-                rs.ambient_color = new_value
+            controller.set_ambient_color(new_value)
             _update_color_button(ambient_btn, rgba)
             _emit()
 
@@ -182,12 +177,7 @@ def show_scene_properties_dialog(
     def _on_intensity(val):
         if updating[0]:
             return
-        old_value = rs.ambient_intensity
-        if push_undo_command is not None:
-            cmd = ScenePropertyEditCommand(scene, "ambient_intensity", old_value, val)
-            push_undo_command(cmd, True)
-        else:
-            rs.ambient_intensity = val
+        controller.set_ambient_intensity(val)
         _emit()
 
     intensity_spin.on_changed = _on_intensity
@@ -231,13 +221,8 @@ def show_scene_properties_dialog(
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = rs.skybox_color.copy()
             new_value = _rgba255_to_float3(rgba)
-            if push_undo_command is not None:
-                cmd = ScenePropertyEditCommand(scene, "skybox_color", old_value, new_value)
-                push_undo_command(cmd, False)
-            else:
-                rs.skybox_color = new_value
+            controller.set_skybox_color(new_value)
             _update_color_button(skybox_color_btn, rgba)
             _emit()
 
@@ -262,13 +247,8 @@ def show_scene_properties_dialog(
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = rs.skybox_top_color.copy()
             new_value = _rgba255_to_float3(rgba)
-            if push_undo_command is not None:
-                cmd = ScenePropertyEditCommand(scene, "skybox_top_color", old_value, new_value)
-                push_undo_command(cmd, False)
-            else:
-                rs.skybox_top_color = new_value
+            controller.set_skybox_top_color(new_value)
             _update_color_button(skybox_top_btn, rgba)
             _emit()
 
@@ -293,13 +273,8 @@ def show_scene_properties_dialog(
         def _result(rgba):
             if rgba is None:
                 return
-            old_value = rs.skybox_bottom_color.copy()
             new_value = _rgba255_to_float3(rgba)
-            if push_undo_command is not None:
-                cmd = ScenePropertyEditCommand(scene, "skybox_bottom_color", old_value, new_value)
-                push_undo_command(cmd, False)
-            else:
-                rs.skybox_bottom_color = new_value
+            controller.set_skybox_bottom_color(new_value)
             _update_color_button(skybox_bottom_btn, rgba)
             _emit()
 
@@ -322,14 +297,9 @@ def show_scene_properties_dialog(
         if updating[0]:
             return
         new_type = _SKYBOX_TYPES[idx][1]
-        old_type = rs.skybox_type
-        if new_type == old_type:
+        if new_type == rs.skybox_type:
             return
-        if push_undo_command is not None:
-            cmd = SkyboxTypeEditCommand(scene, old_type, new_type)
-            push_undo_command(cmd, False)
-        else:
-            rs.skybox_type = new_type
+        controller.set_skybox_type(new_type)
         _update_skybox_visibility()
         _emit()
 
@@ -376,34 +346,11 @@ def show_scene_properties_dialog(
     add_btn.padding = 6
 
     def _on_add_pipeline():
-        from termin.editor_core.resource_manager import ResourceManager
-
-        rm = ResourceManager.instance()
-        if rm is None:
-            return
-
-        pipeline_names = rm.list_scene_pipeline_names()
-        if not pipeline_names:
-            from tcgui.widgets.message_box import MessageBox
-            MessageBox.show_info(ui, "No Pipelines",
-                                 "No scene pipelines are registered.")
-            return
-
-        existing_uuids = set()
-        for template in rm.scene_pipelines:
-            if template.is_valid:
-                existing_uuids.add(template.uuid)
-
-        available = []
-        for name in pipeline_names:
-            asset = rm.get_scene_pipeline_asset(name)
-            if asset is not None and asset.uuid not in existing_uuids:
-                available.append(name)
-
+        available = list(controller.load().available_pipelines)
         if not available:
             from tcgui.widgets.message_box import MessageBox
             MessageBox.show_info(ui, "No Pipelines",
-                                 "All available pipelines are already added.")
+                                 "No additional scene pipelines are available.")
             return
 
         # Use combo-style selection via a simple list dialog
@@ -427,10 +374,7 @@ def show_scene_properties_dialog(
             if idx < 0 or idx >= len(available):
                 return
             name = available[idx]
-            asset = rm.get_scene_pipeline_asset(name)
-            if asset is None:
-                return
-            scene.add_scene_pipeline(asset.template)
+            controller.add_pipeline(name)
             _refresh_pipelines()
             _emit()
 
@@ -443,8 +387,7 @@ def show_scene_properties_dialog(
         idx = pipelines_list.selected_index
         if idx < 0 or idx >= len(pipeline_handles):
             return
-        handle = pipeline_handles[idx]
-        scene.remove_scene_pipeline(handle)
+        controller.remove_pipeline(idx)
         _refresh_pipelines()
         _emit()
 

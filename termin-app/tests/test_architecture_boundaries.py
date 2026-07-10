@@ -395,6 +395,53 @@ def test_domain_package_tests_do_not_import_editor_private_modules() -> None:
     assert offenders == []
 
 
+def test_framegraph_automation_service_is_toolkit_neutral() -> None:
+    legacy = REPO_ROOT / "termin-app/termin/editor_tcgui/framegraph_debugger_service.py"
+    canonical = REPO_ROOT / "termin-app/termin/editor_core/framegraph_debugger_service.py"
+
+    assert not legacy.exists()
+    assert canonical.is_file()
+    assert "tcgui" not in _read_text(canonical)
+
+
+def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
+    shared_models = (
+        "about_model.py",
+        "audio_debugger_model.py",
+        "python_console_model.py",
+        "project_settings_model.py",
+        "navigation_settings_model.py",
+        "settings_model.py",
+        "scene_settings_model.py",
+        "undo_history_model.py",
+    )
+    for filename in shared_models:
+        source = _read_text(REPO_ROOT / "termin-app/termin/editor_core" / filename)
+        assert "tcgui" not in source
+        assert "editor_native" not in source
+
+    frontend_sources = (
+        "termin-app/termin/editor_native/about_dialog.py",
+        "termin-app/termin/editor_native/python_console.py",
+        "termin-app/termin/editor_native/project_settings_dialog.py",
+        "termin-app/termin/editor_native/navigation_settings_dialogs.py",
+        "termin-app/termin/editor_native/settings_dialog.py",
+        "termin-app/termin/editor_native/diagnostic_dialogs.py",
+        "termin-app/termin/editor_native/scene_settings_dialogs.py",
+        "termin-app/termin/editor_tcgui/dialogs/about_dialog.py",
+        "termin-app/termin/editor_tcgui/python_console_panel.py",
+        "termin-app/termin/editor_tcgui/dialogs/project_settings_dialog.py",
+        "termin-app/termin/editor_tcgui/dialogs/settings_dialog.py",
+        "termin-app/termin/editor_tcgui/dialogs/audio_debugger.py",
+        "termin-app/termin/editor_tcgui/dialogs/undo_stack_viewer.py",
+        "termin-app/termin/editor_tcgui/dialogs/scene_inspector.py",
+        "termin-app/termin/editor_tcgui/dialogs/layers_dialog.py",
+        "termin-app/termin/editor_tcgui/dialogs/shadow_settings_dialog.py",
+    )
+    for path in frontend_sources:
+        assert "termin.editor_core" in _read_text(REPO_ROOT / path)
+
+
 def test_domain_python_tests_are_outside_app_tests_package() -> None:
     moved_tests = {
         "termin-app/tests/aabb_test.py": "termin-components/termin-components-kinematic/tests/aabb_test.py",

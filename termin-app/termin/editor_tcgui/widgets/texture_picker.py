@@ -15,6 +15,10 @@ from tcgui.widgets.combo_box import ComboBox
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.units import px
 from tcgui.widgets.widget import Widget
+from termin.editor_core.material_texture_sources import (
+    MaterialTextureSourceCatalog,
+    resolve_live_render_target_texture,
+)
 
 
 class TexturePreviewWidget(Widget):
@@ -105,10 +109,6 @@ class TexturePickerWidget(HStack):
     ============== =============================================
     """
 
-    # Display names shown in the combo for RT textures.
-    _RT_COLOR_SUFFIX: str = " (Color)"
-    _RT_DEPTH_SUFFIX: str = " (Depth)"
-
     def __init__(
         self,
         resource_manager: Any,
@@ -122,8 +122,11 @@ class TexturePickerWidget(HStack):
 
         self._rm: Any = resource_manager
         self._on_changed: Callable[[str, str], None] = on_changed
-        self._scene_getter: Optional[Callable[[], list[Any]]] = scene_getter
         self._default_texture_kind: str = default_texture_kind
+        self._source_catalog = MaterialTextureSourceCatalog(
+            resource_manager,
+            scene_getter=scene_getter,
+        )
         self._show_preview: bool = show_preview
         self._updating: bool = False
 
@@ -179,23 +182,10 @@ class TexturePickerWidget(HStack):
             self._item_tags.clear()
             self._item_values.clear()
 
-            # "(default)" is always first.
-            self._combo.add_item("(default)")
-            self._item_tags.append("default")
-            self._item_values.append("")
-
-            # Render-target textures are dynamic scene resources. Put them
-            # before file textures so they stay visible in the combo popup
-            # even when the project has many texture assets.
-            self._add_rt_textures()
-
-            # File-based textures.
-            for tname in self._rm.list_texture_names():
-                if tname == "__white_1x1__":
-                    continue
-                self._combo.add_item(tname)
-                self._item_tags.append("file")
-                self._item_values.append(tname)
+            for source in self._source_catalog.choices(self._default_texture_kind):
+                self._combo.add_item(source.label)
+                self._item_tags.append(source.tag)
+                self._item_values.append(source.name)
 
             log.warn(
                 f"[TexturePickerWidget] combo populated: "
@@ -204,121 +194,6 @@ class TexturePickerWidget(HStack):
             )
         finally:
             self._combo.on_changed = old_cb
-
-    def _add_rt_textures(self) -> None:
-        """Append render-target color/depth textures to the combo."""
-        try:
-            entries = self._get_rt_entries()
-        except Exception as e:
-            log.warn(f"[TexturePickerWidget] Failed to enumerate RT textures: {e}")
-            return
-
-        for display_name, tag, rt_name in entries:
-            self._combo.add_item(display_name)
-            self._item_tags.append(tag)
-            self._item_values.append(rt_name)
-
-    def _get_rt_entries(self) -> list[tuple[str, str, str]]:
-        """Return ``[(display_name, tag, rt_name), ...]`` for alive RTs.
-
-        Uses *scene_getter* when available (RT-inspector path), otherwise
-        falls back to the global ``render_target_pool_list()`` (material-inspector
-        path).
-        """
-        entries: list[tuple[str, str, str]] = []
-        scene_entries: list[tuple[str, str, str]] = []
-
-        if self._scene_getter is not None:
-            scene_entries = self._get_rt_entries_from_scenes()
-            entries.extend(scene_entries)
-        pool_entries = self._get_rt_entries_from_pool()
-        entries.extend(pool_entries)
-
-        entries = self._dedupe_rt_entries(entries)
-        entries.sort(key=lambda e: e[0])
-        log.warn(
-            f"[TexturePickerWidget] RT enumeration summary: "
-            f"scene_getter={self._scene_getter is not None}, "
-            f"scene_entries={len(scene_entries)}, pool_entries={len(pool_entries)}, "
-            f"deduped_entries={len(entries)}, "
-            f"names={[display_name for display_name, _tag, _rt_name in entries]}"
-        )
-        return entries
-
-    def _dedupe_rt_entries(self, entries: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
-        """Deduplicate entries by texture identity while preserving first label."""
-        result: list[tuple[str, str, str]] = []
-        seen: set[tuple[str, str]] = set()
-        for display_name, tag, rt_name in entries:
-            key = (tag, rt_name)
-            if key in seen:
-                continue
-            seen.add(key)
-            result.append((display_name, tag, rt_name))
-        return result
-
-    def _get_rt_entries_from_scenes(self) -> list[tuple[str, str, str]]:
-        """Collect RT textures from scene render mounts."""
-        entries: list[tuple[str, str, str]] = []
-        try:
-            from termin.render import scene_render_mount
-
-            scenes_value = self._scene_getter()
-            if scenes_value is None:
-                scenes = []
-            elif isinstance(scenes_value, (list, tuple)):
-                scenes = list(scenes_value)
-            else:
-                scenes = [scenes_value]
-            log.warn(f"[TexturePickerWidget] scene_getter returned {len(scenes)} scene(s)")
-            for scene in scenes:
-                mount = scene_render_mount(scene)
-                scene_name = scene.name or scene.uuid or repr(scene)
-                configs = mount.render_target_configs
-                log.warn(
-                    f"[TexturePickerWidget] scene '{scene_name}' has "
-                    f"{len(configs)} render_target_config(s)"
-                )
-                for rt in configs:
-                    if rt.kind != "texture_2d":
-                        continue
-                    name = rt.name
-                    if not name:
-                        log.warn(f"[TexturePickerWidget] skipped unnamed render_target_config in scene '{scene_name}'")
-                        continue
-                    entries.append((f"{name}{self._RT_COLOR_SUFFIX}", "rt_color", name))
-                    entries.append((f"{name}{self._RT_DEPTH_SUFFIX}", "rt_depth", name))
-        except Exception as e:
-            log.warn(f"[TexturePickerWidget] Scene RT enumeration failed: {e}")
-        return entries
-
-    def _get_rt_entries_from_pool(self) -> list[tuple[str, str, str]]:
-        """Collect RT textures from the global render-target pool."""
-        entries: list[tuple[str, str, str]] = []
-        try:
-            from termin.render_framework import render_target_pool_list
-        except ImportError as e:
-            log.warn(f"[TexturePickerWidget] render_framework import failed while enumerating RT textures: {e}")
-            return entries
-
-        try:
-            pool = list(render_target_pool_list())
-            log.warn(f"[TexturePickerWidget] render_target_pool_list returned {len(pool)} handle(s)")
-            for h in pool:
-                if not h.alive:
-                    log.warn(f"[TexturePickerWidget] skipped dead RT handle {h.index}:{h.generation}")
-                    continue
-                if h.kind != "texture_2d":
-                    continue
-                name = h.name
-                if not name:
-                    log.warn(f"[TexturePickerWidget] skipped unnamed live RT handle {h.index}:{h.generation}")
-                    continue
-                entries.append((f"{name}{self._RT_COLOR_SUFFIX}", "rt_color", name))
-                entries.append((f"{name}{self._RT_DEPTH_SUFFIX}", "rt_depth", name))
-        except Exception as e:
-            log.warn(f"[TexturePickerWidget] Pool RT enumeration failed: {e}")
-        return entries
 
     # ------------------------------------------------------------------
     # Selection
@@ -401,8 +276,7 @@ class TexturePickerWidget(HStack):
                 return arr, "No\nTex"
 
             log.warn(
-                f"[TexturePickerWidget] RT preview data has unsupported shape: "
-                f"{rt_name}/{channel} shape={arr.shape}"
+                f"[TexturePickerWidget] RT preview data has unsupported shape: {rt_name}/{channel} shape={arr.shape}"
             )
             return None, "No\nTex"
         except Exception as e:
@@ -414,21 +288,7 @@ class TexturePickerWidget(HStack):
 # Internal helpers
 # ------------------------------------------------------------------
 
+
 def find_rt_texture(rt_name: str, channel: str) -> Any:
     """Find a live render target by name and return its color or depth TcTexture."""
-    try:
-        from termin.render_framework import render_target_pool_list
-    except ImportError as e:
-        log.warn(f"[TexturePickerWidget] render_framework import failed while resolving RT texture: {e}")
-        return None
-
-    for h in render_target_pool_list():
-        if not h.alive or h.name != rt_name:
-            continue
-        h.ensure_textures()
-        if channel == "color":
-            return h.color_texture
-        if channel == "depth":
-            return h.depth_texture
-    log.warn(f"[TexturePickerWidget] live render target texture not found: {rt_name}/{channel}")
-    return None
+    return resolve_live_render_target_texture(rt_name, channel)

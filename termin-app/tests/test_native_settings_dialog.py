@@ -1,0 +1,51 @@
+from termin.editor_core.settings_model import EditorSettingsController
+from termin.editor_native.dialog_service import NativeDialogService
+from termin.editor_native.settings_dialog import build_native_settings_dialog
+from termin.gui_native import Document, Rect
+
+from test_editor_settings_model import _Settings
+
+
+def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
+    settings = _Settings()
+    controller = EditorSettingsController(settings)
+    document = Document()
+    renders = []
+    applied = []
+    viewport = lambda: Rect(0.0, 0.0, 900.0, 600.0)
+    dialog_service = NativeDialogService(
+        document,
+        viewport=viewport,
+        request_render=lambda: renders.append(True),
+    )
+    dialog = build_native_settings_dialog(
+        document,
+        controller,
+        dialog_service=dialog_service,
+        viewport=viewport,
+        request_render=lambda: renders.append(True),
+        apply_font_size=applied.append,
+    )
+
+    assert dialog.show()
+    assert dialog.text_editor.text == "/usr/bin/editor"
+    dialog.text_editor.text = " /opt/code "
+    dialog.slang_compiler.text = " /opt/slangc "
+    dialog.font_size.value = 18.0
+    dialog.font_size_small.value = 12.0
+    dialog.mcp_enabled.checked = True
+    dialog.apply_live()
+    assert applied == [18.0]
+    assert settings.sync_count == 0
+
+    assert dialog.dialog.activate("ok")
+    assert settings.text_editor == "/opt/code"
+    assert settings.slang_compiler == "/opt/slangc"
+    assert settings.mcp_enabled is True
+    assert settings.sync_count == 1
+    assert applied == [18.0, 18.0]
+
+    assert dialog.show()
+    dialog.close()
+    assert not document.is_alive(dialog.dialog.handle)
+    assert renders

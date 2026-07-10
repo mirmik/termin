@@ -10,6 +10,7 @@ from tcgui.widgets.text_input import TextInput
 from tcgui.widgets.button import Button
 from tcgui.widgets.checkbox import Checkbox
 from tcgui.widgets.spin_box import SpinBox
+from termin.editor_core.settings_model import EditorSettingsController, EditorSettingsSnapshot
 
 
 def _make_spin_row(label_text: str, value: float, min_v: float, max_v: float,
@@ -31,8 +32,8 @@ def _make_spin_row(label_text: str, value: float, min_v: float, max_v: float,
 
 def show_settings_dialog(ui) -> None:
     """Show modal settings dialog."""
-    from termin.editor_core.settings import EditorSettings
-    settings = EditorSettings.instance()
+    controller = EditorSettingsController()
+    snapshot = controller.load()
 
     content = VStack()
     content.spacing = 8
@@ -46,7 +47,7 @@ def show_settings_dialog(ui) -> None:
     row.spacing = 4
 
     editor_input = TextInput()
-    editor_input.text = settings.get_text_editor() or ""
+    editor_input.text = snapshot.text_editor
     editor_input.stretch = True
     row.add_child(editor_input)
 
@@ -79,7 +80,7 @@ def show_settings_dialog(ui) -> None:
     slang_row.spacing = 4
 
     slang_input = TextInput()
-    slang_input.text = settings.get_slang_compiler() or ""
+    slang_input.text = snapshot.slang_compiler
     slang_input.stretch = True
     slang_row.add_child(slang_input)
 
@@ -107,18 +108,18 @@ def show_settings_dialog(ui) -> None:
     from tcgui.widgets.theme import current_theme as _t
 
     font_row, font_spin = _make_spin_row(
-        "Font Size:", settings.get_font_size(),
+        "Font Size:", snapshot.font_size,
         8.0, 32.0, 1.0, 0)
     content.add_child(font_row)
 
     font_small_row, font_small_spin = _make_spin_row(
-        "Font Size (small):", settings.get_font_size_small(),
+        "Font Size (small):", snapshot.font_size_small,
         8.0, 24.0, 1.0, 0)
     content.add_child(font_small_row)
 
     mcp_check = Checkbox()
     mcp_check.text = "Enable local editor MCP server on startup"
-    mcp_check.checked = settings.get_mcp_server_enabled()
+    mcp_check.checked = snapshot.mcp_server_enabled
     content.add_child(mcp_check)
 
     # Apply button — applies font changes without closing the dialog
@@ -150,14 +151,15 @@ def show_settings_dialog(ui) -> None:
 
     def _on_result(btn: str):
         if btn == "OK":
-            text = editor_input.text.strip()
-            slang_text = slang_input.text.strip()
-            settings.set_text_editor(text if text else None)
-            settings.set_slang_compiler(slang_text if slang_text else None)
-            settings.set_font_size(font_spin.value)
-            settings.set_font_size_small(font_small_spin.value)
-            settings.set_mcp_server_enabled(mcp_check.checked)
-            settings.sync()
+            controller.save(
+                EditorSettingsSnapshot(
+                    text_editor=editor_input.text,
+                    slang_compiler=slang_input.text,
+                    font_size=font_spin.value,
+                    font_size_small=font_small_spin.value,
+                    mcp_server_enabled=mcp_check.checked,
+                )
+            )
 
             # Apply font changes to the live widget tree immediately.
             _t.font_size = font_spin.value

@@ -159,6 +159,10 @@ class NativeInspectorFields:
         if row.field is None:
             _logger.error("Native inspector field row '%s' has no InspectField", row.key)
             return
+        widget_kind = None if row.metadata is None else row.metadata.get("widget")
+        if widget_kind in ("inline_material", "material_inline"):
+            self._append_inline_material_field(row)
+            return
         if row.field.kind == "list[vec3]":
             self._append_vec3_list_field(row)
             return
@@ -185,6 +189,45 @@ class NativeInspectorFields:
             return
         container.add_stretch_child(control)
         self.root.add_fixed_child(container, 28.0)
+
+    def _append_inline_material_field(self, row: InspectorFieldRow) -> None:
+        if row.mixed:
+            label = self.document.create_label(
+                f"{row.label} (mixed)",
+                f"native-inspector-inline-material-mixed-{row.key}",
+            )
+            label.enabled = False
+            self.field_widgets[row.key] = label
+            self.root.add_fixed_child(label, 28.0)
+            return
+        if self.resource_catalog is None:
+            _logger.error("Inline material field '%s' requires a resource catalog", row.key)
+            label = self.document.create_label(
+                "Material resources unavailable",
+                f"native-inspector-inline-material-unavailable-{row.key}",
+            )
+            label.enabled = False
+            self.field_widgets[row.key] = label
+            self.root.add_fixed_child(label, 28.0)
+            return
+        from termin.editor_core.material_inspector_model import MaterialInspectorController
+        from termin.editor_native.material_inspector import build_native_material_inspector
+
+        material_controller = MaterialInspectorController(
+            self.resource_catalog.resource_manager,
+            changed=self.request_render,
+        )
+        inspector = build_native_material_inspector(
+            self.document,
+            material_controller,
+            request_render=self.request_render,
+            resource_catalog=self.resource_catalog,
+            show_color_dialog=self.show_color_dialog,
+        )
+        inspector.set_target(row.value)
+        height = max(28.0, inspector.root.preferred_size.height)
+        self.field_widgets[row.key] = inspector
+        self.root.add_fixed_child(inspector.root, height)
 
     def _append_interval_slider_field(self, row: InspectorFieldRow) -> None:
         field_info = row.field

@@ -1,4 +1,4 @@
-"""Headless framegraph debugger access for editor automation."""
+"""Toolkit-neutral framegraph debugger access for editor automation."""
 
 from __future__ import annotations
 
@@ -12,18 +12,22 @@ from tcbase import log
 
 
 class EditorFramegraphDebuggerService:
-    """Expose FramegraphDebuggerModel state without requiring its tcgui dialog."""
+    """Expose FramegraphDebuggerModel state without requiring a UI dialog."""
 
     def __init__(
         self,
         *,
         get_rendering_controller: Callable[[], object | None],
         on_request_update: Callable[[], None] | None = None,
+        model: object | None = None,
+        core: object | None = None,
     ) -> None:
+        if (model is None) != (core is None):
+            raise ValueError("framegraph debugger model and core must be supplied together")
         self._get_rendering_controller = get_rendering_controller
         self._on_request_update = on_request_update
-        self._model = None
-        self._core = None
+        self._model = model
+        self._core = core
 
     @property
     def model(self):
@@ -283,8 +287,8 @@ class EditorFramegraphDebuggerService:
         if rendering_controller is None:
             raise RuntimeError("Rendering controller is not available")
 
-        from termin.editor._editor_native import FrameGraphDebuggerCore
         from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
+        from termin.render_framework import FrameGraphDebuggerCore
 
         self._core = FrameGraphDebuggerCore()
         self._model = FramegraphDebuggerModel(

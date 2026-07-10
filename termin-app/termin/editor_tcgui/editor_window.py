@@ -833,7 +833,7 @@ class EditorWindowTcgui:
     @property
     def framegraph_debugger(self):
         if self._framegraph_debugger_service is None:
-            from termin.editor_tcgui.framegraph_debugger_service import (
+            from termin.editor_core.framegraph_debugger_service import (
                 EditorFramegraphDebuggerService,
             )
 
