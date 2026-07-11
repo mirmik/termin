@@ -119,6 +119,7 @@ from termin.editor_native.scene_manager_dialog import (
     connect_scene_manager_command,
 )
 from termin.editor_native.project_browser import build_native_project_browser
+from termin.editor_native.project_extensions import NativeProjectEditorContext
 from termin.editor_native.registry_viewer import (
     build_native_registry_catalog_viewer,
     build_native_registry_viewer,
@@ -957,6 +958,17 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             return
         project_file_watcher.watch_directory(str(project_root))
 
+    project_editor_context = NativeProjectEditorContext(
+        document=host.document,
+        menu_bar=shell.menu_bar,
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+        extension_context=extension_context,
+        get_scene=current_scene,
+        get_selected_entity=lambda: selected_entity,
+        select_scene_object=scene_tree.select_object,
+    )
     project_session_controller = ProjectSessionController(
         set_project_state=lambda _project_dir, _project_name: None,
         log_to_console=log_build_message,
@@ -964,7 +976,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         set_project_browser_root=lambda project_dir: project_browser.set_root(
             Path(project_dir)
         ),
-        get_init_script_editor=lambda: None,
+        get_init_script_editor=lambda: project_editor_context,
         resolve_termin_shaderc=resolve_termin_shaderc,
         resolve_slangc=resolve_slangc,
         show_error=dialog_service.show_error,
