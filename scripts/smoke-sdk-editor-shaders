@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Verify SDK editor OpenGL shader compilation from an empty cache."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+class SmokeError(RuntimeError):
+    pass
+
+
+EXPECTED_SHADER_STAGES = (
+    "termin-engine-skybox.vert",
+    "termin-engine-skybox.frag",
+    "termin-engine-depth.vert",
+    "termin-engine-depth.frag",
+    "termin-engine-id.vert",
+    "termin-engine-id.frag",
+    "termin-engine-highlight.frag",
+    "termin-engine-bloom-bright.frag",
+    "termin-engine-bloom-downsample.frag",
+    "termin-engine-bloom-upsample.frag",
+    "termin-engine-bloom-composite.frag",
+    "termin-engine-tonemap.frag",
+)
+SHADER_FAILURE_MARKERS = (
+    "tgfx2 engine shader dev compile:",
+    "[builtinshadersource] failed to load",
+    "missing required shader artifact",
+)
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _write_project(project_root: Path) -> Path:
+    project_root.mkdir(parents=True)
+    project_file = project_root / "ShaderSmoke.terminproj"
+    project_file.write_text(
+        '{"version": 1, "name": "ShaderSmoke"}\n', encoding="utf-8"
+    )
+    settings = project_root / "project_settings"
+    settings.mkdir()
+    (settings / "project.json").write_text(
+        "{\n"
+        '  "render_sync_mode": "none",\n'
+        '  "build_output_dir": "dist",\n'
+        '  "ignored_resource_paths": []\n'
+        "}\n",
+        encoding="utf-8",
+    )
+    return project_file
+
+
+def _editor_command(editor: Path, project_file: Path, *, allow_xvfb: bool) -> list[str]:
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        return [str(editor), str(project_file)]
+
+    xvfb = shutil.which("xvfb-run")
+    if xvfb is not None and allow_xvfb:
+        return [
+            xvfb,
+            "-a",
+            "--server-args=-screen 0 1280x720x24",
+            str(editor),
+            str(project_file),
+        ]
+
+    raise SmokeError(
+        "No DISPLAY/WAYLAND_DISPLAY is available and xvfb-run was not found. "
+        "Install xvfb or run with a graphical display."
+    )
+
+
+def _terminate_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        process.wait(timeout=8.0)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    process.wait(timeout=5.0)
+
+
+def _expected_paths(project_root: Path) -> tuple[Path, ...]:
+    source_root = project_root / ".termin" / "shader-cache" / "source"
+    artifact_root = project_root / ".termin" / "shader-artifacts" / "shaders" / "opengl"
+    paths: list[Path] = []
+    for stage in EXPECTED_SHADER_STAGES:
+        paths.append(source_root / f"{stage}.slang")
+        paths.append(artifact_root / f"{stage}.glsl")
+    return tuple(paths)
+
+
+def _wait_for_shader_outputs(
+    process: subprocess.Popen[str],
+    project_root: Path,
+    log_path: Path,
+    timeout: float,
+) -> None:
+    expected_paths = _expected_paths(project_root)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise SmokeError(f"Editor exited before shader compilation, code={process.returncode}")
+        if all(path.is_file() for path in expected_paths):
+            return
+        time.sleep(0.25)
+
+    missing = [str(path.relative_to(project_root)) for path in expected_paths if not path.is_file()]
+    log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    raise SmokeError(
+        "Timed out waiting for SDK editor shader outputs. Missing:\n"
+        + "\n".join(missing)
+        + f"\nEditor log:\n{log_text}"
+    )
+
+
+def _assert_no_shader_failures(log_path: Path) -> None:
+    log_text = log_path.read_text(encoding="utf-8", errors="replace")
+    log_lower = log_text.lower()
+    failures = [marker for marker in SHADER_FAILURE_MARKERS if marker in log_lower]
+    if failures:
+        raise SmokeError(
+            "SDK editor shader compilation reported failures: "
+            + ", ".join(failures)
+            + f"\nEditor log:\n{log_text}"
+        )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--timeout", type=float, default=45.0)
+    parser.add_argument("--keep-temp", action="store_true")
+    parser.add_argument("--no-xvfb", action="store_true")
+    args = parser.parse_args()
+
+    root = _repo_root()
+    editor = root / "sdk" / "bin" / "termin_editor"
+    if not editor.is_file():
+        raise SmokeError(f"Editor executable not found: {editor}. Build the SDK first.")
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="termin-sdk-editor-shaders-"))
+    project_root = temp_dir / "project"
+    home = temp_dir / "home"
+    log_path = temp_dir / "editor.log"
+    project_file = _write_project(project_root)
+
+    environment = os.environ.copy()
+    environment["HOME"] = str(home)
+    environment["TERMIN_BACKEND"] = "opengl"
+    environment["TERMIN_SDK"] = str(root / "sdk")
+
+    process: subprocess.Popen[str] | None = None
+    try:
+        command = _editor_command(editor, project_file, allow_xvfb=not args.no_xvfb)
+        print("[smoke] project:", project_root, flush=True)
+        print("[smoke] editor log:", log_path, flush=True)
+        print("[smoke] command:", " ".join(command), flush=True)
+        with log_path.open("w", encoding="utf-8") as log_file:
+            process = subprocess.Popen(
+                command,
+                cwd=root,
+                env=environment,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                start_new_session=True,
+            )
+            _wait_for_shader_outputs(process, project_root, log_path, args.timeout)
+
+        _assert_no_shader_failures(log_path)
+        print("[smoke] PASS", flush=True)
+        return 0
+    finally:
+        if process is not None:
+            _terminate_process(process)
+        if args.keep_temp:
+            print("[smoke] kept temp:", temp_dir, flush=True)
+        else:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except SmokeError as exc:
+        print(f"[smoke] FAIL: {exc}", file=sys.stderr)
+        raise SystemExit(1)
