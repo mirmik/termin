@@ -10,6 +10,7 @@ include(GNUInstallDirs)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(TerminRpath)
 include(TerminSDL2)
+include(TerminTestMetadata)
 
 # Project root - either from parent CMakeLists.txt or compute from here
 if(NOT DEFINED TERMIN_ROOT)
