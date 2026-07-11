@@ -56,9 +56,4 @@ ENTITY_API void collect_line_batch_shader_usages(
     bool cast_shadow,
     const std::function<void(TcShader)>& emit);
 
-ENTITY_API bool line_batch_needs_lighting_ubo_tgfx2(
-    const std::string& phase_mark,
-    LineRenderMode mode,
-    bool cast_shadow);
-
 } // namespace termin

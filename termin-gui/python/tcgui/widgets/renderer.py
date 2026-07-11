@@ -9,9 +9,8 @@ Internally the renderer drives a ``Tgfx2Context`` (created lazily on
 first ``begin()``) and keeps an offscreen native tgfx2 color+depth
 texture pair as its draw target. ``end_compose()`` returns that color
 texture to the host presenter. Common 2D primitives, simple textures
-and text are delegated to the C++ ``Canvas2DRenderer``. The local UI
-shader remains for image preview modes that need channel selection or
-HDR highlighting.
+and text are delegated to the C++ ``Canvas2DRenderer``. Specialized
+texture inspection is delegated to a backend-native presenter.
 """
 
 from __future__ import annotations
@@ -20,131 +19,18 @@ import math
 
 import numpy as np
 
-from tgfx import (
-    Canvas2DRenderer,
-    ShaderResourceKind,
-    ShaderResourceScope,
-    TcShader,
-)
+from tgfx import Canvas2DRenderer
 from tgfx.font import FontTextureAtlas, get_default_font
 from tgfx._tgfx_native import (
     Tgfx2Context,
     Tgfx2TextureHandle,
-    tc_shader_ensure_tgfx2,
     CULL_NONE,
 )
 from tcbase.profiler import Profiler
 
 
-UI_SHADER_UUID = "termin-tcgui-ui-engine"
-UI_SHADER_NAME = "UIEngineVSFS"
-
-
-# UI shader: solid colour (mode 0) and RGBA-image sampling (mode 2).
-# Font-atlas sampling lives in Text2DRenderer; this shader does not
-# carry mode 1.
-#
-# Single source for both backends. Under Vulkan (`#define VULKAN 1`
-# injected by shaderc) the per-draw state lives in a `layout(push_
-# constant)` block; under OpenGL it is a plain UBO bound at binding
-# 14 (the slot used by tgfx2's push-constant ring buffer — see
-# `TGFX2_PUSH_CONSTANTS_BINDING`). Same `UIPush pc` struct on both
-# sides, so the Python packer does not fork. `#version 450 core`
-# requires GL 4.3+ core (BackendWindow bumps the context to match).
-_UI_SHADER_COMMON_PUSH = """
-struct UIPushData {
-    mat4 u_projection;
-    vec4 u_color;
-    int  u_texture_mode;
-    int  u_channel_mode;
-    int  u_highlight_hdr;
-};
-#ifdef VULKAN
-layout(push_constant) uniform UIPushBlock { UIPushData pc; };
-#else
-layout(std140, binding = 14) uniform UIPushBlock { UIPushData pc; };
-#endif
-"""
-
-UI_VERTEX_SHADER = """#version 450 core
-""" + _UI_SHADER_COMMON_PUSH + """
-layout(location=0) in vec3 a_pos;    // (x_pixel, y_pixel, 0)
-layout(location=1) in vec4 a_uv_pad; // (u, v, _, _)
-
-layout(location=0) out vec2 v_uv;
-
-void main() {
-    gl_Position = pc.u_projection * vec4(a_pos.xy, 0.0, 1.0);
-    v_uv = a_uv_pad.xy;
-}
-"""
-
-UI_FRAGMENT_SHADER = """#version 450 core
-""" + _UI_SHADER_COMMON_PUSH + """
-layout(binding = 4) uniform sampler2D u_texture;
-
-layout(location=0) in vec2 v_uv;
-layout(location=0) out vec4 FragColor;
-
-void main() {
-    if (pc.u_texture_mode == 2) {
-        vec4 c = texture(u_texture, v_uv);
-        vec3 rgb;
-        if (pc.u_channel_mode == 5)      rgb = vec3(pow(clamp(1.0 - c.r, 0.0, 1.0), 0.25));
-        else if (pc.u_channel_mode == 1) rgb = vec3(c.r);
-        else if (pc.u_channel_mode == 2) rgb = vec3(c.g);
-        else if (pc.u_channel_mode == 3) rgb = vec3(c.b);
-        else if (pc.u_channel_mode == 4) rgb = vec3(c.a);
-        else                             rgb = c.rgb;
-        if (pc.u_highlight_hdr == 1) {
-            float max_val = max(max(c.r, c.g), c.b);
-            if (max_val > 1.0) {
-                float intensity = clamp((max_val - 1.0) / 2.0, 0.0, 1.0);
-                rgb = mix(rgb, vec3(1.0, 0.0, 1.0), 0.5 + intensity * 0.5);
-            }
-        }
-        float alpha = pc.u_channel_mode == 0 ? c.a : 1.0;
-        FragColor = vec4(rgb, alpha) * pc.u_color;
-    } else {
-        FragColor = pc.u_color;
-    }
-}
-"""
-
-# Python-side struct layout mirroring UIPushData. mat4 = 64 bytes
-# std140-aligned, vec4 = 16 bytes, int = 4 bytes (padded to 16 in
-# std140 BUT push_constant uses scalar/natural alignment; we align
-# manually). Total 96 bytes — well under the 128-byte push-constant
-# range that VulkanRenderDevice reserves. Encoded little-endian
-# native floats (x86_64 / arm64).
-import struct as _struct
-_UI_PUSH_FMT = "=16f4f3I4x"   # projection, color, texture_mode/channel/hdr + pad
-_UI_PUSH_SIZE = _struct.calcsize(_UI_PUSH_FMT)
-
-
 def _profiler() -> Profiler:
     return Profiler.instance()
-
-
-def _build_ortho_pixel_to_ndc(w: float, h: float) -> np.ndarray:
-    """Ortho projection: pixel coords (y+ down) → clip-space (y+ down).
-
-    Matches the unified Vulkan-native NDC convention used in tgfx:
-    pixel_y=0 (top of the window) maps to clip_y=-1, pixel_y=h maps
-    to clip_y=+1. On OpenGL this is enforced by a one-time
-    glClipControl(GL_UPPER_LEFT) in OpenGLRenderDevice.
-    """
-    if w <= 0 or h <= 0:
-        return np.eye(4, dtype=np.float32)
-    return np.array(
-        [
-            [2.0 / w,  0.0,     0.0, -1.0],
-            [0.0,     2.0 / h,  0.0, -1.0],
-            [0.0,     0.0,      1.0,  0.0],
-            [0.0,     0.0,      0.0,  1.0],
-        ],
-        dtype=np.float32,
-    )
 
 
 class UIRenderer:
@@ -197,19 +83,11 @@ class UIRenderer:
         self._canvas: Canvas2DRenderer | None = None
         self._canvas_active: bool = False
 
-        self._ui_tc_shader: TcShader | None = None
-        self._ui_vs = None
-        self._ui_fs = None
-
         # Owned offscreen color + depth textures. Allocated on first
         # begin() / reallocated when the viewport size changes.
         self._offscreen_color_tex: Tgfx2TextureHandle | None = None
         self._offscreen_depth_tex: Tgfx2TextureHandle | None = None
         self._offscreen_size: tuple[int, int] = (0, 0)
-
-        # 1×1 white fallback texture bound at sampler slot 4 on every
-        # solid-colour draw (see _ensure_init for the rationale).
-        self._placeholder_tex: Tgfx2TextureHandle | None = None
 
         # Set in begin() if we were the ones to open the frame on the
         # lender's RenderContext2. end_compose() uses it to decide
@@ -250,9 +128,10 @@ class UIRenderer:
     # ------------------------------------------------------------------
 
     def _ensure_init(self, w: int, h: int, need_offscreen: bool = True) -> None:
-        """Compile the UI shader and (if needed) allocate the offscreen
-        FBO. Called on the first begin() and whenever the viewport size
-        changes. The Tgfx2Context is already set up by __init__.
+        """Initialize Canvas2D and allocate the offscreen target if needed.
+
+        Called on the first begin() and whenever the viewport size changes.
+        The Tgfx2Context is already set up by __init__.
 
         ``need_offscreen`` is False on the framegraph in-scene path: the
         host hands us its own target_color, so we skip allocating the
@@ -274,63 +153,6 @@ class UIRenderer:
             self._offscreen_color_tex = self._graphics.create_color_attachment(w, h)
             self._offscreen_depth_tex = self._graphics.create_depth_attachment(w, h)
             self._offscreen_size = (w, h)
-
-        if self._placeholder_tex is None:
-            # 1×1 white texture bound at binding 4 whenever the UI shader
-            # runs in solid-colour mode (texture_mode=0). Vulkan's
-            # validator rejects draws that leave a shader-declared
-            # `layout(binding=4) uniform sampler2D` slot empty even if
-            # the fragment branch never samples from it. OpenGL doesn't
-            # care, but the same placeholder on both sides keeps the
-            # bind sequence identical and cheap.
-            white = np.array([[[255, 255, 255, 255]]], dtype=np.uint8)
-            self._placeholder_tex = self._graphics.create_texture_rgba8(
-                1, 1, white.reshape(-1))
-
-    def _ensure_legacy_ui_shader(self) -> None:
-        """Compile the legacy immediate UI shader on first real use.
-
-        Most UI primitives now go through Canvas2DRenderer. The shader
-        below remains only for fallback texture preview paths with
-        channel/HDR inspection modes, so compiling it during renderer
-        startup makes D3D11 fail before those modes are actually needed.
-        """
-        if self._ui_vs is not None and self._ui_fs is not None:
-            return
-        if self._graphics.backend == "d3d11":
-            raise RuntimeError(
-                "UIRenderer: legacy image preview shader is GLSL-only; "
-                "D3D11 needs a Slang/HLSL port or Canvas2D channel preview"
-            )
-
-        # Register the UI shader with the tc_shader registry — hash-
-        # based dedup keeps compiled VkShaderModules / GL programs alive
-        # across UIRenderer instances.
-        if self._ui_tc_shader is None:
-            self._ui_tc_shader = TcShader.get_or_create(UI_SHADER_UUID)
-            self._ui_tc_shader.set_sources(
-                UI_VERTEX_SHADER,
-                UI_FRAGMENT_SHADER,
-                "",
-                UI_SHADER_NAME,
-                "tcgui/widgets/renderer.py",
-            )
-            self._ui_tc_shader.set_resource_layout([
-                (
-                    "u_texture",
-                    ShaderResourceKind.TEXTURE,
-                    ShaderResourceScope.TRANSIENT,
-                    0,
-                    4,
-                    2,  # TC_SHADER_STAGE_FRAGMENT
-                    0,
-                ),
-            ])
-        pair = tc_shader_ensure_tgfx2(self._ctx, self._ui_tc_shader)
-        self._ui_vs = pair.vs
-        self._ui_fs = pair.fs
-        if not self._ui_vs or not self._ui_fs:
-            raise RuntimeError("UIRenderer: UI shader compile failed")
 
     # ------------------------------------------------------------------
     # Frame lifecycle
@@ -543,12 +365,12 @@ class UIRenderer:
     # Primitive drawing helpers
     # ------------------------------------------------------------------
 
-    def _suspend_canvas_for_legacy_draw(self) -> None:
+    def _suspend_canvas_for_external_draw(self) -> None:
         if self._canvas is not None and self._canvas_active:
             self._canvas.end()
             self._canvas_active = False
 
-    def _resume_canvas_after_legacy_draw(self) -> None:
+    def _resume_canvas_after_external_draw(self) -> None:
         if self._canvas is None or self._ctx is None:
             return
         self._canvas.set_default_font(self.font)
@@ -567,69 +389,7 @@ class UIRenderer:
         from tgfx._tgfx_native import Tgfx2BlendFactor
         self._ctx.set_blend_func(Tgfx2BlendFactor.SrcAlpha,
                                  Tgfx2BlendFactor.OneMinusSrcAlpha)
-        self._resume_canvas_after_legacy_draw()
-
-    def _push_ui_state(
-        self,
-        color: tuple[float, float, float, float],
-        texture_mode: int,
-        channel_mode: int = 0,
-        highlight_hdr: bool = False,
-    ) -> None:
-        """Pack the per-draw UI state into a push-constant block and
-        bind it. Single byte layout for both backends — under Vulkan
-        vkCmdPushConstants ships it; under OpenGL the tgfx2 ring UBO
-        at binding 14 picks it up. Shader source is the same on both
-        sides (`pc.u_projection`, `pc.u_color`, texture mode and preview
-        channel flags)."""
-        ctx = self._ctx
-        self._ensure_legacy_ui_shader()
-        ctx.bind_shader(self._ui_vs, self._ui_fs)
-        ctx.use_shader_resource_layout(self._ui_tc_shader)
-        # Projection is row-major in Python but GLSL expects column-major
-        # mat4. Transpose here once instead of a shader-side transpose
-        # marker (set_uniform_mat4 had a transpose flag; push_constants
-        # is raw bytes).
-        self._suspend_canvas_for_legacy_draw()
-        proj = _build_ortho_pixel_to_ndc(
-            float(self._viewport_w), float(self._viewport_h),
-        )
-        proj_cm = np.ascontiguousarray(proj.T, dtype=np.float32)
-        data = _struct.pack(
-            _UI_PUSH_FMT,
-            *proj_cm.flatten().tolist(),
-            float(color[0]), float(color[1]),
-            float(color[2]), float(color[3]),
-            int(texture_mode),
-            int(channel_mode),
-            1 if highlight_hdr else 0,
-        )
-        # np.frombuffer would give a read-only view; nanobind needs a
-        # C-contiguous writable-ish ndarray, so copy into a fresh array.
-        ctx.set_push_constants(np.asarray(bytearray(data), dtype=np.uint8))
-
-    def _emit_quad(
-        self,
-        px0: float, py0: float, px1: float, py1: float,
-        u0: float, v0: float, u1: float, v1: float,
-    ) -> np.ndarray:
-        """Return 6 CCW (in y+ down pixel coords) vertices for a
-        quad spanning (px0, py0)-(px1, py1) with given UVs. The
-        winding survives the ortho Y-flip and default back-face
-        culling: triangles end up CCW in NDC."""
-        return np.array(
-            [
-                # Triangle 1: TL, BL, BR
-                px0, py0, 0.0, u0, v0, 0.0, 0.0,
-                px0, py1, 0.0, u0, v1, 0.0, 0.0,
-                px1, py1, 0.0, u1, v1, 0.0, 0.0,
-                # Triangle 2: TL, BR, TR
-                px0, py0, 0.0, u0, v0, 0.0, 0.0,
-                px1, py1, 0.0, u1, v1, 0.0, 0.0,
-                px1, py0, 0.0, u1, v0, 0.0, 0.0,
-            ],
-            dtype=np.float32,
-        )
+        self._resume_canvas_after_external_draw()
 
     # ------------------------------------------------------------------
     # Public draw API
@@ -754,16 +514,8 @@ class UIRenderer:
         if w <= 0 or h <= 0 or texture_handle is None:
             return
 
-        ctx = self._ctx
-
         if self._canvas is not None and self._canvas_active:
             self._canvas.draw_texture(texture_handle, x, y, w, h, tint)
-        else:
-            self._push_ui_state(tint, 2)
-            ctx.bind_texture_by_name("u_texture", texture_handle)
-            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
-            ctx.draw_immediate_triangles(verts, 6)
-            self._resume_canvas_after_legacy_draw()
 
     def upload_texture(self, data: np.ndarray) -> Tgfx2TextureHandle:
         """Upload a numpy RGBA array as a new GPU texture.
@@ -836,10 +588,8 @@ class UIRenderer:
     ) -> None:
         """Draw a texture preview with optional channel/HDR inspection.
 
-        Plain RGB previews use the Canvas2D path. Channel/depth/HDR
-        previews need a shader; callers can provide a backend-native
-        presenter with ``render_in_current_pass`` so D3D11 does not fall
-        back to the legacy GLSL-only UI shader.
+        Plain RGB previews use the Canvas2D path. Channel/depth/HDR previews
+        require a backend-native presenter with ``render_in_current_pass``.
         """
         if w <= 0 or h <= 0 or handle is None or self._ctx is None:
             return
@@ -851,42 +601,21 @@ class UIRenderer:
                 tex_w,
                 tex_h,
                 flip_v=flip_v,
-                channel_mode=0,
-                highlight_hdr=False,
                 tint=tint,
             )
             return
 
         if presenter is None:
-            self.draw_texture(
-                x, y, w, h,
-                handle,
-                tex_w,
-                tex_h,
-                flip_v=flip_v,
-                channel_mode=channel_mode,
-                highlight_hdr=highlight_hdr,
-                tint=tint,
+            raise RuntimeError(
+                "channel/HDR texture preview requires a backend-native presenter"
             )
-            return
 
         if flip_v:
-            # FrameGraphPresenter samples in the backend's canonical
-            # orientation. Preserve legacy flip_v support by falling
-            # back to the old path for callers that explicitly need it.
-            self.draw_texture(
-                x, y, w, h,
-                handle,
-                tex_w,
-                tex_h,
-                flip_v=True,
-                channel_mode=channel_mode,
-                highlight_hdr=highlight_hdr,
-                tint=tint,
+            raise RuntimeError(
+                "backend-native channel/HDR preview does not support flip_v"
             )
-            return
 
-        self._suspend_canvas_for_legacy_draw()
+        self._suspend_canvas_for_external_draw()
         try:
             presenter.render_in_current_pass(
                 self._ctx,
@@ -906,8 +635,6 @@ class UIRenderer:
         handle: Tgfx2TextureHandle, tex_w: int, tex_h: int,
         *,
         flip_v: bool = False,
-        channel_mode: int = 0,
-        highlight_hdr: bool = False,
         tint: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
     ) -> None:
         """Draw a tgfx2 TextureHandle as a subregion of the current UI pass.
@@ -925,20 +652,8 @@ class UIRenderer:
         if w <= 0 or h <= 0 or handle is None or self._ctx is None:
             return
 
-        if channel_mode == 0 and not highlight_hdr and self._canvas is not None and self._canvas_active:
+        if self._canvas is not None and self._canvas_active:
             self._canvas.draw_texture(handle, x, y, w, h, tint, flip_v)
-            return
-
-        ctx = self._ctx
-        self._push_ui_state(tint, 2, channel_mode, highlight_hdr)
-        ctx.bind_texture_by_name("u_texture", handle)
-
-        if flip_v:
-            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 1.0, 1.0, 0.0)
-        else:
-            verts = self._emit_quad(x, y, x + w, y + h, 0.0, 0.0, 1.0, 1.0)
-        ctx.draw_immediate_triangles(verts, 6)
-        self._resume_canvas_after_legacy_draw()
 
     def load_image(self, path: str) -> Tgfx2TextureHandle:
         """Load an image file and upload it as a GPU texture."""
