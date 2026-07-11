@@ -354,6 +354,41 @@ def test_runtime_shutdown_allows_later_rebootstrap():
     )
 
 
+def test_component_registry_names_survive_repeated_player_rebootstrap():
+    _run_python_without_nanobind_leaks(
+        """
+        import gc
+
+        from termin.bootstrap import bootstrap_player, shutdown_player
+        from termin.scene import ComponentRegistry, Entity
+
+        for iteration in range(3):
+            bootstrap_player()
+
+            registry = ComponentRegistry.instance()
+            component_infos = registry.list_info()
+            component_names = {info["name"] for info in component_infos}
+            assert "CameraComponent" in component_names
+
+            camera_info = registry.get_info("CameraComponent")
+            assert camera_info["name"] == "CameraComponent"
+            assert camera_info["kind"] == "cxx"
+            assert camera_info["is_abstract"] is False
+
+            entity = Entity(f"component-registry-rebootstrap-{iteration}")
+            component = entity.add_component_by_name("CameraComponent")
+            assert component.type_name == "CameraComponent"
+            assert entity.has_component_type("CameraComponent")
+
+            del component
+            del entity
+            gc.collect()
+            shutdown_player()
+            assert not registry.has("CameraComponent")
+        """
+    )
+
+
 def test_player_shutdown_releases_standalone_entity_components():
     _run_python_without_nanobind_leaks(
         """
