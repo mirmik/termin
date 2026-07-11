@@ -78,6 +78,11 @@ public:
     LightingUBOData data;
     tgfx::BufferHandle buffer;
 
+private:
+    tgfx::IRenderDevice* device_ = nullptr;
+
+public:
+
     LightingUBO() {
         std::memset(&data, 0, sizeof(data));
     }
@@ -109,11 +114,6 @@ public:
 
     LightingUBO(const LightingUBO&) = delete;
     LightingUBO& operator=(const LightingUBO&) = delete;
-
-private:
-    tgfx::IRenderDevice* device_ = nullptr;
-
-public:
 
     // Update UBO from a non-owning lights view.
     void update_from_lights(

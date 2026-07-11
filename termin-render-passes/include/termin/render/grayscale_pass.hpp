@@ -20,7 +20,6 @@ namespace termin {
 // reflected texture binding. Legacy tgfx1 dual-path removed in Stage 8.1.
 class TERMIN_RENDER_PASSES_API GrayscalePass : public CxxFramePass {
 public:
-    static void register_type();
     std::string input_res = "color";
     std::string output_res = "color";
     float strength = 1.0f;
@@ -36,6 +35,7 @@ private:
     float uploaded_strength_ = -1.0f;
 
 public:
+    static void register_type();
     INSPECT_FIELD(GrayscalePass, input_res, "Input", "string")
     INSPECT_FIELD(GrayscalePass, output_res, "Output", "string")
     INSPECT_FIELD_RANGE(GrayscalePass, strength, "Strength", "float", 0.0f, 1.0f)

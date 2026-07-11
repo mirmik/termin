@@ -89,8 +89,8 @@ The script:
 ### C++ class member order
 
 The repository style guide requires class and struct data members to appear
-before member functions. The opt-in AST checker uses the same compilation
-database as clang-tidy:
+before member functions. The AST checker uses the same compilation database as
+clang-tidy and is enforced for the normal and Python/nanobind profiles by CI:
 
 ```bash
 ./run-lint-cpp.sh --configure-only

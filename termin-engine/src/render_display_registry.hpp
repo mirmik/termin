@@ -16,6 +16,11 @@ extern "C" {
 namespace termin::rendering_manager_detail {
 
 class RenderDisplayRegistry {
+private:
+    std::vector<tc_display*> displays_;
+    std::vector<tc_display*> editor_displays_;
+    std::unordered_map<tc_display*, std::unique_ptr<DisplayInputRouter>> display_routers_;
+
 public:
     using DisplayFactory = std::function<tc_display*(const std::string& name)>;
     using DisplayRemovedCallback = std::function<void(tc_display*)>;
@@ -52,9 +57,6 @@ public:
 private:
     void cleanup_viewport_states(tc_display* display, const ViewportCleanupCallback& cleanup_viewport);
 
-    std::vector<tc_display*> displays_;
-    std::vector<tc_display*> editor_displays_;
-    std::unordered_map<tc_display*, std::unique_ptr<DisplayInputRouter>> display_routers_;
 };
 
 } // namespace termin::rendering_manager_detail

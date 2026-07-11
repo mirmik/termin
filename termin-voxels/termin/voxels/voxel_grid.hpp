@@ -130,6 +130,14 @@ inline Vec3 compute_triangle_normal(const Vec3& v0, const Vec3& v1, const Vec3& 
 // ============================================================================
 
 class VoxelGrid {
+private:
+    double cell_size_;
+    Vec3 origin_;
+    std::string name_;
+    std::string source_path_;
+    std::unordered_map<ChunkKey, VoxelChunk, ChunkKeyHash> chunks_;
+    std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash> surface_normals_;
+
 public:
     VoxelGrid(double cell_size = 0.25, Vec3 origin = Vec3::zero(),
               const std::string& name = "", const std::string& source_path = "")
@@ -602,13 +610,6 @@ public:
         return result;
     }
 
-private:
-    double cell_size_;
-    Vec3 origin_;
-    std::string name_;
-    std::string source_path_;
-    std::unordered_map<ChunkKey, VoxelChunk, ChunkKeyHash> chunks_;
-    std::unordered_map<VoxelKey, std::vector<Vec3>, ChunkKeyHash> surface_normals_;
 };
 
 } // namespace voxels

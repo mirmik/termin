@@ -17,8 +17,10 @@ extern TERMIN_RENDER_PASSES_API const Color4 COLLIDER_GIZMO_COLOR;
 // wireframe representations via ImmediateRenderer (tgfx2-native).
 // Supports Box, Sphere, Capsule, and ConvexHull collider types.
 class TERMIN_RENDER_PASSES_API ColliderGizmoPass : public CxxFramePass {
+private:
+    ImmediateRenderer _renderer;
+
 public:
-    static void register_type();
     // Configuration
     std::string input_res = "color";
     std::string output_res = "color";
@@ -33,6 +35,8 @@ public:
         {{"output_res", "fbo"}},
         {{"input_res", "output_res"}}
     ))
+
+    static void register_type();
 
     ColliderGizmoPass(
         const std::string& input_res = "color",
@@ -56,8 +60,6 @@ public:
     void _draw_capsule_internal(const Mat44f& entity_world, float height, float radius);
     void _draw_convex_hull_internal(const Mat44f& entity_world, const colliders::ConvexHullCollider* hull);
 
-private:
-    ImmediateRenderer _renderer;
 };
 
 } // namespace termin

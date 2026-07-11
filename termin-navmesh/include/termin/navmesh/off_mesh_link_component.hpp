@@ -44,6 +44,19 @@ public:
     double radius = 0.35;
     bool bidirectional = false;
 
+private:
+    struct Vertex {
+        float position[3];
+        float normal[3];
+        float uv[2];
+    };
+    mutable TcMesh _debug_mesh;
+    mutable TcMaterial _debug_material;
+    mutable tc_vec3 _mesh_start = {0.0, 0.0, 0.0};
+    mutable tc_vec3 _mesh_end = {0.0, 0.0, 0.0};
+    mutable bool _mesh_bidirectional = false;
+
+public:
     void center_entity();
 
     OffMeshLinkComponent()
@@ -166,18 +179,6 @@ public:
     }
 
 private:
-    struct Vertex {
-        float position[3];
-        float normal[3];
-        float uv[2];
-    };
-
-    mutable TcMesh _debug_mesh;
-    mutable TcMaterial _debug_material;
-    mutable tc_vec3 _mesh_start = {0.0, 0.0, 0.0};
-    mutable tc_vec3 _mesh_end = {0.0, 0.0, 0.0};
-    mutable bool _mesh_bidirectional = false;
-
     Vec3 local_to_world(const tc_vec3& value) const {
         Entity ent = entity();
         if (!ent.valid()) {

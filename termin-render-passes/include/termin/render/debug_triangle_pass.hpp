@@ -15,7 +15,6 @@ namespace termin {
 
 class TERMIN_RENDER_PASSES_API DebugTrianglePass : public CxxFramePass {
 public:
-    static void register_type();
     std::string output_res = "OUTPUT";
 
 private:
@@ -23,6 +22,7 @@ private:
     tc_shader_handle shader_handle_ = tc_shader_handle_invalid();
 
 public:
+    static void register_type();
     INSPECT_FIELD(DebugTrianglePass, output_res, "Output Resource", "string")
     INSPECT_TYPE_METADATA(DebugTrianglePass, graph, make_pass_graph_metadata(
         {},
