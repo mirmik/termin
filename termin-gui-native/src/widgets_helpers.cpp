@@ -276,6 +276,31 @@ void paint_widget(tc_widget* widget, tc_ui_document* document, tc_ui_paint_conte
     }
 }
 
+void draw_drop_shadow(tc_ui_paint_context* context, tc_ui_rect rect) {
+    // Fake a soft shadow for floating surfaces (dialogs, dropdowns, menus):
+    // a few nested translucent-black rects that grow outward and bias
+    // downward, so their overlap is darkest against the surface edge and
+    // fades out — a cheap penumbra with no blur primitive required. The
+    // surface then paints on top, covering the center.
+    if (!context) {
+        return;
+    }
+    const tc_ui_color shadow {0.0f, 0.0f, 0.0f, 0.10f};
+    for (int step = 1; step <= 4; ++step) {
+        const float spread = static_cast<float>(step) * 2.5f;
+        const float drop = static_cast<float>(step) * 1.5f;
+        tc_ui_painter_fill_rect(
+            context,
+            tc_ui_rect {
+                rect.x - spread,
+                rect.y - spread + drop,
+                rect.width + spread * 2.0f,
+                rect.height + spread * 2.0f
+            },
+            shadow);
+    }
+}
+
 tc_ui_rect inset_rect(tc_ui_rect rect, EdgeInsets padding) {
     rect.x += padding.left;
     rect.y += padding.top;

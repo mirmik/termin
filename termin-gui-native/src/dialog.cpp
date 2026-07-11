@@ -106,7 +106,7 @@ bool Dialog::ensure_buttons(tc_ui_document* document) {
     for (size_t index = 0; index < actions_.size(); ++index) {
         auto button = std::make_unique<Button>(actions_[index].label);
         if (actions_[index].is_default)
-            button->set_accent(Color{0.22f, 0.48f, 0.86f, 1.0f});
+            button->set_accent(Color{0.024f, 0.714f, 0.831f, 1.0f}); // cyan accent #06b6d4
         const tc_widget_handle handle = tc_ui_document_adopt_widget(document, button->c_widget());
         if (tc_widget_handle_is_invalid(handle)) {
             tc_log_error("[termin-gui-native] Dialog failed to adopt action button");
@@ -203,6 +203,7 @@ void Dialog::layout(tc_ui_document* document, tc_ui_rect rect) {
 
 void Dialog::paint(tc_ui_document* document, tc_ui_paint_context* context) {
     const tc_ui_style style = computed_style(document);
+    draw_drop_shadow(context, bounds());
     tc_ui_painter_fill_rect(context, bounds(), style.background);
     tc_ui_painter_stroke_rect(context, bounds(), style.border, style.border_width);
     tc_ui_color title_background = style.accent;

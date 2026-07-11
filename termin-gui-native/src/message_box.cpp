@@ -20,7 +20,7 @@ bool MessageBox::ensure_content(tc_ui_document* document) {
         return true;
     }
     const char* icon = "ℹ";
-    Color color{0.30f, 0.60f, 0.90f, 1.0f};
+    Color color{0.024f, 0.714f, 0.831f, 1.0f}; // cyan accent #06b6d4 (info uses the theme accent)
     if (kind_ == MessageBoxKind::Warning) {
         icon = "⚠";
         color = Color{0.90f, 0.70f, 0.20f, 1.0f};
