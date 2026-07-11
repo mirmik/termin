@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+import numpy as np
 import pytest
 
 from termin.editor_core.inspector_fields_model import InspectorFieldsController
@@ -31,6 +32,9 @@ class _Phase:
 
 class _Texture:
     is_valid = True
+
+    def __init__(self) -> None:
+        self._image_data = np.array([[[32, 64, 128, 255]]], dtype=np.uint8)
 
 
 class _Material:
@@ -91,6 +95,9 @@ class _Resources:
     def get_texture_handle(self, name):
         return self.texture if name == "brick" else None
 
+    def get_texture(self, name):
+        return self.texture if name == "brick" else None
+
     def find_material_name(self, _material):
         return None
 
@@ -112,6 +119,10 @@ def test_native_material_inspector_projects_and_edits_shared_snapshot():
 
     inspector.set_target(material)
 
+    # Texture rows are taller than ordinary fields, so the enclosing inline
+    # inspector must advertise their real extent to the parent scroll area.
+    assert inspector.root.preferred_size.height == pytest.approx(292.0)
+
     assert inspector.controls["name"].text == "Inline"
     assert inspector.controls["shader"].selected_index == 0
     assert inspector.controls["roughness"].value == pytest.approx(0.25)
@@ -123,6 +134,36 @@ def test_native_material_inspector_projects_and_edits_shared_snapshot():
     texture_combo.selected_index = 0
     assert material.assigned_texture is not None
     assert material.assigned_texture[0] == "albedo"
+    inspector.controls.clear()
+    assert document.destroy_widget_recursive(inspector.root.handle)
+
+
+def test_native_material_inspector_registers_and_releases_texture_previews():
+    document = Document()
+    material = _Material()
+    resources = _Resources()
+    registered = []
+    released = []
+
+    def register(image, pixels):
+        registered.append((image, pixels))
+        return lambda: released.append(image)
+
+    inspector = build_native_material_inspector(
+        document,
+        MaterialInspectorController(resources),
+        request_render=lambda: None,
+        resource_catalog=InspectorResourceCatalog(resources),
+        show_texture_preview=register,
+    )
+    inspector.set_target(material)
+    assert len(registered) == 1
+    assert registered[0][1].shape == (1, 1, 4)
+    inspector.controls["albedo"].selected_index = 0
+    assert released == [registered[0][0]]
+    assert len(registered) == 2
+    inspector._release_previews()
+    assert released == [registered[0][0], registered[1][0]]
     inspector.controls.clear()
     assert document.destroy_widget_recursive(inspector.root.handle)
 

@@ -38,6 +38,7 @@ LayerMaskDialogHandler = Callable[
     [int, tuple[str, ...], Callable[[int | None], None]],
     None,
 ]
+TexturePreviewHandler = Callable[[object, object], Callable[[], None]]
 
 
 def _vector(value: Any, size: int) -> tuple[float, ...]:
@@ -73,6 +74,27 @@ def _color(value: Any) -> tuple[float, float, float, float]:
 
 def _color_label(value: tuple[float, float, float, float]) -> str:
     return ", ".join(f"{component:.2f}" for component in value)
+
+
+def build_native_color_control(
+    document: Document,
+    color: tuple[float, float, float, float],
+    *,
+    debug_name: str,
+    on_clicked: Callable[[], None],
+) -> tuple[WidgetRef, object]:
+    """Build a color swatch alongside the numeric control that opens its dialog."""
+
+    control = document.create_hstack(f"{debug_name}-control")
+    control.set_layout_spacing(4.0)
+    swatch = document.create_hstack(f"{debug_name}-swatch")
+    swatch.set_layout_background(Color(*color))
+    swatch.set_layout_border(Color(0.75, 0.78, 0.84, 1.0), 1.0)
+    control.add_fixed_child(swatch, 28.0)
+    button = document.create_button(_color_label(color), debug_name)
+    button.connect_clicked(on_clicked)
+    control.add_stretch_child(button.widget)
+    return control, button
 
 
 @dataclass(frozen=True)
@@ -119,6 +141,7 @@ class NativeInspectorFields:
     request_render: Callable[[], None]
     show_color_dialog: ColorDialogHandler | None = None
     show_layer_mask_dialog: LayerMaskDialogHandler | None = None
+    show_texture_preview: TexturePreviewHandler | None = None
     layer_names: Callable[[], tuple[str, ...]] | None = None
     resource_catalog: InspectorResourceCatalog | None = None
     special_choices: InspectorSpecialChoiceProvider = field(default_factory=InspectorSpecialChoices)
@@ -223,6 +246,7 @@ class NativeInspectorFields:
             request_render=self.request_render,
             resource_catalog=self.resource_catalog,
             show_color_dialog=self.show_color_dialog,
+            show_texture_preview=self.show_texture_preview,
         )
         inspector.set_target(row.value)
         height = max(28.0, inspector.root.preferred_size.height)
@@ -682,7 +706,6 @@ class NativeInspectorFields:
             return vector_row
         if kind == "color":
             color = (1.0, 1.0, 1.0, 1.0) if row.mixed else _color(row.value)
-            button = self.document.create_button(_color_label(color), f"native-inspector-color-{row.key}")
             weak_owner = weakref.ref(self)
 
             def clicked() -> None:
@@ -700,10 +723,15 @@ class NativeInspectorFields:
 
                 owner.show_color_dialog(color, finished)
 
-            button.connect_clicked(clicked)
+            control, button = build_native_color_control(
+                self.document,
+                color,
+                debug_name=f"native-inspector-color-{row.key}",
+                on_clicked=clicked,
+            )
             button.widget.enabled = not field_info.read_only
             self.field_widgets[row.key] = button
-            return button.widget
+            return control
         if kind == "layer_mask":
             try:
                 mask = 0 if row.mixed else int(row.value or 0, 0)
@@ -774,6 +802,7 @@ def build_native_inspector_fields(
     request_render: Callable[[], None],
     show_color_dialog: ColorDialogHandler | None = None,
     show_layer_mask_dialog: LayerMaskDialogHandler | None = None,
+    show_texture_preview: TexturePreviewHandler | None = None,
     layer_names: Callable[[], tuple[str, ...]] | None = None,
     resource_catalog: InspectorResourceCatalog | None = None,
     special_choices: InspectorSpecialChoiceProvider | None = None,
@@ -788,6 +817,7 @@ def build_native_inspector_fields(
         request_render=request_render,
         show_color_dialog=show_color_dialog,
         show_layer_mask_dialog=show_layer_mask_dialog,
+        show_texture_preview=show_texture_preview,
         layer_names=layer_names,
         resource_catalog=resource_catalog,
         special_choices=special_choices or InspectorSpecialChoices(),
@@ -797,10 +827,12 @@ def build_native_inspector_fields(
 __all__ = [
     "ColorDialogHandler",
     "LayerMaskDialogHandler",
+    "TexturePreviewHandler",
     "NativeInspectorFields",
     "NativeIntervalSliderWidgets",
     "NativeListFieldWidgets",
     "NativeResourceFieldWidgets",
     "NativeVec3ListFieldWidgets",
+    "build_native_color_control",
     "build_native_inspector_fields",
 ]

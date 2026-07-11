@@ -351,6 +351,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         viewport=editor_viewport,
         show_color_dialog=dialog_service.show_color,
         show_layer_mask_dialog=dialog_service.show_layer_mask,
+        show_texture_preview=host.register_image_preview,
         show_input=dialog_service.show_input,
         resource_catalog=InspectorResourceCatalog(resource_manager),
     )

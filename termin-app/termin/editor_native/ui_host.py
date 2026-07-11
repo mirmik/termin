@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import math
 import os
 from pathlib import Path
 import sys
@@ -29,6 +30,7 @@ from termin.gui_native import (
     PointerEvent,
     PointerEventType,
     Rect,
+    Size,
     StyleRole,
 )
 
@@ -43,6 +45,13 @@ PreRenderCallback = Callable[[object], None]
 class RouteResult:
     keep_running: bool = True
     routed: bool = False
+
+
+@dataclass
+class _ImagePreview:
+    image: object
+    pixels: object
+    texture: object | None = None
 
 
 def resolve_native_ui_font(configured: str | Path | None = None) -> Path:
@@ -191,6 +200,7 @@ class NativeUiHost:
         self._render_requested = True
         self._pre_render_callbacks: list[PreRenderCallback] = []
         self._color_pickers: list[object] = []
+        self._image_previews: list[_ImagePreview] = []
         start_text_input()
 
     @property
@@ -226,6 +236,7 @@ class NativeUiHost:
         self.document.layout_roots(Rect(0.0, 0.0, float(width), float(height)))
         self.context.begin_frame()
         self._sync_color_picker_surfaces()
+        self._sync_image_previews()
         for callback in tuple(self._pre_render_callbacks):
             try:
                 callback(self.context)
@@ -280,6 +291,53 @@ class NativeUiHost:
                 self._color_pickers.remove(picker)
                 continue
             self.renderer.sync_color_picker_surfaces(self.context, picker)
+
+    def register_image_preview(self, image: object, pixels: object) -> Callable[[], None]:
+        """Upload CPU pixels once and keep the resulting texture owned by this host."""
+
+        import numpy as np
+
+        array = np.asarray(pixels)
+        if array.ndim != 3 or array.shape[2] not in (3, 4):
+            raise ValueError("native image preview requires an H×W RGB or RGBA array")
+        if array.shape[0] <= 0 or array.shape[1] <= 0:
+            raise ValueError("native image preview requires non-empty pixels")
+        if array.dtype.kind == "f":
+            array = np.clip(array * 255.0, 0.0, 255.0)
+        array = np.ascontiguousarray(array.astype(np.uint8, copy=False))
+        if array.shape[2] == 3:
+            alpha = np.full((*array.shape[:2], 1), 255, dtype=np.uint8)
+            array = np.concatenate((array, alpha), axis=2)
+        step = max(1, math.ceil(max(array.shape[0], array.shape[1]) / 128))
+        if step > 1:
+            array = np.ascontiguousarray(array[::step, ::step])
+        preview = _ImagePreview(image=image, pixels=array)
+        self._image_previews.append(preview)
+        self.request_render_update()
+
+        def release() -> None:
+            self._release_image_preview(preview)
+
+        return release
+
+    def _sync_image_previews(self) -> None:
+        for preview in tuple(self._image_previews):
+            if not self.document.is_alive(preview.image.handle):
+                _logger.error("native image preview was destroyed without host unregistration")
+                self._release_image_preview(preview)
+                continue
+            if preview.texture is None:
+                height, width, _channels = preview.pixels.shape
+                preview.texture = self.context.create_texture_rgba8(width, height, preview.pixels)
+                preview.image.set_texture(preview.texture, Size(float(width), float(height)))
+
+    def _release_image_preview(self, preview: _ImagePreview) -> None:
+        if preview not in self._image_previews:
+            return
+        self._image_previews.remove(preview)
+        if preview.texture is not None:
+            self.context.destroy_texture(preview.texture)
+            preview.texture = None
 
     def apply_font_size(self, font_size: float) -> None:
         size = float(font_size)
@@ -348,6 +406,8 @@ class NativeUiHost:
         self._closed = True
         self._pre_render_callbacks.clear()
         self._color_pickers.clear()
+        for preview in tuple(self._image_previews):
+            self._release_image_preview(preview)
         stop_text_input()
         self.renderer.release_gpu()
         if self._color_target is not None:
