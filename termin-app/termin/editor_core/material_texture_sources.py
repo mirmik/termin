@@ -80,6 +80,28 @@ class MaterialTextureSourceCatalog:
             render_target_pool=self._render_target_pool,
         )
 
+    def preview_pixels(self, tag: str, name: str, default_kind: str):
+        """Return CPU pixels for a texture-source thumbnail, when available."""
+
+        try:
+            if tag == "default":
+                from termin.render.texture import get_normal_texture, get_white_texture
+
+                texture = get_normal_texture() if default_kind == "normal" else get_white_texture()
+                return texture._image_data
+            if tag == "file":
+                texture = self._resource_manager.get_texture(name)
+                return None if texture is None else texture._image_data
+            if tag in ("rt_color", "rt_depth"):
+                texture = self.resolve_render_target(
+                    name,
+                    "depth" if tag == "rt_depth" else "color",
+                )
+                return None if texture is None else texture.data
+        except Exception:
+            _logger.exception("Failed to resolve material texture preview: %s/%s", tag, name)
+        return None
+
     def _render_target_sources(self) -> list[MaterialTextureSource]:
         names = set()
         if self._scene_getter is not None:

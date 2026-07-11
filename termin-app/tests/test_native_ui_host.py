@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from tcbase import Key
@@ -362,6 +363,7 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
     host._target_size = (0, 0)
     host._render_requested = True
     host._color_pickers = []
+    host._image_previews = []
     def pre_render(_context):
         calls.append("pre-render")
         host.request_render_update()
@@ -372,6 +374,57 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
     assert calls.index("begin-frame") < calls.index("pre-render") < calls.index("paint")
     assert calls[-1] == ("present", "target")
     assert host.render_requested
+
+
+def test_native_ui_host_uploads_image_preview_through_render_context():
+    from termin.editor_native.ui_host import NativeUiHost
+
+    class Handle:
+        valid = True
+
+    class Image:
+        handle = Handle()
+
+        def __init__(self) -> None:
+            self.textures = []
+
+        def set_texture(self, texture, size) -> None:
+            self.textures.append((texture, size))
+
+    class Document:
+        def is_alive(self, handle) -> bool:
+            return handle.valid
+
+    class Context:
+        def __init__(self) -> None:
+            self.created = []
+            self.destroyed = []
+
+        def create_texture_rgba8(self, width, height, pixels):
+            self.created.append((width, height, pixels.copy()))
+            return "preview-texture"
+
+        def destroy_texture(self, texture) -> None:
+            self.destroyed.append(texture)
+
+    host = NativeUiHost.__new__(NativeUiHost)
+    host.document = Document()
+    host.context = Context()
+    host._image_previews = []
+    host._render_requested = False
+    image = Image()
+
+    release = host.register_image_preview(
+        image,
+        np.array([[[12, 34, 56]]], dtype=np.uint8),
+    )
+    host._sync_image_previews()
+
+    assert host.context.created[0][:2] == (1, 1)
+    assert host.context.created[0][2].tolist() == [[[12, 34, 56, 255]]]
+    assert image.textures[0][0] == "preview-texture"
+    release()
+    assert host.context.destroyed == ["preview-texture"]
 
 
 def test_native_ui_host_applies_font_size_to_all_theme_roles():

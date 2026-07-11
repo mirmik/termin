@@ -15,9 +15,13 @@ from termin.editor_core.material_inspector_model import (
     material_vector,
 )
 from termin.editor_core.material_texture_sources import MaterialTextureSourceCatalog
-from termin.gui_native import Document, EdgeInsets, Size, WidgetRef
+from termin.gui_native import Color, Document, EdgeInsets, Size, WidgetRef
 
-from .inspector_fields import ColorDialogHandler
+from .inspector_fields import (
+    ColorDialogHandler,
+    TexturePreviewHandler,
+    build_native_color_control,
+)
 
 
 _logger = logging.getLogger(__name__)
@@ -32,7 +36,9 @@ class NativeMaterialInspector:
     resource_catalog: InspectorResourceCatalog
     texture_sources: MaterialTextureSourceCatalog
     show_color_dialog: ColorDialogHandler | None = None
+    show_texture_preview: TexturePreviewHandler | None = None
     controls: dict[str, object] = field(default_factory=dict)
+    _preview_releases: list[Callable[[], None]] = field(default_factory=list)
 
     def set_target(self, material) -> None:
         self.rebuild(self.controller.set_target(material))
@@ -41,6 +47,7 @@ class NativeMaterialInspector:
         self.rebuild(self.controller.refresh())
 
     def rebuild(self, snapshot: MaterialInspectorSnapshot) -> None:
+        self._release_previews()
         for child in tuple(self.root.children):
             if not self.document.destroy_widget_recursive(child.handle):
                 _logger.error("Failed to destroy native material inspector row: %s", child.debug_name)
@@ -51,17 +58,28 @@ class NativeMaterialInspector:
             self.request_render()
             return
 
+        row_heights = [28.0, 28.0, 28.0, 28.0]
         self._append_text_row("Name", snapshot.name, self.controller.set_name, "name")
         self._append_label_row("UUID", snapshot.uuid or "—", "uuid")
         self._append_shader_row(snapshot)
         self._append_label_row("Phases", str(snapshot.phase_count), "phases")
         if snapshot.message:
             self.root.add_fixed_child(self.document.create_label(snapshot.message, "native-material-message"), 26.0)
+            row_heights.append(26.0)
         for prop in snapshot.properties:
             self._append_property(prop)
-        row_count = 4 + len(snapshot.properties) + (1 if snapshot.message else 0)
-        self.root.preferred_size = Size(300.0, float(row_count * 30))
+            row_heights.append(self._property_row_height(prop))
+        self.root.preferred_size = Size(
+            300.0,
+            sum(row_heights) + 2.0 * max(0, len(row_heights) - 1),
+        )
         self.request_render()
+
+    @staticmethod
+    def _property_row_height(prop: MaterialPropertySnapshot) -> float:
+        if prop.kind in ("Texture", "Texture2D") and prop.texture is not None:
+            return 52.0
+        return 28.0
 
     def _row(self, key: str, label_text: str) -> WidgetRef:
         row = self.document.create_hstack(f"native-material-row-{key}")
@@ -108,10 +126,68 @@ class NativeMaterialInspector:
         self.controls["shader"] = combo
 
     def _append_property(self, prop: MaterialPropertySnapshot) -> None:
+        if prop.kind in ("Texture", "Texture2D") and prop.texture is not None:
+            self._append_texture_property(prop)
+            return
         row = self._row(prop.name, prop.label)
         control = self._property_control(prop)
         row.add_stretch_child(control)
         self.root.add_fixed_child(row, 28.0)
+
+    def _append_texture_property(self, prop: MaterialPropertySnapshot) -> None:
+        if prop.texture is None:
+            return
+        row = self._row(prop.name, prop.label)
+        control = self.document.create_hstack(f"native-material-texture-{prop.name}")
+        control.set_layout_spacing(6.0)
+        preview = self.document.create_hstack(f"native-material-texture-preview-{prop.name}")
+        preview.set_layout_background(Color(0.08, 0.09, 0.11, 1.0))
+        preview.set_layout_border(Color(0.38, 0.40, 0.46, 1.0), 1.0)
+        image = self.document.create_image_widget()
+        image.set_preserve_aspect(False)
+        preview.add_stretch_child(image.widget)
+        control.add_fixed_child(preview, 48.0)
+
+        choices = self.texture_sources.choices(prop.texture.default_kind)
+        combo = self.document.create_combo_box()
+        selected = 0
+        for index, choice in enumerate(choices):
+            combo.add_item(choice.label)
+            if choice.tag == prop.texture.tag and choice.name == prop.texture.name:
+                selected = index
+        combo.selected_index = selected
+
+        if self.show_texture_preview is not None and 0 <= selected < len(choices):
+            choice = choices[selected]
+            pixels = self.texture_sources.preview_pixels(
+                choice.tag,
+                choice.name,
+                prop.texture.default_kind,
+            )
+            if pixels is not None:
+                self._preview_releases.append(self.show_texture_preview(image, pixels))
+
+        weak_owner = weakref.ref(self)
+
+        def changed(index: int, _text: str) -> None:
+            owner = weak_owner()
+            if owner is None or not (0 <= index < len(choices)):
+                return
+            choice = choices[index]
+            owner._mutate(
+                lambda: owner.controller.set_texture(
+                    prop.name,
+                    choice.tag,
+                    choice.name,
+                    default_kind=prop.texture.default_kind,
+                )
+            )
+
+        combo.connect_changed(changed)
+        control.add_stretch_child(combo.widget)
+        row.add_stretch_child(control)
+        self.root.add_fixed_child(row, 52.0)
+        self.controls[prop.name] = combo
 
     def _property_control(self, prop: MaterialPropertySnapshot) -> WidgetRef:
         weak_owner = weakref.ref(self)
@@ -157,10 +233,6 @@ class NativeMaterialInspector:
             return vector_row
         if prop.kind == "Color":
             color = material_vector(prop.value, 4, color=True)
-            button = self.document.create_button(
-                ", ".join(f"{component:.2f}" for component in color),
-                f"native-material-color-{prop.name}",
-            )
 
             def clicked() -> None:
                 owner = weak_owner()
@@ -177,36 +249,14 @@ class NativeMaterialInspector:
 
                 owner.show_color_dialog(color, finished)
 
-            button.connect_clicked(clicked)
+            control, button = build_native_color_control(
+                self.document,
+                color,
+                debug_name=f"native-material-color-{prop.name}",
+                on_clicked=clicked,
+            )
             self.controls[prop.name] = button
-            return button.widget
-        if prop.kind in ("Texture", "Texture2D") and prop.texture is not None:
-            choices = self.texture_sources.choices(prop.texture.default_kind)
-            combo = self.document.create_combo_box()
-            selected = 0
-            for index, choice in enumerate(choices):
-                combo.add_item(choice.label)
-                if choice.tag == prop.texture.tag and choice.name == prop.texture.name:
-                    selected = index
-            combo.selected_index = selected
-
-            def changed(index: int, _text: str) -> None:
-                owner = weak_owner()
-                if owner is None or not (0 <= index < len(choices)):
-                    return
-                choice = choices[index]
-                owner._mutate(
-                    lambda: owner.controller.set_texture(
-                        prop.name,
-                        choice.tag,
-                        choice.name,
-                        default_kind=prop.texture.default_kind,
-                    )
-                )
-
-            combo.connect_changed(changed)
-            self.controls[prop.name] = combo
-            return combo.widget
+            return control
         label = self.document.create_label(str(prop.value), f"native-material-unsupported-{prop.name}")
         label.enabled = False
         self.controls[prop.name] = label
@@ -214,6 +264,11 @@ class NativeMaterialInspector:
 
     def _mutate(self, mutation: Callable[[], MaterialInspectorSnapshot]) -> None:
         self.rebuild(mutation())
+
+    def _release_previews(self) -> None:
+        for release in self._preview_releases:
+            release()
+        self._preview_releases.clear()
 
 
 def build_native_material_inspector(
@@ -223,6 +278,7 @@ def build_native_material_inspector(
     request_render: Callable[[], None],
     resource_catalog: InspectorResourceCatalog,
     show_color_dialog: ColorDialogHandler | None = None,
+    show_texture_preview: TexturePreviewHandler | None = None,
     texture_sources: MaterialTextureSourceCatalog | None = None,
 ) -> NativeMaterialInspector:
     sources = texture_sources or MaterialTextureSourceCatalog(resource_catalog.resource_manager)
@@ -237,6 +293,7 @@ def build_native_material_inspector(
         resource_catalog,
         sources,
         show_color_dialog,
+        show_texture_preview,
     )
 
 

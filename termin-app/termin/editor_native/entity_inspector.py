@@ -17,6 +17,7 @@ from termin.editor_native.inspector_fields import (
     ColorDialogHandler,
     LayerMaskDialogHandler,
     NativeInspectorFields,
+    TexturePreviewHandler,
     build_native_inspector_fields,
 )
 from termin.gui_native import (
@@ -53,8 +54,8 @@ class NativeEntityInspector:
     add_soa_component_menu: object
     component_context_model: CommandModel
     component_context_menu: object
-    field_scroll: object
-    field_content: WidgetRef
+    scroll: object
+    content: WidgetRef
     extension_host: WidgetRef
     fields: NativeInspectorFields
     viewport: Callable[[], Rect]
@@ -228,17 +229,22 @@ def build_native_entity_inspector(
     viewport: Callable[[], Rect],
     show_color_dialog: ColorDialogHandler | None = None,
     show_layer_mask_dialog: LayerMaskDialogHandler | None = None,
+    show_texture_preview: TexturePreviewHandler | None = None,
     resource_catalog: InspectorResourceCatalog | None = None,
     show_input: InputDialogHandler | None = None,
 ) -> NativeEntityInspector:
     root = document.create_vstack("native-entity-inspector")
     root.stable_id = "editor.inspector.entity"
     root.preferred_size = Size(360.0, 626.0)
-    root.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
-    root.set_layout_spacing(4.0)
+    content = document.create_vstack("native-entity-inspector-scroll-content")
+    content.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
+    content.set_layout_spacing(4.0)
+    scroll = document.create_scroll_area("native-entity-inspector-scroll")
+    scroll.set_content(content)
+    root.add_stretch_child(scroll.widget)
 
     title = document.create_label("Inspector", "native-entity-inspector-title")
-    root.add_fixed_child(title, 28.0)
+    content.add_fixed_child(title, 28.0)
 
     name_row = document.create_hstack("native-inspector-entity-name-row")
     name_row.set_layout_spacing(4.0)
@@ -246,7 +252,7 @@ def build_native_entity_inspector(
     name_row.add_fixed_child(name_label, 72.0)
     name_input = document.create_text_input()
     name_row.add_stretch_child(name_input.widget)
-    root.add_fixed_child(name_row, 30.0)
+    content.add_fixed_child(name_row, 30.0)
 
     uuid_row = document.create_hstack("native-inspector-entity-uuid-row")
     uuid_row.set_layout_spacing(4.0)
@@ -254,7 +260,7 @@ def build_native_entity_inspector(
     uuid_row.add_fixed_child(uuid_label, 72.0)
     uuid_value = document.create_status_bar("No entity selected")
     uuid_row.add_stretch_child(uuid_value.widget)
-    root.add_fixed_child(uuid_row, 26.0)
+    content.add_fixed_child(uuid_row, 26.0)
 
     layer_row = document.create_hstack("native-inspector-entity-layer-row")
     layer_row.set_layout_spacing(4.0)
@@ -264,7 +270,7 @@ def build_native_entity_inspector(
     layer_row.add_stretch_child(layer_combo.widget)
     apply_layer_button = document.create_button("↓", "native-inspector-apply-layer")
     layer_row.add_fixed_child(apply_layer_button.widget, 32.0)
-    root.add_fixed_child(layer_row, 30.0)
+    content.add_fixed_child(layer_row, 30.0)
 
     transform_boxes = []
     for key, label_text in (
@@ -286,15 +292,15 @@ def build_native_entity_inspector(
             row.add_stretch_child(box.widget)
             boxes.append(box)
         transform_boxes.append(tuple(boxes))
-        root.add_fixed_child(row, 30.0)
+        content.add_fixed_child(row, 30.0)
 
     component_label = document.create_label("Components", "native-inspector-components-label")
-    root.add_fixed_child(component_label, 26.0)
+    content.add_fixed_child(component_label, 26.0)
     component_model = CollectionModel()
     component_list = document.create_list_widget(component_model)
     component_list.set_row_height(24.0)
     component_list.set_row_spacing(1.0)
-    root.add_fixed_child(component_list.widget, 150.0)
+    content.add_fixed_child(component_list.widget, 150.0)
 
     add_component_model = CommandModel()
     add_component_menu = document.create_menu(add_component_model)
@@ -309,19 +315,15 @@ def build_native_entity_inspector(
         request_render=request_render,
         show_color_dialog=show_color_dialog,
         show_layer_mask_dialog=show_layer_mask_dialog,
+        show_texture_preview=show_texture_preview,
         layer_names=lambda: controller.snapshot.layer_names,
         resource_catalog=resource_catalog,
     )
-    field_content = document.create_vstack("native-entity-inspector-scroll-content")
-    field_content.set_layout_spacing(4.0)
-    field_content.add_preferred_child(fields.root)
+    content.add_preferred_child(fields.root)
     extension_host = document.create_vstack("native-component-extension-host")
     extension_host.set_layout_spacing(4.0)
     extension_host.visible = False
-    field_content.add_preferred_child(extension_host)
-    field_scroll = document.create_scroll_area("native-entity-inspector-fields-scroll")
-    field_scroll.set_content(field_content)
-    root.add_stretch_child(field_scroll.widget)
+    content.add_preferred_child(extension_host)
 
     inspector = NativeEntityInspector(
         document=document,
@@ -340,8 +342,8 @@ def build_native_entity_inspector(
         add_soa_component_menu=add_soa_component_menu,
         component_context_model=component_context_model,
         component_context_menu=component_context_menu,
-        field_scroll=field_scroll,
-        field_content=field_content,
+        scroll=scroll,
+        content=content,
         extension_host=extension_host,
         fields=fields,
         viewport=viewport,
