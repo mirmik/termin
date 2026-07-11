@@ -32,6 +32,7 @@ public:
         const std::string& output_res = "normal",
         const std::string& pass_name = "Normal"
     ) : GeometryPassBase(pass_name, input_res, output_res) {}
+    static void register_type();
 
     ~NormalPass() override { release_tgfx2_resources(); }
 

@@ -92,6 +92,12 @@ void DebugTrianglePass::destroy() {
     device2_ = nullptr;
 }
 
-TC_REGISTER_FRAME_PASS(DebugTrianglePass);
+TC_DEFINE_FRAME_PASS_FACTORY(DebugTrianglePass);
+
+void DebugTrianglePass::register_type() {
+    register_frame_pass_DebugTrianglePass();
+    _register_inspect_output_res();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

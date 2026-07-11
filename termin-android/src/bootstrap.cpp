@@ -63,6 +63,7 @@ namespace {
 
 class UIWidgetPass final : public termin::CxxFramePass {
 public:
+    static void register_type();
     std::string input_res = "color";
     std::string output_res = "color+widgets";
 
@@ -111,7 +112,14 @@ public:
     }
 };
 
-TC_REGISTER_FRAME_PASS(UIWidgetPass);
+TC_DEFINE_FRAME_PASS_FACTORY(UIWidgetPass);
+
+void UIWidgetPass::register_type() {
+    register_frame_pass_UIWidgetPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_metadata_graph();
+}
 
 struct AndroidBootstrapState {
     std::string app_data_dir;
@@ -395,6 +403,7 @@ void register_android_runtime_inspect_fields() {
     tc_inspect_kind_core_init();
     tc::KindRegistryCpp::instance();
     termin::MeshComponent::register_type();
+    UIWidgetPass::register_type();
 
     auto& inspect = tc::InspectRegistry::instance();
     inspect.set_type_parent("MeshRenderer", "Component");

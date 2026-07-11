@@ -99,6 +99,7 @@ struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
  */
 class TERMIN_RENDER_PASSES_API ShadowPass : public CxxFramePass {
 public:
+    static void register_type();
     // Pass configuration
     std::string output_res = "shadow_maps";
     float caster_offset = 50.0f;

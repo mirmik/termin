@@ -7,6 +7,8 @@
 #include <termin/entity/unknown_component.hpp>
 #include <termin/foliage/components_bootstrap.hpp>
 #include <termin/render/components_bootstrap.hpp>
+#include <termin/render/builtin_passes.hpp>
+#include <termin/render_passes/bootstrap.hpp>
 #include <termin/render/skeleton_components_bootstrap.hpp>
 #include <termin/entity/component.hpp>
 #include <termin/entity/entity.hpp>
@@ -73,6 +75,7 @@ struct BootstrapState {
     bool entity_registered = false;
     bool inspect_initialized = false;
     bool builtin_components_registered = false;
+    bool builtin_passes_registered = false;
 };
 
 BootstrapState g_bootstrap_state;
@@ -218,11 +221,22 @@ void register_builtin_component_types() {
     g_bootstrap_state.builtin_components_registered = true;
 }
 
+void register_builtin_pass_types() {
+    if (g_bootstrap_state.builtin_passes_registered) {
+        return;
+    }
+    register_builtin_render_pass_types();
+    register_builtin_render_component_pass_types();
+    register_builtin_render_passes();
+    g_bootstrap_state.builtin_passes_registered = true;
+}
+
 void bootstrap_runtime() {
     tc_init();
     init_inspect_adapters();
     register_runtime_kinds();
     register_builtin_component_types();
+    register_builtin_pass_types();
     register_scene_extensions();
 }
 

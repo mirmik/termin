@@ -882,6 +882,13 @@ void ShadowPass::execute(ExecuteContext& ctx) {
 }
 
 // Register ShadowPass in tc_pass_registry for C#/standalone C++ usage
-TC_REGISTER_FRAME_PASS(ShadowPass);
+TC_DEFINE_FRAME_PASS_FACTORY(ShadowPass);
+
+void ShadowPass::register_type() {
+    register_frame_pass_ShadowPass();
+    _register_inspect_output_res();
+    _register_inspect_caster_offset();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import atexit
 import os
+import subprocess
 import sys
 import weakref
 from dataclasses import dataclass
@@ -70,6 +71,7 @@ class ProjectModulesRuntime:
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
         self._dirty_module_reasons: dict[str, set[str]] = {}
+        self._background_error = ""
         self._closed = False
         self._configure_environment()
         self._configure_runtime()
@@ -84,7 +86,7 @@ class ProjectModulesRuntime:
 
     @property
     def last_error(self) -> str:
-        return self._runtime.last_error
+        return self._background_error or self._runtime.last_error
 
     @property
     def sync_live_scenes(self) -> bool:
@@ -123,20 +125,23 @@ class ProjectModulesRuntime:
 
     def load_project(self, project_root: str | Path | None = None) -> bool:
         self._ensure_open()
-        if project_root is not None:
-            self._project_root = Path(project_root).resolve()
+        next_project_root = (
+            Path(project_root).resolve() if project_root is not None else self._project_root
+        )
 
-        if self._project_root is None:
+        if next_project_root is None:
             log.error("[ProjectModulesRuntime] project root is not set")
             return False
 
+        if not self._shutdown_runtime():
+            return False
+        self._project_root = next_project_root
         self._update_environment()
-        self._shutdown_runtime()
         self._recreate_runtime()
         self._configure_discovery_ignored_roots()
-        self._runtime.discover(self._project_root)
-        if self._runtime.last_error:
+        if not self._runtime.discover(self._project_root):
             log.error(f"[ProjectModulesRuntime] discover failed: {self._runtime.last_error}")
+            return False
         success = self._runtime.load_all()
         if success:
             self._dirty_module_reasons.clear()
@@ -144,22 +149,25 @@ class ProjectModulesRuntime:
 
     def discover_project(self, project_root: str | Path | None = None) -> bool:
         self._ensure_open()
-        if project_root is not None:
-            self._project_root = Path(project_root).resolve()
+        next_project_root = (
+            Path(project_root).resolve() if project_root is not None else self._project_root
+        )
 
-        if self._project_root is None:
+        if next_project_root is None:
             log.error("[ProjectModulesRuntime] project root is not set")
             return False
 
+        if not self._shutdown_runtime():
+            return False
+        self._project_root = next_project_root
         self._update_environment()
-        self._shutdown_runtime()
         self._recreate_runtime()
         self._configure_discovery_ignored_roots()
-        self._runtime.discover(self._project_root)
-        return not self._runtime.last_error
+        return bool(self._runtime.discover(self._project_root))
 
     def reload_module(self, module_id: str) -> bool:
         self._ensure_open()
+        self._background_error = ""
         success = self._runtime.reload_module_with_dependents(module_id)
         if success:
             self._dirty_module_reasons.pop(module_id, None)
@@ -296,6 +304,7 @@ class ProjectModulesRuntime:
 
     def build_module(self, module_id: str) -> bool:
         self._ensure_open()
+        self._background_error = ""
         return self._runtime.build_module(module_id)
 
     def clean_module(self, module_id: str) -> bool:
@@ -304,7 +313,86 @@ class ProjectModulesRuntime:
 
     def rebuild_module(self, module_id: str) -> bool:
         self._ensure_open()
+        self._background_error = ""
         return self._runtime.rebuild_module(module_id)
+
+    def prepare_module_artifacts(
+        self,
+        *,
+        project_root: str | Path | None = None,
+        operation: str = "warmup",
+        module_id: str | None = None,
+    ) -> bool:
+        """Build project module artifacts in an isolated worker process.
+
+        This method is safe to call from an editor worker: the subprocess owns
+        its own module runtime and cannot mutate this process' scenes or global
+        registries. The editor must perform the subsequent load/reload commit on
+        its owner thread.
+        """
+        self._ensure_open()
+        self._background_error = ""
+        target_root = Path(project_root).resolve() if project_root is not None else self._project_root
+        if target_root is None:
+            self._background_error = "Project root is not set for module artifact preparation"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}")
+            return False
+
+        python_executable = self._integration.environment.python_executable
+        if not python_executable:
+            self._background_error = "SDK Python executable is not configured"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}")
+            return False
+
+        command = [
+            python_executable,
+            "-m",
+            "termin.project_modules.warmup",
+            "warmup",
+            "--project",
+            str(target_root),
+            "--quiet",
+        ]
+        operation_flags = {
+            "warmup": None,
+            "build": "--build-module",
+            "clean": "--clean-module",
+            "rebuild": "--rebuild-module",
+        }
+        if operation not in operation_flags:
+            raise ValueError(f"Unsupported module artifact operation: {operation}")
+        flag = operation_flags[operation]
+        if flag is not None:
+            if not module_id:
+                raise ValueError(f"Module id is required for artifact operation '{operation}'")
+            command.extend([flag, module_id])
+
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=target_root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            assert process.stdout is not None
+            for raw_line in process.stdout:
+                line = raw_line.rstrip("\r\n")
+                if line:
+                    self._on_build_output("module-build", line)
+            return_code = process.wait()
+        except Exception as exc:
+            self._background_error = f"Failed to run isolated module build: {exc}"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}", exc_info=True)
+            return False
+
+        if return_code != 0:
+            self._background_error = f"Isolated module build failed with exit code {return_code}"
+            log.error(f"[ProjectModulesRuntime] {self._background_error}")
+            return False
+        return True
 
     def unload_module(self, module_id: str) -> bool:
         self._ensure_open()
@@ -321,9 +409,18 @@ class ProjectModulesRuntime:
         if self._project_root is None:
             self._project_root = descriptor.parent
 
-        self._update_environment()
-        self._configure_discovery_ignored_roots()
-        self._runtime.discover(self._project_root)
+        existing = self.find_by_descriptor(descriptor)
+        if existing is not None:
+            success = self._runtime.load_module(existing.id)
+            if success:
+                self._dirty_module_reasons.pop(existing.id, None)
+            return success
+
+        # A new descriptor changes the dependency graph. Rebuild the runtime
+        # through its explicit shutdown boundary instead of rediscovering over
+        # live backend handles and orphaning the previous records.
+        if not self.load_project(self._project_root):
+            return False
         record = self.find_by_descriptor(descriptor)
         if record is None:
             log.error(f"[ProjectModulesRuntime] descriptor is not part of discovered project: {descriptor}")
@@ -333,17 +430,17 @@ class ProjectModulesRuntime:
             self._dirty_module_reasons.pop(record.id, None)
         return success
 
-    def close(self) -> None:
+    def close(self) -> bool:
         if self._closed:
-            return
+            return True
 
-        try:
-            self._shutdown_runtime()
-        finally:
-            self._detach_runtime_callbacks()
-            self._listeners.clear()
-            self._build_output_listeners.clear()
-            self._closed = True
+        if not self._shutdown_runtime():
+            return False
+        self._detach_runtime_callbacks()
+        self._listeners.clear()
+        self._build_output_listeners.clear()
+        self._closed = True
+        return True
 
     def __enter__(self) -> ProjectModulesRuntime:
         self._ensure_open()
@@ -530,35 +627,11 @@ class ProjectModulesRuntime:
 
         self._runtime.set_discovery_ignored_roots(list(project_ignored_roots(self._project_root)))
 
-    def _shutdown_runtime(self) -> None:
-        records_by_id: dict[str, ModuleRecord] = {}
-        for record in self.records():
-            records_by_id[record.id] = record
-
-        unloaded: set[str] = set()
-
-        def unload_recursive(module_id: str) -> None:
-            if module_id in unloaded:
-                return
-
-            for record in list(records_by_id.values()):
-                if module_id in record.dependencies:
-                    unload_recursive(record.id)
-
-            record = records_by_id.get(module_id)
-            if record is None:
-                unloaded.add(module_id)
-                return
-
-            if record.state.name == "Loaded":
-                if not self._runtime.unload_module(module_id):
-                    log.error(
-                        f"[ProjectModulesRuntime] failed to unload module '{module_id}': {self._runtime.last_error}"
-                    )
-            unloaded.add(module_id)
-
-        for record in list(records_by_id.values()):
-            unload_recursive(record.id)
+    def _shutdown_runtime(self) -> bool:
+        if self._runtime.shutdown():
+            return True
+        log.error(f"[ProjectModulesRuntime] runtime shutdown failed: {self._runtime.last_error}")
+        return False
 
     def _detach_runtime_callbacks(self) -> None:
         self._runtime.clear_callbacks()

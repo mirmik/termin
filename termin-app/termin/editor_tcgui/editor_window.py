@@ -205,6 +205,7 @@ class EditorWindowTcgui:
         # Game mode state + transitions live in GameModeModel. The model is
         # created after editor_attachment/rendering_controller exist (end of build()).
         self._game_mode_model = None
+        self._play_prepare_running = False
         self._saved_tree_expanded_uuids: list[str] | None = None
         self._spacemouse = None
         self._dialog_launcher = EditorDialogLauncher(
@@ -1307,8 +1308,45 @@ class EditorWindowTcgui:
         return self._game_mode_model.game_scene_name if self._game_mode_model else None
 
     def _toggle_game_mode(self) -> None:
-        if self._game_mode_model is not None:
+        if self._game_mode_model is None:
+            return
+        if self._game_mode_model.is_game_mode:
             self._game_mode_model.toggle_game_mode()
+            return
+        if self._play_prepare_running:
+            log.info("[EditorWindow] Ignoring Play while module preparation is running")
+            return
+
+        from termin.project_modules.runtime import get_project_modules_runtime
+
+        modules_runtime = get_project_modules_runtime()
+        if self._ui is None or not modules_runtime.changed_modules():
+            self._game_mode_model.toggle_game_mode()
+            return
+
+        from termin.editor_tcgui.dialogs.module_operation_dialog import show_module_operation_dialog
+
+        self._play_prepare_running = True
+
+        def finish(success: bool) -> None:
+            self._play_prepare_running = False
+            if success and self._game_mode_model is not None:
+                self._game_mode_model.toggle_game_mode()
+            elif not success:
+                log.error(
+                    f"[EditorWindow] Module artifact preparation before Play failed: "
+                    f"{modules_runtime.last_error}"
+                )
+
+        show_module_operation_dialog(
+            self._ui,
+            modules_runtime,
+            title="Prepare Modules for Play",
+            start_message="Building changed project modules...",
+            worker_action=modules_runtime.prepare_module_artifacts,
+            owner_action=lambda: True,
+            on_complete=finish,
+        )
 
     def _toggle_pause(self) -> None:
         if self._game_mode_model is None:

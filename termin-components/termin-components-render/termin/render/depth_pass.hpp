@@ -60,6 +60,7 @@ public:
         const std::string& output_res = "depth",
         const std::string& pass_name = "Depth"
     ) : GeometryPassBase(pass_name, input_res, output_res) {}
+    static void register_type();
 
     ~DepthPass() override { release_tgfx2_resources(); }
 
@@ -151,6 +152,7 @@ public:
     ) : output_res(output_res) {
         set_pass_name(pass_name);
     }
+    static void register_type();
 
     ~DepthOnlyPass() override { release_tgfx2_resources(); }
 
@@ -231,6 +233,7 @@ public:
     ) : input_res(input_res), output_res(output_res) {
         set_pass_name(pass_name);
     }
+    static void register_type();
 
     ~DepthToColorPass() override { release_tgfx2_resources(); }
 
@@ -296,6 +299,7 @@ public:
     ) : input_res(input_res), output_res(output_res) {
         set_pass_name(pass_name);
     }
+    static void register_type();
 
     ~ColorToDepthPass() override { release_tgfx2_resources(); }
 

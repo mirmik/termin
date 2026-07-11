@@ -15,6 +15,7 @@ namespace termin {
 
 class TERMIN_RENDER_PASSES_API DebugTrianglePass : public CxxFramePass {
 public:
+    static void register_type();
     std::string output_res = "OUTPUT";
 
 private:

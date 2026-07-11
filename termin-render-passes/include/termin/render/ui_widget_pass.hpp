@@ -12,6 +12,7 @@ namespace termin {
 // Desktop builds leave the UIWidgetPass registry name to the Python pass.
 class TERMIN_RENDER_PASSES_API UIWidgetPass : public CxxFramePass {
 public:
+    static void register_type();
     std::string input_res = "color";
     std::string output_res = "color+widgets";
     bool include_internal_entities = false;

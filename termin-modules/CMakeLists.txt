@@ -30,6 +30,7 @@ add_library(termin_modules SHARED
     src/module_cpp_backend.cpp
     src/module_descriptor_parser.cpp
     src/module_runtime.cpp
+    src/native_module_abi.cpp
     src/text_encoding.cpp
 )
 add_library(termin_modules::termin_modules ALIAS termin_modules)
@@ -61,7 +62,8 @@ target_link_libraries(termin_modules
 add_executable(termin_module_native_validator
     tools/native_validator.cpp
 )
-target_link_libraries(termin_module_native_validator PRIVATE ${CMAKE_DL_LIBS})
+target_link_libraries(termin_module_native_validator PRIVATE termin_modules ${CMAKE_DL_LIBS})
+termin_set_rpath_tool(termin_module_native_validator)
 set_target_properties(termin_module_native_validator PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
@@ -174,6 +176,38 @@ install(FILES
 if(TERMIN_MODULES_BUILD_TESTS)
     enable_testing()
 
+    add_library(termin_modules_shadow_test_dependency SHARED
+        tests/shadow_test_dependency.cpp
+    )
+    add_library(termin_modules_shadow_test_module SHARED
+        tests/shadow_test_module.cpp
+    )
+    target_link_libraries(
+        termin_modules_shadow_test_module
+        PRIVATE termin_modules_shadow_test_dependency termin_modules
+    )
+    set_target_properties(
+        termin_modules_shadow_test_module
+        PROPERTIES BUILD_RPATH "$ORIGIN"
+    )
+
+    foreach(abi_case IN ITEMS missing_descriptor mismatch init_failure shutdown_retry)
+        add_library(termin_modules_abi_${abi_case} SHARED
+            tests/abi_contract_test_module.cpp
+        )
+        target_link_libraries(termin_modules_abi_${abi_case} PRIVATE termin_modules)
+        string(TOUPPER "${abi_case}" abi_case_upper)
+        target_compile_definitions(termin_modules_abi_${abi_case} PRIVATE
+            "TERMIN_ABI_TEST_${abi_case_upper}=1"
+        )
+        set_target_properties(termin_modules_abi_${abi_case} PROPERTIES
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+            ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+        )
+        termin_set_rpath_lib(termin_modules_abi_${abi_case})
+    endforeach()
+
     add_executable(termin_modules_runtime_test
         tests/test_module_runtime.cpp
     )
@@ -183,10 +217,24 @@ if(TERMIN_MODULES_BUILD_TESTS)
     )
 
     target_link_libraries(termin_modules_runtime_test PRIVATE termin_modules)
-    add_dependencies(termin_modules_runtime_test termin_module_native_validator)
+    add_dependencies(
+        termin_modules_runtime_test
+        termin_module_native_validator
+        termin_modules_shadow_test_module
+        termin_modules_abi_missing_descriptor
+        termin_modules_abi_mismatch
+        termin_modules_abi_init_failure
+        termin_modules_abi_shutdown_retry
+    )
     target_compile_definitions(termin_modules_runtime_test PRIVATE
         TERMIN_MODULES_TEST_BUILD_ROOT="${CMAKE_BINARY_DIR}"
         TERMIN_MODULES_TEST_CXX_COMPILER="${CMAKE_CXX_COMPILER}"
+        TERMIN_MODULES_TEST_SHADOW_MODULE="$<TARGET_FILE:termin_modules_shadow_test_module>"
+        TERMIN_MODULES_TEST_SHADOW_DEPENDENCY="$<TARGET_FILE:termin_modules_shadow_test_dependency>"
+        TERMIN_MODULES_TEST_ABI_MISSING="$<TARGET_FILE:termin_modules_abi_missing_descriptor>"
+        TERMIN_MODULES_TEST_ABI_MISMATCH="$<TARGET_FILE:termin_modules_abi_mismatch>"
+        TERMIN_MODULES_TEST_ABI_INIT_FAILURE="$<TARGET_FILE:termin_modules_abi_init_failure>"
+        TERMIN_MODULES_TEST_ABI_SHUTDOWN_RETRY="$<TARGET_FILE:termin_modules_abi_shutdown_retry>"
     )
     set_target_properties(termin_modules_runtime_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"

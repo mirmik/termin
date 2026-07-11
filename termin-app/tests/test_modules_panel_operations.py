@@ -3,9 +3,11 @@ import threading
 import time
 from types import SimpleNamespace
 
+import termin.project_modules.runtime as project_modules_runtime
 from termin.editor_tcgui.dialogs import module_operation_dialog
 from termin.editor_tcgui import modules_panel as modules_panel_module
 from termin.editor_tcgui.modules_panel import ModulesPanel
+from termin.editor_tcgui.editor_window import EditorWindowTcgui
 from termin_modules import CppModuleBackend, ModuleEnvironment, ModuleKind, ModuleRuntime, ModuleState
 
 
@@ -23,6 +25,7 @@ class FakeModulesRuntime:
         self.last_error = ""
         self.listeners = []
         self.build_calls: list[str] = []
+        self.artifact_calls: list[tuple[str, str | None]] = []
         self.records_read_count = 0
 
     def add_listener(self, listener) -> None:
@@ -48,6 +51,17 @@ class FakeModulesRuntime:
         self.build_calls.append(module_id)
         return True
 
+    def prepare_module_artifacts(
+        self,
+        *,
+        operation: str = "warmup",
+        module_id: str | None = None,
+        project_root=None,
+    ) -> bool:
+        del project_root
+        self.artifact_calls.append((operation, module_id))
+        return True
+
 
 class RuntimeThatFailsWhenRead(FakeModulesRuntime):
     def records(self) -> list[object]:
@@ -63,17 +77,30 @@ def test_modules_panel_build_module_uses_progress_dialog(monkeypatch) -> None:
     panel._selected_module = "native_core"
     dialog_calls = []
 
-    def fake_dialog(ui, runtime_arg, *, title, start_message, action, on_complete) -> None:
+    def fake_dialog(
+        ui,
+        runtime_arg,
+        *,
+        title,
+        start_message,
+        worker_action=None,
+        owner_action=None,
+        on_complete,
+    ) -> None:
         dialog_calls.append((ui, runtime_arg, title, start_message))
         assert panel._operation_running
         assert all(not button.enabled for button in panel._operation_buttons)
-        on_complete(action())
+        success = worker_action() if worker_action is not None else True
+        if success and owner_action is not None:
+            success = owner_action()
+        on_complete(success)
 
     monkeypatch.setattr(modules_panel_module, "show_module_operation_dialog", fake_dialog)
 
     panel._on_build_clicked()
 
-    assert runtime.build_calls == ["native_core"]
+    assert runtime.build_calls == []
+    assert runtime.artifact_calls == [("build", "native_core")]
     assert dialog_calls == [
         (
             panel._ui,
@@ -126,6 +153,7 @@ def test_module_operation_dialog_uses_overlay_and_closes_on_completion(monkeypat
             self._target = target
             self.name = name
             self.daemon = daemon
+            assert not daemon
 
         def start(self) -> None:
             self._target()
@@ -150,7 +178,7 @@ def test_module_operation_dialog_uses_overlay_and_closes_on_completion(monkeypat
         runtime,
         title="Build Module",
         start_message="Building...",
-        action=action,
+        worker_action=action,
         on_complete=completed.append,
     )
 
@@ -158,6 +186,81 @@ def test_module_operation_dialog_uses_overlay_and_closes_on_completion(monkeypat
     assert closed == [True]
     assert completed == [True]
     assert runtime._build_output_listeners == []
+
+
+def test_module_operation_dialog_marshals_live_commit_to_owner_thread(monkeypatch) -> None:
+    runtime = FakeModulesRuntime()
+    runtime._build_output_listeners = []
+    runtime.add_build_output_listener = runtime._build_output_listeners.append
+    runtime.remove_build_output_listener = runtime._build_output_listeners.remove
+    owner_thread = threading.get_ident()
+    worker_threads: list[int] = []
+    commit_threads: list[int] = []
+    completed: list[bool] = []
+
+    class FakeDialog:
+        def __init__(self) -> None:
+            self.title = ""
+            self.content = None
+            self.buttons = []
+            self.default_button = None
+            self.cancel_button = None
+            self.min_width = 0
+
+        def show(self, ui, windowed: bool = False) -> None:
+            del ui, windowed
+
+        def close(self) -> None:
+            pass
+
+    class QueuedUi:
+        def __init__(self) -> None:
+            self.callbacks = []
+            self.lock = threading.Lock()
+
+        def defer(self, callback) -> None:
+            with self.lock:
+                self.callbacks.append(callback)
+
+        def process_one(self) -> bool:
+            with self.lock:
+                if not self.callbacks:
+                    return False
+                callback = self.callbacks.pop(0)
+            callback()
+            return True
+
+    ui = QueuedUi()
+    monkeypatch.setattr(module_operation_dialog, "Dialog", FakeDialog)
+
+    def slow_worker() -> bool:
+        worker_threads.append(threading.get_ident())
+        time.sleep(0.15)
+        return True
+
+    ticks = 0
+
+    module_operation_dialog.show_module_operation_dialog(
+        ui,
+        runtime,
+        title="Thread confinement",
+        start_message="Building...",
+        worker_action=slow_worker,
+        owner_action=lambda: commit_threads.append(threading.get_ident()) is None,
+        on_complete=completed.append,
+    )
+
+    deadline = time.monotonic() + 2.0
+    while not completed and time.monotonic() < deadline:
+        ticks += 1
+        if not ui.process_one():
+            time.sleep(0.01)
+
+    assert completed == [True]
+    assert len(worker_threads) == 1
+    assert worker_threads[0] != owner_thread
+    assert commit_threads == [owner_thread]
+    assert ticks > 5
 
 
 def test_native_module_build_releases_gil_while_waiting_for_command(tmp_path) -> None:
@@ -198,3 +301,57 @@ def test_native_module_build_releases_gil_while_waiting_for_command(tmp_path) ->
         thread.join(timeout=1.0)
 
     assert ticks > 5
+
+
+def test_play_gate_prebuilds_changed_modules_before_owner_thread_toggle(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class FakeGameModeModel:
+        is_game_mode = False
+
+        def toggle_game_mode(self) -> None:
+            calls.append("toggle")
+
+    class FakeRuntime:
+        last_error = ""
+
+        def changed_modules(self) -> list[str]:
+            return ["native_core"]
+
+        def prepare_module_artifacts(self) -> bool:
+            calls.append("build")
+            return True
+
+    runtime = FakeRuntime()
+    monkeypatch.setattr(project_modules_runtime, "get_project_modules_runtime", lambda: runtime)
+
+    from termin.editor_tcgui.dialogs import module_operation_dialog
+
+    def fake_dialog(
+        ui,
+        runtime_arg,
+        *,
+        worker_action,
+        owner_action,
+        on_complete,
+        **_kwargs,
+    ) -> None:
+        del ui
+        assert runtime_arg is runtime
+        success = worker_action()
+        if success:
+            calls.append("owner_boundary")
+            success = owner_action()
+        on_complete(success)
+
+    monkeypatch.setattr(module_operation_dialog, "show_module_operation_dialog", fake_dialog)
+
+    editor = EditorWindowTcgui.__new__(EditorWindowTcgui)
+    editor._game_mode_model = FakeGameModeModel()
+    editor._play_prepare_running = False
+    editor._ui = object()
+
+    editor._toggle_game_mode()
+
+    assert calls == ["build", "owner_boundary", "toggle"]
+    assert not editor._play_prepare_running

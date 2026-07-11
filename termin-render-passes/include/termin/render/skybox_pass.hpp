@@ -25,6 +25,7 @@ namespace termin {
 
 class TERMIN_RENDER_PASSES_API SkyBoxPass : public CxxFramePass {
 public:
+    static void register_type();
     std::string input_res = "empty";
     std::string output_res = "color";
 

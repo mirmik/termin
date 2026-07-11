@@ -41,14 +41,14 @@
   - при необходимости дочитать появившиеся регистрации типов и компонентов
 
 - `before_native_init`
-  - вызывается C++ backend-ом непосредственно перед `module_init`
+  - вызывается C++ backend-ом непосредственно перед ABI v1 `descriptor.init`
   - в `termin-engine` включает owner scope для явных module-owned C++
     registrations
 
 - `after_native_init`
-  - вызывается C++ backend-ом сразу после `module_init`
+  - вызывается C++ backend-ом сразу после `descriptor.init`
   - в `termin-engine` выключает owner scope
-  - вызывается и при исключении из `module_init`, если `before_native_init`
+  - вызывается и при ошибке/запрещённом исключении из `descriptor.init`, если `before_native_init`
     уже успел начаться
 
 - `before_unload`
@@ -57,7 +57,7 @@
   - в `termin-engine` деградирует live scene components в `UnknownComponent`
 
 - `before_native_close`
-  - вызывается только для staged C++ unload после `module_shutdown`, но до
+  - вызывается только для staged C++ unload после успешного `descriptor.shutdown`, но до
     `dlclose`/`FreeLibrary`
   - должен удалить все module-owned `InspectRegistry`/`ComponentRegistry`
     registrations, чтобы не осталось callbacks/factory pointers в выгружаемый код
@@ -111,6 +111,12 @@
 
 - `before_unload`
   - снять runtime-ссылки на Python objects, если они мешают reload
+
+- `before_module_remove`
+  - fallible prepare-фаза перед изменением registries, `sys.modules` и `sys.path`
+  - возвращает `false` и диагностическое сообщение, если хотя бы один live
+    object/type нельзя безопасно подготовить
+  - при отказе backend unload не вызывается, handle и loaded state сохраняются
 
 - `after_unload`
   - завершить cleanup после удаления модулей из `sys.modules`

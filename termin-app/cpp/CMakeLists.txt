@@ -127,6 +127,11 @@ if(COMMAND termin_require_package)
 else()
     find_package(termin_render REQUIRED)
 endif()
+if(COMMAND termin_require_package)
+    termin_require_package(termin_bootstrap termin_bootstrap::termin_bootstrap)
+else()
+    find_package(termin_bootstrap REQUIRED)
+endif()
 if(TERMIN_BUILD_PYTHON AND NOT TARGET termin_inspect::termin_inspect_python)
     message(FATAL_ERROR "termin Python build requires termin_inspect::termin_inspect_python. Rebuild/install termin-inspect with TERMIN_BUILD_PYTHON=ON.")
 endif()
@@ -335,6 +340,7 @@ if(BUILD_TESTS)
         termin_collision::termin_collision
         termin_render::termin_render
         termin_render_passes::termin_render_passes
+        termin_bootstrap::termin_bootstrap
         tgfx::termin_graphics
         tgfx::termin_graphics2
         ${CMAKE_DL_LIBS}

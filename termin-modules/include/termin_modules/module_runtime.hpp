@@ -17,6 +17,7 @@ namespace termin_modules {
 class TERMIN_MODULES_API ModuleRuntime {
 public:
     using ModuleEventCallback = std::function<void(const ModuleEvent&)>;
+    using MutationThreadChecker = std::function<bool(std::string&)>;
 
 private:
     ModuleEnvironment _environment;
@@ -27,20 +28,31 @@ private:
     std::vector<ModuleRecord> _records;
     ModuleEventCallback _event_callback;
     BuildOutputCallback _build_output_callback;
+    MutationThreadChecker _mutation_thread_checker;
     std::vector<std::filesystem::path> _discovery_ignored_roots;
     std::string _last_error;
 
 public:
+    ModuleRuntime() = default;
+    ~ModuleRuntime() noexcept;
+
+    ModuleRuntime(const ModuleRuntime&) = delete;
+    ModuleRuntime& operator=(const ModuleRuntime&) = delete;
+    ModuleRuntime(ModuleRuntime&&) = delete;
+    ModuleRuntime& operator=(ModuleRuntime&&) = delete;
+
     void set_environment(ModuleEnvironment environment);
     void set_cpp_callbacks(CppModuleCallbacks callbacks);
     void set_python_callbacks(PythonModuleCallbacks callbacks);
     void set_event_callback(ModuleEventCallback callback);
     void set_build_output_callback(BuildOutputCallback callback);
+    void set_mutation_thread_checker(MutationThreadChecker checker);
     void set_descriptor_parser(std::shared_ptr<ModuleDescriptorParser> parser);
     void set_discovery_ignored_roots(std::vector<std::filesystem::path> roots);
     void register_backend(std::shared_ptr<IModuleBackend> backend);
 
-    void discover(const std::filesystem::path& project_root);
+    bool discover(const std::filesystem::path& project_root);
+    bool shutdown();
 
     bool load_all();
     bool load_module(const std::string& module_id);
@@ -79,7 +91,7 @@ private:
         std::vector<ModuleRecord*>& ordered,
         std::string& error
     );
-    void refresh_spec(ModuleRecord& record);
+    bool refresh_descriptor_snapshot();
     std::shared_ptr<IModuleReloadState> capture_reload_state(const ModuleRecord& record) const;
     bool restore_reload_state(
         const std::string& module_id,
@@ -89,6 +101,9 @@ private:
     void emit(ModuleEventKind kind, const std::string& module_id, const std::string& message = std::string());
     bool should_skip(const ModuleSpec& spec) const;
     bool is_discovery_ignored(const std::filesystem::path& path) const;
+    bool load_module_impl(const std::string& module_id, bool refresh_descriptors);
+    bool unload_module_impl(const std::string& module_id, bool refresh_descriptor);
+    bool ensure_mutation_thread(const char* operation);
 };
 
 } // namespace termin_modules

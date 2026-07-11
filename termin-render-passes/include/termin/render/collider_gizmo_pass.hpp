@@ -18,6 +18,7 @@ extern TERMIN_RENDER_PASSES_API const Color4 COLLIDER_GIZMO_COLOR;
 // Supports Box, Sphere, Capsule, and ConvexHull collider types.
 class TERMIN_RENDER_PASSES_API ColliderGizmoPass : public CxxFramePass {
 public:
+    static void register_type();
     // Configuration
     std::string input_res = "color";
     std::string output_res = "color";

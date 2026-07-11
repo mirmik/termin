@@ -199,6 +199,8 @@ if(TERMIN_ENGINE_BUILD_TESTS)
         PRIVATE
             termin_scene::termin_scene
             termin_inspect::termin_inspect
+            termin_render::termin_render
+            termin_modules::termin_modules
     )
     set_target_properties(termin_engine_cpp_hot_reload_test_module PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
@@ -216,6 +218,7 @@ if(TERMIN_ENGINE_BUILD_TESTS)
             termin_modules::termin_modules
             termin_scene::termin_scene
             termin_inspect::termin_inspect
+            termin_render::termin_render
     )
     target_compile_definitions(termin_engine_cpp_module_hot_reload_test PRIVATE
         TERMIN_ENGINE_CPP_HOT_RELOAD_TEST_MODULE="$<TARGET_FILE:termin_engine_cpp_hot_reload_test_module>"
