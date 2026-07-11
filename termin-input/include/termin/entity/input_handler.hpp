@@ -12,6 +12,9 @@ struct tc_key_event;
 namespace termin {
 
 class TERMIN_INPUT_API InputHandler {
+private:
+    static const tc_input_vtable cxx_input_vtable;
+
 public:
     virtual ~InputHandler() = default;
 
@@ -20,7 +23,6 @@ public:
     virtual void on_scroll(tc_scroll_event* event) {}
     virtual void on_key(tc_key_event* event) {}
 
-    static const tc_input_vtable cxx_input_vtable;
 
 protected:
     void install_input_vtable(tc_component* c) {

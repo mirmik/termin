@@ -14,10 +14,10 @@ namespace termin {
 // resource through the backend transfer/resolve path.
 class TERMIN_RENDER_PASSES_API ResolvePass : public CxxFramePass {
 public:
-    static void register_type();
     std::string input_res = "color";
     std::string output_res = "resolved";
     std::string output_res_target;
+    static void register_type();
 
 public:
     INSPECT_FIELD(ResolvePass, input_res, "Input Resource", "string")

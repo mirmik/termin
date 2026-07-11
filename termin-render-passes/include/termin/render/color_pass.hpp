@@ -68,7 +68,6 @@ struct ColorPassExecuteData {
  */
 class TERMIN_RENDER_PASSES_API ColorPass : public CxxFramePass {
 public:
-    static void register_type();
     // Pass configuration
     std::string input_res = "empty";
     std::string output_res = "color";
@@ -92,6 +91,34 @@ public:
 
     // Timing for selected internal symbol (debug mode)
     InternalSymbolTiming selected_symbol_timing;
+
+private:
+    // Last GPU time in ms (from detailed profiling mode)
+    double last_gpu_time_ms_ = 0.0;
+
+    // Lighting UBO for efficient uniform uploads
+    LightingUBO lighting_ubo_;
+
+    // Depth-compare sampler used for `sampler2DShadow u_shadow_map[]` in
+    // shaders. Backends attach the compare state through their native
+    // sampler object; the default sampler has compare disabled.
+    tgfx::SamplerHandle shadow_sampler_{};
+
+    // Cached draw calls vector (reused between frames to avoid allocations)
+    std::vector<PhaseDrawCall> cached_draw_calls_;
+
+    // Sort keys for distance sorting (parallel array to cached_draw_calls_)
+    std::vector<uint64_t> sort_keys_;
+
+    // Indices for sorting (reused between frames)
+    std::vector<size_t> sort_indices_;
+
+    // Temp buffer for sorted draw calls
+    std::vector<PhaseDrawCall> sorted_draw_calls_;
+
+public:
+
+    static void register_type();
 
     // Last GPU time in milliseconds (from detailed profiling)
     double last_gpu_time_ms() const { return last_gpu_time_ms_; }
@@ -190,29 +217,6 @@ private:
      * Returns nullptr if not found.
      */
     CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name);
-
-    // Last GPU time in ms (from detailed profiling mode)
-    double last_gpu_time_ms_ = 0.0;
-
-    // Lighting UBO for efficient uniform uploads
-    LightingUBO lighting_ubo_;
-
-    // Depth-compare sampler used for `sampler2DShadow u_shadow_map[]` in
-    // shaders. Backends attach the compare state through their native
-    // sampler object; the default sampler has compare disabled.
-    tgfx::SamplerHandle shadow_sampler_{};
-
-    // Cached draw calls vector (reused between frames to avoid allocations)
-    std::vector<PhaseDrawCall> cached_draw_calls_;
-
-    // Sort keys for distance sorting (parallel array to cached_draw_calls_)
-    std::vector<uint64_t> sort_keys_;
-
-    // Indices for sorting (reused between frames)
-    std::vector<size_t> sort_indices_;
-
-    // Temp buffer for sorted draw calls
-    std::vector<PhaseDrawCall> sorted_draw_calls_;
 
     // Collect draw calls from scene entities into cached_draw_calls_.
     void collect_draw_calls(

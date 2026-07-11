@@ -17,6 +17,10 @@ constexpr uint8_t VOXEL_SOLID = 1;
 constexpr uint8_t VOXEL_SURFACE = 2;
 
 class VoxelChunk {
+private:
+    std::array<uint8_t, CHUNK_VOLUME> data_;
+    int non_empty_count_;
+
 public:
     VoxelChunk() : data_{}, non_empty_count_(0) {
         data_.fill(VOXEL_EMPTY);
@@ -80,9 +84,6 @@ public:
 
     const std::array<uint8_t, CHUNK_VOLUME>& data() const { return data_; }
 
-private:
-    std::array<uint8_t, CHUNK_VOLUME> data_;
-    int non_empty_count_;
 };
 
 } // namespace voxels

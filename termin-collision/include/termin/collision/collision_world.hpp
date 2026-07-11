@@ -36,6 +36,12 @@ enum class BroadPhaseMode {
  * Collision world manages colliders and performs collision detection.
  */
 class CollisionWorld {
+private:
+    BVH bvh_;
+    BroadPhaseMode broad_phase_mode_ = BroadPhaseMode::BVH;
+    tc_scene_handle scene_ = TC_SCENE_HANDLE_INVALID;
+    std::vector<Collider*> colliders_;
+
 public:
     CollisionWorld() = default;
 
@@ -598,10 +604,6 @@ private:
         return (query.layer_mask & (uint64_t{1} << layer)) != 0;
     }
 
-    BVH bvh_;
-    BroadPhaseMode broad_phase_mode_ = BroadPhaseMode::BVH;
-    tc_scene_handle scene_ = TC_SCENE_HANDLE_INVALID;
-    std::vector<Collider*> colliders_;
 };
 
 } // namespace collision

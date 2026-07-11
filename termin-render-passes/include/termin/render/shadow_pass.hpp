@@ -99,13 +99,30 @@ struct TERMIN_RENDER_PASSES_API ShadowPassExecuteData {
  */
 class TERMIN_RENDER_PASSES_API ShadowPass : public CxxFramePass {
 public:
-    static void register_type();
     // Pass configuration
     std::string output_res = "shadow_maps";
     float caster_offset = 50.0f;
 
     // Entity names cache (for get_internal_symbols)
     std::vector<std::string> entity_names;
+private:
+    // Lazy tgfx2 state owned by the pass.
+    // Shader handles live on the global registry; the pass only caches them.
+    tgfx::IRenderDevice* device2_ = nullptr;
+    mutable tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
+
+    struct ShadowDepthSlot {
+        tgfx::TextureHandle tex;
+        int resolution = 0;
+    };
+    // Native shadow-map pool: index -> depth texture.
+    std::unordered_map<int, ShadowDepthSlot> depth_pool_;
+    tgfx::IRenderDevice* depth_pool_device_ = nullptr;
+    // Cached draw calls (reused between frames).
+    std::vector<ShadowDrawCall> cached_draw_calls_;
+
+public:
+    static void register_type();
 
     // INSPECT_FIELD registrations
     INSPECT_FIELD(ShadowPass, output_res, "Output Resource", "string")
@@ -172,23 +189,8 @@ private:
     // stale data bug, vulkan_ubo_reuse_pitfall). Shader handles are NOT
     // owned — they live on the tc_shader global registry so repeated pass
     // construction/destruction doesn't re-run shaderc.
-    tgfx::IRenderDevice* device2_ = nullptr;
-    mutable tc_shader_handle shadow_shader_handle_ = tc_shader_handle_invalid();
-
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
-
-    // Native shadow-map pool: index -> depth texture.
-    // Owned via tgfx2 IRenderDevice. Destroyed in destroy().
-    struct ShadowDepthSlot {
-        tgfx::TextureHandle tex;
-        int resolution = 0;
-    };
-    std::unordered_map<int, ShadowDepthSlot> depth_pool_;
-    tgfx::IRenderDevice* depth_pool_device_ = nullptr;
-
-    // Cached draw calls (reused between frames)
-    std::vector<ShadowDrawCall> cached_draw_calls_;
 
     // Get or create native depth texture for shadow map at (index, resolution).
     tgfx::TextureHandle get_or_create_depth_tex2(

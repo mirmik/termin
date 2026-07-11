@@ -24,7 +24,6 @@ namespace termin {
  */
 class TERMIN_RENDER_PASSES_API GroundGridPass : public CxxFramePass {
 public:
-    static void register_type();
     std::string input_res = "color";
     std::string output_res = "color";
 
@@ -35,6 +34,7 @@ private:
     tc_shader_handle _shader_handle = tc_shader_handle_invalid();
 
 public:
+    static void register_type();
     INSPECT_TYPE_METADATA(GroundGridPass, graph, make_pass_graph_metadata(
         {{"input_res", "fbo"}},
         {{"output_res", "fbo"}},

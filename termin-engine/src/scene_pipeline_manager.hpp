@@ -12,6 +12,10 @@ extern "C" {
 namespace termin::rendering_manager_detail {
 
 class ScenePipelineManager {
+private:
+    std::unordered_map<uint64_t, std::unordered_map<std::string, tc_pipeline_handle>> scene_pipelines_;
+    std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
+
 public:
     void attach_scene(tc_scene_handle scene);
     void detach_scene(tc_scene_handle scene);
@@ -30,8 +34,6 @@ private:
     static uint64_t scene_key(tc_scene_handle h);
     void destroy_scene_pipelines(tc_scene_handle scene, bool notify_detach);
 
-    std::unordered_map<uint64_t, std::unordered_map<std::string, tc_pipeline_handle>> scene_pipelines_;
-    std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
 };
 
 } // namespace termin::rendering_manager_detail
