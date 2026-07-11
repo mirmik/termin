@@ -32,6 +32,7 @@
 
 extern "C" {
 #include <core/tc_component.h>
+#include <core/tc_entity_pool_registry.h>
 #include <core/tc_scene_extension.h>
 #include <core/tc_scene_pool.h>
 #include <core/tc_scene_render_mount.h>
@@ -111,6 +112,7 @@ void tc_init(void) {
     tc_animation_init();
 #endif
     tc_material_init();
+    tc_entity_pool_registry_init();
     tc_scene_pool_init();
     tc_scene_ext_registry_init();
     g_c_runtime_initialized = true;
@@ -122,6 +124,9 @@ void tc_shutdown(void) {
     }
 
     tc_scene_pool_shutdown();
+    // Scene shutdown unregisters and destroys scene-owned pools first.  The
+    // registry then owns only standalone (or otherwise unmounted) pools.
+    tc_entity_pool_registry_shutdown();
     tc_pipeline_pool_shutdown();
     tc_material_shutdown();
 #ifdef TERMIN_BOOTSTRAP_HAS_ANIMATION
