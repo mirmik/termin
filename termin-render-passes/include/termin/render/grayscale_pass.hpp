@@ -17,7 +17,7 @@ namespace termin {
 //
 // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
 // UBO for parameters via bind_uniform_buffer, input texture via
-// bind_sampled_texture. Legacy tgfx1 dual-path removed in Stage 8.1.
+// reflected texture binding. Legacy tgfx1 dual-path removed in Stage 8.1.
 class TERMIN_RENDER_PASSES_API GrayscalePass : public CxxFramePass {
 public:
     std::string input_res = "color";

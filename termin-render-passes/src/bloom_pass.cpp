@@ -3,7 +3,7 @@
 // Draws through tgfx::RenderContext2: four sub-passes (bright,
 // downsample chain, upsample chain, composite) with an HDR (RGBA16F)
 // mip chain allocated as tgfx2 textures, std140 UBOs for parameters,
-// bind_sampled_texture for all sampler slots. Legacy tgfx1 dual-path
+// reflected texture bindings for all sampler slots. Legacy tgfx1 dual-path
 // removed in Stage 8.1.
 #include <termin/render/bloom_pass.hpp>
 #include "termin/render/execute_context.hpp"
@@ -202,7 +202,7 @@ void BloomPass::ensure_tgfx2_mip_textures(int width, int height) {
 // Helper — common FSQ draw setup for tgfx2 sub-passes. Sets render state,
 // binds the built-in FSQ VS + the provided FS, sets vertex layout. Caller
 // is responsible for begin_pass / set_viewport / bind_uniform_buffer /
-// bind_sampled_texture / draw_fullscreen_quad / end_pass around this.
+// reflected texture binding / draw_fullscreen_quad / end_pass around this.
 static void setup_fsq_state(tgfx::RenderContext2& ctx,
                             tgfx::ShaderHandle fs) {
     ctx.set_depth_test(false);

@@ -179,3 +179,5 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_collisionConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_collision
 )
+
+termin_label_tests_in_directory("termin-collision")

@@ -256,3 +256,5 @@ if(TERMIN_SCENE_BUILD_TESTS)
         target_compile_options(termin_scene_entity_clone_test PRIVATE /wd4251 /wd4275)
     endif()
 endif()
+
+termin_label_tests_in_directory("termin-scene")

@@ -121,3 +121,5 @@ if(TERMIN_BUILD_PYTHON)
         PATTERN "*.pyc" EXCLUDE
     )
 endif()
+
+termin_label_tests_in_directory("termin-components-foliage")

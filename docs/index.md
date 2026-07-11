@@ -10,6 +10,7 @@
 - [Module Map](./modules.md) — границы ответственности модулей и правила переноса кода.
 - [Linting And Static Analysis](./linting.md) — общий план Python и C/C++ lint/static-analysis.
 - [Python Linting](./python-linting.md) — Ruff baseline для Python-кода.
+- [C++ Style Guide](./cpp-style.md) — порядок членов C++-классов и структур.
 - [Code Duplication Check](./code-duplication.md) — jscpd-прогон для поиска copy/paste-дублей.
 - [Render Phase Semantics](./render-phase-semantics.md) — контракт `phase_mark`, pass-owned shader contracts, allowed/forbidden responsibilities.
 - [SDK Python Wheelhouse](./sdk-python-wheelhouse.md) — wheels из SDK для внешних Python-проектов.

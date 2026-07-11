@@ -415,6 +415,30 @@ intended paths, and installed-mode tests reject checkout leakage.
 
 ### Phase 4: Native/process inventories and local runner
 
+Initial native inventory status, 2026-07-10: `test-suites.json` now owns every
+repository-native C/C++ test translation unit and its CTest module suite.
+Configured CTest registrations receive stable `termin:module`, `termin:tier`,
+and `termin:capability` labels. `termin_build.repository_control check-ctest`
+validates CTest JSON plus `compile_commands.json`; an unclassified source that
+does not reach the configured CMake graph is an error. Sources conditional on
+windowing, D3D11, or Python bindings have explicit profile/capability/reason
+classifications, so a headless PR configuration may omit only declared
+inapplicable sources. `run-tests-cpp.sh` runs this gate after configuring CMake.
+The Linux `pr` and `linux-full` configurations have passed the inventory gate.
+Graphics, display, render-pass, and Python-binding CTest registrations carry
+their specific backend/window capability labels in addition to the common
+module/tier labels. The two editor reload smokes are now declared
+`process-smoke` suites and `run-tests.sh --full` dispatches them through the
+planner rather than carrying a second script list. Android, Quest/OpenXR, and
+manual smoke procedures are explicitly classified with requirements and
+reasons; device/manual dispatch remains intentionally unsupported by the local
+automatic runner until it can report real deployment and human-verification
+results. run-tests-cpp.sh now asks the planner for a concrete CTest
+registration selection, executes only that selection, and writes a JSON
+execution manifest with selected/executed/skipped/failed registrations from
+CTest JUnit output. Windows CTest-profile acceptance and device runtime
+executors remain before this phase can close.
+
 - Add consistent CTest labels and CTest JSON validation.
 - Detect native test sources/modules omitted from the top-level CMake graph.
 - Classify editor-process, device, and manual gates.
@@ -425,6 +449,21 @@ Close when the planner can report the complete cross-platform suite union and
 local profiles execute only their declared inventories.
 
 ### Phase 5: CI consumes the planner
+
+Initial Linux PR migration status, 2026-07-11: CI has a dedicated planner job
+that validates manifests and publishes the pr/Linux plan JSON. The C++ and
+Python test jobs download that artifact and pass it to planner-backed runners.
+CTest uploads its selection, JUnit, and execution manifest; the Python runner
+writes the corresponding suite execution manifest.
+The verify-pr-linux-plan job consumes both manifests and fails if the PR plan
+has an unaccounted Python suite or native module, or if either executor reports
+a failed entry.
+The termin-app installed-bundle acceptance is also declared as a separate
+sdk-installed process-smoke suite, preserving its distinct import contract
+without a pytest root list in workflow YAML.
+The focused D3D11 Windows smoke is likewise a declared Windows process-smoke
+suite; CI consumes its Windows plan artifact and publishes a suite execution
+manifest. Runtime acceptance still depends on the Windows runner.
 
 - Generate CI matrices from planner JSON.
 - Remove pytest/CTest root lists from workflow YAML.

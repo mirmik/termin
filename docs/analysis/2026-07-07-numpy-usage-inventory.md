@@ -206,7 +206,6 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-glb/tests/test_glb_instantiator_hierarchy.py` | transform test vectors | tests only |
 | `termin-glb/tests/test_glb_loader.py` | GLB transform assertions | tests only |
 | `termin-graphics/examples/demo_lines.py` | line mesh buffers | example only |
-| `termin-graphics/python/tgfx/text3d.py` | camera basis arrays | Mat44 Vec3 candidate |
 | `termin-gui/examples/sdl_canvas_demo.py` | demo image generation | example only |
 | `termin-gui/python/tcgui/widgets/canvas.py` | canvas image buffers | keep ndarray |
 | `termin-gui/python/tcgui/widgets/color_dialog.py` | color picker textures | keep ndarray |

@@ -14,7 +14,6 @@
 #include "termin/render/render_context.hpp"
 #include "termin/render/render_scene_item_collector.hpp"
 #include "tgfx/render_state.hpp"
-#include "tgfx/handles.hpp"
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include <termin/lighting/light.hpp>
