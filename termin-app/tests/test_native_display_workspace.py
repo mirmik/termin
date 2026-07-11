@@ -68,6 +68,13 @@ class _Display:
         self.tc_display_ptr = self.__class__.next_pointer
         self.__class__.next_pointer += 1
         self.destroyed = False
+        self.viewports = []
+
+    def add_viewport(self, viewport) -> None:
+        self.viewports.append(viewport)
+
+    def remove_viewport(self, viewport) -> None:
+        self.viewports.remove(viewport)
 
     def destroy(self) -> None:
         self.destroyed = True
@@ -118,6 +125,9 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     editor_runtime = SimpleNamespace(
         display=editor_display,
         camera=object(),
+        attachment=SimpleNamespace(
+            viewport=SimpleNamespace(_viewport_handle=lambda: (1, 1)),
+        ),
         closed=False,
     )
 
@@ -162,19 +172,27 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     assert workspace.select_display(display)
     assert selections == [editor_display, display]
 
+    second_display = workspace.create_display()
     viewport = SimpleNamespace(_viewport_handle=lambda: (7, 3))
+    display.add_viewport(viewport)
     workspace.configure_viewport_input(display, viewport)
-    workspace.release_viewport_input(display, viewport)
+    assert workspace.can_move_viewport(viewport)
+    workspace.move_viewport(viewport, display, second_display)
+    assert viewport not in display.viewports
+    assert viewport in second_display.viewports
     assert _InputManager.instances[0].added == [(7, 3)]
     assert _InputManager.instances[0].removed == [(7, 3)]
+    assert _InputManager.instances[1].added == [(7, 3)]
 
     assert workspace.remove_display(display)
+    assert workspace.remove_display(second_display)
     assert workspace.tabs.page_count == 1
-    assert manager.removed == [display]
+    assert manager.removed == [display, second_display]
     assert display.destroyed
-    assert _InputManager.instances[0].closed
-    assert _Surface.instances[0].input_manager == 0
-    assert _Surface.instances[0].closed
+    assert second_display.destroyed
+    assert all(manager.closed for manager in _InputManager.instances)
+    assert all(surface.input_manager == 0 for surface in _Surface.instances)
+    assert all(surface.closed for surface in _Surface.instances)
 
     workspace.close()
     workspace.close()
