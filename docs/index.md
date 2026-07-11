@@ -15,7 +15,7 @@
 - [Render Phase Semantics](./render-phase-semantics.md) — контракт `phase_mark`, pass-owned shader contracts, allowed/forbidden responsibilities.
 - [SDK Python Wheelhouse](./sdk-python-wheelhouse.md) — wheels из SDK для внешних Python-проектов.
 - [Python Package Naming](./python-package-naming.md) — canonical source path / distribution / import namespace policy.
-- [Taskboard CLI](./taskboard-tool.md) — удобный инструмент для работы с Kanboard из репозитория.
+- [Taskboard CLI](./taskboard-tool.md) — использование глобального Kanboard-инструмента для доски Termin.
 - [Taskboard Guidelines](./taskboard-guidelines.md) — короткие правила ведения Kanboard-карточек.
 - [Native Editor UI Style Guide](./ui/native-editor-ui-style-guide.md) — визуальные токены и правила композиции `termin-gui-native`.
 - [Architecture Notes](./architecture/index.md) — cross-module архитектурные заметки.
