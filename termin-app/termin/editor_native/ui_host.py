@@ -39,6 +39,7 @@ _logger = logging.getLogger(__name__)
 
 FileDropHandler = Callable[[str, float, float, int], bool]
 PreRenderCallback = Callable[[object], None]
+ShortcutDispatcher = Callable[[int, int], bool]
 
 
 @dataclass(frozen=True)
@@ -85,10 +86,12 @@ class NativeUiEventRouter:
         document: Document,
         window_id: int,
         file_drop_handler: FileDropHandler | None = None,
+        shortcut_dispatcher: ShortcutDispatcher | None = None,
     ) -> None:
         self.document = document
         self.window_id = int(window_id)
         self.file_drop_handler = file_drop_handler
+        self.shortcut_dispatcher = shortcut_dispatcher
 
     @staticmethod
     def _key_code(value: int) -> KeyCode:
@@ -130,10 +133,19 @@ class NativeUiEventRouter:
             return RouteResult(routed=True)
 
         if event_type in ("key_down", "key_up"):
+            key_value = int(event.get("key", -1))
+            modifiers = int(event.get("mods", 0))
+            if (
+                event_type == "key_down"
+                and not bool(event.get("repeat", False))
+                and self.shortcut_dispatcher is not None
+                and self.shortcut_dispatcher(key_value, modifiers)
+            ):
+                return RouteResult(routed=True)
             key = KeyEvent()
             key.type = KeyEventType.Down if event_type == "key_down" else KeyEventType.Up
-            key.key = self._key_code(int(event.get("key", -1)))
-            key.modifiers = int(event.get("mods", 0))
+            key.key = self._key_code(key_value)
+            key.modifiers = modifiers
             key.repeat = bool(event.get("repeat", False))
             self.document.dispatch_key_event(key)
             return RouteResult(routed=True)

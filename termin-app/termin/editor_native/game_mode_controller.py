@@ -14,18 +14,22 @@ class NativeGameModeController:
         tool_bar,
         toolbar_model,
         toolbar_play_command: int,
+        toolbar_pause_command: int | None = None,
         scene_hierarchy,
         status_bar,
         request_render,
+        on_playing_changed=None,
     ) -> None:
         self.model = model
         self._game_menu_model = game_menu_model
         self._game_play_command = game_play_command
         self._toolbar_model = toolbar_model
         self._toolbar_play_command = toolbar_play_command
+        self._toolbar_pause_command = toolbar_pause_command
         self._scene_hierarchy = scene_hierarchy
         self._status_bar = status_bar
         self._request_render = request_render
+        self._on_playing_changed = on_playing_changed
         self._closed = False
 
         menu_bar.connect_activated(self._menu_activated)
@@ -41,12 +45,22 @@ class NativeGameModeController:
     def _toolbar_activated(self, _index: int, command_id: int, _command) -> None:
         if command_id == self._toolbar_play_command:
             self.model.toggle_game_mode()
+        elif command_id == self._toolbar_pause_command and self.model.is_game_mode:
+            self.model.toggle_pause()
 
     def _state_changed(self, model) -> None:
         label = "Stop" if model.is_game_mode else "Play"
         self._set_command_label(self._game_menu_model, self._game_play_command, label)
         self._set_command_label(self._toolbar_model, self._toolbar_play_command, label)
-        self._status_bar.text = "Game mode" if model.is_game_mode else "Editor mode"
+        if self._toolbar_pause_command is not None:
+            pause = self._toolbar_model.command(self._toolbar_pause_command).data
+            pause.label = "Resume" if model.is_game_paused else "Pause"
+            pause.enabled = model.is_game_mode
+            self._toolbar_model.update(self._toolbar_pause_command, pause)
+        if self._on_playing_changed is None:
+            self._status_bar.text = "Game mode" if model.is_game_mode else "Editor mode"
+        else:
+            self._on_playing_changed(model.is_game_mode)
         self._request_render()
 
     def _mode_entered(self, _is_playing: bool, _scene, expanded_uuids) -> None:

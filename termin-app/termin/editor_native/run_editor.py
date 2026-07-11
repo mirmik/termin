@@ -36,6 +36,7 @@ from termin.editor_core.registry_viewer_model import (
     RegistryCollectionController,
 )
 from termin.editor_core.scene_hierarchy_model import SceneHierarchyController
+from termin.editor_core.scene_structure_observer import SceneStructureObserver
 from termin.editor_core.undo_stack import UndoStack
 from termin.editor_core.undo_history_model import UndoHistoryController
 from termin.editor_core.audio_debugger_model import create_audio_debugger_controller
@@ -60,6 +61,8 @@ from termin.editor_core.spacemouse_controller import SpaceMouseController
 from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
 from termin.editor_core.scene_manager_model import SceneManagerController
 from termin.editor_core.editor_scene_session import EditorSceneSession
+from termin.editor_core.editor_log_model import EditorLogModel
+from termin.editor_core.editor_session_presentation import EditorSessionPresentationModel
 from termin.editor_core.render_scene_session import RenderSceneSession
 from termin.editor_core.rendering_factories import (
     PipelineAssetResolver,
@@ -75,6 +78,7 @@ from termin.editor_native.dialog_service import NativeDialogService
 from termin.editor_native.display_workspace import NativeDisplayWorkspace
 from termin.editor_native.editor_viewport import NativeEditorViewport
 from termin.editor_native.game_mode_controller import NativeGameModeController
+from termin.editor_native.editor_log import build_native_editor_log
 from termin.editor_native.quest_openxr_build_dialog import (
     build_native_quest_openxr_build_dialog,
 )
@@ -137,7 +141,7 @@ from termin.editor_native.registry_viewer import (
     connect_registry_viewer_command,
 )
 from termin.editor_native.scene_tree import build_native_scene_tree
-from termin.editor_native.shell import NativeMenuActivationRoute, build_native_editor_shell
+from termin.editor_native.shell import build_native_editor_shell
 from termin.editor_native.ui_host import NativeUiHost
 from termin.editor_native.viewport_list import build_native_viewport_list
 from termin.gui_native import Rect, WidgetRef
@@ -192,17 +196,36 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     window.maximize()
     host = NativeUiHost(window)
     shell = build_native_editor_shell(host.document)
-    file_menu = NativeMenuActivationRoute(shell.menu_bar, 0)
-    edit_menu = NativeMenuActivationRoute(shell.menu_bar, 1)
-    view_menu = NativeMenuActivationRoute(shell.menu_bar, 2)
-    scene_menu = NativeMenuActivationRoute(shell.menu_bar, 3)
-    game_menu = NativeMenuActivationRoute(shell.menu_bar, 4)
-    debug_menu = NativeMenuActivationRoute(shell.menu_bar, 5)
-    help_menu = NativeMenuActivationRoute(shell.menu_bar, 6)
+    host.router.shortcut_dispatcher = shell.menu_bar.dispatch_shortcut
+    file_menu = shell.menu_route("file")
+    edit_menu = shell.menu_route("edit")
+    view_menu = shell.menu_route("view")
+    scene_menu = shell.menu_route("scene")
+    navigation_menu = shell.menu_route("navigation")
+    game_menu = shell.menu_route("game")
+    debug_menu = shell.menu_route("debug")
+    help_menu = shell.menu_route("help")
 
     def request_editor_render() -> None:
         engine.scene_manager.request_render()
         host.request_render_update()
+
+    session_presentation = EditorSessionPresentationModel()
+
+    def apply_session_presentation(snapshot) -> None:
+        shell.status_bar.text = snapshot.status_text
+        window.set_title(snapshot.window_title)
+        host.request_render_update()
+
+    session_presentation.changed.connect(apply_session_presentation)
+    apply_session_presentation(session_presentation.snapshot)
+    editor_log_model = EditorLogModel()
+    editor_log = build_native_editor_log(
+        host.document,
+        editor_log_model,
+        request_editor_render,
+    )
+    shell.console_host.add_stretch_child(editor_log.root)
 
     def set_profile_ui(enabled: bool) -> None:
         engine.profile_ui = enabled
@@ -212,7 +235,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         set_include_ui=set_profile_ui,
     )
     profiler_panel = build_native_profiler_panel(host.document, profiler_controller)
-    shell.workspace_host.add_fixed_child(profiler_panel.root, 480.0)
+    shell.profiler_host.add_stretch_child(profiler_panel.root)
     profiler_panel.root.visible = False
 
     connect_profiler_menu_toggle(
@@ -220,6 +243,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         shell.profiler_command,
         profiler_panel,
         request_editor_render,
+        shell.set_profiler_docked,
     )
 
     from termin.display import set_clipboard_text
@@ -257,9 +281,14 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     )
     undo_history_controller = UndoHistoryController(undo_stack)
 
+    def update_undo_commands() -> None:
+        shell.edit_menu_model.set_enabled(shell.undo_command, undo_stack.can_undo)
+        shell.edit_menu_model.set_enabled(shell.redo_command, undo_stack.can_redo)
+
     def push_undo_command(command, merge: bool = False) -> None:
         undo_stack.push(command, merge=merge)
         undo_history_controller.refresh()
+        update_undo_commands()
 
     scene_properties_dialog = None
     scene_names_dialog = None
@@ -429,6 +458,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         on_object_selected=on_scene_object_selected,
         request_viewport_update=request_editor_render,
     )
+    scene_structure_observer = SceneStructureObserver(
+        scene_hierarchy_controller.rebuild,
+        request_editor_render,
+    )
+    scene_structure_observer.set_scene(initial_scene)
     scene_tree = build_native_scene_tree(
         host.document,
         scene_hierarchy_controller,
@@ -468,24 +502,24 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             display_workspace.select_display(display)
         if display is not None and inspector_host is not None:
             inspector_host.show_display(display, display.name or "Display")
-        shell.status_bar.text = (
-            "Ready | Display: none" if display is None else f"Ready | Display: {display.name or 'unnamed'}"
+        session_presentation.update(
+            message="Display: none" if display is None else f"Display: {display.name or 'unnamed'}"
         )
         request_editor_render()
 
     def on_viewport_list_viewport_selected(viewport) -> None:
         if viewport is not None and inspector_host is not None:
             inspector_host.show_viewport(viewport)
-        shell.status_bar.text = (
-            "Ready | Viewport: none" if viewport is None else f"Ready | Viewport: {viewport.name or 'unnamed'}"
+        session_presentation.update(
+            message="Viewport: none" if viewport is None else f"Viewport: {viewport.name or 'unnamed'}"
         )
         request_editor_render()
 
     def on_viewport_list_target_selected(target) -> None:
         if target is not None and inspector_host is not None:
             inspector_host.show_render_target(target)
-        shell.status_bar.text = (
-            "Ready | Render target: none" if target is None else f"Ready | Render target: {target.name or 'unnamed'}"
+        session_presentation.update(
+            message="Render target: none" if target is None else f"Render target: {target.name or 'unnamed'}"
         )
         request_editor_render()
 
@@ -772,6 +806,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
         def scene_switched(scene) -> None:
             active_scene[0] = scene
+            scene_structure_observer.set_scene(scene)
+            session_presentation.update(
+                scene_label="No Scene" if scene is None else (active_scene_name() or "Untitled")
+            )
             inspector_model.set_scene(scene)
             if scene is not None:
                 native_viewport.rebind_input_manager()
@@ -907,8 +945,12 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
     def log_build_message(message: str) -> None:
         _logger.info("Project build: %s", message)
-        shell.status_bar.text = message
-        request_editor_render()
+        editor_log_model.append(message)
+        session_presentation.update(message=message)
+
+    def update_window_title() -> None:
+        scene_name = active_scene_name()
+        session_presentation.update(scene_label=scene_name or "No Scene")
 
     editor_state_io = None
     if native_viewport is not None:
@@ -948,10 +990,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         ),
         get_scene_tree_controller=lambda: scene_hierarchy_controller,
         get_inspector_controller=lambda: entity_inspector_controller,
-        observe_scene_events=lambda _scene: None,
+        observe_scene_events=scene_structure_observer.set_scene,
         on_rendering_changed=sync_viewport_list,
         request_viewport_update=request_editor_render,
-        update_window_title=lambda: None,
+        update_window_title=update_window_title,
         log_to_console=log_build_message,
     )
 
@@ -1017,7 +1059,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         default_directory=pipeline_directory,
     )
     connect_pipeline_editor_command(
-        debug_menu,
+        scene_menu,
         shell.pipeline_editor_command,
         pipeline_editor,
     )
@@ -1074,7 +1116,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         select_scene_object=scene_tree.select_object,
     )
     project_session_controller = ProjectSessionController(
-        set_project_state=lambda _project_dir, _project_name: None,
+        set_project_state=lambda _project_dir, project_name: session_presentation.update(
+            project_name=project_name
+        ),
         log_to_console=log_build_message,
         rescan_file_resources=rescan_file_resources,
         set_project_browser_root=lambda project_dir: project_browser.set_root(
@@ -1085,6 +1129,124 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         resolve_slangc=resolve_slangc,
         show_error=dialog_service.show_error,
     )
+
+    from termin.editor_core.project_operations import sync_stdlib
+    from termin.editor_core.resource_loader import ResourceLoader
+
+    resource_loader = ResourceLoader(
+        resource_manager,
+        get_scene=current_scene,
+        get_project_path=lambda: (
+            None if project_browser_controller.root_path is None
+            else str(project_browser_controller.root_path)
+        ),
+        on_resource_reloaded=on_resource_reloaded,
+        log_message=log_build_message,
+    )
+
+    def project_dialog_directory() -> str:
+        root_path = project_browser_controller.root_path
+        return str(root_path) if root_path is not None else str(Path.home())
+
+    def choose_new_project() -> None:
+        dialog_service.show_save_file(
+            "New Project",
+            project_dialog_directory(),
+            "Termin Projects (*.terminproj);;All Files (*)",
+            lambda path: project_session_controller.create_project_file(path) if path else None,
+            default_name="Project.terminproj",
+        )
+
+    def choose_open_project() -> None:
+        dialog_service.show_open_file(
+            "Open Project",
+            project_dialog_directory(),
+            "Termin Projects (*.terminproj);;All Files (*)",
+            lambda path: project_session_controller.load_project(path) if path else None,
+        )
+
+    def choose_material() -> None:
+        dialog_service.show_open_file(
+            "Load Material",
+            project_dialog_directory(),
+            "Shader Files (*.shader);;All Files (*)",
+            lambda path: resource_loader.load_material_from_path(path) if path else None,
+        )
+
+    def choose_components() -> None:
+        dialog_service.show_open_file(
+            "Load Components",
+            project_dialog_directory(),
+            "Python Files (*.py);;All Files (*)",
+            lambda path: resource_loader.load_components_from_path(path) if path else None,
+        )
+
+    def deploy_stdlib() -> None:
+        root_path = project_browser_controller.root_path
+        if root_path is None:
+            dialog_service.show_error("Deploy Standard Library", "Open a project first.")
+            return
+        try:
+            sync_stdlib(root_path)
+            log_build_message(f"Standard library deployed to {root_path}")
+        except Exception as error:
+            _logger.exception("Native standard library deployment failed")
+            dialog_service.show_error("Deploy Standard Library", str(error))
+
+    file_actions = {
+        shell.new_project_command: choose_new_project,
+        shell.open_project_command: choose_open_project,
+        shell.close_scene_command: scene_file_controller.close_scene,
+        shell.load_material_command: choose_material,
+        shell.load_components_command: choose_components,
+        shell.deploy_stdlib_command: deploy_stdlib,
+        shell.exit_command: lambda: window.set_should_close(True),
+    }
+
+    def on_file_action(_menu_index: int, command_id: int, _command) -> None:
+        action = file_actions.get(command_id)
+        if action is not None:
+            action()
+
+    file_menu.connect_activated(on_file_action)
+
+    def apply_undo_redo(action) -> None:
+        action()
+        undo_history_controller.refresh()
+        update_undo_commands()
+        scene_hierarchy_controller.rebuild()
+        entity_inspector_controller.refresh()
+        request_editor_render()
+
+    def on_edit_action(_menu_index: int, command_id: int, _command) -> None:
+        if command_id == shell.undo_command:
+            apply_undo_redo(undo_stack.undo)
+        elif command_id == shell.redo_command:
+            apply_undo_redo(undo_stack.redo)
+
+    edit_menu.connect_activated(on_edit_action)
+
+    fullscreen = [False]
+
+    def on_view_action(_menu_index: int, command_id: int, command) -> None:
+        if command_id != shell.fullscreen_command:
+            return
+        fullscreen[0] = not fullscreen[0]
+        window.set_fullscreen(fullscreen[0])
+        command.checked = fullscreen[0]
+        request_editor_render()
+
+    view_menu.connect_activated(on_view_action)
+
+    def on_camera_frustums(_menu_index: int, command_id: int, command) -> None:
+        if command_id != shell.camera_frustums_command or native_viewport is None:
+            return
+        visible = not bool(native_viewport.interaction.camera_frustums_visible)
+        native_viewport.interaction.set_camera_frustums_visible(visible)
+        command.checked = visible
+        request_editor_render()
+
+    debug_menu.connect_activated(on_camera_frustums)
     if project_file is not None:
         project_session_controller.load_project(
             project_file,
@@ -1132,9 +1294,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             tool_bar=shell.tool_bar,
             toolbar_model=shell.toolbar_model,
             toolbar_play_command=shell.toolbar_play_command,
+            toolbar_pause_command=shell.toolbar_pause_command,
             scene_hierarchy=scene_hierarchy_controller,
             status_bar=shell.status_bar,
             request_render=request_editor_render,
+            on_playing_changed=lambda playing: session_presentation.update(playing=playing),
         )
 
     def on_project_resource_settings_changed() -> None:
@@ -1175,10 +1339,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     connect_navigation_settings_command(
-        scene_menu, shell.agent_types_command, agent_types_dialog
+        navigation_menu, shell.agent_types_command, agent_types_dialog
     )
     connect_navigation_settings_command(
-        scene_menu, shell.navmesh_areas_command, navmesh_areas_dialog
+        navigation_menu, shell.navmesh_areas_command, navmesh_areas_dialog
     )
 
     resource_manager_controller = RegistryCatalogController(
@@ -1271,7 +1435,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     python_console_controller = PythonConsoleController(executor)
 
     def activate_python_console_tab() -> None:
-        shell.bottom_tabs.selected_index = 1
+        shell.bottom_tabs.selected_index = 2
 
     python_console = build_native_python_console(
         host.document,
@@ -1281,7 +1445,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         embedded=True,
         activate_embedded=activate_python_console_tab,
     )
-    shell.console_host.add_stretch_child(python_console.root)
+    shell.python_console_host.add_stretch_child(python_console.root)
     connect_python_console_command(
         debug_menu,
         shell.python_console_command,
@@ -1310,6 +1474,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             pipeline_editor,
             framegraph_debugger,
             python_console,
+            editor_log,
             settings_dialog,
             about_dialog,
             undo_history_dialog,
@@ -1337,6 +1502,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         if quest_openxr_build_dialog.poll() > 0:
             host.request_render_update()
         project_file_watcher.poll()
+        scene_structure_observer.poll()
         spacemouse.poll()
         framegraph_debugger.update()
         if profiler_panel.root.visible and profiler_panel.update():
@@ -1356,6 +1522,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         return not window.should_close()
 
     def on_shutdown() -> None:
+        scene_structure_observer.close()
+        editor_log.close()
         host.remove_pre_render_callback(refresh_live_display_inspector)
         if mcp_server is not None:
             mcp_server.stop()

@@ -33,7 +33,7 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
         set_include_ui=lambda value: include_ui.__setitem__("value", value),
     )
     panel = build_native_profiler_panel(document, controller)
-    shell.central.add_fixed_child(panel.root, 480.0)
+    shell.profiler_host.add_stretch_child(panel.root)
     panel.root.visible = False
     renders = []
     connect_profiler_menu_toggle(
@@ -41,13 +41,20 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
         shell.profiler_command,
         panel,
         lambda: renders.append(True),
+        shell.set_profiler_docked,
     )
 
     document.layout_roots(Rect(0.0, 0.0, 1280.0, 720.0))
     assert shell.menu_bar.dispatch_shortcut(Key.F7.value, 0)
     assert panel.root.visible
+    assert shell.profiler_host.visible
     assert profiler.enabled
     assert renders == [True]
+
+    # A side dock preserves the viewport's vertical extent.
+    document.layout_roots(Rect(0.0, 0.0, 1280.0, 720.0))
+    assert shell.workspace_host.bounds.height == shell.profiler_host.bounds.height
+    assert shell.profiler_host.bounds.x > shell.inspector_host.bounds.x
 
     profiler.frames.append(
         FrameProfile(

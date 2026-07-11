@@ -13,6 +13,7 @@ from termin.gui_native import (
     Size,
     WidgetRef,
 )
+from termin.editor_core.menu_bar_model import build_editor_menu_inventory
 
 
 class NativeMenuActivationRoute:
@@ -37,25 +38,41 @@ class NativeEditorShell:
     main_splitter: object
     left_splitter: object
     right_splitter: object
+    profiler_splitter: object
     navigation_tabs: object
     hierarchy_host: WidgetRef
     rendering_host: WidgetRef
     bottom_tabs: object
     project_host: WidgetRef
     console_host: WidgetRef
+    python_console_host: WidgetRef
     workspace_host: WidgetRef
     inspector_host: WidgetRef
+    profiler_host: WidgetRef
     menu_bar: object
     tool_bar: object
     status_bar: object
     new_scene_command: int
+    new_project_command: int
+    open_project_command: int
+    close_scene_command: int
+    load_material_command: int
+    load_components_command: int
+    deploy_stdlib_command: int
+    exit_command: int
+    undo_command: int
+    redo_command: int
+    fullscreen_command: int
+    camera_frustums_command: int
     load_scene_command: int
     save_scene_command: int
     save_scene_as_command: int
     game_menu_model: CommandModel
+    edit_menu_model: CommandModel
     game_play_command: int
     toolbar_model: CommandModel
     toolbar_play_command: int
+    toolbar_pause_command: int
     debug_menu_model: CommandModel
     profiler_command: int
     inspect_registry_command: int
@@ -83,6 +100,31 @@ class NativeEditorShell:
     about_command: int
     command_models: tuple[CommandModel, ...]
 
+    def set_profiler_docked(self, visible: bool) -> None:
+        """Show the profiler as a horizontal peer of the editor workspace.
+
+        The splitter is inserted only while the dock is visible.  Merely hiding
+        a splitter child still reserves its extent in the native layout, which
+        is why this explicit reparenting boundary belongs to the shell.
+        """
+        if visible:
+            self.right_splitter.widget.detach()
+            self.profiler_splitter.set_first(self.right_splitter.widget)
+            self.profiler_host.detach()
+            self.profiler_splitter.set_second(self.profiler_host)
+            self.profiler_splitter.widget.detach()
+            self.left_splitter.set_second(self.profiler_splitter.widget)
+        else:
+            self.right_splitter.widget.detach()
+            self.left_splitter.set_second(self.right_splitter.widget)
+        self.profiler_host.visible = visible
+
+    def menu_route(self, stable_id: str) -> NativeMenuActivationRoute:
+        for index, entry in enumerate(self.menu_bar.entries):
+            if entry.stable_id == stable_id:
+                return NativeMenuActivationRoute(self.menu_bar, index)
+        raise KeyError(f"native editor menu is not registered: {stable_id}")
+
 
 def _append(
     document: Document,
@@ -107,95 +149,93 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     if not document.add_root(root.handle):
         raise RuntimeError("failed to add native editor root")
 
-    file_menu = CommandModel()
-    new_scene_command = file_menu.append(
-        CommandData("new-scene", "New Scene", shortcut="Ctrl+N")
-    )
-    load_scene_command = file_menu.append(
-        CommandData("load-scene", "Load Scene...", shortcut="Ctrl+O")
-    )
-    save_scene_command = file_menu.append(
-        CommandData("save-scene", "Save Scene", shortcut="Ctrl+S")
-    )
-    save_scene_as_command = file_menu.append(
-        CommandData("save-scene-as", "Save Scene As...", shortcut="Ctrl+Shift+S")
-    )
-    file_menu.append(CommandData("open-project", "Open Project"))
-    file_menu.append(CommandData("separator", kind=CommandKind.Separator))
-    file_menu.append(CommandData("quit", "Quit", shortcut="Ctrl+Q"))
-    view_menu = CommandModel()
-    view_menu.set_commands(
-        [
-            CommandData("scene-tree", "Scene Tree", checkable=True, checked=True),
-            CommandData("inspector", "Inspector", checkable=True, checked=True),
-        ]
-    )
-    spacemouse_settings_command = view_menu.append(
-        CommandData("spacemouse-settings", "SpaceMouse Settings...")
-    )
-    edit_menu = CommandModel()
-    settings_command = edit_menu.append(CommandData("settings", "Settings..."))
-    project_settings_command = edit_menu.append(
-        CommandData("project-settings", "Project Settings...")
-    )
-    scene_menu = CommandModel()
-    scene_properties_command = scene_menu.append(
-        CommandData("scene-properties", "Scene Properties...")
-    )
-    scene_names_command = scene_menu.append(CommandData("scene-names", "Layers & Flags..."))
-    shadow_settings_command = scene_menu.append(
-        CommandData("shadow-settings", "Shadow Settings...")
-    )
-    agent_types_command = scene_menu.append(CommandData("agent-types", "Agent Types..."))
-    navmesh_areas_command = scene_menu.append(CommandData("navmesh-areas", "NavMesh Areas..."))
-    game_menu = CommandModel()
-    game_play_command = game_menu.append(CommandData("play", "Play", shortcut="F5"))
-    build_project_command = game_menu.append(CommandData("build-project", "Build Project..."))
-    build_android_command = game_menu.append(
-        CommandData("build-android", "Build Android APK...")
-    )
-    build_quest_openxr_command = game_menu.append(
-        CommandData("build-quest-openxr", "Quest/OpenXR Build...")
-    )
-    run_build_command = game_menu.append(CommandData("run-build", "Run Build..."))
-    run_standalone_command = game_menu.append(
-        CommandData("run-standalone", "Run Standalone...")
-    )
-    debug_menu = CommandModel()
-    profiler_command = debug_menu.append(CommandData("profiler", "Profiler", shortcut="F7", checkable=True))
-    inspect_registry_command = debug_menu.append(CommandData("inspect-registry", "Inspect Registry...", shortcut="F8"))
-    core_registry_command = debug_menu.append(CommandData("core-registry", "Core Registry...", shortcut="F9"))
-    resource_manager_command = debug_menu.append(CommandData("resource-manager", "Resource Manager...", shortcut="F10"))
-    scene_manager_command = debug_menu.append(CommandData("scene-manager", "Scene Manager..."))
-    pipeline_editor_command = debug_menu.append(
-        CommandData("pipeline-editor", "Pipeline Editor...", shortcut="F11")
-    )
-    framegraph_debugger_command = debug_menu.append(
-        CommandData("framegraph-debugger", "Framegraph Debugger...", shortcut="F12")
-    )
-    python_console_command = debug_menu.append(
-        CommandData("python-console", "Python Console...", shortcut="F6")
-    )
-    undo_history_command = debug_menu.append(CommandData("undo-history", "Undo/Redo Stack..."))
-    audio_debugger_command = debug_menu.append(CommandData("audio-debugger", "Audio Debugger..."))
-    help_menu = CommandModel()
-    about_command = help_menu.append(CommandData("about", "About Termin..."))
+    models: dict[str, CommandModel] = {}
+    commands: dict[tuple[str, str], int] = {}
+    entries = []
+    for spec in build_editor_menu_inventory():
+        # Modules is intentionally outside this milestone and must not appear as
+        # an inert command in the production UI.
+        items = [item for item in spec.items if item is None or item.label != "Modules"]
+        model = CommandModel()
+        separator_index = 0
+        for item in items:
+            if item is None:
+                separator_index += 1
+                model.append(CommandData(f"separator-{separator_index}", kind=CommandKind.Separator))
+                continue
+            stable_id = item.label.lower().replace("...", "").replace("/", "-").replace(" ", "-")
+            command_id = model.append(
+                CommandData(
+                    stable_id,
+                    item.label,
+                    shortcut=item.shortcut or "",
+                    checkable=item.is_checkable,
+                    checked=bool(item.state_getter()) if item.state_getter is not None else False,
+                    enabled=item.label not in {"Undo", "Redo"},
+                )
+            )
+            commands[(spec.name, item.label)] = command_id
+        key = spec.name.lower()
+        models[key] = model
+        entries.append(MenuBarEntry(key, spec.name, model))
+
+    file_menu = models["file"]
+    edit_menu = models["edit"]
+    view_menu = models["view"]
+    scene_menu = models["scene"]
+    navigation_menu = models["navigation"]
+    game_menu = models["game"]
+    debug_menu = models["debug"]
+    help_menu = models["help"]
+    new_scene_command = commands[("File", "New Scene")]
+    new_project_command = commands[("File", "New Project...")]
+    open_project_command = commands[("File", "Open Project...")]
+    close_scene_command = commands[("File", "Close Scene")]
+    load_material_command = commands[("File", "Load Material...")]
+    load_components_command = commands[("File", "Load Components...")]
+    deploy_stdlib_command = commands[("File", "Deploy Standard Library...")]
+    exit_command = commands[("File", "Exit")]
+    load_scene_command = commands[("File", "Load Scene...")]
+    save_scene_command = commands[("File", "Save Scene")]
+    save_scene_as_command = commands[("File", "Save Scene As...")]
+    settings_command = commands[("Edit", "Settings...")]
+    undo_command = commands[("Edit", "Undo")]
+    redo_command = commands[("Edit", "Redo")]
+    project_settings_command = commands[("Edit", "Project Settings...")]
+    spacemouse_settings_command = commands[("View", "SpaceMouse Settings...")]
+    fullscreen_command = commands[("View", "Fullscreen")]
+    scene_properties_command = commands[("Scene", "Scene Properties...")]
+    scene_names_command = commands[("Scene", "Layers & Flags...")]
+    shadow_settings_command = commands[("Scene", "Shadow Settings...")]
+    pipeline_editor_command = commands[("Scene", "Pipeline Editor...")]
+    agent_types_command = commands[("Navigation", "Agent Types...")]
+    navmesh_areas_command = commands[("Navigation", "NavMesh Areas...")]
+    game_play_command = commands[("Game", "Play")]
+    build_project_command = commands[("Game", "Build Project...")]
+    build_android_command = commands[("Game", "Build Android APK...")]
+    build_quest_openxr_command = commands[("Game", "Quest/OpenXR Build...")]
+    run_build_command = commands[("Game", "Run Build...")]
+    run_standalone_command = commands[("Game", "Run Standalone...")]
+    profiler_command = commands[("Debug", "Profiler")]
+    camera_frustums_command = commands[("Debug", "Camera Frustums")]
+    scene_manager_command = commands[("Debug", "Scene Manager...")]
+    framegraph_debugger_command = commands[("Debug", "Framegraph Texture Viewer...")]
+    python_console_command = commands[("Debug", "Python Console...")]
+    undo_history_command = commands[("Debug", "Undo/Redo Stack...")]
+    audio_debugger_command = commands[("Debug", "Audio Debugger...")]
+    inspect_registry_command = debug_menu.append(CommandData("inspect-registry", "Inspect Registry..."))
+    core_registry_command = debug_menu.append(CommandData("core-registry", "Core Registry..."))
+    resource_manager_command = debug_menu.append(CommandData("resource-manager", "Resource Manager..."))
+    about_command = commands[("Help", "About Termin...")]
     menu_bar = document.create_menu_bar()
-    menu_bar.entries = [
-        MenuBarEntry("file", "File", file_menu),
-        MenuBarEntry("edit", "Edit", edit_menu),
-        MenuBarEntry("view", "View", view_menu),
-        MenuBarEntry("scene", "Scene", scene_menu),
-        MenuBarEntry("game", "Game", game_menu),
-        MenuBarEntry("debug", "Debug", debug_menu),
-        MenuBarEntry("help", "Help", help_menu),
-    ]
+    menu_bar.entries = entries
     _append(document, root, menu_bar, Size(1280.0, 30.0), fixed_extent=30.0)
 
     toolbar_model = CommandModel()
     # Keep the caption self-contained. The native icon glyph is not guaranteed
     # by the editor font; reserving its absent glyph shifted "Play" right.
     toolbar_play_command = toolbar_model.append(CommandData("play", "Play"))
+    toolbar_pause_command = toolbar_model.append(CommandData("pause", "Pause", enabled=False))
     tool_bar = document.create_tool_bar(toolbar_model)
     # The editor owns a single Play action in this strip. Center its visible
     # content while retaining the full-width toolbar background and hit area.
@@ -239,6 +279,17 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     right_splitter.set_split_fraction(0.81)
     right_splitter.set_min_extents(360.0, 260.0)
 
+    profiler_host = document.create_vstack("native-editor-profiler-host")
+    profiler_host.stable_id = "editor.profiler-host"
+    profiler_host.set_layout_spacing(0.0)
+    profiler_host.preferred_size = Size(360.0, 406.0)
+    profiler_host.visible = False
+
+    profiler_splitter = document.create_splitter(True, "native-editor-profiler-splitter")
+    profiler_splitter.widget.stable_id = "editor.profiler-splitter"
+    profiler_splitter.set_split_fraction(0.78)
+    profiler_splitter.set_min_extents(620.0, 280.0)
+
     left_splitter = document.create_splitter(True, "native-editor-left-splitter")
     left_splitter.widget.stable_id = "editor.left-splitter"
     left_splitter.set_first(navigation_tabs.widget)
@@ -261,6 +312,11 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     console_host.set_layout_spacing(0.0)
     bottom_tabs.add_page("Console", console_host)
 
+    python_console_host = document.create_vstack("native-editor-python-console-host")
+    python_console_host.stable_id = "editor.python-console-host"
+    python_console_host.set_layout_spacing(0.0)
+    bottom_tabs.add_page("Python Console", python_console_host)
+
     main_splitter = document.create_splitter(False, "native-editor-main-splitter")
     main_splitter.widget.stable_id = "editor.main-splitter"
     main_splitter.set_first(left_splitter.widget)
@@ -278,25 +334,41 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         main_splitter=main_splitter,
         left_splitter=left_splitter,
         right_splitter=right_splitter,
+        profiler_splitter=profiler_splitter,
         navigation_tabs=navigation_tabs,
         hierarchy_host=hierarchy_host,
         rendering_host=rendering_host,
         bottom_tabs=bottom_tabs,
         project_host=project_host,
         console_host=console_host,
+        python_console_host=python_console_host,
         workspace_host=workspace_host,
         inspector_host=inspector_host,
+        profiler_host=profiler_host,
         menu_bar=menu_bar,
         tool_bar=tool_bar,
         status_bar=status_bar,
         new_scene_command=new_scene_command,
+        new_project_command=new_project_command,
+        open_project_command=open_project_command,
+        close_scene_command=close_scene_command,
+        load_material_command=load_material_command,
+        load_components_command=load_components_command,
+        deploy_stdlib_command=deploy_stdlib_command,
+        exit_command=exit_command,
+        undo_command=undo_command,
+        redo_command=redo_command,
+        fullscreen_command=fullscreen_command,
+        camera_frustums_command=camera_frustums_command,
         load_scene_command=load_scene_command,
         save_scene_command=save_scene_command,
         save_scene_as_command=save_scene_as_command,
         game_menu_model=game_menu,
+        edit_menu_model=edit_menu,
         game_play_command=game_play_command,
         toolbar_model=toolbar_model,
         toolbar_play_command=toolbar_play_command,
+        toolbar_pause_command=toolbar_pause_command,
         debug_menu_model=debug_menu,
         profiler_command=profiler_command,
         inspect_registry_command=inspect_registry_command,
@@ -327,6 +399,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
             edit_menu,
             view_menu,
             scene_menu,
+            navigation_menu,
             game_menu,
             debug_menu,
             help_menu,
