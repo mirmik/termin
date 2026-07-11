@@ -139,6 +139,13 @@ void tc_shutdown(void) {
     tc_component_registry_cleanup();
     tc_pass_registry_cleanup();
     tc_inspect_cleanup();
+    // Runtime type records own inspect/widget facets and keep their names,
+    // owners and parents as interned strings.  They must not survive the
+    // intern pool that backs those pointers.  Component and pass cleanup run
+    // first so their facet destructors can still reach their native
+    // registries; the remaining domain-neutral records are then released as
+    // one shutdown boundary.
+    tc_runtime_type_registry_clear();
     tc::reset_kind_registry_cpp();
     tc_kind_cleanup();
     tc_scene_ext_registry_shutdown();

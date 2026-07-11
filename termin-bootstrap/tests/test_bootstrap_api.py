@@ -225,6 +225,25 @@ def test_partial_python_kind_init_does_not_block_later_full_player_bootstrap():
     )
 
 
+def test_player_bootstrap_restores_loaded_python_passes_after_repeated_shutdown():
+    _run_python(
+        """
+        from termin.bootstrap import bootstrap_player, shutdown_player
+        from termin.inspect import InspectRegistry
+        from termin.render_framework import tc_pass_registry_has
+        from termin.render_passes import UIWidgetPass  # noqa: F401
+
+        for _ in range(3):
+            bootstrap_player()
+            assert tc_pass_registry_has("UIWidgetPass")
+            fields = {field.path for field in InspectRegistry.instance().fields("UIWidgetPass")}
+            assert "include_internal_entities" in fields
+            shutdown_player()
+            assert not tc_pass_registry_has("UIWidgetPass")
+        """
+    )
+
+
 def test_player_bootstrap_imports_default_python_render_passes():
     _run_python(
         """

@@ -281,6 +281,8 @@ void init_python_render_passes() {
 
     try {
         nb::module_::import_("termin.render_passes");
+        nb::module_::import_("termin.render_framework.python_pass")
+            .attr("register_loaded_python_passes")();
         g_python_render_passes_initialized = true;
     } catch (const std::exception& e) {
         tc::Log::error(e, "[termin-bootstrap] Failed to import Python render passes");
