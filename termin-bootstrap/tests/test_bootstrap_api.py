@@ -10,6 +10,17 @@ def _run_python(code: str) -> None:
     )
 
 
+def _run_python_without_nanobind_leaks(code: str) -> None:
+    result = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(code)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "nanobind: leaked" not in result.stderr
+
+
 def test_importing_bootstrap_has_no_kind_registration_side_effects():
     _run_python(
         """
@@ -320,5 +331,24 @@ def test_runtime_shutdown_allows_later_rebootstrap():
         assert "tc_mesh" in set(KindRegistry.instance().kinds())
 
         termin.bootstrap.shutdown_player()
+        """
+    )
+
+
+def test_player_shutdown_releases_standalone_entity_components():
+    _run_python_without_nanobind_leaks(
+        """
+        import termin.bootstrap
+        from termin.mesh import MeshComponent
+        from termin.scene import Entity
+
+        for iteration in range(2):
+            termin.bootstrap.bootstrap_player()
+            entity = Entity(f"standalone-shutdown-{iteration}")
+            component = MeshComponent()
+            entity.add_component(component)
+            del component
+            del entity
+            termin.bootstrap.shutdown_player()
         """
     )
