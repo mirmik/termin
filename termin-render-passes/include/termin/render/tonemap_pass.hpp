@@ -24,7 +24,7 @@ enum class TonemapMethod : int {
 //
 // Draws through tgfx::RenderContext2 end-to-end: built-in FSQ, std140
 // UBO for parameters via bind_uniform_buffer, input texture via
-// bind_sampled_texture. No raw GL calls. Legacy tgfx1 dual-path
+// reflected texture binding. No raw GL calls. Legacy tgfx1 dual-path
 // removed in Stage 8.1.
 class TERMIN_RENDER_PASSES_API TonemapPass : public CxxFramePass {
 public:

@@ -253,6 +253,8 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
         SKIP_REGULAR_EXPRESSION
             "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
     )
+    termin_add_test_labels(termin_render_passes_debug_triangle_pixel_smoke
+        "termin:capability:vulkan")
 
     add_executable(termin_render_passes_color_pass_pixel_smoke
         tests/test_color_pass_pixel_smoke.cpp
@@ -278,6 +280,8 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
         SKIP_REGULAR_EXPRESSION
             "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
     )
+    termin_add_test_labels(termin_render_passes_color_pass_pixel_smoke
+        "termin:capability:vulkan")
 
     add_executable(termin_render_passes_id_pass_line_pixel_smoke
         tests/test_id_pass_line_pixel_smoke.cpp
@@ -303,6 +307,8 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
         SKIP_REGULAR_EXPRESSION
             "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
     )
+    termin_add_test_labels(termin_render_passes_id_pass_line_pixel_smoke
+        "termin:capability:vulkan")
 endif()
 
 install(TARGETS termin_render_passes
@@ -313,6 +319,8 @@ install(TARGETS termin_render_passes
 )
 
 install(DIRECTORY include/ DESTINATION include)
+
+termin_label_tests_in_directory("termin-render-passes")
 
 install(EXPORT termin_render_passesTargets
     FILE termin_render_passesTargets.cmake

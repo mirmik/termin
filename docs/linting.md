@@ -86,6 +86,30 @@ The script:
   analyzer repeatedly reports false positives inside nanobind's list caster;
   explicit `--checks` overrides keep full control.
 
+### C++ class member order
+
+The repository style guide requires class and struct data members to appear
+before member functions. The opt-in AST checker uses the same compilation
+database as clang-tidy:
+
+```bash
+./run-lint-cpp.sh --configure-only
+./run-cpp-class-layout-check.sh
+```
+
+For migration inventory and focused checks:
+
+```bash
+./run-cpp-class-layout-check.sh --format jsonl --no-fail
+./run-cpp-class-layout-check.sh --path termin-render
+./run-cpp-class-layout-check.sh --python-bindings --no-fail
+./run-cpp-class-layout-check.sh --self-test
+```
+
+The isolated checker build requires Clang LibTooling development headers. On
+Ubuntu with LLVM 18, install `libclang-18-dev` and `llvm-18-dev`. See
+`tools/cpp-class-layout/README.md` for details.
+
 Useful options:
 
 - `./run-lint-cpp.sh --configure-only` to generate `compile_commands.json`
