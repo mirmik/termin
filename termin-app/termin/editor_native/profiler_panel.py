@@ -175,12 +175,15 @@ def connect_profiler_menu_toggle(
     profiler_command: int,
     panel: NativeProfilerPanel,
     request_render,
+    set_docked=None,
 ) -> None:
     """Connect the shell-level Profiler command without coupling the shell to its view."""
 
     def on_menu_activated(_menu_index: int, command_id: int, command) -> None:
         if command_id == profiler_command:
             panel.set_visible(command.checked)
+            if set_docked is not None:
+                set_docked(command.checked)
             request_render()
 
     menu_bar.connect_activated(on_menu_activated)

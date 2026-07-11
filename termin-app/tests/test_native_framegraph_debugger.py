@@ -1,5 +1,3 @@
-from tcbase import Key
-
 from termin.editor_core.signal import Signal
 from termin.editor_native.framegraph_debugger import (
     NativeFramegraphPreviewSurface,
@@ -227,7 +225,7 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
         debugger,
     )
 
-    assert shell.menu_bar.dispatch_shortcut(Key.F12.value, 0)
+    assert debugger.show()
     assert debugger.dialog.open
     assert model.selected_pass_index == 3
     assert model.selected_symbol == "opaque"

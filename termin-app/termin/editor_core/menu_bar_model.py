@@ -311,3 +311,34 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
             ],
         ),
     ]
+
+
+def build_editor_menu_inventory() -> list[MenuSpec]:
+    """Return the canonical inventory without binding it to a frontend.
+
+    Frontends use this to construct their command models, then bind command
+    activation at their composition root.  Keeping this path based on
+    ``build_editor_menu_spec`` prevents the native and tcgui shells from
+    growing independent menu definitions again.
+    """
+    noop = lambda: None
+    false = lambda: False
+    handle = lambda _value: None
+    return build_editor_menu_spec(
+        EditorMenuSpecConfig(
+            actions=EditorMenuActions(
+                file=FileMenuActions(*([noop] * 11)),
+                edit=EditMenuActions(*([noop] * 4)),
+                view=ViewMenuActions(*([noop] * 2)),
+                scene=SceneMenuActions(*([noop] * 4)),
+                navigation=NavigationMenuActions(noop, noop),
+                game=GameMenuActions(*([noop] * 6)),
+                debug=DebugMenuActions(*([noop] * 8)),
+                help=HelpMenuActions(noop),
+            ),
+            states=EditorMenuStateGetters(false, false, false, false),
+            handles=EditorMenuHandleSetters(
+                handle, handle, handle, handle, handle, handle, handle
+            ),
+        )
+    )

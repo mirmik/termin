@@ -1,8 +1,6 @@
 import gc
 import weakref
 
-from tcbase import Key
-
 from termin.editor_core.python_console_model import PythonConsoleController
 from termin.editor_core.python_executor import EditorPythonExecutor
 from termin.editor_native.python_console import (
@@ -13,7 +11,7 @@ from termin.editor_native.shell import build_native_editor_shell
 from termin.gui_native import Document, Rect
 
 
-def test_native_python_console_f6_executes_clears_reopens_and_releases():
+def test_native_python_console_command_executes_clears_reopens_and_releases():
     document = Document()
     shell = build_native_editor_shell(document)
     controller = PythonConsoleController(EditorPythonExecutor(lambda: {"answer": 42}))
@@ -26,7 +24,7 @@ def test_native_python_console_f6_executes_clears_reopens_and_releases():
     )
     connect_python_console_command(shell.menu_bar, shell.python_console_command, console)
 
-    assert shell.menu_bar.dispatch_shortcut(Key.F6.value, 0)
+    assert console.show()
     assert console.dialog.open
     console.input.text = "answer + 1"
     snapshot = console.execute()
@@ -48,7 +46,7 @@ def test_native_python_console_f6_executes_clears_reopens_and_releases():
     assert renders
 
 
-def test_native_python_console_embeds_in_bottom_tab_and_f6_activates_it():
+def test_native_python_console_embeds_in_dedicated_bottom_tab():
     document = Document()
     shell = build_native_editor_shell(document)
     controller = PythonConsoleController(EditorPythonExecutor(lambda: {}))
@@ -58,18 +56,18 @@ def test_native_python_console_embeds_in_bottom_tab_and_f6_activates_it():
         viewport=lambda: Rect(0.0, 0.0, 1280.0, 720.0),
         request_render=lambda: None,
         embedded=True,
-        activate_embedded=lambda: _select_console_tab(shell),
+        activate_embedded=lambda: _select_python_console_tab(shell),
     )
-    shell.console_host.add_stretch_child(console.root)
+    shell.python_console_host.add_stretch_child(console.root)
     connect_python_console_command(shell.menu_bar, shell.python_console_command, console)
 
     assert console.dialog is None
     assert shell.bottom_tabs.selected_index == 0
-    assert shell.menu_bar.dispatch_shortcut(Key.F6.value, 0)
-    assert shell.bottom_tabs.selected_index == 1
-    assert console.root.parent.handle == shell.console_host.handle
+    assert console.show()
+    assert shell.bottom_tabs.selected_index == 2
+    assert console.root.parent.handle == shell.python_console_host.handle
     console.close()
 
 
-def _select_console_tab(shell) -> None:
-    shell.bottom_tabs.selected_index = 1
+def _select_python_console_tab(shell) -> None:
+    shell.bottom_tabs.selected_index = 2

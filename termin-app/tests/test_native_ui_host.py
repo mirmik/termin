@@ -10,7 +10,9 @@ from termin.editor_native import (
     resolve_native_ui_font,
 )
 from termin.editor_native.shell import NativeMenuActivationRoute
+from termin.editor_core.menu_bar_model import build_editor_menu_inventory
 from termin.gui_native import (
+    CommandKind,
     Document,
     DrawCommandType,
     DrawList,
@@ -145,6 +147,26 @@ def test_native_ui_event_router_preserves_click_keys_text_and_file_drop():
     assert not router.route({"type": "quit"}).keep_running
 
 
+def test_native_ui_event_router_dispatches_global_shortcuts_before_focused_widget():
+    document = Document()
+    shell = build_native_editor_shell(document)
+    router = NativeUiEventRouter(
+        document,
+        window_id=7,
+        shortcut_dispatcher=shell.menu_bar.dispatch_shortcut,
+    )
+    activated = []
+    shell.menu_route("debug").connect_activated(
+        lambda _menu, command_id, _command: activated.append(command_id)
+    )
+
+    result = router.route(
+        {"type": "key_down", "window_id": 7, "key": Key.F7.value, "mods": 0}
+    )
+    assert result.routed
+    assert activated == [shell.profiler_command]
+
+
 def test_native_editor_continuously_composes_only_in_game_mode():
     from termin.editor_native.run_editor import _game_mode_requires_continuous_render
 
@@ -212,15 +234,18 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.navigation_tabs.page_handle(0) == shell.hierarchy_host.handle
     assert shell.navigation_tabs.page_handle(1) == shell.rendering_host.handle
     assert shell.bottom_tabs.widget.stable_id == "editor.bottom-tabs"
-    assert shell.bottom_tabs.page_count == 2
+    assert shell.bottom_tabs.page_count == 3
     assert shell.bottom_tabs.page_title(0) == "Project"
     assert shell.bottom_tabs.page_title(1) == "Console"
+    assert shell.bottom_tabs.page_title(2) == "Python Console"
     assert shell.project_host.stable_id == "editor.project-host"
     assert shell.console_host.stable_id == "editor.console-host"
+    assert shell.python_console_host.stable_id == "editor.python-console-host"
+    assert shell.profiler_host.stable_id == "editor.profiler-host"
     assert shell.workspace_host.stable_id == "editor.workspace-host"
     assert shell.inspector_host.stable_id == "editor.inspector-host"
     assert shell.menu_bar.entries[0].stable_id == "file"
-    assert shell.tool_bar.model.command_count == 1
+    assert shell.tool_bar.model.command_count == 2
     assert shell.toolbar_model.command(shell.toolbar_play_command).data.icon == ""
     assert shell.status_bar.displayed_text == "Ready | Native editor host"
     assert shell.project_host.bounds.y > shell.workspace_host.bounds.y
@@ -228,7 +253,8 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.workspace_host.bounds.x > shell.hierarchy_host.bounds.x
     assert shell.inspector_host.bounds.x > shell.workspace_host.bounds.x
     play_rect = shell.tool_bar.item_rects[0]
-    assert play_rect.x + play_rect.width / 2.0 == pytest.approx(
+    pause_rect = shell.tool_bar.item_rects[1]
+    assert (play_rect.x + pause_rect.x + pause_rect.width) / 2.0 == pytest.approx(
         shell.workspace_host.bounds.x + shell.workspace_host.bounds.width / 2.0
     )
     document.layout_roots(Rect(0.0, 0.0, 2048.0, 1152.0))
@@ -243,11 +269,32 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.navigation_tabs.widget.bounds.width > initial_navigation_width
     assert shell.bottom_tabs.widget.bounds.height > initial_bottom_height
     play_rect = shell.tool_bar.item_rects[0]
-    assert play_rect.x + play_rect.width / 2.0 == pytest.approx(
+    pause_rect = shell.tool_bar.item_rects[1]
+    assert (play_rect.x + pause_rect.x + pause_rect.width) / 2.0 == pytest.approx(
         shell.workspace_host.bounds.x + shell.workspace_host.bounds.width / 2.0
     )
     assert draw_list.command_count > 20
     assert any(command.type == DrawCommandType.Text for command in draw_list.commands)
+
+
+def test_native_shell_projects_the_canonical_menu_inventory():
+    document = Document()
+    shell = build_native_editor_shell(document)
+    specs = build_editor_menu_inventory()
+    assert [entry.label for entry in shell.menu_bar.entries] == [spec.name for spec in specs]
+    for entry, spec in zip(shell.menu_bar.entries, specs, strict=True):
+        expected = [
+            item.label for item in spec.items
+            if item is not None and item.label != "Modules"
+        ]
+        actual = [
+            entry.menu.command(command_id).data.label
+            for command_id in range(1, entry.menu.command_count + 1)
+            if entry.menu.command(command_id).data.kind != CommandKind.Separator
+        ]
+        assert actual[: len(expected)] == expected
+
+    assert shell.game_menu_model.command(shell.run_standalone_command).data.shortcut == "F6"
 
 
 def test_editor_cli_accepts_explicit_native_backend(monkeypatch):

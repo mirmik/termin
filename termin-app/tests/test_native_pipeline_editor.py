@@ -1,6 +1,5 @@
 from pathlib import Path
 
-from tcbase import Key
 from tcnodegraph.controller import GraphController
 from tcnodegraph.model import Graph
 from termin.editor_core.pipeline_editor_model import PipelineEditorController
@@ -51,7 +50,7 @@ def test_native_pipeline_editor_projects_params_and_roundtrips_file(tmp_path: Pa
     )
 
     connect_pipeline_editor_command(shell.menu_bar, shell.pipeline_editor_command, editor)
-    assert shell.menu_bar.dispatch_shortcut(Key.F11.value, 0)
+    editor.show()
     assert editor.dialog.open
     document.layout_roots(viewport())
     draw_list = DrawList()

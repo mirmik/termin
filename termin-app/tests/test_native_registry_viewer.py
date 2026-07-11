@@ -1,4 +1,3 @@
-from tcbase import Key
 from termin.editor_core.registry_viewer_model import (
     RegistryCatalogController,
     RegistryCollectionController,
@@ -70,7 +69,7 @@ def test_native_registry_viewer_production_command_filter_selection_and_virtuali
     )
 
     document.layout_roots(Rect(0.0, 0.0, 1280.0, 720.0))
-    assert shell.menu_bar.dispatch_shortcut(Key.F8.value, 0)
+    assert viewer.show()
     assert viewer.dialog.open
     assert viewer.table_model.row_count == 10_000
     assert "10000" in viewer.status_bar.text
@@ -210,7 +209,7 @@ def test_native_registry_catalog_is_opened_by_production_core_registry_command()
     )
     connect_registry_viewer_command(shell.menu_bar, shell.core_registry_command, viewer)
 
-    assert shell.menu_bar.dispatch_shortcut(Key.F9.value, 0)
+    assert viewer.show()
     assert viewer.dialog.open
     assert viewer.tree_model.node_count == 3
     renderer.release_gpu()
