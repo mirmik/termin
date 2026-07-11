@@ -55,10 +55,6 @@ ENGINE_TEXT2D_SHADER_UUID = "termin-engine-text2d"
 ENGINE_TEXT2D_SDF_SHADER_UUID = "termin-engine-text2d-sdf"
 ENGINE_TEXT3D_SHADER_UUID = "termin-engine-text3d"
 ENGINE_SHADOW_MATERIAL_SHADER_UUID = "termin-engine-shadow-material"
-TCGUI_UI_SHADER_UUID = "termin-tcgui-ui-engine"
-TCGUI_UI_SHADER_NAME = "UIEngineVSFS"
-
-
 def normalize_shader_targets(shader_targets: Iterable[str] | None) -> tuple[str, ...] | None:
     if shader_targets is None:
         return None
@@ -345,7 +341,6 @@ def write_default_pipeline_shader_artifacts(
 
     for shader in default_pipeline_engine_shaders():
         write_engine_shader_artifact(package_dir, diagnostics, shader, compiler, requested_targets)
-    write_tcgui_ui_shader_artifacts(package_dir, compiler)
 
 
 def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
@@ -521,43 +516,6 @@ def write_engine_shader_artifact(
             f"{shader.name}:fragment",
             shader.fragment_entry,
         )
-
-
-def write_tcgui_ui_shader_artifacts(package_dir: Path, compiler: Path) -> None:
-    from tcgui.widgets.renderer import UI_FRAGMENT_SHADER, UI_VERTEX_SHADER
-
-    vulkan_dir = package_dir / "shaders" / "vulkan"
-    opengl_dir = package_dir / "shaders" / "opengl"
-    vulkan_dir.mkdir(parents=True, exist_ok=True)
-    opengl_dir.mkdir(parents=True, exist_ok=True)
-
-    vulkan_vertex = vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.vert.glsl"
-    vulkan_fragment = vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.frag.glsl"
-    vulkan_vertex.write_text(UI_VERTEX_SHADER, encoding="utf-8")
-    vulkan_fragment.write_text(UI_FRAGMENT_SHADER, encoding="utf-8")
-    compile_shader_stage(
-        compiler,
-        "glsl",
-        "vulkan",
-        "vertex",
-        vulkan_vertex,
-        vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.vert.spv",
-        f"{TCGUI_UI_SHADER_NAME}:vertex",
-        "main",
-    )
-    compile_shader_stage(
-        compiler,
-        "glsl",
-        "vulkan",
-        "fragment",
-        vulkan_fragment,
-        vulkan_dir / f"{TCGUI_UI_SHADER_UUID}.frag.spv",
-        f"{TCGUI_UI_SHADER_NAME}:fragment",
-        "main",
-    )
-
-    (opengl_dir / f"{TCGUI_UI_SHADER_UUID}.vert.glsl").write_text(UI_VERTEX_SHADER, encoding="utf-8")
-    (opengl_dir / f"{TCGUI_UI_SHADER_UUID}.frag.glsl").write_text(UI_FRAGMENT_SHADER, encoding="utf-8")
 
 
 def source_extension_for_language(language: str) -> str:
