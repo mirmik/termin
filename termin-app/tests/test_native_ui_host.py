@@ -160,6 +160,24 @@ def test_native_editor_continuously_composes_only_in_game_mode():
     assert _game_mode_requires_continuous_render(controller)
 
 
+def test_completed_scene_render_requests_ui_presentation():
+    from termin.editor_native.run_editor import _complete_editor_scene_render
+
+    calls = []
+
+    class Viewport:
+        def after_render(self):
+            calls.append("viewport")
+
+    class Host:
+        def request_render_update(self):
+            calls.append("present")
+
+    _complete_editor_scene_render(Viewport(), Host())
+
+    assert calls == ["viewport", "present"]
+
+
 def test_native_ui_font_resolution_honors_explicit_path(tmp_path: Path):
     font = tmp_path / "editor.ttf"
     font.write_bytes(b"test-font")
