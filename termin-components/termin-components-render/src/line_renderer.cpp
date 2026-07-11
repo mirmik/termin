@@ -815,17 +815,6 @@ void collect_line_batch_shader_usages(
     }
 }
 
-bool line_batch_needs_lighting_ubo_tgfx2(
-    const std::string& phase_mark,
-    LineRenderMode mode,
-    bool cast_shadow)
-{
-    if (!accepts_phase(phase_mark, cast_shadow)) {
-        return false;
-    }
-    return mode == LineRenderMode::WorldBillboard || mode == LineRenderMode::WorldTube;
-}
-
 LineRenderer::LineRenderer(const char* type_name)
     : Component(type_name)
 {
@@ -1389,15 +1378,6 @@ bool LineRenderer::encode_render_item_tgfx2(
 {
     static LineBatchEncoderState state;
     return encode_line_batch_render_item_tgfx2(ctx2, item, request, state);
-}
-
-bool LineRenderer::needs_lighting_ubo_tgfx2(const std::string& phase_mark, int geometry_id) const {
-    (void)geometry_id;
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        return false;
-    }
-    return line_batch_needs_lighting_ubo_tgfx2(phase_mark, mode, cast_shadow);
 }
 
 TcMesh LineRenderer::get_mesh() {

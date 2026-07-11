@@ -72,15 +72,6 @@ public:
     void update_bone_matrices();
 
     /**
-     * tgfx2 path: bind bone matrices to the currently-bound shader layout
-     * right before ctx2->draw().
-     */
-    void upload_per_draw_uniforms_tgfx2(
-        tgfx::RenderContext2& ctx2,
-        int geometry_id
-    ) override;
-
-    /**
      * Override shader to inject skinning if needed.
      * Called by passes before applying uniforms.
      */

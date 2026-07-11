@@ -103,9 +103,9 @@ Current rendering has several overlapping draw ownership models:
 - Historical `GeometryDrawCall` and geometry-id discovery paths did not carry
   enough structured backend payload to be the single render protocol and have
   now been retired from live code.
-- `upload_per_draw_uniforms_tgfx2()` still exists for narrow per-draw renderer
-  data such as skinned mesh bone matrices; it should not grow into a replacement
-  draw ownership channel.
+- The obsolete `Drawable::upload_per_draw_uniforms_tgfx2()` callback has been
+  removed. Skinned mesh bone matrices are carried by the mesh RenderItem and
+  bound by the shared mesh encoder.
 - Direct `draw_tgfx2()` and `RenderContext::prepare_tgfx2_material_resources`
   have been removed from the live code, but old design references may still
   exist in historical notes.
@@ -730,8 +730,8 @@ custom drawables from becoming backend submit owners.
    `resolve_mesh_geometry()`, `get_geometry_ids_for_phase()`,
    `supports_direct_tgfx2_draw()`, and `draw_tgfx2()` have been removed from
    the live C++/Python render API.
-10. Keep `upload_per_draw_uniforms_tgfx2()` narrow and renderer-owned until
-    skinned mesh bone data has a typed RenderItem payload/resource path.
+10. Move skinned mesh bone data into the typed mesh RenderItem payload/resource
+    path and remove `upload_per_draw_uniforms_tgfx2()`. Done.
 11. Add `RenderSceneItemCollector` and make `ColorPass` / `ShadowPass` draw
     calls reference collected item indices instead of re-collecting non-mesh
     items during draw. Initial C++ helper and pass conversion are done; broader
@@ -816,8 +816,8 @@ Required tests:
   interned ids with debug string lookup.
 - How encoder registration participates in module hot-reload without relying on
   static initialization.
-- How skinned mesh bone data should move from `upload_per_draw_uniforms_tgfx2()`
-  into an explicit typed payload/resource path.
+- Skinned mesh bone data now uses an explicit typed mesh RenderItem payload and
+  the shared mesh encoder's draw-resource binding path.
 - Exact public shape of `RenderSceneItemCollector`: C-only helper, C++ helper
   over C sinks, or both.
 - Whether task storage becomes a shared SoA `RenderTaskList` type or remains a

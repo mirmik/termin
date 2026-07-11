@@ -1308,6 +1308,8 @@ def test_export_runtime_package_writes_builtin_shader_catalog_artifacts(tmp_path
         shader_compiler=_write_fake_shader_compiler(tmp_path),
     )
 
+    assert not list(result.package_dir.rglob("termin-tcgui-ui-engine*"))
+
     fsq_source = (
         result.package_dir / "shaders" / "vulkan" / "termin-engine-fsq.vert.slang"
     ).read_text(encoding="utf-8")
