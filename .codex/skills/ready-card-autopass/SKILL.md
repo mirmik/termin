@@ -1,6 +1,6 @@
 ---
 name: ready-card-autopass
-description: Use when Codex should autonomously process Termin Kanboard tasks from the Ready column: select clear actionable cards, implement fixes, test, commit patches, and move cards through the project workflow.
+description: Use when Codex should autonomously process Termin Kanboard tasks from the Ready column: select clear actionable cards, implement fixes, test, commit patches when useful, and move cards through the project workflow.
 ---
 
 # Ready Card Autopass
@@ -16,11 +16,13 @@ A Ready autopass is a bounded work campaign:
 1. Inspect `Ready` cards with tags, descriptions, and comments.
 2. Choose one clear actionable card at a time.
 3. Move the selected card to `In Progress` before implementation.
-4. Implement, test, and commit the patch.
+4. Implement and test the patch, committing when useful for the shape of the work.
 5. Move the card based on the actual result.
 6. Continue until no suitable `Ready` cards remain, the user stops the pass, or repeated blockers prevent useful progress.
 
 Do not batch unrelated code changes into one card or one commit.
+
+When processing multiple cards, commits are useful boundaries between completed tasks. A large card may likewise benefit from commits between meaningful implementation stages. For a single card whose changes naturally fit in one commit, leave the verified result uncommitted for the human to review and commit.
 
 ## Card Selection
 
@@ -42,13 +44,14 @@ If the fix is clear and mechanical:
 - make the change using normal repo conventions;
 - run focused tests first, then broader tests when risk warrants it;
 - update docs when behavior or workflow changed;
-- commit the finished patch with a concise message;
+- when committing, use a concise message;
 - do not add `Co-authored-by` trailers.
 
 If the card is fully done and verification is sufficient:
 
 - move the card to `Done`;
-- add a short comment describing the implementation, verification, and commit hash;
+- add a short comment describing the implementation and verification;
+- include commit hashes when available;
 - do not leave the completed card in `In Progress` or `On Test` unless additional verification is still required.
 
 If implementation is done but requires human/manual/platform verification:
@@ -88,5 +91,5 @@ During a long goal, periodically report:
 - current card id and title;
 - action taken;
 - tests or verification run;
-- commit hash after committing;
+- commit hash when available;
 - resulting board state: `Done`, `On Test`, `In Progress`, or returned to `Backlog`.
