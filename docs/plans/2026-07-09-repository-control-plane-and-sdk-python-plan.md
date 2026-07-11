@@ -490,6 +490,12 @@ SDK runtime in `build-system/python-docs-lock.txt`; `build-docs.sh` creates a
 disposable `build/python-envs/docs` environment and is the shared local/CI entry
 point.
 
+Repository policy status, 2026-07-12: the source-size baseline is green with no
+exceptions. `build-system/repository-policies.json` is the source of the limit,
+extensions, and exclusions. Both `repository_control check` and the legacy
+`scripts/find-long-files.py` launcher use the same implementation and manifest;
+the redundant standalone CI job has been removed.
+
 - Generate/validate docs publication from module metadata.
 - Add orphan docs and broken-link gates.
 - Consolidate package, suite, docs, and policy validation under the check profile.
