@@ -462,7 +462,9 @@ platform identity and rejects suites/modules not present in the planner
 artifact, preventing stale or cross-profile reports from satisfying coverage.
 The termin-app installed-bundle acceptance is also declared as a separate
 sdk-installed process-smoke suite, preserving its distinct import contract
-without a pytest root list in workflow YAML.
+without a pytest root list in workflow YAML. Process-smoke jobs verify their
+selected/executed/failed suite manifest against the exact planner artifact
+before publishing it, using the same fail-closed identity contract.
 The focused D3D11 Windows smoke is likewise a declared Windows process-smoke
 suite; CI consumes its Windows plan artifact and publishes a suite execution
 manifest. Runtime acceptance still depends on the Windows runner.
