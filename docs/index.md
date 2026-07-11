@@ -17,6 +17,7 @@
 - [Python Package Naming](./python-package-naming.md) — canonical source path / distribution / import namespace policy.
 - [Taskboard CLI](./taskboard-tool.md) — удобный инструмент для работы с Kanboard из репозитория.
 - [Taskboard Guidelines](./taskboard-guidelines.md) — короткие правила ведения Kanboard-карточек.
+- [Native Editor UI Style Guide](./ui/native-editor-ui-style-guide.md) — визуальные токены и правила композиции `termin-gui-native`.
 - [Architecture Notes](./architecture/index.md) — cross-module архитектурные заметки.
 - [Plans And Migration Notes](./plans/index.md) — исторические планы и миграционные чеклисты.
 - [Главный вход Obsidian](../docs.md) — навигационная страница vault.
