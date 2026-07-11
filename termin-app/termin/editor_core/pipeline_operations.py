@@ -95,12 +95,9 @@ class PipelineOperations:
         if from_idx == to_idx:
             return
         p = passes[from_idx]
-        self._pipeline.remove_pass(p)
-        updated_passes = self._pipeline.passes
-        if to_idx >= len(updated_passes):
-            self._pipeline.add_pass(p)
-        else:
-            self._pipeline.insert_pass_before(p, updated_passes[to_idx])
+        remaining = [candidate for index, candidate in enumerate(passes) if index != from_idx]
+        before = remaining[to_idx] if to_idx < len(remaining) else None
+        self._pipeline.move_pass_before(p, before)
         self.pipeline_changed.emit()
 
     def set_pass_enabled(self, pass_obj, enabled: bool) -> None:
