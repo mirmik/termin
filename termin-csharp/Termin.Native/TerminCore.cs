@@ -666,9 +666,6 @@ public static class TerminCore
     [DllImport(RENDER_DLL, EntryPoint = "tc_pass_set_enabled")]
     public static extern void PassSetEnabled(IntPtr pass, [MarshalAs(UnmanagedType.U1)] bool enabled);
 
-    [DllImport(RENDER_DLL, EntryPoint = "tc_pass_drop")]
-    public static extern void PassDrop(IntPtr pass);
-
     // ========================================================================
     // FBO Pool Extended
     // ========================================================================
@@ -1182,9 +1179,9 @@ public static class TerminCore
 }
 
 /// <summary>
-/// Manages C# owner references for components and passes.
-/// When C++ retains a component/pass, the GCHandle prevents GC collection.
-/// When C++ releases it, the GCHandle is freed and C# GC can collect.
+/// Manages C# lifetime bridges for components and passes.
+/// Components still use the legacy retain/release bridge. Passes install one
+/// pipeline ownership deleter which releases their GCHandle exactly once.
 /// </summary>
 public static class CSharpOwnerRef
 {
@@ -1217,7 +1214,7 @@ public static class CSharpOwnerRef
     }
 
     /// <summary>
-    /// Set GCHandle as owner on a tc_pass. Called from SWIG constructor typemaps.
+    /// Set GCHandle and the single-owner deleter on a tc_pass.
     /// </summary>
     public static void SetupPassOwnerRef(IntPtr tcPass, IntPtr gcHandle)
     {
