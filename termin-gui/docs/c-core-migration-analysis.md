@@ -1,8 +1,8 @@
 # Анализ: перенос ядра tcgui в C (по модели tc_component)
 
 > Исторический набросок. Текущая целевая модель владения уточнена в
-> [UI storage and plot annotations](../../docs/architecture/2026-07-07-ui-storage-and-plot-annotations.md)
-> и [Multilanguage component lifetime model](../../docs/architecture/2026-07-09-multilanguage-component-lifetime-model.md).
+> [UI storage and plot annotations](https://github.com/mirmik/termin-monorepo/blob/master/docs/architecture/2026-07-07-ui-storage-and-plot-annotations.md)
+> и [Multilanguage component lifetime model](https://github.com/mirmik/termin-monorepo/blob/master/docs/architecture/2026-07-09-multilanguage-component-lifetime-model.md).
 > Языковая реализация встраивает полный `tc_widget`, а `tc_ui_document`
 > принимает его через заданный создателем deleter и выдаёт generation-checked
 > handle. Отдельного `WidgetRecord` с копией общего состояния нет.
