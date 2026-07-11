@@ -38,15 +38,20 @@ class RenderingControllerTcgui:
         on_render_target_selected: Callable[[object], None] | None = None,
     ) -> None:
         from termin.engine import RenderingManager
+        from termin.editor_core.rendering_factories import PipelineAssetResolver
         from termin.editor_core.rendering_model import RenderingModel
+        from termin.editor_core.resource_manager import ResourceManager
 
         self._manager = RenderingManager.instance()
         self._model = RenderingModel(self._manager)
+        self._pipeline_resolver = PipelineAssetResolver(
+            ResourceManager.instance(),
+            make_editor_pipeline=make_editor_pipeline,
+        )
         # Process-global tgfx2 context — every FBOSurface this controller
         # creates allocates its color/depth textures on this device.
         self._ctx = ctx
         self._get_scene = get_scene
-        self._make_editor_pipeline = make_editor_pipeline
         self._on_request_update = on_request_update
         self._on_rendering_changed = on_rendering_changed
         self._on_display_selected = on_display_selected
@@ -65,7 +70,7 @@ class RenderingControllerTcgui:
 
         # Register factories
         self._manager.set_display_factory(self._create_display_for_name)
-        self._manager.set_pipeline_factory(self._create_pipeline_for_name)
+        self._manager.set_pipeline_factory(self._pipeline_resolver.resolve)
         self._manager.set_render_request_callback(self._request_update)
         self._manager.set_display_removed_callback(self._on_display_removed)
 
@@ -183,29 +188,6 @@ class RenderingControllerTcgui:
     # ------------------------------------------------------------------
     # Factories
     # ------------------------------------------------------------------
-
-    def _create_pipeline_for_name(self, name: str) -> "RenderPipeline | None":
-        if not name or name in ("Default", "(Default)"):
-            return None
-
-        if name == "(Editor)":
-            if self._make_editor_pipeline is not None:
-                return self._make_editor_pipeline()
-            return None
-
-        from termin.editor_core.resource_manager import ResourceManager
-        rm = ResourceManager.instance()
-
-        if name and "-" in name:
-            pipeline = rm.get_pipeline_by_uuid(name)
-            if pipeline is not None:
-                return pipeline
-
-        pipeline = rm.get_pipeline(name)
-        if pipeline is not None:
-            return pipeline
-
-        return None
 
     def _create_display_for_name(self, name: str) -> "Display | None":
         from termin.display import Display

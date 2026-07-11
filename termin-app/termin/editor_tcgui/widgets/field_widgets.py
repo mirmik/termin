@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
 from tcbase import log
+from termin.inspect import parse_uint32
 from tcgui.widgets.hstack import HStack
 from tcgui.widgets.label import Label
 from tcgui.widgets.button import Button
@@ -247,6 +248,36 @@ class StringFieldWidget(FieldWidget):
         old = self._input.on_changed
         self._input.on_changed = None
         self._input.text = str(value) if value is not None else ""
+        self._input.on_changed = old
+
+
+class UInt32FieldWidget(FieldWidget):
+    """Exact uint32 editor that does not route identifiers through float."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._value = 0
+        self._input = TextInput()
+        self._input.on_changed = self._on_changed
+        self.add_child(self._input)
+
+    def _on_changed(self, text: str) -> None:
+        try:
+            self._value = parse_uint32(text)
+        except ValueError as error:
+            log.error(f"[UInt32FieldWidget] invalid value: {error}")
+            return
+        self._emit()
+
+    def get_value(self) -> int:
+        return self._value
+
+    def set_value(self, value: Any) -> None:
+        parsed = parse_uint32(0 if value is None else value)
+        self._value = parsed
+        old = self._input.on_changed
+        self._input.on_changed = None
+        self._input.text = str(parsed)
         self._input.on_changed = old
 
 
@@ -1256,6 +1287,9 @@ class FieldWidgetFactory:
 
         if field.choices:
             return ComboFieldWidget(choices=field.choices)
+
+        if kind == "uint32":
+            return UInt32FieldWidget()
 
         if kind in ("float", "int", "double"):
             return FloatFieldWidget(

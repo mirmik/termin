@@ -27,6 +27,7 @@ from termin.gui_native import (
     Size,
     WidgetRef,
 )
+from termin.inspect import parse_uint32
 
 
 _logger = logging.getLogger(__name__)
@@ -545,20 +546,43 @@ class NativeInspectorFields:
         if field_info is None:
             return None
         kind = field_info.kind
+        if kind == "uint32":
+            text = "<mixed>" if row.mixed else str(parse_uint32(0 if row.value is None else row.value))
+            editor = self.document.create_text_input(text)
+            weak_owner = weakref.ref(self)
+
+            def submitted(value: str) -> None:
+                owner = weak_owner()
+                if owner is None:
+                    return
+                try:
+                    parsed = parse_uint32(value)
+                except ValueError as error:
+                    _logger.error("Invalid uint32 value for '%s': %s", row.key, error)
+                    editor.text = text
+                    return
+                owner._apply(row.key, parsed)
+
+            editor.connect_submitted(submitted)
+            editor.widget.enabled = not field_info.read_only
+            self.field_widgets[row.key] = editor
+            return editor.widget
+        integer_kind = kind == "int"
         if kind in ("float", "double", "int"):
             value = 0.0 if row.mixed or row.value is None else float(row.value)
-            spin = self.document.create_spin_box(value)
+            spin = self.document.create_spin_box(0.0)
             minimum = -1.0e9 if field_info.min is None else float(field_info.min)
             maximum = 1.0e9 if field_info.max is None else float(field_info.max)
             spin.set_range(minimum, maximum)
-            spin.step = float(field_info.step) if field_info.step is not None else (1.0 if kind == "int" else 0.01)
-            spin.decimals = 0 if kind == "int" else 4
+            spin.step = float(field_info.step) if field_info.step is not None else (1.0 if integer_kind else 0.01)
+            spin.decimals = 0 if integer_kind else 4
+            spin.value = value
             weak_owner = weakref.ref(self)
 
             def changed(value: float) -> None:
                 owner = weak_owner()
                 if owner is not None:
-                    owner._apply(row.key, int(round(value)) if kind == "int" else value, merge=True)
+                    owner._apply(row.key, int(round(value)) if integer_kind else value, merge=True)
 
             spin.connect_changed(changed)
             spin.widget.enabled = not field_info.read_only
