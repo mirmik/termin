@@ -18,6 +18,10 @@ struct Point2 {
 using Polygon2 = std::vector<Point2>;
 
 class TERMIN_CSG_API Solid {
+private:
+    struct Impl;
+    Impl* impl_ = nullptr;
+
 public:
     Solid();
     Solid(const Solid&);
@@ -37,10 +41,7 @@ public:
     Solid rotated(double x_degrees, double y_degrees, double z_degrees) const;
 
 private:
-    struct Impl;
     explicit Solid(Impl impl);
-
-    Impl* impl_ = nullptr;
 
     friend TERMIN_CSG_API Solid make_box(double, double, double, bool);
     friend TERMIN_CSG_API Solid make_sphere(double, int);

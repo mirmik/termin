@@ -54,6 +54,13 @@ struct BVHNode {
  * Dynamic BVH tree for broad-phase collision detection.
  */
 class BVH {
+private:
+    std::vector<BVHNode> nodes_;
+    std::unordered_map<Collider*, int32_t> collider_to_node_;
+    int32_t root_ = BVH_NULL_NODE;
+    int32_t free_list_ = BVH_NULL_NODE;
+    size_t node_count_ = 0;
+
 public:
     BVH() = default;
 
@@ -263,12 +270,6 @@ public:
     }
 
 private:
-    std::vector<BVHNode> nodes_;
-    std::unordered_map<Collider*, int32_t> collider_to_node_;
-    int32_t root_ = BVH_NULL_NODE;
-    int32_t free_list_ = BVH_NULL_NODE;
-    size_t node_count_ = 0;
-
     // ==================== Node allocation ====================
 
     int32_t allocate_node() {

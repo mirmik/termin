@@ -76,15 +76,6 @@ public:
     bool show_poly_mesh = false;
     bool show_detail_mesh = false;
 
-    // Apply agent type parameters (called from Python before build)
-    void apply_agent_type(float height, float radius, float max_climb, float max_slope);
-
-    // Build from entity's MeshRenderer (called by inspector button)
-    void build_from_entity();
-
-    // Build Recast meshes from entity geometry without writing a navmesh asset.
-    RecastBuildResult build_from_entity_geometry();
-
     // --- Runtime state ---
 
     // Captured debug data (filled during build if capture flags are set)
@@ -93,6 +84,39 @@ public:
     // Last build result
     RecastBuildResult last_result;
     NavMeshBakeInput last_bake_input;
+
+private:
+    // Geometry IDs for different debug layers
+    static constexpr int GEOMETRY_INPUT_MESH = 0;
+    static constexpr int GEOMETRY_HEIGHTFIELD = 1;
+    static constexpr int GEOMETRY_REGIONS = 2;
+    static constexpr int GEOMETRY_DISTANCE_FIELD = 3;
+    static constexpr int GEOMETRY_CONTOURS = 4;
+    static constexpr int GEOMETRY_POLY_MESH = 5;
+    static constexpr int GEOMETRY_DETAIL_MESH = 6;
+
+    // Debug meshes
+    TcMesh _input_mesh;
+    TcMesh _heightfield_mesh;
+    TcMesh _regions_mesh;
+    TcMesh _distance_field_mesh;
+    TcMesh _contours_mesh;
+    TcMesh _poly_mesh_debug;
+    TcMesh _detail_mesh_debug;
+
+    // Debug material
+    TcMaterial _debug_material;
+
+public:
+
+    // Apply agent type parameters (called from Python before build)
+    void apply_agent_type(float height, float radius, float max_climb, float max_slope);
+
+    // Build from entity's MeshRenderer (called by inspector button)
+    void build_from_entity();
+
+    // Build Recast meshes from entity geometry without writing a navmesh asset.
+    RecastBuildResult build_from_entity_geometry();
 
     // --- Methods ---
 
@@ -128,27 +152,6 @@ public:
         tc_render_item_sink& sink) override;
 
 private:
-    // Geometry IDs for different debug layers
-    static constexpr int GEOMETRY_INPUT_MESH = 0;
-    static constexpr int GEOMETRY_HEIGHTFIELD = 1;
-    static constexpr int GEOMETRY_REGIONS = 2;
-    static constexpr int GEOMETRY_DISTANCE_FIELD = 3;
-    static constexpr int GEOMETRY_CONTOURS = 4;
-    static constexpr int GEOMETRY_POLY_MESH = 5;
-    static constexpr int GEOMETRY_DETAIL_MESH = 6;
-
-    // Debug meshes
-    TcMesh _input_mesh;
-    TcMesh _heightfield_mesh;
-    TcMesh _regions_mesh;
-    TcMesh _distance_field_mesh;
-    TcMesh _contours_mesh;
-    TcMesh _poly_mesh_debug;
-    TcMesh _detail_mesh_debug;
-
-    // Debug material
-    TcMaterial _debug_material;
-
     // Mesh generation from debug data
     void rebuild_debug_meshes();
     void build_input_mesh(const float* verts, int nverts, const int* tris, int ntris);

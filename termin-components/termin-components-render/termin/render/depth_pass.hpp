@@ -33,9 +33,6 @@ private:
     tgfx::IRenderDevice* device2_ = nullptr;
     mutable tc_shader_handle depth_shader_handle_ = tc_shader_handle_invalid();
 
-    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
-    void release_tgfx2_resources();
-
 public:
     std::string depth_encoding = "linear";
     // Drawable/material representation requested by depth passes. The depth
@@ -43,6 +40,12 @@ public:
     // label value.
     std::string pass_phase_mark = "depth";
     bool clear = true;
+
+private:
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+    void release_tgfx2_resources();
+
+public:
 
     INSPECT_FIELD_NAMED(DepthPass, pass_phase_mark, "phase_mark", "Phase Mark", "string")
     INSPECT_FIELD_CHOICES(DepthPass, depth_encoding, "Depth Encoding", "string",

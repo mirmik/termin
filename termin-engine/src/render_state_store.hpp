@@ -15,6 +15,10 @@ extern "C" {
 namespace termin::rendering_manager_detail {
 
 class RenderStateStore {
+private:
+    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
+    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> render_target_states_;
+
 public:
     using MakeCurrent = std::function<void()>;
 
@@ -32,8 +36,6 @@ private:
     static uint64_t viewport_key(tc_viewport_handle h);
     static uint64_t render_target_key(tc_render_target_handle h);
 
-    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> viewport_states_;
-    std::unordered_map<uint64_t, std::unique_ptr<ViewportRenderState>> render_target_states_;
 };
 
 } // namespace termin::rendering_manager_detail

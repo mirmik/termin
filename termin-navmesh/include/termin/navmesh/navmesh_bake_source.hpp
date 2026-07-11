@@ -90,6 +90,18 @@ using NavMeshBakeVisitor = std::function<void(
     NavMeshBakeInput&)>;
 
 class TERMIN_NAVMESH_COMPONENTS_API NavMeshBakeVisitorRegistry {
+private:
+    struct VisitorRecord {
+        NavMeshBakeVisitor visitor;
+        std::string owner;
+    };
+    using VisitorMap = std::unordered_map<std::string, VisitorRecord>;
+    VisitorMap _geometry_visitors;
+    VisitorMap _link_visitors;
+    VisitorMap _linear_visitors;
+    std::string _current_registration_owner;
+    bool _builtin_visitors_registered = false;
+
 public:
     static NavMeshBakeVisitorRegistry& instance();
 
@@ -116,14 +128,6 @@ public:
                         const NavMeshBakeContext& context,
                         NavMeshBakeInput& input) const;
 
-private:
-    struct VisitorRecord {
-        NavMeshBakeVisitor visitor;
-        std::string owner;
-    };
-
-    using VisitorMap = std::unordered_map<std::string, VisitorRecord>;
-
     bool register_visitor(VisitorMap& visitors,
                           const char* visitor_kind,
                           const std::string& component_type,
@@ -132,11 +136,6 @@ private:
     static bool unregister_visitor(VisitorMap& visitors, const std::string& component_type);
     static std::string visitor_owner(const VisitorMap& visitors, const std::string& component_type);
 
-    VisitorMap _geometry_visitors;
-    VisitorMap _link_visitors;
-    VisitorMap _linear_visitors;
-    std::string _current_registration_owner;
-    bool _builtin_visitors_registered = false;
 };
 
 TERMIN_NAVMESH_COMPONENTS_API NavMeshBakeInput collect_navmesh_bake_input(

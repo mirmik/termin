@@ -1,10 +1,13 @@
 # C++ Class Layout Migration Map
 
-Дата baseline: 2026-07-10.
+Дата baseline: 2026-07-11.
 
 Нормативное правило описано в [C++ Style Guide](../cpp-style.md). Карта построена
 по Python/nanobind compilation profile, который является наиболее полным
-текущим профилем: 139 классов, 118 файлов и 852 поля в 18 модулях.
+текущим профилем: 147 классов, 124 файла и 919 полей в 18 модулях.
+
+Миграция завершена 2026-07-11. Normal profile (276 translation units) и
+Python/nanobind profile (389 translation units) проходят с нулём нарушений.
 
 ## Как вести карту
 
@@ -30,32 +33,33 @@
 
 | Status | Module | Classes | Files | Fields | Owner | Last check |
 |---|---|---:|---:|---:|---|---|
-| pending | `termin-gui-native` | 66 | 58 | 467 | — | baseline |
-| pending | `termin-base` | 13 | 3 | 20 | — | baseline |
-| pending | `termin-graphics` | 9 | 9 | 110 | — | baseline |
-| pending | `termin-engine` | 7 | 7 | 29 | — | baseline |
-| pending | `termin-navmesh` | 7 | 7 | 44 | — | baseline |
-| pending | `tcplot` | 6 | 6 | 88 | — | baseline |
-| pending | `termin-render` | 5 | 3 | 8 | — | baseline |
-| pending | `termin-render-passes` | 5 | 5 | 24 | — | baseline |
-| pending | `termin-components` | 4 | 4 | 26 | — | baseline |
+| done | `termin-gui-native` | 66 | 58 | 474 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-base` | 13 | 3 | 20 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-graphics` | 9 | 9 | 110 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-engine` | 8 | 7 | 30 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-navmesh` | 7 | 7 | 44 | coordinator | 2026-07-11, both: 0 |
+| done | `tcplot` | 6 | 6 | 88 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-render` | 5 | 3 | 8 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-render-passes` | 14 | 13 | 93 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-components` | 5 | 5 | 20 | coordinator | 2026-07-11, both: 0 |
 | done | `termin-display` | 4 | 4 | 8 | `ClassLayout-1` | 2026-07-10, Python profile: 0 |
-| pending | `termin-collision` | 3 | 3 | 11 | — | baseline |
-| pending | `termin-scene` | 3 | 2 | 4 | — | baseline |
-| pending | `termin-voxels` | 2 | 2 | 8 | — | baseline |
-| pending | `termin-app` | 1 | 1 | 1 | — | baseline |
-| pending | `termin-csg` | 1 | 1 | 1 | — | baseline |
-| pending | `termin-input` | 1 | 1 | 1 | — | baseline |
-| pending | `termin-materials` | 1 | 1 | 1 | — | baseline |
-| pending | `termin-player` | 1 | 1 | 1 | — | baseline |
-| **Total** | | **139** | **118** | **852** | | |
+| done | `termin-collision` | 3 | 3 | 11 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-scene` | 3 | 2 | 4 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-voxels` | 2 | 2 | 8 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-app` | 1 | 1 | 1 | coordinator | 2026-07-11, Python: 0 |
+| done | `termin-csg` | 1 | 1 | 1 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-input` | 1 | 1 | 1 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-materials` | 1 | 1 | 1 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-modules` | 1 | 1 | 4 | coordinator | 2026-07-11, both: 0 |
+| done | `termin-player` | 1 | 1 | 1 | coordinator | 2026-07-11, Python: 0 |
+| **Total** | | **147** | **124** | **919** | | |
 
 Небольшие модули можно выдавать агенту целиком. `termin-gui-native` разбит ниже
 на непересекающиеся file-owned batches.
 
 ## GUI-1: models and documents
 
-Status: `pending`. Baseline: 15 classes, 13 files, 58 fields.
+Status: `done`. Baseline: 15 classes, 13 files, 58 fields.
 
 - `termin-gui-native/include/termin/gui_native/collection_model.hpp`
 - `termin-gui-native/include/termin/gui_native/color_picker_model.hpp`
@@ -73,7 +77,7 @@ Status: `pending`. Baseline: 15 classes, 13 files, 58 fields.
 
 ## GUI-2: complex views and widgets
 
-Status: `pending`. Baseline: 14 classes, 12 files, 186 fields.
+Status: `done`. Baseline: 14 classes, 12 files, 186 fields.
 
 - `termin-gui-native/include/termin/gui_native/canvas.hpp`
 - `termin-gui-native/include/termin/gui_native/draw_list_renderer.hpp`
@@ -90,13 +94,13 @@ Status: `pending`. Baseline: 14 classes, 12 files, 186 fields.
 
 ## GUI-3: Python bindings
 
-Status: `pending`. Baseline: 5 classes, 1 file, 10 fields.
+Status: `done`. Baseline: 5 classes, 1 file, 10 fields.
 
 - `termin-gui-native/python/bindings/gui_native_module.cpp`
 
 ## GUI-4: controls A
 
-Status: `pending`. Baseline: 16 classes, 16 files, 130 fields.
+Status: `done`. Baseline: 16 classes, 16 files, 130 fields.
 
 - `termin-gui-native/include/termin/gui_native/box_layout.hpp`
 - `termin-gui-native/include/termin/gui_native/button.hpp`
@@ -117,7 +121,7 @@ Status: `pending`. Baseline: 16 classes, 16 files, 130 fields.
 
 ## GUI-5: controls B
 
-Status: `pending`. Baseline: 16 classes, 16 files, 83 fields.
+Status: `done`. Baseline: 16 classes, 16 files, 83 fields.
 
 - `termin-gui-native/include/termin/gui_native/native_widget.hpp`
 - `termin-gui-native/include/termin/gui_native/progress_bar.hpp`

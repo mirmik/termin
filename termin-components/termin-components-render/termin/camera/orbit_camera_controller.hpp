@@ -45,6 +45,34 @@ public:
     double max_radius = 100.0;
     bool horizon_lock = true;  // Z always up, clamp roll
 
+private:
+    // === Internal state (derived from transform) ===
+    double _azimuth = 0.0;      // Horizontal angle (radians)
+    double _elevation = 0.0;   // Vertical angle (radians)
+    Vec3 _target{0.0, 0.0, 0.0};  // Point camera orbits around
+    // For detecting external transform changes
+    Vec3 _last_position{0.0, 0.0, 0.0};
+    Quat _last_rotation = Quat::identity();
+    bool _has_last_transform = false;
+    // === Control parameters ===
+    double _orbit_speed = 0.2;
+    double _pan_speed = 0.005;
+    double _zoom_speed = 0.5;
+    bool _prevent_moving = false;
+    // === Per-viewport state for drag operations ===
+    struct ViewportState {
+        bool orbit_active = false;
+        bool pan_active = false;
+        double last_x = 0.0;
+        double last_y = 0.0;
+        bool has_last = false;
+    };
+    std::unordered_map<uintptr_t, ViewportState> _viewport_states;
+    // === Camera component reference (CmpRef validates entity liveness) ===
+    CmpRef<CameraComponent> _camera;
+
+public:
+
     // === Constructor ===
 
     OrbitCameraController(
@@ -130,39 +158,6 @@ public:
     void _update_pose();
 
 private:
-    // === Internal state (derived from transform) ===
-
-    double _azimuth = 0.0;      // Horizontal angle (radians)
-    double _elevation = 0.0;   // Vertical angle (radians)
-    Vec3 _target{0.0, 0.0, 0.0};  // Point camera orbits around
-
-    // For detecting external transform changes
-    Vec3 _last_position{0.0, 0.0, 0.0};
-    Quat _last_rotation = Quat::identity();
-    bool _has_last_transform = false;
-
-    // === Control parameters ===
-
-    double _orbit_speed = 0.2;
-    double _pan_speed = 0.005;
-    double _zoom_speed = 0.5;
-    bool _prevent_moving = false;
-
-    // === Per-viewport state for drag operations ===
-
-    struct ViewportState {
-        bool orbit_active = false;
-        bool pan_active = false;
-        double last_x = 0.0;
-        double last_y = 0.0;
-        bool has_last = false;
-    };
-    std::unordered_map<uintptr_t, ViewportState> _viewport_states;
-
-    // === Camera component reference (CmpRef validates entity liveness) ===
-
-    CmpRef<CameraComponent> _camera;
-
     // === Internal methods ===
 
     void _ensure_camera();

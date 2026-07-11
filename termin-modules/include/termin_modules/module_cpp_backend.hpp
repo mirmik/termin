@@ -9,6 +9,12 @@
 namespace termin_modules {
 
 class TERMIN_MODULES_API CppModuleBackend : public IModuleBackend {
+private:
+    std::filesystem::path _shadow_base_dir;
+    std::filesystem::path _shadow_session_dir;
+    std::atomic<uint64_t> _shadow_counter{0};
+    std::mutex _shadow_mutex;
+
 public:
     BuildOutputCallback _output_callback;
 
@@ -61,11 +67,6 @@ public:
 
     void set_output_callback(BuildOutputCallback callback) override;
 
-private:
-    std::filesystem::path _shadow_base_dir;
-    std::filesystem::path _shadow_session_dir;
-    std::atomic<uint64_t> _shadow_counter{0};
-    std::mutex _shadow_mutex;
 
     bool ensure_shadow_session(
         const ModuleEnvironment& environment,

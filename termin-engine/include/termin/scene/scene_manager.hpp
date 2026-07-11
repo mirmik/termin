@@ -20,6 +20,25 @@ namespace termin {
 // SceneManager - manages multiple scenes and their update cycles
 class TERMIN_ENGINE_API SceneManager {
 public:
+    using AfterRenderCallback = std::function<void()>;
+    using BeforeSceneCloseCallback = std::function<void(const std::string&)>;
+
+protected:
+    // Registered scenes: name -> tc_scene_handle
+    std::unordered_map<std::string, tc_scene_handle> _scenes;
+
+    // Scene file paths: name -> path
+    std::unordered_map<std::string, std::string> _paths;
+
+    // Render request flag
+    bool _render_requested = false;
+
+    // Callbacks
+    AfterRenderCallback _on_after_render;
+    BeforeSceneCloseCallback _on_before_scene_close;
+
+public:
+public:
     SceneManager();
     virtual ~SceneManager();
 
@@ -89,28 +108,12 @@ public:
     bool consume_render_request();
 
     // --- Callbacks ---
-    using AfterRenderCallback = std::function<void()>;
-    using BeforeSceneCloseCallback = std::function<void(const std::string&)>;
-
     void set_on_after_render(AfterRenderCallback callback);
     void set_on_before_scene_close(BeforeSceneCloseCallback callback);
 
     void invoke_after_render();
     void invoke_before_scene_close(const std::string& name);
 
-protected:
-    // Registered scenes: name -> tc_scene_handle
-    std::unordered_map<std::string, tc_scene_handle> _scenes;
-
-    // Scene file paths: name -> path
-    std::unordered_map<std::string, std::string> _paths;
-
-    // Render request flag
-    bool _render_requested = false;
-
-    // Callbacks
-    AfterRenderCallback _on_after_render;
-    BeforeSceneCloseCallback _on_before_scene_close;
 };
 
 } // namespace termin

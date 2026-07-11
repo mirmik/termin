@@ -28,14 +28,7 @@ public:
     // Embedded C component (MUST be first member for from_tc to work)
     tc_component _c;
 
-    // Owner entity - constructed from C-side owner handle
-    Entity entity() const {
-        return Entity(_c.owner);
-    }
-
 private:
-    // --- Fields (private) ---
-
     // Reference count for lifetime management
     // Starts at 0, incremented by entity on add, decremented on remove
     // When reaches 0 after being >0, component deletes itself
@@ -45,6 +38,11 @@ private:
     static const tc_component_vtable _cxx_vtable;
 
 public:
+    // Owner entity - constructed from C-side owner handle
+    Entity entity() const {
+        return Entity(_c.owner);
+    }
+
     // --- Methods ---
 
     virtual ~CxxComponent();

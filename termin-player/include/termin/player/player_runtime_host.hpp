@@ -8,6 +8,11 @@ class PlayerRuntimeHost {
 public:
     struct Impl;
 
+private:
+    Impl* impl_ = nullptr;
+
+public:
+
     PlayerRuntimeHost();
     ~PlayerRuntimeHost();
 
@@ -17,8 +22,6 @@ public:
     int run(int argc, char** argv);
     void request_quit(int exit_code);
 
-private:
-    Impl* impl_ = nullptr;
 };
 
 } // namespace termin::player

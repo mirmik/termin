@@ -46,6 +46,12 @@ struct TERMIN_NAVMESH_COMPONENTS_API DetourPathResult {
 };
 
 class TERMIN_NAVMESH_COMPONENTS_API DetourQuerySession {
+private:
+    std::string _asset_name;
+    dtNavMesh* _navmesh = nullptr;
+    dtNavMeshQuery* _query = nullptr;
+    std::vector<unsigned char> _tile_blob;
+
 public:
     float query_extent_x = 2.0f;
     float query_extent_y = 4.0f;
@@ -98,11 +104,6 @@ public:
         const Vec3f& point);
 
 private:
-    std::string _asset_name;
-    dtNavMesh* _navmesh = nullptr;
-    dtNavMeshQuery* _query = nullptr;
-    std::vector<unsigned char> _tile_blob;
-
     bool find_nearest_poly(const Vec3f& point,
                            unsigned long long& poly_ref,
                            float nearest[3],

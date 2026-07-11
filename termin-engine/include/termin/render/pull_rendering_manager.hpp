@@ -31,6 +31,11 @@ class TERMIN_ENGINE_API TERMIN_PULL_RENDERING_MANAGER_DEPRECATED PullRenderingMa
 public:
     static PullRenderingManager* s_instance;
 
+private:
+    std::unique_ptr<RenderingManager> owned_manager_;
+    RenderingManager* manager_ = nullptr;
+
+public:
     static PullRenderingManager& instance();
     static void reset_for_testing();
 
@@ -58,8 +63,6 @@ public:
 private:
     RenderingManager* manager();
 
-    std::unique_ptr<RenderingManager> owned_manager_;
-    RenderingManager* manager_ = nullptr;
 };
 
 #undef TERMIN_PULL_RENDERING_MANAGER_DEPRECATED
