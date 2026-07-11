@@ -23,14 +23,6 @@ extern "C" {
 
 namespace termin {
 
-// Must match TerminBoneBlock in termin-engine-skinned-common.slang.
-// The descriptor set layout is built from shader reflection. std140 mat4[]
-// is tightly packed (4 vec4 per matrix), the int after the array needs
-// vec4 alignment. Total 128*64 + 16 = 8208.
-static constexpr uint32_t BONE_BLOCK_MAX_BONES = 128;
-static constexpr uint64_t BONE_BLOCK_SIZE =
-    BONE_BLOCK_MAX_BONES * 16u * sizeof(float) + 16u;
-
 // Hash for TcShader (uses handle.index)
 struct TcShaderHash {
     size_t operator()(const TcShader& s) const {
@@ -77,24 +69,6 @@ void SkinnedMeshRenderer::register_type() {
     register_component_type<SkinnedMeshRenderer>("SkinnedMeshRenderer", "MeshRenderer");
     ComponentRegistry::instance().set_category("SkinnedMeshRenderer", "Rendering");
     register_component_requirement("SkinnedMeshRenderer", "MeshComponent");
-}
-
-static const tc_shader_resource_binding* find_bone_block_resource(const tc_shader* shader) {
-    if (!shader) {
-        return nullptr;
-    }
-    static constexpr const char* kNames[] = {
-        TC_SHADER_RESOURCE_BONE_BLOCK,
-        "BoneBlock",
-    };
-    for (const char* name : kNames) {
-        const tc_shader_resource_binding* rb =
-            tc_shader_find_resource_binding(shader, name);
-        if (rb && rb->kind == TC_SHADER_RESOURCE_CONSTANT_BUFFER) {
-            return rb;
-        }
-    }
-    return nullptr;
 }
 
 static bool shader_contract_uses_skinning(const tc_shader* shader) {
@@ -219,45 +193,6 @@ void SkinnedMeshRenderer::update_bone_matrices() {
             _bone_matrices_flat[i * 16 + j] = static_cast<float>(m.data[j]);
         }
     }
-}
-
-void SkinnedMeshRenderer::upload_per_draw_uniforms_tgfx2(
-    tgfx::RenderContext2& ctx2,
-    int geometry_id
-) {
-    (void)geometry_id;
-    resolve_skeleton_controller();
-    if (!_skeleton_controller.valid()) return;
-
-    update_bone_matrices();
-    if (_bone_count <= 0 || _bone_matrices_flat.empty()) return;
-
-    // Pack std140 BoneBlock: [mat4 u_bone_matrices[128]; int u_bone_count;].
-    // Matrices fill the first MAX_BONES*64 bytes; unused slots stay zeroed.
-    // The trailing int sits at offset MAX_BONES*64 (vec4-aligned by std140).
-    std::vector<uint8_t> staging(BONE_BLOCK_SIZE, 0);
-    const uint32_t used_bones =
-        std::min<uint32_t>(static_cast<uint32_t>(_bone_count), BONE_BLOCK_MAX_BONES);
-    std::memcpy(staging.data(),
-                _bone_matrices_flat.data(),
-                used_bones * 16u * sizeof(float));
-    int32_t count = static_cast<int32_t>(used_bones);
-    std::memcpy(staging.data() + BONE_BLOCK_MAX_BONES * 16u * sizeof(float),
-                &count, sizeof(int32_t));
-
-    // Route BoneBlock through shader metadata. Layout-only shaders must
-    // declare the draw-scope bone block explicitly.
-    const tc_shader* active_shader = ctx2.active_shader_resource_layout();
-    if (const tc_shader_resource_binding* rb = find_bone_block_resource(active_shader)) {
-        ctx2.bind_uniform_data(rb, staging.data(), static_cast<uint32_t>(staging.size()));
-        return;
-    }
-
-    tc::Log::error(
-        "[SkinnedMeshRenderer] shader '%s' has no '%s' resource; fixed binding "
-        "fallback has been removed",
-        active_shader && active_shader->name ? active_shader->name : "<unnamed>",
-        TC_SHADER_RESOURCE_BONE_BLOCK);
 }
 
 TcShader SkinnedMeshRenderer::override_shader(

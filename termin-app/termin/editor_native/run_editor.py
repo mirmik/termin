@@ -12,7 +12,13 @@ from termin.editor_core.component_editor_extension import (
     ComponentExtensionPresentation,
 )
 from termin.editor_core.entity_inspector_model import EntityInspectorController
+from termin.editor_core.inspector_model import InspectorKind, InspectorModel
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
+from termin.editor_core.rendering_inspector_models import (
+    DisplayInspectorController,
+    RenderTargetInspectorController,
+    ViewportInspectorController,
+)
 from termin.editor_core.pipeline_editor_model import PipelineEditorController
 from termin.editor_core.framegraph_debugger_service import EditorFramegraphDebuggerService
 from termin.editor_core.python_console_model import PythonConsoleController
@@ -69,6 +75,7 @@ from termin.editor_native.quest_openxr_build_dialog import (
     build_native_quest_openxr_build_dialog,
 )
 from termin.editor_native.entity_inspector import build_native_entity_inspector
+from termin.editor_native.rendering_inspectors import build_native_rendering_inspectors
 from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,
     connect_profiler_menu_toggle,
@@ -119,6 +126,7 @@ from termin.editor_native.scene_manager_dialog import (
     connect_scene_manager_command,
 )
 from termin.editor_native.project_browser import build_native_project_browser
+from termin.editor_native.project_extensions import NativeProjectEditorContext
 from termin.editor_native.registry_viewer import (
     build_native_registry_catalog_viewer,
     build_native_registry_viewer,
@@ -342,6 +350,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     selected_entity = None
     display_workspace: NativeDisplayWorkspace | None = None
     native_viewport: NativeEditorViewport | None = None
+    inspector_host = None
+    suppress_scene_inspector = False
+    inspector_model = InspectorModel(resource_manager)
+    inspector_model.set_scene(initial_scene)
     entity_inspector_controller = EntityInspectorController(undo_handler=push_undo_command)
     entity_inspector_controller.set_scene(initial_scene)
     entity_inspector = build_native_entity_inspector(
@@ -355,7 +367,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         show_input=dialog_service.show_input,
         resource_catalog=InspectorResourceCatalog(resource_manager),
     )
-    shell.inspector_host.add_stretch_child(entity_inspector.root)
     extension_projectors = NativeComponentExtensionProjectorRegistry(host.document)
     register_native_component_extensions(extension_projectors)
     extension_context = NativeComponentExtensionContext(
@@ -394,9 +405,12 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     entity_inspector_controller.set_component_selection_changed_handler(on_component_selected)
 
     def on_scene_object_selected(obj: object | None) -> None:
-        nonlocal selected_entity
+        nonlocal selected_entity, suppress_scene_inspector
         selected_entity = obj
-        entity_inspector.set_target(obj)
+        if suppress_scene_inspector:
+            suppress_scene_inspector = False
+        else:
+            inspector_model.resync_from_selection(obj)
         if native_viewport is not None:
             native_viewport.select_scene_object(
                 obj,
@@ -441,23 +455,31 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         viewport_list_controller.set_render_targets(engine.rendering_manager.managed_render_targets)
 
     def on_viewport_list_entity_selected(entity) -> None:
+        nonlocal suppress_scene_inspector
+        suppress_scene_inspector = entity is None
         scene_tree.select_object(entity)
 
     def on_viewport_list_display_selected(display) -> None:
         if display is not None and display_workspace is not None:
             display_workspace.select_display(display)
+        if display is not None and inspector_host is not None:
+            inspector_host.show_display(display, display.name or "Display")
         shell.status_bar.text = (
             "Ready | Display: none" if display is None else f"Ready | Display: {display.name or 'unnamed'}"
         )
         request_editor_render()
 
     def on_viewport_list_viewport_selected(viewport) -> None:
+        if viewport is not None and inspector_host is not None:
+            inspector_host.show_viewport(viewport)
         shell.status_bar.text = (
             "Ready | Viewport: none" if viewport is None else f"Ready | Viewport: {viewport.name or 'unnamed'}"
         )
         request_editor_render()
 
     def on_viewport_list_target_selected(target) -> None:
+        if target is not None and inspector_host is not None:
+            inspector_host.show_render_target(target)
         shell.status_bar.text = (
             "Ready | Render target: none" if target is None else f"Ready | Render target: {target.name or 'unnamed'}"
         )
@@ -594,7 +616,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
                 ),
                 merge=False,
             )
-            entity_inspector.set_target(transform_gizmo.target)
+            inspector_model.resync_from_selection(transform_gizmo.target)
             request_editor_render()
 
         native_viewport.configure_interaction(
@@ -612,6 +634,77 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             lambda: _complete_editor_scene_render(native_viewport, host)
         )
         sync_viewport_list()
+
+    def inspector_scenes() -> tuple[object, ...]:
+        return tuple(
+            scene
+            for name in engine.scene_manager.scene_names()
+            if (scene := engine.scene_manager.get_scene(name)) is not None
+        )
+
+    def inspector_displays(viewport) -> tuple[object, ...]:
+        displays = viewport_list_controller.displays
+        if display_workspace is None or not display_workspace.can_move_viewport(viewport):
+            return displays
+        return tuple(
+            display for display in displays if not display_workspace.is_editor_display(display)
+        )
+
+    def move_inspected_viewport(viewport, source, target) -> None:
+        if display_workspace is None:
+            raise RuntimeError("native display workspace is unavailable")
+        display_workspace.move_viewport(viewport, source, target)
+
+    def rendering_inspector_changed() -> None:
+        if display_workspace is not None:
+            for display in display_workspace.displays:
+                display_workspace.set_display_title(display, display.name or "Display")
+        sync_viewport_list()
+        request_editor_render()
+
+    display_inspector_controller = DisplayInspectorController(
+        changed=rendering_inspector_changed,
+    )
+    viewport_inspector_controller = ViewportInspectorController(
+        displays=inspector_displays,
+        scenes=inspector_scenes,
+        render_targets=lambda: engine.rendering_manager.managed_render_targets,
+        owner_display=engine.rendering_manager.get_display_for_viewport,
+        move_viewport=move_inspected_viewport,
+        can_move_viewport=lambda viewport: (
+            display_workspace is not None and display_workspace.can_move_viewport(viewport)
+        ),
+        changed=rendering_inspector_changed,
+    )
+    render_target_inspector_controller = RenderTargetInspectorController(
+        resource_manager,
+        scenes=inspector_scenes,
+        layer_names=lambda: entity_inspector_controller.snapshot.layer_names,
+        create_default_pipeline=lambda: engine.rendering_manager.create_pipeline("Default"),
+        changed=rendering_inspector_changed,
+    )
+    inspector_host = build_native_rendering_inspectors(
+        host.document,
+        model=inspector_model,
+        entity_inspector=entity_inspector,
+        display_controller=display_inspector_controller,
+        viewport_controller=viewport_inspector_controller,
+        render_target_controller=render_target_inspector_controller,
+        request_render=request_editor_render,
+        show_color_dialog=dialog_service.show_color,
+        show_layer_mask_dialog=dialog_service.show_layer_mask,
+    )
+    shell.inspector_host.add_stretch_child(inspector_host.root)
+
+    def refresh_live_display_inspector(_context) -> None:
+        if inspector_model.kind is not InspectorKind.DISPLAY:
+            return
+        previous = display_inspector_controller.snapshot
+        current = display_inspector_controller.refresh()
+        if current != previous:
+            inspector_host.display_inspector.rebuild(current)
+
+    host.add_pre_render_callback(refresh_live_display_inspector)
 
     from termin.editor_core.rendering_model import RenderingModel
 
@@ -663,11 +756,12 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             nonlocal selected_entity
             selected_entity = None
             extension_session.clear()
-            entity_inspector.set_target(None)
+            inspector_model.clear()
             native_viewport.select_scene_object(None)
 
         def scene_switched(scene) -> None:
             active_scene[0] = scene
+            inspector_model.set_scene(scene)
             if scene is not None:
                 native_viewport.rebind_input_manager()
             sync_viewport_list()
@@ -957,6 +1051,17 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             return
         project_file_watcher.watch_directory(str(project_root))
 
+    project_editor_context = NativeProjectEditorContext(
+        document=host.document,
+        menu_bar=shell.menu_bar,
+        dialog_service=dialog_service,
+        viewport=editor_viewport,
+        request_render=request_editor_render,
+        extension_context=extension_context,
+        get_scene=current_scene,
+        get_selected_entity=lambda: selected_entity,
+        select_scene_object=scene_tree.select_object,
+    )
     project_session_controller = ProjectSessionController(
         set_project_state=lambda _project_dir, _project_name: None,
         log_to_console=log_build_message,
@@ -964,7 +1069,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         set_project_browser_root=lambda project_dir: project_browser.set_root(
             Path(project_dir)
         ),
-        get_init_script_editor=lambda: None,
+        get_init_script_editor=lambda: project_editor_context,
         resolve_termin_shaderc=resolve_termin_shaderc,
         resolve_slangc=resolve_slangc,
         show_error=dialog_service.show_error,
@@ -1095,6 +1200,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "display_workspace": display_workspace,
             "entity_inspector_controller": entity_inspector_controller,
             "entity_inspector": entity_inspector,
+            "inspector_model": inspector_model,
+            "inspector_host": inspector_host,
+            "display_inspector_controller": display_inspector_controller,
+            "viewport_inspector_controller": viewport_inspector_controller,
+            "render_target_inspector_controller": render_target_inspector_controller,
             "component_extension_session": extension_session,
             "component_extension_projectors": extension_projectors,
             "undo_stack": undo_stack,
@@ -1235,6 +1345,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         return not window.should_close()
 
     def on_shutdown() -> None:
+        host.remove_pre_render_callback(refresh_live_display_inspector)
         if mcp_server is not None:
             mcp_server.stop()
         project_file_watcher.disable()

@@ -37,6 +37,14 @@ The default DroidSans font is installed in `sdk/share/termin/fonts`. Production
 layout no longer depends on running from a source checkout; an explicit broken
 `TERMIN_UI_FONT` is an error rather than a silent fallback.
 
+Project `InitScript.py` files receive a `NativeProjectEditorContext` in the
+native frontend. This is the supported project-extension boundary for adding a
+stable project menu, showing document-owned dialogs, registering viewport click
+interceptors and overlay drawers, reading the active scene and changing editor
+selection. Projects must not reach into the native shell, scene tree, inspector
+or interaction-system implementation. The context retains command models and
+menu connections for the editor session so project UI lifetime is explicit.
+
 ## Migration order
 
 1. Stabilize the native host and minimal menu/toolbar/central/status shell.

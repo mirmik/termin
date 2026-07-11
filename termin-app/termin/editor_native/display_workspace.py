@@ -223,6 +223,43 @@ class NativeDisplayWorkspace:
         index, generation = viewport._viewport_handle()
         self._pages[page_index].input_manager.remove_viewport(index, generation)
 
+    def can_move_viewport(self, viewport: object) -> bool:
+        """Return whether a viewport uses a movable runtime-display input route."""
+
+        editor_viewport = self.editor_viewport.attachment.viewport
+        return (
+            editor_viewport is not None
+            and viewport._viewport_handle() != editor_viewport._viewport_handle()
+        )
+
+    def move_viewport(self, viewport: object, source: object, target: object) -> None:
+        """Move one runtime viewport while preserving its input-manager ownership."""
+
+        self._require_open()
+        if not self.can_move_viewport(viewport):
+            _logger.error("Native display workspace cannot move the editor-owned viewport")
+            raise ValueError("editor-owned viewport cannot move between displays")
+        if self.is_editor_display(source) or self.is_editor_display(target):
+            _logger.error("Native display workspace cannot attach runtime viewports to editor display")
+            raise ValueError("runtime viewports cannot move to or from the editor display")
+        if source is target:
+            return
+
+        self.release_viewport_input(source, viewport)
+        source.remove_viewport(viewport)
+        try:
+            target.add_viewport(viewport)
+            self.configure_viewport_input(target, viewport)
+        except Exception:
+            _logger.exception("Native display workspace failed to move viewport; restoring source")
+            try:
+                target.remove_viewport(viewport)
+                source.add_viewport(viewport)
+                self.configure_viewport_input(source, viewport)
+            except Exception:
+                _logger.exception("Native display workspace failed to restore viewport after move")
+            raise
+
     def set_display_title(self, display: object, title: str) -> None:
         normalized = title.strip()
         if not normalized:

@@ -53,6 +53,11 @@ Default buttons have no visible border. Editable fields use at most a subtle
 layout and perceived weight remain stable. Container outlines are a last resort;
 prefer an inset surface or a single separator between regions.
 
+Splitters separate interaction geometry from visual weight. Their resize hit
+area may be comfortably wide, while the visible divider remains a centered 1 px
+line. Hover and drag use the interaction accent and a 2 px line without changing
+panel layout.
+
 ## Interaction states
 
 Every interactive primitive must define default, hovered, pressed, focused and

@@ -91,7 +91,6 @@ public:
         tgfx::RenderContext2& ctx2,
         const tc_render_item& item,
         const RenderItemDrawSubmitRequest& request);
-    bool needs_lighting_ubo_tgfx2(const std::string& phase_mark, int geometry_id) const override;
     TcMesh get_mesh();
 };
 
