@@ -5,12 +5,16 @@
 #include <termin/entity/unknown_component_ops.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin/render/unknown_pass_ops.hpp>
 
 #include <termin/scene/scene_manager.hpp>
 
 #include <core/tc_component.h>
+#include <render/tc_pass.h>
 #include <tc_inspect_cpp.hpp>
 #include <inspect/tc_runtime_type_registry.h>
+
+#include <thread>
 
 namespace termin {
 namespace {
@@ -37,7 +41,35 @@ std::vector<std::string> module_component_types(const termin_modules::ModuleReco
     return ComponentRegistry::instance().list_owned(record.spec.id);
 }
 
-struct ComponentUnloadContext {
+std::vector<std::string> module_pass_types(const termin_modules::ModuleRecord& record) {
+    std::vector<std::string> result;
+    const size_t count = tc_pass_registry_type_count();
+    for (size_t i = 0; i < count; ++i) {
+        const char* type_name = tc_pass_registry_type_at(i);
+        const char* owner = type_name
+            ? tc_runtime_type_registry_get_owner(type_name)
+            : nullptr;
+        if (owner && record.spec.id == owner) {
+            result.emplace_back(type_name);
+        }
+    }
+    return result;
+}
+
+std::vector<std::string> module_runtime_types(const termin_modules::ModuleRecord& record) {
+    std::vector<std::string> result;
+    const size_t count = tc_runtime_type_registry_type_count();
+    for (size_t i = 0; i < count; ++i) {
+        const char* type_name = tc_runtime_type_registry_type_at(i);
+        const char* owner = type_name
+            ? tc_runtime_type_registry_get_owner(type_name)
+            : nullptr;
+        if (owner && record.spec.id == owner) result.emplace_back(type_name);
+    }
+    return result;
+}
+
+struct RuntimeUnloadContext {
     bool sync_live_scenes = false;
     const std::vector<TcSceneRef>* scenes = nullptr;
     const char* module_id = nullptr;
@@ -48,18 +80,24 @@ bool prepare_component_unload_for_runtime_type(
     void* context,
     void*
 ) {
-    auto* unload_context = static_cast<ComponentUnloadContext*>(context);
+    auto* unload_context = static_cast<RuntimeUnloadContext*>(context);
     if (!type_name || !unload_context || !unload_context->sync_live_scenes) {
         return true;
     }
 
     if (!unload_context->scenes || unload_context->scenes->empty()) {
-        tc::Log::warn(
-            "TermModulesIntegration: no scenes available to prepare component type '%s' for module '%s'",
+        const size_t remaining = tc_runtime_type_registry_instance_count(type_name);
+        if (remaining == 0) {
+            return true;
+        }
+        tc::Log::error(
+            "TermModulesIntegration: cannot prepare component type '%s' for module '%s': "
+            "no managed scenes are available while %zu live instance(s) remain",
             type_name,
-            unload_context->module_id ? unload_context->module_id : "<unknown>"
+            unload_context->module_id ? unload_context->module_id : "<unknown>",
+            remaining
         );
-        return true;
+        return false;
     }
 
     const std::vector<std::string> type_names{type_name};
@@ -90,6 +128,80 @@ bool prepare_component_unload_for_runtime_type(
     }
 
     return ok;
+}
+
+bool prepare_pass_unload_for_runtime_type(
+    const char* type_name,
+    void* context,
+    void*
+) {
+    auto* unload_context = static_cast<RuntimeUnloadContext*>(context);
+    if (!type_name) return false;
+
+    const size_t before = tc_runtime_type_registry_instance_count(type_name);
+    if (before == 0) return true;
+    if (!unload_context || !unload_context->sync_live_scenes) {
+        tc::Log::error(
+            "TermModulesIntegration: refusing to unload pass type '%s' with %zu live "
+            "instance(s) while live-state synchronization is disabled",
+            type_name,
+            before
+        );
+        return false;
+    }
+
+    const UnknownPassStats stats = degrade_passes_to_unknown({type_name});
+    if (stats.failed > 0) {
+        const UnknownPassStats restored = upgrade_unknown_passes({type_name});
+        tc::Log::error(
+            "TermModulesIntegration: failed to degrade %zu pass instance(s) of type '%s'; "
+            "rolled back %zu placeholder(s)",
+            stats.failed,
+            type_name,
+            restored.upgraded
+        );
+        return false;
+    }
+    const size_t remaining = tc_runtime_type_registry_instance_count(type_name);
+    if (remaining > 0) {
+        const UnknownPassStats restored = upgrade_unknown_passes({type_name});
+        tc::Log::error(
+            "TermModulesIntegration: pass type '%s' still has %zu external live "
+            "reference(s) after pipeline degradation; rolled back %zu placeholder(s)",
+            type_name,
+            remaining,
+            restored.upgraded
+        );
+        return false;
+    }
+    return true;
+}
+
+void rollback_module_placeholders(const termin_modules::ModuleRecord& record) {
+    const std::vector<std::string> component_types = module_component_types(record);
+    if (!component_types.empty()) {
+        for (const TcSceneRef& scene : collect_scenes()) {
+            const UnknownComponentStats stats =
+                upgrade_unknown_components(scene, component_types);
+            if (stats.failed > 0) {
+                tc::Log::error(
+                    "TermModulesIntegration: rollback failed for %zu component placeholder(s) "
+                    "after refused unload of module '%s'",
+                    stats.failed,
+                    record.spec.id.c_str()
+                );
+            }
+        }
+    }
+    const UnknownPassStats pass_stats = upgrade_unknown_passes(module_pass_types(record));
+    if (pass_stats.failed > 0) {
+        tc::Log::error(
+            "TermModulesIntegration: rollback failed for %zu pass placeholder(s) after "
+            "refused unload of module '%s'",
+            pass_stats.failed,
+            record.spec.id.c_str()
+        );
+    }
 }
 
 void begin_module_registration_scope(const termin_modules::ModuleRecord& record) {
@@ -132,7 +244,7 @@ bool cleanup_module_registrations(
         if (sync_live_scenes) {
             scenes = collect_scenes();
         }
-        ComponentUnloadContext context{
+        RuntimeUnloadContext context{
             sync_live_scenes,
             &scenes,
             record.spec.id.c_str()
@@ -142,10 +254,10 @@ bool cleanup_module_registrations(
                 record.spec.id.c_str(),
                 &context
             );
-        const std::vector<std::string> remaining_component_types =
-            ComponentRegistry::instance().list_owned(record.spec.id);
-        if (!remaining_component_types.empty()) {
-            error = "Failed to clean module component registrations for '" + record.spec.id + "'";
+        const std::vector<std::string> remaining_types = module_runtime_types(record);
+        if (!remaining_types.empty()) {
+            if (sync_live_scenes) rollback_module_placeholders(record);
+            error = "Failed to clean module registrations for '" + record.spec.id + "'";
             tc::Log::error("TermModulesIntegration: %s", error.c_str());
             return false;
         }
@@ -163,6 +275,40 @@ bool cleanup_module_registrations(
         return false;
     } catch (...) {
         error = "Failed to clean module registrations for '" + record.spec.id + "'";
+        tc::Log::error("TermModulesIntegration: %s", error.c_str());
+        return false;
+    }
+}
+
+bool prepare_module_registration_unload(
+    const termin_modules::ModuleRecord& record,
+    std::string& error,
+    bool sync_live_scenes
+) {
+    error.clear();
+    try {
+        std::vector<TcSceneRef> scenes;
+        if (sync_live_scenes) {
+            scenes = collect_scenes();
+        }
+        RuntimeUnloadContext context{
+            sync_live_scenes,
+            &scenes,
+            record.spec.id.c_str()
+        };
+        if (!tc_runtime_type_registry_prepare_owner_unload(record.spec.id.c_str(), &context)) {
+            if (sync_live_scenes) rollback_module_placeholders(record);
+            error = "Failed to prepare module registrations for unload: '" + record.spec.id + "'";
+            tc::Log::error("TermModulesIntegration: %s", error.c_str());
+            return false;
+        }
+        return true;
+    } catch (const std::exception& e) {
+        error = "Failed to prepare module registrations for '" + record.spec.id + "': " + e.what();
+        tc::Log::error("TermModulesIntegration: %s", error.c_str());
+        return false;
+    } catch (...) {
+        error = "Failed to prepare module registrations for '" + record.spec.id + "'";
         tc::Log::error("TermModulesIntegration: %s", error.c_str());
         return false;
     }
@@ -196,6 +342,25 @@ void upgrade_module_components(const termin_modules::ModuleRecord& record) {
     }
 }
 
+bool upgrade_module_passes(
+    const termin_modules::ModuleRecord& record,
+    std::string* error = nullptr
+) {
+    const std::vector<std::string> type_names = module_pass_types(record);
+    if (type_names.empty()) return true;
+    const UnknownPassStats stats = upgrade_unknown_passes(type_names);
+    if (stats.failed == 0) return true;
+    if (error) {
+        *error = "Failed to restore module pass state for '" + record.spec.id + "'";
+    }
+    tc::Log::error(
+        "TermModulesIntegration: failed to upgrade %zu unknown pass instance(s) for module '%s'",
+        stats.failed,
+        record.spec.id.c_str()
+    );
+    return false;
+}
+
 } // namespace
 
 void TermModulesIntegration::set_environment(termin_modules::ModuleEnvironment environment) {
@@ -208,23 +373,29 @@ const termin_modules::ModuleEnvironment& TermModulesIntegration::environment() c
 
 void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& runtime) const {
     runtime.set_environment(_environment);
+    const std::thread::id owner_thread = std::this_thread::get_id();
+    runtime.set_mutation_thread_checker([owner_thread](std::string& error) {
+        if (std::this_thread::get_id() == owner_thread) {
+            return true;
+        }
+        error = "Live module mutation must run on the integration owner thread";
+        return false;
+    });
     const bool sync_live_scenes = _environment.sync_live_scenes;
     tc_component_registry_set_prepare_unload_callback(
         prepare_component_unload_for_runtime_type,
         nullptr
     );
+    tc_pass_registry_set_prepare_unload_callback(
+        prepare_pass_unload_for_runtime_type,
+        nullptr
+    );
 
     auto cpp_before_unload = [](const termin_modules::ModuleRecord&) {};
-    auto python_before_unload = [sync_live_scenes](const termin_modules::ModuleRecord& record) {
-        std::string error;
-        if (!cleanup_module_registrations(record, error, sync_live_scenes) &&
-            !error.empty()) {
-            tc::Log::error("TermModulesIntegration: %s", error.c_str());
-        }
-    };
     auto after_load = [sync_live_scenes](const termin_modules::ModuleRecord& record) {
         if (sync_live_scenes) {
             upgrade_module_components(record);
+            upgrade_module_passes(record);
         }
     };
     auto restore_reload_state = [sync_live_scenes](const termin_modules::ModuleRecord& record,
@@ -235,9 +406,6 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         }
 
         const std::vector<std::string> type_names = module_component_types(record);
-        if (type_names.empty()) {
-            return true;
-        }
 
         const std::vector<TcSceneRef> scenes = collect_scenes();
         for (const TcSceneRef& scene : scenes) {
@@ -247,7 +415,7 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
                 return false;
             }
         }
-        return true;
+        return upgrade_module_passes(record, &error);
     };
 
     termin_modules::CppModuleCallbacks cpp_callbacks;
@@ -284,7 +452,11 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         cleanup_module_registrations(record, error, false);
         end_module_registration_scope(record);
     };
-    python_callbacks.before_unload = python_before_unload;
+    python_callbacks.before_module_remove = [sync_live_scenes](
+                                                  const termin_modules::ModuleRecord& record,
+                                                  std::string& error) {
+        return prepare_module_registration_unload(record, error, sync_live_scenes);
+    };
     python_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
         end_module_registration_scope(record);
         after_load(record);

@@ -12,6 +12,7 @@ namespace termin {
 
 class TERMIN_RENDER_PASSES_API IdPass : public GeometryPassBase {
 public:
+    static void register_type();
     IdPass(
         const std::string& input_res = "empty",
         const std::string& output_res = "id",

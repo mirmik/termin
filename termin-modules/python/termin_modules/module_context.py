@@ -195,78 +195,56 @@ def _end_native_type_owner_scope(module_id: str, scope: NativeTypeOwnerScope) ->
 
 
 def unregister_module_owner(module_id: str) -> None:
-    registrations = _registrations_by_owner.pop(module_id, None)
+    registrations = _registrations_by_owner.get(module_id)
     if registrations is None:
         return
 
-    _unregister_app_resource_classes(registrations)
-    _unregister_python_component_classes(registrations)
-    _unregister_python_frame_pass_classes(module_id)
-    _unregister_runtime_type_records(module_id)
-    _unregister_python_kinds(registrations)
+    try:
+        _unregister_app_resource_classes(registrations)
+        _unregister_python_component_classes(registrations)
+        _unregister_python_frame_pass_classes(module_id)
+        _unregister_python_kinds(registrations)
+        _commit_runtime_type_records(module_id)
+    except Exception:
+        log.error(
+            f"[termin_modules] failed to commit registrations for module '{module_id}'",
+            exc_info=True,
+        )
+        raise
+    _registrations_by_owner.pop(module_id, None)
 
 
 def _unregister_python_component_classes(registrations: ModuleOwnedRegistrations) -> None:
     if not registrations.components:
         return
 
-    try:
-        from termin.scene import ComponentRegistry
+    from termin.scene import ComponentRegistry
 
-        registry = ComponentRegistry.instance()
-        for name in sorted(registrations.components):
-            try:
-                registry.unregister_python(name)
-            except Exception:
-                log.error(
-                    f"[termin_modules] failed to unregister Python component class '{name}'",
-                    exc_info=True,
-                )
-    except Exception:
-        log.error(
-            "[termin_modules] failed to clean Python component classes",
-            exc_info=True,
-        )
+    registry = ComponentRegistry.instance()
+    for name in sorted(registrations.components):
+        registry.unregister_python(name)
 
 
 def _unregister_python_frame_pass_classes(module_id: str) -> None:
-    try:
-        from termin.inspect import _inspect_native
-        from termin.render_framework import tc_pass_registry_unregister_python
+    from termin.inspect import _inspect_native
+    from termin.render_framework import tc_pass_registry_unregister_python
 
-        records = _inspect_native.runtime_type_registry_snapshot()
-        for record in records:
-            if record["owner"] != module_id:
-                continue
-            if "termin.render.frame_pass" not in record["facets"]:
-                continue
-            try:
-                tc_pass_registry_unregister_python(record["name"])
-            except Exception:
-                log.error(
-                    f"[termin_modules] failed to unregister Python frame pass '{record['name']}'",
-                    exc_info=True,
-                )
-    except Exception:
-        log.error(
-            f"[termin_modules] failed to clean Python frame pass classes for '{module_id}'",
-            exc_info=True,
-        )
+    records = _inspect_native.runtime_type_registry_snapshot()
+    for record in records:
+        if record["owner"] != module_id:
+            continue
+        if "termin.render.frame_pass" not in record["facets"]:
+            continue
+        tc_pass_registry_unregister_python(record["name"])
 
 
-def _unregister_runtime_type_records(module_id: str) -> None:
-    try:
-        from termin.inspect import _inspect_native
+def _commit_runtime_type_records(module_id: str) -> None:
+    from termin.inspect import _inspect_native
 
-        removed = _inspect_native.unregister_runtime_type_owner(module_id)
-        if removed:
-            log.info(
-                f"[termin_modules] removed {removed} runtime type record(s) for module '{module_id}'"
-            )
-    except Exception:
-        log.error(
-            f"[termin_modules] failed to unregister runtime type records for '{module_id}'",
-            exc_info=True,
+    removed = _inspect_native.commit_runtime_type_owner_unload(module_id)
+    if removed:
+        log.info(
+            f"[termin_modules] removed {removed} runtime type record(s) for module '{module_id}'"
         )
 
 
@@ -274,57 +252,30 @@ def _unregister_python_kinds(registrations: ModuleOwnedRegistrations) -> None:
     if not registrations.python_kinds:
         return
 
-    try:
-        from termin.inspect.kind import KindRegistry
+    from termin.inspect.kind import KindRegistry
 
-        registry = KindRegistry.instance()
-        for name in sorted(registrations.python_kinds):
-            try:
-                registry.unregister_python(name)
-            except Exception:
-                log.error(
-                    f"[termin_modules] failed to unregister Python kind '{name}'",
-                    exc_info=True,
-                )
-    except Exception:
-        log.error("[termin_modules] failed to access KindRegistry during module cleanup", exc_info=True)
+    registry = KindRegistry.instance()
+    for name in sorted(registrations.python_kinds):
+        registry.unregister_python(name)
 
 
 def _unregister_app_resource_classes(registrations: ModuleOwnedRegistrations) -> None:
     if not registrations.app_components and not registrations.frame_passes:
         return
 
-    try:
-        from termin_assets import get_resource_manager
+    from termin_assets import get_resource_manager
 
-        resources = get_resource_manager()
-        if resources is None:
-            log.warn(
-                "[termin_modules] no ResourceManager configured; "
-                "skipping dynamic component/frame-pass cleanup"
-            )
-            return
-        for name in sorted(registrations.app_components):
-            try:
-                resources.component_registry.unregister(name)
-            except Exception:
-                log.error(
-                    f"[termin_modules] failed to unregister app component class '{name}'",
-                    exc_info=True,
-                )
-        for name in sorted(registrations.frame_passes):
-            try:
-                resources.frame_pass_registry.unregister(name)
-            except Exception:
-                log.error(
-                    f"[termin_modules] failed to unregister frame pass class '{name}'",
-                    exc_info=True,
-                )
-    except Exception:
-        log.error(
-            "[termin_modules] failed to clean app-side resource class registries",
-            exc_info=True,
+    resources = get_resource_manager()
+    if resources is None:
+        log.warn(
+            "[termin_modules] no ResourceManager configured; "
+            "skipping dynamic component/frame-pass cleanup"
         )
+        return
+    for name in sorted(registrations.app_components):
+        resources.component_registry.unregister(name)
+    for name in sorted(registrations.frame_passes):
+        resources.frame_pass_registry.unregister(name)
 
 
 __all__ = [

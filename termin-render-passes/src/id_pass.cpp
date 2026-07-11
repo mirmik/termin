@@ -375,6 +375,10 @@ void IdPass::execute(ExecuteContext& ctx) {
     );
 }
 
-TC_REGISTER_FRAME_PASS_DERIVED(IdPass, GeometryPassBase);
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(IdPass, GeometryPassBase);
+
+void IdPass::register_type() {
+    register_frame_pass_IdPass();
+}
 
 } // namespace termin

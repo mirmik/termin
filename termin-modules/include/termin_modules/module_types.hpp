@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "termin_modules/native_module_abi.h"
+
 namespace termin_modules {
 
 enum class ModuleKind {
@@ -55,6 +57,9 @@ struct CppModuleHandle : IModuleHandle {
     std::filesystem::path artifact_path;
     std::filesystem::path loaded_path;
     void* native_handle = nullptr;
+    std::string module_id;
+    termin_native_module_host_v1 host_api{};
+    const termin_native_module_descriptor_v1_data* descriptor = nullptr;
     bool shutdown_called = false;
 };
 
@@ -77,12 +82,15 @@ struct ModuleEnvironment {
     std::filesystem::path lib_dir;
     std::filesystem::path project_root;
     std::filesystem::path project_venv_path;
+    std::filesystem::path native_shadow_root;
     std::string python_executable;
     bool use_project_venv = false;
     bool allow_python_package_install = false;
     bool sync_live_scenes = true;
     std::function<void(const ModuleRecord&)> before_cpp_module_init;
     std::function<void(const ModuleRecord&)> after_cpp_module_init;
+    std::function<void(const ModuleRecord&, const std::string&)>
+        on_cpp_module_load_failure;
 };
 
 enum class ModuleEventKind {

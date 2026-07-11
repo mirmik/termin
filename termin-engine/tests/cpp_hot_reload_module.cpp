@@ -2,6 +2,8 @@
 
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <termin/render/frame_pass.hpp>
+#include <termin_modules/native_module_abi.h>
 
 namespace {
 
@@ -13,43 +15,41 @@ public:
     int value = 0;
 };
 
-class EngineHeaderSideEffectProbe {
+class HotReloadNativeProbePass : public termin::CxxFramePass {
 public:
-    int value = 0;
-};
+    static void register_type();
+    int exposure = 0;
 
-class EngineHeaderSideEffectComponentProbe : public termin::CxxComponent {
-public:
-    EngineHeaderSideEffectComponentProbe()
-        : termin::CxxComponent("EngineOwnedProbeComponent") {}
-};
+    HotReloadNativeProbePass() {
+        link_to_type_registry("HotReloadNativeProbePass");
+    }
 
-static termin::ComponentRegistrar<EngineHeaderSideEffectComponentProbe>
-    engine_header_side_effect_component_registrar("EngineOwnedProbeComponent", "CxxComponent");
-
-struct EngineHeaderSideEffectInspectRegistration {
-    EngineHeaderSideEffectInspectRegistration() {
-        tc::InspectRegistry::instance().add<EngineHeaderSideEffectProbe, int>(
-            "EngineOwnedProbeType",
-            &EngineHeaderSideEffectProbe::value,
-            "value",
-            "Value From Module Header Side Effect",
-            "int"
-        );
+    std::set<const char*> compute_reads() const override { return {"source"}; }
+    std::set<const char*> compute_writes() const override { return {"output"}; }
+    std::vector<termin::ResourceSpec> get_resource_specs() const override {
+        return {termin::ResourceSpec("output", "color_texture")};
     }
 };
 
-static EngineHeaderSideEffectInspectRegistration engine_header_side_effect_inspect_registration;
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(HotReloadNativeProbePass, CxxFramePass);
+
+void HotReloadNativeProbePass::register_type() {
+    register_frame_pass_HotReloadNativeProbePass();
+    TC_MODULE_INSPECT_FIELD(
+        HotReloadNativeProbePass,
+        exposure,
+        "Exposure",
+        "int"
+    );
+}
 
 } // namespace
 
-#ifdef _WIN32
-    #define TERMIN_TEST_MODULE_API __declspec(dllexport)
-#else
-    #define TERMIN_TEST_MODULE_API __attribute__((visibility("default")))
-#endif
-
-extern "C" TERMIN_TEST_MODULE_API void module_init() {
+int32_t native_probe_init(
+    const termin_native_module_host_v1*,
+    termin_native_module_error*
+) {
+    HotReloadNativeProbePass::register_type();
     TC_MODULE_REGISTER_COMPONENT(HotReloadNativeProbeComponent, CxxComponent);
     TC_MODULE_INSPECT_FIELD(
         HotReloadNativeProbeComponent,
@@ -57,9 +57,25 @@ extern "C" TERMIN_TEST_MODULE_API void module_init() {
         "Value",
         "int"
     );
+    return 0;
 }
 
-extern "C" TERMIN_TEST_MODULE_API void module_shutdown() {
+int32_t native_probe_shutdown(
+    const termin_native_module_host_v1*,
+    termin_native_module_error*
+) {
     // Intentionally do not unregister anything here. The integration test
     // verifies module-owner cleanup before dlclose/FreeLibrary.
+    return 0;
 }
+
+TERMIN_NATIVE_MODULE_DESCRIPTOR_V1(
+    "native_probe",
+    "1.0.0",
+    "termin-engine-native-probe",
+    TERMIN_NATIVE_MODULE_CAP_COMPONENTS |
+        TERMIN_NATIVE_MODULE_CAP_FRAME_PASSES |
+        TERMIN_NATIVE_MODULE_CAP_INSPECT_TYPES,
+    native_probe_init,
+    native_probe_shutdown
+);

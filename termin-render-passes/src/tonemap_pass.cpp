@@ -172,6 +172,16 @@ void TonemapPass::destroy() {
     uploaded_method_ = -1;
 }
 
-TC_REGISTER_FRAME_PASS(TonemapPass);
+TC_DEFINE_FRAME_PASS_FACTORY(TonemapPass);
+
+void TonemapPass::register_type() {
+    register_frame_pass_TonemapPass();
+    _register_inspect_input_res();
+    _register_inspect_output_res();
+    _register_inspect_output_res_target();
+    _register_inspect_exposure();
+    _register_inspect_method();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

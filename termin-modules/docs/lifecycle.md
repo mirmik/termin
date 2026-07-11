@@ -2,6 +2,21 @@
 
 Ниже описан текущий жизненный цикл модуля в `termin-modules`.
 
+## Владение runtime и shutdown
+
+`ModuleRuntime` является единственным владельцем backend handles в своих
+records и поэтому намеренно не копируется и не перемещается. Перед удалением
+runtime или повторным discovery хост вызывает `shutdown()`. Операция выгружает
+активные records в обратном порядке зависимостей, включая records в состоянии
+`Failed`, если они всё ещё держат backend handle. Ошибка возвращается как
+`false` с диагностикой; records и неосвобождённые handles сохраняются, чтобы
+причину можно было устранить и повторить shutdown.
+
+`discover()` отказывает при наличии активных handles и не заменяет текущие
+records. Деструктор выполняет ту же попытку shutdown без исключений и пишет
+ошибку в лог, если очистка невозможна: молчаливое удаление native/Python handle
+потеряло бы единственный оставшийся путь корректной выгрузки.
+
 ## 1. discover
 
 `ModuleRuntime::discover(project_root)` рекурсивно обходит дерево проекта и ищет:
@@ -58,21 +73,37 @@
 4. если в `ModuleEnvironment.sdk_prefix` доступен
    `bin/termin_module_native_validator`, запускает отдельный helper-процесс,
    который делает clean-process `dlopen(..., RTLD_NOW | RTLD_LOCAL)` /
-   `LoadLibrary` для artifact
+   `LoadLibrary`, находит descriptor ABI v1 и проверяет identity и совместимость
+   artifact, не вызывая его lifecycle
 5. на Linux при провале validation добавляет отфильтрованный `ldd -r | c++filt`
    вывод в diagnostics
-6. копирует artifact во временный `.loaded.N` путь, чтобы обойти cache `dlopen`
+6. создаёт уникальную backend-owned load directory под системным temp root и
+   копирует туда artifact вместе с соседними dynamic libraries, сохраняя
+   loader-origin dependency lookup без загрязнения project build tree
 7. загружает shared library через `dlopen` или `LoadLibrary`
-8. ищет символ `module_init`
-9. если символ найден, вызывает его внутри native-init callback scope
-10. сохраняет native handle в `CppModuleHandle`
+8. ищет обязательный символ `termin_module_descriptor_v1` и повторяет проверку
+   descriptor до открытия registration scope
+9. формирует стабильную host API table/context и вызывает обязательный fallible
+   `descriptor.init` внутри native-init callback scope
+10. при ошибке init вызывает cleanup callback и best-effort shutdown до закрытия
+    library; при успехе сохраняет descriptor, host API и native handle в
+    `CppModuleHandle`
+
+Shadow artifact удаляется только после `dlclose`/`FreeLibrary`. Все failure
+paths после копирования также удаляют его; ошибка удаления логируется и при
+обычном unload оставляет record retryable. Каждый backend получает отдельную
+collision-safe session directory, поэтому параллельные runtimes не используют
+общие имена. При создании новой session удаляются только directories старше 24
+часов, владеющий PID которых уже не существует. Для тестов или host policy root
+можно явно задать через `ModuleEnvironment::native_shadow_root`.
 
 Важно:
 
 - глобальные статические конструкторы shared library вызываются загрузчиком ОС при `dlopen`/`LoadLibrary`
-- `module_init` это дополнительная явная точка входа поверх static initialization
+- ABI v1 descriptor и обе lifecycle-функции обязательны; legacy
+  `module_init`/`module_shutdown` больше не являются точками входа
 - integration layer включает owner scope регистрации только на время
-  `module_init`; C++ component/inspect registrations, сделанные в static
+  `descriptor.init`; C++ component/inspect registrations, сделанные в static
   constructors при `dlopen`/`LoadLibrary`, считаются legacy side effects и не
   получают module ownership
 - project C++ artifact должен быть самодостаточным на уровне DT_NEEDED/RUNPATH;
@@ -94,16 +125,20 @@
 
 1. проверяет, что модуль находится в состоянии `Loaded` или всё ещё держит backend handle
 2. вызывает integration hook `before_unload`
-3. для staged backend-ов вызывает `begin_unload(...)`
-4. вызывает integration hook, который должен очистить регистрации до закрытия native handle
-5. вызывает `finish_unload(...)`
-6. очищает `handle`
-7. переводит модуль в `Unloaded`
-8. публикует событие
+3. для Python вызывает fallible `before_module_remove`, который подготавливает
+   все owner registrations, не удаляя их
+4. для staged native backend-ов вызывает `begin_unload(...)`
+5. вызывает integration hook, который должен очистить регистрации до закрытия native handle
+6. вызывает backend commit (`finish_unload` либо Python registry/module removal)
+7. очищает `handle`
+8. переводит модуль в `Unloaded`
+9. публикует событие
 
 Для C++:
 
-- если найден `module_shutdown`, он вызывается
+- обязательный fallible `descriptor.shutdown` вызывается ровно один раз для
+  успешной попытки unload; ошибка оставляет handle и descriptor доступными для
+  повторной попытки
 - затем `termin-engine` снимает module-owned `InspectRegistry` и `ComponentRegistry`
   registrations по `module_id`
 - затем shared library выгружается
@@ -113,6 +148,12 @@
 
 Для Python:
 
+- runtime-type registry сначала вызывает prepare-unload lifecycle у всех типов
+  владельца и не удаляет ни один type/facet, пока весь owner set не подготовлен
+- ошибка prepare прерывает операцию до Python backend: handle, registrations,
+  `sys.modules` и `sys.path` остаются на месте, state остаётся `Loaded`
+- после успешного prepare `module_context` commit-ит Python-side registries и
+  runtime types; исключение не проглатывается и сохраняет retryable handle/state
 - импортированный package subtree удаляется из `sys.modules`
 - добавленные пути удаляются из `sys.path`
 - регистрации, выполненные под module import context, снимаются по `module_id`
@@ -132,10 +173,20 @@ factory/accessor callbacks перед `dlclose`/`FreeLibrary`.
 
 `ModuleRuntime::reload_module(name)` сейчас реализован как orchestration-операция:
 
-1. публикуется событие `Reloading`
-2. если модуль был загружен, выполняется `unload_module(name)`
-3. затем выполняется `load_module(name)`
-4. после успешной перезагрузки вызывается integration hook `after_reload`
+1. все известные descriptors заново разбираются во временный snapshot
+2. snapshot целиком проверяется на duplicate ids, missing dependencies и cycles
+3. только после успешной проверки новые specs атомарно заменяют предыдущий graph
+4. публикуется событие `Reloading`
+5. если модуль был загружен, выполняется unload
+6. затем выполняется load
+7. после успешной перезагрузки вызывается integration hook `after_reload`
+
+Descriptor identity считается стабильной на протяжении жизни runtime: изменение
+`name` отклоняется и требует полного lifecycle boundary/discovery. Смена backend
+kind загруженного модуля также отклоняется. Ошибка чтения или validation любого
+descriptor завершает операцию до unload/build/clean, оставляет live handles и
+последний валидный graph нетронутыми и сообщает путь через `last_error`/`Failed`
+event. Editor-level dirty flag очищается только после успешного reload.
 
 То есть сейчас у backend-ов нет отдельного специализированного `reload`; runtime собирает его из `unload + load`.
 
@@ -144,7 +195,7 @@ factory/accessor callbacks перед `dlclose`/`FreeLibrary`.
 ошибкой. Для hot reload dependency-модулей используется отдельная операция
 `ModuleRuntime::reload_module_with_dependents(name)`:
 
-1. runtime собирает `name` и все транзитивные dependents, которые сейчас
+1. после atomic descriptor snapshot runtime собирает `name` и все транзитивные dependents, которые сейчас
    находятся в `Loaded` или всё ещё держат backend handle
 2. выгружает affected-модули в обратном dependency order: сначала самые верхние
    dependents, затем их dependencies
@@ -167,6 +218,32 @@ Dependents, которые не были загружены к моменту re
 автоматический rollback, потому что после закрытия native handle старую версию
 модуля нельзя считать безопасно восстанавливаемой.
 
+### Owner-thread boundary в editor
+
+`TermModulesIntegration::configure_runtime()` привязывает live mutation к
+потоку, на котором создана integration. `load`, `unload`, `reload`, `rebuild` и
+shutdown fail-closed до backend/registry вызовов, если их вызвали с другого
+потока; `last_error` содержит operation и thread-contract diagnostic.
+
+Editor progress dialog разделяет операцию на две части:
+
+1. build/clean/rebuild выполняется non-daemon worker-ом через отдельный
+   `sdk/bin/termin_python -m termin.project_modules.warmup` process; у него свой
+   runtime, CWD, Python interpreter и registries
+2. live unload/load, UnknownComponent migration и registry commit ставятся через
+   `UI.defer()` и выполняются после текущего UI/render compose на owner thread
+
+Это сохраняет отзывчивость UI во время native build и исключает изменение CWD,
+scene или process-global registries из module worker. Диалог нельзя закрыть до
+завершения build; worker не daemon. При shutdown незавершённый build может
+закончить только isolated phase, а live commit без обработки owner-thread queue
+не выполняется. Play gate использует ту же prebuild/owner-commit схему.
+
+Python wrappers на module-owned live objects, удерживаемые console/MCP/tooling
+вне управляемой сцены, считаются настоящими live references и блокируют unload.
+Tooling обязано отпустить такие ссылки до commit; editor smoke probe явно
+очищает persistent executor globals перед запросом reload.
+
 Editor watcher не выполняет module reload прямо на filesystem-событии. Изменения
 Python `.pymodule`, `.py` файлов внутри `packages`, C++ `.module` и native
 input-файлов помечают владеющий модуль dirty. Initial scan не пачкает уже
@@ -175,9 +252,10 @@ dirty.
 
 Применение изменений выполняется явным действием (`Reload Changed` /
 `Build & Reload Changed`) или Play-gate перед входом в Game Mode. Play-gate
-вызывает editor-level `prepare_changed_modules_for_play()`: dirty/stale модули
-reload-ятся через dependency-aware cascade, а C++ backend при load выполняет
-build command. Если build/reload падает, Play не стартует, модуль остаётся в
+сначала запускает isolated artifact preparation, затем на owner thread вызывает
+editor-level `prepare_changed_modules_for_play()`: dirty/stale модули
+reload-ятся через dependency-aware cascade, а уже подготовленный C++ artifact
+не требует долгого build в commit phase. Если build/reload падает, Play не стартует, модуль остаётся в
 `Failed`/degraded состоянии с диагностикой.
 
 Loose `.py` файлы вне `.pymodule` являются поддерживаемой editor policy, а не

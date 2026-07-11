@@ -151,6 +151,11 @@ void GroundGridPass::execute(ExecuteContext& ctx) {
 }
 
 // Register GroundGridPass in tc_pass_registry
-TC_REGISTER_FRAME_PASS(GroundGridPass);
+TC_DEFINE_FRAME_PASS_FACTORY(GroundGridPass);
+
+void GroundGridPass::register_type() {
+    register_frame_pass_GroundGridPass();
+    _register_inspect_metadata_graph();
+}
 
 } // namespace termin

@@ -29,6 +29,11 @@ else()
     find_package(termin_render REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_render_passes termin_render_passes::termin_render_passes)
+else()
+    find_package(termin_render_passes REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_collision termin_collision::termin_collision)
 else()
     find_package(termin_collision REQUIRED)
@@ -145,6 +150,21 @@ if(TARGET termin_components_animation::termin_components_animation)
     target_compile_definitions(termin_bootstrap PUBLIC TERMIN_BOOTSTRAP_HAS_ANIMATION_COMPONENTS)
 endif()
 
+if(TERMIN_BUILD_TESTS)
+    enable_testing()
+    add_executable(termin_bootstrap_explicit_pass_test
+        tests/test_explicit_pass_bootstrap.cpp
+    )
+    target_link_libraries(termin_bootstrap_explicit_pass_test PRIVATE termin_bootstrap)
+    set_target_properties(termin_bootstrap_explicit_pass_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_bootstrap_explicit_pass_test
+        COMMAND termin_bootstrap_explicit_pass_test
+    )
+endif()
+
 target_include_directories(termin_bootstrap
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -157,6 +177,7 @@ target_link_libraries(termin_bootstrap
         termin_inspect::termin_inspect
         termin_scene::termin_scene
         termin_render::termin_render
+        termin_render_passes::termin_render_passes
         termin_collision::termin_collision
         tmesh::termin_mesh
         tgfx::termin_graphics

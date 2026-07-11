@@ -10,6 +10,8 @@
 #include <string>
 #include <chrono>
 #include <vector>
+#include <stdexcept>
+#include <thread>
 
 using namespace termin_modules;
 
@@ -95,6 +97,33 @@ public:
     }
 };
 
+class FakePythonBackend final : public IModuleBackend {
+public:
+    int load_calls = 0;
+    int unload_calls = 0;
+    bool fail_unload = false;
+
+    ModuleKind kind() const override {
+        return ModuleKind::Python;
+    }
+
+    bool load(ModuleRecord& record, const ModuleEnvironment&) override {
+        load_calls++;
+        record.handle = std::make_shared<PythonModuleHandle>();
+        return true;
+    }
+
+    bool unload(ModuleRecord& record, const ModuleEnvironment&) override {
+        unload_calls++;
+        if (fail_unload) {
+            record.error_message = "injected Python backend commit failure";
+            return false;
+        }
+        record.handle.reset();
+        return true;
+    }
+};
+
 class TempDir {
 public:
     std::filesystem::path path;
@@ -115,6 +144,69 @@ void write_text_file(const std::filesystem::path& path, const std::string& text)
     std::filesystem::create_directories(path.parent_path());
     std::ofstream out(path);
     out << text;
+}
+
+std::filesystem::path write_shadow_test_descriptor(
+    const std::filesystem::path& project_root,
+    const std::string& module_id
+) {
+#ifdef _WIN32
+    const std::filesystem::path artifact = project_root / "build" / "shadow_test_module.dll";
+    const std::string output = "build/shadow_test_module.dll";
+#else
+    const std::filesystem::path artifact = project_root / "build" / "libshadow_test_module.so";
+    const std::string output = "build/libshadow_test_module.so";
+#endif
+    std::filesystem::create_directories(artifact.parent_path());
+    std::filesystem::copy_file(
+        TERMIN_MODULES_TEST_SHADOW_MODULE,
+        artifact,
+        std::filesystem::copy_options::overwrite_existing
+    );
+    const std::filesystem::path dependency_source = TERMIN_MODULES_TEST_SHADOW_DEPENDENCY;
+    std::filesystem::copy_file(
+        dependency_source,
+        artifact.parent_path() / dependency_source.filename(),
+        std::filesystem::copy_options::overwrite_existing
+    );
+    write_text_file(
+        project_root / (module_id + ".module"),
+        "name: " + module_id + "\nbuild:\n  output: " + output + "\n"
+    );
+    return artifact;
+}
+
+std::filesystem::path write_native_abi_descriptor(
+    const std::filesystem::path& project_root,
+    const std::string& module_id,
+    const std::filesystem::path& source_artifact
+) {
+    const std::filesystem::path artifact =
+        project_root / "build" / source_artifact.filename();
+    std::filesystem::create_directories(artifact.parent_path());
+    std::filesystem::copy_file(
+        source_artifact,
+        artifact,
+        std::filesystem::copy_options::overwrite_existing
+    );
+    write_text_file(
+        project_root / (module_id + ".module"),
+        "name: " + module_id + "\nbuild:\n  output: " + artifact.string() + "\n"
+    );
+    return artifact;
+}
+
+size_t count_regular_files(const std::filesystem::path& root) {
+    if (!std::filesystem::exists(root)) {
+        return 0;
+    }
+    size_t result = 0;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
+        if (entry.is_regular_file()) {
+            ++result;
+        }
+    }
+    return result;
 }
 
 std::shared_ptr<FakeCppBackend> make_runtime(ModuleRuntime& runtime, std::vector<ModuleEvent>* events = nullptr) {
@@ -360,6 +452,163 @@ void test_cascade_reload_stops_on_dependent_load_failure() {
     expect(runtime.find("ui")->state == ModuleState::Unloaded, "later dependent remains unloaded");
 }
 
+void test_reload_rejects_invalid_descriptor_before_unload() {
+    TempDir tmp;
+    write_dependency_chain(tmp);
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "discovery should succeed");
+    expect(runtime.load_all(), "load_all should succeed before descriptor corruption");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    write_text_file(tmp.path / "game.module", "name: game\ndependencies: [\n");
+
+    expect(!runtime.reload_module_with_dependents("core"), "invalid descriptor must reject cascade reload");
+    expect(runtime.last_error().find((tmp.path / "game.module").string()) != std::string::npos,
+           "descriptor error should identify the invalid file");
+    expect(backend->unload_calls.empty(), "descriptor validation must finish before any unload");
+    expect(backend->load_calls.empty(), "descriptor validation failure must not load modules");
+    expect(runtime.find("core")->state == ModuleState::Loaded, "core must remain loaded");
+    expect(runtime.find("game")->state == ModuleState::Loaded, "game must remain loaded");
+    expect(runtime.find("game")->spec.dependencies.size() == 1,
+           "failed snapshot must preserve the last valid descriptor graph");
+}
+
+void test_cascade_reload_uses_atomic_updated_dependency_graph() {
+    TempDir tmp;
+    write_text_file(tmp.path / "core.module", "name: core\nbuild:\n  output: build/libcore.so\n");
+    write_text_file(tmp.path / "game.module", "name: game\nbuild:\n  output: build/libgame.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "discovery should succeed");
+    expect(runtime.load_all(), "independent modules should load");
+    backend->load_calls.clear();
+    backend->unload_calls.clear();
+
+    write_text_file(
+        tmp.path / "game.module",
+        "name: game\ndependencies: [core]\nbuild:\n  output: build/libgame.so\n"
+    );
+
+    expect(runtime.reload_module_with_dependents("core"), runtime.last_error());
+    expect(backend->unload_calls.size() == 2, "new dependent edge must expand the reload closure");
+    expect(backend->unload_calls[0] == "game", "new dependent must unload before its dependency");
+    expect(backend->unload_calls[1] == "core", "target must unload after its new dependent");
+    expect(backend->load_calls.size() == 2, "both modules must reload using the new graph");
+    expect(backend->load_calls[0] == "core" && backend->load_calls[1] == "game",
+           "new dependency order must be used for loading");
+}
+
+void test_reload_rejects_duplicate_ids_and_simultaneous_cycle_atomically() {
+    TempDir tmp;
+    write_text_file(tmp.path / "a.module", "name: a\nbuild:\n  output: build/liba.so\n");
+    write_text_file(tmp.path / "b.module", "name: b\nbuild:\n  output: build/libb.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "discovery should succeed");
+    expect(runtime.load_all(), "modules should load before edits");
+    backend->unload_calls.clear();
+
+    write_text_file(tmp.path / "b.module", "name: a\nbuild:\n  output: build/libb.so\n");
+    expect(!runtime.reload_module("a"), "duplicate module ids must reject reload");
+    expect(runtime.last_error().find("Duplicate module id 'a'") != std::string::npos,
+           "duplicate id diagnostic expected");
+    expect(backend->unload_calls.empty(), "duplicate validation must happen before unload");
+    expect(runtime.find("b") != nullptr, "failed duplicate snapshot must preserve old identity");
+
+    write_text_file(
+        tmp.path / "a.module",
+        "name: a\ndependencies: [b]\nbuild:\n  output: build/liba.so\n"
+    );
+    write_text_file(
+        tmp.path / "b.module",
+        "name: b\ndependencies: [a]\nbuild:\n  output: build/libb.so\n"
+    );
+    expect(!runtime.reload_module_with_dependents("a"), "simultaneous cyclic edits must reject reload");
+    expect(runtime.last_error().find("Dependency cycle detected") != std::string::npos,
+           "cycle diagnostic expected");
+    expect(backend->unload_calls.empty(), "cycle validation must happen before unload");
+    expect(runtime.find("a")->spec.dependencies.empty() && runtime.find("b")->spec.dependencies.empty(),
+           "failed cyclic snapshot must preserve the entire old graph");
+}
+
+void test_python_unload_prepare_failure_preserves_loaded_handle() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "sample.pymodule",
+        "name: sample\nroot: Scripts\npackages: [sample]\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakePythonBackend>();
+    runtime.register_backend(backend);
+    PythonModuleCallbacks callbacks;
+    callbacks.before_module_remove = [](const ModuleRecord&, std::string& error) {
+        error = "injected Python unload prepare failure";
+        return false;
+    };
+    runtime.set_python_callbacks(std::move(callbacks));
+
+    expect(runtime.discover(tmp.path), "Python module discovery should succeed");
+    expect(runtime.load_module("sample"), "Python module load should succeed");
+    const std::shared_ptr<IModuleHandle> loaded_handle = runtime.find("sample")->handle;
+
+    expect(!runtime.unload_module("sample"), "fallible Python prepare must abort unload");
+    expect(runtime.last_error() == "injected Python unload prepare failure",
+           "prepare error must cross the runtime boundary");
+    expect(backend->unload_calls == 0, "backend must not remove sys.modules after prepare failure");
+    expect(runtime.find("sample")->state == ModuleState::Loaded, "module must remain loaded");
+    expect(runtime.find("sample")->handle == loaded_handle, "retryable backend handle must be retained");
+
+    PythonModuleCallbacks retry_callbacks;
+    retry_callbacks.before_module_remove = [](const ModuleRecord&, std::string&) { return true; };
+    runtime.set_python_callbacks(std::move(retry_callbacks));
+    backend->fail_unload = true;
+    expect(!runtime.unload_module("sample"), "backend commit failure must abort Python unload");
+    expect(runtime.find("sample")->state == ModuleState::Loaded,
+           "Python backend commit failure must preserve coherent loaded state");
+    expect(runtime.find("sample")->handle == loaded_handle,
+           "Python backend commit failure must retain the handle");
+
+    backend->fail_unload = false;
+    expect(runtime.unload_module("sample"), "retry should unload after prepare succeeds");
+    expect(backend->unload_calls == 2, "failed backend commit and retry must each run once");
+}
+
+void test_live_mutation_thread_guard_fails_before_backend_calls() {
+    TempDir tmp;
+    write_text_file(tmp.path / "guarded.module", "name: guarded\nbuild:\n  output: build/libguarded.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    const std::thread::id owner_thread = std::this_thread::get_id();
+    runtime.set_mutation_thread_checker([owner_thread](std::string& error) {
+        if (std::this_thread::get_id() == owner_thread) return true;
+        error = "injected wrong-thread mutation";
+        return false;
+    });
+    expect(runtime.discover(tmp.path), "guarded module discovery should succeed");
+
+    bool worker_result = true;
+    std::thread worker([&runtime, &worker_result]() {
+        worker_result = runtime.load_module("guarded");
+    });
+    worker.join();
+
+    expect(!worker_result, "wrong-thread load must fail closed");
+    expect(runtime.last_error().find("injected wrong-thread mutation") != std::string::npos,
+           "wrong-thread diagnostic expected");
+    expect(backend->load_calls.empty(), "thread guard must run before backend load");
+    expect(runtime.find("guarded")->state == ModuleState::Discovered,
+           "wrong-thread attempt must not mutate module state");
+    expect(runtime.load_module("guarded"), "owner-thread load should succeed");
+}
+
 void test_cycle_detection() {
     TempDir tmp;
 
@@ -603,6 +852,313 @@ void test_staged_cpp_unload_keeps_handle_when_cleanup_fails() {
     const size_t order_after_failed_unload = backend->order.size();
     expect(!runtime.load_module("native"), "load should be blocked while failed module retains handle");
     expect(backend->order.size() == order_after_failed_unload, "blocked load must not call backend load");
+
+    CppModuleCallbacks retry_callbacks;
+    retry_callbacks.before_native_close = [](const ModuleRecord&, std::string&) {
+        return true;
+    };
+    runtime.set_cpp_callbacks(std::move(retry_callbacks));
+    expect(runtime.shutdown(), "retained staged handle should be releasable on retry");
+}
+
+void test_discovery_rejects_active_handles_without_losing_records() {
+    TempDir first;
+    TempDir second;
+    write_text_file(first.path / "active.module", "name: active\nbuild:\n  output: build/libactive.so\n");
+    write_text_file(second.path / "replacement.module", "name: replacement\nbuild:\n  output: build/libreplacement.so\n");
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(first.path), "initial discovery should succeed");
+    expect(runtime.load_module("active"), "active module should load");
+
+    expect(!runtime.discover(second.path), "rediscovery over an active handle must fail");
+    expect(runtime.find("active") != nullptr, "active record must survive rejected rediscovery");
+    expect(runtime.find("active")->handle != nullptr, "active handle must survive rejected rediscovery");
+    expect(runtime.find("replacement") == nullptr, "rejected rediscovery must not publish replacement records");
+    expect(backend->unload_calls.empty(), "rediscovery must not implicitly unload modules");
+
+    expect(runtime.shutdown(), "explicit shutdown should unload the active module");
+    expect(runtime.discover(second.path), "discovery should succeed after shutdown");
+    expect(runtime.find("replacement") != nullptr, "replacement should be visible after safe discovery");
+}
+
+void test_shutdown_unloads_reverse_dependencies_and_retries_failed_handles() {
+    TempDir tmp;
+    write_text_file(tmp.path / "core.module", "name: core\nbuild:\n  output: build/libcore.so\n");
+    write_text_file(
+        tmp.path / "game.module",
+        "name: game\ndependencies: [core]\nbuild:\n  output: build/libgame.so\n"
+    );
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "shutdown test discovery should succeed");
+    expect(runtime.load_all(), "shutdown test modules should load");
+
+    backend->fail_unload_module = "game";
+    expect(!runtime.shutdown(), "shutdown must report retained failed handle");
+    expect(backend->unload_calls.size() == 1, "dependency guard must keep core backend untouched");
+    expect(backend->unload_calls[0] == "game", "shutdown must unload dependent first");
+    expect(runtime.find("game")->state == ModuleState::Failed, "failed shutdown record should be retryable");
+    expect(runtime.find("game")->handle != nullptr, "failed shutdown must retain backend handle");
+    expect(runtime.find("core")->handle != nullptr, "dependency stays active while dependent handle remains");
+
+    backend->fail_unload_module.clear();
+    backend->unload_calls.clear();
+    expect(runtime.shutdown(), "second shutdown should retry retained handles");
+    expect(backend->unload_calls.size() == 2, "retry should unload both retained handles");
+    expect(backend->unload_calls[0] == "game", "retry keeps reverse dependency order");
+    expect(backend->unload_calls[1] == "core", "retry unloads dependency last");
+    expect(runtime.find("game")->handle == nullptr, "retry clears dependent handle");
+    expect(runtime.find("core")->handle == nullptr, "retry clears dependency handle");
+}
+
+void test_destructor_runs_non_throwing_shutdown() {
+    TempDir tmp;
+    write_text_file(tmp.path / "native.module", "name: native\nbuild:\n  output: build/libnative.so\n");
+
+    auto backend = std::make_shared<FakeCppBackend>();
+    {
+        ModuleRuntime runtime;
+        runtime.set_environment(ModuleEnvironment{});
+        runtime.register_backend(backend);
+        expect(runtime.discover(tmp.path), "destructor test discovery should succeed");
+        expect(runtime.load_module("native"), "destructor test module should load");
+    }
+
+    expect(backend->unload_calls.size() == 1, "destructor must attempt runtime shutdown");
+    expect(backend->unload_calls[0] == "native", "destructor should unload the active module");
+}
+
+void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
+    TempDir tmp;
+    const std::filesystem::path artifact = write_shadow_test_descriptor(tmp.path, "shadow_test");
+    const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(runtime.discover(tmp.path), "shadow cleanup discovery should succeed");
+
+    for (size_t iteration = 0; iteration < 3; ++iteration) {
+        expect(runtime.load_module("shadow_test"), "native shadow module should load");
+        const ModuleRecord* record = runtime.find("shadow_test");
+        auto handle = std::dynamic_pointer_cast<CppModuleHandle>(record->handle);
+        expect(handle != nullptr, "native shadow handle should be available");
+        expect(handle->loaded_path.parent_path() != artifact.parent_path(), "shadow must not live beside artifact");
+        expect(handle->loaded_path.string().starts_with(shadow_root.string()), "shadow must live under configured root");
+        expect(std::filesystem::exists(handle->loaded_path), "shadow file should exist while loaded");
+        const std::filesystem::path loaded_path = handle->loaded_path;
+
+        expect(runtime.unload_module("shadow_test"), "native shadow module should unload");
+        expect(!std::filesystem::exists(loaded_path), "shadow file must be removed after native close");
+        expect(count_regular_files(shadow_root) == 0, "shadow root must contain no files after unload");
+    }
+}
+
+void test_cpp_backend_cleans_shadow_after_post_copy_load_failure() {
+    TempDir tmp;
+    write_shadow_test_descriptor(tmp.path, "shadow_test");
+    const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_init = [](const ModuleRecord&) {
+        throw std::runtime_error("injected native init scope failure");
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "failed shadow load discovery should succeed");
+
+    expect(!runtime.load_module("shadow_test"), "injected init failure should reject load");
+    expect(runtime.find("shadow_test")->handle == nullptr, "failed load must not publish a native handle");
+    expect(count_regular_files(shadow_root) == 0, "failed post-copy load must remove shadow file");
+}
+
+void test_cpp_backend_shadow_sessions_do_not_collide_between_runtimes() {
+    TempDir first;
+    TempDir second;
+    write_shadow_test_descriptor(first.path, "shadow_test");
+    write_shadow_test_descriptor(second.path, "shadow_test");
+    const std::filesystem::path shadow_root = first.path / "shared-shadow-cache";
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime first_runtime;
+    ModuleRuntime second_runtime;
+    first_runtime.set_environment(environment);
+    second_runtime.set_environment(environment);
+    first_runtime.register_backend(std::make_shared<CppModuleBackend>());
+    second_runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(first_runtime.discover(first.path), "first concurrent runtime discovery should succeed");
+    expect(second_runtime.discover(second.path), "second concurrent runtime discovery should succeed");
+
+    bool first_loaded = false;
+    bool second_loaded = false;
+    std::thread first_thread([&]() { first_loaded = first_runtime.load_module("shadow_test"); });
+    std::thread second_thread([&]() { second_loaded = second_runtime.load_module("shadow_test"); });
+    first_thread.join();
+    second_thread.join();
+    expect(first_loaded && second_loaded, "concurrent runtimes should both load");
+
+    auto first_handle = std::dynamic_pointer_cast<CppModuleHandle>(first_runtime.find("shadow_test")->handle);
+    auto second_handle = std::dynamic_pointer_cast<CppModuleHandle>(second_runtime.find("shadow_test")->handle);
+    expect(first_handle && second_handle, "both concurrent handles should exist");
+    expect(first_handle->loaded_path != second_handle->loaded_path, "concurrent shadow paths must be unique");
+    expect(first_handle->loaded_path.parent_path() != second_handle->loaded_path.parent_path(),
+           "concurrent runtimes must own separate session directories");
+
+    expect(first_runtime.shutdown(), "first concurrent runtime should shut down");
+    expect(second_runtime.shutdown(), "second concurrent runtime should shut down");
+    expect(count_regular_files(shadow_root) == 0, "concurrent shutdown must remove every shadow file");
+}
+
+void test_cpp_backend_prunes_only_aged_abandoned_shadow_sessions() {
+    TempDir tmp;
+    write_shadow_test_descriptor(tmp.path, "shadow_test");
+    const std::filesystem::path shadow_root = tmp.path / "shadow-cache";
+    const std::filesystem::path abandoned = shadow_root / "session-999999999-old";
+    const std::filesystem::path recent = shadow_root / "session-999999998-recent";
+    std::filesystem::create_directories(abandoned);
+    std::filesystem::create_directories(recent);
+    write_text_file(abandoned / "stale.dll", "stale");
+    write_text_file(recent / "active.dll", "active");
+    std::filesystem::last_write_time(
+        abandoned,
+        std::filesystem::file_time_type::clock::now() - std::chrono::hours(25)
+    );
+
+    ModuleEnvironment environment;
+    environment.native_shadow_root = shadow_root;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(runtime.discover(tmp.path), "abandoned cleanup discovery should succeed");
+    expect(runtime.load_module("shadow_test"), "abandoned cleanup trigger module should load");
+    expect(!std::filesystem::exists(abandoned), "aged abandoned session should be removed");
+    expect(std::filesystem::exists(recent / "active.dll"), "recent session must not be pruned");
+    expect(runtime.shutdown(), "abandoned cleanup runtime should shut down");
+}
+
+void test_native_abi_rejects_missing_descriptor_before_init_scope() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_missing",
+        TERMIN_MODULES_TEST_ABI_MISSING
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    int init_scope_calls = 0;
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_init = [&](const ModuleRecord&) { ++init_scope_calls; };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "missing ABI descriptor discovery should succeed");
+    expect(!runtime.load_module("abi_missing"), "missing ABI descriptor must reject load");
+    expect(init_scope_calls == 0, "missing ABI descriptor must fail before registration scope");
+    expect(runtime.last_error().find("missing native module descriptor") != std::string::npos,
+           "missing ABI descriptor diagnostic should be actionable");
+}
+
+void test_native_abi_rejects_version_mismatch_before_init_scope() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_mismatch",
+        TERMIN_MODULES_TEST_ABI_MISMATCH
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    int init_scope_calls = 0;
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_init = [&](const ModuleRecord&) { ++init_scope_calls; };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "ABI mismatch discovery should succeed");
+    expect(!runtime.load_module("abi_mismatch"), "ABI mismatch must reject load");
+    expect(init_scope_calls == 0, "ABI mismatch must fail before registration scope");
+    expect(runtime.last_error().find("native module ABI mismatch") != std::string::npos,
+           "ABI mismatch diagnostic should include module and host versions");
+}
+
+void test_native_abi_propagates_structured_init_failure_once() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_init_failure",
+        TERMIN_MODULES_TEST_ABI_INIT_FAILURE
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    int failure_callbacks = 0;
+    CppModuleCallbacks callbacks;
+    callbacks.after_failed_load = [&](const ModuleRecord&, const std::string&) {
+        ++failure_callbacks;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+    expect(runtime.discover(tmp.path), "structured init failure discovery should succeed");
+    expect(!runtime.load_module("abi_init_failure"), "structured init failure must reject load");
+    expect(failure_callbacks == 1, "in-process init failure cleanup callback must run exactly once");
+    expect(runtime.last_error().find("status 17") != std::string::npos,
+           "structured init failure should preserve status");
+    expect(runtime.last_error().find("injected structured init failure") != std::string::npos,
+           "structured init failure should preserve message");
+    expect(runtime.find("abi_init_failure")->handle == nullptr,
+           "failed init must not publish native handle");
+}
+
+void test_native_abi_shutdown_failure_is_retryable_and_metadata_is_exposed() {
+    TempDir tmp;
+    write_native_abi_descriptor(
+        tmp.path,
+        "abi_shutdown_retry",
+        TERMIN_MODULES_TEST_ABI_SHUTDOWN_RETRY
+    );
+
+    ModuleEnvironment environment;
+    environment.sdk_prefix = TERMIN_MODULES_TEST_BUILD_ROOT;
+    ModuleRuntime runtime;
+    runtime.set_environment(environment);
+    runtime.register_backend(std::make_shared<CppModuleBackend>());
+    expect(runtime.discover(tmp.path), "shutdown retry discovery should succeed");
+    expect(runtime.load_module("abi_shutdown_retry"), "compatible ABI module should load");
+
+    auto handle = std::dynamic_pointer_cast<CppModuleHandle>(
+        runtime.find("abi_shutdown_retry")->handle
+    );
+    expect(handle && handle->descriptor, "loaded handle should expose validated descriptor");
+    expect(std::string(handle->descriptor->module_version) == "1.0.0",
+           "module version metadata should be available to host");
+    expect(std::string(handle->descriptor->build_id) == "abi-shutdown-retry-test",
+           "module build identity should be available to host");
+
+    expect(!runtime.unload_module("abi_shutdown_retry"),
+           "fallible shutdown must keep library loaded on failure");
+    expect(runtime.find("abi_shutdown_retry")->handle != nullptr,
+           "failed shutdown must preserve retryable handle");
+    expect(runtime.last_error().find("status 23") != std::string::npos,
+           "shutdown failure should preserve structured status");
+    expect(runtime.unload_module("abi_shutdown_retry"),
+           "idempotent shutdown retry should complete unload");
+    expect(runtime.find("abi_shutdown_retry")->handle == nullptr,
+           "successful shutdown retry should release handle");
 }
 
 } // namespace
@@ -631,6 +1187,26 @@ TEST_CASE("module runtime cascade reload stops on dependent load failure") {
     test_cascade_reload_stops_on_dependent_load_failure();
 }
 
+TEST_CASE("module runtime rejects invalid descriptor snapshots before unload") {
+    test_reload_rejects_invalid_descriptor_before_unload();
+}
+
+TEST_CASE("module runtime cascade reload uses updated dependency snapshot") {
+    test_cascade_reload_uses_atomic_updated_dependency_graph();
+}
+
+TEST_CASE("module runtime rejects duplicate ids and simultaneous cycles atomically") {
+    test_reload_rejects_duplicate_ids_and_simultaneous_cycle_atomically();
+}
+
+TEST_CASE("module runtime keeps Python module loaded when unload preparation fails") {
+    test_python_unload_prepare_failure_preserves_loaded_handle();
+}
+
+TEST_CASE("module runtime rejects live mutation from a non-owner thread") {
+    test_live_mutation_thread_guard_fails_before_backend_calls();
+}
+
 TEST_CASE("module runtime rejects dependency cycles") {
     test_cycle_detection();
 }
@@ -657,6 +1233,50 @@ TEST_CASE("module runtime stages C++ unload cleanup before native close") {
 
 TEST_CASE("module runtime keeps native handle loaded when C++ cleanup fails") {
     test_staged_cpp_unload_keeps_handle_when_cleanup_fails();
+}
+
+TEST_CASE("module runtime rejects discovery over active backend handles") {
+    test_discovery_rejects_active_handles_without_losing_records();
+}
+
+TEST_CASE("module runtime shutdown retries failed handles in reverse dependency order") {
+    test_shutdown_unloads_reverse_dependencies_and_retries_failed_handles();
+}
+
+TEST_CASE("module runtime destructor performs non-throwing shutdown") {
+    test_destructor_runs_non_throwing_shutdown();
+}
+
+TEST_CASE("cpp backend cleans shadow artifacts after repeated unload") {
+    test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload();
+}
+
+TEST_CASE("cpp backend cleans shadow artifacts after post-copy load failure") {
+    test_cpp_backend_cleans_shadow_after_post_copy_load_failure();
+}
+
+TEST_CASE("cpp backend shadow sessions are collision-free across concurrent runtimes") {
+    test_cpp_backend_shadow_sessions_do_not_collide_between_runtimes();
+}
+
+TEST_CASE("cpp backend prunes only aged abandoned shadow sessions") {
+    test_cpp_backend_prunes_only_aged_abandoned_shadow_sessions();
+}
+
+TEST_CASE("native ABI rejects missing descriptor before registration") {
+    test_native_abi_rejects_missing_descriptor_before_init_scope();
+}
+
+TEST_CASE("native ABI rejects version mismatch before registration") {
+    test_native_abi_rejects_version_mismatch_before_init_scope();
+}
+
+TEST_CASE("native ABI propagates structured init failure exactly once") {
+    test_native_abi_propagates_structured_init_failure_once();
+}
+
+TEST_CASE("native ABI exposes metadata and retries fallible shutdown") {
+    test_native_abi_shutdown_failure_is_retryable_and_metadata_is_exposed();
 }
 
 TEST_CASE("module text diagnostics are sanitized to utf8") {

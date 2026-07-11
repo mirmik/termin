@@ -287,6 +287,11 @@ void NormalPass::execute(ExecuteContext& ctx) {
     );
 }
 
-TC_REGISTER_FRAME_PASS_DERIVED(NormalPass, GeometryPassBase);
+TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(NormalPass, GeometryPassBase);
+
+void NormalPass::register_type() {
+    register_frame_pass_NormalPass();
+    _register_inspect_pass_phase_mark();
+}
 
 } // namespace termin
