@@ -62,7 +62,7 @@ Prefer representative coverage over touching every possible file. If a file most
 ## Implementation Plan
 
 1. Reconfirm active scope from the task board and inventory.
-   - Read `scripts/taskboard show 221`.
+   - Read card 221 with the global `kanboard-taskboard` skill.
    - Read `docs/analysis/2026-07-07-numpy-usage-inventory.md`.
    - If the board has changed materially, update this plan or the card before implementation.
 
