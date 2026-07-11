@@ -1,3 +1,6 @@
+import pytest
+
+from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.editor_core.pipeline_editor_model import (
     load_pipeline_graph as _load_graph_from_pipeline_dict,
     pass_list_to_pipeline_graph as _pass_list_pipeline_to_graph,
@@ -5,6 +8,13 @@ from termin.editor_core.pipeline_editor_model import (
 )
 from tcgui.scene import GraphicsWidgetItem
 from tcnodegraph import NodeGraphView
+
+
+@pytest.fixture(scope="module", autouse=True)
+def player_runtime():
+    bootstrap_player()
+    yield
+    shutdown_player()
 
 
 def test_pipeline_graph_load_populates_node_params_and_sockets():
