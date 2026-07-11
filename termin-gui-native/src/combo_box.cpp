@@ -9,7 +9,7 @@ public:
 
     void paint(tc_ui_document* document, tc_ui_paint_context* context) override {
         const tc_ui_style style = owner_.computed_style(document);
-        tc_ui_painter_fill_rect(context, bounds(), tc_ui_color {0.18f, 0.18f, 0.22f, 0.98f});
+        tc_ui_painter_fill_rect(context, bounds(), tc_ui_color {0.153f, 0.153f, 0.153f, 0.98f});
         tc_ui_painter_push_clip(context, bounds());
         for (size_t index = 0; index < owner_.items_.size(); ++index) {
             const float y = bounds().y + static_cast<float>(index) * owner_.item_height_ - scroll_y_;

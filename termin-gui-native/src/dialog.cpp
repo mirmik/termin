@@ -106,7 +106,7 @@ bool Dialog::ensure_buttons(tc_ui_document* document) {
     for (size_t index = 0; index < actions_.size(); ++index) {
         auto button = std::make_unique<Button>(actions_[index].label);
         if (actions_[index].is_default)
-            button->set_accent(Color{0.22f, 0.48f, 0.86f, 1.0f});
+            button->set_accent(Color{0.949f, 0.373f, 0.075f, 1.0f}); // CabanTheme neon #F25F13
         const tc_widget_handle handle = tc_ui_document_adopt_widget(document, button->c_widget());
         if (tc_widget_handle_is_invalid(handle)) {
             tc_log_error("[termin-gui-native] Dialog failed to adopt action button");

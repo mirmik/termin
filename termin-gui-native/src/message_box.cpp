@@ -20,7 +20,7 @@ bool MessageBox::ensure_content(tc_ui_document* document) {
         return true;
     }
     const char* icon = "ℹ";
-    Color color{0.30f, 0.60f, 0.90f, 1.0f};
+    Color color{0.949f, 0.373f, 0.075f, 1.0f}; // CabanTheme neon #F25F13 (info uses the brand accent)
     if (kind_ == MessageBoxKind::Warning) {
         icon = "⚠";
         color = Color{0.90f, 0.70f, 0.20f, 1.0f};
