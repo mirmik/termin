@@ -10,6 +10,7 @@ from typing import Callable
 from termin.editor_core.editor_commands import (
     AddComponentCommand,
     AddSoAComponentCommand,
+    ComponentDisplayNameEditCommand,
     ComponentFieldEditCommand,
     EntityPropertyEditCommand,
     RemoveComponentCommand,
@@ -74,6 +75,7 @@ class EntityTransformSnapshot:
 
 
 ComponentTypeCollector = Callable[[], tuple[EntityInspectorComponentType, ...]]
+SoaComponentTypeCollector = Callable[[], tuple[str, ...]]
 
 
 def _component_category_index(category: str) -> int:
@@ -109,6 +111,21 @@ def collect_component_types() -> tuple[EntityInspectorComponentType, ...]:
     )
 
 
+def collect_soa_component_types() -> tuple[str, ...]:
+    from termin.scene._scene_native import soa_registry_get_all_info
+
+    return tuple(
+        sorted(
+            {
+                str(info["name"])
+                for info in soa_registry_get_all_info()
+                if isinstance(info, dict) and isinstance(info.get("name"), str) and info["name"]
+            },
+            key=str.casefold,
+        )
+    )
+
+
 @dataclass(frozen=True)
 class EntityInspectorSnapshot:
     entity: Entity | None
@@ -132,6 +149,7 @@ class EntityInspectorController:
         metadata_collector=collect_inspector_metadata,
         component_selection_changed: ComponentSelectionHandler | None = None,
         component_type_collector: ComponentTypeCollector = collect_component_types,
+        soa_component_type_collector: SoaComponentTypeCollector = collect_soa_component_types,
     ) -> None:
         self._scene = None
         self._entity: Entity | None = None
@@ -140,6 +158,7 @@ class EntityInspectorController:
         self._snapshot_changed = snapshot_changed
         self._component_selection_changed = component_selection_changed
         self._component_type_collector = component_type_collector
+        self._soa_component_type_collector = soa_component_type_collector
         self.fields = InspectorFieldsController(
             field_collector=field_collector,
             metadata_collector=metadata_collector,
@@ -265,6 +284,9 @@ class EntityInspectorController:
     def available_component_types(self) -> tuple[EntityInspectorComponentType, ...]:
         return self._component_type_collector()
 
+    def available_soa_component_types(self) -> tuple[str, ...]:
+        return self._soa_component_type_collector()
+
     def add_component(self, type_name: str) -> EntityInspectorSnapshot:
         if self._entity is None:
             return self._snapshot
@@ -304,6 +326,25 @@ class EntityInspectorController:
         self._selected_component = -1
         self.fields.set_targets(())
         self._notify_component_selection(None)
+        return self.refresh()
+
+    def selected_component_display_name(self) -> str:
+        entity = self._entity
+        index = self._selected_component
+        if entity is None or index < 0 or index >= len(entity.tc_components):
+            return ""
+        return str(entity.tc_components[index].get_field("display_name") or "")
+
+    def rename_selected_component(self, value: str) -> EntityInspectorSnapshot:
+        entity = self._entity
+        index = self._selected_component
+        if entity is None or index < 0 or index >= len(entity.tc_components):
+            return self._snapshot
+        component = entity.tc_components[index]
+        old_name = self.selected_component_display_name()
+        new_name = value.strip()
+        if new_name != old_name:
+            self._execute(ComponentDisplayNameEditCommand(component, old_name, new_name))
         return self.refresh()
 
     def add_soa_component(self, type_name: str) -> EntityInspectorSnapshot:
@@ -482,6 +523,7 @@ class EntityInspectorController:
 
 __all__ = [
     "ComponentTypeCollector",
+    "SoaComponentTypeCollector",
     "EntityInspectorComponent",
     "EntityInspectorComponentType",
     "ComponentSelectionHandler",
@@ -489,4 +531,5 @@ __all__ = [
     "EntityInspectorSnapshot",
     "EntityTransformSnapshot",
     "collect_component_types",
+    "collect_soa_component_types",
 ]

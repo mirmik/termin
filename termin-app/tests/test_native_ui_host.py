@@ -220,13 +220,16 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.inspector_host.stable_id == "editor.inspector-host"
     assert shell.menu_bar.entries[0].stable_id == "file"
     assert shell.tool_bar.model.command_count == 1
+    assert shell.toolbar_model.command(shell.toolbar_play_command).data.icon == ""
     assert shell.status_bar.displayed_text == "Ready | Native editor host"
     assert shell.project_host.bounds.y > shell.workspace_host.bounds.y
     assert shell.project_host.bounds.width == pytest.approx(shell.central.bounds.width)
     assert shell.workspace_host.bounds.x > shell.hierarchy_host.bounds.x
     assert shell.inspector_host.bounds.x > shell.workspace_host.bounds.x
-    assert shell.tool_bar.widget.bounds.x == pytest.approx(shell.workspace_host.bounds.x)
-    assert shell.tool_bar.widget.bounds.width == pytest.approx(shell.workspace_host.bounds.width)
+    play_rect = shell.tool_bar.item_rects[0]
+    assert play_rect.x + play_rect.width / 2.0 == pytest.approx(
+        shell.workspace_host.bounds.x + shell.workspace_host.bounds.width / 2.0
+    )
     document.layout_roots(Rect(0.0, 0.0, 2048.0, 1152.0))
     assert shell.navigation_tabs.widget.bounds.width == pytest.approx(225.0, abs=3.0)
     assert shell.inspector_host.bounds.width == pytest.approx(344.0, abs=4.0)
@@ -238,8 +241,10 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     document.layout_roots(Rect(0.0, 0.0, 2048.0, 1152.0))
     assert shell.navigation_tabs.widget.bounds.width > initial_navigation_width
     assert shell.bottom_tabs.widget.bounds.height > initial_bottom_height
-    assert shell.tool_bar.widget.bounds.x == pytest.approx(shell.workspace_host.bounds.x)
-    assert shell.tool_bar.widget.bounds.width == pytest.approx(shell.workspace_host.bounds.width)
+    play_rect = shell.tool_bar.item_rects[0]
+    assert play_rect.x + play_rect.width / 2.0 == pytest.approx(
+        shell.workspace_host.bounds.x + shell.workspace_host.bounds.width / 2.0
+    )
     assert draw_list.command_count > 20
     assert any(command.type == DrawCommandType.Text for command in draw_list.commands)
 
@@ -356,6 +361,7 @@ def test_native_ui_host_pre_render_runs_before_document_paint():
     host._color_target = None
     host._target_size = (0, 0)
     host._render_requested = True
+    host._color_pickers = []
     def pre_render(_context):
         calls.append("pre-render")
         host.request_render_update()

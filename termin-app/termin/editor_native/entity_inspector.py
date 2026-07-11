@@ -10,6 +10,8 @@ from termin.editor_core.entity_inspector_model import (
     EntityInspectorController,
     EntityInspectorSnapshot,
 )
+
+InputDialogHandler = Callable[[str, str, str, Callable[[str | None], None]], None]
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
 from termin.editor_native.inspector_fields import (
     ColorDialogHandler,
@@ -21,6 +23,7 @@ from termin.gui_native import (
     CollectionItem,
     CollectionModel,
     Color,
+    CommandKind,
     CommandData,
     CommandModel,
     Document,
@@ -44,17 +47,22 @@ class NativeEntityInspector:
     transform_boxes: tuple[tuple[object, object, object], ...]
     component_model: CollectionModel
     component_list: object
-    add_component_button: object
-    remove_component_button: object
     add_component_model: CommandModel
     add_component_menu: object
+    add_soa_component_model: CommandModel
+    add_soa_component_menu: object
+    component_context_model: CommandModel
+    component_context_menu: object
     field_scroll: object
     field_content: WidgetRef
     extension_host: WidgetRef
     fields: NativeInspectorFields
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
+    show_input: InputDialogHandler | None
     add_component_types: dict[str, str]
+    add_soa_component_types: dict[str, str]
+    context_menu_position: Point | None = None
     updating: bool = False
 
     def apply_snapshot(self, snapshot: EntityInspectorSnapshot) -> None:
@@ -79,8 +87,6 @@ class NativeEntityInspector:
                 for box, value in zip(boxes, values, strict=True):
                     box.value = value
                     box.widget.enabled = snapshot.transform.enabled
-            self.add_component_button.widget.enabled = snapshot.entity is not None
-            self.remove_component_button.widget.enabled = snapshot.selected_component >= 0
             self.component_model.set_items(
                 [
                     CollectionItem(
@@ -106,7 +112,7 @@ class NativeEntityInspector:
     def set_scene(self, scene) -> None:
         self.controller.set_scene(scene)
 
-    def show_add_component_menu(self) -> None:
+    def show_add_component_menu(self, position: Point | None = None) -> None:
         categories: dict[str, CommandModel] = {}
         commands = []
         self.add_component_types.clear()
@@ -128,13 +134,72 @@ class NativeEntityInspector:
         if not commands:
             commands.append(CommandData("empty", "(No component types)", enabled=False))
         self.add_component_model.set_commands(commands)
-        bounds = self.add_component_button.widget.bounds
+        if position is None:
+            bounds = self.component_list.widget.bounds
+            position = Point(bounds.x, bounds.y + bounds.height)
         if not self.add_component_menu.show(
-            Point(bounds.x, bounds.y + bounds.height),
+            position,
             self.viewport(),
         ):
             raise RuntimeError("failed to show native add component menu")
         self.request_render()
+
+    def show_add_soa_component_menu(self, position: Point | None = None) -> None:
+        commands = []
+        self.add_soa_component_types.clear()
+        for type_name in self.controller.available_soa_component_types():
+            stable_id = f"soa:{len(self.add_soa_component_types)}"
+            self.add_soa_component_types[stable_id] = type_name
+            commands.append(CommandData(stable_id, type_name))
+        if not commands:
+            commands.append(CommandData("empty", "(No SoA component types)", enabled=False))
+        self.add_soa_component_model.set_commands(commands)
+        if position is None:
+            bounds = self.component_list.widget.bounds
+            position = Point(bounds.x, bounds.y + bounds.height)
+        if not self.add_soa_component_menu.show(position, self.viewport()):
+            raise RuntimeError("failed to show native add SoA component menu")
+        self.request_render()
+
+    def show_component_context_menu(self, index: int, x: float, y: float) -> None:
+        snapshot = self.controller.snapshot
+        if index >= len(snapshot.components):
+            index = -1
+        self.context_menu_position = Point(x, y)
+        if index >= 0:
+            self.controller.select_component(index)
+        commands = []
+        if index >= 0:
+            component = snapshot.components[index]
+            if not component.soa and self.show_input is not None:
+                commands.append(CommandData("rename-component", "Rename Component..."))
+            commands.append(
+                CommandData(
+                    "remove-component",
+                    "Remove SoA Component" if component.soa else "Remove Component",
+                )
+            )
+            commands.append(CommandData("separator", kind=CommandKind.Separator))
+        commands.append(CommandData("add-component", "Add Component..."))
+        commands.append(CommandData("add-soa-component", "Add SoA Component..."))
+        self.component_context_model.set_commands(commands)
+        if not self.component_context_menu.show(Point(x, y), self.viewport()):
+            raise RuntimeError("failed to show native component context menu")
+        self.request_render()
+
+    def rename_selected_component(self) -> None:
+        if self.show_input is None:
+            raise RuntimeError("native component rename requested without an input dialog service")
+        self.show_input(
+            "Rename Component",
+            "Name:",
+            self.controller.selected_component_display_name(),
+            self._apply_component_rename,
+        )
+
+    def _apply_component_rename(self, value: str | None) -> None:
+        if value is not None:
+            self.controller.rename_selected_component(value)
 
     def set_extension_panel(self, panel: WidgetRef | None) -> None:
         self.clear_extension_panel()
@@ -164,6 +229,7 @@ def build_native_entity_inspector(
     show_color_dialog: ColorDialogHandler | None = None,
     show_layer_mask_dialog: LayerMaskDialogHandler | None = None,
     resource_catalog: InspectorResourceCatalog | None = None,
+    show_input: InputDialogHandler | None = None,
 ) -> NativeEntityInspector:
     root = document.create_vstack("native-entity-inspector")
     root.stable_id = "editor.inspector.entity"
@@ -230,21 +296,12 @@ def build_native_entity_inspector(
     component_list.set_row_spacing(1.0)
     root.add_fixed_child(component_list.widget, 150.0)
 
-    component_buttons = document.create_hstack("native-inspector-component-buttons")
-    component_buttons.set_layout_spacing(4.0)
-    add_component_button = document.create_button(
-        "+ Component",
-        "native-inspector-add-component",
-    )
-    remove_component_button = document.create_button(
-        "Remove",
-        "native-inspector-remove-component",
-    )
-    component_buttons.add_stretch_child(add_component_button.widget)
-    component_buttons.add_stretch_child(remove_component_button.widget)
-    root.add_fixed_child(component_buttons, 30.0)
     add_component_model = CommandModel()
     add_component_menu = document.create_menu(add_component_model)
+    add_soa_component_model = CommandModel()
+    add_soa_component_menu = document.create_menu(add_soa_component_model)
+    component_context_model = CommandModel()
+    component_context_menu = document.create_menu(component_context_model)
 
     fields = build_native_inspector_fields(
         document,
@@ -277,17 +334,21 @@ def build_native_entity_inspector(
         transform_boxes=tuple(transform_boxes),
         component_model=component_model,
         component_list=component_list,
-        add_component_button=add_component_button,
-        remove_component_button=remove_component_button,
         add_component_model=add_component_model,
         add_component_menu=add_component_menu,
+        add_soa_component_model=add_soa_component_model,
+        add_soa_component_menu=add_soa_component_menu,
+        component_context_model=component_context_model,
+        component_context_menu=component_context_menu,
         field_scroll=field_scroll,
         field_content=field_content,
         extension_host=extension_host,
         fields=fields,
         viewport=viewport,
         request_render=request_render,
+        show_input=show_input,
         add_component_types={},
+        add_soa_component_types={},
     )
     weak_inspector = weakref.ref(inspector)
 
@@ -330,16 +391,6 @@ def build_native_entity_inspector(
         if owner is not None and not owner.updating:
             owner.controller.select_component(selected[-1] if selected else -1)
 
-    def on_add_component() -> None:
-        owner = current()
-        if owner is not None and not owner.updating:
-            owner.show_add_component_menu()
-
-    def on_remove_component() -> None:
-        owner = current()
-        if owner is not None and not owner.updating:
-            owner.controller.remove_selected_component()
-
     def on_add_component_activated(_index: int, _command_id: int, command) -> None:
         owner = current()
         if owner is None:
@@ -348,6 +399,32 @@ def build_native_entity_inspector(
         if type_name is not None:
             owner.controller.add_component(type_name)
 
+    def on_add_soa_component_activated(_index: int, _command_id: int, command) -> None:
+        owner = current()
+        if owner is None:
+            return
+        type_name = owner.add_soa_component_types.get(command.stable_id)
+        if type_name is not None:
+            owner.controller.add_soa_component(type_name)
+
+    def on_component_context(index: int, x: float, y: float) -> None:
+        owner = current()
+        if owner is not None and not owner.updating:
+            owner.show_component_context_menu(index, x, y)
+
+    def on_component_context_activated(_index: int, _command_id: int, command) -> None:
+        owner = current()
+        if owner is None:
+            return
+        if command.stable_id == "remove-component":
+            owner.controller.remove_selected_component()
+        elif command.stable_id == "rename-component":
+            owner.rename_selected_component()
+        elif command.stable_id == "add-component":
+            owner.show_add_component_menu(owner.context_menu_position)
+        elif command.stable_id == "add-soa-component":
+            owner.show_add_soa_component_menu(owner.context_menu_position)
+
     name_input.connect_submitted(on_name_submitted)
     layer_combo.connect_changed(on_layer_changed)
     apply_layer_button.connect_clicked(on_apply_layer)
@@ -355,9 +432,10 @@ def build_native_entity_inspector(
         for box in boxes:
             box.connect_changed(on_transform_changed)
     component_list.connect_selection_changed(on_component_selection)
-    add_component_button.connect_clicked(on_add_component)
-    remove_component_button.connect_clicked(on_remove_component)
+    component_list.connect_context_menu_requested(on_component_context)
     add_component_menu.connect_activated(on_add_component_activated)
+    add_soa_component_menu.connect_activated(on_add_soa_component_activated)
+    component_context_menu.connect_activated(on_component_context_activated)
     controller.set_snapshot_changed_handler(on_snapshot)
     inspector.apply_snapshot(controller.snapshot)
     return inspector

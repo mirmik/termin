@@ -30,6 +30,8 @@ class NativeDialogService(DialogService):
         *,
         viewport: Callable[[], Rect],
         request_render: Callable[[], None],
+        register_color_picker: Callable[[object], None] | None = None,
+        unregister_color_picker: Callable[[object], None] | None = None,
     ) -> None:
         self._document = document
         self._viewport = viewport
@@ -37,6 +39,9 @@ class NativeDialogService(DialogService):
         self._next_key = 1
         self._active: dict[int, object] = {}
         self._callbacks: dict[int, Callable] = {}
+        self._register_color_picker = register_color_picker
+        self._unregister_color_picker = unregister_color_picker
+        self._color_pickers: dict[int, object] = {}
 
     @property
     def active_count(self) -> int:
@@ -66,6 +71,9 @@ class NativeDialogService(DialogService):
         self._destroy_dialog(key, self._active.pop(key, None))
 
     def _destroy_dialog(self, key: int, dialog) -> None:
+        picker = self._color_pickers.pop(key, None)
+        if picker is not None and self._unregister_color_picker is not None:
+            self._unregister_color_picker(picker)
         if dialog is not None and self._document.is_alive(dialog.handle):
             if not self._document.destroy_widget_recursive(dialog.handle):
                 _logger.error("Failed to destroy native dialog: %d", key)
@@ -188,6 +196,13 @@ class NativeDialogService(DialogService):
         if not dialog.show(self._viewport()):
             self._discard(key)
             raise RuntimeError("failed to show native color dialog")
+        picker = dialog.picker
+        if picker is None:
+            self._discard(key)
+            raise RuntimeError("native color dialog did not create its ColorPicker")
+        self._color_pickers[key] = picker
+        if self._register_color_picker is not None:
+            self._register_color_picker(picker)
         self._request_render()
 
     def show_layer_mask(

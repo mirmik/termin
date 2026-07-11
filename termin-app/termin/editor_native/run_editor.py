@@ -240,6 +240,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         host.document,
         viewport=editor_viewport,
         request_render=request_editor_render,
+        register_color_picker=host.register_color_picker,
+        unregister_color_picker=host.unregister_color_picker,
     )
     undo_history_controller = UndoHistoryController(undo_stack)
 
@@ -349,6 +351,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         viewport=editor_viewport,
         show_color_dialog=dialog_service.show_color,
         show_layer_mask_dialog=dialog_service.show_layer_mask,
+        show_input=dialog_service.show_input,
         resource_catalog=InspectorResourceCatalog(resource_manager),
     )
     shell.inspector_host.add_stretch_child(entity_inspector.root)
