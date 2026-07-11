@@ -591,8 +591,9 @@ Goals:
 Deliverables:
 
 - `SkinnedMeshRenderer` requests a `SkinnedMesh` transform variant;
-- `upload_per_draw_uniforms_tgfx2()` becomes a draw data provider or thin
-  adapter;
+- bone matrices are carried by the typed mesh RenderItem and bound by the
+  shared mesh encoder; the old `upload_per_draw_uniforms_tgfx2()` callback is
+  removed;
 - old `get_skinned_shader()` becomes compatibility wrapper or is removed after
   callers migrate.
 

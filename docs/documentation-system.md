@@ -6,7 +6,7 @@
 
 | Уровень | Где лежит | Что хранит |
 |---------|-----------|------------|
-| Навигация | [docs.md](../docs.md), [docs/index.md](index.md) | входы, маршруты чтения, ссылки на модули |
+| Навигация | [docs.md](https://github.com/mirmik/termin-monorepo/blob/master/docs.md), [docs/index.md](index.md) | входы, маршруты чтения, ссылки на модули |
 | Архитектурные границы | [docs/modules.md](modules.md), [docs/library-dependencies.md](library-dependencies.md), [docs/architecture/](architecture/index.md) | ownership модулей, допустимые зависимости, правила перемещения кода |
 | Документация модуля | `<module>/docs/` | API, lifecycle, ownership, gotchas, примеры модуля |
 | Планы миграций | [docs/plans/](plans/index.md) | временные планы, решения, чеклисты до завершения миграции |
@@ -14,10 +14,24 @@
 
 ## Правила ссылок
 
-- Используем обычные Markdown-ссылки: `[termin-gui](../termin-gui/docs/index.md)`.
+- Используем обычные Markdown-ссылки: `[termin-gui](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui/docs/index.md)`.
 - Obsidian понимает такие ссылки и строит graph/backlinks без wiki-синтаксиса.
 - Wiki-ссылки `[[...]]` допустимы только в личных черновиках, которые не являются source of truth.
 - Если документ описывает модуль, он должен ссылаться на [Module Map](modules.md) и на соседние модули, от которых зависит.
+
+## Локальная сборка
+
+Запускайте документационный портал той же командой, что использует CI:
+
+```bash
+./build-docs.sh
+```
+
+Команда создаёт disposable environment в `build/python-envs/docs` из exact
+lock `build-system/python-docs-lock.txt`, проверяет docs inventory и собирает
+все публичные сайты в `_site/` с MkDocs strict mode. Пользовательская установка
+MkDocs и добавление docs tools в SDK runtime не требуются. Для принудительного
+пересоздания среды используйте `./setup-docs-env.sh --force`.
 
 ## Граница модуля
 

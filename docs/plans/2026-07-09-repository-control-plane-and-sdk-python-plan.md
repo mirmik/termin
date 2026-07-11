@@ -457,10 +457,14 @@ CTest uploads its selection, JUnit, and execution manifest; the Python runner
 writes the corresponding suite execution manifest.
 The verify-pr-linux-plan job consumes both manifests and fails if the PR plan
 has an unaccounted Python suite or native module, or if either executor reports
-a failed entry.
+a failed entry. Execution verification is fail-closed on schema, profile, and
+platform identity and rejects suites/modules not present in the planner
+artifact, preventing stale or cross-profile reports from satisfying coverage.
 The termin-app installed-bundle acceptance is also declared as a separate
 sdk-installed process-smoke suite, preserving its distinct import contract
-without a pytest root list in workflow YAML.
+without a pytest root list in workflow YAML. Process-smoke jobs verify their
+selected/executed/failed suite manifest against the exact planner artifact
+before publishing it, using the same fail-closed identity contract.
 The focused D3D11 Windows smoke is likewise a declared Windows process-smoke
 suite; CI consumes its Windows plan artifact and publishes a suite execution
 manifest. Runtime acceptance still depends on the Windows runner.
@@ -474,6 +478,17 @@ Close when local and CI selection for the same profile is identical and verified
 by tests.
 
 ### Phase 6: Docs and broader repository doctor
+
+Documentation inventory status, 2026-07-12: `build-system/docs-publication.json`
+classifies every repository-owned `docs/` root as a public MkDocs site or an
+explicit internal root. `repository_control check` fails on orphaned, missing,
+duplicate, or incorrectly module-linked roots. The Pages workflow uses
+`docs-plan` rather than a hand-maintained project loop, has generic docs/config
+path triggers, and builds each declared public site with MkDocs strict mode.
+MkDocs and its complete dependency closure are exact-pinned separately from the
+SDK runtime in `build-system/python-docs-lock.txt`; `build-docs.sh` creates a
+disposable `build/python-envs/docs` environment and is the shared local/CI entry
+point.
 
 - Generate/validate docs publication from module metadata.
 - Add orphan docs and broken-link gates.

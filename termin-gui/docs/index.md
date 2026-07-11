@@ -6,7 +6,7 @@ Immediate-mode рендеринг через OpenGL, retained-mode дерево 
 Документация отражает текущую реализацию в `python/tcgui/widgets/*` и примеры из `examples/*`.
 
 Целевая C++-миграция виджетов зафиксирована в архитектурной заметке
-[UI storage and plot annotations](../../docs/architecture/2026-07-07-ui-storage-and-plot-annotations.md):
+[UI storage and plot annotations](https://github.com/mirmik/termin-monorepo/blob/master/docs/architecture/2026-07-07-ui-storage-and-plot-annotations.md):
 виджетами должен владеть явный storage/document layer с handle-based references,
 а не неявная object-tree модель lifetime.
 
