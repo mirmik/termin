@@ -61,6 +61,10 @@ from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsContr
 from termin.editor_core.scene_manager_model import SceneManagerController
 from termin.editor_core.editor_scene_session import EditorSceneSession
 from termin.editor_core.render_scene_session import RenderSceneSession
+from termin.editor_core.rendering_factories import (
+    PipelineAssetResolver,
+    RenderingFactoryRegistration,
+)
 from termin.editor_core.viewport_list_model import ViewportListController
 from termin.editor_native.component_extensions import (
     NativeComponentExtensionContext,
@@ -709,8 +713,15 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     from termin.editor_core.rendering_model import RenderingModel
 
     rendering_model = RenderingModel(engine.rendering_manager)
+    rendering_factory_registration = None
     if display_workspace is not None:
-        engine.rendering_manager.set_display_factory(display_workspace.create_display)
+        pipeline_resolver = PipelineAssetResolver(resource_manager)
+        rendering_factory_registration = RenderingFactoryRegistration(
+            engine.rendering_manager,
+            display_factory=display_workspace.create_display,
+            pipeline_factory=pipeline_resolver.resolve,
+        )
+        rendering_factory_registration.install()
 
     render_scene_session = None
     if display_workspace is not None:
@@ -1366,7 +1377,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         extension_context.on_viewport_tool_state_changed = None
         extension_context.viewport_geometry = None
         engine.scene_manager.set_on_after_render(None)
-        engine.rendering_manager.set_display_factory(None)
+        if rendering_factory_registration is not None:
+            try:
+                rendering_factory_registration.close()
+            except Exception:
+                _logger.exception("Native rendering factory shutdown cleanup failed")
         try:
             about_dialog.close()
         except Exception:

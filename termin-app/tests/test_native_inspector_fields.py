@@ -18,6 +18,9 @@ from termin.gui_native import (
     DrawList,
     DrawListRenderer,
     EventResult,
+    KeyCode,
+    KeyEvent,
+    KeyEventType,
     PaintContext,
     PointerEvent,
     PointerEventType,
@@ -220,6 +223,46 @@ def test_native_inspector_fields_typed_edits_color_action_and_rebuild_lifetime()
     assert draw_list.command_count > 10
     assert renders
     renderer.release_gpu()
+
+
+def test_native_inspector_uint32_preserves_values_above_signed_int_range():
+    @dataclass
+    class Target:
+        stable_id: int = 4_000_000_000
+
+    def set_stable_id(item, value):
+        item.stable_id = value
+
+    target = Target()
+    controller = InspectorFieldsController(
+        field_collector=lambda _target: {
+            "stable_id": InspectField(
+                path="stable_id",
+                label="Stable Id",
+                kind="uint32",
+                min=0,
+                max=4_294_967_295,
+                step=1,
+                getter=lambda item: item.stable_id,
+                setter=set_stable_id,
+            )
+        },
+        metadata_collector=lambda _target: {},
+    )
+    document = Document()
+    panel = build_native_inspector_fields(document, controller, request_render=lambda: None)
+    assert document.add_root(panel.root.handle)
+    panel.set_targets([target])
+
+    editor = panel.field_widgets["stable_id"]
+    assert editor.text == "4000000000"
+    assert document.set_focus(editor.handle)
+    editor.text = "4294967295"
+    key = KeyEvent()
+    key.type = KeyEventType.Down
+    key.key = KeyCode.Enter
+    assert document.dispatch_key_event(key) == EventResult.Handled
+    assert target.stable_id == 4_294_967_295
 
 
 def test_native_inspector_resource_selection_and_creation():

@@ -2,6 +2,8 @@
 
 #include <tc_inspect_cpp.hpp>
 
+#include <limits>
+
 namespace termin {
 
 void OffMeshLinkComponent::register_type() {
@@ -46,7 +48,10 @@ void OffMeshLinkComponent::register_type() {
         "OffMeshLinkComponent",
         "stable_user_id",
         "Stable User Id",
-        "int"
+        "uint32",
+        0.0,
+        static_cast<double>(std::numeric_limits<unsigned int>::max()),
+        1.0
     );
     tc::register_inspect_field(
         &OffMeshLinkComponent::start_local,
