@@ -138,6 +138,12 @@ def _game_mode_requires_continuous_render(game_mode_controller) -> bool:
     return game_mode_controller is not None and game_mode_controller.model.is_game_mode
 
 
+def _complete_editor_scene_render(native_viewport, host) -> None:
+    """Finish viewport work and schedule presentation of the produced image."""
+    native_viewport.after_render()
+    host.request_render_update()
+
+
 def _smoke_frame_limit() -> int:
     value = os.environ.get("TERMIN_EDITOR_NATIVE_SMOKE_FRAMES", "0")
     try:
@@ -598,7 +604,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         )
         extension_context.on_viewport_tool_state_changed = native_viewport.sync_gizmo_target
         extension_context.viewport_geometry = native_viewport.geometry
-        engine.scene_manager.set_on_after_render(native_viewport.after_render)
+        engine.scene_manager.set_on_after_render(
+            lambda: _complete_editor_scene_render(native_viewport, host)
+        )
         sync_viewport_list()
 
     from termin.editor_core.rendering_model import RenderingModel
