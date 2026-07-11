@@ -4,20 +4,15 @@ on:
   push:
     branches: [master]
     paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - 'termin-app/docs/**'
-      - 'termin-app/mkdocs.yml'
-      - 'termin-collision/docs/**'
-      - 'termin-collision/mkdocs.yml'
-      - 'termin-gui/docs/**'
-      - 'termin-gui/mkdocs.yml'
-      - 'termin-inspect/docs/**'
-      - 'termin-inspect/mkdocs.yml'
-      - 'termin-scene/docs/**'
-      - 'termin-scene/mkdocs.yml'
-      - 'termin-modules/docs/**'
-      - 'termin-modules/mkdocs.yml'
+      - '**/docs/**'
+      - '**/mkdocs.yml'
+      - 'build-system/docs-publication.json'
+      - 'build-system/python-docs-lock.txt'
+      - 'build-system/modules.json'
+      - 'build-system/packages.json'
+      - 'build-docs.sh'
+      - 'setup-docs-env.sh'
+      - 'termin-build-tools/termin_build/repository_control.py'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -41,21 +36,8 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install doc tools
-        run: |
-          pip install mkdocs mkdocs-material
-
-      - name: Build hub page
-        run: mkdocs build -d _site
-
-      - name: Build MkDocs projects
-        run: |
-          for project in termin-app termin-collision termin-gui termin-inspect termin-scene termin-modules; do
-            echo "=== Building $project docs ==="
-            pushd "$project"
-            mkdocs build -d ../_site/$project
-            popd
-          done
+      - name: Build manifest-driven documentation
+        run: ./build-docs.sh
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

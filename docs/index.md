@@ -20,29 +20,29 @@
 - [Native Editor UI Style Guide](./ui/native-editor-ui-style-guide.md) — визуальные токены и правила композиции `termin-gui-native`.
 - [Architecture Notes](./architecture/index.md) — cross-module архитектурные заметки.
 - [Plans And Migration Notes](./plans/index.md) — исторические планы и миграционные чеклисты.
-- [Главный вход Obsidian](../docs.md) — навигационная страница vault.
+- [Главный вход Obsidian](https://github.com/mirmik/termin-monorepo/blob/master/docs.md) — навигационная страница vault.
 
 ## Проекты
 
 | Проект | Описание |
 |--------|----------|
 | [termin-app](./modules.md#termin-app) | Основное приложение/редактор |
-| [termin-base](../termin-base/docs/index.md) | Базовые типы, logging, settings, geometry, low-level utilities |
-| [termin-mesh](../termin-mesh/docs/index.md) | Canonical mesh/resource data layer |
-| [termin-default-assets](../termin-default-assets/docs/index.md) | Default asset adapters for domain packages |
-| [termin-graphics](../termin-graphics/docs/index.md) | tgfx/tgfx2, backend-neutral GPU API |
-| [termin-render](../termin-render/docs/index.md) | Render framework, pipelines, frame graph |
-| [termin-display](../termin-display/docs/index.md) | Windows/display/platform integration |
-| [termin-inspect](../termin-inspect/docs/index.md) | Система инспекции: Kind-типы, рефлексия полей, сериализация C/C++/Python |
-| [termin-scene](../termin-scene/docs/index.md) | ECS-сцена: Entity, Component, SoA-хранилище, хэндлы, lifecycle |
-| [termin-collision](../termin-collision/docs/index.md) | Коллизии: GJK, коллайдеры, collision world, C/Python API |
-| [termin-physics](../termin-physics/docs/index.md) | C++ rigid-body physics bindings |
-| [termin-physics-fem](../termin-physics-fem/docs/index.md) | Experimental Python FEM scene components |
-| [termin-input](../termin-input/docs/index.md) | Input abstractions |
-| [termin-gui](../termin-gui/docs/index.md) | UI фреймворк (tcgui): виджеты, лейауты, диалоги, Canvas/Viewport |
-| [termin-modules](../termin-modules/docs/index.md) | Система модулей: C++/Python плагины, дескрипторы, lifecycle, callbacks |
-| [termin-components](../termin-components/docs/index.md) | Component packages |
-| [tcplot](../tcplot/docs/index.md) | Plotting library поверх tgfx/tcgui |
+| [termin-base](https://github.com/mirmik/termin-monorepo/blob/master/termin-base/docs/index.md) | Базовые типы, logging, settings, geometry, low-level utilities |
+| [termin-mesh](https://github.com/mirmik/termin-monorepo/blob/master/termin-mesh/docs/index.md) | Canonical mesh/resource data layer |
+| [termin-default-assets](https://github.com/mirmik/termin-monorepo/blob/master/termin-default-assets/docs/index.md) | Default asset adapters for domain packages |
+| [termin-graphics](https://github.com/mirmik/termin-monorepo/blob/master/termin-graphics/docs/index.md) | tgfx/tgfx2, backend-neutral GPU API |
+| [termin-render](https://github.com/mirmik/termin-monorepo/blob/master/termin-render/docs/index.md) | Render framework, pipelines, frame graph |
+| [termin-display](https://github.com/mirmik/termin-monorepo/blob/master/termin-display/docs/index.md) | Windows/display/platform integration |
+| [termin-inspect](https://github.com/mirmik/termin-monorepo/blob/master/termin-inspect/docs/index.md) | Система инспекции: Kind-типы, рефлексия полей, сериализация C/C++/Python |
+| [termin-scene](https://github.com/mirmik/termin-monorepo/blob/master/termin-scene/docs/index.md) | ECS-сцена: Entity, Component, SoA-хранилище, хэндлы, lifecycle |
+| [termin-collision](https://github.com/mirmik/termin-monorepo/blob/master/termin-collision/docs/index.md) | Коллизии: GJK, коллайдеры, collision world, C/Python API |
+| [termin-physics](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics/docs/index.md) | C++ rigid-body physics bindings |
+| [termin-physics-fem](https://github.com/mirmik/termin-monorepo/blob/master/termin-physics-fem/docs/index.md) | Experimental Python FEM scene components |
+| [termin-input](https://github.com/mirmik/termin-monorepo/blob/master/termin-input/docs/index.md) | Input abstractions |
+| [termin-gui](https://github.com/mirmik/termin-monorepo/blob/master/termin-gui/docs/index.md) | UI фреймворк (tcgui): виджеты, лейауты, диалоги, Canvas/Viewport |
+| [termin-modules](https://github.com/mirmik/termin-monorepo/blob/master/termin-modules/docs/index.md) | Система модулей: C++/Python плагины, дескрипторы, lifecycle, callbacks |
+| [termin-components](https://github.com/mirmik/termin-monorepo/blob/master/termin-components/docs/index.md) | Component packages |
+| [tcplot](https://github.com/mirmik/termin-monorepo/blob/master/tcplot/docs/index.md) | Plotting library поверх tgfx/tcgui |
 
 ## Архитектура
 

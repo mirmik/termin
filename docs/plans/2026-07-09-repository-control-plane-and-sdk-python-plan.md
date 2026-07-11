@@ -479,6 +479,17 @@ by tests.
 
 ### Phase 6: Docs and broader repository doctor
 
+Documentation inventory status, 2026-07-12: `build-system/docs-publication.json`
+classifies every repository-owned `docs/` root as a public MkDocs site or an
+explicit internal root. `repository_control check` fails on orphaned, missing,
+duplicate, or incorrectly module-linked roots. The Pages workflow uses
+`docs-plan` rather than a hand-maintained project loop, has generic docs/config
+path triggers, and builds each declared public site with MkDocs strict mode.
+MkDocs and its complete dependency closure are exact-pinned separately from the
+SDK runtime in `build-system/python-docs-lock.txt`; `build-docs.sh` creates a
+disposable `build/python-envs/docs` environment and is the shared local/CI entry
+point.
+
 - Generate/validate docs publication from module metadata.
 - Add orphan docs and broken-link gates.
 - Consolidate package, suite, docs, and policy validation under the check profile.

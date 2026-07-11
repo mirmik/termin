@@ -37,6 +37,6 @@ bash run-tests-python.sh
 
 ## Следующие шаги
 
-- [Build System](../../docs/build-system.md) — текущий SDK workflow.
-- [Documentation System](../../docs/documentation-system.md) — где держать разные типы документов.
+- [Build System](https://github.com/mirmik/termin-monorepo/blob/master/docs/build-system.md) — текущий SDK workflow.
+- [Documentation System](https://github.com/mirmik/termin-monorepo/blob/master/docs/documentation-system.md) — где держать разные типы документов.
 - [Editor Architecture](editor-architecture.md) — структура editor-core, tcgui views и controllers.
