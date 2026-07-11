@@ -10,6 +10,13 @@
 namespace termin {
 
 class TERMIN_NAVMESH_COMPONENTS_API DetourPathfindingWorldComponent : public CxxComponent {
+private:
+    mutable std::string _loaded_navmesh_uuid;
+    mutable std::string _loaded_asset_path;
+    mutable bool _load_failed = false;
+    std::vector<std::vector<unsigned char>> _tile_blobs;
+    DetourQuerySession _query_session;
+
 public:
     std::string navmesh_uuid;
     float query_extent_x = 2.0f;
@@ -64,12 +71,6 @@ public:
         const Vec3f& point);
 
 private:
-    mutable std::string _loaded_navmesh_uuid;
-    mutable std::string _loaded_asset_path;
-    mutable bool _load_failed = false;
-    std::vector<std::vector<unsigned char>> _tile_blobs;
-    DetourQuerySession _query_session;
-
     bool ensure_query_loaded();
     void sync_query_settings();
 };

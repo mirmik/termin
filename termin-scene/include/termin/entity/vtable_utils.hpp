@@ -15,22 +15,24 @@ public:
 
 // Probe class that overrides ONLY update() - used to find its vtable slot.
 class ENTITY_API UpdateProbe : public CxxComponent {
+private:
+    volatile float _probe_marker = 0;
+
 public:
     UpdateProbe()
         : CxxComponent("UpdateProbe") {}
     void update(float dt) override;
-private:
-    volatile float _probe_marker = 0;
 };
 
 // Probe class that overrides ONLY fixed_update() - used to find its vtable slot.
 class ENTITY_API FixedUpdateProbe : public CxxComponent {
+private:
+    volatile float _probe_marker = 0;
+
 public:
     FixedUpdateProbe()
         : CxxComponent("FixedUpdateProbe") {}
     void fixed_update(float dt) override;
-private:
-    volatile float _probe_marker = 0;
 };
 
 // Cached vtable slot indices, computed once at startup.

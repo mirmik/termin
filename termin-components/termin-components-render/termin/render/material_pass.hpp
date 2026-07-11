@@ -25,6 +25,12 @@ public:
     std::unordered_map<std::string, std::string> texture_resources;
     std::unordered_map<std::string, std::string> extra_resources;
 
+private:
+    static uint32_t s_quad_vao;
+    static uint32_t s_quad_vbo;
+
+public:
+
     tc_value serialize_texture_resources() const;
     void deserialize_texture_resources(const tc_value* value);
     tc_value serialize_extra_resources() const;
@@ -39,11 +45,6 @@ public:
         {{"output_res_target", "output_res"}}
     ))
 
-private:
-    static uint32_t s_quad_vao;
-    static uint32_t s_quad_vbo;
-
-public:
     MaterialPass();
     static void register_type();
     ~MaterialPass() override;

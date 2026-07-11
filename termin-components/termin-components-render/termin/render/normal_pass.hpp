@@ -17,13 +17,16 @@ private:
     tgfx::IRenderDevice* device2_ = nullptr;
     mutable tc_shader_handle normal_shader_handle_ = tc_shader_handle_invalid();
 
-    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
-    void release_tgfx2_resources();
-
 public:
     // Drawable/material representation requested by NormalPass. Normal output
     // resources and vertex requirements are declared by shader_pass_contract().
     std::string pass_phase_mark = "normal";
+
+private:
+    void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
+    void release_tgfx2_resources();
+
+public:
 
     INSPECT_FIELD_NAMED(NormalPass, pass_phase_mark, "phase_mark", "Phase Mark", "string")
 

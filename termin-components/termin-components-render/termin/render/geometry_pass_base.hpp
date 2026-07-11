@@ -63,6 +63,10 @@ public:
     std::string camera_name;
     std::vector<std::string> entity_names;
 
+protected:
+    mutable std::vector<DrawCall> cached_draw_calls_;
+    mutable RenderItemCollection cached_render_items_;
+
     INSPECT_FIELD(GeometryPassBase, input_res, "Input Resource", "string")
     INSPECT_FIELD(GeometryPassBase, output_res, "Output Resource", "string")
     INSPECT_FIELD(GeometryPassBase, camera_name, "Camera Name", "string")
@@ -71,10 +75,6 @@ public:
         {{"output_res", "fbo"}},
         {{"input_res", "output_res"}}
     ))
-
-protected:
-    mutable std::vector<DrawCall> cached_draw_calls_;
-    mutable RenderItemCollection cached_render_items_;
 
 protected:
     GeometryPassBase(

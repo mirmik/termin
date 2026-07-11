@@ -24,14 +24,15 @@ bool compute_camera_frustum_corners(
 );
 
 class CameraFrustumDebugGizmo final : public Gizmo {
+private:
+    EditorInteractionSystem* _system = nullptr;
+
 public:
     explicit CameraFrustumDebugGizmo(EditorInteractionSystem* system);
 
     void draw(ImmediateRenderer* renderer) override;
     std::vector<GizmoCollider> get_colliders() override;
 
-private:
-    EditorInteractionSystem* _system = nullptr;
 };
 
 } // namespace termin

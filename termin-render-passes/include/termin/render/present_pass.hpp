@@ -11,9 +11,9 @@ namespace termin {
 // Use this to copy rendered content to OUTPUT/DISPLAY.
 class TERMIN_RENDER_PASSES_API PresentToScreenPass : public CxxFramePass {
 public:
-    static void register_type();
     std::string input_res = "color";
     std::string output_res = "OUTPUT";
+    static void register_type();
 
     INSPECT_FIELD(PresentToScreenPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(PresentToScreenPass, output_res, "Output Resource", "string")
@@ -44,10 +44,10 @@ public:
 // pipelines can run in C++-only runtimes such as OpenXR/Android.
 class TERMIN_RENDER_PASSES_API BlitPass : public CxxFramePass {
 public:
-    static void register_type();
     std::string input_res = "color";
     std::string output_res = "blit";
     std::string output_res_target;
+    static void register_type();
 
     INSPECT_FIELD(BlitPass, input_res, "Input Resource", "string")
     INSPECT_FIELD(BlitPass, output_res, "Output Resource", "string")

@@ -51,6 +51,14 @@ struct TERMIN_NAVMESH_COMPONENTS_API PathfindingWorldPathResult {
 };
 
 class TERMIN_NAVMESH_COMPONENTS_API PathfindingWorld {
+private:
+    struct Entry {
+        tc_entity_handle owner = TC_ENTITY_HANDLE_INVALID;
+        DetourPathfindingWorldComponent* component = nullptr;
+    };
+    tc_scene_handle scene_ = TC_SCENE_HANDLE_INVALID;
+    std::vector<Entry> entries_;
+
 public:
     static PathfindingWorld* from_scene(tc_scene_handle scene);
     static PathfindingWorld* ensure_scene(tc_scene_handle scene);
@@ -89,14 +97,6 @@ public:
         const PathfindingWorldQueryOptions& options = {});
 
 private:
-    struct Entry {
-        tc_entity_handle owner = TC_ENTITY_HANDLE_INVALID;
-        DetourPathfindingWorldComponent* component = nullptr;
-    };
-
-    tc_scene_handle scene_ = TC_SCENE_HANDLE_INVALID;
-    std::vector<Entry> entries_;
-
     void prune_invalid_entries();
     static double distance_sq(const Vec3f& a, const Vec3f& b);
     static bool same_owner_scene(const Entity& entity, tc_scene_handle scene);

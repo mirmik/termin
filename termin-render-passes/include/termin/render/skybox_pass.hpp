@@ -25,7 +25,6 @@ namespace termin {
 
 class TERMIN_RENDER_PASSES_API SkyBoxPass : public CxxFramePass {
 public:
-    static void register_type();
     std::string input_res = "empty";
     std::string output_res = "color";
 
@@ -44,6 +43,7 @@ private:
     MaterialUboLayout skybox_layout_;
 
 public:
+    static void register_type();
     INSPECT_FIELD(SkyBoxPass, input_res, "Input", "string")
     INSPECT_FIELD(SkyBoxPass, output_res, "Output", "string")
     INSPECT_TYPE_METADATA(SkyBoxPass, graph, make_pass_graph_metadata(

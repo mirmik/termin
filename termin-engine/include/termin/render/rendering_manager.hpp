@@ -74,6 +74,49 @@ struct SceneMountRequest {
 // Owned by EngineCore. Global instance() returns the one set by EngineCore.
 // Thread safety: NOT thread-safe. All calls must be from main/render thread.
 class TERMIN_ENGINE_API RenderingManager {
+private:
+    // Scene/editor display lists and per-display input routers.
+    std::unique_ptr<rendering_manager_detail::RenderDisplayRegistry> display_registry_;
+
+    // Render engine (owned if created internally)
+    RenderEngine* render_engine_ = nullptr;
+    std::unique_ptr<RenderEngine> owned_render_engine_;
+
+    // Runtime GPU output state helpers.
+    std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
+
+    // Compiled scene pipeline handles and target viewport mappings.
+    std::unique_ptr<rendering_manager_detail::ScenePipelineManager> scene_pipelines_;
+
+    // Callback to activate GL context before rendering
+    MakeCurrentCallback make_current_callback_;
+
+    // Factory for creating displays on demand
+    DisplayFactory display_factory_;
+
+    // Factory for creating pipelines by special name
+    PipelineFactory pipeline_factory_;
+
+    // Callback when a display is removed
+    DisplayRemovedCallback display_removed_callback_;
+
+    // Callback to request another frame in pull-rendering hosts.
+    RenderRequestCallback render_request_callback_;
+
+    // Attached scenes (for scene pipeline execution)
+    std::vector<tc_scene_handle> attached_scenes_;
+
+    // Render targets managed by this RenderingManager.
+    // Used for offscreen rendering, viewport target lookup, and scene-detach cleanup.
+    // RenderingManager code must use this list as the ownership boundary and
+    // must not scan the global render-target pool for lookup or rebinding:
+    // the pool may contain stale, foreign, or duplicate editor/game targets.
+    std::vector<tc_render_target_handle> managed_render_targets_;
+
+    // Special target providers, keyed by tc_render_target_kind.
+    std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
+    std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
+
 public:
     // Global instance access (set by EngineCore)
     static RenderingManager& instance();
@@ -353,48 +396,6 @@ private:
     // Collect all viewports from all displays by name
     std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
 
-private:
-    // Scene/editor display lists and per-display input routers.
-    std::unique_ptr<rendering_manager_detail::RenderDisplayRegistry> display_registry_;
-
-    // Render engine (owned if created internally)
-    RenderEngine* render_engine_ = nullptr;
-    std::unique_ptr<RenderEngine> owned_render_engine_;
-
-    // Runtime GPU output state helpers.
-    std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
-
-    // Compiled scene pipeline handles and target viewport mappings.
-    std::unique_ptr<rendering_manager_detail::ScenePipelineManager> scene_pipelines_;
-
-    // Callback to activate GL context before rendering
-    MakeCurrentCallback make_current_callback_;
-
-    // Factory for creating displays on demand
-    DisplayFactory display_factory_;
-
-    // Factory for creating pipelines by special name
-    PipelineFactory pipeline_factory_;
-
-    // Callback when a display is removed
-    DisplayRemovedCallback display_removed_callback_;
-
-    // Callback to request another frame in pull-rendering hosts.
-    RenderRequestCallback render_request_callback_;
-
-    // Attached scenes (for scene pipeline execution)
-    std::vector<tc_scene_handle> attached_scenes_;
-
-    // Render targets managed by this RenderingManager.
-    // Used for offscreen rendering, viewport target lookup, and scene-detach cleanup.
-    // RenderingManager code must use this list as the ownership boundary and
-    // must not scan the global render-target pool for lookup or rebinding:
-    // the pool may contain stale, foreign, or duplicate editor/game targets.
-    std::vector<tc_render_target_handle> managed_render_targets_;
-
-    // Special target providers, keyed by tc_render_target_kind.
-    std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
-    std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
 };
 
 } // namespace termin

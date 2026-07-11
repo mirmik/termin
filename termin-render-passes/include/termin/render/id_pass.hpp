@@ -11,6 +11,11 @@ extern "C" {
 namespace termin {
 
 class TERMIN_RENDER_PASSES_API IdPass : public GeometryPassBase {
+private:
+    // Lazy tgfx2 resources used by execute_with_data_tgfx2.
+    tgfx::IRenderDevice* device2_ = nullptr;
+    mutable tc_shader_handle id_shader_handle_ = tc_shader_handle_invalid();
+
 public:
     static void register_type();
     IdPass(
@@ -64,13 +69,6 @@ protected:
 
 private:
     static void id_to_rgb(int id, float& r, float& g, float& b);
-
-    // Lazy tgfx2 resources used by execute_with_data_tgfx2. Shader lives
-    // on the tc_shader registry (hash-based dedup across pass re-creations)
-    // so Play/Stop doesn't re-run shaderc — see ShadowPass for the same
-    // pattern + extended rationale.
-    tgfx::IRenderDevice* device2_ = nullptr;
-    mutable tc_shader_handle id_shader_handle_ = tc_shader_handle_invalid();
 
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();

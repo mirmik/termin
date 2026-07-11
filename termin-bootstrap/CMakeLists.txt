@@ -163,6 +163,7 @@ if(TERMIN_BUILD_TESTS)
         NAME termin_bootstrap_explicit_pass_test
         COMMAND termin_bootstrap_explicit_pass_test
     )
+    termin_label_tests_in_directory("termin-bootstrap")
 endif()
 
 target_include_directories(termin_bootstrap

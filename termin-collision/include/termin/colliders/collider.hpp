@@ -75,13 +75,13 @@ using ColliderPtr = std::shared_ptr<Collider>;
  */
 class Collider {
 public:
-    virtual ~Collider() = default;
-
     // --- Velocity hints for physics systems ---
     // These are set by physics solvers and can be read by other systems.
     // For colliders without RigidBody, these can be set manually or computed from position deltas.
     Vec3 linear_velocity{0, 0, 0};
     Vec3 angular_velocity{0, 0, 0};
+
+    virtual ~Collider() = default;
 
     /**
      * Compute velocity at a specific world point (includes angular contribution).

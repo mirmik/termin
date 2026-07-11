@@ -9,16 +9,17 @@ namespace {
 
 class HotReloadNativeProbeComponent : public termin::CxxComponent {
 public:
+    int value = 0;
+
     HotReloadNativeProbeComponent()
         : termin::CxxComponent("HotReloadNativeProbeComponent") {}
-
-    int value = 0;
 };
 
 class HotReloadNativeProbePass : public termin::CxxFramePass {
 public:
-    static void register_type();
     int exposure = 0;
+
+    static void register_type();
 
     HotReloadNativeProbePass() {
         link_to_type_registry("HotReloadNativeProbePass");
