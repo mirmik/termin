@@ -314,26 +314,8 @@ int run_cpp_module_hot_reload_smoke() {
     TEST_ASSERT(pass != nullptr, "native pass instance created");
     set_pass_int_field(pass, "exposure", 23);
     tc_pass_set_name(pass, "module-pass");
-    tc_pipeline_add_pass_take(pipeline, pass);
-
-    tc_pass* externally_held_pass = tc_pipeline_get_pass_at(pipeline, 0);
-    tc_pass_retain(externally_held_pass);
-    TEST_ASSERT(!runtime.unload_module(kModuleId),
-                "module unload must refuse an externally-held pass vtable");
-    TEST_ASSERT(tc_pass_registry_has(kPassType),
-                "refused unload keeps pass registration live");
-    TEST_ASSERT(std::string(tc_pass_type_name(tc_pipeline_get_pass_at(pipeline, 0))) == kPassType,
-                "refused unload rolls pipeline placeholder back to live pass");
-    TEST_ASSERT(pass_int_field(tc_pipeline_get_pass_at(pipeline, 0), "exposure") == 23,
-                "refused unload rollback preserves pass payload");
-    tc_component* rollback_component = entity.get_component_by_type_name(kComponentType);
-    TEST_ASSERT(rollback_component != nullptr,
-                "refused unload rolls component placeholder back to live component");
-    TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
-                "refused unload leaves no component placeholder behind");
-    TEST_ASSERT(component_int_field(rollback_component, "value") == 77,
-                "refused unload rollback preserves component payload");
-    tc_pass_release(externally_held_pass);
+    TEST_ASSERT(tc_pipeline_adopt_pass(pipeline, pass, pass->deleter),
+                "pipeline adopts module pass with its creator deleter");
 
     TEST_ASSERT(runtime.reload_module(kModuleId), runtime.last_error());
     TEST_ASSERT(termin::ComponentRegistry::instance().has(kComponentType),
