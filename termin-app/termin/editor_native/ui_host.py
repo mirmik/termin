@@ -190,6 +190,7 @@ class NativeUiHost:
         self._closed = False
         self._render_requested = True
         self._pre_render_callbacks: list[PreRenderCallback] = []
+        self._color_pickers: list[object] = []
         start_text_input()
 
     @property
@@ -224,6 +225,7 @@ class NativeUiHost:
 
         self.document.layout_roots(Rect(0.0, 0.0, float(width), float(height)))
         self.context.begin_frame()
+        self._sync_color_picker_surfaces()
         for callback in tuple(self._pre_render_callbacks):
             try:
                 callback(self.context)
@@ -253,6 +255,31 @@ class NativeUiHost:
     def remove_pre_render_callback(self, callback: PreRenderCallback) -> None:
         if callback in self._pre_render_callbacks:
             self._pre_render_callbacks.remove(callback)
+
+    def register_color_picker(self, picker: object) -> None:
+        """Arrange for a native ColorPicker's generated surfaces to use GPU textures."""
+
+        handle = picker.handle
+        if not self.document.is_alive(handle):
+            raise RuntimeError("cannot register a stale native ColorPicker")
+        if not any(existing.handle == handle for existing in self._color_pickers):
+            self._color_pickers.append(picker)
+
+    def unregister_color_picker(self, picker: object) -> None:
+        handle = picker.handle
+        for index, existing in enumerate(self._color_pickers):
+            if existing.handle == handle:
+                self.renderer.release_color_picker_surfaces(existing)
+                del self._color_pickers[index]
+                return
+
+    def _sync_color_picker_surfaces(self) -> None:
+        for picker in tuple(self._color_pickers):
+            if not self.document.is_alive(picker.handle):
+                _logger.error("native ColorPicker was destroyed without host unregistration")
+                self._color_pickers.remove(picker)
+                continue
+            self.renderer.sync_color_picker_surfaces(self.context, picker)
 
     def apply_font_size(self, font_size: float) -> None:
         size = float(font_size)
@@ -320,6 +347,7 @@ class NativeUiHost:
             return
         self._closed = True
         self._pre_render_callbacks.clear()
+        self._color_pickers.clear()
         stop_text_input()
         self.renderer.release_gpu()
         if self._color_target is not None:

@@ -15,6 +15,9 @@ from termin.gui_native import (
     KeyEvent,
     KeyEventType,
     PaintContext,
+    PointerEvent,
+    PointerEventType,
+    PointerButton,
     Rect,
 )
 from termin.inspect import InspectField
@@ -61,6 +64,7 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
                     "Editor/Internal",
                 ),
             ),
+            soa_component_type_collector=lambda: ("NativeInspectorSoAProbe",),
         )
         controller.set_scene(scene)
         document = Document()
@@ -73,6 +77,7 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
             controller,
             request_render=lambda: renders.append(True),
             viewport=lambda: Rect(0.0, 0.0, 420.0, 640.0),
+            show_input=lambda _title, _message, _default, callback: callback("Renamed Probe"),
         )
         assert document.add_root(inspector.root.handle)
         inspector.set_target(entity)
@@ -84,6 +89,24 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
         assert inspector.component_model.items[0].subtitle == ""
         assert inspector.component_list.select(0)
         assert "enabled" in inspector.fields.field_widgets
+        pointer = PointerEvent()
+        pointer.type = PointerEventType.Down
+        pointer.button = PointerButton.Right.value
+        pointer.x = inspector.component_list.widget.bounds.x + 8.0
+        pointer.y = inspector.component_list.widget.bounds.y + 8.0
+        assert document.dispatch_pointer_event(pointer)
+        assert document.overlay_count == 1
+        assert inspector.component_context_model.command_count == 5
+        assert inspector.component_context_model.command_at(0).data.stable_id == "rename-component"
+        inspector.component_context_menu.dismiss()
+        inspector.rename_selected_component()
+        assert entity.tc_components[0].get_field("display_name") == "Renamed Probe"
+        assert inspector.component_model.items[0].text.startswith("Renamed Probe (")
+        inspector.show_add_soa_component_menu()
+        assert document.overlay_count == 1
+        assert inspector.add_soa_component_model.command_count == 1
+        assert inspector.add_soa_component_model.command_at(0).data.stable_id == "soa:0"
+        inspector.add_soa_component_menu.dismiss()
         assert len(inspector.transform_boxes) == 3
         inspector.transform_boxes[0][0].value = 2.5
         assert tuple(entity.transform.local_pose().lin) == pytest.approx((2.5, 0.0, 0.0))

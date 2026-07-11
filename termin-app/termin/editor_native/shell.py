@@ -193,8 +193,13 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     _append(document, root, menu_bar, Size(1280.0, 30.0), fixed_extent=30.0)
 
     toolbar_model = CommandModel()
-    toolbar_play_command = toolbar_model.append(CommandData("play", "Play", icon="▶"))
+    # Keep the caption self-contained. The native icon glyph is not guaranteed
+    # by the editor font; reserving its absent glyph shifted "Play" right.
+    toolbar_play_command = toolbar_model.append(CommandData("play", "Play"))
     tool_bar = document.create_tool_bar(toolbar_model)
+    # The editor owns a single Play action in this strip. Center its visible
+    # content while retaining the full-width toolbar background and hit area.
+    tool_bar.centered = True
 
     central = document.create_vstack("native-editor-central")
     central.stable_id = "editor.central"
