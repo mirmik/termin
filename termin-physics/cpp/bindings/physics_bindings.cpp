@@ -1,5 +1,6 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
@@ -41,12 +42,18 @@ NB_MODULE(_physics_native, m) {
         .def("apply_impulse_at_point", &RigidBody::apply_impulse_at_point)
         .def("integrate_forces", &RigidBody::integrate_forces)
         .def("integrate_positions", &RigidBody::integrate_positions)
-        .def_static("create_box", &RigidBody::create_box,
-            nb::arg("sx"), nb::arg("sy"), nb::arg("sz"),
-            nb::arg("mass"), nb::arg("pose") = Pose3(), nb::arg("is_static") = false)
-        .def_static("create_sphere", &RigidBody::create_sphere,
-            nb::arg("radius"), nb::arg("mass"),
-            nb::arg("pose") = Pose3(), nb::arg("is_static") = false);
+        .def_static("create_box", [](double sx, double sy, double sz, double mass,
+                                      std::optional<Pose3> pose, bool is_static) {
+            return RigidBody::create_box(
+                sx, sy, sz, mass, pose.value_or(Pose3{}), is_static);
+        }, nb::arg("sx"), nb::arg("sy"), nb::arg("sz"), nb::arg("mass"),
+           nb::arg("pose").none() = nb::none(), nb::arg("is_static") = false)
+        .def_static("create_sphere", [](double radius, double mass,
+                                         std::optional<Pose3> pose, bool is_static) {
+            return RigidBody::create_sphere(
+                radius, mass, pose.value_or(Pose3{}), is_static);
+        }, nb::arg("radius"), nb::arg("mass"),
+           nb::arg("pose").none() = nb::none(), nb::arg("is_static") = false);
 
     nb::class_<Contact>(m, "Contact")
         .def(nb::init<>())

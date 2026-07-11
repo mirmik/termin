@@ -131,16 +131,16 @@ NB_MODULE(_lighting_native, m) {
     // Light
     nb::class_<Light>(m, "Light")
         .def(nb::init<>())
-        .def("__init__", [](Light* self, LightType type, const Vec3& color, double intensity,
-                         const Vec3& direction, const Vec3& position,
+        .def("__init__", [](Light* self, LightType type, std::optional<Vec3> color, double intensity,
+                         std::optional<Vec3> direction, std::optional<Vec3> position,
                          nb::object range, double inner_angle, double outer_angle,
                          nb::object attenuation, nb::object shadows, const std::string& name) {
             new (self) Light();
             self->type = type;
-            self->color = color;
+            self->color = color.value_or(Vec3(1.0, 1.0, 1.0));
             self->intensity = intensity;
-            self->direction = direction.normalized();
-            self->position = position;
+            self->direction = direction.value_or(Vec3(0.0, 1.0, 0.0)).normalized();
+            self->position = position.value_or(Vec3(0.0, 0.0, 0.0));
             if (!range.is_none()) self->range = nb::cast<double>(range);
             self->inner_angle = inner_angle;
             self->outer_angle = outer_angle;
@@ -153,10 +153,10 @@ NB_MODULE(_lighting_native, m) {
             self->name = name;
         },
              nb::arg("type") = LightType::Directional,
-             nb::arg("color") = Vec3(1.0, 1.0, 1.0),
+             nb::arg("color").none() = nb::none(),
              nb::arg("intensity") = 1.0,
-             nb::arg("direction") = Vec3(0.0, 1.0, 0.0),
-             nb::arg("position") = Vec3(0.0, 0.0, 0.0),
+             nb::arg("direction").none() = nb::none(),
+             nb::arg("position").none() = nb::none(),
              nb::arg("range") = nb::none(),
              nb::arg("inner_angle") = 15.0 * M_PI / 180.0,
              nb::arg("outer_angle") = 30.0 * M_PI / 180.0,

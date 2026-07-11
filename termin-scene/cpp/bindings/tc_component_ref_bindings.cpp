@@ -3,6 +3,7 @@
 #include <termin/bindings/entity_helpers.hpp>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 
 #include <cstring>
@@ -306,14 +307,18 @@ void bind_tc_component_ref(nb::module_& m) {
             "Serialize component to dict with 'type' and 'data' keys.")
         .def("serialize_data", &TcComponentRef::serialize_data,
             "Serialize component data (fields only) to dict.")
-        .def("deserialize_data", &TcComponentRef::deserialize_data,
-            nb::arg("data"), nb::arg("scene") = TcSceneRef(),
+        .def("deserialize_data", [](TcComponentRef& self, nb::object data,
+                                    std::optional<TcSceneRef> scene) {
+            self.deserialize_data(data, scene.value_or(TcSceneRef{}));
+        }, nb::arg("data"), nb::arg("scene").none() = nb::none(),
             "Deserialize data dict into component fields. Pass scene for resolution.")
         .def("get_field", &TcComponentRef::get_field,
             nb::arg("field_name"),
             "Get field value by name. Returns None if field not found.")
-        .def("set_field", &TcComponentRef::set_field,
-            nb::arg("field_name"), nb::arg("value"), nb::arg("scene") = TcSceneRef(),
+        .def("set_field", [](TcComponentRef& self, const std::string& field_name,
+                              nb::object value, std::optional<TcSceneRef> scene) {
+            self.set_field(field_name, value, scene.value_or(TcSceneRef{}));
+        }, nb::arg("field_name"), nb::arg("value"), nb::arg("scene").none() = nb::none(),
             "Set field value by name.")
         .def("action_field", &TcComponentRef::action_field,
             nb::arg("field_name"),

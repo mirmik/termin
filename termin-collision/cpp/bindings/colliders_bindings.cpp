@@ -1,6 +1,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/operators.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 #include <nanobind/stl/shared_ptr.h>
@@ -68,10 +69,14 @@ NB_MODULE(_colliders_native, m) {
 
     nb::class_<BoxCollider, ColliderPrimitive>(m, "BoxCollider")
         .def(nb::init<>())
-        .def(nb::init<const Vec3&, const GeneralPose3&>(),
-             nb::arg("half_size"), nb::arg("transform") = GeneralPose3())
-        .def_static("from_size", &BoxCollider::from_size,
-             nb::arg("size"), nb::arg("transform") = GeneralPose3())
+        .def("__init__", [](BoxCollider* self, const Vec3& half_size,
+                            std::optional<GeneralPose3> transform) {
+            new (self) BoxCollider{half_size, transform.value_or(GeneralPose3{})};
+        }, nb::arg("half_size"), nb::arg("transform").none() = nb::none())
+        .def_static("from_size", [](const Vec3& size,
+                                     std::optional<GeneralPose3> transform) {
+            return BoxCollider::from_size(size, transform.value_or(GeneralPose3{}));
+        }, nb::arg("size"), nb::arg("transform").none() = nb::none())
         .def_rw("half_size", &BoxCollider::half_size)
         .def("effective_half_size", &BoxCollider::effective_half_size)
         .def("get_corners_world", [](const BoxCollider& b) {
@@ -110,8 +115,10 @@ NB_MODULE(_colliders_native, m) {
 
     nb::class_<SphereCollider, ColliderPrimitive>(m, "SphereCollider")
         .def(nb::init<>())
-        .def(nb::init<double, const GeneralPose3&>(),
-             nb::arg("radius"), nb::arg("transform") = GeneralPose3())
+        .def("__init__", [](SphereCollider* self, double radius,
+                            std::optional<GeneralPose3> transform) {
+            new (self) SphereCollider{radius, transform.value_or(GeneralPose3{})};
+        }, nb::arg("radius"), nb::arg("transform").none() = nb::none())
         .def_rw("radius", &SphereCollider::radius)
         .def("effective_radius", &SphereCollider::effective_radius)
         .def("collide_ground", &SphereCollider::collide_ground, nb::arg("ground_height"));
@@ -127,10 +134,18 @@ NB_MODULE(_colliders_native, m) {
 
     nb::class_<CapsuleCollider, ColliderPrimitive>(m, "CapsuleCollider")
         .def(nb::init<>())
-        .def(nb::init<double, double, const GeneralPose3&>(),
-             nb::arg("half_height"), nb::arg("radius"), nb::arg("transform") = GeneralPose3())
-        .def_static("from_total_height", &CapsuleCollider::from_total_height,
-             nb::arg("total_height"), nb::arg("radius"), nb::arg("transform") = GeneralPose3())
+        .def("__init__", [](CapsuleCollider* self, double half_height, double radius,
+                            std::optional<GeneralPose3> transform) {
+            new (self) CapsuleCollider{
+                half_height, radius, transform.value_or(GeneralPose3{})};
+        }, nb::arg("half_height"), nb::arg("radius"),
+           nb::arg("transform").none() = nb::none())
+        .def_static("from_total_height", [](double total_height, double radius,
+                                             std::optional<GeneralPose3> transform) {
+            return CapsuleCollider::from_total_height(
+                total_height, radius, transform.value_or(GeneralPose3{}));
+        }, nb::arg("total_height"), nb::arg("radius"),
+           nb::arg("transform").none() = nb::none())
         .def_rw("half_height", &CapsuleCollider::half_height)
         .def_rw("radius", &CapsuleCollider::radius)
         .def("effective_half_height", &CapsuleCollider::effective_half_height)

@@ -215,9 +215,11 @@ NB_MODULE(_components_render_native, m) {
         .def("projection_matrix", &Camera::projection_matrix)
         .def_static("view_matrix", &Camera::view_matrix,
             nb::arg("position"), nb::arg("rotation"))
-        .def_static("view_matrix_look_at", &Camera::view_matrix_look_at,
-            nb::arg("eye"), nb::arg("target"),
-            nb::arg("up") = Vec3::unit_z())
+        .def_static("view_matrix_look_at", [](const Vec3& eye, const Vec3& target,
+                                               std::optional<Vec3> up) {
+            return Camera::view_matrix_look_at(
+                eye, target, up.value_or(Vec3::unit_z()));
+        }, nb::arg("eye"), nb::arg("target"), nb::arg("up").none() = nb::none())
         .def("set_aspect", &Camera::set_aspect, nb::arg("aspect"))
         .def("set_fov", &Camera::set_fov, nb::arg("fov_rad"))
         .def("set_fov_deg", &Camera::set_fov_deg, nb::arg("fov_deg"))
