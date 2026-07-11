@@ -355,7 +355,11 @@ void Entity::deserialize_from(const tc_value* data, void* context) {
 }
 
 tc_entity_pool_handle Entity::standalone_pool_handle() {
-    if (!tc_entity_pool_handle_valid(g_standalone_pool_handle)) {
+    // The C pool registry resets its standalone handle during tc_shutdown(),
+    // while this C++ cache survives for the process lifetime.  A non-sentinel
+    // handle alone is therefore insufficient after a runtime rebootstrap.
+    if (!tc_entity_pool_handle_valid(g_standalone_pool_handle) ||
+        !tc_entity_pool_registry_get(g_standalone_pool_handle)) {
         g_standalone_pool_handle = tc_entity_pool_standalone_handle();
     }
     return g_standalone_pool_handle;
