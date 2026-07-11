@@ -21,6 +21,13 @@ tc_pass* create_scene_pass(
     return pass;
 }
 
+void adopt_scene_pass(tc_pipeline_handle pipeline, tc_pass* pass) {
+    if (!tc_pipeline_adopt_pass(pipeline, pass, pass ? pass->deleter : nullptr)) {
+        tc_log_error("[OpenXR scene] failed to adopt configured pass");
+        tc_pass_delete_unowned(pass);
+    }
+}
+
 void set_pass_float(tc_pass* pass, const char* field, float value) {
     if (!pass || !field) {
         return;
@@ -111,7 +118,7 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
             {"shadow_res", ""},
             {"phase_mark", "opaque"}
         })) {
-        tc_pipeline_add_pass_take(ph, p);
+        adopt_scene_pass(ph, p);
     }
     if (tc_pass* p = create_scene_pass("ColorPass", "Transparent", {
             {"input_res", "color_opaque"},
@@ -120,7 +127,7 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
             {"phase_mark", "transparent"},
             {"sort_mode", "far_to_near"}
     })) {
-        tc_pipeline_add_pass_take(ph, p);
+        adopt_scene_pass(ph, p);
     }
     if (tc_pass* p = create_scene_pass("TonemapPass", "Tonemap", {
             {"input_res", "color"},
@@ -128,13 +135,13 @@ termin::RenderPipeline make_openxr_scene_pipeline() {
         })) {
         set_pass_float(p, "exposure", 1.0f);
         set_pass_int(p, "method", 0);
-        tc_pipeline_add_pass_take(ph, p);
+        adopt_scene_pass(ph, p);
     }
     if (tc_pass* p = create_scene_pass("PresentToScreenPass", "Present", {
             {"input_res", "color_ldr"},
             {"output_res", "OUTPUT"}
         })) {
-        tc_pipeline_add_pass_take(ph, p);
+        adopt_scene_pass(ph, p);
     }
 
     const char* color_resources[] = {

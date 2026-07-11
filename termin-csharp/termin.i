@@ -87,19 +87,14 @@ static tc_component_ref_vtable _cs_comp_ref_vtable = {
     _cs_comp_retain, _cs_comp_release, NULL
 };
 
-// --- Pass ref vtable ---
-static void _cs_pass_retain(tc_pass* p) {
-    (void)p; // no-op
-}
-static void _cs_pass_release(tc_pass* p) {
+// --- Pass single-owner deleter ---
+static void _cs_pass_delete(tc_pass* p) {
     if (p && p->body && _csharp_release_body) {
-        _csharp_release_body(p->body);
+        void* body = p->body;
         p->body = NULL;
+        _csharp_release_body(body);
     }
 }
-static tc_pass_ref_vtable _cs_pass_ref_vtable = {
-    _cs_pass_retain, _cs_pass_release, NULL
-};
 
 // --- Exported functions (called via P/Invoke from C#) ---
 
@@ -120,12 +115,13 @@ SWIGEXPORT void SWIGSTDCALL CSharp_csharp_component_setup_owner_ref(void* tc_com
     c->ref_vtable = &_cs_comp_ref_vtable;
 }
 
-// Per-pass: set GCHandle as owner + install C# ref vtable
+// Per-pass: set GCHandle as body and the pipeline ownership deleter.
 SWIGEXPORT void SWIGSTDCALL CSharp_csharp_pass_setup_owner_ref(void* tc_pass_ptr, void* gc_handle) {
     tc_pass* p = (tc_pass*)tc_pass_ptr;
     if (!p) return;
     p->body = gc_handle;
-    p->ref_vtable = &_cs_pass_ref_vtable;
+    p->native_language = TC_LANGUAGE_CSHARP;
+    p->deleter = &_cs_pass_delete;
 }
 
 #ifdef __cplusplus
