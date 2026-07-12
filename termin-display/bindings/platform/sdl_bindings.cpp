@@ -60,6 +60,19 @@ uint32_t sdl_event_window_id(const SDL_Event& event) {
 }
 
 int translate_sdl_key(SDL_Scancode scancode) {
+    // Commands and shortcuts must not depend on the active keyboard layout.
+    // Text entry is delivered separately through SDL_TEXTINPUT, so map the
+    // physical alphanumeric keys to their stable editor key codes here.
+    if (scancode >= SDL_SCANCODE_A && scancode <= SDL_SCANCODE_Z) {
+        return 'A' + (scancode - SDL_SCANCODE_A);
+    }
+    if (scancode >= SDL_SCANCODE_1 && scancode <= SDL_SCANCODE_9) {
+        return '1' + (scancode - SDL_SCANCODE_1);
+    }
+    if (scancode == SDL_SCANCODE_0) {
+        return '0';
+    }
+
     switch (scancode) {
         case SDL_SCANCODE_BACKSPACE:
             return TC_KEY_BACKSPACE;
