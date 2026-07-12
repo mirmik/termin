@@ -1,5 +1,5 @@
 """
-EditorCameraUIController - контроллер для UI редакторской камеры.
+EditorCameraUIController — shared controller for the editor camera overlay.
 
 Подписывается на кнопки в editor_camera_ui.uiscript и управляет:
 - Отображением коллайдеров (render category mask)
