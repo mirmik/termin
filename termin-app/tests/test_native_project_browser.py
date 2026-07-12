@@ -4,7 +4,15 @@ import pytest
 
 from termin.editor_core.project_browser_model import ProjectBrowserController
 from termin.editor_native import build_native_project_browser, resolve_native_ui_font
-from termin.gui_native import Document, DrawList, DrawListRenderer, PaintContext, Rect
+from termin.gui_native import (
+    Document,
+    DrawList,
+    DrawListRenderer,
+    PaintContext,
+    PointerEvent,
+    PointerEventType,
+    Rect,
+)
 
 
 def _project(root: Path, file_count: int = 20) -> None:
@@ -35,11 +43,15 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
         copy_text=clipboard.append,
     )
     renders = []
+    drops = []
     browser = build_native_project_browser(
         document,
         controller,
         viewport=lambda: Rect(0.0, 0.0, 900.0, 600.0),
         request_render=lambda: renders.append(True),
+        file_drop_handler=lambda path, x, y, modifiers: drops.append(
+            (path, x, y, modifiers)
+        ) or True,
     )
     assert document.add_root(browser.root.handle)
     browser.set_root(tmp_path)
@@ -76,6 +88,19 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
     browser.activate_file(mesh)
     assert selected == [tmp_path / "Assets" / "mesh.stl"]
     assert activated == [tmp_path / "Assets" / "mesh.stl"]
+    mesh_rect = browser.file_grid.item_rect(mesh)
+    pointer = PointerEvent()
+    pointer.type = PointerEventType.Down
+    pointer.x = mesh_rect.x + 4.0
+    pointer.y = mesh_rect.y + 4.0
+    assert document.dispatch_pointer_event(pointer)
+    pointer.type = PointerEventType.Move
+    pointer.x = 20.0
+    pointer.y = 20.0
+    assert document.dispatch_pointer_event(pointer)
+    pointer.type = PointerEventType.Up
+    assert document.dispatch_pointer_event(pointer)
+    assert drops == [(str(tmp_path / "Assets" / "mesh.stl"), 20.0, 20.0, 0)]
     browser.show_file_context(mesh, 300.0, 180.0)
     assert browser.context_menu.open
     browser.execute_context_action("copy-path")

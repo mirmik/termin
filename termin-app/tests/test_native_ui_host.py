@@ -11,6 +11,7 @@ from termin.editor_native import (
 )
 from termin.editor_native.shell import NativeMenuActivationRoute
 from termin.editor_core.menu_bar_model import build_editor_menu_inventory
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
     CommandKind,
     Document,
@@ -246,6 +247,7 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert shell.inspector_host.stable_id == "editor.inspector-host"
     assert shell.menu_bar.entries[0].stable_id == "file"
     assert shell.tool_bar.model.command_count == 2
+    assert shell.tool_bar.widget.bounds.height == pytest.approx(EDITOR_UI_METRICS.toolbar)
     assert shell.toolbar_model.command(shell.toolbar_play_command).data.icon == ""
     assert shell.status_bar.displayed_text == "Ready | Native editor host"
     assert shell.project_host.bounds.y > shell.workspace_host.bounds.y
@@ -277,16 +279,35 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     assert any(command.type == DrawCommandType.Text for command in draw_list.commands)
 
 
+def test_native_editor_shell_projects_prefab_editing_chrome() -> None:
+    document = Document()
+    shell = build_native_editor_shell(document)
+
+    assert not shell.prefab_tool_bar.widget.visible
+    assert shell.toolbar_model.command(shell.toolbar_play_command).data.enabled
+
+    shell.set_prefab_editing(True, "Guard")
+
+    assert shell.prefab_tool_bar.widget.visible
+    assert (
+        shell.prefab_toolbar_model.command(shell.prefab_label_command).data.label
+        == "Editing Prefab: Guard"
+    )
+    assert not shell.toolbar_model.command(shell.toolbar_play_command).data.enabled
+
+    shell.set_prefab_editing(False)
+
+    assert not shell.prefab_tool_bar.widget.visible
+    assert shell.toolbar_model.command(shell.toolbar_play_command).data.enabled
+
+
 def test_native_shell_projects_the_canonical_menu_inventory():
     document = Document()
     shell = build_native_editor_shell(document)
     specs = build_editor_menu_inventory()
     assert [entry.label for entry in shell.menu_bar.entries] == [spec.name for spec in specs]
     for entry, spec in zip(shell.menu_bar.entries, specs, strict=True):
-        expected = [
-            item.label for item in spec.items
-            if item is not None and item.label != "Modules"
-        ]
+        expected = [item.label for item in spec.items if item is not None]
         actual = [
             entry.menu.command(command_id).data.label
             for command_id in range(1, entry.menu.command_count + 1)
@@ -297,25 +318,25 @@ def test_native_shell_projects_the_canonical_menu_inventory():
     assert shell.game_menu_model.command(shell.run_standalone_command).data.shortcut == "F6"
 
 
-def test_editor_cli_accepts_explicit_native_backend(monkeypatch):
+def test_editor_cli_rejects_retired_backend_selection(monkeypatch):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor", "--ui=native"])
-    assert _parse_editor_args() == (None, None, "native")
+    assert _parse_editor_args() == ("__error__", None)
 
 
 def test_editor_cli_defaults_to_native_backend(monkeypatch):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor"])
-    assert _parse_editor_args() == (None, None, "native")
+    assert _parse_editor_args() == (None, None)
 
 
-def test_editor_cli_keeps_explicit_legacy_tcgui_backend(monkeypatch):
+def test_editor_cli_rejects_legacy_tcgui_backend(monkeypatch):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor", "--ui=tcgui"])
-    assert _parse_editor_args() == (None, None, "tcgui")
+    assert _parse_editor_args() == ("__error__", None)
 
 
 def test_native_screenshot_composes_current_document_before_readback(monkeypatch, tmp_path):

@@ -28,12 +28,12 @@ from termin.gui_native import (
     CommandData,
     CommandModel,
     Document,
-    EdgeInsets,
     Point,
     Rect,
     Size,
     WidgetRef,
 )
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
 @dataclass
@@ -237,19 +237,19 @@ def build_native_entity_inspector(
     root.stable_id = "editor.inspector.entity"
     root.preferred_size = Size(360.0, 626.0)
     content = document.create_vstack("native-entity-inspector-scroll-content")
-    content.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
-    content.set_layout_spacing(4.0)
+    content.set_layout_padding(EDITOR_UI_METRICS.panel_insets)
+    content.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     scroll = document.create_scroll_area("native-entity-inspector-scroll")
     scroll.set_content(content)
     root.add_stretch_child(scroll.widget)
 
     title = document.create_label("Inspector", "native-entity-inspector-title")
-    content.add_fixed_child(title, 28.0)
+    content.add_fixed_child(title, EDITOR_UI_METRICS.compact_row)
 
     name_row = document.create_hstack("native-inspector-entity-name-row")
     name_row.set_layout_spacing(4.0)
     name_label = document.create_label("Name", "native-inspector-entity-name-label")
-    name_row.add_fixed_child(name_label, 72.0)
+    name_row.add_fixed_child(name_label, EDITOR_UI_METRICS.inspector_label)
     name_input = document.create_text_input()
     name_row.add_stretch_child(name_input.widget)
     content.add_fixed_child(name_row, 30.0)
@@ -257,7 +257,7 @@ def build_native_entity_inspector(
     uuid_row = document.create_hstack("native-inspector-entity-uuid-row")
     uuid_row.set_layout_spacing(4.0)
     uuid_label = document.create_label("UUID", "native-inspector-entity-uuid-label")
-    uuid_row.add_fixed_child(uuid_label, 72.0)
+    uuid_row.add_fixed_child(uuid_label, EDITOR_UI_METRICS.inspector_label)
     uuid_value = document.create_status_bar("No entity selected")
     uuid_row.add_stretch_child(uuid_value.widget)
     content.add_fixed_child(uuid_row, 26.0)
@@ -265,7 +265,7 @@ def build_native_entity_inspector(
     layer_row = document.create_hstack("native-inspector-entity-layer-row")
     layer_row.set_layout_spacing(4.0)
     layer_label = document.create_label("Layer", "native-inspector-entity-layer-label")
-    layer_row.add_fixed_child(layer_label, 72.0)
+    layer_row.add_fixed_child(layer_label, EDITOR_UI_METRICS.inspector_label)
     layer_combo = document.create_combo_box()
     layer_row.add_stretch_child(layer_combo.widget)
     apply_layer_button = document.create_button("↓", "native-inspector-apply-layer")
@@ -281,7 +281,7 @@ def build_native_entity_inspector(
         row = document.create_hstack(f"native-inspector-transform-{key}")
         row.set_layout_spacing(3.0)
         label = document.create_label(label_text, f"native-inspector-transform-{key}-label")
-        row.add_fixed_child(label, 104.0)
+        row.add_fixed_child(label, EDITOR_UI_METRICS.inspector_label)
         boxes = []
         for axis in "xyz":
             box = document.create_spin_box(1.0 if key == "scale" else 0.0)

@@ -17,7 +17,6 @@ from termin.gui_native import (
     CommandData,
     CommandModel,
     Document,
-    EdgeInsets,
     Point,
     Rect,
     Size,
@@ -25,6 +24,7 @@ from termin.gui_native import (
     TreeModel,
     WidgetRef,
 )
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
 InputDialogHandler = Callable[[str, str, str, Callable[[str | None], None]], None]
@@ -171,8 +171,8 @@ def build_native_viewport_list(
     root = document.create_vstack("native-viewport-list")
     root.stable_id = "editor.viewport-list"
     root.preferred_size = Size(420.0, 300.0)
-    root.set_layout_padding(EdgeInsets(4.0, 4.0, 4.0, 4.0))
-    root.set_layout_spacing(4.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.collection_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     toolbar_model = CommandModel()
     toolbar_model.set_commands(
         [
@@ -183,14 +183,14 @@ def build_native_viewport_list(
         ]
     )
     toolbar = document.create_tool_bar(toolbar_model)
-    root.add_fixed_child(document.ref(toolbar.handle), 36.0)
+    root.add_fixed_child(document.ref(toolbar.handle), EDITOR_UI_METRICS.toolbar)
     tree_model = TreeModel()
     expansion_model = TreeExpansionModel()
     tree = document.create_tree_widget(tree_model, expansion_model)
     tree.set_row_height(26.0)
     root.add_stretch_child(document.ref(tree.handle))
     status = document.create_status_bar()
-    root.add_fixed_child(document.ref(status.handle), 24.0)
+    root.add_fixed_child(document.ref(status.handle), EDITOR_UI_METRICS.status_row)
     context_model = CommandModel()
     context_menu = document.create_menu(context_model)
     result = NativeViewportList(

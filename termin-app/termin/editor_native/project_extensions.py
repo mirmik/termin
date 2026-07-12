@@ -31,6 +31,9 @@ class NativeProjectEditorContext:
     get_scene: Callable[[], object | None]
     get_selected_entity: Callable[[], object | None]
     select_scene_object: Callable[[object | None], None]
+    register_tool_inspector: Callable[[str, object], None]
+    unregister_tool_inspector: Callable[[str], object | None]
+    show_tool_inspector: Callable[[str, str], None]
     frontend: str = field(default="native", init=False)
     _menu_models: list[CommandModel] = field(default_factory=list, init=False)
     _menu_connections: list[object] = field(default_factory=list, init=False)
@@ -115,6 +118,16 @@ class NativeProjectEditorContext:
 
     def select_entity(self, entity: object | None) -> None:
         self.select_scene_object(entity)
+
+    def register_tool_inspector_panel(self, key: str, panel: object) -> None:
+        self.register_tool_inspector(key, panel)
+
+    def unregister_tool_inspector_panel(self, key: str):
+        return self.unregister_tool_inspector(key)
+
+    def show_tool_inspector_panel(self, key: str, label: str = "") -> None:
+        self.show_tool_inspector(key, label)
+        self.request_render()
 
 
 __all__ = ["NativeProjectEditorContext"]

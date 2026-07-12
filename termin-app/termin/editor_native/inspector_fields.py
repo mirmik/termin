@@ -27,6 +27,7 @@ from termin.gui_native import (
     Size,
     WidgetRef,
 )
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.inspect import parse_uint32
 
 
@@ -206,7 +207,7 @@ class NativeInspectorFields:
                 f"{row.label}{suffix}",
                 f"native-inspector-label-{row.key}",
             )
-            container.add_fixed_child(label, 130.0)
+            container.add_fixed_child(label, EDITOR_UI_METRICS.inspector_label)
         control = self._create_control(row)
         if control is None:
             self.document.destroy_widget_recursive(container.handle)

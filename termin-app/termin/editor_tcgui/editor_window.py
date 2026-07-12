@@ -74,7 +74,7 @@ from termin.editor_core.python_executor import EditorPythonExecutor
 from termin.editor_tcgui.component_extension_panel_controller import (
     ComponentExtensionPanelController,
 )
-from termin.editor_tcgui.project_file_action_controller import ProjectFileActionController
+from termin.editor_core.project_file_action_controller import ProjectFileActionController
 from termin.editor_tcgui.scene_tree_controller import SceneTreeControllerTcgui
 from termin.editor_tcgui.inspector_controller import InspectorControllerTcgui
 from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
@@ -181,7 +181,7 @@ class EditorWindowTcgui:
         self._project_file_actions = ProjectFileActionController(
             load_scene_from_file=self._load_scene_from_file,
             open_prefab=self._open_prefab,
-            get_inspector_controller=lambda: self._inspector_controller,
+            get_inspector_model=lambda: self._inspector_controller.model,
         )
         self._right_scroll: ScrollArea | None = None
         self._bottom_tabs: TabView | None = None

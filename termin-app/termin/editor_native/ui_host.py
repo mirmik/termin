@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from queue import Empty, SimpleQueue
 from typing import Callable
 
 from termin.display import (
@@ -213,6 +214,7 @@ class NativeUiHost:
         self._pre_render_callbacks: list[PreRenderCallback] = []
         self._color_pickers: list[object] = []
         self._image_previews: list[_ImagePreview] = []
+        self._deferred: SimpleQueue[Callable[[], None]] = SimpleQueue()
         start_text_input()
 
     @property
@@ -230,6 +232,26 @@ class NativeUiHost:
                 self.window.set_should_close(True)
                 return False, routed
         return not self.window.should_close(), routed
+
+    def defer(self, callback: Callable[[], None]) -> None:
+        """Schedule a callback for the UI owner thread from any thread."""
+        self._deferred.put(callback)
+
+    def process_deferred(self) -> int:
+        processed = 0
+        while True:
+            try:
+                callback = self._deferred.get_nowait()
+            except Empty:
+                break
+            try:
+                callback()
+            except Exception:
+                _logger.exception("Native UI deferred callback failed")
+            processed += 1
+        if processed:
+            self.request_render_update()
+        return processed
 
     def render(self) -> bool:
         width, height = self.window.framebuffer_size()

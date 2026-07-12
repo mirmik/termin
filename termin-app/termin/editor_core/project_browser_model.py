@@ -9,6 +9,8 @@ from pathlib import Path
 
 from termin.project.ignored_paths import is_path_ignored, project_ignored_roots
 
+from .project_operations import ProjectOperations
+
 
 _logger = logging.getLogger(__name__)
 
@@ -87,12 +89,16 @@ class ProjectBrowserController:
         copy_text: Callable[[str], None] | None = None,
         reveal_path: Callable[[Path], None] | None = None,
         delete_path: Callable[[Path, Callable[[], None]], None] | None = None,
+        operations: ProjectOperations | None = None,
     ) -> None:
         self._on_file_selected = on_file_selected
         self._on_file_activated = on_file_activated
         self._copy_text = copy_text
         self._reveal_path = reveal_path
         self._delete_path = delete_path
+        self._operations = operations
+        self._mutation_refresh: Callable[[], None] = self.refresh
+        self._mutation_navigate: Callable[[Path], None] = self.navigate
         self._root_path: Path | None = None
         self._selected_directory: Path | None = None
         self._entries: tuple[ProjectBrowserEntry, ...] = ()
@@ -105,6 +111,13 @@ class ProjectBrowserController:
     @property
     def selected_directory(self) -> Path | None:
         return self._selected_directory
+
+    def set_mutation_refresh(self, callback: Callable[[], None]) -> None:
+        """Set the projection refresh invoked after asynchronous mutations."""
+        self._mutation_refresh = callback
+
+    def set_mutation_navigation(self, callback: Callable[[Path], None]) -> None:
+        self._mutation_navigate = callback
 
     def set_root(self, path: str | Path) -> ProjectBrowserSnapshot:
         root = Path(path).resolve()
@@ -183,6 +196,7 @@ class ProjectBrowserController:
 
     def context_actions(self, index: int) -> tuple[ProjectBrowserAction, ...]:
         entry = self._entry(index)
+        operations = self._operations is not None
         can_go_up = (
             self._root_path is not None
             and self._selected_directory is not None
@@ -194,7 +208,18 @@ class ProjectBrowserController:
             ProjectBrowserAction("go-root", "Go to Root", self._root_path is not None),
             ProjectBrowserAction("copy-path", "Copy Absolute Path", entry is not None and self._copy_text is not None),
             ProjectBrowserAction("reveal", "Show in Explorer", entry is not None and self._reveal_path is not None),
-            ProjectBrowserAction("delete", "Delete", entry is not None and self._delete_path is not None),
+            ProjectBrowserAction("rename", "Rename...", entry is not None and operations),
+            ProjectBrowserAction(
+                "extract-glb",
+                "Extract GLB...",
+                entry is not None and operations and entry.path.suffix.lower() == ".glb",
+            ),
+            ProjectBrowserAction(
+                "delete",
+                "Delete",
+                entry is not None and (self._delete_path is not None or operations),
+            ),
+            *self._creation_actions(),
             ProjectBrowserAction("refresh", "Refresh"),
         )
 
@@ -208,6 +233,8 @@ class ProjectBrowserController:
             return self.go_to_root()
         if action_id == "refresh":
             return self.refresh()
+        if self._execute_creation_action(action_id, self._selected_directory):
+            return self.snapshot()
         if entry is None:
             _logger.error("Project browser action %s requires an entry", action_id)
             raise IndexError("project browser action requires an entry")
@@ -217,6 +244,16 @@ class ProjectBrowserController:
             self._reveal_path(entry.path)
         elif action_id == "delete" and self._delete_path is not None:
             self._delete_path(entry.path, self.refresh)
+        elif action_id == "rename" and self._operations is not None:
+            self._operations.rename_item(entry.path, self._mutation_refresh)
+        elif action_id == "extract-glb" and self._operations is not None:
+            self._operations.extract_glb(
+                entry.path,
+                self._mutation_refresh,
+                self._mutation_navigate,
+            )
+        elif action_id == "delete" and self._operations is not None:
+            self._operations.delete_item(entry.path, self._mutation_refresh)
         else:
             _logger.error("Unavailable project browser action: %s", action_id)
             raise RuntimeError(f"unavailable project browser action: {action_id}")
@@ -237,6 +274,7 @@ class ProjectBrowserController:
                 "Show in Explorer",
                 visible and self._reveal_path is not None,
             ),
+            *self._creation_actions(),
             ProjectBrowserAction("refresh", "Refresh", self._root_path is not None),
         )
 
@@ -257,10 +295,43 @@ class ProjectBrowserController:
             self._copy_text(str(path))
         elif action_id == "reveal-directory" and self._reveal_path is not None:
             self._reveal_path(path)
+        elif self._execute_creation_action(action_id, path):
+            pass
         else:
             _logger.error("Unavailable project browser directory action: %s", action_id)
             raise RuntimeError(f"unavailable project browser directory action: {action_id}")
         return self.snapshot()
+
+    def _creation_actions(self) -> tuple[ProjectBrowserAction, ...]:
+        enabled = self._operations is not None and self._selected_directory is not None
+        return (
+            ProjectBrowserAction("create-directory", "Create Directory...", enabled),
+            ProjectBrowserAction("create-file", "Create File...", enabled),
+            ProjectBrowserAction("create-material", "Create Material...", enabled),
+            ProjectBrowserAction("create-shader", "Create Shader...", enabled),
+            ProjectBrowserAction("create-component", "Create Component...", enabled),
+            ProjectBrowserAction("create-pipeline", "Create Render Pipeline...", enabled),
+            ProjectBrowserAction("create-prefab", "Create Prefab...", enabled),
+        )
+
+    def _execute_creation_action(self, action_id: str, directory: Path | None) -> bool:
+        operations = self._operations
+        if operations is None:
+            return False
+        callbacks = {
+            "create-directory": operations.create_directory,
+            "create-file": operations.create_file,
+            "create-material": operations.create_material,
+            "create-shader": operations.create_shader,
+            "create-component": operations.create_component,
+            "create-pipeline": operations.create_pipeline,
+            "create-prefab": operations.create_prefab,
+        }
+        callback = callbacks.get(action_id)
+        if callback is None:
+            return False
+        callback(directory, self._mutation_refresh)
+        return True
 
     def snapshot(self) -> ProjectBrowserSnapshot:
         return ProjectBrowserSnapshot(

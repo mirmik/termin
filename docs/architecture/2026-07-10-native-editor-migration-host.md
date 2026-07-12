@@ -59,9 +59,9 @@ menu connections for the editor session so project UI lifetime is explicit.
 `termin_editor` now exercises the host through the normal
 C++ embedded-Python `EngineCore` entrypoint. `TERMIN_EDITOR_NATIVE_SMOKE_FRAMES`
 is a deterministic test-only frame limit used to prove graceful startup,
-render/present and shutdown. The default is `native`; the temporary
-`--ui=tcgui` compatibility path is an entrypoint choice during legacy
-retirement, not a mixed-tree fallback.
+render/present and shutdown. Native is now the only production editor
+entrypoint; the old frontend remains source-only while its reusable models and
+test fixtures are retired.
 
 The production MCP gate starts this entrypoint with an ephemeral loopback port,
 captures the composed native UI through `capture_editor_screenshot`, then uses

@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import platform
 import subprocess
+from pathlib import Path
 from typing import Callable
 
 from tcbase import log
@@ -53,4 +54,24 @@ def open_in_text_editor(
 
     except Exception as e:
         log.error(f"Failed to open file in text editor: {file_path}: {e}")
+        return False
+
+
+def reveal_in_file_manager(path: str | Path) -> bool:
+    """Reveal a project path using the platform file manager."""
+    target = Path(path)
+    try:
+        system = platform.system()
+        if system == "Windows":
+            if target.is_file():
+                subprocess.Popen(["explorer", "/select,", str(target)])
+            else:
+                subprocess.Popen(["explorer", str(target)])
+        elif system == "Darwin":
+            subprocess.Popen(["open", "-R", str(target)])
+        else:
+            subprocess.Popen(["xdg-open", str(target.parent if target.is_file() else target)])
+        return True
+    except Exception as exc:
+        log.error(f"Failed to reveal path in file manager: {target}: {exc}")
         return False
