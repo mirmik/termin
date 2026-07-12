@@ -285,27 +285,10 @@ void tc_scene_free(tc_scene_handle h) {
 
     uint32_t idx = h.index;
 
-    // Detach and destroy all scene extensions before scene-owned resources go away.
-    tc_scene_ext_detach_all(h);
-
-    // Free metadata
-    tc_value_free(&g_pool->slots[idx].metadata);
-
-    // Stop delivering scene events before scene-owned resources are torn down.
-    tc_event_bus_destroy(g_pool->slots[idx].event_bus);
-    g_pool->slots[idx].event_bus = NULL;
-
-    // Free component lists
-    list_free(&g_pool->slots[idx].pending_starts);
-    list_free(&g_pool->slots[idx].update_list);
-    list_free(&g_pool->slots[idx].fixed_update_list);
-    list_free(&g_pool->slots[idx].before_render_list);
-
-    // Free type heads map
-    tc_resource_map_free(g_pool->slots[idx].type_heads);
-    g_pool->slots[idx].type_heads = NULL;
-
-    // Destroy entity pool via registry to invalidate handles
+    // Components must be removed while the scene schedulers, type indices,
+    // event bus, and extensions are still alive.  tc_entity_pool_destroy()
+    // invokes component destruction and removal callbacks before releasing
+    // the entity-owned references.
     tc_entity_pool_handle pool_handle = tc_entity_pool_registry_find(g_pool->slots[idx].pool);
     if (tc_entity_pool_handle_valid(pool_handle)) {
         tc_entity_pool_registry_destroy(pool_handle);
@@ -314,6 +297,25 @@ void tc_scene_free(tc_scene_handle h) {
         tc_entity_pool_destroy(g_pool->slots[idx].pool);
     }
     g_pool->slots[idx].pool = NULL;
+
+    // Scene-owned extensions may now release resources that referenced
+    // entities or components.
+    tc_scene_ext_detach_all(h);
+
+    // Free metadata.
+    tc_value_free(&g_pool->slots[idx].metadata);
+
+    // Stop delivering scene events after all component removal notifications.
+    tc_event_bus_destroy(g_pool->slots[idx].event_bus);
+    g_pool->slots[idx].event_bus = NULL;
+
+    // Free component lists and type heads after components have unregistered.
+    list_free(&g_pool->slots[idx].pending_starts);
+    list_free(&g_pool->slots[idx].update_list);
+    list_free(&g_pool->slots[idx].fixed_update_list);
+    list_free(&g_pool->slots[idx].before_render_list);
+    tc_resource_map_free(g_pool->slots[idx].type_heads);
+    g_pool->slots[idx].type_heads = NULL;
 
     // Clear capability linked lists (prevent dangling pointers on slot reuse)
     memset(g_pool->slots[idx].capability_heads, 0, sizeof(g_pool->slots[idx].capability_heads));

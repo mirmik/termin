@@ -433,7 +433,28 @@ tc_scene_handle tc_entity_pool_get_scene(tc_entity_pool* pool) {
 void tc_entity_pool_destroy(tc_entity_pool* pool) {
     if (!pool) return;
 
-    // Free strings, release Python refs, and free dynamic arrays
+    // Scene shutdown must follow the same lifecycle as ordinary entity
+    // removal.  In particular, Python components can own UI callback graphs
+    // and need on_removed to break those references before their entity-owned
+    // reference is released.
+    for (uint32_t index = 0; index < pool->capacity; ++index) {
+        tc_entity_id entity = tc_entity_pool_id_at(pool, index);
+        if (!tc_entity_id_valid(entity)) {
+            continue;
+        }
+
+        ComponentArray* components = &pool->components[index];
+        for (size_t component_index = 0; component_index < components->count; ++component_index) {
+            tc_component* component = components->items[component_index];
+            if (component != NULL) {
+                tc_component_on_destroy(component);
+            }
+        }
+        tc_entity_pool_free(pool, entity);
+    }
+
+    // All live entities have been removed above.  Free their now-empty slot
+    // storage and the remaining pool-owned arrays.
     for (size_t i = 0; i < pool->capacity; i++) {
         free(pool->names[i]);
         free(pool->uuids[i]);
@@ -700,16 +721,21 @@ void tc_entity_pool_free(tc_entity_pool* pool, tc_entity_id id) {
             continue;
         }
 
-        // Notify component it's being removed from scene
-        tc_component_on_removed(c);
-
-        // Unregister from scene's type lists and scheduler
+        // Unregistering from a live scene delivers on_removed and removes the
+        // component from all scene indices. Standalone pools have no scene to
+        // perform that notification, so deliver it directly there.
         if (tc_scene_handle_valid(scene)) {
             tc_scene_unregister_component(scene, c);
+        } else {
+            tc_component_on_removed(c);
         }
 
         // Notify component it's being removed from entity
         tc_component_on_removed_from_entity(c);
+
+        // The component may outlive the entity through a Python reference.
+        // Do not leave that external reference pointing at a dead entity.
+        c->owner = TC_ENTITY_HANDLE_INVALID;
 
         // Remove from array and release component
         component_array_remove(comps, c);
@@ -1548,12 +1574,12 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
 
     const char* component_type = tc_component_type_name(c);
 
-    // Notify component it's being removed from scene
-    tc_component_on_removed(c);
-
-    // Unregister from scene's type lists
+    // Unregistering from a live scene delivers on_removed and updates its
+    // schedulers. Standalone pools still need the lifecycle notification.
     if (tc_scene_handle_valid(pool->scene)) {
         tc_scene_unregister_component(pool->scene, c);
+    } else {
+        tc_component_on_removed(c);
     }
 
     // Notify component it's being removed from entity
