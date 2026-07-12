@@ -1,6 +1,7 @@
 #include <termin/render/color_pass.hpp>
 #include <termin/render/execute_context.hpp>
 #include <termin/render/mesh_renderer.hpp>
+#include <termin/camera/camera_component.hpp>
 #include <termin/tc_scene.hpp>
 
 #include <components/mesh_component.hpp>
@@ -291,6 +292,13 @@ termin::TcSceneRef create_scene(
     renderer->set_material(material);
     entity.add_component(renderer);
 
+    termin::Entity camera_entity = scene.create_entity("ColorPassNamedCamera");
+    if (!camera_entity.valid()) {
+        return {};
+    }
+    auto* camera = new termin::CameraComponent();
+    camera_entity.add_component(camera);
+
     return scene;
 }
 
@@ -355,6 +363,7 @@ int run_smoke(const char* argv0) {
     pass_config.shadow_res = "";
     pass_config.phase_mark = "opaque";
     pass_config.pass_name = "ColorPassPixelSmoke";
+    pass_config.camera_name = "ColorPassNamedCamera";
     termin::ColorPass pass(pass_config);
 
     termin::ExecuteContext exec_ctx;
@@ -367,6 +376,18 @@ int run_smoke(const char* argv0) {
     render_ctx.begin_frame();
     render_ctx.begin_pass(target, {}, clear_color, 1.0f, false);
     render_ctx.end_pass();
+
+    pass.execute(exec_ctx);
+    const bool named_camera_reached_draw_collection =
+        pass.entity_names.size() == 1 &&
+        pass.entity_names[0] == "ColorPassSmokeTriangle";
+
+    termin::ColorPassConfig missing_camera_config = pass_config;
+    missing_camera_config.camera_name = "MissingColorPassCamera";
+    termin::ColorPass missing_camera_pass(missing_camera_config);
+    missing_camera_pass.execute(exec_ctx);
+    const bool missing_camera_skipped = missing_camera_pass.entity_names.empty();
+    missing_camera_pass.destroy();
 
     termin::ColorPassExecuteData pass_data;
     pass_data.rect = exec_ctx.render_rect;
@@ -403,7 +424,9 @@ int run_smoke(const char* argv0) {
         matches_material_color(center) &&
         matches_clear_color(corner) &&
         pipeline_cache_size >= 1 &&
-        entity_seen;
+        entity_seen &&
+        named_camera_reached_draw_collection &&
+        missing_camera_skipped;
 
     pass.destroy();
     device->destroy(target);
@@ -411,10 +434,12 @@ int run_smoke(const char* argv0) {
     if (!pass_ok) {
         std::fprintf(
             stderr,
-            "ColorPass pixel smoke failed: read_ok=%s cache_size=%zu entity_seen=%s\n",
+            "ColorPass pixel smoke failed: read_ok=%s cache_size=%zu entity_seen=%s named_camera=%s missing_camera=%s\n",
             read_ok ? "true" : "false",
             pipeline_cache_size,
-            entity_seen ? "true" : "false");
+            entity_seen ? "true" : "false",
+            named_camera_reached_draw_collection ? "true" : "false",
+            missing_camera_skipped ? "true" : "false");
         return 1;
     }
 

@@ -775,7 +775,7 @@ bool ModuleRuntime::clean_module(const std::string& module_id) {
         return false;
     }
 
-    if (!backend->clean(*target, _environment)) {
+    if (backend->clean(*target, _environment) == ModuleCleanResult::Failed) {
         if (target->error_message.empty()) {
             target->error_message = "Clean failed";
         }
@@ -803,8 +803,11 @@ bool ModuleRuntime::rebuild_module(const std::string& module_id) {
         return false;
     }
 
-    // Clean build artifacts (ignore failure if no clean_command configured)
-    clean_module(module_id);
+    // A backend may intentionally have no clean step, but an attempted clean
+    // must succeed before a rebuild can reuse its artifact location.
+    if (!clean_module(module_id)) {
+        return false;
+    }
 
     // Build only, do not load
     return build_module(module_id);

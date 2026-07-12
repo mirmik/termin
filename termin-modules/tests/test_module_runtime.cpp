@@ -29,6 +29,8 @@ public:
     std::vector<std::string> unload_calls;
     std::string fail_load_module;
     std::string fail_unload_module;
+    int build_calls = 0;
+    ModuleCleanResult clean_result = ModuleCleanResult::NotSupported;
 
     ModuleKind kind() const override {
         return ModuleKind::Cpp;
@@ -58,6 +60,18 @@ public:
         }
         record.handle.reset();
         return true;
+    }
+
+    bool build(ModuleRecord&, const ModuleEnvironment&) override {
+        ++build_calls;
+        return true;
+    }
+
+    ModuleCleanResult clean(ModuleRecord& record, const ModuleEnvironment&) override {
+        if (clean_result == ModuleCleanResult::Failed) {
+            record.error_message = "injected clean failure";
+        }
+        return clean_result;
     }
 };
 
@@ -219,6 +233,33 @@ std::shared_ptr<FakeCppBackend> make_runtime(ModuleRuntime& runtime, std::vector
         });
     }
     return backend;
+}
+
+void test_rebuild_distinguishes_no_clean_step_from_clean_failure() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "native.module",
+        "name: native\n"
+        "build:\n"
+        "  output: build/libnative.so\n"
+    );
+
+    ModuleRuntime runtime;
+    auto backend = make_runtime(runtime);
+    expect(runtime.discover(tmp.path), "rebuild clean-result discovery should succeed");
+
+    backend->clean_result = ModuleCleanResult::NotSupported;
+    expect(runtime.rebuild_module("native"), "rebuild should proceed when clean is unsupported");
+    expect(backend->build_calls == 1, "build should run after no-op clean");
+
+    backend->clean_result = ModuleCleanResult::Failed;
+    expect(!runtime.rebuild_module("native"), "rebuild should fail after attempted clean failure");
+    expect(backend->build_calls == 1, "build must not run after failed clean");
+    expect(runtime.last_error() == "injected clean failure", "clean diagnostic should be preserved");
+
+    backend->clean_result = ModuleCleanResult::Succeeded;
+    expect(runtime.rebuild_module("native"), "rebuild should proceed after successful clean");
+    expect(backend->build_calls == 2, "build should run after successful clean");
 }
 
 void test_descriptor_parsing_and_discovery() {
@@ -1200,6 +1241,10 @@ TEST_CASE("module runtime rejects invalid descriptor snapshots before unload") {
 
 TEST_CASE("module runtime cascade reload uses updated dependency snapshot") {
     test_cascade_reload_uses_atomic_updated_dependency_graph();
+}
+
+TEST_CASE("module runtime rebuild distinguishes clean outcomes") {
+    test_rebuild_distinguishes_no_clean_step_from_clean_failure();
 }
 
 TEST_CASE("module runtime rejects duplicate ids and simultaneous cycles atomically") {

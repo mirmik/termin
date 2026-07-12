@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "C:\\Users\\mirmik\\AppData\\Local\\Programs\\Python\\Python312\\python.exe -m llm_tools.command_guard --codex-hook --profile command_guard_huihui --policy C:\\Users\\mirmik\\.config\\command-guard\\termin.json",
+            "command": "/home/mirmik/.pyenv/shims/command-guard --codex-hook --profile command_guard_huihui --policy /home/mirmik/.config/command-guard/termin.json",
+            "commandWindows": "C:\\Users\\mirmik\\AppData\\Local\\Programs\\Python\\Python312\\python.exe -m llm_tools.command_guard --codex-hook --profile command_guard_huihui --policy C:\\Users\\mirmik\\.config\\command-guard\\termin.json",
             "timeout": 20,
             "statusMessage": "Validating command against Termin policy"
           }
