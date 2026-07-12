@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import atexit
 import sys
 from typing import TYPE_CHECKING
 
@@ -256,6 +257,9 @@ class DefaultResourceManager(
     """Default asset runtime manager without editor-specific extensions."""
 
     pass
+
+
+atexit.register(DefaultResourceManager.shutdown_instance)
 
 
 __all__ = ["DefaultResourceManager", "DefaultResourceManagerBase"]

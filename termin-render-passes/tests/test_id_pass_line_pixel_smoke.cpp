@@ -196,7 +196,7 @@ termin::TcSceneRef create_world_text_scene(uint32_t& out_pick_id)
 
     auto* text = new termin::WorldTextComponent();
     text->set_text("Text");
-    text->set_font_path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    text->set_font_path(TERMIN_RENDER_PASSES_TEST_FONT_PATH);
     text->set_phase_mark("transparent");
     text->set_orientation(termin::WorldTextOrientation::Fixed);
     text->set_plane_normal(termin::Vec3{0.0, 0.0, 1.0});

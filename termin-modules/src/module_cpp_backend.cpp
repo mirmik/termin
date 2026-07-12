@@ -4,6 +4,7 @@
 
 #include <tcbase/tc_log.hpp>
 
+#include <algorithm>
 #include <cerrno>
 #include <cctype>
 #include <cstdio>
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <optional>
 #include <sstream>
+#include <vector>
 
 #ifdef _WIN32
     #ifndef NOMINMAX
@@ -34,6 +36,38 @@ namespace termin_modules {
 namespace {
 
 constexpr auto kAbandonedShadowAge = std::chrono::hours(24);
+
+#ifdef _WIN32
+std::mutex& pending_shadow_cleanup_mutex() {
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::vector<std::filesystem::path>& pending_shadow_cleanup_dirs() {
+    static std::vector<std::filesystem::path> paths;
+    return paths;
+}
+
+void retry_pending_shadow_cleanup() {
+    std::lock_guard<std::mutex> lock(pending_shadow_cleanup_mutex());
+    auto& paths = pending_shadow_cleanup_dirs();
+    paths.erase(
+        std::remove_if(paths.begin(), paths.end(), [](const auto& path) {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+            return !ec;
+        }),
+        paths.end());
+}
+
+void defer_shadow_cleanup(const std::filesystem::path& path) {
+    std::lock_guard<std::mutex> lock(pending_shadow_cleanup_mutex());
+    auto& paths = pending_shadow_cleanup_dirs();
+    if (std::find(paths.begin(), paths.end(), path) == paths.end()) {
+        paths.push_back(path);
+    }
+}
+#endif
 
 void native_module_host_log(void*, int level, const char* message) {
     const char* text = message ? message : "";
@@ -197,13 +231,43 @@ std::string shell_quote(const std::filesystem::path& path) {
 #endif
 }
 
-std::filesystem::path native_validator_path(const ModuleEnvironment& environment) {
+std::filesystem::path native_validator_path(
+    const ModuleEnvironment& environment,
+    const std::filesystem::path& artifact_path
+) {
     if (environment.sdk_prefix.empty()) {
         return {};
     }
 
 #ifdef _WIN32
-    return environment.sdk_prefix / "bin" / "termin_module_native_validator.exe";
+    const std::filesystem::path installed =
+        environment.sdk_prefix / "bin" / "termin_module_native_validator.exe";
+    if (std::filesystem::exists(installed)) {
+        return installed;
+    }
+
+    // CMake multi-config build trees place runtime tools in bin/<config>.
+    // Accept that layout only when it resolves unambiguously; installed SDKs
+    // continue to use the canonical flat bin directory above.
+    std::vector<std::filesystem::path> multi_config_candidates;
+    std::error_code iteration_error;
+    const std::filesystem::path bin_dir = environment.sdk_prefix / "bin";
+    for (std::filesystem::directory_iterator it(bin_dir, iteration_error), end;
+         !iteration_error && it != end;
+         it.increment(iteration_error)) {
+        if (!it->is_directory()) {
+            continue;
+        }
+        const std::filesystem::path candidate =
+            it->path() / "termin_module_native_validator.exe";
+        if (std::filesystem::is_regular_file(candidate)) {
+            multi_config_candidates.push_back(candidate);
+        }
+    }
+    if (multi_config_candidates.size() == 1) {
+        return multi_config_candidates.front();
+    }
+    return artifact_path.parent_path() / "termin_module_native_validator.exe";
 #else
     return environment.sdk_prefix / "bin" / "termin_module_native_validator";
 #endif
@@ -303,7 +367,8 @@ bool validate_native_artifact(
     const ModuleEnvironment& environment,
     const std::filesystem::path& artifact_path
 ) {
-    const std::filesystem::path validator = native_validator_path(environment);
+    const std::filesystem::path validator =
+        native_validator_path(environment, artifact_path);
     if (validator.empty()) {
         return true;
     }
@@ -543,8 +608,21 @@ bool CppModuleBackend::remove_shadow_artifacts(
     const std::filesystem::path load_dir = path.parent_path();
     std::filesystem::remove_all(load_dir, ec);
     if (!ec) {
+#ifdef _WIN32
+        retry_pending_shadow_cleanup();
+#endif
         return true;
     }
+
+#ifdef _WIN32
+    if (ec == std::errc::permission_denied) {
+        defer_shadow_cleanup(load_dir);
+        tc::Log::warn(
+            "CppModuleBackend: deferring cleanup of loader-owned shadow directory '%s'",
+            load_dir.string().c_str());
+        return true;
+    }
+#endif
 
     const std::string cleanup_error = "Failed to remove native shadow load directory '" +
         load_dir.string() + "': " + ec.message();

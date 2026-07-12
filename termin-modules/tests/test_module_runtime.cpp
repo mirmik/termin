@@ -1067,7 +1067,7 @@ void test_native_abi_rejects_missing_descriptor_before_init_scope() {
     expect(!runtime.load_module("abi_missing"), "missing ABI descriptor must reject load");
     expect(init_scope_calls == 0, "missing ABI descriptor must fail before registration scope");
     expect(runtime.last_error().find("missing native module descriptor") != std::string::npos,
-           "missing ABI descriptor diagnostic should be actionable");
+           "missing ABI descriptor diagnostic should be actionable: " + runtime.last_error());
 }
 
 void test_native_abi_rejects_version_mismatch_before_init_scope() {
@@ -1091,7 +1091,7 @@ void test_native_abi_rejects_version_mismatch_before_init_scope() {
     expect(!runtime.load_module("abi_mismatch"), "ABI mismatch must reject load");
     expect(init_scope_calls == 0, "ABI mismatch must fail before registration scope");
     expect(runtime.last_error().find("native module ABI mismatch") != std::string::npos,
-           "ABI mismatch diagnostic should include module and host versions");
+           "ABI mismatch diagnostic should include module and host versions: " + runtime.last_error());
 }
 
 void test_native_abi_propagates_structured_init_failure_once() {
@@ -1117,7 +1117,7 @@ void test_native_abi_propagates_structured_init_failure_once() {
     expect(!runtime.load_module("abi_init_failure"), "structured init failure must reject load");
     expect(failure_callbacks == 1, "in-process init failure cleanup callback must run exactly once");
     expect(runtime.last_error().find("status 17") != std::string::npos,
-           "structured init failure should preserve status");
+           "structured init failure should preserve status: " + runtime.last_error());
     expect(runtime.last_error().find("injected structured init failure") != std::string::npos,
            "structured init failure should preserve message");
     expect(runtime.find("abi_init_failure")->handle == nullptr,
@@ -1138,7 +1138,8 @@ void test_native_abi_shutdown_failure_is_retryable_and_metadata_is_exposed() {
     runtime.set_environment(environment);
     runtime.register_backend(std::make_shared<CppModuleBackend>());
     expect(runtime.discover(tmp.path), "shutdown retry discovery should succeed");
-    expect(runtime.load_module("abi_shutdown_retry"), "compatible ABI module should load");
+    const bool loaded = runtime.load_module("abi_shutdown_retry");
+    expect(loaded, "compatible ABI module should load: " + runtime.last_error());
 
     auto handle = std::dynamic_pointer_cast<CppModuleHandle>(
         runtime.find("abi_shutdown_retry")->handle

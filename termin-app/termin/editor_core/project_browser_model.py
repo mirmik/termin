@@ -71,6 +71,10 @@ _EXEC_SUBTYPES = frozenset({
     "x-executable", "x-sharedlib", "x-elf", "x-msdos-program", "x-msdownload",
 })
 
+_ARCHIVE_EXTENSIONS = frozenset({
+    ".7z", ".bz2", ".gz", ".rar", ".tar", ".xz", ".zip",
+})
+
 
 def file_subtitle(path: Path) -> str:
     extension = path.suffix.lower()
@@ -86,6 +90,9 @@ def file_icon_kind(path: Path) -> str:
     This is deliberately a semantic label rather than a frontend texture handle: the legacy
     and native editors may render it differently while retaining the same file classification.
     """
+
+    if path.suffix.lower() in _ARCHIVE_EXTENSIONS:
+        return "archive"
 
     mime_type, _encoding = mimetypes.guess_type(path.name)
     if mime_type is None:

@@ -63,11 +63,11 @@ void bind_shadow_camera_helpers(nb::module_& m) {
             );
         },
             nb::arg("light_direction"),
-            nb::arg("ortho_bounds") = nb::none(),
+            nb::arg("ortho_bounds").none() = nb::none(),
             nb::arg("ortho_size") = 20.0,
             nb::arg("near") = 0.1,
             nb::arg("far") = 100.0,
-            nb::arg("center") = nb::none()
+            nb::arg("center").none() = nb::none()
         )
         .def_prop_rw("light_direction",
             [](const ShadowCameraParams& self) {
@@ -81,9 +81,12 @@ void bind_shadow_camera_helpers(nb::module_& m) {
             [](const ShadowCameraParams& self) {
                 return self.ortho_bounds;
             },
-            [](ShadowCameraParams& self, std::optional<Bounds2f> bounds) {
-                self.ortho_bounds = bounds;
-            }
+            [](ShadowCameraParams& self, nb::object bounds) {
+                self.ortho_bounds = bounds.is_none()
+                    ? std::nullopt
+                    : std::optional<Bounds2f>(nb::cast<Bounds2f>(bounds));
+            },
+            nb::arg().none()
         )
         .def_rw("ortho_size", &ShadowCameraParams::ortho_size)
         .def_rw("near", &ShadowCameraParams::near)
