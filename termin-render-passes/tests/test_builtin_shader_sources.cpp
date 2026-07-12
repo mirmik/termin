@@ -789,6 +789,19 @@ TEST_CASE("built-in slang shader catalog registers explicit stage entry points")
     tc_shader_shutdown();
 }
 
+TEST_CASE("modular skinned shadow transform imports scope attribute declaration") {
+    const std::filesystem::path shader_root =
+        repo_root_from_test_file() / "termin-graphics" / "resources" /
+        "builtin_shaders";
+    const std::string source =
+        read_text(shader_root / "termin_shadow_skinned_transform.slang");
+
+    CHECK(source.find("import termin_prelude;") != std::string::npos);
+    CHECK(source.find("[[TerminScope(\"draw\")]]") != std::string::npos);
+    CHECK(source.find("ConstantBuffer<TerminBoneBlock> bone_block;") !=
+          std::string::npos);
+}
+
 TEST_CASE("built-in shader catalog resolves vertex-only variant templates") {
     clear_builtin_root();
 

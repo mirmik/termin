@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -388,6 +389,15 @@ def test_native_ui_font_resolution_honors_explicit_path(tmp_path: Path):
     assert resolve_native_ui_font(font) == font
     with pytest.raises(FileNotFoundError, match="missing file"):
         resolve_native_ui_font(tmp_path / "missing.ttf")
+
+
+def test_native_ui_font_is_installed_in_sdk(monkeypatch, tmp_path: Path):
+    monkeypatch.chdir(tmp_path)
+    sdk_root = Path(sys.executable).resolve().parent.parent
+    installed_font = sdk_root / "share" / "termin" / "fonts" / "DroidSans.ttf"
+
+    assert installed_font.is_file()
+    assert resolve_native_ui_font() == installed_font
 
 
 def test_native_editor_shell_has_stable_headless_root_and_chrome():
