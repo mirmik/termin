@@ -55,7 +55,7 @@ from termin.editor_core.scene_settings_model import (
 )
 from termin.editor_core.project_settings_model import ProjectSettingsController
 from termin.editor_core.project_build_controller import ProjectBuildController
-from termin.editor_core.project_session_controller import ProjectSessionController
+from termin.editor_native.project_session_controller import NativeProjectSessionController
 from termin.editor_core.scene_file_controller import SceneFileController
 from termin.editor_core.editor_state_io import EditorStateIO
 from termin.editor_core.shader_runtime import resolve_slangc, resolve_termin_shaderc
@@ -1305,7 +1305,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         unregister_tool_inspector=inspector_host.unregister_tool_panel,
         show_tool_inspector=inspector_host.show_tool_panel,
     )
-    project_session_controller = ProjectSessionController(
+    project_session_controller = NativeProjectSessionController(
+        document=host.document,
+        viewport=editor_viewport,
+        defer=host.defer,
+        request_render=request_editor_render,
         set_project_state=lambda _project_dir, project_name: session_presentation.update(
             project_name=project_name
         ),
