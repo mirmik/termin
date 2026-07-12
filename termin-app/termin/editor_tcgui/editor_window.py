@@ -81,7 +81,6 @@ from termin.editor_tcgui.project_browser import ProjectBrowserTcgui
 from termin.editor_tcgui.default_component_editor_extensions import (
     register_default_component_editor_extensions,
 )
-from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIController
 
 SceneMode = engine_scene.SceneMode
 
@@ -114,10 +113,6 @@ class EditorWindowTcgui:
         # Resource manager
         self.resource_manager = ResourceManager.instance()
         register_editor_builtin_resources(self.resource_manager)
-        self.resource_manager.register_component(
-            "EditorCameraUIController",
-            EditorCameraUIController,
-        )
         register_default_component_editor_extensions()
 
         # Scene manager

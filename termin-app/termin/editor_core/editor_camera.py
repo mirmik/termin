@@ -111,7 +111,9 @@ class EditorCameraManager:
         ui_comp.input_source_mask = INPUT_SOURCE_RUNTIME | INPUT_SOURCE_EDITOR
         ui_comp.set_ui_layout_by_name("editor_camera_ui")
 
-        # Add EditorCameraUIController if available (loaded from stdlib)
+        # The shared editor bootstrap registers the overlay controller for every
+        # frontend. Keep the lookup registry-based so editor camera construction
+        # remains independent from the concrete controller implementation.
         from termin.editor_core.resource_manager import ResourceManager
         rm = ResourceManager.instance()
         controller_cls = rm.get_component("EditorCameraUIController")

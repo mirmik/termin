@@ -5,7 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from tcgui.widgets.loader import UILoader
-from termin.editor_tcgui.editor_camera_ui_controller import EditorCameraUIController
+from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController
+from termin.editor_core.resource_loader import register_editor_builtin_resources
 from termin.render import RENDER_CATEGORY_ALL, RENDER_CATEGORY_COLLIDERS, RENDER_CATEGORY_NAVMESH
 
 
@@ -32,6 +33,43 @@ class _InteractionSystem:
 
     def _request_update(self) -> None:
         self.update_count += 1
+
+
+class _ResourceManager:
+    def __init__(self) -> None:
+        self.components: dict[str, type] = {}
+
+    def register_builtin_components(self) -> list[str]:
+        return []
+
+    def register_component(self, name: str, component_type: type) -> None:
+        self.components[name] = component_type
+
+    def register_builtin_frame_passes(self) -> None:
+        pass
+
+    def register_builtin_shaders(self) -> None:
+        pass
+
+    def register_builtin_textures(self) -> None:
+        pass
+
+    def register_builtin_materials(self) -> None:
+        pass
+
+    def register_builtin_meshes(self) -> list[str]:
+        return []
+
+    def register_builtin_pipelines(self) -> None:
+        pass
+
+
+def test_editor_builtin_resources_register_camera_ui_controller() -> None:
+    resource_manager = _ResourceManager()
+
+    register_editor_builtin_resources(resource_manager)
+
+    assert resource_manager.components["EditorCameraUIController"] is EditorCameraUIController
 
 
 def test_editor_camera_ui_script_exposes_gizmo_orientation_button() -> None:

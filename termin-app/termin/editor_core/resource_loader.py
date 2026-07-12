@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 def register_editor_builtin_resources(resource_manager: "ResourceManager") -> None:
     """Register built-in resources required before editor scene loading."""
+    from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController
+
     loaded_components = resource_manager.register_builtin_components()
     if loaded_components:
         log.info(f"Loaded components: {loaded_components}")
@@ -30,6 +32,10 @@ def register_editor_builtin_resources(resource_manager: "ResourceManager") -> No
     if loaded_meshes:
         log.info(f"Loaded builtin meshes: {loaded_meshes}")
     resource_manager.register_builtin_pipelines()
+    resource_manager.register_component(
+        "EditorCameraUIController",
+        EditorCameraUIController,
+    )
 
 
 class ResourceLoader:
