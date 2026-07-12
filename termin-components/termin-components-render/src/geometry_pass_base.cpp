@@ -143,6 +143,7 @@ void GeometryPassBase::collect_shader_usages(
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = UINT64_MAX;
         item_context.render_category_mask = UINT64_MAX;
+        item_context.pass_semantic = static_cast<uint32_t>(ctx->pass_semantic);
         item_context.debug_pass_name = ctx->pass_name.c_str();
         item_context.pass_contract = &ctx->pass_contract;
 
@@ -237,6 +238,7 @@ void GeometryPassBase::collect_draw_calls(
         item_context.render_category_mask = ctx->render_context
             ? ctx->render_context->render_category_mask
             : UINT64_MAX;
+        item_context.pass_semantic = static_cast<uint32_t>(ctx->pass_semantic);
         item_context.debug_pass_name = ctx->pass_name.c_str();
         item_context.pass_contract = &ctx->pass_contract;
         item_context.camera = ctx->render_context

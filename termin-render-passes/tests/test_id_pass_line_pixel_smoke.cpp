@@ -1,6 +1,7 @@
 #include <termin/render/execute_context.hpp>
 #include <termin/render/id_pass.hpp>
 #include <termin/render/line_renderer.hpp>
+#include <termin/render/world_text_component.hpp>
 #include <termin/tc_scene.hpp>
 
 #include <tgfx/resources/tc_material_registry.h>
@@ -181,6 +182,31 @@ termin::TcSceneRef create_scene(const termin::TcMaterial& material, uint32_t& ou
     return scene;
 }
 
+termin::TcSceneRef create_world_text_scene(uint32_t& out_pick_id)
+{
+    termin::WorldTextComponent::register_type();
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("id-pass-world-text-pixel-smoke");
+    termin::Entity entity = scene.create_entity("PickableWorldText");
+    if (!entity.valid()) {
+        return {};
+    }
+    entity.set_pickable(true);
+    out_pick_id = entity.pick_id();
+
+    auto* text = new termin::WorldTextComponent();
+    text->set_text("Text");
+    text->set_font_path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    text->set_phase_mark("transparent");
+    text->set_orientation(termin::WorldTextOrientation::Fixed);
+    text->set_plane_normal(termin::Vec3{0.0, 0.0, 1.0});
+    text->set_text_up(termin::Vec3{0.0, 1.0, 0.0});
+    text->set_local_offset(termin::Vec3{-0.45, -0.25, 0.0});
+    text->set_size(0.5f);
+    entity.add_component(text);
+    return scene;
+}
+
 int run_smoke(const char* argv0)
 {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
@@ -304,6 +330,101 @@ int run_smoke(const char* argv0)
     return 0;
 }
 
+int run_world_text_smoke(const char* argv0)
+{
+    const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
+    const ScopedTempDirectory artifact_root{
+        std::filesystem::temp_directory_path() /
+        ("termin-render-passes-id-pass-world-text-pixel-smoke-" + std::to_string(unique))
+    };
+    std::filesystem::remove_all(artifact_root.path);
+    configure_shader_artifacts(argv0, artifact_root.path);
+
+    uint32_t pick_id = 0;
+    termin::TcSceneRef scene = create_world_text_scene(pick_id);
+    if (!scene.valid() || pick_id == 0) {
+        std::fprintf(stderr, "Failed to create pickable WorldText scene\n");
+        return 1;
+    }
+
+    std::unique_ptr<tgfx::IRenderDevice> device;
+    try {
+        device = tgfx::create_device(tgfx::BackendType::Vulkan);
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "Failed to create Vulkan device: %s\n", e.what());
+        return 1;
+    }
+
+    tgfx::TextureDesc color_desc;
+    color_desc.width = kWidth;
+    color_desc.height = kHeight;
+    color_desc.format = tgfx::PixelFormat::RGBA8_UNorm;
+    color_desc.usage = tgfx::TextureUsage::ColorAttachment | tgfx::TextureUsage::CopySrc;
+    const tgfx::TextureHandle color = device->create_texture(color_desc);
+    tgfx::TextureDesc depth_desc;
+    depth_desc.width = kWidth;
+    depth_desc.height = kHeight;
+    depth_desc.format = tgfx::PixelFormat::D32F;
+    depth_desc.usage = tgfx::TextureUsage::DepthStencilAttachment;
+    const tgfx::TextureHandle depth = device->create_texture(depth_desc);
+    if (!color || !depth) {
+        std::fprintf(stderr, "Failed to create WorldText IdPass targets\n");
+        if (depth) device->destroy(depth);
+        if (color) device->destroy(color);
+        return 1;
+    }
+
+    tgfx::PipelineCache cache(*device);
+    tgfx::RenderContext2 render_ctx(*device, cache);
+    termin::IdPass pass("empty", "id", "IdPassWorldTextPixelSmoke");
+    termin::ExecuteContext exec_ctx;
+    exec_ctx.ctx2 = &render_ctx;
+    exec_ctx.tex2_writes.emplace("id", color);
+    exec_ctx.tex2_depth_writes.emplace("id", depth);
+    exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};
+    exec_ctx.scene = scene;
+
+    render_ctx.begin_frame();
+    pass.execute_with_data_tgfx2(
+        exec_ctx,
+        exec_ctx.render_rect,
+        scene.handle(),
+        termin::Mat44f::identity(),
+        termin::Mat44f::identity(),
+        termin::Vec3{0.0, -1.0, 0.0},
+        UINT64_MAX);
+    render_ctx.end_frame();
+    device->wait_idle();
+
+    bool saw_pick_color = false;
+    bool read_ok = true;
+    for (uint32_t y = 0; y < kHeight; ++y) {
+        for (uint32_t x = 0; x < kWidth; ++x) {
+            float pixel[4] = {};
+            read_ok = device->read_pixel_rgba8(color, static_cast<int>(x), static_cast<int>(y), pixel) && read_ok;
+            saw_pick_color = matches_pick_color(pick_id, pixel) || saw_pick_color;
+        }
+    }
+
+    const bool entity_seen =
+        pass.entity_names.size() == 1 && pass.entity_names[0] == "PickableWorldText";
+    const bool pass_ok = read_ok && saw_pick_color && entity_seen && cache.size() >= 1;
+    pass.destroy();
+    device->destroy(depth);
+    device->destroy(color);
+    if (!pass_ok) {
+        std::fprintf(
+            stderr,
+            "IdPass WorldText pixel smoke failed: read_ok=%s saw_pick_color=%s entity_seen=%s cache_size=%zu\n",
+            read_ok ? "true" : "false",
+            saw_pick_color ? "true" : "false",
+            entity_seen ? "true" : "false",
+            cache.size());
+        return 1;
+    }
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -319,10 +440,11 @@ int main(int argc, char** argv)
     tc_material_init();
     tc_scene_pool_init();
 
-    const int result = run_smoke(argc > 0 ? argv[0] : nullptr);
+    const int line_result = run_smoke(argc > 0 ? argv[0] : nullptr);
+    const int world_text_result = run_world_text_smoke(argc > 0 ? argv[0] : nullptr);
 
     tc_scene_pool_shutdown();
     tc_material_shutdown();
     tc_shader_shutdown();
-    return result;
+    return line_result != 0 || world_text_result != 0 ? 1 : 0;
 }

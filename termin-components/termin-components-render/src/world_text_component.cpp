@@ -207,7 +207,8 @@ void ensure_world_text_render_item_encoder_registered()
     desc.encode = world_text_render_item_draw_encoder;
     desc.debug_name = "WorldTextComponent";
     desc.capabilities.pass_semantic_mask =
-        render_item_pass_semantic_bit(RenderItemPassSemantic::Color);
+        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
+        | render_item_pass_semantic_bit(RenderItemPassSemantic::Id);
     desc.capabilities.requires_draw_context = true;
     desc.capabilities.consumes_common_resources = false;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_TEXT_BATCH, desc);
@@ -633,8 +634,10 @@ bool WorldTextComponent::collect_render_items(
         return true;
     }
 
+    const bool is_id_pass =
+        context.pass_semantic == static_cast<uint32_t>(RenderItemPassSemantic::Id);
     const std::string mark = sanitize_phase_mark(phase_mark);
-    if (context.phase_mark != mark) {
+    if (!is_id_pass && context.phase_mark != mark) {
         return true;
     }
 
