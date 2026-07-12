@@ -14,7 +14,7 @@ namespace termin::rendering_manager_detail {
 class ScenePipelineManager {
 private:
     std::unordered_map<uint64_t, std::unordered_map<std::string, tc_pipeline_handle>> scene_pipelines_;
-    std::unordered_map<std::string, std::vector<std::string>> pipeline_targets_;
+    std::unordered_map<uint64_t, std::unordered_map<std::string, std::vector<std::string>>> pipeline_targets_;
 
 public:
     void attach_scene(tc_scene_handle scene);
@@ -23,8 +23,8 @@ public:
     tc_pipeline_handle get_scene_pipeline(tc_scene_handle scene, const std::string& name) const;
     tc_pipeline_handle get_scene_pipeline(const std::string& name) const;
 
-    void set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets);
-    const std::vector<std::string>& get_pipeline_targets(const std::string& pipeline_name) const;
+    void set_pipeline_targets(tc_scene_handle scene, const std::string& pipeline_name, const std::vector<std::string>& targets);
+    const std::vector<std::string>& get_pipeline_targets(tc_scene_handle scene, const std::string& pipeline_name) const;
     std::vector<std::string> get_pipeline_names(tc_scene_handle scene) const;
 
     void clear_scene_pipelines(tc_scene_handle scene);

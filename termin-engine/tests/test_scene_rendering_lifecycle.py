@@ -56,3 +56,15 @@ def test_scene_manager_callbacks_accept_none_for_shutdown_cleanup():
     manager.set_on_after_render(None)
     manager.set_on_before_scene_close(lambda _scene: None)
     manager.set_on_before_scene_close(None)
+
+
+def test_scene_manager_invokes_before_close_hook_before_releasing_scene():
+    from termin.engine import SceneManager
+
+    manager = SceneManager()
+    closed: list[str] = []
+    manager.set_on_before_scene_close(closed.append)
+    manager.create_scene("before-close-hook")
+    manager.close_scene("before-close-hook")
+
+    assert closed == ["before-close-hook"]

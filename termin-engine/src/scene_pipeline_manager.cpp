@@ -48,7 +48,7 @@ void ScenePipelineManager::attach_scene(tc_scene_handle scene) {
         delete compiled; // RenderPipeline no longer owns; handle stays in pool.
 
         scene_pipelines_[key][name] = ph;
-        pipeline_targets_[name] = templ.target_viewports();
+        pipeline_targets_[key][name] = templ.target_viewports();
     }
 
     tc_scene_notify_render_attach(scene);
@@ -85,19 +85,28 @@ tc_pipeline_handle ScenePipelineManager::get_scene_pipeline(const std::string& n
 }
 
 void ScenePipelineManager::set_pipeline_targets(
+    tc_scene_handle scene,
     const std::string& pipeline_name,
     const std::vector<std::string>& targets
 ) {
-    pipeline_targets_[pipeline_name] = targets;
+    if (!tc_scene_handle_valid(scene)) {
+        tc_log(TC_LOG_ERROR, "[RenderingManager] cannot set targets for invalid scene pipeline '%s'", pipeline_name.c_str());
+        return;
+    }
+    pipeline_targets_[scene_key(scene)][pipeline_name] = targets;
 }
 
 static const std::vector<std::string> empty_targets;
 
 const std::vector<std::string>& ScenePipelineManager::get_pipeline_targets(
+    tc_scene_handle scene,
     const std::string& pipeline_name
 ) const {
-    auto it = pipeline_targets_.find(pipeline_name);
-    return (it != pipeline_targets_.end()) ? it->second : empty_targets;
+    if (!tc_scene_handle_valid(scene)) return empty_targets;
+    auto scene_it = pipeline_targets_.find(scene_key(scene));
+    if (scene_it == pipeline_targets_.end()) return empty_targets;
+    auto target_it = scene_it->second.find(pipeline_name);
+    return target_it != scene_it->second.end() ? target_it->second : empty_targets;
 }
 
 std::vector<std::string> ScenePipelineManager::get_pipeline_names(tc_scene_handle scene) const {
@@ -130,10 +139,7 @@ void ScenePipelineManager::destroy_scene_pipelines(tc_scene_handle scene, bool n
         tc_scene_notify_render_detach(scene);
     }
 
-    for (const auto& [name, ptr] : scene_it->second) {
-        (void)ptr;
-        pipeline_targets_.erase(name);
-    }
+    pipeline_targets_.erase(key);
 
     for (const auto& [name, ph] : scene_it->second) {
         (void)name;
