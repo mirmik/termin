@@ -220,13 +220,16 @@ class NavMeshDisplayComponent(DrawableComponent):
             shader = navmesh_display_shader()
 
             self._material = Material(
+                name="NavMeshDisplaySurface",
                 shader=shader,
                 color=self.color,
                 phase_mark="opaque",
                 render_state=RenderState(
                     polygon_mode="line" if self.wireframe else "fill",
                     depth_test=True,
-                    depth_write=True,
+                    # This editor overlay runs before the transparent scene
+                    # pass, so it must not occlude later transparent draws.
+                    depth_write=False,
                     blend=True,
                     cull=False,  # Двухсторонний рендеринг для navmesh
                 ),
@@ -245,12 +248,15 @@ class NavMeshDisplayComponent(DrawableComponent):
             contour_color = (1.0, 1.0, 0.0, 1.0)
 
             self._contour_material = Material(
+                name="NavMeshDisplayContours",
                 shader=shader,
                 color=contour_color,
                 phase_mark="opaque",
                 render_state=RenderState(
                     depth_test=True,
-                    depth_write=True,
+                    # Contours share the same overlay ordering contract as
+                    # the translucent navmesh surface.
+                    depth_write=False,
                     blend=False,
                     cull=False,
                 ),
