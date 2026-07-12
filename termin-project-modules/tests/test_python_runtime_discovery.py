@@ -5,7 +5,7 @@ from pathlib import Path
 from termin.project_modules import runtime
 
 
-def test_sdk_python_discovery_prefers_isolated_launcher(
+def test_sdk_python_discovery_prefers_venv_capable_windows_runtime(
     tmp_path: Path,
 ) -> None:
     launcher_name = (
@@ -15,7 +15,13 @@ def test_sdk_python_discovery_prefers_isolated_launcher(
     launcher.parent.mkdir()
     launcher.touch()
 
-    assert runtime._sdk_python_executable(tmp_path) == launcher
+    expected = launcher
+    if runtime.sys.platform == "win32":
+        expected = tmp_path / "python" / "python.exe"
+        expected.parent.mkdir()
+        expected.touch()
+
+    assert runtime._sdk_python_executable(tmp_path) == expected
     assert runtime._is_python_executable(launcher)
 
 

@@ -6,6 +6,10 @@
 //
 // The app code below has zero mention of GL vs Vulkan. All backend
 // specifics are inside BackendWindow + IRenderDevice.
+#ifndef SDL_MAIN_HANDLED
+#define SDL_MAIN_HANDLED
+#endif
+
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -96,7 +100,7 @@ void main() {
         {0, tgfx::VertexFormat::Float2, 0},
         {1, tgfx::VertexFormat::Float3, 2 * sizeof(float)},
     };
-    pd.vertex_layouts.push_back(layout);
+    pd.vertex_layouts.push_back(tgfx::make_vertex_layout_desc(layout));
     tgfx::PipelineHandle pipe = dev->create_pipeline(pd);
 
     float vertices[] = {

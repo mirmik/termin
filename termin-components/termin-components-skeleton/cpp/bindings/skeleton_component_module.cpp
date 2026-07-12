@@ -70,9 +70,11 @@ void bind_skeleton_controller(nb::module_& m) {
                 }
                 return nb::none();
             },
-            [](termin::SkeletonController& self, std::optional<termin::Entity> root) {
-                self.set_skeleton_root(root.value_or(termin::Entity()));
-            })
+            [](termin::SkeletonController& self, nb::object root) {
+                self.set_skeleton_root(
+                    root.is_none() ? termin::Entity() : nb::cast<termin::Entity>(root));
+            },
+            nb::arg().none())
         .def_prop_ro("skeleton_instance",
             &termin::SkeletonController::skeleton_instance,
             nb::rv_policy::reference)

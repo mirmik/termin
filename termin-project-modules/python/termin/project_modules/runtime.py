@@ -46,9 +46,9 @@ def _is_python_executable(path: Path) -> bool:
 def _sdk_python_executable(prefix_root: Path) -> Path | None:
     if sys.platform == "win32":
         candidates = (
-            prefix_root / "bin" / "termin_python.exe",
             prefix_root / "python" / "python.exe",
             prefix_root / "bin" / "python.exe",
+            prefix_root / "bin" / "termin_python.exe",
         )
     else:
         candidates = (
@@ -557,7 +557,7 @@ class ProjectModulesRuntime:
             else:
                 log.error(
                     "[ProjectModulesRuntime] SDK Python executable was not found. "
-                    f"Expected termin_python under {prefix_root / 'bin'}; "
+                    f"Expected bundled Python under {prefix_root}; "
                     "rebuild SDK or set TERMIN_MODULES_PYTHON."
                 )
                 environment.python_executable = ""

@@ -324,9 +324,11 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
             PRIVATE termin_display ${SDL2_LIBRARIES})
         target_include_directories(backend_window_triangle
             PRIVATE ${SDL2_INCLUDE_DIRS})
+        termin_copy_sdl2_runtime(backend_window_triangle)
         add_test(NAME backend_window_triangle COMMAND backend_window_triangle)
         set_tests_properties(backend_window_triangle PROPERTIES
             TIMEOUT 10
+            ENVIRONMENT "TERMIN_BACKEND=opengl"
             SKIP_RETURN_CODE 77
             SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL")
         termin_add_test_labels(backend_window_triangle

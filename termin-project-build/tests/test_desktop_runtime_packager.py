@@ -301,12 +301,19 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     _write_json(legacy_output / "build.json", {"legacy": True})
     _write_json(legacy_output / "assets" / "manifest.json", {"legacy": True})
 
+    sdk_root = _write_fake_desktop_sdk(tmp_path)
+    _write_fake_distribution(
+        sdk_root / "lib" / "python3.10" / "site-packages",
+        "python-chess",
+        {"chess/__init__.py": "VALUE = 'sdk chess seed'\n"},
+    )
+
     result = build_desktop_project(
         project_root=project,
         entry_scene="Main.scene",
         output_dir=legacy_output,
         shader_compiler=_write_fake_shader_compiler(tmp_path),
-        sdk_root=_write_fake_desktop_sdk(tmp_path),
+        sdk_root=sdk_root,
     )
 
     assert result.dist_dir == legacy_output.resolve()
@@ -1199,9 +1206,9 @@ def test_export_runtime_package_collects_pass_aware_pipeline_shader_usages(tmp_p
         json.loads(path.read_text(encoding="utf-8"))["name"]
         for path in (result.package_dir / "shaders").glob("*.shader.json")
     }
-    assert "termin-engine-line-default" in shader_names
-    assert "termin-engine-line-default_LineTubeBody" in shader_names
-    assert "termin-engine-line-default_LineTubeCap" in shader_names
+    assert "DefaultLineShader" in shader_names
+    assert "DefaultLineShader_LineTubeBody" in shader_names
+    assert "DefaultLineShader_LineTubeCap" in shader_names
     assert not [diagnostic for diagnostic in result.diagnostics if diagnostic.level == "error"]
 
 
