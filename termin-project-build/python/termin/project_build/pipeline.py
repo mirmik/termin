@@ -131,6 +131,17 @@ def run_project_build_pipeline(
             package_result,
             target_preflight_result.payload,
         )
+        all_diagnostics = [
+            *pre_target_diagnostics,
+            *target_package_result.diagnostics,
+        ]
+        if _has_error_diagnostic(all_diagnostics):
+            raise ProjectBuildPipelineError(
+                target_name,
+                all_diagnostics,
+                package_result=package_result,
+                package_validation_diagnostics=package_validation_diagnostics,
+            )
 
         return ProjectBuildPipelineResult(
             context=context,
@@ -139,10 +150,7 @@ def run_project_build_pipeline(
             package_result=package_result,
             package_validation_diagnostics=package_validation_diagnostics,
             target_package_result=target_package_result,
-            diagnostics=[
-                *pre_target_diagnostics,
-                *target_package_result.diagnostics,
-            ],
+            diagnostics=all_diagnostics,
         )
     finally:
         cleanup_runtime_state(preload_log_tag)

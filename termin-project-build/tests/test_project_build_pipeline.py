@@ -299,3 +299,56 @@ def test_project_build_pipeline_stops_before_target_packaging_when_validation_fa
     assert events == ["prepare", "export"]
     assert exc_info.value.package_result is not None
     assert exc_info.value.diagnostics == [validation_diagnostic]
+
+
+def test_project_build_pipeline_fails_when_target_packaging_reports_error(tmp_path: Path) -> None:
+    project, scene = _write_project(tmp_path)
+    context = create_build_context(
+        project_root=project,
+        entry_scene=scene,
+        target="desktop",
+        output_dir=project / "dist" / "pipeline",
+    )
+    events: list[str] = []
+    target_error = build_error("Desktop runtime", "launcher packaging failed")
+
+    def export_package(
+        project_root,
+        entry_scene,
+        output_dir,
+        shader_compiler,
+        default_shader_language,
+        shader_targets,
+        resource_policy,
+    ):
+        events.append("export")
+        output_dir.mkdir(parents=True)
+        manifest_path = output_dir / "manifest.json"
+        scene_path = output_dir / "scene.json"
+        manifest_path.write_text("{}\\n", encoding="utf-8")
+        scene_path.write_text("{}\\n", encoding="utf-8")
+        return RuntimePackageExportResult(
+            package_dir=output_dir,
+            manifest_path=manifest_path,
+            scene_path=scene_path,
+        )
+
+    with pytest.raises(ProjectBuildPipelineError) as exc_info:
+        run_project_build_pipeline(
+            context=context,
+            target_name="Desktop",
+            preload_log_tag="[PipelineTest]",
+            prepare_output=lambda _context: events.append("prepare"),
+            run_target_preflight=lambda: TargetPreflightStepResult(payload="target-env"),
+            package_target=lambda _context, _package_result, _payload: TargetPackageStepResult(
+                payload="target-artifact",
+                diagnostics=[target_error],
+            ),
+            export_package=export_package,
+            validate_package=lambda _package_dir: [],
+            cleanup_runtime_state=lambda log_tag: events.append(f"cleanup:{log_tag}"),
+        )
+
+    assert events == ["prepare", "export", "cleanup:[PipelineTest]"]
+    assert exc_info.value.package_result is not None
+    assert exc_info.value.diagnostics == [target_error]
