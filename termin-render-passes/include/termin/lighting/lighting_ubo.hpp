@@ -11,6 +11,7 @@
 #include "tgfx2/descriptors.hpp"
 #include "tgfx2/i_render_device.hpp"
 #include <termin/geom/vec3.hpp>
+#include <termin/render_passes/export.h>
 
 namespace termin {
 
@@ -73,7 +74,7 @@ struct alignas(16) LightingUBOData {
 static_assert(sizeof(LightingUBOData) == 688, "LightingUBOData must be 688 bytes");
 
 // Helper class to manage lighting UBO
-class LightingUBO {
+class TERMIN_RENDER_PASSES_API LightingUBO {
 public:
     LightingUBOData data;
     tgfx::BufferHandle buffer;
@@ -83,34 +84,18 @@ private:
 
 public:
 
-    LightingUBO() {
-        std::memset(&data, 0, sizeof(data));
-    }
+    LightingUBO();
 
     // Create the GPU buffer through the tgfx2 device. Idempotent —
     // calling twice on the same device is a no-op. If the device
     // pointer changes between frames the buffer is recreated; this
     // happens when the RenderEngine's tgfx2 stack is rebuilt
     // (resolution change, context reset, ...).
-    void create(tgfx::IRenderDevice& device) {
-        if (buffer && device_ == &device) return;
-        destroy();
-        tgfx::BufferDesc desc;
-        desc.size = sizeof(LightingUBOData);
-        desc.usage = tgfx::BufferUsage::Uniform | tgfx::BufferUsage::CopyDst;
-        buffer = device.create_buffer(desc);
-        device_ = &device;
-    }
+    void create(tgfx::IRenderDevice& device);
 
-    void destroy() {
-        if (buffer && device_) {
-            device_->destroy(buffer);
-        }
-        buffer = {};
-        device_ = nullptr;
-    }
+    void destroy();
 
-    ~LightingUBO() { destroy(); }
+    ~LightingUBO();
 
     LightingUBO(const LightingUBO&) = delete;
     LightingUBO& operator=(const LightingUBO&) = delete;
@@ -122,78 +107,10 @@ public:
         float ambient_intensity,
         const Vec3& camera_position,
         const ShadowSettings& shadow_settings
-    ) {
-        int count = static_cast<int>(std::min(lights.size(), static_cast<size_t>(UBO_MAX_LIGHTS)));
-
-        for (int i = 0; i < count; ++i) {
-            const Light& light = lights[i];
-            LightDataStd140& ld = data.lights[i];
-
-            ld.color[0] = static_cast<float>(light.color.x);
-            ld.color[1] = static_cast<float>(light.color.y);
-            ld.color[2] = static_cast<float>(light.color.z);
-            ld.intensity = static_cast<float>(light.intensity);
-
-            ld.direction[0] = static_cast<float>(light.direction.x);
-            ld.direction[1] = static_cast<float>(light.direction.y);
-            ld.direction[2] = static_cast<float>(light.direction.z);
-            ld.range = light.range.has_value() ? static_cast<float>(light.range.value()) : 1e9f;
-
-            ld.position[0] = static_cast<float>(light.position.x);
-            ld.position[1] = static_cast<float>(light.position.y);
-            ld.position[2] = static_cast<float>(light.position.z);
-
-            // Type as float (0=DIR, 1=POINT, 2=SPOT)
-            switch (light.type) {
-                case LightType::Directional: ld.type = 0.0f; break;
-                case LightType::Point: ld.type = 1.0f; break;
-                case LightType::Spot: ld.type = 2.0f; break;
-            }
-
-            ld.attenuation[0] = static_cast<float>(light.attenuation.constant);
-            ld.attenuation[1] = static_cast<float>(light.attenuation.linear);
-            ld.attenuation[2] = static_cast<float>(light.attenuation.quadratic);
-            ld.inner_angle = static_cast<float>(light.inner_angle);
-
-            ld.outer_angle = static_cast<float>(light.outer_angle);
-            ld.cascade_count = static_cast<float>(light.shadows.cascade_count);
-            ld.cascade_blend = light.shadows.cascade_blend ? 1.0f : 0.0f;
-            ld.blend_distance = light.shadows.blend_distance;
-        }
-
-        // Zero out unused light slots
-        for (int i = count; i < UBO_MAX_LIGHTS; ++i) {
-            std::memset(&data.lights[i], 0, sizeof(LightDataStd140));
-        }
-
-        // Ambient
-        data.ambient_color[0] = static_cast<float>(ambient_color.x);
-        data.ambient_color[1] = static_cast<float>(ambient_color.y);
-        data.ambient_color[2] = static_cast<float>(ambient_color.z);
-        data.ambient_intensity = ambient_intensity;
-
-        // Camera position
-        data.camera_position[0] = static_cast<float>(camera_position.x);
-        data.camera_position[1] = static_cast<float>(camera_position.y);
-        data.camera_position[2] = static_cast<float>(camera_position.z);
-        data.light_count = static_cast<float>(count);
-
-        // Shadow settings
-        data.shadow_method = static_cast<float>(shadow_settings.method);
-        data.shadow_softness = static_cast<float>(shadow_settings.softness);
-        data.shadow_bias = static_cast<float>(shadow_settings.bias);
-        data._pad0 = 0.0f;
-    }
+    );
 
     // Upload data to GPU (buffer must be create()'d first).
-    void upload() {
-        if (!buffer || !device_) return;
-        device_->upload_buffer(
-            buffer,
-            std::span<const uint8_t>(
-                reinterpret_cast<const uint8_t*>(&data),
-                sizeof(data)));
-    }
+    void upload();
 };
 
 } // namespace termin

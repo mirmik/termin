@@ -69,6 +69,7 @@ set(TERMIN_RENDER_PASSES_SOURCES
     src/grayscale_pass.cpp
     src/ground_grid_pass.cpp
     src/id_pass.cpp
+    src/lighting_ubo.cpp
     src/present_pass.cpp
     src/resolve_pass.cpp
     src/shadow_camera.cpp
