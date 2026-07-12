@@ -7,6 +7,7 @@
 #include "termin/render/frame_graph_debugger_core.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
+#include "termin/render/material_pipeline_shader_assembler.hpp"
 #include "termin/render/render_item_submission.hpp"
 #include "termin/render/render_task.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
@@ -36,6 +37,9 @@ extern "C" {
 namespace termin {
 
 constexpr const char* SHADOW_ENGINE_SHADER_UUID = "termin-engine-shadow";
+constexpr const char* SHADOW_STATIC_TRANSFORM_MODULE = "termin_shadow_static_transform";
+constexpr const char* SHADOW_SKINNED_TRANSFORM_MODULE = "termin_shadow_skinned_transform";
+constexpr const char* SHADOW_OUTPUT_ADAPTER_MODULE = "termin_shadow_vertex_output_adapter";
 
 namespace {
 
@@ -61,12 +65,78 @@ struct ShadowTaskExtension final : RenderTaskExtension {
     ShadowPushStd140 draw_data{};
 };
 
+MaterialFragmentInterface shadow_world_position_interface()
+{
+    MaterialFragmentInterface interface;
+    interface.semantics.push_back(
+        {"world_pos", MaterialPipelineValueType::Float3});
+    return interface;
+}
+
+std::vector<MaterialPipelineResourceDecl> shadow_adapter_resources()
+{
+    std::vector<MaterialPipelineResourceDecl> resources =
+        material_pipeline_common_vertex_resources("shadow_draw");
+    for (MaterialPipelineResourceDecl& resource : resources) {
+        resource.owner = MaterialPipelineResourceOwner::Pass;
+    }
+    return resources;
+}
+
+VertexOutputAdapter shadow_vertex_output_adapter()
+{
+    VertexOutputAdapter adapter;
+    adapter.debug_name = "shadow_clip_output";
+    adapter.source_module = {
+        SHADOW_OUTPUT_ADAPTER_MODULE,
+        "builtin_shaders/termin_shadow_vertex_output_adapter.slang"};
+    adapter.output_type_name = "VertexOutput";
+    adapter.output_function = "termin_shadow_clip_output";
+    adapter.consumed_world_semantics = shadow_world_position_interface();
+    adapter.produced_output_semantics.semantics.push_back(
+        {"clip_position", MaterialPipelineValueType::Float4});
+    adapter.resources = shadow_adapter_resources();
+    return adapter;
+}
+
+void configure_shadow_static_provider(VertexTransformProvider& provider)
+{
+    provider.source_module = {
+        SHADOW_STATIC_TRANSFORM_MODULE,
+        "builtin_shaders/termin_shadow_static_transform.slang"};
+    provider.entry_input_declaration = R"(
+struct VertexInput {
+    float3 position : POSITION;
+};)";
+    provider.adapter_input_expression =
+        "termin_shadow_static_world_position(input.position, shadow_draw.u_model)";
+    provider.produced_world_semantics = shadow_world_position_interface();
+}
+
+void configure_shadow_skinned_provider(VertexTransformProvider& provider)
+{
+    provider.source_module = {
+        SHADOW_SKINNED_TRANSFORM_MODULE,
+        "builtin_shaders/termin_shadow_skinned_transform.slang"};
+    provider.entry_input_declaration = R"(
+struct VertexInput {
+    float3 position : POSITION;
+    float4 joints : TEXCOORD0;
+    float4 weights : TEXCOORD1;
+};)";
+    provider.adapter_input_expression =
+        "termin_shadow_skinned_world_position("
+        "input.position, input.joints, input.weights, shadow_draw.u_model, bone_block)";
+    provider.produced_world_semantics = shadow_world_position_interface();
+}
+
 MaterialPipelinePassContract shadow_material_pass_contract()
 {
     MaterialPipelinePassContract contract;
     contract.debug_name = "shadow";
     contract.required_material_fragment_input = MaterialFragmentInterface{};
     contract.uses_material_fragment = true;
+    contract.vertex_output_adapter = shadow_vertex_output_adapter();
 
     MaterialFragmentInterface fragment_input =
         material_pipeline_standard_material_fragment_interface();
@@ -75,13 +145,15 @@ MaterialPipelinePassContract shadow_material_pass_contract()
             "static_shadow",
             material_pipeline_position_mesh_input(),
             fragment_input,
-            material_pipeline_common_vertex_resources("shadow_draw"));
+            {});
+    configure_shadow_static_provider(*contract.static_vertex_transform);
     contract.skinned_vertex_transform =
         material_pipeline_make_skinned_vertex_transform_contract(
             *contract.static_vertex_transform,
             "skinned_shadow",
-            "termin-engine-skinned-shadow",
+            std::nullopt,
             material_pipeline_skinned_position_mesh_input());
+    configure_shadow_skinned_provider(*contract.skinned_vertex_transform);
     contract.foliage_vertex_transform =
         material_pipeline_make_foliage_vertex_transform_contract(
             VertexTransformKind::FoliageShadow,
@@ -91,6 +163,68 @@ MaterialPipelinePassContract shadow_material_pass_contract()
             fragment_input,
             material_pipeline_foliage_vertex_resources());
     return contract;
+}
+
+tc_shader_handle register_modular_shadow_shader()
+{
+    const std::string shadow_fragment_source =
+        tgfx::load_builtin_shader_stage_source_from_catalog(
+            SHADOW_ENGINE_SHADER_UUID,
+            "fragment");
+    if (shadow_fragment_source.empty()) {
+        tc::Log::error(
+            "[ShadowPass] failed to load shadow fragment source '%s'",
+            SHADOW_ENGINE_SHADER_UUID);
+        return tc_shader_handle_invalid();
+    }
+
+    TcShaderCreateInfo fragment_create_info{};
+    fragment_create_info.sources.fragment = shadow_fragment_source;
+    fragment_create_info.sources.name = "ShadowEngineFragmentSource";
+    fragment_create_info.sources.source_path =
+        "builtin_shaders/termin-engine-shadow.slang";
+    fragment_create_info.sources.fragment_entry = "fs_main";
+    fragment_create_info.uuid = "termin-engine-shadow-fragment-source";
+    fragment_create_info.language = TC_SHADER_LANGUAGE_SLANG;
+    fragment_create_info.artifact_policy = TC_SHADER_ARTIFACT_REQUIRED;
+    TcShader base_shader = TcShader::from_sources(fragment_create_info);
+    if (!base_shader.is_valid()) {
+        tc::Log::error("[ShadowPass] failed to register shadow fragment source");
+        return tc_shader_handle_invalid();
+    }
+    MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
+    if (!pass_contract.static_vertex_transform.has_value()) {
+        tc::Log::error("[ShadowPass] static shadow transform provider is missing");
+        return tc_shader_handle_invalid();
+    }
+
+    MaterialPipelineShaderAssemblyRequest request{};
+    request.material = material_pipeline_material_contract_from_shader(
+        base_shader,
+        pass_contract.required_material_fragment_input);
+    request.vertex_transform = *pass_contract.static_vertex_transform;
+    request.pass = pass_contract;
+    request.shader_name = "ShadowEngineModular";
+    request.shader_uuid = material_pipeline_shader_intent_fingerprint(
+        base_shader,
+        TC_SHADER_VARIANT_NONE,
+        request.vertex_transform,
+        request.pass);
+    request.language = base_shader.language();
+    request.artifact_policy = base_shader.artifact_policy();
+
+    MaterialPipelineShaderAssemblyResult result =
+        material_pipeline_assemble_shader(request);
+    if (!result.ok()) {
+        for (const MaterialPipelineDiagnostic& diagnostic : result.diagnostics) {
+            tc::Log::error(
+                "[ShadowPass] modular shadow shader assembly failed: %s: %s",
+                material_pipeline_diagnostic_code_name(diagnostic.code),
+                diagnostic.message.c_str());
+        }
+        return tc_shader_handle_invalid();
+    }
+    return result.shader.handle;
 }
 
 } // anonymous namespace
@@ -122,8 +256,9 @@ void ShadowPass::destroy() {
 void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     device2_ = &device;
 
-    // Register the engine's shadow VS/FS sources as a TcShader so the
-    // global hash-based registry dedups them across pass re-creations.
+    // Assemble and register the modular shadow VS plus the engine fragment
+    // source as a TcShader so the global hash-based registry dedups it across
+    // pass re-creations.
     // When the editor toggles Play/Stop and the frame-graph rebuilds its
     // ShadowPass, `tc_shader_from_sources` returns the existing handle
     // (same source -> same hash -> same slot), and `tc_shader_ensure_tgfx2`
@@ -136,7 +271,7 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
         // Process-lifetime engine shader: never destroyed (transient
         // TcShader wrappers from material phases / Python bindings
         // can't bounce ref_count through zero and take it down).
-        shadow_shader_handle_ = tgfx::register_builtin_shader_from_catalog(SHADOW_ENGINE_SHADER_UUID);
+        shadow_shader_handle_ = register_modular_shadow_shader();
     }
 }
 
@@ -376,8 +511,7 @@ void ShadowPass::collect_shader_usages(
     }
 
     if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
-        shadow_shader_handle_ =
-            tgfx::register_builtin_shader_from_catalog(SHADOW_ENGINE_SHADER_UUID);
+        shadow_shader_handle_ = register_modular_shadow_shader();
     }
     if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
         tc::Log::error("[ShadowPass] cannot collect shader usages without a valid base shader");
