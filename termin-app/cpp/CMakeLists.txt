@@ -238,6 +238,7 @@ option(BUILD_EDITOR_MINIMAL "Build minimal termin_editor (no Qt C++ SDK required
 if(BUILD_EDITOR_MINIMAL)
     add_executable(termin_editor
         app/main_minimal.cpp
+        termin/editor/gizmo_types.cpp
     )
     target_include_directories(termin_editor PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
@@ -313,6 +314,7 @@ if(BUILD_TESTS)
         termin/editor/editor_interaction_system.cpp
         termin/editor/editor_snap.cpp
         termin/editor/gizmo_manager.cpp
+        termin/editor/gizmo_types.cpp
         termin/editor/camera_frustum_math.cpp
         termin/editor/transform_gizmo.cpp
         termin/render/solid_primitive_renderer.cpp
