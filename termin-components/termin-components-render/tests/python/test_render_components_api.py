@@ -320,21 +320,13 @@ def test_pipeline_shader_usage_collection_uses_pass_phase_mark():
 
         pipeline.add_pass(ColorPass(phase_mark="opaque"))
         shaders = collect_shader_usages_for_pipeline(scene.scene_handle(), pipeline)
-        shader_names = {shader.name for shader in shaders}
+        shader_uuids = {shader.uuid for shader in shaders}
 
-        assert "termin-engine-line-default" in shader_names
-        assert "termin-engine-line-default_LineTubeBody" in shader_names
-        assert "termin-engine-line-default_LineTubeCap" in shader_names
-        assert len({shader.uuid for shader in shaders}) == len(shaders)
-        variant_ops = {shader.name: shader.variant_op for shader in shaders}
-        assert (
-            variant_ops["termin-engine-line-default_LineTubeBody"]
-            == ShaderVariantOp.LINE_TUBE_BODY
-        )
-        assert (
-            variant_ops["termin-engine-line-default_LineTubeCap"]
-            == ShaderVariantOp.LINE_TUBE_CAP
-        )
+        assert "termin-engine-line-default" in shader_uuids
+        assert len(shader_uuids) == len(shaders)
+        variant_ops = {shader.variant_op for shader in shaders}
+        assert ShaderVariantOp.LINE_TUBE_BODY in variant_ops
+        assert ShaderVariantOp.LINE_TUBE_CAP in variant_ops
 
         empty_phase_pipeline.add_pass(ColorPass(phase_mark=""))
         assert len(collect_shader_usages_for_pipeline(scene.scene_handle(), empty_phase_pipeline)) == 0

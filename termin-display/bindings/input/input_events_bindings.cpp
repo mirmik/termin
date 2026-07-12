@@ -31,8 +31,8 @@ void bind_input_events(nb::module_& m) {
         .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
                            int button, int action, int mods, uint32_t source,
                            uint32_t click_count) {
-            new (self) MouseButtonEvent(viewport.handle(), x, y, button, action, mods, source,
-                                        click_count);
+            new (self) MouseButtonEvent(MouseButtonEventInit{
+                viewport.handle(), x, y, button, action, mods, source, click_count});
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0,
            nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME),
@@ -40,9 +40,9 @@ void bind_input_events(nb::module_& m) {
         .def("__init__", [](MouseButtonEvent* self, const TcViewport& viewport, double x, double y,
                            MouseButton button_enum, Action action_enum, int mods, uint32_t source,
                            uint32_t click_count) {
-            new (self) MouseButtonEvent(viewport.handle(), x, y,
-                static_cast<int>(button_enum), static_cast<int>(action_enum), mods, source,
-                click_count);
+            new (self) MouseButtonEvent(MouseButtonEventInit{
+                viewport.handle(), x, y, static_cast<int>(button_enum),
+                static_cast<int>(action_enum), mods, source, click_count});
         }, nb::arg("viewport"), nb::arg("x"), nb::arg("y"),
            nb::arg("button"), nb::arg("action"), nb::arg("mods") = 0,
            nb::arg("source") = static_cast<uint32_t>(TC_INPUT_SOURCE_RUNTIME),

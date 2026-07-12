@@ -112,8 +112,8 @@ void EditorViewportInputManager::on_mouse_button(int button, int action, int mod
 
     // Dispatch to viewport-local editor entities, then scene components
     // explicitly opted into editor input via input_source_mask.
-    MouseButtonEvent event(_viewport, x, y, button, action, mods, TC_INPUT_SOURCE_EDITOR,
-                           click_count);
+    MouseButtonEvent event(MouseButtonEventInit{
+        _viewport, x, y, button, action, mods, TC_INPUT_SOURCE_EDITOR, click_count});
     _dispatch_to_internal_entities(&event);
     if (event.handled) return;
     _dispatch_to_editor_components(&event);

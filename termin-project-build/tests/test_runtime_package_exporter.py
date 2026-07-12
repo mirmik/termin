@@ -1,11 +1,9 @@
 import json
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-from termin.project_build import build_desktop_project, export_runtime_package
-from termin.project_build.desktop_runtime_packager import package_desktop_runtime
+from termin.project_build import export_runtime_package
 from termin.project_build.runtime_package_exporter import (
     ENGINE_TEXT3D_SHADER_UUID,
     _default_pipeline_engine_shaders,

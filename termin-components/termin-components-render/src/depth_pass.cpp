@@ -459,6 +459,7 @@ void DepthOnlyPass::collect_draw_calls(
         std::vector<DepthOnlyPass::DrawCall>* draw_calls = nullptr;
         MaterialPipelinePassContract pass_contract;
         RenderContext* render_context = nullptr;
+        std::string pass_name;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
@@ -474,7 +475,7 @@ void DepthOnlyPass::collect_draw_calls(
         item_context.render_category_mask = collect_ctx->render_context
             ? collect_ctx->render_context->render_category_mask
             : UINT64_MAX;
-        item_context.debug_pass_name = collect_ctx->pass->get_pass_name().c_str();
+        item_context.debug_pass_name = collect_ctx->pass_name.c_str();
         item_context.pass_contract = &collect_ctx->pass_contract;
         item_context.camera = collect_ctx->render_context
             ? collect_ctx->render_context->camera
@@ -532,7 +533,8 @@ void DepthOnlyPass::collect_draw_calls(
         this,
         &cached_draw_calls_,
         depth_material_pass_contract("depth_only"),
-        &render_context};
+        &render_context,
+        get_pass_name()};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
