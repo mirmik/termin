@@ -7,8 +7,8 @@ from termin_nanobind.runtime import preload_sdk_libs
 preload_sdk_libs("termin_bootstrap")
 
 from termin.bootstrap._bootstrap_native import (
-    bootstrap_editor,
-    bootstrap_player,
+    bootstrap_editor as _bootstrap_editor_native,
+    bootstrap_player as _bootstrap_player_native,
     bootstrap_runtime,
     init_inspect_adapters,
     init_pointer_extractors,
@@ -20,6 +20,24 @@ from termin.bootstrap._bootstrap_native import (
     register_scene_extensions,
     shutdown_runtime as _shutdown_runtime_native,
 )
+
+
+def _restore_python_components() -> None:
+    from termin.scene import restore_python_components
+
+    restore_python_components()
+
+
+def bootstrap_player() -> None:
+    """Bootstrap player/runtime registries and restore loaded Python components."""
+    _bootstrap_player_native()
+    _restore_python_components()
+
+
+def bootstrap_editor() -> None:
+    """Bootstrap editor registries and restore loaded Python components."""
+    _bootstrap_editor_native()
+    _restore_python_components()
 
 
 def configure_resource_manager_factory(factory: Callable[[], object] | None) -> None:
