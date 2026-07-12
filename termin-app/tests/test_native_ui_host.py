@@ -498,25 +498,26 @@ def test_native_shell_projects_the_canonical_menu_inventory():
     assert shell.game_menu_model.command(shell.run_standalone_command).data.shortcut == "F6"
 
 
-def test_editor_cli_rejects_retired_backend_selection(monkeypatch):
+def test_editor_cli_accepts_native_backend_selection(monkeypatch):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor", "--ui=native"])
-    assert _parse_editor_args() == ("__error__", None)
+    assert _parse_editor_args() == (None, None, "native")
 
 
 def test_editor_cli_defaults_to_native_backend(monkeypatch):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor"])
-    assert _parse_editor_args() == (None, None)
+    assert _parse_editor_args() == (None, None, "native")
 
 
-def test_editor_cli_rejects_legacy_tcgui_backend(monkeypatch):
+def test_editor_cli_accepts_legacy_tcgui_backend_for_migration_comparison(monkeypatch, capsys):
     from termin.editor.run_editor import _parse_editor_args
 
     monkeypatch.setattr("sys.argv", ["termin_editor", "--ui=tcgui"])
-    assert _parse_editor_args() == ("__error__", None)
+    assert _parse_editor_args() == (None, None, "tcgui")
+    assert "migration comparison" in capsys.readouterr().out
 
 
 def test_native_screenshot_composes_current_document_before_readback(monkeypatch, tmp_path):

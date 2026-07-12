@@ -62,15 +62,18 @@ menu connections for the editor session so project UI lifetime is explicit.
 4. Port inspector fields and component extension panels.
 5. Attach production `Viewport3D` and the `tcnodegraph` SceneView adapter to
    the same document.
-6. Port remaining dialogs/launcher chrome, make native the only production
-   entrypoint and remove `tcgui`/`termin.editor_tcgui` dependencies.
+6. Port remaining dialogs/launcher chrome, keep native as the default
+   production entrypoint, and remove `tcgui`/`termin.editor_tcgui`
+   dependencies only after the legacy comparison route is no longer needed.
 
 `termin_editor` now exercises the host through the normal
 C++ embedded-Python `EngineCore` entrypoint. `TERMIN_EDITOR_NATIVE_SMOKE_FRAMES`
 is a deterministic test-only frame limit used to prove graceful startup,
-render/present and shutdown. Native is now the only production editor
-entrypoint; the old frontend remains source-only while its reusable models and
-test fixtures are retired.
+render/present and shutdown. Native is the default production editor
+entrypoint. During the migration the old frontend remains explicitly available
+via `termin_editor --ui=tcgui` for side-by-side functional comparison; it is
+not the default or a supported release path. Its reusable models and test
+fixtures are retired only after the comparison gate closes.
 
 The production MCP gate starts this entrypoint with an ephemeral loopback port,
 captures the composed native UI through `capture_editor_screenshot`, then uses
