@@ -1,4 +1,4 @@
-import sys
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -393,10 +393,21 @@ def test_native_ui_font_resolution_honors_explicit_path(tmp_path: Path):
 
 def test_native_ui_font_is_installed_in_sdk(monkeypatch, tmp_path: Path):
     monkeypatch.chdir(tmp_path)
-    sdk_root = Path(sys.executable).resolve().parent.parent
+    sdk_root = Path(os.environ["TERMIN_SDK"]).resolve()
     installed_font = sdk_root / "share" / "termin" / "fonts" / "DroidSans.ttf"
 
     assert installed_font.is_file()
+    assert resolve_native_ui_font() == installed_font
+
+
+def test_native_ui_font_resolution_uses_runtime_sdk_root(monkeypatch, tmp_path: Path):
+    sdk_root = tmp_path / "runtime-sdk"
+    installed_font = sdk_root / "share" / "termin" / "fonts" / "DroidSans.ttf"
+    installed_font.parent.mkdir(parents=True)
+    installed_font.write_bytes(b"test-font")
+    monkeypatch.setenv("TERMIN_SDK", str(sdk_root))
+    monkeypatch.chdir(tmp_path)
+
     assert resolve_native_ui_font() == installed_font
 
 

@@ -69,7 +69,12 @@ def resolve_native_ui_font(configured: str | Path | None = None) -> Path:
             return explicit
         raise FileNotFoundError(f"TERMIN_UI_FONT points to missing file: {explicit}")
 
-    sdk_root = Path(sys.executable).resolve().parent.parent
+    configured_sdk = os.environ.get("TERMIN_SDK")
+    sdk_root = (
+        Path(configured_sdk).resolve()
+        if configured_sdk
+        else Path(sys.executable).resolve().parent.parent
+    )
     candidates = (
         sdk_root / "share" / "termin" / "fonts" / "DroidSans.ttf",
         Path.cwd() / "termin-thirdparty" / "recastnavigation" / "RecastDemo" / "Bin" / "DroidSans.ttf",
@@ -77,7 +82,10 @@ def resolve_native_ui_font(configured: str | Path | None = None) -> Path:
     for candidate in candidates:
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError("native UI font is absent from the SDK and source checkout")
+    searched = ", ".join(str(candidate) for candidate in candidates)
+    raise FileNotFoundError(
+        f"native UI font is absent from the SDK and source checkout; searched: {searched}"
+    )
 
 
 class NativeUiEventRouter:
