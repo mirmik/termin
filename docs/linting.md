@@ -145,9 +145,10 @@ Keep each lint stage separately callable and separately gated:
 
 - Python lint is already cheap enough for every PR.
 - C/C++ lint runs in PR CI through the default `./run-lint-cpp.sh` baseline.
-- Source file length is gated in PR CI through
-  `python3 scripts/find-long-files.py --threshold 2000 --fail .`; the check only
-  scans C/C++/C#/Python source extensions.
+- Source file length policy is declared in
+  `build-system/repository-policies.json` and enforced by
+  `python3 -m termin_build.repository_control --repo-root . check`. The legacy
+  `scripts/find-long-files.py` entry point consumes the same manifest.
 - Keep `--python-bindings` as an opt-in/manual C++ lint mode until its runtime
   cost and nanobind analyzer noise are understood in CI.
 - Expensive static analysis can remain scheduled or opt-in.
