@@ -37,38 +37,6 @@ namespace {
 
 constexpr auto kAbandonedShadowAge = std::chrono::hours(24);
 
-#ifdef _WIN32
-std::mutex& pending_shadow_cleanup_mutex() {
-    static std::mutex mutex;
-    return mutex;
-}
-
-std::vector<std::filesystem::path>& pending_shadow_cleanup_dirs() {
-    static std::vector<std::filesystem::path> paths;
-    return paths;
-}
-
-void retry_pending_shadow_cleanup() {
-    std::lock_guard<std::mutex> lock(pending_shadow_cleanup_mutex());
-    auto& paths = pending_shadow_cleanup_dirs();
-    paths.erase(
-        std::remove_if(paths.begin(), paths.end(), [](const auto& path) {
-            std::error_code ec;
-            std::filesystem::remove_all(path, ec);
-            return !ec;
-        }),
-        paths.end());
-}
-
-void defer_shadow_cleanup(const std::filesystem::path& path) {
-    std::lock_guard<std::mutex> lock(pending_shadow_cleanup_mutex());
-    auto& paths = pending_shadow_cleanup_dirs();
-    if (std::find(paths.begin(), paths.end(), path) == paths.end()) {
-        paths.push_back(path);
-    }
-}
-#endif
-
 void native_module_host_log(void*, int level, const char* message) {
     const char* text = message ? message : "";
     switch (level) {
@@ -406,28 +374,33 @@ bool validate_native_artifact(
 
 void* load_shared_library(
     const std::filesystem::path& path,
+    const std::filesystem::path& artifact_dir,
     const std::filesystem::path& sdk_bin_dir,
     std::string& error
 ) {
 #ifdef _WIN32
     std::filesystem::path load_path = std::filesystem::absolute(path);
     load_path.make_preferred();
-    std::filesystem::path dependency_path;
-    if (!sdk_bin_dir.empty()) {
-        dependency_path = std::filesystem::absolute(sdk_bin_dir);
+    std::vector<DLL_DIRECTORY_COOKIE> dependency_cookies;
+    for (const auto& directory : {artifact_dir, sdk_bin_dir}) {
+        if (directory.empty()) {
+            continue;
+        }
+        std::filesystem::path dependency_path = std::filesystem::absolute(directory);
         dependency_path.make_preferred();
-    }
-    DLL_DIRECTORY_COOKIE dependency_cookie = nullptr;
-    if (!dependency_path.empty()) {
-        dependency_cookie = AddDllDirectory(dependency_path.c_str());
-        if (dependency_cookie == nullptr) {
+        DLL_DIRECTORY_COOKIE cookie = AddDllDirectory(dependency_path.c_str());
+        if (cookie == nullptr) {
             const DWORD error_code = GetLastError();
+            for (DLL_DIRECTORY_COOKIE added_cookie : dependency_cookies) {
+                RemoveDllDirectory(added_cookie);
+            }
             std::ostringstream ss;
             ss << "AddDllDirectory failed for " << dependency_path.string()
                << " with error code " << error_code;
             error = ss.str();
             return nullptr;
         }
+        dependency_cookies.push_back(cookie);
     }
     HMODULE handle = LoadLibraryExW(
         load_path.c_str(),
@@ -437,8 +410,8 @@ void* load_shared_library(
             LOAD_LIBRARY_SEARCH_USER_DIRS
     );
     const DWORD load_error_code = handle == nullptr ? GetLastError() : ERROR_SUCCESS;
-    if (dependency_cookie != nullptr) {
-        RemoveDllDirectory(dependency_cookie);
+    for (DLL_DIRECTORY_COOKIE cookie : dependency_cookies) {
+        RemoveDllDirectory(cookie);
     }
     if (handle == nullptr) {
         std::ostringstream ss;
@@ -449,6 +422,7 @@ void* load_shared_library(
     }
     return reinterpret_cast<void*>(handle);
 #else
+    (void)artifact_dir;
     (void)sdk_bin_dir;
     void* handle = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
     if (handle == nullptr) {
@@ -593,6 +567,17 @@ bool CppModuleBackend::stage_sibling_libraries(
     const std::filesystem::path& artifact_path,
     const std::filesystem::path& load_dir
 ) {
+#ifdef _WIN32
+    // Windows resolves adjacent dependencies from the original artifact
+    // directory through AddDllDirectory while loading the private module copy.
+    // Copying every sibling DLL into the shadow directory gives this backend
+    // ownership of libraries that may remain loaded by Python extensions or
+    // other modules, making deterministic directory cleanup impossible.
+    (void)record;
+    (void)artifact_path;
+    (void)load_dir;
+    return true;
+#else
     std::error_code ec;
     std::filesystem::directory_iterator it(artifact_path.parent_path(), ec);
     if (ec) {
@@ -620,6 +605,7 @@ bool CppModuleBackend::stage_sibling_libraries(
         }
     }
     return true;
+#endif
 }
 
 bool CppModuleBackend::remove_shadow_artifacts(
@@ -634,21 +620,8 @@ bool CppModuleBackend::remove_shadow_artifacts(
     const std::filesystem::path load_dir = path.parent_path();
     std::filesystem::remove_all(load_dir, ec);
     if (!ec) {
-#ifdef _WIN32
-        retry_pending_shadow_cleanup();
-#endif
         return true;
     }
-
-#ifdef _WIN32
-    if (ec == std::errc::permission_denied) {
-        defer_shadow_cleanup(load_dir);
-        tc::Log::warn(
-            "CppModuleBackend: deferring cleanup of loader-owned shadow directory '%s'",
-            load_dir.string().c_str());
-        return true;
-    }
-#endif
 
     const std::string cleanup_error = "Failed to remove native shadow load directory '" +
         load_dir.string() + "': " + ec.message();
@@ -808,6 +781,7 @@ bool CppModuleBackend::load(
         : environment.sdk_prefix / "bin";
     void* native_handle = load_shared_library(
         load_path,
+        config->artifact_path.parent_path(),
         sdk_bin_dir,
         error);
     if (native_handle == nullptr) {

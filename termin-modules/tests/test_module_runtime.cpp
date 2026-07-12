@@ -951,6 +951,12 @@ void test_cpp_backend_cleans_shadow_artifacts_after_repeated_unload() {
         expect(handle->loaded_path.parent_path() != artifact.parent_path(), "shadow must not live beside artifact");
         expect(handle->loaded_path.string().starts_with(shadow_root.string()), "shadow must live under configured root");
         expect(std::filesystem::exists(handle->loaded_path), "shadow file should exist while loaded");
+#ifdef _WIN32
+        expect(
+            count_regular_files(handle->loaded_path.parent_path()) == 1,
+            "Windows shadow directory must own only the uniquely loaded module, not sibling DLL dependencies"
+        );
+#endif
         const std::filesystem::path loaded_path = handle->loaded_path;
 
         expect(runtime.unload_module("shadow_test"), "native shadow module should unload");
