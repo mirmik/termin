@@ -275,6 +275,30 @@ The long-term form allows the pipeline to generate small adapter functions
 instead of relying on all templates to manually match every material fragment
 input shape.
 
+### Implemented first vertical slice (2026-07-12)
+
+The shadow pass now uses this boundary for static and skinned casters:
+
+```text
+static/skinned transform provider
+  + shadow vertex-output adapter
+  -> deterministic imported Slang entry-point glue
+```
+
+`VertexTransformProvider` records its imported module and source identity,
+mesh/instance inputs, transform-owned resources, and world-space semantics.
+`VertexOutputAdapter` records its module/source identity, the world semantics
+it consumes, clip/output semantics, and pass-owned resources. The assembler
+merges material, provider, adapter, and pass contracts, and includes both
+module identities in the shader intent fingerprint. Runtime Slang dependency
+tracking then includes transitive imports in the artifact fingerprint.
+
+For the shadow slice, `bone_block` is declared by the skinned provider while
+`per_frame` and `shadow_draw` are declared by the shared output adapter. The
+old `termin-engine-skinned-shadow` whole-stage template is not selected on the
+migrated path. Foliage and the remaining material/depth/id/normal paths retain
+their transitional templates until their dedicated migrations.
+
 ## Interface Contracts
 
 The pipeline needs explicit vertex/fragment interface metadata.
