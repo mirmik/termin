@@ -154,7 +154,10 @@ class NativeDisplayWorkspace:
                 input_manager=input_manager,
             )
             self._pages.append(page)
-            self.tabs.selected_index = self.tabs.page_count - 1
+            # Displays are also created by RenderingManager while a scene is
+            # restored or a game-scene is attached. Factory side effects must
+            # not steal the user's active tab in either case. Explicit editor
+            # commands select their newly-created display at the call site.
             self.request_render()
             return display
         except Exception:
