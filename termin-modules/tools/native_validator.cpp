@@ -1,4 +1,6 @@
+#include <filesystem>
 #include <iostream>
+#include <iterator>
 #include <string>
 
 #include <termin_modules/native_module_validation.hpp>
@@ -33,6 +35,25 @@ int validate_library(
     bool inspect
 ) {
 #ifdef _WIN32
+    wchar_t executable_path[MAX_PATH] = {};
+    const DWORD executable_path_size = GetModuleFileNameW(
+        nullptr,
+        executable_path,
+        static_cast<DWORD>(std::size(executable_path))
+    );
+    if (executable_path_size == 0 || executable_path_size >= std::size(executable_path)) {
+        std::cerr << "Failed to resolve native validator directory, error code "
+                  << GetLastError() << "\n";
+        return 2;
+    }
+    const std::filesystem::path validator_directory =
+        std::filesystem::path(executable_path).parent_path();
+    if (!SetDllDirectoryW(validator_directory.c_str())) {
+        std::cerr << "Failed to add native validator directory to DLL search path: '"
+                  << validator_directory.string() << "', error code "
+                  << GetLastError() << "\n";
+        return 2;
+    }
     HMODULE handle = LoadLibraryExA(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!handle) {
         std::cerr << "LoadLibrary failed for '" << path << "' with error code "
