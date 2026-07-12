@@ -1162,6 +1162,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             else str(project_browser_controller.root_path)
         ),
         get_editor_state_io=lambda: editor_state_io,
+        prepare_scene_for_save=lambda name: (
+            True
+            if render_scene_session is None
+            else render_scene_session.sync_scene_render_state(name)
+        ),
         has_editor_attachment=lambda: editor_scene_session is not None,
         detach_editor_from_scene=detach_editor_scene,
         detach_scene_from_render=lambda name, **_options: (

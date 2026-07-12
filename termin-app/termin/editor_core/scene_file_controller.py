@@ -26,6 +26,7 @@ class SceneFileController:
         get_scene: Callable[[], object | None],
         get_project_path: Callable[[], str | None],
         get_editor_state_io: Callable[[], EditorStateIO | None],
+        prepare_scene_for_save: Callable[[str], bool | None],
         has_editor_attachment: Callable[[], bool],
         detach_editor_from_scene: Callable[..., bool],
         detach_scene_from_render: Callable[..., bool],
@@ -46,6 +47,7 @@ class SceneFileController:
         self._get_scene = get_scene
         self._get_project_path = get_project_path
         self._get_editor_state_io = get_editor_state_io
+        self._prepare_scene_for_save = prepare_scene_for_save
         self._has_editor_attachment = has_editor_attachment
         self._detach_editor_from_scene = detach_editor_from_scene
         self._detach_scene_from_render = detach_scene_from_render
@@ -146,6 +148,11 @@ class SceneFileController:
         if scene_name is None:
             return
         try:
+            prepared = self._prepare_scene_for_save(scene_name)
+            if prepared is False:
+                raise RuntimeError(
+                    f"Failed to synchronize scene state before saving '{scene_name}'"
+                )
             state_io = self._get_editor_state_io()
             editor_data = state_io.collect() if state_io else None
             self._scene_manager.save_scene(scene_name, path, editor_data)

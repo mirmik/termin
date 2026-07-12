@@ -314,6 +314,7 @@ class EditorWindowTcgui:
             get_scene=lambda: self.scene,
             get_project_path=self._get_project_path,
             get_editor_state_io=lambda: self._editor_state_io,
+            prepare_scene_for_save=self.sync_scene_render_state,
             has_editor_attachment=lambda: self._editor_attachment is not None,
             detach_editor_from_scene=self.detach_editor_from_scene,
             detach_scene_from_render=self.detach_scene_from_render,
