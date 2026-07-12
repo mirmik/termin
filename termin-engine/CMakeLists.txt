@@ -233,8 +233,11 @@ if(TERMIN_ENGINE_BUILD_TESTS)
         COMMAND termin_engine_cpp_module_hot_reload_test
     )
 
+    # ScenePipelineManager is implementation detail; compile it into this
+    # white-box test rather than exporting it from termin_engine.dll.
     add_executable(termin_engine_scene_pipeline_manager_test
         tests/test_scene_pipeline_manager.cpp
+        src/scene_pipeline_manager.cpp
     )
     target_include_directories(termin_engine_scene_pipeline_manager_test PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src

@@ -48,7 +48,7 @@ struct ENTITY_API GeneralTransform3 {
     size_t children_count() const;
     GeneralTransform3 child_at(size_t index) const;
 
-    ENTITY_API Entity entity() const;
+    Entity entity() const;
     const char* name() const;
     void mark_dirty();
 

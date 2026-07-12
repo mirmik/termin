@@ -8,12 +8,13 @@
 #include <utility>
 #include <vector>
 
+#include "termin/voxels/tc_voxel_grid.h"
 #include "termin/voxels/voxel_chunk.hpp"
 #include <termin/geom/vec3.hpp>
 
 namespace termin::voxels {
 
-struct ChunkKeyHash {
+struct TERMIN_VOXELS_API ChunkKeyHash {
     size_t operator()(const std::tuple<int, int, int> &key) const;
 };
 
@@ -27,12 +28,14 @@ bool axis_test_y(const Vec3 &edge, const Vec3 &va, const Vec3 &vb, double hx, do
 bool axis_test_z(const Vec3 &edge, const Vec3 &va, const Vec3 &vb, double hx, double hy);
 } // namespace detail
 
-bool triangle_aabb_intersect(Vec3 v0, Vec3 v1, Vec3 v2, const Vec3 &box_center,
-                             const Vec3 &box_half_size);
+TERMIN_VOXELS_API bool triangle_aabb_intersect(Vec3 v0, Vec3 v1, Vec3 v2,
+                                                const Vec3 &box_center,
+                                                const Vec3 &box_half_size);
 
-Vec3 compute_triangle_normal(const Vec3 &v0, const Vec3 &v1, const Vec3 &v2);
+TERMIN_VOXELS_API Vec3 compute_triangle_normal(const Vec3 &v0, const Vec3 &v1,
+                                               const Vec3 &v2);
 
-class VoxelGrid {
+class TERMIN_VOXELS_API VoxelGrid {
   private:
     double cell_size_;
     Vec3 origin_;
