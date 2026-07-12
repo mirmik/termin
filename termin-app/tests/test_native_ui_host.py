@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -6,6 +7,7 @@ import pytest
 from tcbase import Key
 from termin.editor_native import (
     NativeUiEventRouter,
+    NativeUiWindowManager,
     build_native_editor_shell,
     resolve_native_ui_font,
 )
@@ -48,6 +50,162 @@ class EventProbe(Widget):
     def text_event(self, text):
         self.text_events.append(text)
         return EventResult.Handled
+
+
+class _WindowManagerTestWindow:
+    def __init__(self, window_id):
+        self._window_id = window_id
+        self._should_close = False
+        self.closed = False
+
+    def window_id(self):
+        return self._window_id
+
+    def set_should_close(self, value):
+        self._should_close = bool(value)
+
+    def should_close(self):
+        return self._should_close
+
+    def close(self):
+        self.closed = True
+
+
+class _WindowManagerTestBackend:
+    def __init__(self):
+        self.entries = []
+        self.next_window_id = 2
+
+    def register_main(self, window, *, host_data=None, on_destroy=None):
+        entry = SimpleNamespace(
+            window=window,
+            is_main=True,
+            host_data=host_data,
+            on_destroy=on_destroy,
+        )
+        self.entries.append(entry)
+        return entry
+
+    def create_window(self, _title, _width, _height, *, always_on_top=False):
+        window = _WindowManagerTestWindow(self.next_window_id)
+        self.next_window_id += 1
+        entry = SimpleNamespace(
+            window=window,
+            is_main=False,
+            host_data=None,
+            on_destroy=None,
+            always_on_top=always_on_top,
+        )
+        self.entries.append(entry)
+        return entry
+
+    def get_entry_for_window_id(self, window_id):
+        for entry in self.entries:
+            if entry.window.window_id() == window_id:
+                return entry
+        return None
+
+    def destroy_window(self, entry):
+        if entry not in self.entries or entry.is_main:
+            return
+        if entry.on_destroy is not None:
+            entry.on_destroy(entry)
+        self.entries.remove(entry)
+        entry.window.close()
+
+    def destroy_all(self):
+        for entry in list(self.entries):
+            if entry.on_destroy is not None:
+                entry.on_destroy(entry)
+        self.entries.clear()
+
+
+class _WindowManagerTestDocument:
+    def __init__(self):
+        self.theme = object()
+
+
+class _WindowManagerTestRouter:
+    def __init__(self):
+        self.events = []
+
+    def route(self, event):
+        self.events.append(event)
+        return SimpleNamespace(keep_running=True, routed=True)
+
+
+class _WindowManagerTestHost:
+    def __init__(self, window, document=None, **options):
+        self.window = window
+        self.document = document or _WindowManagerTestDocument()
+        self.font_path = Path("/tmp/editor.ttf")
+        self.router = _WindowManagerTestRouter()
+        self.render_requested = False
+        self.render_count = 0
+        self.deferred_count = 0
+        self.closed = False
+        self.options = options
+
+    def request_render_update(self):
+        self.render_requested = True
+
+    def process_deferred(self):
+        result = self.deferred_count
+        self.deferred_count = 0
+        return result
+
+    def render(self):
+        self.render_requested = False
+        self.render_count += 1
+        return True
+
+    def close(self):
+        self.closed = True
+        self.window.close()
+
+
+def test_native_ui_window_manager_routes_renders_and_closes_secondary_windows():
+    backend = _WindowManagerTestBackend()
+    main_host = _WindowManagerTestHost(_WindowManagerTestWindow(1))
+    batches = [
+        [{"type": "mouse_move", "window_id": 2, "x": 10.0, "y": 20.0}],
+        [{"type": "window_close", "window_id": 2}],
+        [{"type": "window_close", "window_id": 1}],
+    ]
+    manager = NativeUiWindowManager(
+        main_host,
+        backend_manager=backend,
+        event_source=lambda: batches.pop(0),
+        host_factory=_WindowManagerTestHost,
+    )
+    closed = []
+    secondary = manager.create_window(
+        "Debugger",
+        800,
+        600,
+        document=_WindowManagerTestDocument(),
+        on_close=lambda: closed.append("secondary"),
+    )
+
+    assert secondary.host.options["manage_text_input"] is False
+    assert secondary.host.document.theme is main_host.document.theme
+    assert manager.poll_events() == (True, 1)
+    assert len(secondary.host.router.events) == 1
+    assert secondary.host.render_requested
+    assert manager.render_requested() == 1
+    assert secondary.host.render_count == 1
+
+    assert manager.poll_events() == (True, 0)
+    assert secondary.closed
+    assert secondary.host.closed
+    assert closed == ["secondary"]
+    assert manager.windows == ()
+    assert not main_host.window.should_close()
+
+    assert manager.poll_events() == (False, 0)
+    assert main_host.window.should_close()
+    manager.close()
+    assert main_host.closed
 
 
 def test_native_menu_activation_route_filters_local_command_id_collisions():

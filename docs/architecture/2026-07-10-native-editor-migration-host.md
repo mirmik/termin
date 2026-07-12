@@ -19,6 +19,15 @@ layer.
 - document clipboard services and a typed file-drop callback boundary;
 - owner-thread PNG readback of the composed color target for screenshots/MCP.
 
+`NativeUiWindowManager` owns the process-level multi-window boundary. SDL has a
+single event queue, so the manager drains it once and routes events to a host by
+SDL window id. Secondary windows receive independent `Document`, renderer,
+color target and input state while `SDLBackendWindow(..., share_with=main)`
+keeps one render device/context contract for the process. Closing a secondary
+window tears down only its host; closing the primary window terminates the
+editor. Requested hosts are composed and presented sequentially so tgfx2 frame
+recording is never nested.
+
 `EditorPythonExecutor`, `EditorMcpServer` and editor shader-runtime setup now
 live in `termin.editor_core`; their old `termin.editor_tcgui` modules are
 temporary compatibility imports for legacy consumers. MCP screenshot capture

@@ -13,6 +13,7 @@ from queue import Empty, SimpleQueue
 from typing import Callable
 
 from termin.display import (
+    BackendWindowManager,
     SDLBackendWindow,
     get_clipboard_text,
     poll_sdl_events,
@@ -187,6 +188,7 @@ class NativeUiHost:
         *,
         font_path: str | Path | None = None,
         file_drop_handler: FileDropHandler | None = None,
+        manage_text_input: bool = True,
     ) -> None:
         if poll_sdl_events is None or get_clipboard_text is None or set_clipboard_text is None:
             raise RuntimeError("termin-display SDL platform bindings are unavailable")
@@ -198,6 +200,7 @@ class NativeUiHost:
         self.paint_context = PaintContext(self.draw_list)
         self.renderer = DrawListRenderer()
         resolved_font = resolve_native_ui_font(font_path)
+        self.font_path = resolved_font
         if not self.renderer.set_default_font_path(str(resolved_font), 15):
             raise RuntimeError(f"failed to configure native UI font: {resolved_font}")
         self.renderer.bind_text_measurer(self.document)
@@ -215,7 +218,9 @@ class NativeUiHost:
         self._color_pickers: list[object] = []
         self._image_previews: list[_ImagePreview] = []
         self._deferred: SimpleQueue[Callable[[], None]] = SimpleQueue()
-        start_text_input()
+        self._manage_text_input = bool(manage_text_input)
+        if self._manage_text_input:
+            start_text_input()
 
     @property
     def color_target(self):
@@ -442,7 +447,8 @@ class NativeUiHost:
         self._color_pickers.clear()
         for preview in tuple(self._image_previews):
             self._release_image_preview(preview)
-        stop_text_input()
+        if self._manage_text_input:
+            stop_text_input()
         self.renderer.release_gpu()
         if self._color_target is not None:
             self.context.destroy_texture(self._color_target)
@@ -454,3 +460,185 @@ class NativeUiHost:
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         self.close()
+
+
+@dataclass
+class NativeUiWindow:
+    """A secondary OS window and the native UI host attached to it."""
+
+    manager: "NativeUiWindowManager"
+    entry: object
+    host: NativeUiHost
+    _closed: bool = False
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def request_render_update(self) -> None:
+        if not self._closed:
+            self.host.request_render_update()
+
+    def close(self) -> None:
+        if not self._closed:
+            self.manager.destroy_window(self)
+
+
+class NativeUiWindowManager:
+    """Own and drive all native UI windows in one editor process.
+
+    SDL has one process-global event queue, so individual hosts cannot poll it
+    independently.  This manager drains the queue once, routes each event by
+    window id, and composes every host that requested an update.  Secondary
+    windows share the primary window's render device through
+    :class:`BackendWindowManager`.
+    """
+
+    def __init__(
+        self,
+        main_host: NativeUiHost,
+        *,
+        backend_manager: object | None = None,
+        event_source: Callable[[], list[dict[str, object]]] | None = None,
+        host_factory: Callable[..., NativeUiHost] | None = None,
+    ) -> None:
+        if BackendWindowManager is None and backend_manager is None:
+            raise RuntimeError("termin-display BackendWindowManager is unavailable")
+        self.main_host = main_host
+        self._backend = backend_manager if backend_manager is not None else BackendWindowManager()
+        self._event_source = event_source if event_source is not None else poll_sdl_events
+        self._host_factory = host_factory if host_factory is not None else NativeUiHost
+        self._windows: list[NativeUiWindow] = []
+        self._closed = False
+        self._main_entry = self._backend.register_main(
+            main_host.window,
+            host_data=main_host,
+            on_destroy=lambda _entry: main_host.close(),
+        )
+
+    @property
+    def windows(self) -> tuple[NativeUiWindow, ...]:
+        return tuple(self._windows)
+
+    def create_window(
+        self,
+        title: str,
+        width: int,
+        height: int,
+        *,
+        document: Document | None = None,
+        always_on_top: bool = False,
+        on_close: Callable[[], None] | None = None,
+    ) -> NativeUiWindow:
+        if self._closed:
+            raise RuntimeError("native UI window manager is closed")
+        entry = self._backend.create_window(
+            title,
+            width,
+            height,
+            always_on_top=always_on_top,
+        )
+        try:
+            host = self._host_factory(
+                entry.window,
+                document=document,
+                font_path=self.main_host.font_path,
+                manage_text_input=False,
+            )
+            # Secondary tools must inherit the complete editor theme, not just
+            # the default font size used when their renderer was constructed.
+            host.document.theme = self.main_host.document.theme
+        except Exception:
+            self._backend.destroy_window(entry)
+            raise
+
+        window = NativeUiWindow(self, entry, host)
+
+        def destroy_secondary(_entry) -> None:
+            if window._closed:
+                return
+            window._closed = True
+            if window in self._windows:
+                self._windows.remove(window)
+            try:
+                if on_close is not None:
+                    on_close()
+            except Exception:
+                _logger.exception("native secondary-window close callback failed")
+            finally:
+                host.close()
+
+        entry.host_data = host
+        entry.on_destroy = destroy_secondary
+        self._windows.append(window)
+        return window
+
+    def destroy_window(self, window: NativeUiWindow) -> None:
+        if window.manager is not self:
+            raise ValueError("secondary native UI window belongs to another manager")
+        if window._closed:
+            return
+        self._backend.destroy_window(window.entry)
+
+    def poll_events(self) -> tuple[bool, int]:
+        if self._closed:
+            return False, 0
+        routed = 0
+        for event in self._event_source():
+            event_type = event.get("type")
+            if event_type == "quit":
+                self.main_host.window.set_should_close(True)
+                return False, routed
+
+            window_id = int(event.get("window_id", 0))
+            if event_type == "window_close":
+                entry = self._backend.get_entry_for_window_id(window_id)
+                if entry is None:
+                    continue
+                if entry.is_main:
+                    self.main_host.window.set_should_close(True)
+                    return False, routed
+                self._backend.destroy_window(entry)
+                continue
+
+            entry = (
+                self._backend.get_entry_for_window_id(window_id)
+                if window_id
+                else self._main_entry
+            )
+            if entry is None:
+                continue
+            host = entry.host_data
+            result = host.router.route(event)
+            if not result.keep_running:
+                if entry.is_main:
+                    self.main_host.window.set_should_close(True)
+                    return False, routed
+                self._backend.destroy_window(entry)
+                continue
+            if result.routed:
+                routed += 1
+                host.request_render_update()
+        return not self.main_host.window.should_close(), routed
+
+    def process_deferred(self) -> int:
+        processed = self.main_host.process_deferred()
+        for window in tuple(self._windows):
+            if not window.closed:
+                processed += window.host.process_deferred()
+        return processed
+
+    def render_requested(self) -> int:
+        rendered = 0
+        entries = tuple(self._backend.entries)
+        for entry in entries:
+            host = entry.host_data
+            if host.render_requested and host.render():
+                rendered += 1
+        return rendered
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._backend.destroy_all()

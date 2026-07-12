@@ -625,6 +625,15 @@ class FramegraphDebuggerModel:
         """Public: called by view when the debugger closes."""
         self._disconnect()
 
+    def connect(self) -> None:
+        """Attach the current selection after a debugger view is opened.
+
+        Selection state deliberately survives closing a window.  Reopening
+        must therefore reconnect explicitly instead of relying on a combo-box
+        setter to change the already-selected pass or resource.
+        """
+        self._reconnect()
+
     def _disconnect(self) -> None:
         for pipeline in self._known_pipelines():
             pipeline.remove_passes_by_name("FrameDebugger")
