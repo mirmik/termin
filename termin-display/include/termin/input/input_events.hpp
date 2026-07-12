@@ -19,6 +19,17 @@ extern "C" {
 
 namespace termin {
 
+struct MouseButtonEventInit {
+    tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
+    double x = 0.0;
+    double y = 0.0;
+    int button = 0;
+    int action = 0;
+    int mods = 0;
+    uint32_t source = TC_INPUT_SOURCE_RUNTIME;
+    uint32_t click_count = 1;
+};
+
 /**
  * Mouse button press/release event.
  * C++ wrapper for tc_mouse_button_event.
@@ -32,12 +43,16 @@ struct MouseButtonEvent : public tc_mouse_button_event {
         handled = false;
     }
 
-    MouseButtonEvent(tc_viewport_handle vp, double x_, double y_, int btn, int act, int m = 0,
-                     uint32_t source_ = TC_INPUT_SOURCE_RUNTIME, uint32_t click_count_ = 1) {
-        viewport = vp;
-        x = x_; y = y_;
-        button = btn; action = act; mods = m; click_count = click_count_;
-        source = source_;
+    MouseButtonEvent(tc_viewport_handle viewport_, double x_, double y_, int button_, int action_, int mods_ = 0)
+        : MouseButtonEvent(MouseButtonEventInit{
+              viewport_, x_, y_, button_, action_, mods_, TC_INPUT_SOURCE_RUNTIME, 1}) {
+    }
+
+    explicit MouseButtonEvent(const MouseButtonEventInit& init) {
+        viewport = init.viewport;
+        x = init.x; y = init.y;
+        button = init.button; action = init.action; mods = init.mods; click_count = init.click_count;
+        source = init.source;
         handled = false;
     }
 

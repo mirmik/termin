@@ -124,6 +124,7 @@ void GeometryPassBase::collect_shader_usages(
         MaterialPipelinePassContract pass_contract;
         RenderItemPassSemantic pass_semantic = RenderItemPassSemantic::Color;
         const char* phase_mark = nullptr;
+        std::string pass_name;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
@@ -142,7 +143,7 @@ void GeometryPassBase::collect_shader_usages(
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = UINT64_MAX;
         item_context.render_category_mask = UINT64_MAX;
-        item_context.debug_pass_name = ctx->pass->get_pass_name().c_str();
+        item_context.debug_pass_name = ctx->pass_name.c_str();
         item_context.pass_contract = &ctx->pass_contract;
 
         RenderItemCollection items;
@@ -179,7 +180,8 @@ void GeometryPassBase::collect_shader_usages(
         base_shader,
         shader_pass_contract(),
         render_item_pass_semantic(),
-        collect_phase_mark};
+        collect_phase_mark,
+        get_pass_name()};
 
     tc_scene_foreach_drawable(scene, callback, &context, TC_SCENE_FILTER_NONE, 0);
 }
@@ -215,6 +217,7 @@ void GeometryPassBase::collect_draw_calls(
         RenderItemPassSemantic pass_semantic = RenderItemPassSemantic::Color;
         const char* phase_mark = nullptr;
         RenderContext* render_context = nullptr;
+        std::string pass_name;
     };
 
     auto callback = [](tc_component* c, void* user_data) -> bool {
@@ -234,7 +237,7 @@ void GeometryPassBase::collect_draw_calls(
         item_context.render_category_mask = ctx->render_context
             ? ctx->render_context->render_category_mask
             : UINT64_MAX;
-        item_context.debug_pass_name = ctx->pass->get_pass_name().c_str();
+        item_context.debug_pass_name = ctx->pass_name.c_str();
         item_context.pass_contract = &ctx->pass_contract;
         item_context.camera = ctx->render_context
             ? ctx->render_context->camera
@@ -312,7 +315,8 @@ void GeometryPassBase::collect_draw_calls(
         shader_pass_contract(),
         render_item_pass_semantic(),
         collect_phase_mark,
-        &render_context};
+        &render_context,
+        get_pass_name()};
 
     int filter_flags = TC_SCENE_FILTER_ENABLED
                      | TC_SCENE_FILTER_VISIBLE
