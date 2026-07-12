@@ -247,19 +247,19 @@ void tc_component_registry_register(
     tc_component_registry_register_with_parent(type_name, factory, factory_userdata, kind, NULL);
 }
 
-void tc_component_registry_register_with_parent(
+bool tc_component_registry_register_with_parent(
     const char* type_name,
     tc_component_factory factory,
     void* factory_userdata,
     tc_component_kind kind,
     const char* parent_type_name
 ) {
-    if (!type_name) return;
+    if (!type_name) return false;
 
     ensure_registry_initialized();
 
     if (!can_register_component_type(type_name, "component")) {
-        return;
+        return false;
     }
 
     tc_type_entry* entry = tc_type_registry_register_with_parent(
@@ -288,9 +288,19 @@ void tc_component_registry_register_with_parent(
             facet->factory_userdata = factory_userdata;
             facet->kind = kind;
             facet->is_abstract = false;
+            tc_type_entry_set_flag(entry, TC_TYPE_FLAG_ABSTRACT, false);
+            return true;
         }
-        tc_type_entry_set_flag(entry, TC_TYPE_FLAG_ABSTRACT, false);
+        tc_log(TC_LOG_ERROR,
+               "[ComponentRegistry] failed to create component facet for '%s'",
+               type_name);
+        return false;
     }
+
+    tc_log(TC_LOG_ERROR,
+           "[ComponentRegistry] failed to register component type '%s'",
+           type_name);
+    return false;
 }
 
 void tc_component_registry_register_abstract(
