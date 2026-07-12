@@ -227,22 +227,8 @@ void bind_tc_scene_core(nb::module_& m) {
             return TcSceneRef(h);
         }, nb::arg("index"), nb::arg("generation"),
            "Create from handle (index, generation)")
-        .def("destroy", [](TcSceneRef& self) {
-            if (!self.is_alive()) return;
-
-            // Call on_destroy on all components before destroying scene
-            for (Entity& e : self.get_all_entities()) {
-                size_t count = e.component_count();
-                for (size_t i = 0; i < count; i++) {
-                    tc_component* c = e.component_at(i);
-                    if (c) {
-                        tc_component_on_destroy(c);
-                    }
-                }
-            }
-
-            self.destroy();
-        }, "Explicitly destroy scene and release all resources")
+        .def("destroy", &TcSceneRef::destroy,
+             "Explicitly destroy scene and release all resources")
         .def("is_alive", &TcSceneRef::is_alive, "Check if scene is alive (not destroyed)")
 
         // Entity management

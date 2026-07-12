@@ -94,15 +94,6 @@ TcSceneRef deserialize_scene_with_render(const nos::trent& data, const std::stri
 
 void destroy_scene_with_render(TcSceneRef& scene) {
     if (scene.valid()) {
-        for (Entity& entity : scene.get_all_entities()) {
-            const size_t count = entity.component_count();
-            for (size_t i = 0; i < count; ++i) {
-                if (tc_component* component = entity.component_at(i)) {
-                    tc_component_on_destroy(component);
-                }
-            }
-        }
-
         if (RenderingManager* manager = RenderingManager::instance_or_null()) {
             manager->clear_scene_pipelines(scene.handle());
         }
