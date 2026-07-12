@@ -55,7 +55,7 @@ public:
         const ModuleEnvironment& environment
     ) override;
 
-    bool clean(
+    ModuleCleanResult clean(
         ModuleRecord& record,
         const ModuleEnvironment& environment
     ) override;

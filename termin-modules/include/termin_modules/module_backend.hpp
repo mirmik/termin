@@ -9,6 +9,12 @@ namespace termin_modules {
 
 using BuildOutputCallback = std::function<void(const std::string& module_id, const std::string& line)>;
 
+enum class ModuleCleanResult {
+    NotSupported,
+    Succeeded,
+    Failed,
+};
+
 class TERMIN_MODULES_API IModuleBackend {
 public:
     virtual ~IModuleBackend() = default;
@@ -54,13 +60,13 @@ public:
         return true;
     }
 
-    virtual bool clean(
+    virtual ModuleCleanResult clean(
         ModuleRecord& record,
         const ModuleEnvironment& environment
     ) {
         (void)record;
         (void)environment;
-        return true;
+        return ModuleCleanResult::NotSupported;
     }
 
     virtual bool needs_rebuild(

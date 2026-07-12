@@ -194,10 +194,20 @@ CameraComponent* ColorPass::find_camera_by_name(tc_scene_handle scene, const std
         return nullptr;
     }
 
-    // Search in scene entities
-    // TODO: This requires iterating scene entities and finding CameraComponent
-    // For now, return nullptr - camera lookup by name needs scene iteration support
-    return nullptr;
+    tc_entity_id entity_id = tc_scene_find_entity_by_name(scene, name.c_str());
+    if (!tc_entity_id_valid(entity_id)) {
+        tc::Log::error("[ColorPass] named camera entity '%s' was not found", name.c_str());
+        return nullptr;
+    }
+
+    Entity entity(tc_scene_entity_pool(scene), entity_id);
+    CameraComponent* camera = entity.get_component<CameraComponent>();
+    if (!camera) {
+        tc::Log::error(
+            "[ColorPass] entity '%s' does not contain a CameraComponent",
+            name.c_str());
+    }
+    return camera;
 }
 
 std::vector<ResourceSpec> ColorPass::get_resource_specs() const {

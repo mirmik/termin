@@ -958,19 +958,18 @@ bool CppModuleBackend::finish_unload(
     return remove_shadow_artifacts(record, handle->loaded_path);
 }
 
-bool CppModuleBackend::clean(
+ModuleCleanResult CppModuleBackend::clean(
     ModuleRecord& record,
     const ModuleEnvironment& environment
 ) {
     const auto config = std::dynamic_pointer_cast<CppModuleConfig>(record.spec.config);
     if (!config) {
         record.error_message = "Invalid C++ module config";
-        return false;
+        return ModuleCleanResult::Failed;
     }
 
     if (config->clean_command.empty()) {
-        record.error_message = "No clean command configured";
-        return false;
+        return ModuleCleanResult::NotSupported;
     }
 
     record.diagnostics.clear();
@@ -988,10 +987,10 @@ bool CppModuleBackend::clean(
         )) {
         record.diagnostics = output;
         record.error_message = error;
-        return false;
+        return ModuleCleanResult::Failed;
     }
     record.diagnostics = output;
-    return true;
+    return ModuleCleanResult::Succeeded;
 }
 
 bool CppModuleBackend::run_build_command(

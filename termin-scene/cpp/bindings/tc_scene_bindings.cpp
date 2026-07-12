@@ -551,11 +551,6 @@ void bind_tc_scene_core(nb::module_& m) {
 
         .def("remove", [](TcSceneRef& self, Entity& entity) {
             if (!entity.valid()) return;
-            size_t count = entity.component_count();
-            for (size_t i = 0; i < count; i++) {
-                tc_component* c = entity.component_at(i);
-                if (c) tc_component_on_removed(c);
-            }
             self.remove_entity(entity);
         }, nb::arg("entity"));
 
