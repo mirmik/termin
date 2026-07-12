@@ -175,7 +175,7 @@ TEST_CASE("built-in shader catalog registration resolves fragment-only entry by 
       "name": "TestCatalogFragmentFS",
       "language": "glsl",
       "stages": {
-        "fragment": {"path": "catalog-fragment-source.frag.glsl"}
+        "fragment": {"path": "catalog-fragment-source.frag.glsl", "entry": "main"}
       }
     }
   ]
@@ -228,9 +228,9 @@ TEST_CASE("built-in shader catalog registration resolves vertex-fragment entry b
       "language": "glsl",
       "stages": {
         "vertex": {
-          "path": "test-catalog.vert.glsl"
+          "path": "test-catalog.vert.glsl", "entry": "main"
         },
-        "fragment": {"path": "test-catalog.frag.glsl"}
+        "fragment": {"path": "test-catalog.frag.glsl", "entry": "main"}
       }
     }
   ]
@@ -520,7 +520,7 @@ TEST_CASE("built-in shader catalog resolves shader program source by uuid") {
     std::filesystem::remove_all(root);
 }
 
-TEST_CASE("built-in shader convention resolves canonical files without catalog manifest") {
+TEST_CASE("built-in shader lookup rejects canonical files without catalog manifest") {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path root =
         std::filesystem::temp_directory_path()
@@ -548,44 +548,37 @@ TEST_CASE("built-in shader convention resolves canonical files without catalog m
 
     tc_shader_handle handle =
         tgfx::register_builtin_shader_from_catalog("test-convention-vsfs");
-    REQUIRE(!tc_shader_handle_is_invalid(handle));
-
-    tc_shader* shader = tc_shader_get(handle);
-    REQUIRE(shader != nullptr);
-    CHECK(std::strcmp(shader->uuid, "test-convention-vsfs") == 0);
-    REQUIRE(shader->name != nullptr);
-    CHECK(std::strcmp(shader->name, "test-convention-vsfs") == 0);
-    REQUIRE(shader->vertex_source != nullptr);
-    REQUIRE(shader->fragment_source != nullptr);
-    CHECK(std::strstr(shader->vertex_source, "TEST_CONVENTION_VSFS_MARKER") != nullptr);
-    CHECK(std::strstr(shader->fragment_source, "TEST_CONVENTION_VSFS_MARKER") != nullptr);
-    REQUIRE(shader->vertex_entry != nullptr);
-    REQUIRE(shader->fragment_entry != nullptr);
-    CHECK(std::strcmp(shader->vertex_entry, "vs_main") == 0);
-    CHECK(std::strcmp(shader->fragment_entry, "fs_main") == 0);
+    CHECK(tc_shader_handle_is_invalid(handle));
 
     std::string fragment_stage =
         tgfx::load_builtin_shader_stage_source_from_catalog(
             "test-convention-stage", "fragment");
-    CHECK(fragment_stage.find("TEST_CONVENTION_FRAGMENT_STAGE_MARKER") != std::string::npos);
+    CHECK(fragment_stage.empty());
 
     tgfx::BuiltinShaderProgramSource program =
         tgfx::load_builtin_shader_program_from_catalog("test-convention-program");
-    CHECK(program.name == "test-convention-program");
-    REQUIRE(!program.source.empty());
-    CHECK(program.source.find("TEST_CONVENTION_PROGRAM_MARKER") != std::string::npos);
+    CHECK(program.name.empty());
+    CHECK(program.source.empty());
 
     tc_shader_shutdown();
     clear_builtin_root();
     std::filesystem::remove_all(root);
 }
 
-TEST_CASE("typed engine shader descriptors register without catalog manifest") {
+TEST_CASE("engine shader descriptors resolve through the catalog manifest") {
     const auto unique = std::chrono::steady_clock::now().time_since_epoch().count();
     const std::filesystem::path root =
         std::filesystem::temp_directory_path()
         / ("termin-render-passes-typed-engine-shader-test-" + std::to_string(unique));
     std::filesystem::remove_all(root);
+
+    write_text(
+        root / "engine-shader-catalog.json",
+        R"({"version":1,"shaders":[
+          {"uuid":"termin-engine-fsq","name":"FullscreenQuadEngineVS","language":"slang","stages":{"vertex":{"path":"termin-engine-fsq.vert.slang","entry":"vs_main"}}},
+          {"uuid":"termin-engine-shadow","name":"ShadowEngineVSFS","language":"slang","stages":{"vertex":{"path":"termin-engine-shadow.slang","entry":"vs_main"},"fragment":{"path":"termin-engine-shadow.slang","entry":"fs_main"}}},
+          {"uuid":"termin-engine-tonemap","name":"TonemapEngineFS","language":"slang","stages":{"fragment":{"path":"termin-engine-tonemap.frag.slang","entry":"fs_main"}}}
+        ]})");
 
     write_text(
         root / "termin-engine-fsq.vert.slang",
@@ -724,7 +717,7 @@ TEST_CASE("built-in shader catalog resolves migrated live engine shaders from ca
 
     tgfx::BuiltinShaderProgramSource skybox =
         tgfx::load_builtin_shader_program_from_catalog("termin-engine-skybox");
-    CHECK(skybox.name == "termin-engine-skybox");
+    CHECK(skybox.name == "SkyboxEngineVSFS");
     REQUIRE(!skybox.source.empty());
     CHECK(skybox.source.find("@program Skybox") != std::string::npos);
 
