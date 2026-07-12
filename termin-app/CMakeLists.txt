@@ -173,6 +173,7 @@ if(BUNDLE_PYTHON)
         "tgfx        | ${ENV_DIR}/termin-graphics/python/tgfx"
         "tcgui        | ${ENV_DIR}/termin-gui/python/tcgui"
         "tcnodegraph  | ${ENV_DIR}/termin-nodegraph/python/tcnodegraph"
+        "termin_nanobind | ${ENV_DIR}/termin-nanobind-sdk/python/termin_nanobind"
         "termin_modules | ${ENV_DIR}/termin-modules/python/termin_modules"
     )
 

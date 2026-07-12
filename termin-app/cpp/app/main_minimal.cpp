@@ -10,6 +10,7 @@
 #include "termin/scene/tc_scene_render_ext.hpp"
 
 #include <iostream>
+#include <cstring>
 #include <filesystem>
 #include <cstdlib>
 #include <string>
@@ -110,6 +111,10 @@ static void set_python_argv(int argc, char* argv[]) {
         PyMem_RawFree(wargv[i]);
     }
     delete[] wargv;
+}
+
+static bool is_python_layout_smoke_request(int argc, char* argv[]) {
+    return argc == 2 && std::strcmp(argv[1], "--termin-python-layout-smoke") == 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -219,6 +224,21 @@ int main(int argc, char* argv[]) {
     if (PyRun_SimpleString(path_code.c_str()) != 0) {
         std::cerr << "Failed to set Python path" << std::endl;
         return 1;
+    }
+
+    if (is_python_layout_smoke_request(argc, argv)) {
+        const char* smoke_code = R"(
+import json
+import tcbase
+import termin.editor
+print(json.dumps({"tcbase": tcbase.__file__, "termin_editor": termin.editor.__file__}))
+)";
+        const int result = PyRun_SimpleString(smoke_code);
+        if (result != 0) {
+            PyErr_Print();
+        }
+        Py_Finalize();
+        return result == 0 ? 0 : 1;
     }
 
     // Initialize editor (creates tcgui app, SDL, EditorWindow, sets up callbacks)
