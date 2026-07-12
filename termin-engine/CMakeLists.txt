@@ -232,6 +232,21 @@ if(TERMIN_ENGINE_BUILD_TESTS)
         NAME termin_engine_cpp_module_hot_reload_test
         COMMAND termin_engine_cpp_module_hot_reload_test
     )
+
+    add_executable(termin_engine_scene_pipeline_manager_test
+        tests/test_scene_pipeline_manager.cpp
+    )
+    target_include_directories(termin_engine_scene_pipeline_manager_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(termin_engine_scene_pipeline_manager_test PRIVATE
+        termin_engine
+        termin_scene::termin_scene
+    )
+    add_test(
+        NAME termin_engine_scene_pipeline_manager_test
+        COMMAND termin_engine_scene_pipeline_manager_test
+    )
 endif()
 
 termin_label_tests_in_directory("termin-engine")

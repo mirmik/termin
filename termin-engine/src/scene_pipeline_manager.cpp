@@ -133,7 +133,10 @@ void ScenePipelineManager::destroy_scene_pipelines(tc_scene_handle scene, bool n
     uint64_t key = scene_key(scene);
 
     auto scene_it = scene_pipelines_.find(key);
-    if (scene_it == scene_pipelines_.end()) return;
+    if (scene_it == scene_pipelines_.end()) {
+        pipeline_targets_.erase(key);
+        return;
+    }
 
     if (notify_detach) {
         tc_scene_notify_render_detach(scene);
