@@ -155,7 +155,7 @@ from termin.editor_native.registry_viewer import (
 )
 from termin.editor_native.scene_tree import build_native_scene_tree
 from termin.editor_native.shell import build_native_editor_shell
-from termin.editor_native.ui_host import NativeUiHost
+from termin.editor_native.ui_host import NativeUiHost, NativeUiWindowManager
 from termin.editor_native.viewport_list import build_native_viewport_list
 from termin.gui_native import Rect, WidgetRef
 
@@ -208,6 +208,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     window = SDLBackendWindow("Termin Editor — Native UI", 1280, 720)
     window.maximize()
     host = NativeUiHost(window)
+    window_manager = NativeUiWindowManager(host)
     shell = build_native_editor_shell(host.document)
     host.router.shortcut_dispatcher = shell.menu_bar.dispatch_shortcut
     file_menu = shell.menu_route("file")
@@ -1260,14 +1261,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         on_request_update=request_editor_render,
     )
     framegraph_debugger = build_native_framegraph_debugger(
-        host.document,
+        window_manager,
         framegraph_debugger_service.model,
-        context=host.context,
-        device=host.device,
-        viewport=editor_viewport,
         request_render=request_editor_render,
-        add_pre_render_callback=host.add_pre_render_callback,
-        remove_pre_render_callback=host.remove_pre_render_callback,
     )
     connect_framegraph_debugger_command(
         debug_menu,
@@ -1694,14 +1690,12 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             display_workspace,
             entity_inspector,
         )
-        keep_running, routed = host.poll_events()
+        keep_running, _routed = window_manager.poll_events()
         if not keep_running:
             return
-        if routed > 0:
-            host.request_render_update()
         if executor.process_pending() > 0:
             host.request_render_update()
-        host.process_deferred()
+        window_manager.process_deferred()
         if quest_openxr_build_dialog.poll() > 0:
             host.request_render_update()
         project_file_watcher.poll()
@@ -1715,8 +1709,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             # every loop so the frame produced at the end of the previous loop is
             # presented, and keep the scene render scheduler active for the next one.
             request_editor_render()
-        if host.render_requested:
-            host.render()
+        window_manager.render_requested()
         frame_count += 1
         if frame_limit > 0 and frame_count >= frame_limit:
             window.set_should_close(True)
@@ -1829,7 +1822,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             engine.rendering_manager.shutdown()
         except Exception:
             _logger.exception("Native rendering manager shutdown failed")
-        host.close()
+        window_manager.close()
         quit_sdl()
 
     engine.set_poll_events_callback(poll_events)

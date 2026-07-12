@@ -8,11 +8,10 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.framegraph_debugger_model import FramegraphDebuggerModel
+from termin.editor_native.ui_host import NativeUiWindow, NativeUiWindowManager
 from termin.gui_native import (
-    DialogAction,
     Document,
     EdgeInsets,
-    Rect,
     RichTextModel,
     Size,
     WidgetRef,
@@ -110,7 +109,7 @@ class NativeFramegraphPreviewSurface:
 class NativeFramegraphDebugger:
     document: Document
     model: FramegraphDebuggerModel
-    dialog: object
+    window_manager: NativeUiWindowManager
     root: WidgetRef
     target_combo: object
     mode_combo: object
@@ -132,10 +131,9 @@ class NativeFramegraphDebugger:
     main_status: object
     main_preview: NativeFramegraphPreviewSurface
     depth_preview: NativeFramegraphPreviewSurface
-    viewport: Callable[[], Rect]
-    request_render: Callable[[], None]
-    remove_pre_render_callback: Callable[[Callable[[object], None]], None]
+    request_scene_render: Callable[[], None]
     device: object
+    window: NativeUiWindow | None = None
     pass_indices: list[int] = field(default_factory=list)
     _updating: bool = False
     _active: bool = False
@@ -146,28 +144,40 @@ class NativeFramegraphDebugger:
     def show(self) -> bool:
         if self._closed:
             raise RuntimeError("native framegraph debugger is closed")
-        if self.dialog.open:
+        if self.window is not None and not self.window.closed:
             return False
         self._bind_signals()
         self._active = True
         self.model.refresh_viewports()
         self._select_initial_values()
+        self.model.connect()
         self._refresh_info()
-        shown = self.dialog.show(self.viewport())
-        if not shown:
+        try:
+            window = self.window_manager.create_window(
+                "Framegraph Debugger",
+                1180,
+                760,
+                document=self.document,
+                on_close=self._on_window_closed,
+            )
+        except Exception:
             self._deactivate()
-            return False
+            raise
+        self.window = window
+        self.main_preview.context = window.host.context
+        self.depth_preview.context = window.host.context
+        window.host.add_pre_render_callback(self.render_previews)
         self.request_render()
         return True
 
     def update(self) -> bool:
-        if not self._active or not self.dialog.open:
+        if not self._active or self.window is None or self.window.closed:
             return False
         self.model.notify_frame_rendered()
         return True
 
     def show_resource(self, resource_name: str) -> bool:
-        if not self.dialog.open:
+        if self.window is None or self.window.closed:
             self.show()
         resources = self.model.get_resources()
         if resource_name not in resources:
@@ -181,7 +191,7 @@ class NativeFramegraphDebugger:
         return True
 
     def render_previews(self, context: object) -> None:
-        if not self._active or not self.dialog.open:
+        if not self._active or self.window is None or self.window.closed:
             return
         self.main_preview.channel_mode = self.model.channel_mode
         self.main_preview.highlight_hdr = self.model.highlight_hdr
@@ -227,14 +237,29 @@ class NativeFramegraphDebugger:
         if self._closed:
             return
         self._closed = True
-        if self.dialog.open:
-            self.dialog.close()
-        self._deactivate()
-        self.remove_pre_render_callback(self.render_previews)
+        self.dismiss()
+        if self._active:
+            self._deactivate()
         self.main_preview.close()
         self.depth_preview.close()
-        if self.document.is_alive(self.dialog.handle):
-            self.document.destroy_widget_recursive(self.dialog.handle)
+        if self.document.is_alive(self.root.handle):
+            self.document.destroy_widget_recursive(self.root.handle)
+
+    def dismiss(self) -> None:
+        if self.window is not None and not self.window.closed:
+            self.window.close()
+
+    def request_render(self) -> None:
+        self.request_scene_render()
+        if self.window is not None and not self.window.closed:
+            self.window.request_render_update()
+
+    def _on_window_closed(self) -> None:
+        window = self.window
+        if window is not None:
+            window.host.remove_pre_render_callback(self.render_previews)
+        self.window = None
+        self._deactivate()
 
     def _select_initial_values(self) -> None:
         passes = self.model.get_passes()
@@ -347,18 +372,16 @@ class NativeFramegraphDebugger:
 
 
 def build_native_framegraph_debugger(
-    document: Document,
+    window_manager: NativeUiWindowManager,
     model: FramegraphDebuggerModel,
     *,
-    context: object,
-    device: object,
-    viewport: Callable[[], Rect],
     request_render: Callable[[], None],
-    add_pre_render_callback: Callable[[Callable[[object], None]], None],
-    remove_pre_render_callback: Callable[[Callable[[object], None]], None],
 ) -> NativeFramegraphDebugger:
+    document = Document()
     root = document.create_vstack("native-framegraph-debugger")
     root.stable_id = "editor.framegraph-debugger"
+    if not document.add_root(root.handle):
+        raise RuntimeError("failed to add native framegraph debugger root")
     root.preferred_size = Size(1180.0, 760.0)
     root.set_layout_padding(EdgeInsets(5.0, 5.0, 5.0, 5.0))
     root.set_layout_spacing(5.0)
@@ -455,9 +478,7 @@ def build_native_framegraph_debugger(
     timing_bar = document.create_status_bar("Timing: no selection")
     root.add_fixed_child(_ref(document, timing_bar), 24.0)
 
-    dialog = document.create_dialog("Framegraph Debugger")
-    dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
-    dialog.set_content(root)
+    context = window_manager.main_host.context
     main_preview = NativeFramegraphPreviewSurface(
         context,
         main_image,
@@ -476,7 +497,7 @@ def build_native_framegraph_debugger(
     result = NativeFramegraphDebugger(
         document=document,
         model=model,
-        dialog=dialog,
+        window_manager=window_manager,
         root=root,
         target_combo=target_combo,
         mode_combo=mode_combo,
@@ -498,10 +519,8 @@ def build_native_framegraph_debugger(
         main_status=main_status,
         main_preview=main_preview,
         depth_preview=depth_preview,
-        viewport=viewport,
-        request_render=request_render,
-        remove_pre_render_callback=remove_pre_render_callback,
-        device=device,
+        request_scene_render=request_render,
+        device=window_manager.main_host.device,
     )
     weak_result = weakref.ref(result)
 
@@ -557,14 +576,6 @@ def build_native_framegraph_debugger(
     )
     refresh_depth.connect_clicked(lambda: current().refresh_depth() if current() is not None else None)
 
-    def finished(_dialog_result) -> None:
-        owner = current()
-        if owner is not None:
-            owner._deactivate()
-            owner.request_render()
-
-    dialog.connect_finished(finished)
-    add_pre_render_callback(result.render_previews)
     return result
 
 

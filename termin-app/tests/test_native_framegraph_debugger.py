@@ -5,7 +5,7 @@ from termin.editor_native.framegraph_debugger import (
     connect_framegraph_debugger_command,
 )
 from termin.editor_native.shell import build_native_editor_shell
-from termin.gui_native import Document, Rect
+from termin.gui_native import Document
 
 
 class _Capture:
@@ -62,6 +62,7 @@ class _Model:
         self.debug_paused = False
         self.highlight_hdr = False
         self.disconnect_count = 0
+        self.connect_count = 0
         self.lists_changed = Signal()
         self.selection_changed = Signal()
         self.info_changed = Signal()
@@ -125,6 +126,9 @@ class _Model:
     def disconnect(self):
         self.disconnect_count += 1
 
+    def connect(self):
+        self.connect_count += 1
+
     def format_fbo_info(self):
         return "<b>RT_COLOR</b>"
 
@@ -168,6 +172,51 @@ class _Image:
 
 class _Root:
     visible = True
+
+
+class _WindowHost:
+    def __init__(self, document, context):
+        self.document = document
+        self.context = context
+        self.callbacks = []
+        self.render_requests = 0
+
+    def add_pre_render_callback(self, callback):
+        self.callbacks.append(callback)
+
+    def remove_pre_render_callback(self, callback):
+        self.callbacks.remove(callback)
+
+    def request_render_update(self):
+        self.render_requests += 1
+
+
+class _ManagedWindow:
+    def __init__(self, host, on_close):
+        self.host = host
+        self.on_close = on_close
+        self.closed = False
+
+    def request_render_update(self):
+        self.host.request_render_update()
+
+    def close(self):
+        if self.closed:
+            return
+        self.closed = True
+        self.on_close()
+
+
+class _WindowManager:
+    def __init__(self, context):
+        self.main_host = _WindowHost(Document(), context)
+        self.main_host.device = object()
+        self.windows = []
+
+    def create_window(self, _title, _width, _height, *, document, on_close, **_options):
+        window = _ManagedWindow(_WindowHost(document, self.main_host.context), on_close)
+        self.windows.append(window)
+        return window
 
 
 def test_native_framegraph_preview_surface_presents_resizes_and_releases():
@@ -239,18 +288,15 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     shell = build_native_editor_shell(document)
     model = _Model()
     context = _Context()
-    callbacks = []
+    window_manager = _WindowManager(context)
     renders = []
     debugger = build_native_framegraph_debugger(
-        document,
+        window_manager,
         model,
-        context=context,
-        device=object(),
-        viewport=lambda: Rect(0.0, 0.0, 1280.0, 800.0),
         request_render=lambda: renders.append(True),
-        add_pre_render_callback=callbacks.append,
-        remove_pre_render_callback=callbacks.remove,
     )
+    assert debugger.document.root_count == 1
+    assert debugger.document.root_at(0) == debugger.root.handle
     connect_framegraph_debugger_command(
         shell.menu_bar,
         shell.framegraph_debugger_command,
@@ -258,7 +304,9 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     )
 
     assert debugger.show()
-    assert debugger.dialog.open
+    assert model.connect_count == 1
+    assert debugger.window is window_manager.windows[-1]
+    assert debugger.render_previews in debugger.window.host.callbacks
     assert model.selected_pass_index == 3
     assert model.selected_symbol == "opaque"
     assert model.debug_source_res == "RT_COLOR"
@@ -272,14 +320,19 @@ def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
     debugger.mode_combo.selected_index = 1
     assert model.mode == "between"
     assert debugger.between_panel.visible
-    assert debugger.dialog.activate("close")
+    first_window = debugger.window
+    debugger.dismiss()
+    assert first_window.closed
+    assert first_window.host.callbacks == []
     assert model.disconnect_count == 1
     assert not debugger.update()
 
     assert debugger.show()
-    assert debugger.dialog.open
+    assert model.connect_count == 2
+    assert debugger.window is window_manager.windows[-1]
+    debugger_root = debugger.root.handle
     debugger.close()
     assert model.disconnect_count == 2
-    assert callbacks == []
-    assert not document.is_alive(debugger.dialog.handle)
+    assert window_manager.windows[-1].closed
+    assert not debugger.document.is_alive(debugger_root)
     assert renders
