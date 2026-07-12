@@ -97,6 +97,7 @@ class _Interaction:
         self.on_transform_end = None
         self.after_render_count = 0
         self.gizmo_target = None
+        self.transform_gizmo = _TransformGizmo()
 
     @classmethod
     def instance(cls):
@@ -111,6 +112,7 @@ class _Interaction:
 
     def set_gizmo_target(self, value) -> None:
         self.gizmo_target = value
+        self.transform_gizmo.target = value
 
     def clear_callbacks(self) -> None:
         self.on_request_update = None
@@ -120,6 +122,36 @@ class _Interaction:
         self.on_viewport_pointer_event = None
         self.selection.on_selection_changed = None
         self.selection.on_hover_changed = None
+
+
+class _TransformGizmo:
+    def __init__(self) -> None:
+        self.target = None
+        self.screen_scales = []
+
+    def set_screen_scale(self, scale: float) -> None:
+        self.screen_scales.append(scale)
+
+
+class _Point:
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def __sub__(self, other: "_Point") -> "_Point":
+        return _Point(self.value - other.value)
+
+    def norm(self) -> float:
+        return abs(self.value)
+
+
+class _Entity:
+    def __init__(self, position: float) -> None:
+        self.transform = SimpleNamespace(
+            global_pose=lambda: SimpleNamespace(lin=_Point(position))
+        )
+
+    def valid(self) -> bool:
+        return True
 
 
 class _Attachment:
@@ -154,6 +186,25 @@ class _RenderingManager:
 
     def remove_editor_display(self, display) -> None:
         self.removed.append(display)
+
+
+def test_native_editor_viewport_uses_legacy_camera_relative_gizmo_scale():
+    runtime = object.__new__(NativeEditorViewport)
+    target = _Entity(3.0)
+    interaction = _Interaction()
+    interaction.selection.selected = target
+    runtime.interaction = interaction
+    runtime.attachment = SimpleNamespace(
+        camera=SimpleNamespace(entity=_Entity(8.0))
+    )
+    renders = []
+    runtime._request_render = lambda: renders.append(True)
+
+    runtime.sync_gizmo_target(active_tools=0)
+
+    assert interaction.gizmo_target is target
+    assert interaction.transform_gizmo.screen_scales == [0.5]
+    assert renders == [True]
 
 
 def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch):
