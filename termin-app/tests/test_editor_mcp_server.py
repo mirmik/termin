@@ -11,6 +11,7 @@ from termin.editor_core.mcp_server import (
     EditorMcpConfig,
     EditorMcpServer,
     editor_mcp_enabled,
+    load_editor_mcp_config,
 )
 
 
@@ -494,3 +495,18 @@ def test_editor_mcp_enabled_env_overrides_settings(monkeypatch):
     monkeypatch.setattr(EditorSettings, "instance", staticmethod(lambda: FakeSettings()))
 
     assert editor_mcp_enabled() is False
+
+
+def test_editor_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatch):
+    monkeypatch.setenv("TERMIN_EDITOR_MCP_PORT", "invalid")
+    monkeypatch.setenv("TERMIN_EDITOR_MCP_TOKEN", " ")
+
+    config = load_editor_mcp_config()
+
+    assert config.port == 8765
+    assert config.token
+    assert config.token.strip()
+
+    monkeypatch.setenv("TERMIN_EDITOR_MCP_PORT", "0")
+    config = load_editor_mcp_config()
+    assert config.port == 8765
