@@ -37,6 +37,8 @@ endif()
 
 set(TERMIN_PHYSICS_SOURCES
     src/termin_physics_version.cpp
+    src/rigid_body.cpp
+    src/physics_world.cpp
 )
 
 add_library(termin_physics SHARED ${TERMIN_PHYSICS_SOURCES})

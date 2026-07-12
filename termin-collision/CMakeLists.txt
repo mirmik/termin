@@ -43,6 +43,7 @@ if(TERMIN_BUILD_PYTHON)
 endif()
 
 set(TERMIN_COLLISION_SOURCES
+    src/termin/colliders/gjk.cpp
     src/termin_collision_version.cpp
     src/termin_collision_runtime.c
     src/termin/tc_collision_c_api.cpp
