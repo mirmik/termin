@@ -293,6 +293,7 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
     )
     target_link_libraries(termin_render_passes_id_pass_line_pixel_smoke PRIVATE
         termin_render_passes
+        termin_components_render
     )
     if(TARGET termin_shaderc)
         add_dependencies(termin_render_passes_id_pass_line_pixel_smoke termin_shaderc)

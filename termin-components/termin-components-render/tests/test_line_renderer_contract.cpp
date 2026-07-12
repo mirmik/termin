@@ -568,6 +568,19 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     CHECK(item.payload.text_batch.local_offset.y == 2.0);
     CHECK(item.payload.text_batch.local_offset.z == 3.0);
 
+    tc_render_item_collect_context id_collect_context{};
+    id_collect_context.phase_mark = "id";
+    id_collect_context.pass_semantic =
+        static_cast<uint32_t>(termin::RenderItemPassSemantic::Id);
+    id_collect_context.debug_pass_name = "IdPass";
+    termin::RenderItemCollection id_collection;
+    REQUIRE(termin::collect_drawable_render_items(
+        text->tc_component_ptr(),
+        id_collect_context,
+        id_collection));
+    REQUIRE(id_collection.items.size() == 1u);
+    CHECK(id_collection.items[0].kind == TC_RENDER_ITEM_KIND_TEXT_BATCH);
+
     const char* collected_text = item.payload.text_batch.text;
     const char* collected_font_path = item.payload.text_batch.font_path;
     text->set_text("changed");
