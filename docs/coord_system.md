@@ -150,14 +150,15 @@ default). Наша Y-down проекция (§2) visually переворачив
 и winding в clip-space: mesh, CCW-авторенный в view, приходит CW в
 clip/window.
 
-Чтобы это не требовало переписывать все meshes, default
-`front_face = FrontFace::CW` (см. `tgfx::RasterState`). Это один из
-двух канонических способов для Y-flipped проекций в Vulkan-community;
-второй — `vp.height = -h` + CCW, но он ломает inter-pass sampling и
-у нас удалён.
+`tgfx::RasterState` использует default `front_face = FrontFace::CCW`.
+Это логическая authoring-конвенция: mesh generators и importers передают
+стандартный CCW winding без поправок на graphics backend. Y-flip проекции,
+viewport orientation и native rasterizer semantics учитываются только в
+backend mapping. Поэтому совпадение или несовпадение default-а конкретного
+native API с `FrontFace::CCW` не является частью публичного контракта.
 
-Direct3D 11 по умолчанию тоже использует CW = front, так что
-convention одинакова с ним.
+Fullscreen/postprocess и действительно двусторонняя геометрия должны явно
+задавать `CullMode::None`, а не полагаться на случайную ориентацию вершин.
 
 ### Backend-specific mapping для FrontFace
 

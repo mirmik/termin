@@ -40,3 +40,51 @@ def test_mesh_spec_explicit_identity_axes_are_preserved(tmp_path) -> None:
 
     assert (spec.axis_x, spec.axis_y, spec.axis_z) == ("x", "y", "z")
     assert spec.apply_to_vertices(vertices).tolist() == [[1.0, 2.0, 3.0]]
+
+
+def test_mesh_spec_preserves_ccw_winding_across_default_axis_reflection() -> None:
+    spec = MeshSpec()
+    vertices = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=np.float32,
+    )
+    indices = np.array([0, 1, 2], dtype=np.uint32)
+
+    transformed_vertices = spec.apply_to_vertices(vertices)
+    transformed_indices = spec.apply_to_triangle_indices(indices)
+    p0, p1, p2 = transformed_vertices[transformed_indices]
+    transformed_normal = spec.apply_to_normals(
+        np.array([[0.0, 0.0, 1.0]], dtype=np.float32)
+    )[0]
+
+    assert spec.reverses_orientation()
+    assert transformed_indices.tolist() == [0, 2, 1]
+    assert np.dot(np.cross(p1 - p0, p2 - p0), transformed_normal) > 0.0
+
+
+def test_mesh_spec_identity_transform_keeps_triangle_indices() -> None:
+    spec = MeshSpec(axis_x="x", axis_y="y", axis_z="z")
+    indices = np.array([0, 1, 2], dtype=np.uint32)
+
+    assert not spec.reverses_orientation()
+    assert spec.apply_to_triangle_indices(indices) is indices
+
+
+def test_mesh_spec_negative_scale_keeps_winding_and_normals_consistent() -> None:
+    spec = MeshSpec(scale=-2.0, axis_x="x", axis_y="y", axis_z="z")
+    vertices = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+        dtype=np.float32,
+    )
+    indices = spec.apply_to_triangle_indices(
+        np.array([0, 1, 2], dtype=np.uint32)
+    )
+    transformed = spec.apply_to_vertices(vertices)
+    normal = spec.apply_to_normals(
+        np.array([[0.0, 0.0, 1.0]], dtype=np.float32)
+    )[0]
+    p0, p1, p2 = transformed[indices]
+
+    assert indices.tolist() == [0, 2, 1]
+    assert normal.tolist() == [0.0, 0.0, -1.0]
+    assert np.dot(np.cross(p1 - p0, p2 - p0), normal) > 0.0

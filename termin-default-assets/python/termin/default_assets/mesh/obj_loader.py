@@ -133,6 +133,7 @@ def parse_obj_text(text: str, name: str = "mesh", spec: "MeshSpec | None" = None
     # Apply spec transformations
     if spec is not None:
         mesh.vertices = spec.apply_to_vertices(mesh.vertices)
+        mesh.indices = spec.apply_to_triangle_indices(mesh.indices)
         if mesh.normals is not None:
             mesh.normals = spec.apply_to_normals(mesh.normals)
         if mesh.uvs is not None:

@@ -189,6 +189,7 @@ class MeshAsset(DataAsset[TcMesh]):
 
         # Apply spec transformations
         mesh_data.vertices = spec.apply_to_vertices(mesh_data.vertices)
+        mesh_data.indices = spec.apply_to_triangle_indices(mesh_data.indices)
         if mesh_data.normals is not None:
             mesh_data.normals = spec.apply_to_normals(mesh_data.normals)
 

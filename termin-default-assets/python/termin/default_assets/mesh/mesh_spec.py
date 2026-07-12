@@ -139,6 +139,22 @@ class MeshSpec:
 
         return result.astype(np.float32)
 
+    def reverses_orientation(self) -> bool:
+        """Return whether the configured linear position transform is mirrored."""
+        basis = np.eye(3, dtype=np.float64)
+        transformed = self.apply_to_vertices(basis).astype(np.float64)
+        return bool(np.linalg.det(transformed) < 0.0)
+
+    def apply_to_triangle_indices(self, indices: np.ndarray) -> np.ndarray:
+        """Preserve logical CCW winding across mirrored import transforms."""
+        if indices is None or len(indices) == 0 or not self.reverses_orientation():
+            return indices
+        if indices.size % 3 != 0:
+            raise ValueError("MeshSpec: triangle index count must be divisible by 3")
+        triangles = indices.reshape(-1, 3).copy()
+        triangles[:, [1, 2]] = triangles[:, [2, 1]]
+        return triangles.reshape(indices.shape).astype(indices.dtype, copy=False)
+
     def apply_to_normals(self, normals: np.ndarray) -> np.ndarray:
         """
         Apply axis reordering to normals (no scale).
@@ -168,6 +184,11 @@ class MeshSpec:
         result[:, 0] = normals[:, src_x] * sign_x
         result[:, 1] = normals[:, src_y] * sign_y
         result[:, 2] = normals[:, src_z] * sign_z
+
+        # Uniform negative scale reverses the normal direction under the
+        # inverse-transpose transform. Magnitude is intentionally ignored.
+        if self.scale < 0.0:
+            result *= -1.0
 
         return result.astype(np.float32)
 
