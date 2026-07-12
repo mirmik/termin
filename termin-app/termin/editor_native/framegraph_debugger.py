@@ -49,20 +49,33 @@ class NativeFramegraphPreviewSurface:
     force_depth: bool = False
     target: object | None = None
     target_size: tuple[int, int] = (0, 0)
+    _image_has_texture: bool = False
+
+    def __post_init__(self) -> None:
+        # Keep the preview in its parent layout even before the first scene
+        # frame has supplied a capture.  BoxLayout excludes invisible children,
+        # which used to collapse the main preview and move the depth panel.
+        self.root.visible = True
 
     def render(self, context: object) -> bool:
         if not self.capture.has_capture() or not self.capture.capture_tex:
-            self.root.visible = False
+            if self._image_has_texture:
+                self.image.clear_texture()
+                self._image_has_texture = False
             return False
         width = int(self.capture.width)
         height = int(self.capture.height)
         if width <= 0 or height <= 0:
-            self.root.visible = False
+            if self._image_has_texture:
+                self.image.clear_texture()
+                self._image_has_texture = False
             return False
+        target_recreated = False
         if self.target is None or self.target_size != (width, height):
             self._destroy_target()
             self.target = context.create_color_attachment(width, height)
             self.target_size = (width, height)
+            target_recreated = True
         depth = self.force_depth or bool(self.capture.is_depth)
         self.presenter.render(
             context,
@@ -75,12 +88,15 @@ class NativeFramegraphPreviewSurface:
             5 if depth else self.channel_mode,
             False if depth else self.highlight_hdr,
         )
-        self.image.set_texture(self.target, Size(float(width), float(height)))
-        self.root.visible = True
+        if target_recreated or not self._image_has_texture:
+            self.image.set_texture(self.target, Size(float(width), float(height)))
+            self._image_has_texture = True
         return True
 
     def close(self) -> None:
-        self.root.visible = False
+        if self._image_has_texture:
+            self.image.clear_texture()
+            self._image_has_texture = False
         self._destroy_target()
 
     def _destroy_target(self) -> None:
@@ -113,6 +129,7 @@ class NativeFramegraphDebugger:
     stats_bar: object
     timing_bar: object
     depth_status: object
+    main_status: object
     main_preview: NativeFramegraphPreviewSurface
     depth_preview: NativeFramegraphPreviewSurface
     viewport: Callable[[], Rect]
@@ -123,6 +140,8 @@ class NativeFramegraphDebugger:
     _updating: bool = False
     _active: bool = False
     _closed: bool = False
+    _main_preview_ready: bool = False
+    _depth_preview_ready: bool = False
 
     def show(self) -> bool:
         if self._closed:
@@ -166,8 +185,25 @@ class NativeFramegraphDebugger:
             return
         self.main_preview.channel_mode = self.model.channel_mode
         self.main_preview.highlight_hdr = self.model.highlight_hdr
-        self.main_preview.render(context)
-        self.depth_preview.render(context)
+        main_ready = self.main_preview.render(context)
+        depth_ready = self.depth_preview.render(context)
+        main_status = (
+            f"Capture: {self.main_preview.target_size[0]}x{self.main_preview.target_size[1]}"
+            if main_ready
+            else "Waiting for frame capture…"
+        )
+        if self.main_status.text != main_status:
+            self.main_status.text = main_status
+        # Pre-render runs after layout.  A ready capture may have changed the
+        # image's intrinsic size, so request a follow-up frame with a fresh
+        # layout before relying on the preview bounds.
+        if (
+            main_ready != self._main_preview_ready
+            or depth_ready != self._depth_preview_ready
+        ):
+            self._main_preview_ready = main_ready
+            self._depth_preview_ready = depth_ready
+            self.request_render()
 
     def refresh_depth(self) -> str:
         capture = self.model.core.depth_capture
@@ -392,17 +428,20 @@ def build_native_framegraph_debugger(
 
     previews = document.create_hstack("framegraph-previews")
     previews.set_layout_spacing(8.0)
+    main_panel = document.create_vstack("framegraph-main-preview-panel")
+    main_panel.set_layout_spacing(4.0)
     main_image = document.create_image_widget()
     main_image.set_preserve_aspect(True)
     main_root = _ref(document, main_image)
-    main_root.visible = False
-    previews.add_stretch_child(main_root)
+    main_panel.add_stretch_child(main_root)
+    main_status = document.create_status_bar("Waiting for frame capture…")
+    main_panel.add_fixed_child(_ref(document, main_status), 24.0)
+    previews.add_stretch_child(_ref(document, main_panel))
     depth_panel = document.create_vstack("framegraph-depth-panel")
     depth_panel.set_layout_spacing(4.0)
     depth_image = document.create_image_widget()
     depth_image.set_preserve_aspect(True)
     depth_root = _ref(document, depth_image)
-    depth_root.visible = False
     depth_panel.add_stretch_child(depth_root)
     refresh_depth = document.create_button("Refresh Depth")
     depth_panel.add_fixed_child(_ref(document, refresh_depth), 30.0)
@@ -456,6 +495,7 @@ def build_native_framegraph_debugger(
         stats_bar=stats_bar,
         timing_bar=timing_bar,
         depth_status=depth_status,
+        main_status=main_status,
         main_preview=main_preview,
         depth_preview=depth_preview,
         viewport=viewport,
