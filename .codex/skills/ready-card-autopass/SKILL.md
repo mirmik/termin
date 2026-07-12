@@ -1,6 +1,6 @@
 ---
 name: ready-card-autopass
-description: Use when Codex should autonomously process Termin Kanboard tasks from the Ready column: select clear actionable cards, implement fixes, test, commit patches when useful, and move cards through the project workflow.
+description: "Use when Codex should autonomously process Termin Kanboard tasks from the Ready column: select clear actionable cards, implement fixes, test, commit patches when useful, and move cards through the project workflow."
 ---
 
 # Ready Card Autopass
@@ -59,6 +59,12 @@ If implementation is done but requires human/manual/platform verification:
 - move the card to `On Test`;
 - add a comment with the exact verification command, environment, or scenario required.
 
+If implementation and available local verification are complete but CI cannot be run or its results cannot be obtained:
+
+- do not treat unavailable CI as a blocker for completing the autopass goal;
+- leave the card in `On Test`;
+- add a comment recording why CI could not be run or checked and what CI verification remains.
+
 If the card is only partially completed and further progress is blocked by remaining implementation work:
 
 - leave or move it to `In Progress`;
@@ -79,7 +85,7 @@ If the card is stale, non-code, or mismatched with current code but review makes
 ## Hygiene
 
 - Keep the board as task state, not a substitute for local verification.
-- Do not leave completed cards outside `Done` "just in case".
+- Do not leave completed cards outside `Done` "just in case"; use `On Test` only when concrete manual, visual, platform, or CI verification remains outstanding.
 - If new scope is discovered, create or keep a separate card instead of stretching the current card.
 - If comments change the meaning of a card, update the description so the current state is visible.
 - Report bad smells, duplicate tasks, unfinished migrations, or suspicious stubs found during the pass. Create board cards only for meaningful follow-up work, not for trivial fixes already applied.
