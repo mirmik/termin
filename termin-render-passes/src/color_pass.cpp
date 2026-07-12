@@ -4,6 +4,7 @@
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
 #include "termin/render/render_item_submission.hpp"
+#include "termin/render/render_task.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include <optional>
@@ -137,40 +138,8 @@ struct ColorDrawData {
     float u_model[16];
 };
 
-struct ColorRenderTask {
-    size_t source_draw_index = 0;
-    size_t item_index = SIZE_MAX;
-    const tc_render_item* item = nullptr;
-    Entity entity;
-    tc_component* component = nullptr;
-    tc_material_phase* material_phase = nullptr;
-    tc_shader_handle final_shader = tc_shader_handle_invalid();
-    std::string entity_name;
+struct ColorTaskExtension final : RenderTaskExtension {
     ColorDrawData draw_data{};
-    RenderContext draw_context;
-    std::array<RenderItemNamedUniformBinding, 1> named_uniforms{};
-    RenderItemResourceBinding resources{};
-
-    void attach_resources(
-        const MaterialPipelineResourceView* material_resources,
-        const std::vector<RenderItemNamedTextureBinding>& extra_textures)
-    {
-        named_uniforms = {{
-            {
-                "draw_data",
-                &draw_data,
-                static_cast<uint32_t>(sizeof(draw_data)),
-                "draw_data",
-                nullptr,
-            },
-        }};
-        resources = {};
-        resources.material_resources = material_resources;
-        resources.named_uniforms = named_uniforms.data();
-        resources.named_uniform_count = static_cast<uint32_t>(named_uniforms.size());
-        resources.named_textures = extra_textures.data();
-        resources.named_texture_count = static_cast<uint32_t>(extra_textures.size());
-    }
 };
 
 } // anonymous namespace
@@ -690,7 +659,7 @@ void ColorPass::execute_with_data(
     const std::string debug_pass_name = get_pass_name();
     const char* debug_pass_name_c = debug_pass_name.c_str();
 
-    std::vector<ColorRenderTask> render_tasks;
+    RenderTaskList render_tasks;
     render_tasks.reserve(cached_draw_calls_.size());
 
     size_t draw_index = 0;
@@ -748,7 +717,9 @@ void ColorPass::execute_with_data(
             continue;
         }
 
-        ColorRenderTask task;
+        ColorTaskExtension& extension = render_tasks.emplace_extension<ColorTaskExtension>();
+        RenderTask& task = render_tasks.append();
+        task.extension = &extension;
         task.source_draw_index = draw_index;
         task.item_index = dc.item_index;
         task.item = item;
@@ -759,23 +730,23 @@ void ColorPass::execute_with_data(
         task.entity_name = ename ? ename : "";
         if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
             std::memcpy(
-                task.draw_data.u_model,
+                extension.draw_data.u_model,
                 item->model_matrix,
-                sizeof(task.draw_data.u_model));
+                sizeof(extension.draw_data.u_model));
         } else {
             Mat44f identity = Mat44f::identity();
             std::memcpy(
-                task.draw_data.u_model,
+                extension.draw_data.u_model,
                 identity.data,
-                sizeof(task.draw_data.u_model));
+                sizeof(extension.draw_data.u_model));
         }
 
         task.draw_context.view = data.view;
         task.draw_context.projection = data.projection;
         std::memcpy(
             task.draw_context.model.data,
-            task.draw_data.u_model,
-            sizeof(task.draw_data.u_model));
+            extension.draw_data.u_model,
+            sizeof(extension.draw_data.u_model));
         task.draw_context.phase = phase_mark;
         task.draw_context.pass_contract = color_material_pass_contract();
         task.draw_context.current_tc_shader = TcShader(final_shader);
@@ -785,7 +756,6 @@ void ColorPass::execute_with_data(
         task.draw_context.viewport_width = data.rect.width;
         task.draw_context.viewport_height = data.rect.height;
         task.draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
-        render_tasks.push_back(std::move(task));
         ++draw_index;
     }
 
@@ -808,11 +778,15 @@ void ColorPass::execute_with_data(
     }
     material_resources.shadow_sampler = shadow_sampler_;
 
-    for (ColorRenderTask& task : render_tasks) {
-        task.attach_resources(&material_resources, extra_texture_bindings);
+    for (RenderTask& task : render_tasks) {
+        auto& extension = *static_cast<ColorTaskExtension*>(task.extension);
+        const std::array<RenderItemNamedUniformBinding, 1> uniforms{{
+            {"draw_data", &extension.draw_data, static_cast<uint32_t>(sizeof(extension.draw_data)), "draw_data", nullptr},
+        }};
+        task.set_resources(&material_resources, uniforms, extra_texture_bindings);
     }
 
-    for (const ColorRenderTask& task : render_tasks) {
+    for (const RenderTask& task : render_tasks) {
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
         // that slot with its default texture. Without this reset, a missing
