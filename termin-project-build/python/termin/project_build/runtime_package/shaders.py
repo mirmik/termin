@@ -235,6 +235,17 @@ def write_shader(
             )
         for target in targets:
             target_dir = shader_dir / target
+            program_source_paths = tuple(
+                dict.fromkeys(
+                    path
+                    for path in (
+                        vertex_source_path,
+                        fragment_source_path,
+                        geometry_source_path,
+                    )
+                    if path is not None
+                )
+            )
             compile_shader_stage(
                 compiler,
                 shader.language,
@@ -244,6 +255,7 @@ def write_shader(
                 target_dir / artifact_filename(shader.uuid, target, "vertex", "vert"),
                 f"{shader.name or shader.uuid}:vertex",
                 shader.vertex_entry,
+                program_source_paths,
             )
             compile_shader_stage(
                 compiler,
@@ -254,6 +266,7 @@ def write_shader(
                 target_dir / artifact_filename(shader.uuid, target, "fragment", "frag"),
                 f"{shader.name or shader.uuid}:fragment",
                 shader.fragment_entry,
+                program_source_paths,
             )
             if geometry_source_path is not None:
                 compile_shader_stage(
@@ -265,6 +278,7 @@ def write_shader(
                     target_dir / artifact_filename(shader.uuid, target, "geometry", "geom"),
                     f"{shader.name or shader.uuid}:geometry",
                     shader.geometry_entry,
+                    program_source_paths,
                 )
 
     shader_spec: dict[str, Any] = {
@@ -570,6 +584,7 @@ def compile_shader_stage(
     output_path: Path,
     debug_name: str,
     entry: str = "main",
+    program_source_paths: tuple[Path, ...] = (),
 ) -> None:
     cmd = executable_command(compiler) + [
         str(compiler),
@@ -589,6 +604,8 @@ def compile_shader_stage(
         "--debug-name",
         debug_name,
     ]
+    for program_source_path in program_source_paths:
+        cmd.extend(["--program-source", str(program_source_path)])
     result = subprocess.run(cmd, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip()
