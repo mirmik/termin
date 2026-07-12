@@ -224,6 +224,14 @@ tc_shader_handle register_modular_shadow_shader()
         }
         return tc_shader_handle_invalid();
     }
+    // The assembly result owns a transient RAII reference. ShadowPass caches a
+    // raw handle and is recreated with the framegraph, so transfer the
+    // assembled engine shader to the registry's process-lifetime ownership
+    // before the local result releases its reference.
+    if (!tc_shader_retain_static(result.shader.handle)) {
+        tc::Log::error("[ShadowPass] failed to retain modular shadow shader");
+        return tc_shader_handle_invalid();
+    }
     return result.shader.handle;
 }
 
@@ -267,7 +275,7 @@ void ShadowPass::ensure_tgfx2_resources(tgfx::IRenderDevice& device) {
     // pass; every ShadowPass destruction destroyed the shader modules,
     // every construction re-ran shaderc (~35 ms × 19 engine shaders on
     // Play/Stop = ~700 ms lag).
-    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+    if (!tc_shader_is_valid(shadow_shader_handle_)) {
         // Process-lifetime engine shader: never destroyed (transient
         // TcShader wrappers from material phases / Python bindings
         // can't bounce ref_count through zero and take it down).
@@ -510,10 +518,10 @@ void ShadowPass::collect_shader_usages(
         return;
     }
 
-    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+    if (!tc_shader_is_valid(shadow_shader_handle_)) {
         shadow_shader_handle_ = register_modular_shadow_shader();
     }
-    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+    if (!tc_shader_is_valid(shadow_shader_handle_)) {
         tc::Log::error("[ShadowPass] cannot collect shader usages without a valid base shader");
         return;
     }
@@ -585,7 +593,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    if (tc_shader_handle_is_invalid(shadow_shader_handle_)) {
+    if (!tc_shader_is_valid(shadow_shader_handle_)) {
         tc::Log::error("ShadowPass/tgfx2: shadow_shader_handle_ not registered");
         return results;
     }
