@@ -60,6 +60,10 @@ void SceneManager::close_scene(const std::string& name) {
 
     tc_scene_handle h = it->second;
 
+    // Rendering/editor attachments own scene-dependent native resources and
+    // must release them while the scene handle is still valid.
+    invoke_before_scene_close(name);
+
     // Remove from maps first
     _scenes.erase(it);
     _paths.erase(name);

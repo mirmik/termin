@@ -930,7 +930,8 @@ void RenderingManager::render_scene_pipeline_offscreen(
         return;
     }
 
-    const std::vector<std::string>& target_names = get_pipeline_targets(pipeline_name);
+    const std::vector<std::string>& target_names =
+        scene_pipelines_->get_pipeline_targets(scene, pipeline_name);
     if (target_names.empty()) {
         return;
     }
@@ -1198,11 +1199,18 @@ tc_pipeline_handle RenderingManager::get_scene_pipeline(const std::string& name)
 }
 
 void RenderingManager::set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets) {
-    scene_pipelines_->set_pipeline_targets(pipeline_name, targets);
+    tc_log(TC_LOG_ERROR,
+           "[RenderingManager] set_pipeline_targets('%s') requires a scene-qualified API",
+           pipeline_name.c_str());
+    (void)targets;
 }
 
 const std::vector<std::string>& RenderingManager::get_pipeline_targets(const std::string& pipeline_name) const {
-    return scene_pipelines_->get_pipeline_targets(pipeline_name);
+    tc_log(TC_LOG_ERROR,
+           "[RenderingManager] get_pipeline_targets('%s') requires a scene-qualified API",
+           pipeline_name.c_str());
+    static const std::vector<std::string> empty;
+    return empty;
 }
 
 std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle scene) const {
