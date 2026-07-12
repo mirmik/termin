@@ -18,6 +18,7 @@ include(TerminRpath)
 include(GNUInstallDirs)
 
 add_library(termin_voxels SHARED
+    src/voxel_grid.cpp
     src/tc_voxel_grid_registry.cpp
 )
 add_library(termin_voxels::termin_voxels ALIAS termin_voxels)

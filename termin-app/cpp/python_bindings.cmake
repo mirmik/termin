@@ -14,6 +14,7 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/editor/component_editor_visual.cpp
     termin/editor/editor_snap.cpp
     termin/editor/gizmo_manager.cpp
+    termin/editor/gizmo_types.cpp
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
