@@ -168,6 +168,28 @@ def test_native_ui_event_router_dispatches_global_shortcuts_before_focused_widge
     assert activated == [shell.profiler_command]
 
 
+def test_native_ui_event_router_dispatches_enabled_undo_shortcut():
+    document = Document()
+    shell = build_native_editor_shell(document)
+    shell.edit_menu_model.set_enabled(shell.undo_command, True)
+    router = NativeUiEventRouter(
+        document,
+        window_id=7,
+        shortcut_dispatcher=shell.menu_bar.dispatch_shortcut,
+    )
+    activated = []
+    shell.menu_route("edit").connect_activated(
+        lambda _menu, command_id, _command: activated.append(command_id)
+    )
+
+    result = router.route(
+        {"type": "key_down", "window_id": 7, "key": ord("Z"), "mods": 2}
+    )
+
+    assert result.routed
+    assert activated == [shell.undo_command]
+
+
 def test_native_editor_continuously_composes_only_in_game_mode():
     from termin.editor_native.run_editor import _game_mode_requires_continuous_render
 

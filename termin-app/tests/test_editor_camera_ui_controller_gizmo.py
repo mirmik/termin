@@ -152,7 +152,9 @@ def test_editor_camera_ui_controller_updates_camera_render_category_mask(monkeyp
     controller._on_colliders_click()
     assert camera.render_category_mask & RENDER_CATEGORY_COLLIDERS
     assert colliders_button.active is True
+    assert interaction_system.update_count == 1
 
     controller._on_navmesh_click()
     assert camera.render_category_mask & RENDER_CATEGORY_NAVMESH == 0
     assert navmesh_button.active is False
+    assert interaction_system.update_count == 2

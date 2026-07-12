@@ -214,6 +214,23 @@ class EditorCameraUIController(PythonComponent):
             mask &= ~int(category)
         self._camera_component.render_category_mask = mask
 
+    def _request_update(self) -> None:
+        """Request a scene render after changing an editor-camera mode."""
+        try:
+            from termin.editor._editor_native import EditorInteractionSystem
+        except Exception as error:
+            log.error(f"[EditorCameraUIController] cannot import EditorInteractionSystem: {error}")
+            return
+
+        interaction_system = EditorInteractionSystem.instance()
+        if interaction_system is None:
+            log.error("[EditorCameraUIController] cannot request update: interaction system is unavailable")
+            return
+        if interaction_system.on_request_update is None:
+            log.error("[EditorCameraUIController] cannot request update: callback is unavailable")
+            return
+        interaction_system.on_request_update()
+
     def _apply_gizmo_orientation(self, *, request_update: bool = False) -> None:
         """Переключает ориентацию transform gizmo между local и global."""
         mode = "world" if self.gizmo_world_orientation_enabled else "local"
@@ -254,6 +271,7 @@ class EditorCameraUIController(PythonComponent):
         self._set_render_category_enabled(RENDER_CATEGORY_COLLIDERS, self.colliders_enabled)
         if self._colliders_btn is not None:
             self._colliders_btn.active = self.colliders_enabled
+        self._request_update()
 
     def _on_navmesh_click(self) -> None:
         """Переключает отображение navmesh/editor debug overlay."""
@@ -262,13 +280,18 @@ class EditorCameraUIController(PythonComponent):
         self._set_render_category_enabled(RENDER_CATEGORY_NAVMESH, self.navmesh_enabled)
         if self._navmesh_btn is not None:
             self._navmesh_btn.active = self.navmesh_enabled
+        self._request_update()
 
     def _on_wireframe_click(self) -> None:
         """Переключает wireframe режим."""
         self.wireframe_enabled = not self.wireframe_enabled
 
-        color_pass = self._find_pass_by_name("Color").to_python()
-        transparent_pass = self._find_pass_by_name("Transparent").to_python()
+        color_pass_ref = self._find_pass_by_name("Color")
+        transparent_pass_ref = self._find_pass_by_name("Transparent")
+        color_pass = color_pass_ref.to_python() if color_pass_ref is not None else None
+        transparent_pass = (
+            transparent_pass_ref.to_python() if transparent_pass_ref is not None else None
+        )
 
         if color_pass is not None:
             color_pass.wireframe = self.wireframe_enabled
@@ -276,6 +299,7 @@ class EditorCameraUIController(PythonComponent):
             transparent_pass.wireframe = self.wireframe_enabled
         if self._wireframe_btn is not None:
             self._wireframe_btn.active = self.wireframe_enabled
+        self._request_update()
 
     def _on_ortho_click(self) -> None:
         """Переключает ортографическую камеру."""
@@ -285,6 +309,7 @@ class EditorCameraUIController(PythonComponent):
             self._camera_component.projection_type = "orthographic" if self.ortho_enabled else "perspective"
         if self._ortho_btn is not None:
             self._ortho_btn.active = self.ortho_enabled
+        self._request_update()
 
     def _on_gizmo_orientation_click(self) -> None:
         """Переключает ориентацию transform gizmo."""
