@@ -162,9 +162,12 @@ class _Image:
     def set_texture(self, texture, size):
         self.textures.append((texture, size))
 
+    def clear_texture(self):
+        self.textures.append((None, None))
+
 
 class _Root:
-    visible = False
+    visible = True
 
 
 def test_native_framegraph_preview_surface_presents_resizes_and_releases():
@@ -199,7 +202,36 @@ def test_native_framegraph_preview_surface_presents_resizes_and_releases():
 
     preview.close()
     assert context.destroyed[-1] == context.created[-1][2]
-    assert not root.visible
+    assert root.visible
+
+
+def test_native_framegraph_preview_keeps_layout_slot_while_capture_arrives():
+    context = _Context()
+    image = _Image()
+    capture = _Capture(ready=False)
+    preview = NativeFramegraphPreviewSurface(
+        context,
+        image,
+        _Root(),
+        capture,
+        _Presenter(),
+    )
+
+    assert not preview.render(context)
+    assert preview.root.visible
+    assert image.textures == []
+
+    capture.ready = True
+    capture.capture_tex = object()
+    assert preview.render(context)
+    assert preview.root.visible
+    assert len(context.created) == 1
+    assert image.textures[-1][0] == context.created[0][2]
+
+    capture.ready = False
+    capture.capture_tex = None
+    assert not preview.render(context)
+    assert image.textures[-1] == (None, None)
 
 
 def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
