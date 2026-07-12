@@ -48,6 +48,7 @@ set(TERMIN_COLLISION_SOURCES
     src/termin_collision_runtime.c
     src/termin/tc_collision_c_api.cpp
     src/termin/collision/collision_world_c.cpp
+    src/termin/collision/collision_world.cpp
     src/termin/collision/tc_collision_world_ext.c
 )
 
