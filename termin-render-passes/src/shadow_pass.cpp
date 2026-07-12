@@ -8,6 +8,7 @@
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/render_item_submission.hpp"
+#include "termin/render/render_task.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/descriptors.hpp"
@@ -56,52 +57,8 @@ struct ShadowPushStd140 {
 static_assert(sizeof(ShadowPushStd140) == 64,
               "ShadowPushStd140 must be mat4");
 
-struct ShadowRenderTask {
-    size_t item_index = SIZE_MAX;
-    const tc_render_item* item = nullptr;
-    Entity entity;
-    tc_component* component = nullptr;
-    tc_material_phase* material_phase = nullptr;
-    tc_shader_handle final_shader = tc_shader_handle_invalid();
-    std::string entity_name;
+struct ShadowTaskExtension final : RenderTaskExtension {
     ShadowPushStd140 draw_data{};
-    RenderContext draw_context;
-    std::array<RenderItemNamedUniformBinding, 3> named_uniforms{};
-    RenderItemResourceBinding resources{};
-
-    void attach_resources(
-        const ShadowPerFrameStd140* per_frame,
-        const EnginePerFrameStd140* typed_per_frame,
-        const MaterialPipelineResourceView* material_resources)
-    {
-        named_uniforms = {{
-            {
-                "per_frame",
-                per_frame,
-                static_cast<uint32_t>(sizeof(*per_frame)),
-                "shadow_draw",
-                nullptr,
-            },
-            {
-                "shadow_draw",
-                &draw_data,
-                static_cast<uint32_t>(sizeof(draw_data)),
-                "shadow_draw",
-                nullptr,
-            },
-            {
-                "per_frame",
-                typed_per_frame,
-                static_cast<uint32_t>(sizeof(*typed_per_frame)),
-                nullptr,
-                "shadow_draw",
-            },
-        }};
-        resources = {};
-        resources.material_resources = material_resources;
-        resources.named_uniforms = named_uniforms.data();
-        resources.named_uniform_count = static_cast<uint32_t>(named_uniforms.size());
-    }
 };
 
 MaterialPipelinePassContract shadow_material_pass_contract()
@@ -708,7 +665,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     shadow_resources);
             };
             MaterialPipelineResourceView draw_material_resources{};
-            std::vector<ShadowRenderTask> render_tasks;
+            RenderTaskList render_tasks;
             render_tasks.reserve(cached_draw_calls_.size());
 
             for (const auto& dc : cached_draw_calls_) {
@@ -728,7 +685,9 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 }
                 tc_shader_handle final_shader = dc.final_shader;
 
-                ShadowRenderTask task;
+                ShadowTaskExtension& extension = render_tasks.emplace_extension<ShadowTaskExtension>();
+                RenderTask& task = render_tasks.append();
+                task.extension = &extension;
                 task.item_index = dc.item_index;
                 task.item = item;
                 task.entity = dc.entity;
@@ -739,23 +698,23 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 task.entity_name = entity_name ? entity_name : "";
                 if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
                     std::memcpy(
-                        task.draw_data.u_model,
+                        extension.draw_data.u_model,
                         item->model_matrix,
-                        sizeof(task.draw_data.u_model));
+                        sizeof(extension.draw_data.u_model));
                 } else {
                     Mat44f identity = Mat44f::identity();
                     std::memcpy(
-                        task.draw_data.u_model,
+                        extension.draw_data.u_model,
                         identity.data,
-                        sizeof(task.draw_data.u_model));
+                        sizeof(extension.draw_data.u_model));
                 }
 
                 task.draw_context.view = view_matrix;
                 task.draw_context.projection = proj_matrix;
                 std::memcpy(
                     task.draw_context.model.data,
-                    task.draw_data.u_model,
-                    sizeof(task.draw_data.u_model));
+                    extension.draw_data.u_model,
+                    sizeof(extension.draw_data.u_model));
                 task.draw_context.phase = "shadow";
                 task.draw_context.pass_contract = shadow_material_pass_contract();
                 task.draw_context.current_tc_shader = TcShader(final_shader);
@@ -764,18 +723,23 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 task.draw_context.camera_position = shadow_camera_position(params);
                 task.draw_context.viewport_width = resolution;
                 task.draw_context.viewport_height = resolution;
-                render_tasks.push_back(std::move(task));
             }
 
-            for (ShadowRenderTask& task : render_tasks) {
+            for (RenderTask& task : render_tasks) {
+                auto& extension = *static_cast<ShadowTaskExtension*>(task.extension);
                 // Both paths share the same draw-scope model matrix + PerFrame
                 // UBO layout. Mesh encoder binds payload-specific resources
                 // such as BoneBlock. Bias is applied receiver-side while
                 // sampling so the caster's projected XY footprint stays stable.
-                task.attach_resources(&per_frame, &typed_per_frame, &draw_material_resources);
+                const std::array<RenderItemNamedUniformBinding, 3> uniforms{{
+                    {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame)), "shadow_draw", nullptr},
+                    {"shadow_draw", &extension.draw_data, static_cast<uint32_t>(sizeof(extension.draw_data)), "shadow_draw", nullptr},
+                    {"per_frame", &typed_per_frame, static_cast<uint32_t>(sizeof(typed_per_frame)), nullptr, "shadow_draw"},
+                }};
+                task.set_resources(&draw_material_resources, uniforms);
             }
 
-            for (const ShadowRenderTask& task : render_tasks) {
+            for (const RenderTask& task : render_tasks) {
                 RenderItemDrawSubmitRequest encode_request{};
                 encode_request.shader = tc_shader_get(task.final_shader);
                 encode_request.shader_handle = task.final_shader;
