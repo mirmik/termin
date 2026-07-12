@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 import logging
+import mimetypes
 from pathlib import Path
 
 from termin.project.ignored_paths import is_path_ignored, project_ignored_roots
@@ -38,6 +39,38 @@ _KNOWN_EXTENSIONS = {
     ".terminproj": "Project",
 }
 
+_EXACT_ICON_MIME_TYPES = {
+    "application/pdf": "pdf",
+    "application/zip": "archive",
+    "application/gzip": "archive",
+    "application/x-tar": "archive",
+    "application/x-7z-compressed": "archive",
+    "application/x-rar-compressed": "archive",
+    "application/x-bzip2": "archive",
+    "application/x-xz": "archive",
+    "application/vnd.debian.binary-package": "archive",
+    "application/vnd.ms-excel": "spreadsheet",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "spreadsheet",
+    "application/vnd.oasis.opendocument.spreadsheet": "spreadsheet",
+    "application/javascript": "code",
+    "application/json": "code",
+    "application/xml": "code",
+    "application/x-httpd-php": "code",
+    "text/html": "code",
+    "text/css": "code",
+    "text/xml": "code",
+}
+
+_CODE_TEXT_SUBTYPES = frozenset({
+    "x-python", "x-csrc", "x-c++src", "x-java-source", "x-ruby", "x-sh",
+    "x-shellscript", "x-makefile", "x-cmake", "rust", "x-rust", "x-go",
+    "x-typescript", "x-kotlin", "x-lua",
+})
+
+_EXEC_SUBTYPES = frozenset({
+    "x-executable", "x-sharedlib", "x-elf", "x-msdos-program", "x-msdownload",
+})
+
 
 def file_subtitle(path: Path) -> str:
     extension = path.suffix.lower()
@@ -47,6 +80,33 @@ def file_subtitle(path: Path) -> str:
     )
 
 
+def file_icon_kind(path: Path) -> str:
+    """Return the portable visual category used by project browser frontends.
+
+    This is deliberately a semantic label rather than a frontend texture handle: the legacy
+    and native editors may render it differently while retaining the same file classification.
+    """
+
+    mime_type, _encoding = mimetypes.guess_type(path.name)
+    if mime_type is None:
+        return "file"
+    main_type, _separator, subtype = mime_type.partition("/")
+    if main_type == "image":
+        return "image"
+    if main_type == "audio":
+        return "audio"
+    if main_type == "video":
+        return "video"
+    exact = _EXACT_ICON_MIME_TYPES.get(mime_type)
+    if exact is not None:
+        return exact
+    if main_type == "text":
+        return "code" if subtype in _CODE_TEXT_SUBTYPES else "file"
+    if main_type == "application" and subtype in _EXEC_SUBTYPES:
+        return "exec"
+    return "file"
+
+
 @dataclass(frozen=True)
 class ProjectBrowserEntry:
     stable_id: str
@@ -54,6 +114,7 @@ class ProjectBrowserEntry:
     name: str
     subtitle: str
     is_directory: bool
+    icon_kind: str
 
 
 @dataclass(frozen=True)
@@ -366,6 +427,7 @@ class ProjectBrowserController:
                     name=path.name,
                     subtitle="Folder" if is_directory else file_subtitle(path),
                     is_directory=is_directory,
+                    icon_kind="folder" if is_directory else file_icon_kind(path),
                 )
             )
         return tuple(entries)
@@ -400,5 +462,6 @@ __all__ = [
     "ProjectBrowserController",
     "ProjectBrowserEntry",
     "ProjectBrowserSnapshot",
+    "file_icon_kind",
     "file_subtitle",
 ]

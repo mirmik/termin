@@ -4,6 +4,7 @@ import pytest
 
 from termin.editor_core.project_browser_model import (
     ProjectBrowserController,
+    file_icon_kind,
     file_subtitle,
 )
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
@@ -85,6 +86,10 @@ def test_project_browser_navigation_filtering_selection_activation_drag_and_cont
     ]
     assert root.status == "2 directories | 2 files"
     assert file_subtitle(tmp_path / "mesh.stl") == "Mesh"
+    assert file_icon_kind(tmp_path / "script.py") == "code"
+    assert file_icon_kind(tmp_path / "archive.zip") == "archive"
+    assert file_icon_kind(tmp_path / "image.png") == "image"
+    assert file_icon_kind(tmp_path / "unknown.scene") == "file"
     assert not any(entry.name in {".hidden", "tests"} for entry in root.entries)
 
     scene_index = next(i for i, entry in enumerate(root.entries) if entry.name == "scene.scene")

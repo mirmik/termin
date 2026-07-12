@@ -148,6 +148,7 @@ class NativeProjectBrowser:
                     entry.stable_id,
                     entry.name,
                     entry.subtitle,
+                    icon=entry.icon_kind,
                 )
                 for entry in snapshot.entries
             ]
