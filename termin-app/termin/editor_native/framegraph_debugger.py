@@ -454,7 +454,12 @@ def build_native_framegraph_debugger(
     main_panel = document.create_vstack("framegraph-main-preview-panel")
     main_panel.set_layout_spacing(4.0)
     main_image = document.create_image_widget()
-    main_image.set_preserve_aspect(True)
+    # The legacy debugger uses the entire preview canvas for the captured
+    # texture.  A capture may be 4:3 while this pane is wide; preserving the
+    # aspect ratio would make it look as though only a centred portion of the
+    # frame had been captured.  Framegraph inspection values coverage over
+    # pixel-perfect presentation, so match the established stretch behaviour.
+    main_image.set_preserve_aspect(False)
     main_root = _ref(document, main_image)
     main_panel.add_stretch_child(main_root)
     main_status = document.create_status_bar("Waiting for frame capture…")
@@ -463,7 +468,7 @@ def build_native_framegraph_debugger(
     depth_panel = document.create_vstack("framegraph-depth-panel")
     depth_panel.set_layout_spacing(4.0)
     depth_image = document.create_image_widget()
-    depth_image.set_preserve_aspect(True)
+    depth_image.set_preserve_aspect(False)
     depth_root = _ref(document, depth_image)
     depth_panel.add_stretch_child(depth_root)
     refresh_depth = document.create_button("Refresh Depth")
