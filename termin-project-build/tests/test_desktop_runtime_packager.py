@@ -5,7 +5,10 @@ import numpy as np
 import pytest
 
 from termin.project_build import build_desktop_project, export_runtime_package
+from termin.project_build.diagnostics import build_error
 from termin.project_build.desktop_runtime_packager import package_desktop_runtime
+from termin.project_build.pipeline import ProjectBuildPipelineError
+import termin.project_build.desktop_build as desktop_build
 
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
@@ -463,6 +466,39 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
         "version": "1.0",
         "source": "termin-runtime",
     } in runtime_manifest["distributions"]
+
+
+@full_runtime_package_exporter
+def test_build_desktop_project_rejects_target_package_error_diagnostics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "BrokenDesktopGame"
+    project.mkdir()
+    _write_json(project / "BrokenDesktopGame.terminproj", {"version": 1, "name": "BrokenDesktopGame"})
+    _write_json(project / "Main.scene", {"uuid": "broken-desktop-scene", "entities": []})
+
+    package_runtime = desktop_build.package_desktop_runtime
+
+    def package_runtime_with_error(*args, **kwargs):
+        result = package_runtime(*args, **kwargs)
+        result.diagnostics.append(build_error("runtime", "forced target package failure"))
+        return result
+
+    monkeypatch.setattr(
+        desktop_build,
+        "package_desktop_runtime",
+        package_runtime_with_error,
+    )
+
+    with pytest.raises(ProjectBuildPipelineError, match="forced target package failure"):
+        build_desktop_project(
+            project_root=project,
+            entry_scene="Main.scene",
+            output_dir=project / "dist" / "BrokenDesktopGame",
+            shader_compiler=_write_fake_shader_compiler(tmp_path),
+            sdk_root=_write_fake_desktop_sdk(tmp_path),
+        )
 
 
 def test_desktop_runtime_packager_accepts_windows_sdk_layout(tmp_path: Path) -> None:
