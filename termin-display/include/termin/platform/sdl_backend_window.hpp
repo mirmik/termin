@@ -37,6 +37,7 @@ public:
 
     tgfx::IRenderDevice* device() override;
     tgfx::RenderContext2* context() override;
+    tgfx::BackendType backend_type() const override;
 
     SDL_Window* sdl_window() const { return window_; }
 

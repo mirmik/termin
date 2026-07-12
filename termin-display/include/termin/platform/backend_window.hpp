@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "render/termin_display_api.h"
+#include "tgfx2/enums.hpp"
 #include "tgfx2/handles.hpp"
 
 namespace tgfx {
@@ -27,6 +28,7 @@ public:
 
     virtual tgfx::IRenderDevice* device() = 0;
     virtual tgfx::RenderContext2* context() = 0;
+    virtual tgfx::BackendType backend_type() const = 0;
 
     virtual bool should_close() const = 0;
     virtual void set_should_close(bool v) = 0;
