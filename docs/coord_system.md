@@ -166,30 +166,25 @@ Fullscreen/postprocess и действительно двусторонняя г
 Backends мапят эту энум в нативные константы **не одинаково**:
 
 - **Vulkan** — винуровый rule работает в framebuffer-space (y-down,
-  native). После нашей Y-flip projection mesh CCW-in-view становится
-  CW-in-framebuffer, так что API `FrontFace::CW` мы mapим в
-  `VK_FRONT_FACE_COUNTER_CLOCKWISE` и `FrontFace::CCW` — в `VK_FRONT_FACE_CLOCKWISE`.
-  Выглядит как «перевёрнутая табличка» — но это из-за того, что Vulkan
-  enum именует winding after проекции + framebuffer, а наш API — до.
+  native). Канонический projection/viewport path в итоге требует прямой
+  mapping: `FrontFace::CCW → VK_FRONT_FACE_COUNTER_CLOCKWISE`,
+  `FrontFace::CW → VK_FRONT_FACE_CLOCKWISE`.
 - **OpenGL** с `glClipControl(GL_UPPER_LEFT)` — Khronos спец говорит,
   что эта опция «reverses the interpretation of clockwise and counter-
   clockwise polygons», т.е. `glFrontFace(GL_CW)` ведёт себя как
   `glFrontFace(GL_CCW)` без UPPER_LEFT и наоборот. В итоге прямой
-  mapping `FrontFace::CW → GL_CW` случайно совпадает с правильной
-  семантикой — после обратной инверсии от glClipControl он эффективно
-  работает как «view-space CW = front», что нам и нужно.
+  mapping должен компенсировать эту инверсию:
+  `FrontFace::CCW → GL_CW`, `FrontFace::CW → GL_CCW`.
 - **Direct3D 11** — получает final vertex position уже адаптированным под
   native D3D11 viewport mapping через `termin_to_native_clip`. Этот conversion
   переворачивает Y на границе shader output, поэтому native winding, который
   видит rasterizer, получается обратным относительно API-level `FrontFace`.
-  Поэтому `FrontFace::CW`
-  мапится в `FrontCounterClockwise = TRUE`, а `FrontFace::CCW` — в
-  `FrontCounterClockwise = FALSE`.
+  Поэтому `FrontFace::CCW` мапится в `FrontCounterClockwise = TRUE`, а
+  `FrontFace::CW` — в `FrontCounterClockwise = FALSE`.
 
-Net effect: для **одного и того же API-enum значения** Vulkan и
-Direct3D 11 получают инвертированные относительно enum-а нативные
-константы, а OpenGL получает прямые. Это не баг, а следствие того,
-что backend-и применяют разные нативные Y conventions.
+Net effect: Vulkan и Direct3D 11 используют прямое логическое значение,
+а OpenGL инвертирует native enum из-за `GL_UPPER_LEFT`. Эти различия не
+выходят за backend boundary.
 
 ## 5. Projection matrices (scene cameras)
 

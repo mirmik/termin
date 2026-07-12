@@ -410,11 +410,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         shell.settings_command,
         settings_dialog,
     )
-    from tgfx import compiled_backend_name
-
     about_dialog = build_native_about_dialog(
         host.document,
-        build_editor_about_info(backend_name=compiled_backend_name()),
+        build_editor_about_info(backend_name=window.backend),
         viewport=editor_viewport,
         request_render=request_editor_render,
     )

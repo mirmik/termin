@@ -1,5 +1,7 @@
 #include "sdl_bindings.hpp"
 
+#include "tgfx2/device_factory.hpp"
+
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/shared_ptr.h>
@@ -431,6 +433,10 @@ void bind_sdl(nb::module_& m) {
              "tgfx::IRenderDevice bound to this window. Outlives the window.")
         .def("context", &SDLBackendWindow::context, nb::rv_policy::reference_internal,
              "tgfx::RenderContext2 bound to this window's device. Lazy-built.")
+        .def_prop_ro("backend", [](const SDLBackendWindow& self) {
+                return std::string(tgfx::backend_name(self.backend_type()));
+            },
+            "Name of the backend actually created for this window.")
         // Opaque pointers for cross-module (nanobind) handshakes. Python
         // code in tgfx._tgfx_native calls `Tgfx2Context.borrow(dev_ptr,
         // ctx_ptr)` with these to produce a non-owning holder — we cannot

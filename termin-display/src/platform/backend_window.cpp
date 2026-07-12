@@ -450,6 +450,10 @@ tgfx::IRenderDevice* SDLBackendWindow::device() {
     return impl_->device_ref;
 }
 
+tgfx::BackendType SDLBackendWindow::backend_type() const {
+    return impl_->backend;
+}
+
 tgfx::RenderContext2* SDLBackendWindow::context() {
     // Secondary windows never build their own RenderContext2 — that
     // would defeat "one PipelineCache per device" and force redundant
