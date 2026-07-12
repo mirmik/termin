@@ -389,6 +389,55 @@ def test_component_registry_names_survive_repeated_player_rebootstrap():
     )
 
 
+def test_player_rebootstrap_restores_loaded_python_component_types():
+    _run_python_without_nanobind_leaks(
+        """
+        import gc
+
+        from termin.bootstrap import bootstrap_player, shutdown_player
+        from termin.inspect import InspectField, InspectRegistry
+        from termin.scene import ComponentRegistry, Entity, PythonComponent
+
+        bootstrap_player()
+
+        class RebootstrapProbeComponent(PythonComponent):
+            component_category = "Regression"
+            component_display_name = "Rebootstrap Probe"
+            inspect_fields = {
+                "value": InspectField(path="value", label="Value", kind="int"),
+            }
+
+            def __init__(self):
+                super().__init__()
+                self.value = 17
+
+        shutdown_player()
+
+        for iteration in range(3):
+            bootstrap_player()
+            registry = ComponentRegistry.instance()
+            assert registry.has("RebootstrapProbeComponent")
+            info = registry.get_info("RebootstrapProbeComponent")
+            assert info["category"] == "Regression", info
+            assert info["display_name"] == "Rebootstrap Probe", info
+            assert "value" in {
+                field.path for field in InspectRegistry.instance().fields("RebootstrapProbeComponent")
+            }
+
+            entity = Entity(f"rebootstrap-probe-{iteration}")
+            entity.add_component_by_name("RebootstrapProbeComponent")
+            component = entity.get_python_component("RebootstrapProbeComponent")
+            assert isinstance(component, RebootstrapProbeComponent)
+            del component
+            del entity
+            gc.collect()
+
+            shutdown_player()
+            assert not registry.has("RebootstrapProbeComponent")
+        """
+    )
+
+
 def test_player_shutdown_releases_standalone_entity_components():
     _run_python_without_nanobind_leaks(
         """
