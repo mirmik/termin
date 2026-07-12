@@ -164,16 +164,6 @@ class PythonComponent:
             record_component = None
             record_inspect_type = None
 
-        _ensure_python_component_inspect_type(registry, record_inspect_type)
-
-        # Register only own fields (not inherited). Empty own fields still
-        # register the subclass as Python-backed before parent inheritance is set.
-        own_fields = cls.__dict__.get("inspect_fields", {})
-        registry.register_python_fields(cls.__name__, own_fields)
-        _remember_registered_type(_registered_python_inspect_types, cls.__name__)
-        if record_inspect_type is not None:
-            record_inspect_type(cls.__name__)
-
         # Find parent component type and register inheritance
         parent_name = None
         for klass in cls.__mro__[1:]:
@@ -184,14 +174,31 @@ class PythonComponent:
                 parent_name = klass.__name__
                 break
 
+        # Register the native factory first. A conflicting registration must
+        # not replace an existing class, inspect metadata, or ownership record.
+        component_registry = ComponentRegistry.instance()
+        if not component_registry.register_python(cls.__name__, cls, parent_name):
+            log.error(
+                "[PythonComponent] registration rejected for %s; preserving existing component metadata",
+                cls.__name__,
+            )
+            return
+
+        _ensure_python_component_inspect_type(registry, record_inspect_type)
+
+        # Register only own fields (not inherited). Empty own fields still
+        # register the subclass as Python-backed before parent inheritance is set.
+        own_fields = cls.__dict__.get("inspect_fields", {})
+        registry.register_python_fields(cls.__name__, own_fields)
+        _remember_registered_type(_registered_python_inspect_types, cls.__name__)
+        if record_inspect_type is not None:
+            record_inspect_type(cls.__name__)
+
         if parent_name:
             registry.set_type_parent(cls.__name__, parent_name)
             if record_inspect_type is not None:
                 record_inspect_type(cls.__name__)
 
-        # Register factory in C++ ComponentRegistry
-        component_registry = ComponentRegistry.instance()
-        component_registry.register_python(cls.__name__, cls, parent_name)
         component_registry.set_category(cls.__name__, _component_category_for_class(cls))
         component_registry.set_display_name(cls.__name__, _component_display_name_for_class(cls))
         _remember_registered_type(_registered_python_component_types, cls.__name__)

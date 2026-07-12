@@ -84,14 +84,17 @@ void bind_component_registry(nb::module_& m) {
         .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
         .def("register_python", [](ComponentRegistry&, const std::string& name, nb::object cls, nb::object parent) {
             if (parent.is_none()) {
-                ComponentRegistryPython::register_python(name, cls, nullptr);
+                return ComponentRegistryPython::register_python(name, cls, nullptr);
             } else {
                 std::string parent_str = nb::cast<std::string>(parent);
-                ComponentRegistryPython::register_python(name, cls, parent_str.c_str());
+                return ComponentRegistryPython::register_python(name, cls, parent_str.c_str());
             }
         }, nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none())
         .def("unregister_python", [](ComponentRegistry&, const std::string& name) {
             ComponentRegistryPython::unregister_python(name);
+        }, nb::arg("name"))
+        .def("get_class", [](ComponentRegistry&, const std::string& name) {
+            return ComponentRegistryPython::get_class(name);
         }, nb::arg("name"))
         .def("unregister", &ComponentRegistry::unregister, nb::arg("name"))
         .def("has", &ComponentRegistry::has, nb::arg("name"))

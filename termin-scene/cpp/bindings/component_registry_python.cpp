@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include <tcbase/tc_log.hpp>
+#include <tcbase/tc_string.h>
 
 namespace termin {
 
@@ -59,25 +60,35 @@ static tc_component* python_component_factory(void* userdata) {
     return nullptr;
 }
 
-void ComponentRegistryPython::register_python(const std::string& name, nb::object cls, const char* parent) {
+bool ComponentRegistryPython::register_python(const std::string& name, nb::object cls, const char* parent) {
     if (tc_component_registry_has(name.c_str()) &&
         tc_component_registry_get_kind(name.c_str()) == TC_CXX_COMPONENT) {
-        return;
+        tc::Log::error(
+            "[ComponentRegistry] refusing Python registration for native component %s",
+            name.c_str());
+        return false;
     }
 
-    auto cls_ptr = std::make_shared<nb::object>(std::move(cls));
-    python_classes()[name] = cls_ptr;
+    // Factory userdata must outlive registry entries, but reload cycles must
+    // not allocate a fresh duplicate string for the same component name.
+    const char* interned_name = tc_intern_string(name.c_str());
+    if (!interned_name) {
+        tc::Log::error("[ComponentRegistry] failed to intern Python component name %s", name.c_str());
+        return false;
+    }
 
-    // The string is used as factory userdata and lives for process lifetime.
-    const char* interned_name = strdup(name.c_str());
-
-    tc_component_registry_register_with_parent(
+    if (!tc_component_registry_register_with_parent(
         name.c_str(),
         python_component_factory,
         const_cast<char*>(interned_name),
         TC_PYTHON_COMPONENT,
         parent
-    );
+    )) {
+        return false;
+    }
+
+    python_classes()[name] = std::make_shared<nb::object>(std::move(cls));
+    return true;
 }
 
 void ComponentRegistryPython::unregister_python(const std::string& name) {

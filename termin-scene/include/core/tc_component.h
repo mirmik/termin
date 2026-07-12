@@ -310,7 +310,7 @@ TC_API void tc_component_registry_register(
     tc_component_kind kind
 );
 
-TC_API void tc_component_registry_register_with_parent(
+TC_API bool tc_component_registry_register_with_parent(
     const char* type_name,
     tc_component_factory factory,
     void* factory_userdata,
