@@ -59,6 +59,8 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
 
     assert browser.tree_model.node_count >= 4
     assert browser.file_model.item_count == 2_002
+    assert next(item.icon for item in browser.file_model.items if item.text == "Assets") == "folder"
+    assert next(item.icon for item in browser.file_model.items if item.text == "asset-0000.scene") == "file"
     assert browser.file_grid.visible_range[1] < 100
     assert browser.breadcrumb.text == tmp_path.name
     assert "2000 files" in browser.status_bar.text

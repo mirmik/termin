@@ -17,7 +17,10 @@ from tcgui.widgets.menu import Menu, MenuItem
 
 from termin.editor_core.project_operations import ProjectOperations
 from termin.editor_core.project_context import set_current_project_path
-from termin.editor_core.project_browser_model import file_subtitle as _get_file_subtitle
+from termin.editor_core.project_browser_model import (
+    file_icon_kind as _get_file_icon_kind,
+    file_subtitle as _get_file_subtitle,
+)
 from termin.project.ignored_paths import is_path_ignored, project_ignored_roots
 
 class ProjectBrowserTcgui:
@@ -195,7 +198,7 @@ class ProjectBrowserTcgui:
                 items.append({
                     "text": entry.name,
                     "subtitle": "Folder",
-                    "icon_type": self._icons.icon_type_for_directory(),
+                    "icon_type": "folder",
                     "data": entry,
                 })
                 continue
@@ -204,7 +207,7 @@ class ProjectBrowserTcgui:
             items.append({
                 "text": entry.name,
                 "subtitle": _get_file_subtitle(entry),
-                "icon_type": self._icons.icon_type_for_file(entry.name),
+                "icon_type": _get_file_icon_kind(entry),
                 "data": entry,
             })
 
