@@ -650,7 +650,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         if display_workspace is None:
             _logger.error("Native viewport list requested a display before workspace creation")
             return
-        display_workspace.create_display()
+        display = display_workspace.create_display()
+        # Unlike scene restoration, this is an explicit user request. Make the
+        # new display immediately visible; the workspace selection callback
+        # keeps the rendering tree and inspector in sync.
+        display_workspace.select_display(display)
         sync_viewport_list()
         request_editor_render()
 

@@ -162,7 +162,9 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     display = workspace.create_display()
     assert display.name == "Display 0"
     assert workspace.tabs.page_count == 2
-    assert workspace.tabs.selected_index == 1
+    # Display factories are also used during scene restoration; creating a
+    # display must not move focus away from the editor page.
+    assert workspace.tabs.selected_index == 0
     assert manager.added == [(display, "Display 0")]
     assert _Surface.instances[0].input_manager == display.tc_display_ptr + 100
 
@@ -170,9 +172,10 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     workspace.on_display_selected = selections.append
     assert workspace.select_display(editor_display)
     assert workspace.select_display(display)
-    assert selections == [editor_display, display]
+    assert selections == [display]
 
     second_display = workspace.create_display()
+    assert workspace.tabs.selected_index == 1
     viewport = SimpleNamespace(_viewport_handle=lambda: (7, 3))
     display.add_viewport(viewport)
     workspace.configure_viewport_input(display, viewport)
