@@ -33,7 +33,7 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
         set_include_ui=lambda value: include_ui.__setitem__("value", value),
     )
     panel = build_native_profiler_panel(document, controller)
-    shell.profiler_host.add_stretch_child(panel.root)
+    shell.debug_tabs.add_page("Profiler", panel.root)
     panel.root.visible = False
     renders = []
     connect_profiler_menu_toggle(

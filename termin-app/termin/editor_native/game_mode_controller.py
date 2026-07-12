@@ -31,6 +31,7 @@ class NativeGameModeController:
         self._request_render = request_render
         self._on_playing_changed = on_playing_changed
         self._closed = False
+        self._available = True
 
         menu_bar.connect_activated(self._menu_activated)
         tool_bar.connect_activated(self._toolbar_activated)
@@ -39,29 +40,52 @@ class NativeGameModeController:
         self._state_changed(model)
 
     def _menu_activated(self, _index: int, command_id: int, _command) -> None:
-        if command_id == self._game_play_command:
+        if self._available and command_id == self._game_play_command:
             self.model.toggle_game_mode()
 
     def _toolbar_activated(self, _index: int, command_id: int, _command) -> None:
-        if command_id == self._toolbar_play_command:
+        if self._available and command_id == self._toolbar_play_command:
             self.model.toggle_game_mode()
-        elif command_id == self._toolbar_pause_command and self.model.is_game_mode:
+        elif (
+            self._available
+            and command_id == self._toolbar_pause_command
+            and self.model.is_game_mode
+        ):
             self.model.toggle_pause()
 
     def _state_changed(self, model) -> None:
         label = "Stop" if model.is_game_mode else "Play"
         self._set_command_label(self._game_menu_model, self._game_play_command, label)
         self._set_command_label(self._toolbar_model, self._toolbar_play_command, label)
+        self._set_command_enabled(
+            self._game_menu_model,
+            self._game_play_command,
+            self._available,
+        )
+        self._set_command_enabled(
+            self._toolbar_model,
+            self._toolbar_play_command,
+            self._available,
+        )
         if self._toolbar_pause_command is not None:
             pause = self._toolbar_model.command(self._toolbar_pause_command).data
             pause.label = "Resume" if model.is_game_paused else "Pause"
-            pause.enabled = model.is_game_mode
+            pause.enabled = self._available and model.is_game_mode
             self._toolbar_model.update(self._toolbar_pause_command, pause)
         if self._on_playing_changed is None:
             self._status_bar.text = "Game mode" if model.is_game_mode else "Editor mode"
         else:
             self._on_playing_changed(model.is_game_mode)
         self._request_render()
+
+    def set_available(self, available: bool) -> None:
+        """Enable game-mode entry when the active editor session supports it."""
+        if self._available == available:
+            return
+        if not available and self.model.is_game_mode:
+            raise RuntimeError("cannot disable game mode while it is active")
+        self._available = available
+        self._state_changed(self.model)
 
     def _mode_entered(self, _is_playing: bool, _scene, expanded_uuids) -> None:
         if expanded_uuids:
@@ -72,6 +96,12 @@ class NativeGameModeController:
     def _set_command_label(command_model, command_id: int, label: str) -> None:
         data = command_model.command(command_id).data
         data.label = label
+        command_model.update(command_id, data)
+
+    @staticmethod
+    def _set_command_enabled(command_model, command_id: int, enabled: bool) -> None:
+        data = command_model.command(command_id).data
+        data.enabled = enabled
         command_model.update(command_id, data)
 
     def close(self) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 from termin.display import SDLBackendWindow, quit_sdl
@@ -14,18 +15,25 @@ from termin.editor_core.component_editor_extension import (
 from termin.editor_core.entity_inspector_model import EntityInspectorController
 from termin.editor_core.inspector_model import InspectorKind, InspectorModel
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
+from termin.editor_core.material_inspector_model import MaterialInspectorController
+from termin.editor_core.modules_panel_model import ModulesPanelController
 from termin.editor_core.rendering_inspector_models import (
     DisplayInspectorController,
     RenderTargetInspectorController,
     ViewportInspectorController,
 )
 from termin.editor_core.pipeline_editor_model import PipelineEditorController
+from termin.editor_core.pipeline_inspector_model import PipelineInspectorController
 from termin.editor_core.framegraph_debugger_service import EditorFramegraphDebuggerService
 from termin.editor_core.python_console_model import PythonConsoleController
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_core.about_model import build_editor_about_info
 from termin.editor_core.profiler_model import ProfilerController
 from termin.editor_core.project_browser_model import ProjectBrowserController
+from termin.editor_core.project_file_action_controller import ProjectFileActionController
+from termin.editor_core.project_operations import ProjectOperations
+from termin.editor_core.external_editor import reveal_in_file_manager
+from termin.editor_core.prefab_edit_controller import PrefabEditController
 from termin.editor_core.registry_sources import (
     build_core_registry_pages,
     build_resource_manager_pages,
@@ -83,6 +91,9 @@ from termin.editor_native.quest_openxr_build_dialog import (
     build_native_quest_openxr_build_dialog,
 )
 from termin.editor_native.entity_inspector import build_native_entity_inspector
+from termin.editor_native.material_inspector import build_native_material_inspector
+from termin.editor_native.modules_panel import build_native_modules_panel
+from termin.editor_native.resource_inspectors import build_native_resource_inspectors
 from termin.editor_native.rendering_inspectors import build_native_rendering_inspectors
 from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,
@@ -92,6 +103,8 @@ from termin.editor_native.pipeline_editor import (
     build_native_pipeline_editor,
     connect_pipeline_editor_command,
 )
+from termin.editor_native.pipeline_inspector import build_native_pipeline_inspector
+from termin.editor_native.tool_inspector import build_native_tool_inspector
 from termin.editor_native.framegraph_debugger import (
     build_native_framegraph_debugger,
     connect_framegraph_debugger_command,
@@ -235,16 +248,41 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         set_include_ui=set_profile_ui,
     )
     profiler_panel = build_native_profiler_panel(host.document, profiler_controller)
-    shell.profiler_host.add_stretch_child(profiler_panel.root)
-    profiler_panel.root.visible = False
+    shell.debug_tabs.add_page("Profiler", profiler_panel.root)
+
+    from termin.project_modules.runtime import get_project_modules_runtime
+
+    modules_controller = ModulesPanelController(
+        get_project_modules_runtime(),
+        defer=host.defer,
+    )
+    modules_panel = build_native_modules_panel(host.document, modules_controller)
+    shell.debug_tabs.add_page("Modules", modules_panel.root)
+    debug_visibility = {"Profiler": False, "Modules": False}
+
+    def set_debug_panel_visible(name: str, visible: bool) -> None:
+        debug_visibility[name] = visible
+        if visible:
+            shell.debug_tabs.selected_index = 0 if name == "Profiler" else 1
+        shell.set_profiler_docked(any(debug_visibility.values()))
+        request_editor_render()
 
     connect_profiler_menu_toggle(
         debug_menu,
         shell.profiler_command,
         profiler_panel,
         request_editor_render,
-        shell.set_profiler_docked,
+        lambda visible: set_debug_panel_visible("Profiler", visible),
     )
+
+    def on_modules_menu(_index: int, command_id: int, command) -> None:
+        if command_id != shell.modules_command:
+            return
+        if command.checked:
+            modules_panel.refresh()
+        set_debug_panel_visible("Modules", command.checked)
+
+    debug_menu.connect_activated(on_modules_menu)
 
     from termin.display import set_clipboard_text
     from termin.inspect import InspectRegistry
@@ -387,6 +425,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     suppress_scene_inspector = False
     inspector_model = InspectorModel(resource_manager)
     inspector_model.set_scene(initial_scene)
+    pipeline_editor_controller = PipelineEditorController()
+    inspector_resource_catalog = InspectorResourceCatalog(resource_manager)
     entity_inspector_controller = EntityInspectorController(undo_handler=push_undo_command)
     entity_inspector_controller.set_scene(initial_scene)
     entity_inspector = build_native_entity_inspector(
@@ -398,8 +438,37 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         show_layer_mask_dialog=dialog_service.show_layer_mask,
         show_texture_preview=host.register_image_preview,
         show_input=dialog_service.show_input,
-        resource_catalog=InspectorResourceCatalog(resource_manager),
+        resource_catalog=inspector_resource_catalog,
     )
+    material_inspector = build_native_material_inspector(
+        host.document,
+        MaterialInspectorController(resource_manager, changed=request_editor_render),
+        request_render=request_editor_render,
+        resource_catalog=inspector_resource_catalog,
+        show_color_dialog=dialog_service.show_color,
+        show_texture_preview=host.register_image_preview,
+    )
+    texture_inspector, mesh_inspector, glb_inspector = build_native_resource_inspectors(
+        host.document,
+        resource_manager=resource_manager,
+        request_render=request_editor_render,
+        changed=request_editor_render,
+        show_texture_preview=host.register_image_preview,
+    )
+
+    def open_inspected_pipeline() -> None:
+        pipeline_editor.refresh()
+        pipeline_editor.show()
+
+    pipeline_inspector = build_native_pipeline_inspector(
+        host.document,
+        PipelineInspectorController(
+            pipeline_editor_controller,
+            open_editor=open_inspected_pipeline,
+        ),
+        request_render=request_editor_render,
+    )
+    tool_inspector = build_native_tool_inspector(host.document)
     extension_projectors = NativeComponentExtensionProjectorRegistry(host.document)
     register_native_component_extensions(extension_projectors)
     extension_context = NativeComponentExtensionContext(
@@ -470,7 +539,23 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         request_render=request_editor_render,
     )
     shell.hierarchy_host.add_stretch_child(scene_tree.root)
-    host.router.file_drop_handler = scene_tree.drop_file
+
+    def drop_project_file(path: str, x: float, y: float, modifiers: int = 0) -> bool:
+        if scene_tree.drop_file(path, x, y, modifiers):
+            return True
+        if native_viewport is None:
+            return False
+        bounds = native_viewport.root.bounds
+        if not (bounds.x <= x < bounds.x + bounds.width and bounds.y <= y < bounds.y + bounds.height):
+            return False
+        return native_viewport.geometry.drop_project_file(
+            path,
+            Path(path).suffix.casefold(),
+            x,
+            y,
+        )
+
+    host.router.file_drop_handler = drop_project_file
 
     viewport_list_controller = ViewportListController()
     viewport_list = build_native_viewport_list(
@@ -629,6 +714,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             request_render=request_editor_render,
         )
         native_viewport = display_workspace.editor_viewport
+        native_viewport.geometry.set_scene_tree_controller_getter(
+            lambda: scene_hierarchy_controller
+        )
         display_workspace.on_display_selected = lambda display: viewport_list_controller.select(
             viewport_list_controller.display_stable_id(display)
         )
@@ -725,6 +813,12 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         host.document,
         model=inspector_model,
         entity_inspector=entity_inspector,
+        material_inspector=material_inspector,
+        texture_inspector=texture_inspector,
+        mesh_inspector=mesh_inspector,
+        glb_inspector=glb_inspector,
+        pipeline_inspector=pipeline_inspector,
+        tool_inspector=tool_inspector,
         display_controller=display_inspector_controller,
         viewport_controller=viewport_inspector_controller,
         render_target_controller=render_target_inspector_controller,
@@ -893,22 +987,40 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         core_registry_viewer,
     )
 
+    prefab_open_handler: list[Callable[[str], None] | None] = [None]
+
+    def open_prefab_from_project(path: str) -> None:
+        handler = prefab_open_handler[0]
+        if handler is None:
+            _logger.error("Native prefab edit session is not initialized")
+            return
+        handler(path)
+
+    project_file_actions = ProjectFileActionController(
+        load_scene_from_file=lambda path: scene_file_controller.load_scene_from_file(path),
+        open_prefab=open_prefab_from_project,
+        get_inspector_model=lambda: inspector_model,
+    )
+
     def on_project_file_selected(path: Path) -> None:
-        _logger.debug("Native project browser selected: %s", path)
+        project_file_actions.select_file(path)
 
     def on_project_file_activated(path: Path) -> None:
-        _logger.info("Native project browser activated: %s", path)
+        project_file_actions.activate_file(path)
 
     project_browser_controller = ProjectBrowserController(
         on_file_selected=on_project_file_selected,
         on_file_activated=on_project_file_activated,
         copy_text=set_clipboard_text,
+        reveal_path=lambda path: reveal_in_file_manager(path),
+        operations=ProjectOperations(dialog_service),
     )
     project_browser = build_native_project_browser(
         host.document,
         project_browser_controller,
         viewport=editor_viewport,
         request_render=request_editor_render,
+        file_drop_handler=drop_project_file,
     )
     shell.project_host.add_stretch_child(project_browser.root)
 
@@ -951,6 +1063,77 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     def update_window_title() -> None:
         scene_name = active_scene_name()
         session_presentation.update(scene_label=scene_name or "No Scene")
+
+    pre_prefab_scene_name: str | None = None
+
+    def on_prefab_mode_changed(editing: bool, prefab_name: str | None) -> None:
+        nonlocal pre_prefab_scene_name
+        shell.set_prefab_editing(editing, prefab_name)
+        if game_mode_controller is not None:
+            game_mode_controller.set_available(not editing)
+        if editing:
+            prefab_scene = engine.scene_manager.get_scene("prefab")
+            if prefab_scene is None or editor_scene_session is None:
+                raise RuntimeError("prefab edit scene attachment is unavailable")
+            if pre_prefab_scene_name and render_scene_session is not None:
+                render_scene_session.detach(pre_prefab_scene_name, save_state=True)
+            editor_scene_session.attach(prefab_scene, restore_state=False)
+            if render_scene_session is not None:
+                render_scene_session.attach("prefab")
+            session_presentation.update(scene_label=f"Prefab: {prefab_name or ''}")
+        else:
+            previous = pre_prefab_scene_name
+            pre_prefab_scene_name = None
+            if previous and engine.scene_manager.has_scene(previous):
+                attach_editor_scene(previous, restore_state=True)
+                if render_scene_session is not None:
+                    render_scene_session.attach(previous)
+            update_window_title()
+        request_editor_render()
+
+    prefab_edit_controller = PrefabEditController(
+        engine.scene_manager,
+        resource_manager,
+        on_mode_changed=on_prefab_mode_changed,
+        on_request_update=request_editor_render,
+        log_message=log_build_message,
+        get_editor_scene_name=active_scene_name,
+    )
+
+    def open_prefab(path: str) -> None:
+        nonlocal pre_prefab_scene_name
+        if prefab_edit_controller.is_editing:
+            _logger.error(
+                "Native editor is already editing prefab '%s'",
+                prefab_edit_controller.prefab_name,
+            )
+            return
+        pre_prefab_scene_name = active_scene_name()
+        if not prefab_edit_controller.open_prefab(path):
+            pre_prefab_scene_name = None
+
+    prefab_open_handler[0] = open_prefab
+
+    def save_prefab() -> None:
+        if not prefab_edit_controller.save():
+            _logger.error("Native editor failed to save active prefab")
+
+    def exit_prefab() -> None:
+        if not prefab_edit_controller.is_editing:
+            return
+        if editor_scene_session is not None and active_scene_name() == "prefab":
+            editor_scene_session.detach(save_state=False)
+        if render_scene_session is not None and engine.scene_manager.has_scene("prefab"):
+            render_scene_session.detach("prefab", save_state=False)
+        prefab_edit_controller.exit()
+
+    def on_prefab_toolbar(_index: int, command_id: int, _command) -> None:
+        if command_id == shell.prefab_save_command:
+            save_prefab()
+        elif command_id == shell.prefab_exit_command:
+            exit_prefab()
+
+    shell.prefab_tool_bar.connect_activated(on_prefab_toolbar)
 
     editor_state_io = None
     if native_viewport is not None:
@@ -1048,7 +1231,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
     game_menu.connect_activated(on_project_build_command)
 
-    pipeline_editor_controller = PipelineEditorController()
     pipeline_directory = project_browser_controller.root_path or Path.cwd()
     pipeline_editor = build_native_pipeline_editor(
         host.document,
@@ -1114,6 +1296,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         get_scene=current_scene,
         get_selected_entity=lambda: selected_entity,
         select_scene_object=scene_tree.select_object,
+        register_tool_inspector=inspector_host.register_tool_panel,
+        unregister_tool_inspector=inspector_host.unregister_tool_panel,
+        show_tool_inspector=inspector_host.show_tool_panel,
     )
     project_session_controller = ProjectSessionController(
         set_project_state=lambda _project_dir, project_name: session_presentation.update(
@@ -1365,6 +1550,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     executor = EditorPythonExecutor(
         lambda: {
             "editor": host,
+            "shell": shell,
             "scene": current_scene(),
             "current_scene": current_scene(),
             "selected_entity": selected_entity,
@@ -1388,6 +1574,8 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "request_render_update": request_editor_render,
             "profiler_controller": profiler_controller,
             "profiler_panel": profiler_panel,
+            "modules_controller": modules_controller,
+            "modules_panel": modules_panel,
             "registry_controller": registry_controller,
             "registry_viewer": registry_viewer,
             "core_registry_controller": core_registry_controller,
@@ -1401,6 +1589,10 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "project_build_controller": project_build_controller,
             "scene_file_controller": scene_file_controller,
             "game_mode_controller": game_mode_controller,
+            "prefab_edit_controller": prefab_edit_controller,
+            "open_prefab": open_prefab,
+            "save_prefab": save_prefab,
+            "exit_prefab": exit_prefab,
             "quest_openxr_build_dialog": quest_openxr_build_dialog,
             "pipeline_editor_controller": pipeline_editor_controller,
             "pipeline_editor": pipeline_editor,
@@ -1467,6 +1659,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             shell,
             initial_scene,
             profiler_panel,
+            modules_panel,
             registry_viewer,
             core_registry_viewer,
             resource_manager_viewer,
@@ -1499,6 +1692,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             host.request_render_update()
         if executor.process_pending() > 0:
             host.request_render_update()
+        host.process_deferred()
         if quest_openxr_build_dialog.poll() > 0:
             host.request_render_update()
         project_file_watcher.poll()
@@ -1524,6 +1718,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     def on_shutdown() -> None:
         scene_structure_observer.close()
         editor_log.close()
+        modules_panel.close()
         host.remove_pre_render_callback(refresh_live_display_inspector)
         if mcp_server is not None:
             mcp_server.stop()

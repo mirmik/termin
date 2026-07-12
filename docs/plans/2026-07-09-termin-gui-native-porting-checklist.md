@@ -804,9 +804,8 @@ separately as Kanboard #310.
 Phase 12 host notes:
 
 - The coexistence boundary is entrypoint-level, never two widget trees inside
-  one window. The default `termin_editor` owns one `tc_ui_document`; the
-  temporary `--ui=tcgui` compatibility entrypoint remains separate during
-  legacy retirement.
+  one window. `termin_editor` owns one `tc_ui_document`; production backend
+  selection has been removed.
 - `termin.editor_native.NativeUiHost` owns render target resize, layout/paint,
   SDL pointer/key/text/click-count routing, clipboard, PNG/MCP capture and
   shutdown. The native Profiler panel is attached to the same root as a fixed
@@ -818,7 +817,7 @@ Phase 12 host notes:
 - The native minimal shell has stable menu, toolbar, project, workspace,
   inspector and status roots.
   Its headless snapshot and event-router tests are complemented by an actual
-  two-frame `sdk/bin/termin_editor --ui=native` SDL offscreen OpenGL smoke.
+  two-frame `sdk/bin/termin_editor` SDL offscreen OpenGL smoke.
 - The workspace now owns a real editor viewport rather than a label
   placeholder. `NativeEditorViewport` composes the native texture surface,
   editor-only display, `EditorSceneAttachment`, per-viewport editor input
@@ -1073,11 +1072,10 @@ Phase 12 host notes:
   active game scene for it. A live MCP run observed `untitled(game)` in PLAY,
   refreshed executor context to that scene, and restored `untitled` in STOP;
   shutdown remained clean.
-- The canonical `termin_editor` entrypoint now defaults to native UI. Launcher
-  project activation inherits that default because it invokes the editor without
-  a backend override; `--ui=tcgui` is retained only as an explicit compatibility
-  route during legacy retirement. An SDK-backed three-frame offscreen OpenGL
-  smoke passed through the no-flag production command.
+- The canonical `termin_editor` entrypoint now has only the native UI route.
+  Launcher project activation invokes the same path; backend override and the
+  production tcgui import were removed. An SDK-backed three-frame offscreen
+  OpenGL smoke passed through the production command.
 - The migrated tcgui Core/Inspect/NavMesh/Resource viewer modules, their shared
   `RegistryViewerDialog`, launcher methods and menu callbacks were deleted.
   An architecture test fixes their absence. Card #302 remains open only for

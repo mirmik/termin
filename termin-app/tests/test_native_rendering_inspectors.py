@@ -1,7 +1,7 @@
 import gc
 from types import SimpleNamespace
 
-from termin.editor_core.inspector_model import InspectorModel
+from termin.editor_core.inspector_model import InspectorKind, InspectorModel
 from termin.editor_core.rendering_inspector_models import (
     DisplayInspectorSnapshot,
     InspectorChoice,
@@ -19,6 +19,15 @@ class _EntityInspector:
 
     def set_target(self, target):
         self.targets.append(target)
+
+
+class _MaterialInspector(_EntityInspector):
+    pass
+
+
+class _ResourceInspector(_EntityInspector):
+    def set_target(self, target, **options):
+        self.targets.append((target, options))
 
 
 class _DisplayController:
@@ -105,11 +114,23 @@ def test_native_inspector_host_switches_rendering_object_panels():
     document = Document()
     model = InspectorModel(SimpleNamespace())
     entity = _EntityInspector(document)
+    material = _MaterialInspector(document)
+    texture = _ResourceInspector(document)
+    mesh = _ResourceInspector(document)
+    glb = _ResourceInspector(document)
+    pipeline = _ResourceInspector(document)
+    tool = _ResourceInspector(document)
     renders = []
     host = build_native_rendering_inspectors(
         document,
         model=model,
         entity_inspector=entity,
+        material_inspector=material,
+        texture_inspector=texture,
+        mesh_inspector=mesh,
+        glb_inspector=glb,
+        pipeline_inspector=pipeline,
+        tool_inspector=tool,
         display_controller=_DisplayController(),
         viewport_controller=_ViewportController(),
         render_target_controller=_RenderTargetController(),
@@ -120,6 +141,42 @@ def test_native_inspector_host_switches_rendering_object_panels():
     display = SimpleNamespace(name="Editor")
     viewport = SimpleNamespace(name="Main")
     target = SimpleNamespace(name="ColorTarget")
+
+    selected_material = object()
+    model.request(InspectorKind.MATERIAL, target=selected_material, label="Material")
+    assert host.material_inspector.root.visible
+    assert material.targets[-1] is selected_material
+    assert not entity.root.visible
+
+    model.show_texture_for_file("/project/albedo.png")
+    assert host.texture_inspector.root.visible
+    assert texture.targets[-1][1]["file_path"] == "/project/albedo.png"
+
+    model.show_mesh_for_file("/project/mesh.obj")
+    assert host.mesh_inspector.root.visible
+    assert mesh.targets[-1][1]["file_path"] == "/project/mesh.obj"
+
+    model.request(
+        InspectorKind.GLB,
+        target=None,
+        label="/project/model.glb",
+        file_path="/project/model.glb",
+    )
+    assert host.glb_inspector.root.visible
+    assert glb.targets[-1][1]["file_path"] == "/project/model.glb"
+
+    model.request(
+        InspectorKind.PIPELINE,
+        target=None,
+        label="/project/render.scene_pipeline",
+        file_path="/project/render.scene_pipeline",
+    )
+    assert host.pipeline_inspector.root.visible
+    assert pipeline.targets[-1][1]["file_path"] == "/project/render.scene_pipeline"
+
+    model.show_tool("terrain", "Terrain")
+    assert host.tool_inspector.root.visible
+    assert tool.targets[-1] == ("terrain", {"label": "Terrain"})
 
     model.show_display(display, display.name)
     assert host.display_inspector.root.visible
@@ -141,6 +198,12 @@ def test_native_inspector_host_switches_rendering_object_panels():
     assert document.destroy_widget_recursive(host.root.handle)
     del host
     del entity
+    del material
+    del texture
+    del mesh
+    del glb
+    del pipeline
+    del tool
     del model
     del document
     gc.collect()

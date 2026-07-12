@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from termin.editor_core.profiler_model import ProfilerController, ProfilerSnapshot
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import (
     CommandData,
     CommandKind,
     CommandModel,
     Document,
-    EdgeInsets,
     FrameTimeModel,
     Size,
     TableColumn,
@@ -92,8 +92,8 @@ def build_native_profiler_panel(
     root = document.create_vstack("native-profiler-panel")
     root.stable_id = "editor.profiler"
     root.preferred_size = Size(480.0, 626.0)
-    root.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
-    root.set_layout_spacing(4.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.panel_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.spacing)
 
     commands = CommandModel()
     enable = commands.append(
@@ -108,10 +108,10 @@ def build_native_profiler_panel(
     commands.append(CommandData("separator", kind=CommandKind.Separator))
     clear = commands.append(CommandData("clear", "Clear"))
     toolbar = document.create_tool_bar(commands)
-    root.add_fixed_child(_ref(document, toolbar), 36.0)
+    root.add_fixed_child(_ref(document, toolbar), EDITOR_UI_METRICS.toolbar)
 
     status = document.create_status_bar("Profiler | waiting for a complete frame")
-    root.add_fixed_child(_ref(document, status), 24.0)
+    root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
 
     frame_model = FrameTimeModel()
     frame_model.max_samples = 180

@@ -58,3 +58,34 @@ def test_native_game_mode_controller_projects_f5_play_and_stop() -> None:
     assert renders
 
     controller.close()
+
+
+def test_native_game_mode_controller_can_disable_all_play_entry_points() -> None:
+    document = Document()
+    shell = build_native_editor_shell(document)
+    model = _GameModeModel()
+    controller = NativeGameModeController(
+        model,
+        menu_bar=shell.menu_bar,
+        game_menu_model=shell.game_menu_model,
+        game_play_command=shell.game_play_command,
+        tool_bar=shell.tool_bar,
+        toolbar_model=shell.toolbar_model,
+        toolbar_play_command=shell.toolbar_play_command,
+        scene_hierarchy=_SceneHierarchy(),
+        status_bar=shell.status_bar,
+        request_render=lambda: None,
+    )
+
+    controller.set_available(False)
+
+    assert not shell.game_menu_model.command(shell.game_play_command).data.enabled
+    assert not shell.toolbar_model.command(shell.toolbar_play_command).data.enabled
+    assert not shell.menu_bar.dispatch_shortcut(Key.F5.value, 0)
+    assert not model.is_game_mode
+
+    controller.set_available(True)
+    assert shell.menu_bar.dispatch_shortcut(Key.F5.value, 0)
+    assert model.is_game_mode
+
+    controller.close()

@@ -8,6 +8,7 @@ prefab file or discarded.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
@@ -15,6 +16,9 @@ if TYPE_CHECKING:
     from termin.engine import SceneManager
     from termin.editor_core.resource_manager import ResourceManager
     from termin.scene import Entity
+
+
+_logger = logging.getLogger(__name__)
 
 
 class PrefabEditController:
@@ -105,6 +109,7 @@ class PrefabEditController:
         try:
             self._load_prefab_into_scene(prefab_path)
         except Exception as e:
+            _logger.exception("Failed to load prefab '%s'", prefab_path)
             self._log(f"Failed to load prefab: {e}")
             self._prefab_path = None
             self._previous_scene_name = None
@@ -158,9 +163,8 @@ class PrefabEditController:
             )
             return True
         except Exception as e:
+            _logger.exception("Failed to save prefab '%s'", self._prefab_path)
             self._log(f"Failed to save prefab: {e}")
-            import traceback
-            traceback.print_exc()
             return False
 
     def _find_prefab_root(self) -> "Entity | None":

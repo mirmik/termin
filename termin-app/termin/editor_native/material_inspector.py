@@ -16,6 +16,7 @@ from termin.editor_core.material_inspector_model import (
 )
 from termin.editor_core.material_texture_sources import MaterialTextureSourceCatalog
 from termin.gui_native import Color, Document, EdgeInsets, Size, WidgetRef
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 from .inspector_fields import (
     ColorDialogHandler,
@@ -86,7 +87,7 @@ class NativeMaterialInspector:
         row.set_layout_spacing(4.0)
         row.set_layout_padding(EdgeInsets(0.0, 1.0, 0.0, 1.0))
         label = self.document.create_label(label_text, f"native-material-label-{key}")
-        row.add_fixed_child(label, 110.0)
+        row.add_fixed_child(label, EDITOR_UI_METRICS.inspector_label)
         return row
 
     def _append_text_row(self, label: str, value: str, submit, key: str) -> None:

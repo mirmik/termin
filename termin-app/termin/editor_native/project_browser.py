@@ -18,7 +18,6 @@ from termin.gui_native import (
     CommandData,
     CommandModel,
     Document,
-    EdgeInsets,
     Point,
     Rect,
     Size,
@@ -26,6 +25,7 @@ from termin.gui_native import (
     TreeModel,
     WidgetRef,
 )
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
 def _ref(document: Document, reference) -> WidgetRef:
@@ -50,6 +50,7 @@ class NativeProjectBrowser:
     context_menu: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
+    file_drop_handler: Callable[[str, float, float, int], bool] | None = None
     node_paths: dict[int, Path] = field(default_factory=dict)
     path_nodes: dict[Path, int] = field(default_factory=dict)
     placeholder_nodes: set[int] = field(default_factory=set)
@@ -215,12 +216,13 @@ def build_native_project_browser(
     *,
     viewport: Callable[[], Rect],
     request_render: Callable[[], None],
+    file_drop_handler: Callable[[str, float, float, int], bool] | None = None,
 ) -> NativeProjectBrowser:
     root = document.create_vstack("native-project-browser")
     root.stable_id = "editor.project-browser"
     root.preferred_size = Size(420.0, 626.0)
-    root.set_layout_padding(EdgeInsets(4.0, 4.0, 4.0, 4.0))
-    root.set_layout_spacing(4.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.collection_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.spacing)
 
     toolbar_model = CommandModel()
     toolbar_model.set_commands(
@@ -231,9 +233,9 @@ def build_native_project_browser(
         ]
     )
     toolbar = document.create_tool_bar(toolbar_model)
-    root.add_fixed_child(_ref(document, toolbar), 36.0)
+    root.add_fixed_child(_ref(document, toolbar), EDITOR_UI_METRICS.toolbar)
     breadcrumb = document.create_status_bar("No project")
-    root.add_fixed_child(_ref(document, breadcrumb), 24.0)
+    root.add_fixed_child(_ref(document, breadcrumb), EDITOR_UI_METRICS.status_row)
 
     main = document.create_splitter(True, "project-browser-content-splitter")
     main.widget.stable_id = "editor.project-browser.content-splitter"
@@ -249,7 +251,7 @@ def build_native_project_browser(
     main.set_second(_ref(document, grid))
     root.add_stretch_child(main.widget)
     status = document.create_status_bar("No project is open")
-    root.add_fixed_child(_ref(document, status), 24.0)
+    root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
 
     context_model = CommandModel()
     context_menu = document.create_menu(context_model)
@@ -270,11 +272,25 @@ def build_native_project_browser(
         context_menu=context_menu,
         viewport=viewport,
         request_render=request_render,
+        file_drop_handler=file_drop_handler,
     )
     weak_browser = weakref.ref(browser)
 
     def current() -> NativeProjectBrowser | None:
         return weak_browser()
+
+    def refresh_after_mutation() -> None:
+        owner = current()
+        if owner is not None:
+            owner.refresh()
+
+    def navigate_after_mutation(path: Path) -> None:
+        owner = current()
+        if owner is not None:
+            owner.navigate(path)
+
+    controller.set_mutation_refresh(refresh_after_mutation)
+    controller.set_mutation_navigation(navigate_after_mutation)
 
     def on_toolbar(_index: int, _command_id: int, command) -> None:
         owner = current()
@@ -307,6 +323,19 @@ def build_native_project_browser(
         if owner is not None:
             owner.show_file_context(index, x, y)
 
+    def on_delete(index: int, _item) -> None:
+        owner = current()
+        if owner is not None:
+            owner.controller.execute_context_action("delete", index)
+
+    def on_drag(index: int, x: float, y: float, modifiers: int) -> None:
+        owner = current()
+        if owner is None or owner.file_drop_handler is None:
+            return
+        payload = owner.controller.drag_payload(index)
+        if payload is not None:
+            owner.file_drop_handler(payload["path"], x, y, modifiers)
+
     def on_tree_selection(node: int) -> None:
         owner = current()
         if owner is not None:
@@ -331,6 +360,8 @@ def build_native_project_browser(
     grid.connect_selection_changed(on_selection)
     grid.connect_activated(on_activation)
     grid.connect_context_menu_requested(on_context)
+    grid.connect_delete_requested(on_delete)
+    grid.connect_drag_requested(on_drag)
     tree.connect_selection_changed(on_tree_selection)
     tree.connect_expansion_changed(on_tree_expansion)
     tree.connect_context_menu_requested(on_tree_context)

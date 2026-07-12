@@ -1,11 +1,11 @@
-from termin.editor_tcgui.project_file_action_controller import ProjectFileActionController
+from termin.editor_core.project_file_action_controller import ProjectFileActionController
 
 
 class _Recorder:
     def __init__(self) -> None:
         self.scene_path = None
         self.prefab_path = None
-        self.inspector = _InspectorRecorder()
+        self.inspector = _InspectorModelRecorder()
 
     def load_scene(self, path: str) -> None:
         self.scene_path = path
@@ -17,7 +17,7 @@ class _Recorder:
         return self.inspector
 
 
-class _InspectorRecorder:
+class _InspectorModelRecorder:
     def __init__(self) -> None:
         self.material_path = None
         self.pipeline_path = None
@@ -25,19 +25,19 @@ class _InspectorRecorder:
         self.mesh_path = None
         self.glb_path = None
 
-    def show_material_inspector_for_file(self, path: str) -> None:
+    def show_material_for_file(self, path: str) -> None:
         self.material_path = path
 
-    def show_pipeline_inspector_for_file(self, path: str) -> None:
+    def show_pipeline_for_file(self, path: str) -> None:
         self.pipeline_path = path
 
-    def show_texture_inspector_for_file(self, path: str) -> None:
+    def show_texture_for_file(self, path: str) -> None:
         self.texture_path = path
 
-    def show_mesh_inspector_for_file(self, path: str) -> None:
+    def show_mesh_for_file(self, path: str) -> None:
         self.mesh_path = path
 
-    def show_glb_inspector_for_file(self, path: str) -> None:
+    def show_glb_for_file(self, path: str) -> None:
         self.glb_path = path
 
 
@@ -48,7 +48,7 @@ def _make_controller(
     return ProjectFileActionController(
         load_scene_from_file=recorder.load_scene,
         open_prefab=recorder.open_prefab,
-        get_inspector_controller=recorder.get_inspector,
+        get_inspector_model=recorder.get_inspector,
         open_in_text_editor=open_in_text_editor,
     )
 

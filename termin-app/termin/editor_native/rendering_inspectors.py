@@ -17,7 +17,8 @@ from termin.editor_core.rendering_inspector_models import (
     ViewportInspectorController,
     ViewportInspectorSnapshot,
 )
-from termin.gui_native import Document, EdgeInsets, Size, WidgetRef
+from termin.gui_native import Document, Size, WidgetRef
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 from .inspector_fields import (
     ColorDialogHandler,
@@ -33,8 +34,8 @@ def _panel(document: Document, stable_id: str) -> tuple[WidgetRef, WidgetRef]:
     root = document.create_vstack(f"{stable_id}-root")
     root.stable_id = stable_id
     content = document.create_vstack(f"{stable_id}-content")
-    content.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
-    content.set_layout_spacing(4.0)
+    content.set_layout_padding(EDITOR_UI_METRICS.panel_insets)
+    content.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     scroll = document.create_scroll_area(f"{stable_id}-scroll")
     scroll.set_content(content)
     root.add_stretch_child(scroll.widget)
@@ -47,7 +48,12 @@ def _clear(document: Document, content: WidgetRef) -> None:
             _logger.error("Failed to destroy rendering inspector row: %s", child.debug_name)
 
 
-def _row(document: Document, label: str, key: str, label_width: float = 112.0) -> WidgetRef:
+def _row(
+    document: Document,
+    label: str,
+    key: str,
+    label_width: float = EDITOR_UI_METRICS.inspector_label,
+) -> WidgetRef:
     row = document.create_hstack(f"rendering-inspector-row-{key}")
     row.set_layout_spacing(4.0)
     row.add_fixed_child(document.create_label(label, f"rendering-inspector-label-{key}"), label_width)
@@ -406,6 +412,12 @@ class NativeInspectorHost:
     model: InspectorModel
     root: WidgetRef
     entity_inspector: object
+    material_inspector: object
+    texture_inspector: object
+    mesh_inspector: object
+    glb_inspector: object
+    pipeline_inspector: object
+    tool_inspector: object
     display_inspector: NativeDisplayInspector
     viewport_inspector: NativeViewportInspector
     render_target_inspector: NativeRenderTargetInspector
@@ -422,9 +434,24 @@ class NativeInspectorHost:
     def show_render_target(self, render_target) -> None:
         self.model.show_render_target(render_target)
 
+    def register_tool_panel(self, key: str, panel: WidgetRef) -> None:
+        self.tool_inspector.register(key, panel)
+
+    def unregister_tool_panel(self, key: str) -> WidgetRef | None:
+        return self.tool_inspector.unregister(key)
+
+    def show_tool_panel(self, key: str, label: str = "") -> None:
+        self.model.show_tool(key, label or key)
+
     def apply_model(self, model: InspectorModel) -> None:
         panels = (
             self.entity_inspector.root,
+            self.material_inspector.root,
+            self.texture_inspector.root,
+            self.mesh_inspector.root,
+            self.glb_inspector.root,
+            self.pipeline_inspector.root,
+            self.tool_inspector.root,
             self.display_inspector.root,
             self.viewport_inspector.root,
             self.render_target_inspector.root,
@@ -434,6 +461,46 @@ class NativeInspectorHost:
         if model.kind is InspectorKind.ENTITY:
             self.entity_inspector.root.visible = True
             self.entity_inspector.set_target(model.target)
+        elif model.kind is InspectorKind.MATERIAL:
+            self.entity_inspector.set_target(None)
+            self.material_inspector.root.visible = True
+            self.material_inspector.set_target(model.target)
+        elif model.kind is InspectorKind.TEXTURE:
+            self.entity_inspector.set_target(None)
+            self.texture_inspector.root.visible = True
+            self.texture_inspector.set_target(
+                model.target,
+                name=model.label,
+                file_path=model.extras.get("file_path"),
+            )
+        elif model.kind is InspectorKind.MESH:
+            self.entity_inspector.set_target(None)
+            self.mesh_inspector.root.visible = True
+            self.mesh_inspector.set_target(
+                model.target,
+                name=model.label,
+                file_path=model.extras.get("file_path"),
+            )
+        elif model.kind is InspectorKind.GLB:
+            self.entity_inspector.set_target(None)
+            self.glb_inspector.root.visible = True
+            self.glb_inspector.set_target(
+                model.target,
+                name=model.label,
+                file_path=model.extras.get("file_path"),
+            )
+        elif model.kind is InspectorKind.PIPELINE:
+            self.entity_inspector.set_target(None)
+            self.pipeline_inspector.root.visible = True
+            self.pipeline_inspector.set_target(
+                model.target,
+                name=model.label,
+                file_path=model.extras.get("file_path"),
+            )
+        elif model.kind is InspectorKind.TOOL:
+            self.entity_inspector.set_target(None)
+            self.tool_inspector.root.visible = True
+            self.tool_inspector.set_target(model.target, label=model.label)
         elif model.kind is InspectorKind.DISPLAY:
             self.entity_inspector.set_target(None)
             self.display_inspector.root.visible = True
@@ -457,6 +524,12 @@ def build_native_rendering_inspectors(
     *,
     model: InspectorModel,
     entity_inspector,
+    material_inspector,
+    texture_inspector,
+    mesh_inspector,
+    glb_inspector,
+    pipeline_inspector,
+    tool_inspector,
     display_controller: DisplayInspectorController,
     viewport_controller: ViewportInspectorController,
     render_target_controller: RenderTargetInspectorController,
@@ -485,9 +558,33 @@ def build_native_rendering_inspectors(
         show_color_dialog,
         show_layer_mask_dialog,
     )
-    for panel in (entity_inspector.root, display_root, viewport_root, target_root):
+    for panel in (
+        entity_inspector.root,
+        material_inspector.root,
+        texture_inspector.root,
+        mesh_inspector.root,
+        glb_inspector.root,
+        pipeline_inspector.root,
+        tool_inspector.root,
+        display_root,
+        viewport_root,
+        target_root,
+    ):
         root.add_stretch_child(panel)
-    result = NativeInspectorHost(model, root, entity_inspector, display, viewport, target)
+    result = NativeInspectorHost(
+        model,
+        root,
+        entity_inspector,
+        material_inspector,
+        texture_inspector,
+        mesh_inspector,
+        glb_inspector,
+        pipeline_inspector,
+        tool_inspector,
+        display,
+        viewport,
+        target,
+    )
     weak_result = weakref.ref(result)
 
     def changed(current_model: InspectorModel) -> None:

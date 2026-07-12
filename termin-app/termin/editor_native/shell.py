@@ -14,6 +14,7 @@ from termin.gui_native import (
     WidgetRef,
 )
 from termin.editor_core.menu_bar_model import build_editor_menu_inventory
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
 class NativeMenuActivationRoute:
@@ -49,8 +50,10 @@ class NativeEditorShell:
     workspace_host: WidgetRef
     inspector_host: WidgetRef
     profiler_host: WidgetRef
+    debug_tabs: object
     menu_bar: object
     tool_bar: object
+    prefab_tool_bar: object
     status_bar: object
     new_scene_command: int
     new_project_command: int
@@ -73,8 +76,13 @@ class NativeEditorShell:
     toolbar_model: CommandModel
     toolbar_play_command: int
     toolbar_pause_command: int
+    prefab_toolbar_model: CommandModel
+    prefab_label_command: int
+    prefab_save_command: int
+    prefab_exit_command: int
     debug_menu_model: CommandModel
     profiler_command: int
+    modules_command: int
     inspect_registry_command: int
     core_registry_command: int
     resource_manager_command: int
@@ -107,6 +115,13 @@ class NativeEditorShell:
         a splitter child still reserves its extent in the native layout, which
         is why this explicit reparenting boundary belongs to the shell.
         """
+        current = self.left_splitter.widget.children
+        docked = any(
+            child.handle == self.profiler_splitter.widget.handle for child in current
+        )
+        if docked == visible:
+            self.profiler_host.visible = visible
+            return
         if visible:
             self.right_splitter.widget.detach()
             self.profiler_splitter.set_first(self.right_splitter.widget)
@@ -118,6 +133,13 @@ class NativeEditorShell:
             self.right_splitter.widget.detach()
             self.left_splitter.set_second(self.right_splitter.widget)
         self.profiler_host.visible = visible
+
+    def set_prefab_editing(self, editing: bool, prefab_name: str | None = None) -> None:
+        label = self.prefab_toolbar_model.command(self.prefab_label_command).data
+        label.label = f"Editing Prefab: {prefab_name or ''}"
+        self.prefab_toolbar_model.update(self.prefab_label_command, label)
+        self.prefab_tool_bar.widget.visible = editing
+        self.toolbar_model.set_enabled(self.toolbar_play_command, not editing)
 
     def menu_route(self, stable_id: str) -> NativeMenuActivationRoute:
         for index, entry in enumerate(self.menu_bar.entries):
@@ -153,9 +175,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     commands: dict[tuple[str, str], int] = {}
     entries = []
     for spec in build_editor_menu_inventory():
-        # Modules is intentionally outside this milestone and must not appear as
-        # an inert command in the production UI.
-        items = [item for item in spec.items if item is None or item.label != "Modules"]
+        items = list(spec.items)
         model = CommandModel()
         separator_index = 0
         for item in items:
@@ -217,6 +237,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     run_build_command = commands[("Game", "Run Build...")]
     run_standalone_command = commands[("Game", "Run Standalone...")]
     profiler_command = commands[("Debug", "Profiler")]
+    modules_command = commands[("Debug", "Modules")]
     camera_frustums_command = commands[("Debug", "Camera Frustums")]
     scene_manager_command = commands[("Debug", "Scene Manager...")]
     framegraph_debugger_command = commands[("Debug", "Framegraph Texture Viewer...")]
@@ -240,6 +261,15 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     # The editor owns a single Play action in this strip. Center its visible
     # content while retaining the full-width toolbar background and hit area.
     tool_bar.centered = True
+    prefab_toolbar_model = CommandModel()
+    prefab_label_command = prefab_toolbar_model.append(
+        CommandData("prefab-label", "Editing Prefab", enabled=False)
+    )
+    prefab_save_command = prefab_toolbar_model.append(CommandData("prefab-save", "Save"))
+    prefab_exit_command = prefab_toolbar_model.append(CommandData("prefab-exit", "Exit"))
+    prefab_tool_bar = document.create_tool_bar(prefab_toolbar_model)
+    prefab_tool_bar.centered = True
+    prefab_tool_bar.widget.visible = False
 
     central = document.create_vstack("native-editor-central")
     central.stable_id = "editor.central"
@@ -263,7 +293,11 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     workspace_host.stable_id = "editor.workspace-host"
     workspace_host.set_layout_spacing(0.0)
     workspace_host.preferred_size = Size(640.0, 406.0)
-    workspace_host.add_fixed_child(tool_bar.widget, 40.0)
+    workspace_host.add_fixed_child(tool_bar.widget, EDITOR_UI_METRICS.toolbar)
+    workspace_host.add_fixed_child(
+        prefab_tool_bar.widget,
+        EDITOR_UI_METRICS.prefab_toolbar,
+    )
 
     inspector_host = document.create_vstack("native-editor-inspector-host")
     inspector_host.stable_id = "editor.inspector-host"
@@ -284,6 +318,9 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     profiler_host.set_layout_spacing(0.0)
     profiler_host.preferred_size = Size(360.0, 406.0)
     profiler_host.visible = False
+    debug_tabs = document.create_tab_view("native-editor-debug-tabs")
+    debug_tabs.widget.stable_id = "editor.debug-tabs"
+    profiler_host.add_stretch_child(debug_tabs.widget)
 
     profiler_splitter = document.create_splitter(True, "native-editor-profiler-splitter")
     profiler_splitter.widget.stable_id = "editor.profiler-splitter"
@@ -345,8 +382,10 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         workspace_host=workspace_host,
         inspector_host=inspector_host,
         profiler_host=profiler_host,
+        debug_tabs=debug_tabs,
         menu_bar=menu_bar,
         tool_bar=tool_bar,
+        prefab_tool_bar=prefab_tool_bar,
         status_bar=status_bar,
         new_scene_command=new_scene_command,
         new_project_command=new_project_command,
@@ -369,8 +408,13 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         toolbar_model=toolbar_model,
         toolbar_play_command=toolbar_play_command,
         toolbar_pause_command=toolbar_pause_command,
+        prefab_toolbar_model=prefab_toolbar_model,
+        prefab_label_command=prefab_label_command,
+        prefab_save_command=prefab_save_command,
+        prefab_exit_command=prefab_exit_command,
         debug_menu_model=debug_menu,
         profiler_command=profiler_command,
+        modules_command=modules_command,
         inspect_registry_command=inspect_registry_command,
         core_registry_command=core_registry_command,
         resource_manager_command=resource_manager_command,

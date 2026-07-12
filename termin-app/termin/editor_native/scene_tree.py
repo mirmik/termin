@@ -18,7 +18,6 @@ from termin.gui_native import (
     CommandData,
     CommandModel,
     Document,
-    EdgeInsets,
     Point,
     Rect,
     Size,
@@ -27,6 +26,7 @@ from termin.gui_native import (
     TreeModel,
     WidgetRef,
 )
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 
 
 _logger = logging.getLogger(__name__)
@@ -235,8 +235,8 @@ def build_native_scene_tree(
     root = document.create_vstack("native-scene-tree")
     root.stable_id = "editor.scene-tree"
     root.preferred_size = Size(420.0, 300.0)
-    root.set_layout_padding(EdgeInsets(4.0, 4.0, 4.0, 4.0))
-    root.set_layout_spacing(4.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.collection_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.spacing)
 
     toolbar_model = CommandModel()
     toolbar_model.set_commands(
@@ -247,7 +247,7 @@ def build_native_scene_tree(
         ]
     )
     toolbar = document.create_tool_bar(toolbar_model)
-    root.add_fixed_child(_ref(document, toolbar), 36.0)
+    root.add_fixed_child(_ref(document, toolbar), EDITOR_UI_METRICS.toolbar)
 
     tree_model = TreeModel()
     expansion_model = TreeExpansionModel()
@@ -258,7 +258,7 @@ def build_native_scene_tree(
     root.add_stretch_child(tree_root)
 
     status = document.create_status_bar("Scene entities: 0")
-    root.add_fixed_child(_ref(document, status), 24.0)
+    root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
     context_model = CommandModel()
     context_menu = document.create_menu(context_model)
 

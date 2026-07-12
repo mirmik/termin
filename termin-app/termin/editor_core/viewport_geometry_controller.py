@@ -48,11 +48,22 @@ class ViewportGeometryController:
         path = data.get("path")
         if not isinstance(path, str):
             return False
+        return self.drop_project_file(path, str(data.get("extension", "")), event.x, event.y)
+
+    def set_scene_tree_controller_getter(
+        self,
+        getter: Callable[[], object | None],
+    ) -> None:
+        self._get_scene_tree_controller = getter
+
+    def drop_project_file(self, path: str, extension: str, x: float, y: float) -> bool:
+        if extension.casefold() not in _GLTF_MODEL_EXTENSIONS:
+            return False
         scene_tree_controller = self._get_scene_tree_controller()
         if scene_tree_controller is None:
             log.error("[ViewportGeometryController] GLTF viewport drop failed: scene tree controller is not available")
             return False
-        world_pos = self.world_position_for_viewport_drop(event.x, event.y)
+        world_pos = self.world_position_for_viewport_drop(x, y)
         scene_tree_controller.operations.drop_glb(path, None, world_position=world_pos)
         return True
 

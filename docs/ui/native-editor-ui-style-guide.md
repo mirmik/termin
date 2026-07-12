@@ -46,6 +46,24 @@ Compact controls have a 28 px minimum height. Text fields may use 30–34 px whe
 editing comfort requires it. A checkbox's visual box is 18 px; its surrounding
 row provides the larger pointer target.
 
+Editor composition consumes the shared `EditorUiMetrics` contract from
+`termin.editor_native.metrics`. The production baseline is:
+
+| Metric | Value | Use |
+|---|---:|---|
+| spacing | 4 px | gaps between adjacent rows and controls |
+| panel padding | 6 px | inspectors and debug panels |
+| collection padding | 4 px | trees, grids and list-oriented panels |
+| compact row | 28 px | ordinary inspector/property rows |
+| field row | 30 px | text, combo and numeric editing rows |
+| section/status row | 24 px | captions, breadcrumbs and status summaries |
+| toolbar | 32 px | panel and workspace command strips |
+| inspector label column | 112 px | Entity, Material, Rendering and resource inspectors |
+
+Local dimensions are still appropriate for genuinely different content such
+as image previews and graphs. They must not restate one of these shared metrics
+under a panel-specific number.
+
 ### Borders and separators
 
 Default buttons have no visible border. Editable fields use at most a subtle

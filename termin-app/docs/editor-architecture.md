@@ -59,8 +59,8 @@ UI-agnostic слой. Модели состояния + сервисы.
 ### `termin/editor/` — legacy entrypoint
 
 Содержит только совместимые entrypoint-файлы (`python -m termin.editor`,
-`termin.editor.run_editor`). По умолчанию они запускают native UI; tcgui доступен
-явно через `--ui=tcgui` на время миграции. UI-код здесь добавлять нельзя.
+`termin.editor.run_editor`). Они запускают единственный production frontend —
+native UI. UI-код здесь добавлять нельзя.
 
 ### `termin/editor_tcgui/` — tcgui view
 

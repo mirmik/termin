@@ -27,6 +27,8 @@ class FakeExtensionContext:
         self.click_interceptors = []
         self.overlay_drawers = []
         self.active_tools = 0
+        self.tool_panels = {}
+        self.shown_tools = []
 
     def add_viewport_click_interceptor(self, callback) -> None:
         self.click_interceptors.append(callback)
@@ -62,6 +64,9 @@ def make_context():
         get_scene=lambda: "scene",
         get_selected_entity=lambda: selected[0],
         select_scene_object=lambda entity: selected.__setitem__(0, entity),
+        register_tool_inspector=lambda key, panel: extension_context.tool_panels.__setitem__(key, panel),
+        unregister_tool_inspector=lambda key: extension_context.tool_panels.pop(key, None),
+        show_tool_inspector=lambda key, label: extension_context.shown_tools.append((key, label)),
     )
     return context, menu_bar, extension_context, renders, selected
 
@@ -108,4 +113,16 @@ def test_native_project_context_delegates_viewport_tools_and_selection() -> None
     assert selected == ["next"]
     assert context.scene == "scene"
     assert context.selected_entity == "next"
+
+
+def test_native_project_context_delegates_tool_inspector_lifecycle() -> None:
+    context, _menu_bar, extension_context, renders, _selected = make_context()
+    panel = object()
+
+    context.register_tool_inspector_panel("terrain", panel)
+    context.show_tool_inspector_panel("terrain", "Terrain")
+    assert extension_context.tool_panels == {"terrain": panel}
+    assert extension_context.shown_tools == [("terrain", "Terrain")]
+    assert renders == [True]
+    assert context.unregister_tool_inspector_panel("terrain") is panel
     assert renders == [True]
