@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import json
 import os
-import secrets
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from tcbase import log
 
-from termin.mcp import PythonScriptExecutor, TerminMcpConfig, TerminMcpServer
+from termin.mcp import PythonScriptExecutor, TerminMcpConfig, TerminMcpServer, create_secure_mcp_config
 
 if TYPE_CHECKING:
     from termin.player.runtime import PlayerRuntime
@@ -279,20 +277,20 @@ def load_player_mcp_config(
         token_value = manifest_options.get("token")
         if isinstance(token_value, str):
             token = token_value
-    if token is None:
-        token = secrets.token_urlsafe(24)
-
     session_file = _option_string(
         env_name="TERMIN_PLAYER_MCP_SESSION_FILE",
         manifest_options=manifest_options,
         key="session_file",
         default=_DEFAULT_SESSION_FILE,
     )
-    return TerminMcpConfig(
+    return create_secure_mcp_config(
         host=host,
         port=port,
         token=token,
-        session_file=Path(session_file),
+        session_file=session_file,
+        default_host="127.0.0.1",
+        default_port=8766,
+        log_prefix="PlayerMCP",
     )
 
 

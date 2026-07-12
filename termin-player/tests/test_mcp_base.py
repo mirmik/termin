@@ -131,6 +131,22 @@ def test_player_mcp_config_uses_manifest_and_env(monkeypatch) -> None:
     assert config.token == "env-token"
 
 
+def test_player_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatch) -> None:
+    monkeypatch.setenv("TERMIN_PLAYER_MCP_PORT", "-1")
+    monkeypatch.setenv("TERMIN_PLAYER_MCP_TOKEN", "   ")
+
+    config = load_player_mcp_config()
+
+    assert config.port == 8766
+    assert config.token
+    assert config.token.strip()
+
+    monkeypatch.setenv("TERMIN_PLAYER_MCP_PORT", "70000")
+    config = load_player_mcp_config(manifest_options={"token": ""})
+    assert config.port == 8766
+    assert config.token
+
+
 def test_player_mcp_server_exposes_screenshot_tool(tmp_path: Path) -> None:
     executor = PythonScriptExecutor(lambda: {})
     server = PlayerMcpServer(

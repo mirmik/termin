@@ -4,16 +4,14 @@ from __future__ import annotations
 
 import json
 import os
-import secrets
 import time
-from pathlib import Path
 
 from tcbase import log
 
 from termin.editor_core.python_executor import (
     EditorPythonExecutor,
 )
-from termin.mcp.server import TerminMcpConfig, TerminMcpServer
+from termin.mcp.server import TerminMcpConfig, TerminMcpServer, create_secure_mcp_config
 
 
 _DEFAULT_SESSION_FILE = "/tmp/termin-editor-mcp.json"
@@ -912,17 +910,14 @@ def editor_mcp_enabled() -> bool:
 
 
 def load_editor_mcp_config() -> EditorMcpConfig:
-    host = os.environ.get("TERMIN_EDITOR_MCP_HOST", "127.0.0.1")
-    port = int(os.environ.get("TERMIN_EDITOR_MCP_PORT", "8765"))
-    token = os.environ.get("TERMIN_EDITOR_MCP_TOKEN") or secrets.token_urlsafe(24)
-    session_file = Path(
-        os.environ.get("TERMIN_EDITOR_MCP_SESSION_FILE", _DEFAULT_SESSION_FILE)
-    )
-    return EditorMcpConfig(
-        host=host,
-        port=port,
-        token=token,
-        session_file=session_file,
+    return create_secure_mcp_config(
+        host=os.environ.get("TERMIN_EDITOR_MCP_HOST", "127.0.0.1"),
+        port=os.environ.get("TERMIN_EDITOR_MCP_PORT", "8765"),
+        token=os.environ.get("TERMIN_EDITOR_MCP_TOKEN"),
+        session_file=os.environ.get("TERMIN_EDITOR_MCP_SESSION_FILE", _DEFAULT_SESSION_FILE),
+        default_host="127.0.0.1",
+        default_port=8765,
+        log_prefix="EditorMCP",
     )
 
 
