@@ -214,7 +214,22 @@ class NativeEditorViewport:
             self.interaction.set_gizmo_target(None)
         else:
             self.interaction.set_gizmo_target(selected)
+            self._update_gizmo_screen_scale()
         self._request_render()
+
+    def _update_gizmo_screen_scale(self) -> None:
+        """Keep the transform gizmo at the legacy camera-relative scale."""
+        transform_gizmo = self.interaction.transform_gizmo
+        if transform_gizmo is None or not transform_gizmo.target.valid():
+            return
+        camera = self.camera
+        if camera is None or camera.entity is None:
+            return
+
+        camera_position = camera.entity.transform.global_pose().lin
+        gizmo_position = transform_gizmo.target.transform.global_pose().lin
+        distance = (camera_position - gizmo_position).norm()
+        transform_gizmo.set_screen_scale(max(0.1, distance * 0.1))
 
     def after_render(self) -> None:
         self.interaction.after_render()
