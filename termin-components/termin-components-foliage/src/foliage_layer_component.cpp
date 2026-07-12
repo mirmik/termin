@@ -720,7 +720,10 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
         shader = get_foliage_instanced_shader(shader, pass_contract);
     }
     if (!shader.is_valid()) {
-        tc::Log::error("[FoliageLayerComponent] cannot draw foliage: shader variant is invalid");
+        // Shader assembly reports and caches the actionable failure.  This
+        // encoder runs for every submitted foliage batch, so logging the
+        // cached invalid result here would repeat the same diagnostic every
+        // frame until the shader contract changes.
         return false;
     }
     MaterialPipelineShaderBinding shader_binding{};
