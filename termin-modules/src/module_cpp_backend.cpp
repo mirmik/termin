@@ -404,26 +404,52 @@ bool validate_native_artifact(
     return false;
 }
 
-void* load_shared_library(const std::filesystem::path& path, std::string& error) {
+void* load_shared_library(
+    const std::filesystem::path& path,
+    const std::filesystem::path& sdk_bin_dir,
+    std::string& error
+) {
 #ifdef _WIN32
     std::filesystem::path load_path = std::filesystem::absolute(path);
     load_path.make_preferred();
-    const std::string load_path_string = load_path.string();
-    HMODULE handle = LoadLibraryExA(
-        load_path_string.c_str(),
+    std::filesystem::path dependency_path;
+    if (!sdk_bin_dir.empty()) {
+        dependency_path = std::filesystem::absolute(sdk_bin_dir);
+        dependency_path.make_preferred();
+    }
+    DLL_DIRECTORY_COOKIE dependency_cookie = nullptr;
+    if (!dependency_path.empty()) {
+        dependency_cookie = AddDllDirectory(dependency_path.c_str());
+        if (dependency_cookie == nullptr) {
+            const DWORD error_code = GetLastError();
+            std::ostringstream ss;
+            ss << "AddDllDirectory failed for " << dependency_path.string()
+               << " with error code " << error_code;
+            error = ss.str();
+            return nullptr;
+        }
+    }
+    HMODULE handle = LoadLibraryExW(
+        load_path.c_str(),
         nullptr,
-        LOAD_WITH_ALTERED_SEARCH_PATH
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR |
+            LOAD_LIBRARY_SEARCH_DEFAULT_DIRS |
+            LOAD_LIBRARY_SEARCH_USER_DIRS
     );
+    const DWORD load_error_code = handle == nullptr ? GetLastError() : ERROR_SUCCESS;
+    if (dependency_cookie != nullptr) {
+        RemoveDllDirectory(dependency_cookie);
+    }
     if (handle == nullptr) {
-        const DWORD error_code = GetLastError();
         std::ostringstream ss;
-        ss << "LoadLibraryEx failed for " << load_path_string
-           << " with error code " << error_code;
+        ss << "LoadLibraryEx failed for " << load_path.string()
+           << " with error code " << load_error_code;
         error = ss.str();
         return nullptr;
     }
     return reinterpret_cast<void*>(handle);
 #else
+    (void)sdk_bin_dir;
     void* handle = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
     if (handle == nullptr) {
         error = dlerror();
@@ -777,7 +803,13 @@ bool CppModuleBackend::load(
     }
 
     std::string error;
-    void* native_handle = load_shared_library(load_path, error);
+    const std::filesystem::path sdk_bin_dir = environment.sdk_prefix.empty()
+        ? std::filesystem::path{}
+        : environment.sdk_prefix / "bin";
+    void* native_handle = load_shared_library(
+        load_path,
+        sdk_bin_dir,
+        error);
     if (native_handle == nullptr) {
         record.error_message = "Failed to load shared library: " + error;
         remove_shadow_artifacts(record, load_path);

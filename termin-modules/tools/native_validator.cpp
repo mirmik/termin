@@ -54,9 +54,15 @@ int validate_library(
                   << GetLastError() << "\n";
         return 2;
     }
-    HMODULE handle = LoadLibraryExA(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+    std::filesystem::path load_path = std::filesystem::absolute(path);
+    load_path.make_preferred();
+    HMODULE handle = LoadLibraryExW(
+        load_path.c_str(),
+        nullptr,
+        LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!handle) {
-        std::cerr << "LoadLibrary failed for '" << path << "' with error code "
+        std::cerr << "LoadLibrary failed for '" << load_path.string()
+                  << "' with error code "
                   << GetLastError() << "\n";
         return 2;
     }
