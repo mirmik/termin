@@ -39,6 +39,7 @@ namespace termin {
 constexpr const char* SHADOW_ENGINE_SHADER_UUID = "termin-engine-shadow";
 constexpr const char* SHADOW_STATIC_TRANSFORM_MODULE = "termin_shadow_static_transform";
 constexpr const char* SHADOW_SKINNED_TRANSFORM_MODULE = "termin_shadow_skinned_transform";
+constexpr const char* SHADOW_FOLIAGE_TRANSFORM_MODULE = "termin_shadow_foliage_transform";
 constexpr const char* SHADOW_OUTPUT_ADAPTER_MODULE = "termin_shadow_vertex_output_adapter";
 
 namespace {
@@ -75,12 +76,10 @@ MaterialFragmentInterface shadow_world_position_interface()
 
 std::vector<MaterialPipelineResourceDecl> shadow_adapter_resources()
 {
-    std::vector<MaterialPipelineResourceDecl> resources =
-        material_pipeline_common_vertex_resources("shadow_draw");
-    for (MaterialPipelineResourceDecl& resource : resources) {
-        resource.owner = MaterialPipelineResourceOwner::Pass;
-    }
-    return resources;
+    return {material_pipeline_abi_resource_decl(
+        ShaderAbiResourceId::PerFrame,
+        TC_SHADER_STAGE_VERTEX,
+        MaterialPipelineResourceOwner::Pass)};
 }
 
 VertexOutputAdapter shadow_vertex_output_adapter()
@@ -101,6 +100,10 @@ VertexOutputAdapter shadow_vertex_output_adapter()
 
 void configure_shadow_static_provider(VertexTransformProvider& provider)
 {
+    provider.resources.push_back(material_pipeline_draw_resource_decl(
+        "shadow_draw",
+        TC_SHADER_STAGE_VERTEX,
+        64u));
     provider.source_module = {
         SHADOW_STATIC_TRANSFORM_MODULE,
         "builtin_shaders/termin_shadow_static_transform.slang"};
@@ -127,6 +130,27 @@ struct VertexInput {
     provider.adapter_input_expression =
         "termin_shadow_skinned_world_position("
         "input.position, input.joints, input.weights, shadow_draw.u_model, bone_block)";
+    provider.produced_world_semantics = shadow_world_position_interface();
+}
+
+void configure_shadow_foliage_provider(VertexTransformProvider& provider)
+{
+    provider.template_uuid.reset();
+    std::erase_if(
+        provider.resources,
+        [](const MaterialPipelineResourceDecl& resource) {
+            return resource.requirement.name == "per_frame";
+        });
+    provider.source_module = {
+        SHADOW_FOLIAGE_TRANSFORM_MODULE,
+        "builtin_shaders/termin_shadow_foliage_transform.slang"};
+    provider.entry_input_declaration = R"(
+struct VertexInput {
+    float3 position : POSITION;
+    uint instance_id : SV_InstanceID;
+};)";
+    provider.adapter_input_expression =
+        "termin_shadow_foliage_world_position(input.position, input.instance_id)";
     provider.produced_world_semantics = shadow_world_position_interface();
 }
 
@@ -162,6 +186,7 @@ MaterialPipelinePassContract shadow_material_pass_contract()
             material_pipeline_position_mesh_input(),
             fragment_input,
             material_pipeline_foliage_vertex_resources());
+    configure_shadow_foliage_provider(*contract.foliage_vertex_transform);
     return contract;
 }
 
