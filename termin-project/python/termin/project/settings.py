@@ -22,6 +22,7 @@ from termin.render import (
     RenderSyncMode as CRenderSyncMode,
     set_render_sync_mode as c_set_render_sync_mode,
 )
+from termin.project.resource_paths import normalize_project_resource_paths
 
 SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
 DEFAULT_PLAYER_WINDOW_WIDTH = 1280
@@ -336,42 +337,11 @@ def _normalize_project_relative_dir(value: object, *, fallback: str, field_name:
 
 
 def _normalize_project_relative_paths(value: object, *, field_name: str) -> list[str]:
-    if not isinstance(value, list):
-        log.warning(f"[ProjectSettings] {field_name} must be a list, ignoring")
-        return []
-
-    normalized_paths: list[str] = []
-    seen: set[str] = set()
-    for index, item in enumerate(value):
-        normalized = _normalize_project_relative_path_item(
-            item,
-            field_name=f"{field_name}[{index}]",
-        )
-        if normalized is None or normalized in seen:
-            continue
-        normalized_paths.append(normalized)
-        seen.add(normalized)
-
-    return normalized_paths
-
-
-def _normalize_project_relative_path_item(value: object, *, field_name: str) -> str | None:
-    if type(value) is not str:
-        log.warning(f"[ProjectSettings] {field_name} must be a string, ignoring")
-        return None
-
-    normalized = value.strip().replace("\\", "/")
-    rel_path = PurePosixPath(normalized)
-    if (
-        normalized == ""
-        or rel_path.is_absolute()
-        or normalized == "."
-        or ".." in rel_path.parts
-    ):
-        log.warning(f"[ProjectSettings] Invalid {field_name} '{value}', ignoring")
-        return None
-
-    return rel_path.as_posix()
+    return normalize_project_resource_paths(
+        value,
+        field_name=field_name,
+        warning=lambda message: log.warning(f"[ProjectSettings] {message}"),
+    )
 
 
 def _positive_int_field(value: object, *, default: int, field_name: str) -> int:

@@ -64,3 +64,32 @@ def test_source_asset_scan_ignores_generated_and_project_ignored_paths(monkeypat
     assert loaded_count == 1
     assert preloader.paths == [str(keep)]
     assert [result.path for result in manager.results] == [str(keep)]
+
+
+def test_source_asset_scan_does_not_allow_malformed_settings_to_ignore_project_root(monkeypatch, tmp_path: Path):
+    project = tmp_path / "Game"
+    keep = project / "Assets" / "Keep.shader"
+    keep.parent.mkdir(parents=True)
+    keep.write_text("@language slang\n", encoding="utf-8")
+
+    settings_dir = project / "project_settings"
+    settings_dir.mkdir()
+    (settings_dir / "project.json").write_text(
+        json.dumps({"ignored_resource_paths": [".", "../outside"]}),
+        encoding="utf-8",
+    )
+
+    preloader = RecordingPreloader()
+    monkeypatch.setattr(
+        project_runtime_support,
+        "create_asset_import_plugin_map",
+        lambda: {".shader": preloader},
+    )
+    monkeypatch.setattr(
+        project_runtime_support.DefaultResourceManager,
+        "instance",
+        staticmethod(RecordingResourceManager),
+    )
+
+    assert project_runtime_support.scan_project_assets(project, log_prefix="[Test]") == 1
+    assert preloader.paths == [str(keep)]
