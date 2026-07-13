@@ -1,3 +1,5 @@
+import termin_prelude;
+
 struct CameraUBO
 {
     float4x4 view;
@@ -34,6 +36,7 @@ VertexOutput main(VertexInput input)
 {
     VertexOutput output;
     output.color = input.color;
-    output.position = mul(u_camera.view_proj, mul(u_push.model, float4(input.position, 1.0)));
+    output.position = termin_to_native_clip(
+        mul(u_camera.view_proj, mul(u_push.model, float4(input.position, 1.0))));
     return output;
 }
