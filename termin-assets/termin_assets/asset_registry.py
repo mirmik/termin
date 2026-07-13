@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Callable, Dict, Generic, TypeVar
 
+from tcbase import log
+
 from termin_assets.asset import Asset
 
 AssetT = TypeVar("AssetT", bound=Asset)
@@ -71,9 +73,20 @@ class AssetRegistry(Generic[AssetT, DataT]):
 
         self._set_parent_if_applicable(asset, parent, parent_key)
 
+        self._register_uuid(asset)
         self._assets[name] = asset
-        self._uuid_registry[asset.uuid] = asset
         return asset
+
+    def _register_uuid(self, asset: AssetT) -> None:
+        """Record an asset without allowing another asset to steal its UUID."""
+        registered = self._uuid_registry.get(asset.uuid)
+        if registered is not None and registered is not asset:
+            log.error(
+                f"[AssetRegistry] UUID collision for '{asset.uuid}': "
+                f"cannot register '{asset.name}' over '{registered.name}'"
+            )
+            raise ValueError(f"Asset UUID is already registered: {asset.uuid}")
+        self._uuid_registry[asset.uuid] = asset
 
     def _set_parent_if_applicable(
         self,
@@ -97,6 +110,16 @@ class AssetRegistry(Generic[AssetT, DataT]):
         uuid: str | None = None,
     ) -> None:
         """Register asset by name and UUID."""
+        target_uuid = uuid if uuid is not None else asset.uuid
+        registered = self._uuid_registry.get(target_uuid)
+        if registered is not None and registered is not asset:
+            log.error(
+                f"[AssetRegistry] UUID collision for '{target_uuid}': "
+                f"cannot register '{name}' over '{registered.name}'"
+            )
+            raise ValueError(f"Asset UUID is already registered: {target_uuid}")
+
+        old_uuid = asset.uuid
         asset._name = name
         if source_path:
             asset.source_path = source_path
@@ -104,8 +127,11 @@ class AssetRegistry(Generic[AssetT, DataT]):
             asset._uuid = uuid
             asset._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
 
+        if old_uuid != asset.uuid and self._uuid_registry.get(old_uuid) is asset:
+            del self._uuid_registry[old_uuid]
+
         self._assets[name] = asset
-        self._uuid_registry[asset.uuid] = asset
+        self._register_uuid(asset)
 
     def get(self, name: str) -> DataT | None:
         """Get data/handle by name."""
@@ -154,14 +180,14 @@ class AssetRegistry(Generic[AssetT, DataT]):
         """Remove asset by name."""
         asset = self._assets.get(name)
         if asset is not None:
-            if asset.uuid in self._uuid_registry:
+            if self._uuid_registry.get(asset.uuid) is asset:
                 del self._uuid_registry[asset.uuid]
             del self._assets[name]
 
     def clear(self) -> None:
         """Remove all assets."""
         for asset in list(self._assets.values()):
-            if asset.uuid in self._uuid_registry:
+            if self._uuid_registry.get(asset.uuid) is asset:
                 del self._uuid_registry[asset.uuid]
         self._assets.clear()
 

@@ -36,6 +36,8 @@ Prefer cards that are mechanically or locally clear:
 
 Skip or triage cards that are vague, umbrella-shaped, missing acceptance, or unexpectedly broad.
 
+For a genuinely difficult architecture choice, subtle cross-module risk, or a bug that resists the current diagnosis, consider a focused `better-call-sol` consultation before deciding how to proceed. Do not use it for routine implementation or mechanical verification.
+
 ## Execution Rules
 
 If the fix is clear and mechanical:

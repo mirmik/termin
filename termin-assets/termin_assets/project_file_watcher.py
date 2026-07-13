@@ -170,7 +170,9 @@ class FilePreLoader(ABC):
         name = os.path.splitext(os.path.basename(path))[0]
 
         # ResourceManager handles reload logic
-        self._resource_manager.reload_file(result)
+        if not self._resource_manager.reload_file(result):
+            log.error(f"[FilePreLoader] Resource reload failed for changed file: {path}")
+            return
         self._file_to_preload_result[path] = result
 
         self._notify_reloaded(name)

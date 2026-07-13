@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from termin_assets import (
     Asset,
     AssetRegistry,
@@ -36,6 +38,11 @@ class MemoryAsset(DataAsset[str]):
         return str(content)
 
 
+class RejectingAsset(DataAsset[str]):
+    def _parse_content(self, content: bytes | str) -> str | None:
+        return None
+
+
 def test_data_asset_can_store_lazy_runtime_data_without_private_mutation() -> None:
     asset = MemoryAsset(name="probe")
 
@@ -49,6 +56,17 @@ def test_data_asset_can_store_lazy_runtime_data_without_private_mutation() -> No
     assert asset.cached_data == "ready-data"
     assert asset.data == "ready-data"
     assert asset.is_loaded
+
+
+def test_data_asset_reload_preserves_live_data_when_new_content_is_rejected(tmp_path: Path) -> None:
+    source = tmp_path / "probe.memory"
+    source.write_text("invalid", encoding="utf-8")
+    asset = RejectingAsset(data="live-data", name="probe", source_path=source)
+
+    assert not asset.reload()
+    assert asset.cached_data == "live-data"
+    assert asset.is_loaded
+    assert asset.version == 0
 
 
 def test_runtime_manager_get_or_create_embedded_asset_uses_runtime_registry() -> None:
@@ -120,6 +138,25 @@ def test_runtime_manager_can_list_and_find_runtime_asset_names() -> None:
     assert manager.list_runtime_asset_names("memory") == ["alpha", "beta"]
     assert manager.find_runtime_asset_name("memory", "beta-data") == "beta"
     assert manager.find_runtime_asset_name("memory", "missing") is None
+
+
+def test_asset_registry_rejects_uuid_collisions_without_corrupting_existing_mapping() -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=MemoryAsset,
+        uuid_registry=manager._assets_by_uuid,
+        data_from_asset=lambda asset: asset.data,
+    )
+    first = MemoryAsset(data="first", name="first", uuid="shared-uuid")
+    second = MemoryAsset(data="second", name="second", uuid="shared-uuid")
+
+    registry.register("first", first)
+    with pytest.raises(ValueError, match="already registered"):
+        registry.register("second", second)
+
+    assert registry.get_asset("first") is first
+    assert registry.get_asset("second") is None
+    assert manager.get_asset_by_uuid("shared-uuid") is first
 
 
 def test_resource_handle_can_lookup_assets_by_uuid() -> None:
