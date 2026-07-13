@@ -3,6 +3,7 @@
 GUARD_TEST_MAIN();
 
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -392,6 +393,12 @@ TEST_CASE("RuntimePackageLoader follows only symlinks contained in the package")
         root / "shaders" / "inside.shader.json",
         error
     );
+#ifdef _WIN32
+    if (error.value() == 1314) {
+        std::fprintf(stderr, "Skipping symlink containment check: Windows symlink privilege is unavailable\n");
+        return;
+    }
+#endif
     REQUIRE_FALSE(error);
     write_text(
         root / "manifest.json",

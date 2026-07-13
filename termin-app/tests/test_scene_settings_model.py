@@ -74,7 +74,6 @@ def test_scene_properties_controller_owns_undoable_render_mutations(scene):
     changed = []
     controller = ScenePropertiesController(
         scene,
-        resource_manager=None,
         push_undo_command=stack.push,
         on_changed=lambda: changed.append(True),
     )

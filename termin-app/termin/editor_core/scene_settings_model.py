@@ -136,12 +136,10 @@ class ScenePropertiesController:
         self,
         scene,
         *,
-        resource_manager,
         push_undo_command: Callable[[object, bool], None] | None = None,
         on_changed: Callable[[], None] | None = None,
     ) -> None:
         self._scene = scene
-        self._resources = resource_manager
         self._push_undo_command = push_undo_command
         self._on_changed = on_changed
 
