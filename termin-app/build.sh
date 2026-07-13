@@ -10,7 +10,6 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$SCRIPT_DIR/build_standalone"
 INSTALL_DIR="$SCRIPT_DIR/install"
 SDK_DIR="${SDK_PREFIX:-$(dirname "$SCRIPT_DIR")/sdk}"
@@ -78,23 +77,6 @@ fi
 # Create build directory
 mkdir -p "$BUILD_DIR"
 
-find_artifact_in_build() {
-    local base_dir="$1"
-    local pattern="$2"
-    local config_dir="$base_dir/$BUILD_TYPE"
-    local result=""
-
-    if [[ -d "$config_dir" ]]; then
-        result=$(find "$config_dir" -maxdepth 3 -name "$pattern" -not -path "*/CMakeFiles/*" | head -1)
-    fi
-
-    if [[ -z "$result" ]]; then
-        result=$(find "$base_dir" -maxdepth 3 -name "$pattern" -not -path "*/CMakeFiles/*" | head -1)
-    fi
-
-    echo "$result"
-}
-
 # Configure
 echo "Configuring CMake..."
 
@@ -143,91 +125,35 @@ if [[ -d "$SDK_DIR/lib" ]]; then
         "$SDK_DIR/lib/" "$INSTALL_DIR/lib/"
     echo "  Copied SDK libraries from $SDK_DIR/lib"
 else
-    echo "  WARNING: $SDK_DIR/lib not found — skipping SDK library copy"
+    echo "ERROR: SDK library directory not found: $SDK_DIR/lib" >&2
+    exit 1
 fi
 
-# Copy Python bindings (.so) and .py sources from subprojects
-echo "Copying Python packages from subprojects..."
+# Runtime assets (fonts, built-in shader sources, and catalogs) follow the same
+# verified SDK provenance as the shared libraries and Python packages.
+echo "Synchronizing runtime assets from SDK..."
+if [[ ! -d "$SDK_DIR/share" ]]; then
+    echo "ERROR: SDK runtime asset directory not found: $SDK_DIR/share" >&2
+    exit 1
+fi
+mkdir -p "$INSTALL_DIR/share"
+rsync -aL --delete "$SDK_DIR/share/" "$INSTALL_DIR/share/"
+echo "  Synchronized verified SDK assets from $SDK_DIR/share"
+
+# Synchronize the exact SDK runtime into the standalone bundle. The editor
+# binding itself is built by this standalone graph and must remain in place;
+# every other Python module and native binding comes from the verified SDK.
+echo "Synchronizing Python runtime from SDK..."
 PYTHON_DEST="$INSTALL_DIR/lib/python$PYTHON_VERSION/site-packages"
 SDK_SITE_PACKAGES="$SDK_DIR/lib/python$PYTHON_VERSION/site-packages"
 if [[ ! -d "$SDK_SITE_PACKAGES" ]]; then
     echo "ERROR: SDK Python $PYTHON_VERSION site-packages not found: $SDK_SITE_PACKAGES" >&2
     exit 1
 fi
-
-# Module definitions: project_dir | python_subdir | so_pattern | py_source_dir
-#
-# Mirrors which subproject contributes what to the local install
-# lib/pythonX.Y/site-packages/ tree used by this standalone app build script.
-# Each entry either brings an .so binding, a .py source tree, or both.
-# When multiple subprojects target the same python_subdir (e.g. termin.colliders
-# from both termin-collision and termin-components-collision), they are listed
-# as separate entries — subsequent entries only add files without overwriting
-# existing ones (cp -n).
-PYTHON_MODULES=(
-    "termin-inspect       | termin/inspect    | _inspect_native*.so               | termin-inspect/python/termin/inspect"
-    "termin-scene         | termin/scene      | _scene_native*.so                 | termin-scene/python/termin/scene"
-    "termin-input         | termin/input      | _input_native*.so                 | termin-input/python/termin/input"
-    "termin-render        | termin/render     | _render_native*.so                | termin-render/python/termin/render"
-    "termin-render        | termin/render_framework | _render_framework_native*.so | termin-render/python/termin/render_framework"
-    "termin-display       | termin/display    | _display_native*.so               | termin-display/python/termin/display"
-    "termin-display       | termin/viewport   | _viewport_native*.so              | termin-display/python/termin/viewport"
-    "termin-lighting      | termin/lighting   | _lighting_native*.so              | termin-lighting/python/termin/lighting"
-    "termin-navmesh       | termin/navmesh    |                                   | termin-navmesh/python/termin/navmesh"
-    "termin-voxels        | termin/voxels     | _voxels_native*.so                | termin-voxels/python/termin/voxels"
-    "termin-physics       | termin/physics    | _physics_native*.so               | termin-physics/python/termin/physics"
-    "termin-engine        | termin/engine     | _engine_native*.so                | termin-engine/python/termin/engine"
-    "termin-skeleton      | termin/skeleton   | _skeleton_native*.so              | termin-skeleton/python/termin/skeleton"
-    "termin-animation     | termin/animation  | _animation_native*.so             | termin-animation/python/termin/animation"
-    "termin-collision     | termin/colliders  | _colliders_native*.so             | termin-collision/python/termin/colliders"
-    "termin-collision     | termin/collision  | _collision_native*.so             | "
-    "termin-components-collision | termin/colliders | _components_collision_native*.so | "
-    "termin-components-render    | termin/render_components | _components_render_native*.so | termin-components/termin-components-render/python/termin/render_components"
-    "termin-components-mesh      | termin/mesh      | _components_mesh_native*.so      | termin-components/termin-components-mesh/python/termin/mesh"
-    "termin-components-kinematic | termin/kinematic | _components_kinematic_native*.so | termin-components/termin-components-kinematic/python/termin/kinematic"
-    "termin-components-skeleton  | termin/skeleton  | _components_skeleton_native*.so  | "
-    "termin-components-animation | termin/animation | _components_animation_native*.so | "
-)
-
-for entry in "${PYTHON_MODULES[@]}"; do
-    IFS='|' read -r project_name py_subdir so_pattern py_source <<< "$entry"
-    project_name=$(echo "$project_name" | xargs)
-    py_subdir=$(echo "$py_subdir" | xargs)
-    so_pattern=$(echo "$so_pattern" | xargs)
-    py_source=$(echo "$py_source" | xargs)
-
-    mkdir -p "$PYTHON_DEST/$py_subdir"
-
-    # Copy .py files from source if specified
-    if [[ -n "$py_source" && -d "$ENV_DIR/$py_source" ]]; then
-        cp -n "$ENV_DIR/$py_source/"*.py "$PYTHON_DEST/$py_subdir/" 2>/dev/null || true
-    fi
-
-    # Find and copy .so binding
-    build_dir="$ENV_DIR/$project_name/build"
-    if [[ "$project_name" == termin-components-* ]]; then
-        build_dir="$ENV_DIR/termin-components/$project_name/build"
-    fi
-    SO_FILE=""
-    if [[ -n "$so_pattern" ]]; then
-        SO_FILE=$(find_artifact_in_build "$build_dir" "$so_pattern")
-    fi
-    if [[ -n "$SO_FILE" ]]; then
-        cp "$SO_FILE" "$PYTHON_DEST/$py_subdir/"
-        echo "  Copied $(basename "$SO_FILE") → $py_subdir/"
-    elif [[ -n "$so_pattern" && -n "$SDK_SITE_PACKAGES" && -d "$SDK_SITE_PACKAGES/$py_subdir" ]]; then
-        # Fallback: copy .so from SDK when subproject wasn't built from source
-        SDK_SO=$(find "$SDK_SITE_PACKAGES/$py_subdir" -maxdepth 1 -name "$so_pattern" | head -1)
-        if [[ -n "$SDK_SO" ]]; then
-            cp "$SDK_SO" "$PYTHON_DEST/$py_subdir/"
-            echo "  Copied $(basename "$SDK_SO") → $py_subdir/ (from SDK)"
-        else
-            echo "  WARNING: $so_pattern not found in $build_dir or $SDK_SITE_PACKAGES/$py_subdir"
-        fi
-    elif [[ -n "$so_pattern" ]]; then
-        echo "  WARNING: $so_pattern not found in $build_dir"
-    fi
-done
+rsync -aL --delete \
+    --exclude='termin/editor/_editor_native*.so' \
+    "$SDK_SITE_PACKAGES/" "$PYTHON_DEST/"
+echo "  Synchronized verified SDK site-packages from $SDK_SITE_PACKAGES"
 
 echo ""
 echo "=== Build complete ==="
