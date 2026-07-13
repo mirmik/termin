@@ -115,6 +115,39 @@ int main() {
     tc_inspect_kind_core_init();
     register_clone_ref_inspect_fields();
 
+    termin::TcSceneRef migration_scene = termin::TcSceneRef::create("entity-migration-test");
+    termin::Entity standalone = termin::Entity::create_with_uuid(
+        termin::Entity::standalone_pool(),
+        "Standalone",
+        "entity-migration-stable-uuid");
+    TEST_ASSERT(standalone.valid(), "standalone entity with explicit UUID should be created");
+    standalone.set_priority(17);
+    const std::string standalone_uuid = standalone.uuid();
+    termin::Entity migrated = migration_scene.migrate_entity(standalone);
+    TEST_ASSERT(migrated.valid(), "scene migration should succeed");
+    TEST_ASSERT(std::string(migrated.uuid()) == standalone_uuid,
+                "scene migration should preserve UUID");
+    TEST_ASSERT(migrated.priority() == 17, "scene migration should preserve stable fields");
+    TEST_ASSERT(!standalone.valid(), "successful migration should invalidate the source handle");
+    TEST_ASSERT(migration_scene.get_entity(standalone_uuid) == migrated,
+                "destination UUID map should resolve the migrated entity");
+
+    termin::Entity collision_source = termin::Entity::create_with_uuid(
+        termin::Entity::standalone_pool(),
+        "CollisionSource",
+        "entity-migration-collision-uuid");
+    termin::Entity collision_destination = termin::Entity::create_with_uuid(
+        migration_scene.entity_pool(),
+        "CollisionDestination",
+        "entity-migration-collision-uuid");
+    TEST_ASSERT(collision_source.valid() && collision_destination.valid(),
+                "cross-pool UUID collision setup should succeed");
+    TEST_ASSERT(!migration_scene.migrate_entity(collision_source).valid(),
+                "migration should reject destination UUID collision");
+    TEST_ASSERT(collision_source.valid(), "failed migration must preserve source entity");
+    TEST_ASSERT(migration_scene.get_entity("entity-migration-collision-uuid") == collision_destination,
+                "failed migration must preserve destination UUID map");
+
     termin::TcSceneRef scene = termin::TcSceneRef::create("entity-clone-test");
 
     termin::Entity parent = scene.create_entity("Parent");

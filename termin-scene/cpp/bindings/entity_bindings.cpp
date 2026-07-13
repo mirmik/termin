@@ -105,12 +105,24 @@ void bind_entity_class(nb::module_& m) {
 
     nb::class_<Entity>(m, "Entity")
         .def("__init__", [](Entity* self, const std::string& name, const std::string& uuid) {
-            new (self) Entity(Entity::create(get_standalone_pool(), name));
+            new (self) Entity(
+                uuid.empty()
+                    ? Entity::create(get_standalone_pool(), name)
+                    : Entity::create_with_uuid(get_standalone_pool(), name, uuid));
+            if (!self->valid()) {
+                throw std::runtime_error("Entity construction failed; UUID may already exist");
+            }
         }, nb::arg("name") = "entity", nb::arg("uuid") = "")
         .def("__init__", [](Entity* self, const GeneralPose3& pose, const std::string& name, int priority,
                         bool pickable, bool selectable,
                         int layer, uint64_t flags, const std::string& uuid) {
-            new (self) Entity(Entity::create(get_standalone_pool(), name));
+            new (self) Entity(
+                uuid.empty()
+                    ? Entity::create(get_standalone_pool(), name)
+                    : Entity::create_with_uuid(get_standalone_pool(), name, uuid));
+            if (!self->valid()) {
+                throw std::runtime_error("Entity construction failed; UUID may already exist");
+            }
 
             self->transform().set_local_pose(pose);
             self->set_priority(priority);
