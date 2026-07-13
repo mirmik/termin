@@ -21,13 +21,29 @@ def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
     """Load meshes/materials/shaders from a runtime package manifest."""
     from tcbase import log
 
-    with open(manifest_path, "r", encoding="utf-8") as f:
-        manifest = json.load(f)
+    try:
+        package_root = package_dir.resolve(strict=True)
+        resolved_manifest_path = manifest_path.resolve(strict=True)
+        resolved_manifest_path.relative_to(package_root)
+    except (OSError, ValueError) as exc:
+        log.error(
+            f"[PlayerRuntime] Runtime package manifest escapes bundle root "
+            f"'{package_dir}': {exc}"
+        )
+        return
+
+    try:
+        with resolved_manifest_path.open("r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        log.error(f"[PlayerRuntime] Failed to read runtime package manifest {manifest_path}: {exc}")
+        return
     if not isinstance(manifest, dict):
         log.error(f"[PlayerRuntime] Runtime package manifest root is not an object: {manifest_path}")
         return
 
-    _configure_shader_runtime(package_dir, manifest)
+    if not _configure_shader_runtime(package_root, manifest):
+        return
 
     resources = manifest.get("resources")
     if not isinstance(resources, list):
@@ -40,23 +56,30 @@ def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
         for entry in resources:
             if not isinstance(entry, dict) or entry.get("type") != resource_type:
                 continue
-            if _load_resource(package_dir, entry, shaders):
+            if _load_resource(package_root, entry, shaders):
                 loaded += 1
 
     log.info(f"[PlayerRuntime] Loaded {loaded} runtime package resource(s)")
 
 
-def _configure_shader_runtime(package_dir: Path, manifest: dict[str, Any]) -> None:
+def _configure_shader_runtime(package_dir: Path, manifest: dict[str, Any]) -> bool:
     from tcbase import log
 
-    artifact_root_value = manifest.get("shader_artifact_root", ".")
-    artifact_root = package_dir / str(artifact_root_value)
+    artifact_root_value = manifest.get("shader_artifact_root")
+    try:
+        if artifact_root_value is None:
+            artifact_root = package_dir
+        else:
+            artifact_root = _package_path(package_dir, artifact_root_value)
+    except ValueError as exc:
+        log.error(f"[PlayerRuntime] Invalid runtime shader artifact root: {exc}")
+        return False
     cache_root = package_dir / ".shader-cache"
     try:
         cache_root.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         log.error(f"[PlayerRuntime] Failed to create runtime shader cache: {exc}")
-        return
+        return False
 
     os.environ["TERMIN_SHADER_ARTIFACT_ROOT"] = str(artifact_root)
     os.environ["TERMIN_SHADER_CACHE_ROOT"] = str(cache_root)
@@ -73,9 +96,10 @@ def _configure_shader_runtime(package_dir: Path, manifest: dict[str, Any]) -> No
         )
     except Exception as exc:
         log.error(f"[PlayerRuntime] Failed to configure runtime package shader runtime: {exc}")
-        return
+        return False
 
     log.info(f"[PlayerRuntime] Runtime package shader artifacts: {artifact_root}")
+    return True
 
 
 def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, _RuntimeShader]) -> bool:
@@ -92,7 +116,11 @@ def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, 
         log.warning(f"[PlayerRuntime] Python player does not load foliage_data yet: {rel_path}")
         return True
 
-    path = package_dir / rel_path
+    try:
+        path = _package_path(package_dir, rel_path)
+    except ValueError as exc:
+        log.error(f"[PlayerRuntime] Invalid runtime package resource path '{rel_path}': {exc}")
+        return False
     if not path.exists():
         log.error(f"[PlayerRuntime] Runtime package resource file not found: {path}")
         return False
@@ -106,16 +134,20 @@ def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, 
         log.error(f"[PlayerRuntime] Runtime package resource is not an object: {path}")
         return False
 
-    if resource_type == "shader":
-        shader = _load_shader(package_dir, spec, path)
-        if shader is None:
-            return False
-        shaders[shader.shader.uuid] = shader
-        return True
-    if resource_type == "mesh":
-        return _load_mesh(spec, path)
-    if resource_type == "material":
-        return _load_material(spec, path, shaders)
+    try:
+        if resource_type == "shader":
+            shader = _load_shader(package_dir, spec, path)
+            if shader is None:
+                return False
+            shaders[shader.shader.uuid] = shader
+            return True
+        if resource_type == "mesh":
+            return _load_mesh(spec, path)
+        if resource_type == "material":
+            return _load_material(spec, path, shaders)
+    except (OSError, ValueError) as exc:
+        log.error(f"[PlayerRuntime] Failed to load runtime package resource {path}: {exc}")
+        return False
 
     log.error(f"[PlayerRuntime] Unsupported runtime package resource type: {resource_type}")
     return False
@@ -286,7 +318,11 @@ def _material_texture_resources_from_shader_spec(package_dir: Path, spec: dict[s
         for artifact_path in target_spec.values():
             if not isinstance(artifact_path, str) or artifact_path == "":
                 continue
-            layout_path = package_dir / f"{artifact_path}.layout.json"
+            try:
+                layout_path = _package_path(package_dir, f"{artifact_path}.layout.json")
+            except ValueError as exc:
+                log.error(f"[PlayerRuntime] Invalid runtime shader layout path '{artifact_path}': {exc}")
+                continue
             if not layout_path.exists():
                 continue
             try:
@@ -415,9 +451,34 @@ def _all_numbers(values: list[object]) -> bool:
 def _read_optional_text(package_dir: Path, rel_path: str) -> str:
     if rel_path == "":
         return ""
-    path = package_dir / rel_path
+    path = _package_path(package_dir, rel_path)
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def _package_path(package_root: Path, relative_path: object) -> Path:
+    """Resolve one package-provided path and reject every root escape.
+
+    Package manifests are portable data, so backslashes and dot segments are
+    invalid even where the host filesystem would interpret them differently.
+    Existing symlinks are followed; their target must remain inside the package.
+    """
+    if not isinstance(relative_path, str) or relative_path == "":
+        raise ValueError("path must be a non-empty string")
+    if "\\" in relative_path:
+        raise ValueError("backslashes are not allowed")
+    path = Path(relative_path)
+    if relative_path in (".", "..") or path.is_absolute() or any(
+        part in (".", "..") for part in path.parts
+    ):
+        raise ValueError("path must be a relative path without dot segments")
+
+    candidate = (package_root / path).resolve(strict=False)
+    try:
+        candidate.relative_to(package_root)
+    except ValueError as exc:
+        raise ValueError("path escapes bundle root") from exc
+    return candidate
 
 
 def _string(data: dict[str, Any], key: str, default: str = "") -> str:

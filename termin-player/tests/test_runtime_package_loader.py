@@ -2,6 +2,7 @@ from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.player.runtime_package_loader import (
     _load_mesh,
     _material_texture_resources_from_shader_spec,
+    _package_path,
 )
 
 
@@ -61,3 +62,32 @@ def test_runtime_package_loader_registers_meshes_in_default_resource_manager(tmp
 
     assert _load_mesh(spec, tmp_path / "RuntimeTriangle.mesh.json")
     assert manager.get_mesh_asset_by_uuid(mesh_uuid) is not None
+
+
+def test_runtime_package_path_rejects_traversal_and_allows_internal_symlinks(tmp_path) -> None:
+    package_root = tmp_path / "package"
+    package_root.mkdir()
+    (package_root / "shaders").mkdir()
+    target = package_root / "shaders" / "source.glsl"
+    target.write_text("void main() {}", encoding="utf-8")
+    (package_root / "shaders" / "alias.glsl").symlink_to(target)
+
+    assert _package_path(package_root, "shaders/alias.glsl") == target
+
+    for invalid in (".", "../outside", "/outside", r"shaders\\source.glsl"):
+        try:
+            _package_path(package_root, invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"path was accepted: {invalid}")
+
+    outside = tmp_path / "outside.glsl"
+    outside.write_text("outside", encoding="utf-8")
+    (package_root / "shaders" / "outside.glsl").symlink_to(outside)
+    try:
+        _package_path(package_root, "shaders/outside.glsl")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("symlink escape was accepted")

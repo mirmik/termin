@@ -425,7 +425,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
 
     package_manifest = json.loads(result.package_result.manifest_path.read_text(encoding="utf-8"))
     assert package_manifest["scene"] == "scene.json"
-    assert package_manifest["shader_artifact_root"] == "."
+    assert "shader_artifact_root" not in package_manifest
     python_manifest = json.loads(result.python_result.manifest_path.read_text(encoding="utf-8"))
     assert python_manifest == {
         "version": 1,

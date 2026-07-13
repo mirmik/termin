@@ -308,12 +308,58 @@ void set_shader_features_from_glsl(tc_shader* shader, const std::string& fragmen
     }
 }
 
-std::filesystem::path package_path(const std::filesystem::path& root, const std::string& rel) {
-    std::filesystem::path p(rel);
-    if (p.is_absolute()) {
-        throw std::runtime_error("runtime package paths must be relative: " + rel);
+bool is_contained_path(
+    const std::filesystem::path& root,
+    const std::filesystem::path& candidate
+) {
+    auto root_it = root.begin();
+    auto candidate_it = candidate.begin();
+    for (; root_it != root.end(); ++root_it, ++candidate_it) {
+        if (candidate_it == candidate.end() || *root_it != *candidate_it) {
+            return false;
+        }
     }
-    return root / p;
+    return true;
+}
+
+std::filesystem::path package_path(const std::filesystem::path& root, const std::string& rel) {
+    if (rel.empty()) {
+        throw std::runtime_error("runtime package path must not be empty");
+    }
+    // A package manifest uses portable '/' separators. Reject '\\' even on POSIX,
+    // where it would otherwise be treated as part of a filename and make a package
+    // behave differently after being moved to Windows.
+    if (rel.find('\\') != std::string::npos) {
+        throw std::runtime_error("runtime package path must not contain backslashes: " + rel);
+    }
+
+    const std::filesystem::path relative_path(rel);
+    if (relative_path.is_absolute() || relative_path.has_root_name() || relative_path.has_root_directory()) {
+        throw std::runtime_error("runtime package path must be relative: " + rel);
+    }
+    if (rel == "." || rel == "..") {
+        throw std::runtime_error("runtime package path must not contain dot segments: " + rel);
+    }
+    for (const std::filesystem::path& component : relative_path) {
+        if (component == "." || component == "..") {
+            throw std::runtime_error("runtime package path must not contain dot segments: " + rel);
+        }
+    }
+
+    std::error_code error;
+    const std::filesystem::path candidate = std::filesystem::weakly_canonical(
+        root / relative_path,
+        error
+    );
+    if (error) {
+        throw std::runtime_error(
+            "failed to canonicalize runtime package path '" + rel + "': " + error.message()
+        );
+    }
+    if (!is_contained_path(root, candidate)) {
+        throw std::runtime_error("runtime package path escapes bundle root: " + rel);
+    }
+    return candidate;
 }
 
 
@@ -933,8 +979,14 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
 ) {
     RuntimePackageLoadResult result;
     try {
-        const std::filesystem::path root(root_path);
-        const std::filesystem::path manifest_path = root / "manifest.json";
+        std::error_code root_error;
+        const std::filesystem::path root = std::filesystem::canonical(root_path, root_error);
+        if (root_error || !std::filesystem::is_directory(root)) {
+            result.message = "runtime package root is not a directory: " + root_path;
+            tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+            return result;
+        }
+        const std::filesystem::path manifest_path = package_path(root, "manifest.json");
         if (!std::filesystem::is_regular_file(manifest_path)) {
             result.message = "manifest.json not found in " + root.string();
             tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
@@ -942,8 +994,16 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         }
 
         const nos::trent manifest = nos::json::parse(read_text_file(manifest_path));
-        const std::string artifact_root = string_field(manifest, "shader_artifact_root", ".");
-        const std::filesystem::path shader_root = package_path(root, artifact_root);
+        const nos::trent* artifact_root_field = dict_get(manifest, "shader_artifact_root");
+        std::filesystem::path shader_root = root;
+        if (artifact_root_field) {
+            if (!artifact_root_field->is_string() || artifact_root_field->as_string().empty()) {
+                result.message = "shader_artifact_root must be a non-empty relative path when provided";
+                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+                return result;
+            }
+            shader_root = package_path(root, artifact_root_field->as_string());
+        }
         tgfx2_set_shader_artifact_root(shader_root.string().c_str());
 
         const nos::trent* resources = dict_get(manifest, "resources");
