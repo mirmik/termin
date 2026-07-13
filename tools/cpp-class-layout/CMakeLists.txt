@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(termin_cpp_class_layout LANGUAGES CXX)
+project(termin_cpp_class_layout LANGUAGES C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
