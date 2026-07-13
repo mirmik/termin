@@ -1,24 +1,30 @@
-"""PipelineAsset - Asset for render pipelines.
+"""Pipeline asset loading and transactional hot reload.
 
-Stores pipeline graph source (nodes, connections) via TcScenePipelineTemplate (C).
-Compilation to RenderPipeline happens on demand via compile().
-File extension: .pipeline
-
-Supports both pass-list format (passes) and graph format (nodes).
+Pipeline documents use their UUID as stable external identity.  The import
+plugin establishes that identity before this asset is registered; loading must
+therefore never rewrite it from the document contents.
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from tcbase import log
 from termin_assets import DataAsset
-from termin.render_framework import TcScenePipelineTemplate
 
 if TYPE_CHECKING:
     from termin.render_framework import RenderPipeline
+
+
+@dataclass(frozen=True)
+class _PipelineCandidate:
+    """Fully parsed pipeline state, ready to atomically replace the live one."""
+
+    pipeline: "RenderPipeline"
+    graph_data: dict | None
 
 
 class PipelineAsset(DataAsset["RenderPipeline"]):
@@ -53,7 +59,6 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         """
         super().__init__(data=data, name=name, source_path=source_path, uuid=uuid)
 
-        self._template: TcScenePipelineTemplate | None = None
         self._graph_data: dict | None = None
 
     @property
@@ -98,63 +103,125 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
 
         return uses_material_names(self._graph_data, material_names)
 
-    def _parse_content(self, content: str) -> "RenderPipeline | None":
-        """Parse JSON content into RenderPipeline. Detects graph vs pass-list format."""
-        data = json.loads(content)
+    def _parse_content(self, content: bytes | str) -> "RenderPipeline | None":
+        """Parse without modifying live state (required by :class:`DataAsset`)."""
+        if not isinstance(content, str):
+            log.error(f"[PipelineAsset] Pipeline '{self._name}' has non-text content")
+            return None
+        candidate = self._prepare_candidate(content)
+        return candidate.pipeline if candidate is not None else None
 
-        if "nodes" in data and "passes" not in data:
-            return self._parse_graph(data)
-        else:
-            return self._parse_pass_list(data)
-
-    def _parse_graph(self, data: dict) -> "RenderPipeline | None":
-        """Parse graph-format data and compile to RenderPipeline."""
-        self._graph_data = data
-
-        if "uuid" in data:
-            self._uuid = data["uuid"]
-            existing = TcScenePipelineTemplate.find_by_uuid(self._uuid)
-            if existing.is_valid:
-                self._template = existing
-            else:
-                self._template = TcScenePipelineTemplate.declare(self._uuid, self._name)
-
-        if self._template is None:
-            self._template = TcScenePipelineTemplate.declare(self.uuid, self._name)
-
-        self._template.set_graph_data(data)
-        self._template.name = self._name
-
+    def _prepare_candidate(self, content: str) -> _PipelineCandidate | None:
+        """Compile a candidate pipeline while preserving the registered identity."""
         try:
-            pipeline = self._template.compile()
-            if pipeline is not None:
-                pipeline.name = self._name
-            return pipeline
-        except Exception as e:
-            log.error(f"[PipelineAsset] Failed to compile graph: {e}")
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            log.error(
+                f"[PipelineAsset] Invalid JSON in pipeline '{self._name}'",
+                exc_info=True,
+            )
             return None
 
-    def _parse_pass_list(self, data: dict) -> "RenderPipeline | None":
-        """Parse pass-list pipeline format directly."""
+        if not isinstance(data, dict):
+            log.error(f"[PipelineAsset] Pipeline '{self._name}' must contain a JSON object")
+            return None
+
+        embedded_uuid = data.get("uuid")
+        if embedded_uuid is not None:
+            if not isinstance(embedded_uuid, str) or not embedded_uuid:
+                log.error(f"[PipelineAsset] Pipeline '{self._name}' has an invalid embedded UUID")
+                return None
+            if embedded_uuid != self.uuid:
+                log.error(
+                    f"[PipelineAsset] Refusing to change UUID of registered pipeline "
+                    f"'{self._name}' from {self.uuid} to {embedded_uuid}"
+                )
+                return None
+
+        if "nodes" in data and "passes" not in data:
+            return self._prepare_graph_candidate(data)
+        return self._prepare_pass_list_candidate(data)
+
+    def _prepare_graph_candidate(self, data: dict) -> _PipelineCandidate | None:
+        """Compile graph JSON without registering or mutating a global template."""
+        from termin.render_framework import compile_graph_from_json
+
+        try:
+            pipeline = compile_graph_from_json(json.dumps(data))
+        except Exception:
+            log.error(
+                f"[PipelineAsset] Failed to compile graph pipeline '{self._name}'",
+                exc_info=True,
+            )
+            return None
+
+        if pipeline is None:
+            log.error(f"[PipelineAsset] Graph compiler returned no pipeline for '{self._name}'")
+            return None
+        pipeline.name = self._name
+        return _PipelineCandidate(pipeline=pipeline, graph_data=data)
+
+    def _prepare_pass_list_candidate(self, data: dict) -> _PipelineCandidate | None:
+        """Deserialize a legacy pass-list document without modifying live state."""
         from termin_assets import get_resource_manager
         from termin.render_framework import RenderPipeline
-
-        self._graph_data = None
-        self._template = None
 
         rm = get_resource_manager()
         if rm is None:
             log.error(f"[PipelineAsset] Resource manager is not configured for '{self._name}'")
             return None
-        pipeline = RenderPipeline.deserialize(data, rm)
-        if pipeline is not None:
-            pipeline.name = self._name
-        return pipeline
+
+        try:
+            pipeline = RenderPipeline.deserialize(data, rm)
+        except Exception:
+            log.error(
+                f"[PipelineAsset] Failed to deserialize pass-list pipeline '{self._name}'",
+                exc_info=True,
+            )
+            return None
+
+        if pipeline is None:
+            log.error(f"[PipelineAsset] Deserializer returned no pipeline for '{self._name}'")
+            return None
+        pipeline.name = self._name
+        return _PipelineCandidate(pipeline=pipeline, graph_data=None)
+
+    def _load_content(self, content: bytes | str) -> bool:
+        """Atomically replace cached pipeline state after a successful parse."""
+        if not isinstance(content, str):
+            log.error(f"[PipelineAsset] Pipeline '{self._name}' has non-text content")
+            return False
+
+        candidate = self._prepare_candidate(content)
+        if candidate is None:
+            return False
+
+        previous_data = self._data
+        previous_graph_data = self._graph_data
+        previous_loaded = self._loaded
+        self._data = candidate.pipeline
+        self._graph_data = candidate.graph_data
+        self._loaded = True
+        try:
+            self._on_loaded()
+        except Exception:
+            self._data = previous_data
+            self._graph_data = previous_graph_data
+            self._loaded = previous_loaded
+            log.error(f"[PipelineAsset] Post-load hook failed for '{self._name}'", exc_info=True)
+            return False
+
+        if not self._has_uuid_in_spec and self._source_path:
+            self.save_spec_file()
+        return True
 
     def reload(self) -> bool:
         """Reload the asset and rebind live render targets using this pipeline."""
-        result = super().reload()
+        if self._source_path is None:
+            return False
+        result = self._load_from_file()
         if result:
+            self._bump_version()
             self._notify_rendering_manager_reloaded()
         return result
 

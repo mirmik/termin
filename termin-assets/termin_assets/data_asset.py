@@ -125,18 +125,31 @@ class DataAsset(Asset, Generic[T]):
             return f.read()
 
     def _load_content(self, content: bytes | str) -> bool:
-        """Parse content and set data."""
+        """Parse content and replace cached data only after a successful parse."""
         try:
-            self._data = self._parse_content(content)
-            if self._data is not None:
-                self._loaded = True
-                self._on_loaded()
-                if not self._has_uuid_in_spec and self._source_path:
-                    self.save_spec_file()
-                return True
+            parsed_data = self._parse_content(content)
         except Exception:
             log.error(f"[{self.__class__.__name__}] Failed to parse content: " + str(self.name), exc_info=True)
-        return False
+            return False
+
+        if parsed_data is None:
+            return False
+
+        previous_data = self._data
+        previous_loaded = self._loaded
+        self._data = parsed_data
+        self._loaded = True
+        try:
+            self._on_loaded()
+        except Exception:
+            self._data = previous_data
+            self._loaded = previous_loaded
+            log.error(f"[{self.__class__.__name__}] Post-load hook failed: " + str(self.name), exc_info=True)
+            return False
+
+        if not self._has_uuid_in_spec and self._source_path:
+            self.save_spec_file()
+        return True
 
     @abstractmethod
     def _parse_content(self, content: bytes | str) -> T | None:
@@ -199,8 +212,7 @@ class DataAsset(Asset, Generic[T]):
         """Reload asset data from source_path."""
         if self._source_path is None:
             return False
-        self.unload()
-        result = self._load()
+        result = self._load_from_file()
         if result:
             self._bump_version()
         return result

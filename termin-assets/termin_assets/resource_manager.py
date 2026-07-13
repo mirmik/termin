@@ -157,7 +157,7 @@ class AssetRuntimeManager:
 
         plugin.register(AssetContext(resource_manager=self, name=name), result)
 
-    def reload_file(self, result: "PreLoadResult") -> None:
+    def reload_file(self, result: "PreLoadResult") -> bool:
         """Dispatch a preloaded file reload to the registered runtime asset plugin."""
         name = self._resource_name_from_preload_result(result)
         plugin = self._asset_type_plugins.get_runtime(result.resource_type)
@@ -165,9 +165,17 @@ class AssetRuntimeManager:
             log.error(
                 f"[AssetRuntimeManager] No runtime asset plugin registered for reload type: {result.resource_type}"
             )
-            return
+            return False
 
-        plugin.reload(AssetContext(resource_manager=self, name=name), result)
+        try:
+            reload_result = plugin.reload(AssetContext(resource_manager=self, name=name), result)
+        except Exception:
+            log.error(
+                f"[AssetRuntimeManager] Runtime asset reload failed for type: {result.resource_type}",
+                exc_info=True,
+            )
+            return False
+        return reload_result is not False
 
     def unregister_file(self, result: "PreLoadResult") -> None:
         """Dispatch a preloaded file removal to the registered runtime asset plugin."""

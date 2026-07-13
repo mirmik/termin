@@ -25,7 +25,7 @@ class AssetRuntimePlugin(Protocol):
     def register(self, context: AssetContext, result: "PreLoadResult") -> None:
         ...
 
-    def reload(self, context: AssetContext, result: "PreLoadResult") -> None:
+    def reload(self, context: AssetContext, result: "PreLoadResult") -> bool | None:
         ...
 
 

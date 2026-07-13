@@ -503,9 +503,10 @@ def reload_pipeline_asset(file_path: str | Path) -> None:
 
         asset = ResourceManager.instance().get_pipeline_asset(Path(file_path).stem)
         if asset is not None and asset.is_loaded:
-            asset.unload()
-            asset.reload()
-            asset.mark_just_saved()
+            if asset.reload():
+                asset.mark_just_saved()
+            else:
+                _logger.error("Pipeline editor could not reload asset for %s", file_path)
     except Exception:
         _logger.exception("Pipeline editor failed to reload asset for %s", file_path)
 
