@@ -449,7 +449,7 @@ def test_export_runtime_package_writes_runtime_contract(tmp_path: Path) -> None:
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert manifest["scene"] == "scene.json"
-    assert manifest["shader_artifact_root"] == "."
+    assert "shader_artifact_root" not in manifest
     assert manifest["resources"] == [
         {
             "type": "shader",

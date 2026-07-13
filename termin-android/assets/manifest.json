@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "shader_artifact_root": ".",
   "resources": [
     {
       "type": "shader",

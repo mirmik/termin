@@ -102,7 +102,6 @@ std::string material_spec() {
 std::string manifest() {
     return R"({
   "version": 1,
-  "shader_artifact_root": ".",
   "resources": [
     {"type": "shader", "uuid": "runtime-loader-test-shader", "path": "shaders/test.shader.json"},
     {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"},
@@ -111,6 +110,13 @@ std::string manifest() {
   "scene": "scene.json"
 }
 )";
+}
+
+std::string replace_once(std::string text, const std::string& needle, const std::string& replacement) {
+    const size_t offset = text.find(needle);
+    REQUIRE(offset != std::string::npos);
+    text.replace(offset, needle.size(), replacement);
+    return text;
 }
 
 std::string scene_json() {
@@ -355,4 +361,63 @@ TEST_CASE("RuntimePackageLoader keeps package meshes alive after scene entity re
 
     tc_mesh_handle still_loaded = tc_mesh_find_by_name(kMeshName);
     CHECK(tc_mesh_is_valid(still_loaded));
+}
+
+TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform separators") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    const std::vector<std::pair<std::string, std::string>> invalid_paths = {
+        {"\"scene\": \"scene.json\"", "\"scene\": \"../scene.json\""},
+        {"\"scene\": \"scene.json\"", "\"scene\": \".\\\\scene.json\""},
+        {"\"path\": \"shaders/test.shader.json\"", "\"path\": \"/tmp/scene.json\""},
+        {"\"path\": \"shaders/test.shader.json\"", "\"path\": \"C:\\\\outside.json\""},
+    };
+    for (const auto& [needle, replacement] : invalid_paths) {
+        write_text(root / "manifest.json", replace_once(manifest(), needle, replacement));
+        const termin::runtime::RuntimePackageLoadResult result =
+            termin::runtime::load_runtime_package(root.string());
+        CHECK_FALSE(result.ok);
+        CHECK_FALSE(result.message.empty());
+    }
+}
+
+TEST_CASE("RuntimePackageLoader follows only symlinks contained in the package") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    std::error_code error;
+    std::filesystem::create_symlink(
+        root / "shaders" / "test.shader.json",
+        root / "shaders" / "inside.shader.json",
+        error
+    );
+    REQUIRE_FALSE(error);
+    write_text(
+        root / "manifest.json",
+        replace_once(
+            manifest(),
+            "\"path\": \"shaders/test.shader.json\"",
+            "\"path\": \"shaders/inside.shader.json\""
+        )
+    );
+    CHECK(termin::runtime::load_runtime_package(root.string()).ok);
+
+    const std::filesystem::path outside = root.parent_path() / "termin-runtime-package-loader-outside.json";
+    write_text(outside, shader_spec());
+    std::filesystem::create_symlink(outside, root / "shaders" / "outside.shader.json", error);
+    REQUIRE_FALSE(error);
+    write_text(
+        root / "manifest.json",
+        replace_once(
+            manifest(),
+            "\"path\": \"shaders/test.shader.json\"",
+            "\"path\": \"shaders/outside.shader.json\""
+        )
+    );
+    const termin::runtime::RuntimePackageLoadResult result =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(result.ok);
+    CHECK_FALSE(result.message.empty());
+    std::filesystem::remove(outside, error);
 }

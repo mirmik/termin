@@ -148,7 +148,6 @@ def export_runtime_package(
 
     manifest = {
         "version": 1,
-        "shader_artifact_root": ".",
         "diagnostics": [diagnostic.to_dict() for diagnostic in diagnostics],
         "resources": resources,
         "scene": "scene.json",
