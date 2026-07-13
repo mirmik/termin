@@ -189,6 +189,9 @@ if(BUNDLE_PYTHON)
                 DESTINATION ${LOCAL_PYTHON_DIR}
                 PATTERN "__pycache__" EXCLUDE
                 PATTERN "*.pyc" EXCLUDE
+                PATTERN "*.so" EXCLUDE
+                PATTERN "*.pyd" EXCLUDE
+                PATTERN "*.dylib" EXCLUDE
                 PATTERN "include" EXCLUDE
             )
         else()

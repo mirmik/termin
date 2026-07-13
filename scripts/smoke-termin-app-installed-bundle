@@ -1,8 +1,37 @@
 #!/bin/bash
-# Verify the installed termin-app bundle through the active CI/runtime Python.
+# Verify the installed termin-app bundle without importing checkout packages.
 
 set -euo pipefail
 
-python -c "from pathlib import Path; import termin.voxels.voxel_shader as vs; path = Path(vs.__file__).resolve(); expected = Path('termin-app/install/lib/python').resolve(); print(f'termin.voxels.voxel_shader={path}'); assert expected in path.parents, f'expected termin-app install path first, got {path}'"
-python -c "from tgfx import TcShader; shader = TcShader.from_builtin_catalog('termin-engine-voxel-display'); assert shader.is_valid, 'termin-engine-voxel-display failed preflight'"
-python -m pytest termin-app/tests/ -v
+BUNDLE_ROOT="${TERMIN_APP_BUNDLE_ROOT:-termin-app/install}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
+if [[ ! -d "$BUNDLE_ROOT" ]]; then
+    echo "ERROR: installed termin-app bundle not found: $BUNDLE_ROOT" >&2
+    exit 1
+fi
+BUNDLE_ROOT="$(realpath "$BUNDLE_ROOT")"
+SITE_PACKAGES="$(
+    find "$BUNDLE_ROOT/lib" \
+        -mindepth 2 -maxdepth 3 \
+        -type d -path '*/python*/site-packages' \
+        -print -quit
+)"
+
+if [[ -z "$SITE_PACKAGES" ]]; then
+    echo "ERROR: canonical Python site-packages not found below $BUNDLE_ROOT/lib" >&2
+    exit 1
+fi
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+    echo "ERROR: Python interpreter is not executable: $PYTHON_BIN" >&2
+    exit 1
+fi
+
+SITE_PACKAGES="$(realpath "$SITE_PACKAGES")"
+export PYTHONPATH="$SITE_PACKAGES"
+export PYTHONNOUSERSITE=1
+export TERMIN_SDK="$BUNDLE_ROOT"
+export LD_LIBRARY_PATH="$(realpath "$BUNDLE_ROOT/lib")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+"$PYTHON_BIN" -S -c "from pathlib import Path; import sys; import termin.voxels.voxel_shader as vs; path = Path(vs.__file__).resolve(); expected = Path(sys.argv[1]); print(f'termin.voxels.voxel_shader={path}'); assert expected in path.parents, f'expected installed bundle site-packages, got {path}'" "$SITE_PACKAGES"
+"$PYTHON_BIN" -S -c "from tgfx import TcShader; shader = TcShader.from_builtin_catalog('termin-engine-voxel-display'); assert shader.is_valid, 'termin-engine-voxel-display failed preflight'"
+"$PYTHON_BIN" -S -m pytest termin-app/tests/ -v
