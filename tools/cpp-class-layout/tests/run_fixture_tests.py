@@ -72,6 +72,8 @@ def main() -> int:
     clean_source = fixtures / "clean.cpp"
     violation_source = fixtures / "violations.cpp"
     consumer_source = fixtures / "consumer.cpp"
+    consumer_header = fixtures / "owned_headers" / "consumer_only_violation.hpp"
+    require(consumer_header.is_file(), f"missing fixture header: {consumer_header}")
 
     with tempfile.TemporaryDirectory(prefix="termin-cpp-class-layout-") as temp:
         database = Path(temp)
@@ -134,11 +136,14 @@ def main() -> int:
             database,
             fixtures,
             "--path",
-            "target",
+            "owned_headers",
         )
         require(
             consumer_header_result.returncode == 1,
-            "path filter missed a header reached through an outside consumer TU",
+            "path filter missed a header reached through an outside consumer TU\n"
+            f"return code: {consumer_header_result.returncode}\n"
+            f"stdout:\n{consumer_header_result.stdout}\n"
+            f"stderr:\n{consumer_header_result.stderr}",
         )
         consumer_records = parse_jsonl(consumer_header_result.stdout)
         require(
