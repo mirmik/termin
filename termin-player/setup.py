@@ -34,6 +34,7 @@ setup(
         "termin-nanobind",
         "termin-modules",
         "termin-project-modules",
+        "termin-project",
         "termin-stdlib",
         "termin-scene",
         "termin-display",

@@ -1,7 +1,8 @@
 """Lightweight project settings reader for player runtimes.
 
 The editor owns the full project settings model. Player needs only the
-persisted runtime subset and must not import editor/app settings code.
+persisted runtime subset and imports the lightweight shared resource-path
+policy rather than editor/app settings code.
 """
 
 from __future__ import annotations
@@ -9,6 +10,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from termin.project.resource_paths import normalize_project_resource_paths
 
 
 SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
@@ -64,9 +67,10 @@ class ProjectRuntimeSettings:
                 field_name="build_output_dir",
             ),
             ignored_resource_paths=tuple(
-                _project_relative_paths(
+                normalize_project_resource_paths(
                     data.get("ignored_resource_paths"),
                     field_name="ignored_resource_paths",
+                    warning=lambda message: _log_warning(f"[PlayerProjectSettings] {message}"),
                 )
             ),
             player_window=ProjectPlayerWindowSettings.from_dict(data.get("player_window")),
@@ -115,46 +119,17 @@ def _bool_field(value: object, *, default: bool, field_name: str) -> bool:
     return default
 
 
-def _project_relative_paths(value: object, *, field_name: str) -> list[str]:
-    if value is None:
-        return []
-    if not isinstance(value, list):
-        _log_warning(f"[PlayerProjectSettings] {field_name} must be a list, using []")
-        return []
-
-    result: list[str] = []
-    for index, item in enumerate(value):
-        result.append(
-            _project_relative_path(
-                item,
-                fallback="",
-                field_name=f"{field_name}[{index}]",
-                allow_empty=True,
-            )
-        )
-    return [path for path in result if path]
-
-
-def _project_relative_path(
-    value: object,
-    *,
-    fallback: str,
-    field_name: str,
-    allow_empty: bool = False,
-) -> str:
+def _project_relative_path(value: object, *, fallback: str, field_name: str) -> str:
+    """Normalize the single build-output directory setting."""
     if not isinstance(value, str):
         if value is not None:
             _log_warning(f"[PlayerProjectSettings] {field_name} must be a relative path, using {fallback!r}")
         return fallback
 
-    normalized = value.replace("\\", "/").strip("/")
-    if not normalized:
-        return "" if allow_empty else fallback
-    if normalized.startswith("../") or "/../" in normalized or normalized == "..":
+    normalized = value.strip().replace("\\", "/")
+    path = Path(normalized)
+    if normalized in ("", ".", "..") or path.is_absolute() or ".." in path.parts:
         _log_warning(f"[PlayerProjectSettings] {field_name} must stay inside project, using {fallback!r}")
-        return fallback
-    if normalized.startswith("/"):
-        _log_warning(f"[PlayerProjectSettings] {field_name} must be relative, using {fallback!r}")
         return fallback
     return normalized
 
