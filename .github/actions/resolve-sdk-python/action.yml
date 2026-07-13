@@ -7,15 +7,10 @@ runs:
     - name: Resolve canonical SDK site-packages
       shell: bash
       run: |
-        sdk_site_packages="$(find "$GITHUB_WORKSPACE/sdk/lib" \
-          -mindepth 2 \
-          -maxdepth 3 \
-          -type d \
-          -path '*/python*/site-packages' \
-          -print \
-          -quit)"
-        if [[ -z "$sdk_site_packages" ]]; then
-          echo "ERROR: canonical SDK site-packages directory not found under $GITHUB_WORKSPACE/sdk/lib" >&2
-          exit 1
-        fi
+        sdk_site_packages="$(
+          PYTHONPATH="$GITHUB_WORKSPACE/termin-build-tools" \
+            python -m termin_build.sdk --repo-root "$GITHUB_WORKSPACE" \
+            resolve-python-layout --sdk-prefix "$GITHUB_WORKSPACE/sdk" \
+            --require-native-bindings
+        )"
         echo "SDK_SITE_PACKAGES=$sdk_site_packages" >> "$GITHUB_ENV"

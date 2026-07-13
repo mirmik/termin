@@ -25,8 +25,7 @@ CLANG_TIDY_BIN="${CLANG_TIDY_BIN:-clang-tidy}"
 CHECKS="${CLANG_TIDY_CHECKS:--*,clang-diagnostic-*,clang-analyzer-*,-clang-analyzer-deadcode.*,-clang-analyzer-optin.*,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,readability-function-size}"
 CHECKS_OVERRIDDEN=0
 WARNINGS_AS_ERRORS="${CLANG_TIDY_WARNINGS_AS_ERRORS:-*}"
-HEADER_FILTER="^$SCRIPT_DIR/(termin-|tcplot|cmake|scripts|tools|CMakeLists\.txt)"
-EXCLUDE_HEADER_FILTER="${CLANG_TIDY_EXCLUDE_HEADER_FILTER:-^$SCRIPT_DIR/(.*/)?termin-thirdparty/}"
+HEADER_FILTER="${CLANG_TIDY_HEADER_FILTER:-}"
 DEFAULT_CLANG_TIDY_CONFIG="{CheckOptions: [{key: readability-function-size.ParameterThreshold, value: 7}, {key: readability-function-size.StatementThreshold, value: none}, {key: readability-function-size.LineThreshold, value: none}, {key: readability-function-size.BranchThreshold, value: none}, {key: readability-function-size.VariableThreshold, value: none}, {key: readability-function-size.NestingThreshold, value: none}]}"
 CLANG_TIDY_CONFIG="${CLANG_TIDY_CONFIG:-$DEFAULT_CLANG_TIDY_CONFIG}"
 PATH_FILTERS=()
@@ -72,8 +71,9 @@ Environment:
   CLANG_TIDY_WARNINGS_AS_ERRORS
                        clang-tidy warnings-as-errors string
   CLANG_TIDY_CONFIG    clang-tidy YAML/JSON config overlay
-  CLANG_TIDY_EXCLUDE_HEADER_FILTER
-                       clang-tidy exclude-header-filter regex
+  CLANG_TIDY_HEADER_FILTER
+                       clang-tidy header-filter regex. By default an allowlist
+                       of repository-owned source roots is generated.
 EOF
 }
 
@@ -190,7 +190,7 @@ echo "Build dir:   $BUILD_DIR"
 echo "SDK prefix:  $SDK_PREFIX"
 echo "Checks:      $CHECKS"
 echo "Werror:      $WARNINGS_AS_ERRORS"
-echo "Header skip: $EXCLUDE_HEADER_FILTER"
+echo "Header filter: ${HEADER_FILTER:-generated repository allowlist}"
 echo "clang-tidy:  $CLANG_TIDY_BIN"
 echo "Vulkan:      $TERMIN_ENABLE_VULKAN"
 echo "SDL2:        $TERMIN_ENABLE_SDL"
@@ -279,7 +279,6 @@ export TERMIN_CLANG_TIDY_BIN="$CLANG_TIDY_BIN"
 export TERMIN_CLANG_TIDY_CHECKS="$CHECKS"
 export TERMIN_CLANG_TIDY_WARNINGS_AS_ERRORS="$WARNINGS_AS_ERRORS"
 export TERMIN_CLANG_TIDY_HEADER_FILTER="$HEADER_FILTER"
-export TERMIN_CLANG_TIDY_EXCLUDE_HEADER_FILTER="$EXCLUDE_HEADER_FILTER"
 export TERMIN_CLANG_TIDY_CONFIG="$CLANG_TIDY_CONFIG"
 export TERMIN_CLANG_TIDY_JOBS="$BUILD_JOBS"
 export TERMIN_LINT_PATH_FILTERS="$(printf '%s\n' "${PATH_FILTERS[@]}")"
@@ -291,6 +290,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 from pathlib import Path
+import re
+import shlex
 import subprocess
 import sys
 
@@ -299,8 +300,7 @@ build_dir = Path(os.environ["TERMIN_LINT_BUILD_DIR"]).resolve()
 clang_tidy = os.environ["TERMIN_CLANG_TIDY_BIN"]
 checks = os.environ["TERMIN_CLANG_TIDY_CHECKS"]
 warnings_as_errors = os.environ["TERMIN_CLANG_TIDY_WARNINGS_AS_ERRORS"]
-header_filter = os.environ["TERMIN_CLANG_TIDY_HEADER_FILTER"]
-exclude_header_filter = os.environ.get("TERMIN_CLANG_TIDY_EXCLUDE_HEADER_FILTER", "")
+header_filter = os.environ.get("TERMIN_CLANG_TIDY_HEADER_FILTER", "")
 config = os.environ.get("TERMIN_CLANG_TIDY_CONFIG", "")
 jobs = int(os.environ.get("TERMIN_CLANG_TIDY_JOBS", "1"))
 filters_raw = os.environ.get("TERMIN_LINT_PATH_FILTERS", "")
@@ -321,6 +321,28 @@ excluded_parts = {
     "termin-thirdparty",
     "NavMeshes",
 }
+
+
+def default_header_filter() -> str:
+    roots = sorted(
+        path
+        for path in repo.iterdir()
+        if path.is_dir()
+        and path.name.startswith("termin-")
+        and path.name != "termin-thirdparty"
+    )
+    roots.extend(
+        path
+        for name in ("tcplot", "cmake", "scripts", "tools")
+        if (path := repo / name).is_dir()
+    )
+    if not roots:
+        raise RuntimeError("no repository-owned C/C++ header roots were found")
+    return "^(" + "|".join(re.escape(str(path)) for path in roots) + ")(/|$)"
+
+
+if not header_filter:
+    header_filter = default_header_filter()
 
 
 def is_relative_to(path: Path, parent: Path) -> bool:
@@ -374,6 +396,63 @@ compile_commands = build_dir / "compile_commands.json"
 with compile_commands.open("r", encoding="utf-8") as stream:
     entries = json.load(stream)
 
+
+def normalize_include_paths(arguments: list[str], directory: Path) -> list[str]:
+    normalized: list[str] = []
+    paired_options = {"-I", "-isystem", "-iquote", "-idirafter"}
+    joined_options = ("-isystem", "-iquote", "-idirafter", "-I")
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument in paired_options and index + 1 < len(arguments):
+            include_path = Path(arguments[index + 1])
+            if not include_path.is_absolute():
+                include_path = directory / include_path
+            normalized.extend((argument, str(include_path.resolve())))
+            index += 2
+            continue
+        matched = False
+        for option in joined_options:
+            if argument.startswith(option) and len(argument) > len(option):
+                include_path = Path(argument[len(option) :])
+                if not include_path.is_absolute():
+                    include_path = directory / include_path
+                normalized.append(option + str(include_path.resolve()))
+                matched = True
+                break
+        if not matched:
+            normalized.append(argument)
+        index += 1
+    return normalized
+
+
+def normalize_compile_entry(entry: dict[str, object]) -> dict[str, object]:
+    normalized = dict(entry)
+    directory = Path(str(entry.get("directory") or build_dir)).resolve()
+    arguments = entry.get("arguments")
+    if isinstance(arguments, list):
+        normalized["arguments"] = normalize_include_paths(
+            [str(argument) for argument in arguments],
+            directory,
+        )
+    elif isinstance(entry.get("command"), str):
+        command = shlex.split(str(entry["command"]))
+        normalized["command"] = shlex.join(normalize_include_paths(command, directory))
+    return normalized
+
+
+# CMake may spell vendored include roots as project/../termin-thirdparty.  The
+# spelling leaks into clang diagnostics and can accidentally match the positive
+# project header filter.  Give clang-tidy a private normalized compilation DB;
+# do not mutate the CMake-generated source of truth.
+lint_db_dir = build_dir / "clang-tidy-compile-db"
+lint_db_dir.mkdir(parents=True, exist_ok=True)
+normalized_entries = [normalize_compile_entry(entry) for entry in entries]
+(lint_db_dir / "compile_commands.json").write_text(
+    json.dumps(normalized_entries, indent=2) + "\n",
+    encoding="utf-8",
+)
+
 files: list[str] = []
 seen: set[str] = set()
 for entry in entries:
@@ -405,13 +484,11 @@ def run_one(path: str) -> tuple[str, int, str]:
         clang_tidy,
         path,
         "-p",
-        str(build_dir),
+        str(lint_db_dir),
         f"--checks={checks}",
         f"--warnings-as-errors={warnings_as_errors}",
         f"--header-filter={header_filter}",
     ]
-    if exclude_header_filter:
-        cmd.append(f"--exclude-header-filter={exclude_header_filter}")
     if config:
         cmd.append(f"--config={config}")
     proc = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

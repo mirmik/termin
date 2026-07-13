@@ -150,8 +150,9 @@ fi
 echo "Copying Python packages from subprojects..."
 PYTHON_DEST="$INSTALL_DIR/lib/python$PYTHON_VERSION/site-packages"
 SDK_SITE_PACKAGES="$SDK_DIR/lib/python$PYTHON_VERSION/site-packages"
-if [[ ! -d "$SDK_SITE_PACKAGES" && -d "$SDK_DIR/lib" ]]; then
-    SDK_SITE_PACKAGES="$(find "$SDK_DIR/lib" -maxdepth 2 -type d -path '*/python*/site-packages' | sort | head -1)"
+if [[ ! -d "$SDK_SITE_PACKAGES" ]]; then
+    echo "ERROR: SDK Python $PYTHON_VERSION site-packages not found: $SDK_SITE_PACKAGES" >&2
+    exit 1
 fi
 
 # Module definitions: project_dir | python_subdir | so_pattern | py_source_dir
