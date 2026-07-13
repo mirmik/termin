@@ -549,8 +549,6 @@ class RenderTargetInspectorController:
         pipeline_name = snapshot.pipelines[snapshot.pipeline_index].label
         asset = self._resource_manager.get_pipeline_asset(pipeline_name)
         if asset is None:
-            asset = self._resource_manager.get_scene_pipeline_asset(pipeline_name)
-        if asset is None:
             return ()
         choices = [InspectorChoice("Default", None)]
         choices.extend(

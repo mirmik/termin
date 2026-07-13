@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from termin.default_assets.navmesh.asset import NavMeshAsset
     from termin.default_assets.render.material_asset import MaterialAsset
     from termin.default_assets.render.pipeline_asset import PipelineAsset
-    from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
     from termin.default_assets.render.shader_asset import ShaderAsset
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin.default_assets.ui.handle import UIHandle
@@ -736,54 +735,3 @@ class DefaultAssetResourceMixin:
     def list_pipeline_names(self) -> list[str]:
         """List all registered pipeline names."""
         return sorted(self._pipeline_registry.list_names())
-
-    # --------- Scene Pipelines ---------
-    def register_scene_pipeline(
-        self,
-        name: str,
-        pipeline: "RenderPipeline",
-        source_path: str | None = None,
-        uuid: str | None = None,
-    ) -> "ScenePipelineAsset":
-        """Register a RenderPipeline as a scene pipeline."""
-        from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
-
-        asset = self._scene_pipeline_registry.get_asset(name)
-        if asset is not None:
-            asset._data = pipeline
-            asset._bump_version()
-            return asset
-
-        asset = ScenePipelineAsset.from_pipeline(pipeline, name=name, source_path=source_path)
-        if uuid:
-            asset._uuid = uuid
-        self._scene_pipeline_registry.register(name, asset, source_path=source_path, uuid=asset.uuid)
-        return asset
-
-    def get_scene_pipeline(self, name: str) -> Optional["RenderPipeline"]:
-        """Get a copy of RenderPipeline by name."""
-        pipeline = self._scene_pipeline_registry.get(name)
-        if pipeline is not None:
-            return pipeline.copy(self)
-        return None
-
-    def get_scene_pipeline_asset(self, name: str) -> Optional["ScenePipelineAsset"]:
-        """Get ScenePipelineAsset by name."""
-        return self._scene_pipeline_registry.get_asset(name)
-
-    def get_scene_pipeline_by_uuid(self, uuid: str) -> Optional["RenderPipeline"]:
-        """Get a copy of RenderPipeline by UUID."""
-        asset = self._scene_pipeline_registry.get_asset_by_uuid(uuid)
-        if asset is not None:
-            pipeline = asset.data
-            if pipeline is not None:
-                return pipeline.copy(self)
-        return None
-
-    def get_scene_pipeline_asset_by_uuid(self, uuid: str) -> Optional["ScenePipelineAsset"]:
-        """Get ScenePipelineAsset by UUID."""
-        return self._scene_pipeline_registry.get_asset_by_uuid(uuid)
-
-    def list_scene_pipeline_names(self) -> list[str]:
-        """List all registered scene pipeline names."""
-        return sorted(self._scene_pipeline_registry.list_names())

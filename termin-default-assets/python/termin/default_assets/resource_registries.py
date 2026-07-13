@@ -374,29 +374,3 @@ class DefaultAssetRegistryFactoryMixin:
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
-
-    def _create_scene_pipeline_registry(self):
-        """Create AssetRegistry for scene pipelines (.scene_pipeline files)."""
-        from termin_assets import AssetRegistry
-
-        def data_from_asset(asset):
-            if asset.pipeline is None:
-                asset.ensure_loaded()
-            return asset.pipeline
-
-        def data_to_asset(data):
-            for asset in self._scene_pipeline_registry.assets.values():
-                if asset.pipeline is data:
-                    return asset
-            return None
-
-        def get_asset_class():
-            from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
-            return ScenePipelineAsset
-
-        return AssetRegistry(
-            asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
-            data_from_asset=data_from_asset,
-            data_to_asset=data_to_asset,
-        )

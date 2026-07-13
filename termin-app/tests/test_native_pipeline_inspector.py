@@ -8,7 +8,7 @@ from termin.gui_native import Document
 
 
 def test_native_pipeline_inspector_projects_summary(tmp_path):
-    path = tmp_path / "main.scene_pipeline"
+    path = tmp_path / "main.pipeline"
     path.write_text(json.dumps({"nodes": [], "connections": []}), encoding="utf-8")
     document = Document()
     renders = []

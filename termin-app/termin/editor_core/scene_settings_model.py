@@ -129,7 +129,6 @@ class ScenePropertiesSnapshot:
     skybox_top_color: tuple[float, float, float]
     skybox_bottom_color: tuple[float, float, float]
     pipelines: tuple[ScenePipelineSnapshot, ...]
-    available_pipelines: tuple[str, ...]
 
 
 class ScenePropertiesController:
@@ -162,13 +161,6 @@ class ScenePropertiesController:
             )
             for handle in handles
         )
-        existing = {item.uuid for item in pipelines if item.valid}
-        available = []
-        if self._resources is not None:
-            for name in self._resources.list_scene_pipeline_names():
-                asset = self._resources.get_scene_pipeline_asset(name)
-                if asset is not None and asset.uuid not in existing:
-                    available.append(name)
         return ScenePropertiesSnapshot(
             background_color=_color(state.background_color, alpha=True),
             ambient_color=_color(state.ambient_color, alpha=False),
@@ -178,7 +170,6 @@ class ScenePropertiesController:
             skybox_top_color=_color(state.skybox_top_color, alpha=False),
             skybox_bottom_color=_color(state.skybox_bottom_color, alpha=False),
             pipelines=pipelines,
-            available_pipelines=tuple(available),
         )
 
     def set_background_color(self, value) -> ScenePropertiesSnapshot:
@@ -221,17 +212,6 @@ class ScenePropertiesController:
     def set_skybox_bottom_color(self, value) -> ScenePropertiesSnapshot:
         state = _render_state(self._scene)
         return self._edit("skybox_bottom_color", state.skybox_bottom_color, _color(value, alpha=False), merge=False)
-
-    def add_pipeline(self, name: str) -> ScenePropertiesSnapshot:
-        if name not in self.load().available_pipelines:
-            raise ValueError(f"scene pipeline is not available: {name}")
-        if self._resources is None:
-            raise RuntimeError("resource manager is unavailable")
-        asset = self._resources.get_scene_pipeline_asset(name)
-        if asset is None:
-            raise ValueError(f"scene pipeline asset disappeared: {name}")
-        scene_render_mount(self._scene).add_pipeline_template(asset.template)
-        return self._published()
 
     def remove_pipeline(self, index: int) -> ScenePropertiesSnapshot:
         mount = scene_render_mount(self._scene)

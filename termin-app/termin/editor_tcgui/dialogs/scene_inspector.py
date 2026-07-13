@@ -341,48 +341,6 @@ def show_scene_properties_dialog(
 
     pipelines_list.on_select = _on_pipeline_select
 
-    add_btn = Button()
-    add_btn.text = "Add..."
-    add_btn.padding = 6
-
-    def _on_add_pipeline():
-        available = list(controller.load().available_pipelines)
-        if not available:
-            from tcgui.widgets.message_box import MessageBox
-            MessageBox.show_info(ui, "No Pipelines",
-                                 "No additional scene pipelines are available.")
-            return
-
-        # Use combo-style selection via a simple list dialog
-        selection_list = ListWidget()
-        selection_list.set_items([{"text": n} for n in available])
-        selection_list.selected_index = 0
-        selection_list.preferred_height = px(150)
-
-        sel_dlg = Dialog()
-        sel_dlg.title = "Add Scene Pipeline"
-        sel_dlg.content = selection_list
-        sel_dlg.buttons = ["OK", "Cancel"]
-        sel_dlg.default_button = "OK"
-        sel_dlg.cancel_button = "Cancel"
-        sel_dlg.min_width = 350
-
-        def _on_sel_result(btn):
-            if btn != "OK":
-                return
-            idx = selection_list.selected_index
-            if idx < 0 or idx >= len(available):
-                return
-            name = available[idx]
-            controller.add_pipeline(name)
-            _refresh_pipelines()
-            _emit()
-
-        sel_dlg.on_result = _on_sel_result
-        sel_dlg.show(ui)
-
-    add_btn.on_click = _on_add_pipeline
-
     def _on_remove_pipeline():
         idx = pipelines_list.selected_index
         if idx < 0 or idx >= len(pipeline_handles):
@@ -396,7 +354,6 @@ def show_scene_properties_dialog(
     pipelines_group.add_child(pipelines_list)
     btn_row = HStack()
     btn_row.spacing = 4
-    btn_row.add_child(add_btn)
     btn_row.add_child(remove_btn)
     pipelines_group.add_child(btn_row)
 

@@ -73,7 +73,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self._audio_clip_registry = self._create_audio_clip_registry()
         self._ui_registry = self._create_ui_registry()
         self._pipeline_registry = self._create_pipeline_registry()
-        self._scene_pipeline_registry = self._create_scene_pipeline_registry()
 
         for type_id, registry in {
             "prefab": self._prefab_registry,
@@ -90,7 +89,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
             "audio_clip": self._audio_clip_registry,
             "ui": self._ui_registry,
             "pipeline": self._pipeline_registry,
-            "scene_pipeline": self._scene_pipeline_registry,
         }.items():
             self.register_runtime_asset_registry(type_id, registry)
 

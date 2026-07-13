@@ -95,9 +95,6 @@ class _ResourceManager:
     def get_pipeline_asset(self, name):
         return _PipelineAsset() if name == "Post" else None
 
-    def get_scene_pipeline_asset(self, _name):
-        return None
-
     def list_texture_names(self):
         return ["Noise"]
 

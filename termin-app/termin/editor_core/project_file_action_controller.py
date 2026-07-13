@@ -11,7 +11,7 @@ from termin.editor_core.inspector_model import InspectorModel
 
 
 SCENE_FILE_EXTENSIONS = frozenset({".scene"})
-PIPELINE_FILE_EXTENSIONS = frozenset({".pipeline", ".scene_pipeline"})
+PIPELINE_FILE_EXTENSIONS = frozenset({".pipeline"})
 TEXTURE_FILE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".bmp", ".hdr", ".exr"})
 MESH_FILE_EXTENSIONS = frozenset({".obj", ".stl"})
 GLB_FILE_EXTENSIONS = frozenset({".glb", ".gltf"})

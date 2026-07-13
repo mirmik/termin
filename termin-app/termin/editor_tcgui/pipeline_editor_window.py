@@ -24,7 +24,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
     Args:
         parent_ui: Parent UI for window creation.
         directory: Directory for file dialogs.
-        initial_file: Optional path to .pipeline/.scene_pipeline file to load immediately.
+        initial_file: Optional path to a .pipeline file to load immediately.
     """
     if parent_ui.create_window is None:
         log.error("[PipelineEditor] ui.create_window is not available")
@@ -209,9 +209,9 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             start_dir = str(editor.file_path.parent)
         show_open_file_dialog(
             child,
-            title="Open Scene Pipeline",
+            title="Open Pipeline",
             directory=start_dir,
-            filter_str="Scene Pipeline (*.scene_pipeline);;Pipeline (*.pipeline);;All Files (*)",
+            filter_str="Pipeline (*.pipeline);;All Files (*)",
             on_result=lambda p: _load_path(p) if p else None,
             windowed=True,
         )
@@ -230,7 +230,7 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
             child,
             title="Save Pipeline",
             directory=start_dir,
-            filter_str="Pipeline (*.pipeline);;Scene Pipeline (*.scene_pipeline);;All Files (*)",
+            filter_str="Pipeline (*.pipeline);;All Files (*)",
             on_result=lambda p: _save_to(p) if p else None,
             windowed=True,
         )
@@ -256,9 +256,9 @@ def open_pipeline_editor_window(parent_ui: UI, directory: str | None = None, ini
     elif directory:
         try:
             pdir = Path(directory)
-            candidates = sorted(pdir.glob("*.pipeline")) + sorted(pdir.glob("*.scene_pipeline"))
+            candidates = sorted(pdir.glob("*.pipeline"))
             if not candidates:
-                candidates = sorted(pdir.rglob("*.pipeline")) + sorted(pdir.rglob("*.scene_pipeline"))
+                candidates = sorted(pdir.rglob("*.pipeline"))
             if candidates:
                 _load_path(str(candidates[0]))
         except Exception as e:

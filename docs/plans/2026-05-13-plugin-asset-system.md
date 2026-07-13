@@ -275,16 +275,15 @@ Status 2026-06-18 cleanup: unused app compatibility modules
 were removed. Use the `termin.default_assets.render.*` paths directly.
 
 Status 2026-06-18: render pipeline asset runtime moved to `termin-render`,
-then to `termin-default-assets`.
-`PipelineAsset`, `ScenePipelineAsset`, their import/runtime plugins, and the
-`pipeline`/`scene_pipeline` entry points now live under
-`termin.default_assets.render.pipeline_asset`,
-`termin.default_assets.render.scene_pipeline_asset`,
-`termin.default_assets.render.pipeline_plugin`, and
-`termin.default_assets.render.scene_pipeline_plugin`. The old
-`termin.assets.pipeline_*`, `termin.assets.scene_pipeline_*`, and
-`termin.render.*` compatibility re-export modules were removed; use the
-owning `termin.default_assets.render.*` modules directly. Remaining render
+then to `termin-default-assets`. `PipelineAsset` and its import/runtime
+plugins now live under `termin.default_assets.render.pipeline_asset` and
+`termin.default_assets.render.pipeline_plugin`. The old `termin.assets.pipeline_*`
+and `termin.render.*` compatibility re-export modules were removed; use the
+owning `termin.default_assets.render.*` modules directly.
+
+Status 2026-07-13: the unused `.scene_pipeline` file asset, its registry,
+plugins, editor routes, and reload bridge were removed. This does not remove
+the native scene-pipeline runtime or scene-mounted templates. Remaining render
 asset follow-ups: material file parse/save and pipeline pass-list
 deserialization still use the app `ResourceManager` facade at runtime for
 typed lookups, and live pipeline reload notifications still bridge through the
