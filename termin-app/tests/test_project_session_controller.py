@@ -4,6 +4,31 @@ from termin.editor_core import project_session_controller as session_module
 from termin.editor_core.project_session_controller import ProjectSessionController
 
 
+def test_create_project_file_uses_shared_non_destructive_creation(tmp_path, monkeypatch) -> None:
+    loaded_paths: list[str] = []
+    errors: list[tuple[str, str]] = []
+    controller = ProjectSessionController(
+        set_project_state=lambda _project_dir, _project_name: None,
+        log_to_console=lambda _message: None,
+        rescan_file_resources=lambda: None,
+        set_project_browser_root=lambda _project_dir: None,
+        get_init_script_editor=lambda: None,
+        resolve_termin_shaderc=lambda: None,
+        resolve_slangc=lambda: None,
+        show_error=lambda title, message: errors.append((title, message)),
+    )
+    monkeypatch.setattr(controller, "load_project", lambda path: loaded_paths.append(path))
+
+    target = tmp_path / "EditorProject.terminproj"
+    controller.create_project_file(str(target))
+    target.write_text("preserve this project", encoding="utf-8")
+    controller.create_project_file(str(target))
+
+    assert loaded_paths == [str(target)]
+    assert target.read_text(encoding="utf-8") == "preserve this project"
+    assert errors and errors[0][0] == "Create Project Failed"
+
+
 def test_load_project_syncs_stdlib_before_modules_and_resource_scan(tmp_path, monkeypatch) -> None:
     project_file = tmp_path / "FirstRun.terminproj"
     project_file.write_text("{}", encoding="utf-8")
