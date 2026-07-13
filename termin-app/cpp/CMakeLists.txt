@@ -29,19 +29,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-# Put all binaries into a flat bin/ directory so tests don't depend on config subdirs
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-if(CMAKE_CONFIGURATION_TYPES)
-    foreach(cfg ${CMAKE_CONFIGURATION_TYPES})
-        string(TOUPPER ${cfg} cfg_upper)
-        set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
-        set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
-        set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${cfg_upper} ${CMAKE_BINARY_DIR}/bin)
-    endforeach()
-endif()
-
 # Platform-specific optimization flags
 if(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "/Zi /Od /DEBUG /FS")
@@ -349,7 +336,7 @@ if(BUILD_TESTS)
         ${CMAKE_DL_LIBS}
     )
     target_compile_options(termin_tests PRIVATE $<$<CONFIG:Release>:${OPTIMIZE_FLAGS}>)
-    add_test(NAME termin_tests COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/termin_tests${CMAKE_EXECUTABLE_SUFFIX})
+    add_test(NAME termin_tests COMMAND $<TARGET_FILE:termin_tests>)
 
     add_custom_target(termin_run_tests
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -C $<CONFIG>

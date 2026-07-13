@@ -156,7 +156,6 @@ class NativeScenePropertiesDialog:
     skybox_top: object
     skybox_bottom: object
     pipelines: object
-    available: object
     remove_pipeline: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
@@ -192,8 +191,6 @@ class NativeScenePropertiesDialog:
                 for item in snapshot.pipelines
             ))
             self.pipelines.selected_index = 0 if snapshot.pipelines else -1
-            _set_combo_items(self.available, snapshot.available_pipelines)
-            self.available.selected_index = 0 if snapshot.available_pipelines else -1
             self.remove_pipeline.widget.enabled = bool(snapshot.pipelines)
         finally:
             self._updating = False
@@ -237,13 +234,6 @@ class NativeScenePropertiesDialog:
     def set_skybox_type(self, index: int) -> None:
         if not self._updating and 0 <= index < len(SKYBOX_TYPES):
             self.apply_snapshot(self.controller.set_skybox_type(SKYBOX_TYPES[index]))
-
-    def add_selected_pipeline(self) -> None:
-        if self.snapshot is None:
-            return
-        index = self.available.selected_index
-        if 0 <= index < len(self.snapshot.available_pipelines):
-            self.apply_snapshot(self.controller.add_pipeline(self.snapshot.available_pipelines[index]))
 
     def remove_selected_pipeline(self) -> None:
         if self.snapshot is None:
@@ -376,10 +366,6 @@ def build_native_scene_properties_dialog(
     root.add_fixed_child(_ref(document, pipelines), 30.0)
     pipeline_row = document.create_hstack("scene-pipeline-actions")
     pipeline_row.set_layout_spacing(4.0)
-    available = document.create_combo_box()
-    pipeline_row.add_stretch_child(_ref(document, available))
-    add_pipeline = document.create_button("Add")
-    pipeline_row.add_fixed_child(_ref(document, add_pipeline), 66.0)
     remove_pipeline = document.create_button("Remove")
     pipeline_row.add_fixed_child(_ref(document, remove_pipeline), 78.0)
     root.add_fixed_child(pipeline_row, 30.0)
@@ -399,7 +385,6 @@ def build_native_scene_properties_dialog(
         skybox_top,
         skybox_bottom,
         pipelines,
-        available,
         remove_pipeline,
         viewport,
         request_render,
@@ -424,9 +409,6 @@ def build_native_scene_properties_dialog(
     )
     skybox_type.connect_changed(
         lambda index, _text: owner().set_skybox_type(index) if owner() is not None else None
-    )
-    add_pipeline.connect_clicked(
-        lambda: owner().add_selected_pipeline() if owner() is not None else None
     )
     remove_pipeline.connect_clicked(
         lambda: owner().remove_selected_pipeline() if owner() is not None else None

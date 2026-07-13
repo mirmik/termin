@@ -16,7 +16,6 @@ from tcgui.widgets.group_box import GroupBox
 from tcgui.widgets.color_dialog import ColorDialog
 from tcgui.widgets.units import px
 
-from termin.editor_core.resource_manager import ResourceManager
 from termin.editor_core.scene_settings_model import ScenePropertiesController
 from termin.scene import TcScene as Scene
 from termin.render import scene_render_mount, scene_render_state
@@ -82,7 +81,6 @@ def show_scene_properties_dialog(
     rm = scene_render_mount(scene)
     controller = ScenePropertiesController(
         scene,
-        resource_manager=ResourceManager.instance(),
         push_undo_command=push_undo_command,
     )
     updating = [False]

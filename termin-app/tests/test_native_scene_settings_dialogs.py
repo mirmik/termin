@@ -18,9 +18,6 @@ from termin.editor_native.scene_settings_dialogs import (
 from termin.gui_native import Document, Rect
 from termin.scene import TcScene
 
-from test_scene_settings_model import _Resources
-
-
 @pytest.fixture(scope="module", autouse=True)
 def _bootstrap():
     bootstrap_player()
@@ -92,7 +89,7 @@ def test_native_shadow_settings_dialog_applies_live_and_releases(scene):
 
 def test_native_scene_properties_dialog_mutates_reopens_and_releases(scene):
     document, renders, viewport, render = _host()
-    controller = ScenePropertiesController(scene, resource_manager=_Resources())
+    controller = ScenePropertiesController(scene)
     service = NativeDialogService(document, viewport=viewport, request_render=render)
     dialog = build_native_scene_properties_dialog(
         document,

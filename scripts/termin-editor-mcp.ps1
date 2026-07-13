@@ -4,7 +4,6 @@
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot = Split-Path -Parent $ScriptDir
 $HelperPath = Join-Path $ScriptDir "termin-editor-mcp"
 
 if (-not (Test-Path -LiteralPath $HelperPath)) {
@@ -12,11 +11,6 @@ if (-not (Test-Path -LiteralPath $HelperPath)) {
 }
 
 $PythonCandidates = @()
-
-$VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
-if (Test-Path -LiteralPath $VenvPython) {
-    $PythonCandidates += $VenvPython
-}
 
 $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
 if ($PythonCommand) {
@@ -29,7 +23,7 @@ if ($PyCommand) {
 }
 
 if ($PythonCandidates.Count -eq 0) {
-    throw "Python executable not found. Install Python or activate the Termin test venv."
+    throw "Python executable not found. Install Python 3 or add it to PATH."
 }
 
 $ForwardArgs = @($args)

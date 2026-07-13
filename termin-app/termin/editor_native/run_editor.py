@@ -338,7 +338,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     if initial_scene is not None:
         scene_properties_controller = ScenePropertiesController(
             initial_scene,
-            resource_manager=resource_manager,
             push_undo_command=push_undo_command,
             on_changed=request_editor_render,
         )
