@@ -312,7 +312,6 @@ def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
         "shader",
         "material",
         "pipeline",
-        "scene_pipeline",
         "prefab",
         "navmesh",
         "voxel_grid",

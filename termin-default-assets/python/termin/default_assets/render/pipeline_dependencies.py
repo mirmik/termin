@@ -125,24 +125,6 @@ def reload_pipelines_for_material_dependencies(resource_manager, material_names:
                 f"after material dependency update"
             )
 
-    reloaded_scene_pipelines: list[str] = []
-    for pipeline_name in resource_manager.list_scene_pipeline_names():
-        pipeline_asset = resource_manager.get_scene_pipeline_asset(pipeline_name)
-        if pipeline_asset is None:
-            continue
-        if not pipeline_asset.uses_material_names(material_names):
-            continue
-        if pipeline_asset.reload():
-            reloaded_scene_pipelines.append(pipeline_name)
-        else:
-            log.error(
-                f"[ShaderAssetPlugin] Failed to reload scene pipeline '{pipeline_name}' "
-                f"after material dependency update"
-            )
-
     if reloaded_pipelines:
         names = ", ".join(sorted(reloaded_pipelines))
         log.info(f"[ShaderAssetPlugin] Reloaded material-dependent pipelines: {names}")
-    if reloaded_scene_pipelines:
-        names = ", ".join(sorted(reloaded_scene_pipelines))
-        log.info(f"[ShaderAssetPlugin] Reloaded material-dependent scene pipelines: {names}")

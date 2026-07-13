@@ -168,11 +168,11 @@ def test_native_inspector_host_switches_rendering_object_panels():
     model.request(
         InspectorKind.PIPELINE,
         target=None,
-        label="/project/render.scene_pipeline",
-        file_path="/project/render.scene_pipeline",
+        label="/project/render.pipeline",
+        file_path="/project/render.pipeline",
     )
     assert host.pipeline_inspector.root.visible
-    assert pipeline.targets[-1][1]["file_path"] == "/project/render.scene_pipeline"
+    assert pipeline.targets[-1][1]["file_path"] == "/project/render.pipeline"
 
     model.show_tool("terrain", "Terrain")
     assert host.tool_inspector.root.visible

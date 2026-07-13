@@ -24,9 +24,6 @@ class _ResourceManager:
     def get_pipeline_asset(self, name):
         return None
 
-    def get_scene_pipeline_asset(self, name):
-        return None
-
 
 class _CameraComponent:
     pass

@@ -310,27 +310,14 @@ class PipelineInspectorTcgui(VStack):
         graph_connection_count = -1
 
         if pipeline is None:
-            if path.suffix.lower() == ".scene_pipeline":
-                from termin.default_assets.render.scene_pipeline_asset import ScenePipelineAsset
+            from termin.default_assets.render.pipeline_asset import PipelineAsset
 
-                asset = ScenePipelineAsset(name=name, source_path=path)
-                try:
-                    raw = path.read_text(encoding="utf-8")
-                    graph_node_count, graph_connection_count = self._count_graph_items(raw, file_path)
-                    asset.load_from_content(raw)
-                    pipeline = asset.compile()
-                except Exception as e:
-                    log.error(f"[PipelineInspectorTcgui] failed to load scene pipeline {file_path}: {e}")
-                    pipeline = None
-            else:
-                from termin.default_assets.render.pipeline_asset import PipelineAsset
-
-                asset = PipelineAsset(name=name, source_path=path)
-                pipeline = asset.pipeline
-                graph = asset.graph_data
-                if graph is not None:
-                    graph_node_count = len(graph.get("nodes", []))
-                    graph_connection_count = len(graph.get("connections", []))
+            asset = PipelineAsset(name=name, source_path=path)
+            pipeline = asset.pipeline
+            graph = asset.graph_data
+            if graph is not None:
+                graph_node_count = len(graph.get("nodes", []))
+                graph_connection_count = len(graph.get("connections", []))
 
         if pipeline is None:
             log.error(f"[PipelineInspectorTcgui] failed to compile pipeline file: {file_path}")

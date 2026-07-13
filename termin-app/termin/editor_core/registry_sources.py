@@ -642,7 +642,6 @@ def build_resource_manager_pages(resource_manager, project_file_watcher=None) ->
         ("navmesh", "NavMeshes"),
         ("skeleton", "Skeletons"),
         ("pipeline", "Pipelines"),
-        ("scene_pipeline", "Scene Pipelines"),
     ):
         source = ResourceAssetSource(resource_manager, type_id)
         pages.append(

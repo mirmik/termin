@@ -471,12 +471,6 @@ void bind_rendering_manager(nb::module_& m) {
              nb::arg("asset_uuid") = "",
              "Recreate live render-target pipelines that came from a pipeline asset")
 
-        .def("recreate_scene_pipelines_for_asset",
-             &RenderingManager::recreate_scene_pipelines_for_asset,
-             nb::arg("asset_name"),
-             nb::arg("asset_uuid") = "",
-             "Recompile live scene pipelines that came from a scene pipeline asset")
-
         .def("shutdown", &RenderingManager::shutdown,
              "Cleanup all resources")
 

@@ -7,7 +7,7 @@ from termin.editor_core.pipeline_inspector_model import PipelineInspectorControl
 
 
 def test_pipeline_inspector_loads_summary_and_hands_off_to_editor(tmp_path):
-    path = tmp_path / "main.scene_pipeline"
+    path = tmp_path / "main.pipeline"
     path.write_text(
         json.dumps(
             {

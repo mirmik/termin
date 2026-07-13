@@ -14,14 +14,6 @@ from termin.render import scene_render_state
 from termin.scene import TcScene
 
 
-class _Resources:
-    def list_scene_pipeline_names(self):
-        return []
-
-    def get_scene_pipeline_asset(self, _name):
-        return None
-
-
 @pytest.fixture(scope="module", autouse=True)
 def _bootstrap():
     bootstrap_player()
@@ -82,7 +74,7 @@ def test_scene_properties_controller_owns_undoable_render_mutations(scene):
     changed = []
     controller = ScenePropertiesController(
         scene,
-        resource_manager=_Resources(),
+        resource_manager=None,
         push_undo_command=stack.push,
         on_changed=lambda: changed.append(True),
     )
@@ -96,7 +88,6 @@ def test_scene_properties_controller_owns_undoable_render_mutations(scene):
     assert updated.ambient_intensity == pytest.approx(0.625)
     assert updated.skybox_type == next_type
     assert updated.background_color == pytest.approx((0.1, 0.2, 0.3, 1.0))
-    assert updated.available_pipelines == ()
     assert len(stack) == 3
     stack.undo()
     assert tuple(scene_render_state(scene).background_color) == pytest.approx(initial.background_color)

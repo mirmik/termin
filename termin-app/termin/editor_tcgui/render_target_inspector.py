@@ -586,8 +586,6 @@ class RenderTargetInspectorTcgui(VStack):
         asset = None
         try:
             asset = self._rm.get_pipeline_asset(pipeline_name)
-            if asset is None:
-                asset = self._rm.get_scene_pipeline_asset(pipeline_name)
         except Exception as e:
             log.warn(f"[RenderTargetInspector] Failed to get pipeline asset '{pipeline_name}': {e}")
 

@@ -35,7 +35,6 @@ def create_default_preloaders(
     processors: list[FilePreLoader] = [
         _create_plugin_preloader(resource_manager, "glsl", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "pipeline", on_resource_reloaded),
-        _create_plugin_preloader(resource_manager, "scene_pipeline", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "shader", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "texture", on_resource_reloaded),
         _create_plugin_preloader(resource_manager, "material", on_resource_reloaded),

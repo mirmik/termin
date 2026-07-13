@@ -80,7 +80,6 @@ def test_resource_manager_pages_and_component_source_are_toolkit_neutral():
         "navmesh",
         "skeleton",
         "pipeline",
-        "scene_pipeline",
         "components",
     ]
     component_row = tuple(ResourceComponentSource(manager).load_rows())[0]

@@ -23,6 +23,13 @@ def test_default_resource_manager_owns_default_runtime_registries() -> None:
     assert isinstance(manager.get_handle_accessors("tc_material"), HandleAccessors)
 
 
+def test_default_resource_manager_does_not_register_removed_scene_pipeline_assets() -> None:
+    manager = DefaultResourceManager()
+
+    assert "scene_pipeline" not in manager._runtime_asset_registries
+    assert manager.asset_type_plugins.get_for_extension(".scene_pipeline") == []
+
+
 def test_default_resource_manager_exposes_handle_accessor_contracts() -> None:
     manager = DefaultResourceManager()
 

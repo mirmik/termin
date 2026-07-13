@@ -25,7 +25,7 @@ from termin.gui_native import (
 from .dialog_service import NativeDialogService
 
 
-_PIPELINE_FILTER = "Scene Pipeline | *.scene_pipeline;;Pipeline | *.pipeline"
+_PIPELINE_FILTER = "Pipeline | *.pipeline"
 
 
 @dataclass
