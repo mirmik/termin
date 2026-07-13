@@ -99,6 +99,8 @@ endif()
 
 set(TERMIN_OPENXR_SOURCES
     src/openxr_android_runtime.cpp
+    src/openxr_android_runtime_support.cpp
+    src/openxr_android_runtime_smoke.cpp
     src/openxr_math.cpp
     src/openxr_runtime.cpp
 )
