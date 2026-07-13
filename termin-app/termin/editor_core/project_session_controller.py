@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import runpy
 import sys
@@ -69,12 +68,9 @@ class ProjectSessionController:
         if project_file.suffix != ".terminproj":
             project_file = project_file.with_suffix(".terminproj")
         try:
-            project_data = {
-                "version": 1,
-                "name": project_file.stem,
-            }
-            project_file.parent.mkdir(parents=True, exist_ok=True)
-            project_file.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
+            from termin.project import create_project_file
+
+            project_file = Path(create_project_file(project_file.stem, project_file.parent))
         except Exception as e:
             log.error(f"Failed to create project file {project_file}: {e}")
             if self._show_error is not None:
