@@ -607,6 +607,19 @@ static void pool_grow(tc_entity_pool* pool) {
 }
 
 tc_entity_id tc_entity_pool_alloc_with_uuid(tc_entity_pool* pool, const char* name, const char* uuid) {
+    if (!pool) {
+        tc_log_error("[tc_entity_pool_alloc_with_uuid] pool is null");
+        return TC_ENTITY_ID_INVALID;
+    }
+    if (uuid && uuid[0]) {
+        const tc_entity_id existing = tc_entity_pool_find_by_uuid(pool, uuid);
+        if (tc_entity_id_valid(existing)) {
+            tc_log_error(
+                "[tc_entity_pool_alloc_with_uuid] duplicate UUID rejected: %s",
+                uuid);
+            return TC_ENTITY_ID_INVALID;
+        }
+    }
     if (pool->free_count == 0) {
         pool_grow(pool);
     }
@@ -1632,8 +1645,13 @@ tc_entity_id tc_entity_pool_migrate(
 
     uint32_t src_idx = src_id.index;
 
-    // Allocate new entity in destination pool
-    tc_entity_id dst_id = tc_entity_pool_alloc(dst_pool, src_pool->names[src_idx]);
+    // Keep the UUID stable across pools. Allocation validates a destination
+    // collision before any source entity/component ownership is mutated.
+    const char* src_uuid = src_pool->uuids[src_idx];
+    tc_entity_id dst_id = tc_entity_pool_alloc_with_uuid(
+        dst_pool,
+        src_pool->names[src_idx],
+        src_uuid);
     if (!tc_entity_id_valid(dst_id)) {
         return TC_ENTITY_ID_INVALID;
     }

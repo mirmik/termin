@@ -74,3 +74,31 @@ def test_entity_clone_preserves_python_component_data_and_parent():
         termin.bootstrap.shutdown_player()
         """
     )
+
+
+def test_python_entity_constructor_and_scene_migration_preserve_explicit_uuid():
+    _run_python(
+        """
+        import termin.bootstrap
+        from termin.scene import Entity, TcScene
+
+        termin.bootstrap.bootstrap_player()
+
+        uuid = "python-entity-stable-uuid"
+        standalone = Entity("standalone", uuid)
+        assert standalone.uuid == uuid
+
+        scene = TcScene.create("python-entity-migration")
+        migrated = scene.migrate_entity(standalone)
+        assert migrated.valid()
+        assert migrated.uuid == uuid
+        assert scene.get_entity(uuid) == migrated
+
+        duplicate = Entity("duplicate", uuid)
+        assert duplicate.uuid == uuid
+        rejected = scene.migrate_entity(duplicate)
+        assert not rejected.valid()
+        assert duplicate.valid()
+        assert scene.get_entity(uuid) == migrated
+        """
+    )
