@@ -10,7 +10,9 @@ def _run_python(code: str) -> None:
     )
 
 
-def _run_python_without_nanobind_leaks(code: str) -> None:
+def _run_python_without_nanobind_leaks(
+    code: str,
+) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         [sys.executable, "-c", textwrap.dedent(code)],
         check=False,
@@ -19,6 +21,7 @@ def _run_python_without_nanobind_leaks(code: str) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "nanobind: leaked" not in result.stderr
+    return result
 
 
 def test_importing_bootstrap_has_no_kind_registration_side_effects():
@@ -436,6 +439,31 @@ def test_player_rebootstrap_restores_loaded_python_component_types():
             assert not registry.has("RebootstrapProbeComponent")
         """
     )
+
+
+def test_player_bootstrap_does_not_restore_a_component_registered_during_bootstrap():
+    result = _run_python_without_nanobind_leaks(
+        """
+        from termin.bootstrap import bootstrap_player, shutdown_player
+        from termin.scene import ComponentRegistry
+
+        for _ in range(3):
+            bootstrap_player()
+
+            from termin.render import DrawableComponent
+
+            registry = ComponentRegistry.instance()
+            assert registry.get_class("DrawableComponent") is DrawableComponent
+            assert registry.get_info("DrawableComponent")["category"] == "Rendering"
+
+            shutdown_player()
+            assert not registry.has("DrawableComponent")
+        """
+    )
+
+    output = result.stdout + result.stderr
+    assert "registration for existing type 'DrawableComponent'" not in output
+    assert "rebootstrap registration rejected for DrawableComponent" not in output
 
 
 def test_player_shutdown_releases_standalone_entity_components():
