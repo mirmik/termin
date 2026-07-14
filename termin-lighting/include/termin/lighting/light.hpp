@@ -9,6 +9,7 @@
 
 #include <termin/geom/vec3.hpp>
 #include <termin/lighting/attenuation.hpp>
+#include <termin/lighting/termin_lighting_api.hpp>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -65,7 +66,7 @@ public:
     Vec3 radiance;
 };
 
-struct Light {
+struct TERMIN_LIGHTING_API Light {
 public:
     LightType type = LightType::Directional;
     Vec3 color = Vec3(1.0, 1.0, 1.0);
@@ -82,58 +83,14 @@ public:
 public:
     Light() = default;
 
-    Vec3 intensity_rgb() const {
-        return color * intensity;
-    }
+    Vec3 intensity_rgb() const;
 
-    LightSample sample(const Vec3& point) const {
-        if (type == LightType::Directional) {
-            Vec3 incoming = direction.normalized() * -1.0;
-            return LightSample{
-                incoming,
-                std::numeric_limits<double>::infinity(),
-                1.0,
-                intensity_rgb()
-            };
-        }
-
-        Vec3 to_light = position - point;
-        double dist = to_light.norm();
-        Vec3 L = (dist > 1e-6) ? to_light / dist : Vec3(0.0, 1.0, 0.0);
-
-        double atten = distance_weight(dist);
-        if (type == LightType::Spot) {
-            atten *= spot_weight(L);
-        }
-
-        return LightSample{
-            L,
-            dist,
-            atten,
-            intensity_rgb() * atten
-        };
-    }
+    LightSample sample(const Vec3& point) const;
 
 private:
-    double distance_weight(double dist) const {
-        double w = attenuation.evaluate(dist);
-        if (range.has_value() && dist > range.value()) {
-            w = 0.0;
-        }
-        return w;
-    }
+    double distance_weight(double dist) const;
 
-    double spot_weight(const Vec3& L) const {
-        double cos_theta = direction.dot(L * -1.0);
-        double cos_outer = std::cos(outer_angle);
-        double cos_inner = std::cos(inner_angle);
-
-        if (cos_theta <= cos_outer) return 0.0;
-        if (cos_theta >= cos_inner) return 1.0;
-
-        double t = (cos_theta - cos_outer) / (cos_inner - cos_outer);
-        return t * t * (3.0 - 2.0 * t);
-    }
+    double spot_weight(const Vec3& L) const;
 };
 
 } // namespace termin

@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(TERMIN_BUILD_PYTHON "Build Python binding _lighting_native" OFF)
+option(TERMIN_LIGHTING_BUILD_TESTS "Build termin-lighting tests" ON)
 
 if(COMMAND termin_require_package)
     termin_require_package(termin_base tcbase::termin_base)
@@ -16,15 +17,19 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
-add_library(termin_lighting INTERFACE)
+add_library(termin_lighting SHARED
+    cpp/light.cpp
+)
 add_library(termin_lighting::termin_lighting ALIAS termin_lighting)
 
-target_include_directories(termin_lighting INTERFACE
+target_compile_definitions(termin_lighting PRIVATE TERMIN_LIGHTING_EXPORTS)
+
+target_include_directories(termin_lighting PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(termin_lighting INTERFACE
+target_link_libraries(termin_lighting PUBLIC
     tcbase::termin_base
 )
 
@@ -58,10 +63,24 @@ endif()
             FILES_MATCHING PATTERN "*.py")
 endif()
 
+if(TERMIN_LIGHTING_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(termin_lighting_light_test tests/test_light.cpp)
+    target_include_directories(termin_lighting_light_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_lighting_light_test PRIVATE termin_lighting)
+    add_test(NAME termin_lighting_light_test COMMAND termin_lighting_light_test)
+endif()
+
 include(GNUInstallDirs)
 
 install(TARGETS termin_lighting
     EXPORT termin_lightingTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 install(DIRECTORY include/
@@ -93,3 +112,5 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/termin_lightingConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/termin_lighting
 )
+
+termin_label_tests_in_directory("termin-lighting")
