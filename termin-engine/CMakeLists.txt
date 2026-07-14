@@ -72,6 +72,7 @@ set(TERMIN_ENGINE_SOURCES
     src/tc_scene_manager_instance.cpp
     src/tc_rendering_manager_instance.cpp
     src/tc_engine_core_instance.cpp
+    src/viewport_render_state.cpp
 )
 
 if(TERMIN_ENGINE_BUILD_SHARED)
@@ -249,6 +250,18 @@ if(TERMIN_ENGINE_BUILD_TESTS)
     add_test(
         NAME termin_engine_scene_pipeline_manager_test
         COMMAND termin_engine_scene_pipeline_manager_test
+    )
+
+    add_executable(termin_engine_viewport_render_state_test
+        tests/test_viewport_render_state.cpp
+    )
+    target_include_directories(termin_engine_viewport_render_state_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_engine_viewport_render_state_test PRIVATE termin_engine)
+    add_test(
+        NAME termin_engine_viewport_render_state_test
+        COMMAND termin_engine_viewport_render_state_test
     )
 endif()
 
