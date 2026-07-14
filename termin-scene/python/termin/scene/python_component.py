@@ -175,6 +175,19 @@ def restore_python_components() -> None:
             component_registry.set_registration_owner(registration.owner)
             inspect_registry.set_registration_owner(registration.owner)
             parent_name = _find_python_component_parent(cls)
+
+            # Native bootstrap imports some Python component modules while the
+            # registries are already live. In that case __init_subclass__ has
+            # registered this exact class in the current runtime, so there is
+            # nothing to restore. This is distinct from a same-name collision:
+            # a different class must still go through register_python() and its
+            # owner checks below.
+            if (
+                component_registry.has(cls.__name__)
+                and component_registry.get_class(cls.__name__) is cls
+            ):
+                continue
+
             if not component_registry.register_python(cls.__name__, cls, parent_name):
                 log.error(
                     f"[PythonComponent] rebootstrap registration rejected for {cls.__name__}"
