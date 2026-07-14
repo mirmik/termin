@@ -65,6 +65,14 @@ The Python namespace contains:
 - `current_scene` / `current_scene_name`: aliases for the current editor scene.
 - `scene_manager`: the engine scene manager.
 - `selected` / `selected_entity`: currently selected editor entity or `None`.
+- `scene_edit`: public undo-aware local transform editing service. Use
+  `scene_edit.set_selected_local_transform(position=(1, 2, 3))` to move the
+  selection, or `scene_edit.set_entity_local_transform(entity, scale=Vec3(2, 2, 2))`
+  for an explicit entity. `position` and `scale` accept `Vec3` or exactly three
+  finite numeric values; `rotation` accepts `Quat` or four finite `x, y, z, w`
+  values. All values are local-space, omitted fields are preserved, and
+  `merge=True` combines successive edits to the same entity into one Undo entry.
+  Each call returns the resulting local state and requests a viewport refresh.
 - `framegraph_debugger`: headless framegraph debugger inspection service.
 - `project_path`: current project path or `None`.
 - `rm` / `resource_manager`: `ResourceManager.instance()`.

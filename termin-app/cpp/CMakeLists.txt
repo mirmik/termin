@@ -299,6 +299,7 @@ if(BUILD_TESTS)
         termin/editor/component_editor_visual.cpp
         termin/editor/camera_frustum_debug_gizmo.cpp
         termin/editor/editor_interaction_system.cpp
+        termin/editor/selection_manager.cpp
         termin/editor/editor_snap.cpp
         termin/editor/gizmo_manager.cpp
         termin/editor/gizmo_types.cpp
@@ -307,6 +308,7 @@ if(BUILD_TESTS)
         termin/render/solid_primitive_renderer.cpp
         tests/tests_general_pose3.cpp
         tests/tests_editor_interaction_system.cpp
+        tests/tests_selection_manager.cpp
         tests/tests_inspect_registry.cpp
         tests/tests_orbit_camera_controller.cpp
         tests/tests_camera_frustum_debug_gizmo.cpp

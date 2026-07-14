@@ -26,6 +26,7 @@ from termin.editor_core.pipeline_editor_model import PipelineEditorController
 from termin.editor_core.pipeline_inspector_model import PipelineInspectorController
 from termin.editor_core.framegraph_debugger_service import EditorFramegraphDebuggerService
 from termin.editor_core.python_console_model import PythonConsoleController
+from termin.editor_core.scene_edit_service import EditorSceneEditService
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_core.about_model import build_editor_about_info
 from termin.editor_core.profiler_model import ProfilerController
@@ -1553,6 +1554,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         resource_manager_viewer,
     )
 
+    scene_edit = EditorSceneEditService(
+        get_selected_entity=lambda: selected_entity,
+        push_undo_command=push_undo_command,
+        request_viewport_update=request_editor_render,
+    )
     executor = EditorPythonExecutor(
         lambda: {
             "editor": host,
@@ -1560,6 +1566,7 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             "scene": current_scene(),
             "current_scene": current_scene(),
             "selected_entity": selected_entity,
+            "scene_edit": scene_edit,
             "scene_hierarchy_controller": scene_hierarchy_controller,
             "scene_tree": scene_tree,
             "viewport_list_controller": viewport_list_controller,
