@@ -26,48 +26,10 @@ public:
     Entity selected() const { return _selected; }
     Entity hovered() const { return _hovered; }
 
-    void select(Entity entity) {
-        if (!entity.valid() || !entity.selectable()) {
-            entity = Entity();
-        }
-
-        if (entity == _selected) {
-            return;
-        }
-
-        _selected = entity;
-        selected_pick_id = entity.valid() ? entity.pick_id() : 0;
-
-        if (on_selection_changed) {
-            on_selection_changed(entity);
-        }
-    }
-
-    void hover(Entity entity) {
-        if (!entity.valid() || !entity.selectable()) {
-            entity = Entity();
-        }
-
-        if (entity == _hovered) {
-            return;
-        }
-
-        _hovered = entity;
-        hovered_pick_id = entity.valid() ? entity.pick_id() : 0;
-
-        if (on_hover_changed) {
-            on_hover_changed(entity);
-        }
-    }
-
-    void clear() {
-        select(Entity());
-        hover(Entity());
-    }
-
-    void deselect() {
-        select(Entity());
-    }
+    void select(Entity entity);
+    void hover(Entity entity);
+    void clear();
+    void deselect();
 };
 
 } // namespace termin

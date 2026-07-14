@@ -21,6 +21,7 @@ from tcgui.widgets.label import Label
 from tcgui.widgets.text_area import TextArea
 
 from termin.editor_core.undo_stack import UndoStack, UndoCommand
+from termin.editor_core.scene_edit_service import EditorSceneEditService
 from termin.editor_core.menu_bar_model import (
     DebugMenuActions,
     EditMenuActions,
@@ -160,6 +161,11 @@ class EditorWindowTcgui:
         self._display_routers: dict[int, object] = {}
         self._current_project_path: str | None = None
         self._project_name: str | None = None
+        self._scene_edit = EditorSceneEditService(
+            get_selected_entity=lambda: self.selected_entity,
+            push_undo_command=self.push_undo_command,
+            request_viewport_update=self._request_viewport_update,
+        )
         self._python_executor = EditorPythonExecutor(self._build_python_context)
         self._fullscreen = FullscreenController(
             get_panels=self._fullscreen_panels,
@@ -1512,6 +1518,7 @@ class EditorWindowTcgui:
             "current_scene_name": self._editor_scene_name,
             "selected": self.selected_entity,
             "selected_entity": self.selected_entity,
+            "scene_edit": self._scene_edit,
             "framegraph_debugger": self.framegraph_debugger,
             "scene_manager": self.scene_manager,
             "project_path": self._get_project_path(),

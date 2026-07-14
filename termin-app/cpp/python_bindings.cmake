@@ -18,6 +18,7 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
+    termin/editor/selection_manager.cpp
     termin/render/solid_primitive_renderer.cpp
 )
 
