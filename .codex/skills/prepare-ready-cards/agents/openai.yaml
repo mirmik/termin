@@ -1,4 +1,0 @@
-interface:
-  display_name: "Prepare Ready Cards"
-  short_description: "Подготовка карточек Backlog к исполнению"
-  default_prompt: "Use $prepare-ready-cards to triage the Termin Backlog and promote actionable cards to Ready."
