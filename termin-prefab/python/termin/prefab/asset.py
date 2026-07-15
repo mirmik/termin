@@ -12,7 +12,7 @@ from tcbase import log
 from termin_assets import DataAsset, get_resource_manager
 
 if TYPE_CHECKING:
-    from termin.scene import Entity, GeneralTransform3
+    from termin.scene import Entity, GeneralTransform3, TcScene
 
 
 class PrefabResourceManager(Protocol):
@@ -40,13 +40,6 @@ def _numpy_encoder(obj: Any) -> Any:
     if isinstance(obj, (np.int32, np.int64)):
         return int(obj)
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-
-def _deserialize_entity(data: dict) -> "Entity":
-    """Deserialize a scene entity from prefab data."""
-    from termin.scene import Entity
-
-    return Entity.deserialize(data, context=None)
 
 
 class PrefabAsset(DataAsset[dict]):
@@ -80,6 +73,7 @@ class PrefabAsset(DataAsset[dict]):
 
     def instantiate(
         self,
+        scene: "TcScene | None" = None,
         parent: "GeneralTransform3 | None" = None,
         position: tuple[float, float, float] | None = None,
         name: str | None = None,
@@ -93,23 +87,34 @@ class PrefabAsset(DataAsset[dict]):
         if root_data is None:
             raise ValueError(f"Prefab '{self.name}' has no root data")
 
-        entity = _deserialize_entity(root_data)
+        parent_entity = parent.entity if parent is not None else None
+        target_scene = scene
+        if target_scene is None and parent_entity is not None:
+            target_scene = parent_entity.scene
+        if target_scene is None:
+            raise ValueError(f"Prefab '{self.name}' requires an explicit target scene")
 
-        if name is not None:
-            entity.name = name
+        from termin.prefab._prefab_native import instantiate_hierarchy
 
-        if position is not None:
-            pose = entity.transform.local_pose()
-            pose.lin[...] = position
-            entity.transform.relocate(pose)
+        try:
+            entity = instantiate_hierarchy(
+                root_data,
+                target_scene,
+                parent_entity,
+                name,
+                position,
+            )
+        except Exception as exc:
+            log.error(
+                f"[PrefabAsset] Failed to instantiate prefab '{self.name}': {exc}",
+                exc_info=True,
+            )
+            raise RuntimeError(f"Failed to instantiate prefab '{self.name}': {exc}") from exc
 
         existing_marker = entity.get_component(PrefabInstanceMarker)
         if existing_marker is None:
             marker = PrefabInstanceMarker(prefab_uuid=self.uuid)
             entity.add_component(marker)
-
-        if parent is not None:
-            parent.add_child(entity.transform)
 
         return entity
 
@@ -265,7 +270,7 @@ class PrefabAsset(DataAsset[dict]):
         source_path: str | Path | None = None,
     ) -> "PrefabAsset":
         """Create PrefabAsset from an existing Entity."""
-        entity_data = entity.serialize()
+        entity_data = entity.serialize_hierarchy()
         if entity_data is None:
             raise ValueError(f"Entity '{entity.name}' could not be serialized")
 

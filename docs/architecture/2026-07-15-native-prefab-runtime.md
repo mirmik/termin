@@ -238,14 +238,37 @@ A Python-enabled player, source host or automation host is allowed. It may link
 operations still go through bindings to the native prefab library, and its
 existence must not weaken the Python-free library gate.
 
-## Current violations and gaps (2026-07-15)
+## Implementation state (2026-07-15)
 
-- `termin-prefab` is Python-only and registers a Python runtime asset plugin;
-- prefab instance state is a `PythonComponent`, and live tracking uses a Python
-  `WeakSet`;
+The first native execution slice is in place:
+
+- `termin-prefab` now contains a Python-free `termin_prefab` library and an
+  optional `_prefab_native` binding;
+- `PrefabInstantiator` validates a serialized hierarchy, creates fresh runtime
+  UUIDs, remaps internal entity references and deserializes the full hierarchy
+  directly into an explicit target scene and optional parent;
+- hierarchy base creation in `termin-scene` rolls back already-created entities
+  when a descendant cannot be constructed;
+- `PrefabAsset.instantiate()` and editor drag/drop are thin callers of that
+  native transaction rather than a second Python hierarchy loader;
+- native and Python integration tests cover nested hierarchies, two disjoint
+  instances, internal references, parented target-pool creation and malformed
+  input without partial scene mutation.
+
+The remaining violations and gaps are:
+
+- document parsing, versioning and stable source-local IDs have not yet moved
+  into the native library; the current instantiator accepts the existing
+  serialized hierarchy representation and uses its source UUIDs only as clone
+  identities;
+- prefab instance state is still a `PythonComponent`, and live tracking still
+  uses a Python `WeakSet`;
+- the Python runtime asset plugin remains until native asset registration and
+  packaged loading replace it;
 - `termin-runtime` itself is already a native, Python-free library and is the
   correct packaged-project loading boundary, but it does not yet load prefab
-  resources.
+  resources;
+- native typed overrides and reconciliation are not implemented yet.
 
 `termin_player` requiring and packaging Python is intentional for its role as
 an editor-adjacent development/source host and is not a violation of this

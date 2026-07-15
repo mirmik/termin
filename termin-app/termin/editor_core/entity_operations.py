@@ -236,7 +236,11 @@ class EntityOperations:
         prefab_name = Path(prefab_path).stem
         parent_transform = parent.transform if parent else None
 
-        entity = rm.instantiate_prefab(prefab_name, parent=parent_transform)
+        entity = rm.instantiate_prefab(
+            prefab_name,
+            scene=self._scene,
+            parent=parent_transform,
+        )
         if entity is None:
             log.error(f"Failed to instantiate prefab: {prefab_name}")
             self._dialog.show_error("Prefab", f"Failed to instantiate prefab: {prefab_name}")
