@@ -3,6 +3,7 @@ import weakref
 
 from termin.editor_core.navigation_settings_model import NavigationSettingsController
 from termin.editor_native.dialog_service import NativeDialogService
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.navigation_settings_dialogs import (
     build_native_agent_types_dialog,
     build_native_navmesh_areas_dialog,
@@ -29,6 +30,10 @@ def test_native_agent_types_dialog_stages_cancel_saves_and_releases():
         viewport=viewport, request_render=render,
     )
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    assert root.children[0].bounds.height == EDITOR_UI_METRICS.field_row
+    assert root.children[0].children[0].bounds.width == EDITOR_UI_METRICS.form_label
+    assert root.children[1].bounds.height == EDITOR_UI_METRICS.field_row
     dialog.add()
     assert dialog.dialog.activate("cancel")
     assert len(manager.settings.agent_types) == 1
@@ -52,6 +57,8 @@ def test_native_navmesh_areas_dialog_saves_and_reopens():
         viewport=viewport, request_render=render,
     )
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    assert root.children[0].bounds.height == EDITOR_UI_METRICS.section_row
     names = dialog.names.text.split("\n")
     names[7] = "Jump"
     dialog.names.text = "\n".join(names)

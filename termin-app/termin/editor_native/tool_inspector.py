@@ -7,6 +7,8 @@ import logging
 
 from termin.gui_native import Document, WidgetRef
 
+from .metrics import EDITOR_UI_METRICS
+
 
 _logger = logging.getLogger(__name__)
 
@@ -58,9 +60,10 @@ class NativeToolInspector:
 
 def build_native_tool_inspector(document: Document) -> NativeToolInspector:
     root = document.create_vstack("native-tool-inspector")
-    root.set_layout_spacing(2.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.embedded_panel_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
     empty = document.create_label("No tool inspector panel selected.", "native-tool-inspector-empty")
-    root.add_fixed_child(empty, 28.0)
+    root.add_fixed_child(empty, EDITOR_UI_METRICS.compact_row)
     return NativeToolInspector(document, root, empty)
 
 

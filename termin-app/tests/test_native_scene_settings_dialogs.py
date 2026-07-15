@@ -10,6 +10,7 @@ from termin.editor_core.scene_settings_model import (
     ShadowSettingsController,
 )
 from termin.editor_native.dialog_service import NativeDialogService
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.scene_settings_dialogs import (
     build_native_scene_names_dialog,
     build_native_scene_properties_dialog,
@@ -50,6 +51,8 @@ def test_native_scene_names_dialog_saves_reopens_and_releases(scene):
     )
 
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    assert root.children[0].children[0].bounds.height == EDITOR_UI_METRICS.section_row
     layers = dialog.layers.text.split("\n")
     layers[5] = "Effects"
     dialog.layers.text = "\n".join(layers)
@@ -77,6 +80,9 @@ def test_native_shadow_settings_dialog_applies_live_and_releases(scene):
     )
 
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    assert root.children[0].bounds.height == EDITOR_UI_METRICS.field_row
+    assert root.children[0].children[0].bounds.width == EDITOR_UI_METRICS.form_label
     dialog.method.selected_index = 1
     dialog.softness.value = 2.5
     dialog.bias.value = 0.004
@@ -100,6 +106,9 @@ def test_native_scene_properties_dialog_mutates_reopens_and_releases(scene):
     )
 
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    assert root.children[0].children[0].bounds.width == EDITOR_UI_METRICS.form_label
+    assert root.children[-1].bounds.height == EDITOR_UI_METRICS.field_row
     dialog.set_intensity(0.875)
     dialog.set_skybox_type(1)
     assert controller.load().ambient_intensity == pytest.approx(0.875)
