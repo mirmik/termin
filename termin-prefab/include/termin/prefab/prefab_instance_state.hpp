@@ -13,7 +13,7 @@ namespace termin::prefab {
 
 class PrefabDocument;
 
-enum class PrefabOverrideRestoreError {
+enum class PrefabPropertyApplyError {
     None = 0,
     InvalidState,
     InvalidDocument,
@@ -33,8 +33,17 @@ enum class PrefabOverrideRestoreError {
     SetterFailed,
 };
 
+using PrefabOverrideRestoreError = PrefabPropertyApplyError;
+
+enum class PrefabReconcilePhase {
+    Validation = 0,
+    Structure,
+    SourceValue,
+    OverrideValue,
+};
+
 struct TERMIN_PREFAB_API PrefabOverrideRestoreFailure {
-    PrefabOverrideRestoreError error = PrefabOverrideRestoreError::None;
+    PrefabPropertyApplyError error = PrefabPropertyApplyError::None;
     std::string source_entity_id;
     std::string source_component_id;
     std::string field_path;
@@ -45,6 +54,28 @@ struct TERMIN_PREFAB_API PrefabOverrideRestoreResult {
     size_t requested_count = 0;
     size_t restored_count = 0;
     std::vector<PrefabOverrideRestoreFailure> failures;
+
+    bool ok() const { return failures.empty(); }
+};
+
+struct TERMIN_PREFAB_API PrefabReconcileFailure {
+    PrefabReconcilePhase phase = PrefabReconcilePhase::Validation;
+    PrefabPropertyApplyError error = PrefabPropertyApplyError::None;
+    std::string source_entity_id;
+    std::string source_component_id;
+    std::string field_path;
+    std::string message;
+};
+
+struct TERMIN_PREFAB_API PrefabReconcileResult {
+    size_t source_field_count = 0;
+    size_t source_fields_applied = 0;
+    size_t override_count = 0;
+    size_t overrides_applied = 0;
+    bool revision_updated = false;
+    std::string previous_revision;
+    std::string target_revision;
+    std::vector<PrefabReconcileFailure> failures;
 
     bool ok() const { return failures.empty(); }
 };
@@ -96,6 +127,10 @@ public:
     );
     PrefabOverrideRestoreResult clear_all_property_overrides(
         const PrefabDocument& source
+    );
+    PrefabReconcileResult reconcile_properties(
+        const PrefabDocument& source,
+        const PrefabOverrideResourceResolver* resource_resolver = nullptr
     );
     // Explicit metadata-only escape hatch for repair/migration tools. Normal
     // editing must use clear_* so live values and metadata cannot diverge.

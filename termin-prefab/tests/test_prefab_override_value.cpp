@@ -155,6 +155,32 @@ void test_kind_and_resource_contracts() {
     assert(resource_value->get("name").as_string() == "Cube");
 }
 
+void test_native_inspect_value_factory() {
+    tc_value vector = tc_value_list_new();
+    tc_value_list_push(&vector, tc_value_double(1.0));
+    tc_value_list_push(&vector, tc_value_double(2.0));
+    tc_value_list_push(&vector, tc_value_double(3.0));
+    std::string error;
+    auto encoded = PrefabOverrideValue::from_inspect_value(&vector, "vec3", error);
+    tc_value_free(&vector);
+    assert(encoded && encoded->tag() == "kind");
+    auto materialized = encoded->materialize_for_inspect("vec3", error);
+    assert(materialized && materialized->size() == 3);
+    assert(materialized->at(0).as_numer() == 1.0);
+    assert(!encoded->materialize_for_inspect("quat", error));
+
+    tc_value nested = tc_value_dict_new();
+    tc_value_dict_set(&nested, "enabled", tc_value_bool(true));
+    tc_value_dict_set(&nested, "name", tc_value_string("native"));
+    auto nested_encoded = PrefabOverrideValue::from_inspect_value(
+        &nested, "settings", error);
+    tc_value_free(&nested);
+    assert(nested_encoded);
+    auto nested_value = nested_encoded->materialize_for_inspect("settings", error);
+    assert(nested_value && nested_value->get("enabled").as_bool());
+    assert(nested_value->get("name").as_string() == "native");
+}
+
 void test_malformed_values_are_rejected() {
     const std::string prefix =
         R"({"schema":"termin.prefab.override-value","version":1,"value":)";
@@ -197,6 +223,7 @@ int main() {
     test_container_identity_is_explicit();
     test_dense_array_is_not_inferred_from_list();
     test_kind_and_resource_contracts();
+    test_native_inspect_value_factory();
     test_malformed_values_are_rejected();
     return 0;
 }

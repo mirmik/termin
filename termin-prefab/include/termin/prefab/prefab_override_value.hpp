@@ -42,6 +42,11 @@ public:
         const std::string& json,
         std::string& error
     );
+    static std::optional<PrefabOverrideValue> from_inspect_value(
+        const tc_value* value,
+        std::string_view target_kind,
+        std::string& error
+    );
 
     tc_value serialize() const;
     std::string to_json(int indent = -1) const;

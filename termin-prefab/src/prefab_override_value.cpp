@@ -391,6 +391,103 @@ std::optional<tc::trent> materialize_node(const tc_value* node, std::string& err
     return std::nullopt;
 }
 
+std::optional<tc::trent> encode_inspect_node(
+    const tc_value* value,
+    size_t depth,
+    std::string& error
+) {
+    if (value == nullptr || depth > MaxDepth) {
+        error = value == nullptr ? "inspect override value is null"
+                                 : "inspect override value exceeds nesting limit";
+        return std::nullopt;
+    }
+    tc::trent node = tc::trent::dict();
+    switch (value->type) {
+    case TC_VALUE_NIL:
+        node.set("tag", "none");
+        return node;
+    case TC_VALUE_BOOL:
+        node.set("tag", "bool");
+        node.set("value", value->data.b);
+        return node;
+    case TC_VALUE_INT:
+        node.set("tag", "int64");
+        node.set("value", std::to_string(value->data.i));
+        return node;
+    case TC_VALUE_FLOAT:
+    case TC_VALUE_DOUBLE: {
+        const double number = value->type == TC_VALUE_FLOAT
+            ? static_cast<double>(value->data.f) : value->data.d;
+        if (!std::isfinite(number)) {
+            error = "inspect override floats must be finite";
+            return std::nullopt;
+        }
+        char buffer[64];
+        auto formatted = std::to_chars(
+            buffer, buffer + sizeof(buffer), number,
+            std::chars_format::general, std::numeric_limits<double>::max_digits10);
+        if (formatted.ec != std::errc()) {
+            error = "failed to encode inspect override float";
+            return std::nullopt;
+        }
+        node.set("tag", "float64");
+        node.set("value", std::string(buffer, formatted.ptr));
+        return node;
+    }
+    case TC_VALUE_STRING:
+        if (value->data.s == nullptr) {
+            error = "inspect override string is null";
+            return std::nullopt;
+        }
+        node.set("tag", "string");
+        node.set("value", value->data.s);
+        return node;
+    case TC_VALUE_LIST: {
+        node.set("tag", "list");
+        tc::trent items = tc::trent::list();
+        if (value->data.list.count > MaxContainerItems) {
+            error = "inspect override list exceeds item limit";
+            return std::nullopt;
+        }
+        for (size_t index = 0; index < value->data.list.count; ++index) {
+            auto item = encode_inspect_node(&value->data.list.items[index], depth + 1, error);
+            if (!item) return std::nullopt;
+            items.push_back(std::move(*item));
+        }
+        node.set("items", std::move(items));
+        return node;
+    }
+    case TC_VALUE_DICT: {
+        node.set("tag", "dict");
+        tc::trent entries = tc::trent::list();
+        if (value->data.dict.count > MaxContainerItems) {
+            error = "inspect override dictionary exceeds item limit";
+            return std::nullopt;
+        }
+        for (size_t index = 0; index < value->data.dict.count; ++index) {
+            const char* key = nullptr;
+            tc_value* child = tc_value_dict_get_at(
+                const_cast<tc_value*>(value), index, &key);
+            if (key == nullptr || child == nullptr) {
+                error = "inspect override dictionary contains an invalid entry";
+                return std::nullopt;
+            }
+            auto encoded = encode_inspect_node(child, depth + 1, error);
+            if (!encoded) return std::nullopt;
+            tc::trent entry = tc::trent::dict();
+            entry.set("key", key);
+            entry.set("value", std::move(*encoded));
+            entries.push_back(std::move(entry));
+        }
+        node.set("entries", std::move(entries));
+        return node;
+    }
+    default:
+        error = "unsupported tc_value type for prefab override";
+        return std::nullopt;
+    }
+}
+
 } // namespace
 
 PrefabOverrideValue::PrefabOverrideValue()
@@ -446,6 +543,33 @@ std::optional<PrefabOverrideValue> PrefabOverrideValue::parse_json(
         error = std::string("invalid override value JSON: ") + exception.what();
         return std::nullopt;
     }
+}
+
+std::optional<PrefabOverrideValue> PrefabOverrideValue::from_inspect_value(
+    const tc_value* value,
+    std::string_view target_kind,
+    std::string& error
+) {
+    error.clear();
+    if (target_kind.empty()) {
+        error = "target inspect kind must not be empty";
+        return std::nullopt;
+    }
+    auto payload = encode_inspect_node(value, 0, error);
+    if (!payload) return std::nullopt;
+    tc::trent semantic = tc::trent::dict();
+    semantic.set("tag", "kind");
+    semantic.set("kind", std::string(target_kind));
+    semantic.set("payload", std::move(*payload));
+    tc::trent envelope = tc::trent::dict();
+    envelope.set("schema", Schema);
+    envelope.set("version", Version);
+    envelope.set("value", std::move(semantic));
+    ValidationBudget budget;
+    if (!validate_node(envelope.get("value").raw(), 0, budget, error)) {
+        return std::nullopt;
+    }
+    return PrefabOverrideValue(std::move(envelope));
 }
 
 tc_value PrefabOverrideValue::serialize() const {

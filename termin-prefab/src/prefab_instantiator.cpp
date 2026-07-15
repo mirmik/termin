@@ -311,6 +311,49 @@ PrefabInstantiateResult instantiate_hierarchy(
                     "failed to attach PrefabInstanceState to instance root"
                 );
             }
+            const std::string root_source_id =
+                source_hierarchy["uuid"].as_string_default("");
+            const auto store_option_override = [state, &root_source_id](
+                const char* field_path,
+                const char* target_kind,
+                const tc_value& value
+            ) {
+                std::string error;
+                auto encoded = PrefabOverrideValue::from_inspect_value(
+                    &value, target_kind, error);
+                if (!encoded) return error;
+                PrefabPropertyOverride property_override;
+                property_override.source_entity_id = root_source_id;
+                property_override.field_path = field_path;
+                property_override.target_kind = target_kind;
+                property_override.value = std::move(*encoded);
+                if (!state->set_property_override(std::move(property_override), error)) {
+                    return error;
+                }
+                return std::string();
+            };
+            if (!options.root_name.empty()) {
+                tc_value value = tc_value_string(options.root_name.c_str());
+                const std::string error = store_option_override("name", "string", value);
+                tc_value_free(&value);
+                if (!error.empty()) {
+                    throw std::runtime_error(
+                        "failed to record root_name prefab override: " + error);
+                }
+            }
+            if (options.has_position) {
+                tc_value value = tc_value_list_new();
+                for (double coordinate : options.position) {
+                    tc_value_list_push(&value, tc_value_double(coordinate));
+                }
+                const std::string error = store_option_override(
+                    "transform.position", "vec3", value);
+                tc_value_free(&value);
+                if (!error.empty()) {
+                    throw std::runtime_error(
+                        "failed to record position prefab override: " + error);
+                }
+            }
         } catch (const std::exception& error) {
             if (state != nullptr) {
                 if (state->entity().valid()) {

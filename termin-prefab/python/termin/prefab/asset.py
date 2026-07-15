@@ -4,31 +4,13 @@ from __future__ import annotations
 
 import uuid as uuid_module
 from pathlib import Path
-from typing import Any, Protocol, TYPE_CHECKING, cast
-
-import numpy as np
+from typing import TYPE_CHECKING
 
 from tcbase import log
-from termin_assets import DataAsset, get_resource_manager
+from termin_assets import DataAsset
 
 if TYPE_CHECKING:
     from termin.scene import Entity, GeneralTransform3, TcScene
-
-
-class PrefabResourceManager(Protocol):
-    """Resource-manager surface needed by prefab runtime resolution."""
-
-    def get_material_by_uuid(self, uuid: str) -> Any:
-        ...
-
-    def get_mesh_by_uuid(self, uuid: str) -> Any:
-        ...
-
-    def get_skeleton_by_uuid(self, uuid: str) -> Any:
-        ...
-
-    def get_asset_by_uuid(self, uuid: str) -> Any:
-        ...
 
 
 class PrefabAsset(DataAsset[dict]):
@@ -110,75 +92,48 @@ class PrefabAsset(DataAsset[dict]):
 
     def _update_all_instances(self) -> None:
         """Update all instances of this prefab."""
-        from termin.prefab._prefab_native import PrefabInstanceState, find_live_instances
+        from termin.prefab._prefab_native import find_live_instances
         from termin.prefab.persistence import document_from_data
 
         if self._data is None:
             log.error(f"[PrefabAsset] Cannot update instances of unloaded prefab '{self.name}'")
             return
 
-        source_revision = document_from_data(self._data).source_revision
+        document = document_from_data(self._data)
         instances = find_live_instances(self.uuid)
         for entity in instances:
             if entity.valid():
-                self.apply_to_instance(entity)
-                state = entity.get_component(PrefabInstanceState)
-                if state is not None:
-                    state.source_revision = source_revision
+                self._reconcile_instance(entity, document)
 
-    def apply_to_instance(self, entity: "Entity") -> None:
-        """Apply prefab data to an instance, preserving overrides."""
-        from termin.prefab.property_path import PropertyPath, PropertyPathError
+    def apply_to_instance(self, entity: "Entity"):
+        """Reconcile source-owned properties while preserving typed overrides."""
+        from termin.prefab.persistence import document_from_data
 
+        if self._data is None:
+            log.error(f"[PrefabAsset] Cannot reconcile unloaded prefab '{self.name}'")
+            return None
+        return self._reconcile_instance(entity, document_from_data(self._data))
+
+    def _reconcile_instance(self, entity: "Entity", document):
+        """Run the native property reconciler and report every retained failure."""
         from termin.prefab._prefab_native import PrefabInstanceState
 
         state = entity.get_component(PrefabInstanceState)
         if state is None:
-            return
-
-        root_data = self.root_data
-        if root_data is None:
-            return
-
-        for path, value in PropertyPath.iter_from_data(root_data):
-            if path == "name" and entity.name != root_data.get("name"):
-                continue
-
-            try:
-                deserialized = self._deserialize_property_value(path, value)
-                PropertyPath.set_or_raise(entity, path, deserialized)
-            except PropertyPathError:
-                log.warning(f"[PrefabAsset] Cannot apply property path: {path}", exc_info=True)
-
-    def _deserialize_property_value(self, path: str, value: Any) -> Any:
-        """Deserialize a property value for application."""
-        if isinstance(value, dict):
-            if "uuid" in value:
-                return self._resolve_resource_by_uuid(value["uuid"], path)
-            return value
-
-        if isinstance(value, list) and value and all(isinstance(x, (int, float)) for x in value):
-            return np.array(value, dtype=np.float32)
-
-        return value
-
-    def _resolve_resource_by_uuid(self, uuid: str, path: str) -> Any:
-        """Resolve a resource reference by UUID."""
-        resource_manager = get_resource_manager()
-        if resource_manager is None:
-            log.error("[PrefabAsset] Resource manager factory is not configured")
+            log.error(
+                f"[PrefabAsset] Entity '{entity.name}' has no PrefabInstanceState"
+            )
             return None
-        rm = cast(PrefabResourceManager, resource_manager)
 
-        path_lower = path.lower()
-        if "material" in path_lower:
-            return rm.get_material_by_uuid(uuid)
-        if "mesh" in path_lower:
-            return rm.get_mesh_by_uuid(uuid)
-        if "skeleton" in path_lower:
-            return rm.get_skeleton_by_uuid(uuid)
-
-        return rm.get_asset_by_uuid(uuid)
+        result = state.reconcile_properties(document)
+        for failure in result.failures:
+            log.error(
+                "[PrefabAsset] Reconcile failed "
+                f"({failure.phase.name}, {failure.error.name}) for "
+                f"{failure.source_entity_id}/{failure.source_component_id}/"
+                f"{failure.field_path}: {failure.message}"
+            )
+        return result
 
     def _parse_content(self, content: str) -> dict | None:
         """Parse JSON content into prefab data."""
