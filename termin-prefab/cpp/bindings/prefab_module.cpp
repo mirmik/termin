@@ -269,6 +269,28 @@ termin::prefab::PrefabOverrideValue encode_python_override(
     return parse_override_data(envelope);
 }
 
+class PythonBindingResourceResolver final
+    : public termin::prefab::PrefabOverrideResourceResolver {
+public:
+    bool resolve(
+        std::string_view resource_type,
+        std::string_view target_kind,
+        std::string_view uuid,
+        std::string_view display_name,
+        tc::trent& result,
+        std::string& error
+    ) const override {
+        if (resource_type.empty() || target_kind.empty() || uuid.empty()) {
+            error = "resource override identity is incomplete";
+            return false;
+        }
+        result = tc::trent::dict();
+        result.set("uuid", std::string(uuid));
+        if (!display_name.empty()) result.set("name", std::string(display_name));
+        return true;
+    }
+};
+
 } // namespace
 
 NB_MODULE(_prefab_native, m) {
@@ -301,24 +323,25 @@ NB_MODULE(_prefab_native, m) {
             return decode_python_node(nb::cast<nb::dict>(envelope["value"]));
         });
 
-    nb::enum_<termin::prefab::PrefabOverrideRestoreError>(m, "PrefabOverrideRestoreError")
-        .value("NONE", termin::prefab::PrefabOverrideRestoreError::None)
-        .value("INVALID_STATE", termin::prefab::PrefabOverrideRestoreError::InvalidState)
-        .value("INVALID_DOCUMENT", termin::prefab::PrefabOverrideRestoreError::InvalidDocument)
-        .value("DOCUMENT_MISMATCH", termin::prefab::PrefabOverrideRestoreError::DocumentMismatch)
-        .value("OVERRIDE_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::OverrideNotFound)
-        .value("SOURCE_ENTITY_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::SourceEntityNotFound)
-        .value("RUNTIME_ENTITY_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::RuntimeEntityNotFound)
-        .value("SOURCE_COMPONENT_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::SourceComponentNotFound)
-        .value("RUNTIME_COMPONENT_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::RuntimeComponentNotFound)
-        .value("COMPONENT_OWNER_MISMATCH", termin::prefab::PrefabOverrideRestoreError::ComponentOwnerMismatch)
-        .value("COMPONENT_TYPE_MISMATCH", termin::prefab::PrefabOverrideRestoreError::ComponentTypeMismatch)
-        .value("FIELD_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::FieldNotFound)
-        .value("FIELD_NOT_SERIALIZABLE", termin::prefab::PrefabOverrideRestoreError::FieldNotSerializable)
-        .value("KIND_MISMATCH", termin::prefab::PrefabOverrideRestoreError::KindMismatch)
-        .value("INVALID_SOURCE_VALUE", termin::prefab::PrefabOverrideRestoreError::InvalidSourceValue)
-        .value("RESOURCE_RESOLUTION_FAILED", termin::prefab::PrefabOverrideRestoreError::ResourceResolutionFailed)
-        .value("SETTER_FAILED", termin::prefab::PrefabOverrideRestoreError::SetterFailed);
+    nb::enum_<termin::prefab::PrefabPropertyApplyError>(m, "PrefabPropertyApplyError")
+        .value("NONE", termin::prefab::PrefabPropertyApplyError::None)
+        .value("INVALID_STATE", termin::prefab::PrefabPropertyApplyError::InvalidState)
+        .value("INVALID_DOCUMENT", termin::prefab::PrefabPropertyApplyError::InvalidDocument)
+        .value("DOCUMENT_MISMATCH", termin::prefab::PrefabPropertyApplyError::DocumentMismatch)
+        .value("OVERRIDE_NOT_FOUND", termin::prefab::PrefabPropertyApplyError::OverrideNotFound)
+        .value("SOURCE_ENTITY_NOT_FOUND", termin::prefab::PrefabPropertyApplyError::SourceEntityNotFound)
+        .value("RUNTIME_ENTITY_NOT_FOUND", termin::prefab::PrefabPropertyApplyError::RuntimeEntityNotFound)
+        .value("SOURCE_COMPONENT_NOT_FOUND", termin::prefab::PrefabPropertyApplyError::SourceComponentNotFound)
+        .value("RUNTIME_COMPONENT_NOT_FOUND", termin::prefab::PrefabPropertyApplyError::RuntimeComponentNotFound)
+        .value("COMPONENT_OWNER_MISMATCH", termin::prefab::PrefabPropertyApplyError::ComponentOwnerMismatch)
+        .value("COMPONENT_TYPE_MISMATCH", termin::prefab::PrefabPropertyApplyError::ComponentTypeMismatch)
+        .value("FIELD_NOT_FOUND", termin::prefab::PrefabPropertyApplyError::FieldNotFound)
+        .value("FIELD_NOT_SERIALIZABLE", termin::prefab::PrefabPropertyApplyError::FieldNotSerializable)
+        .value("KIND_MISMATCH", termin::prefab::PrefabPropertyApplyError::KindMismatch)
+        .value("INVALID_SOURCE_VALUE", termin::prefab::PrefabPropertyApplyError::InvalidSourceValue)
+        .value("RESOURCE_RESOLUTION_FAILED", termin::prefab::PrefabPropertyApplyError::ResourceResolutionFailed)
+        .value("SETTER_FAILED", termin::prefab::PrefabPropertyApplyError::SetterFailed);
+    m.attr("PrefabOverrideRestoreError") = m.attr("PrefabPropertyApplyError");
 
     nb::class_<termin::prefab::PrefabOverrideRestoreFailure>(m, "PrefabOverrideRestoreFailure")
         .def_ro("error", &termin::prefab::PrefabOverrideRestoreFailure::error)
@@ -332,6 +355,31 @@ NB_MODULE(_prefab_native, m) {
         .def_ro("requested_count", &termin::prefab::PrefabOverrideRestoreResult::requested_count)
         .def_ro("restored_count", &termin::prefab::PrefabOverrideRestoreResult::restored_count)
         .def_ro("failures", &termin::prefab::PrefabOverrideRestoreResult::failures);
+
+    nb::enum_<termin::prefab::PrefabReconcilePhase>(m, "PrefabReconcilePhase")
+        .value("VALIDATION", termin::prefab::PrefabReconcilePhase::Validation)
+        .value("STRUCTURE", termin::prefab::PrefabReconcilePhase::Structure)
+        .value("SOURCE_VALUE", termin::prefab::PrefabReconcilePhase::SourceValue)
+        .value("OVERRIDE_VALUE", termin::prefab::PrefabReconcilePhase::OverrideValue);
+
+    nb::class_<termin::prefab::PrefabReconcileFailure>(m, "PrefabReconcileFailure")
+        .def_ro("phase", &termin::prefab::PrefabReconcileFailure::phase)
+        .def_ro("error", &termin::prefab::PrefabReconcileFailure::error)
+        .def_ro("source_entity_id", &termin::prefab::PrefabReconcileFailure::source_entity_id)
+        .def_ro("source_component_id", &termin::prefab::PrefabReconcileFailure::source_component_id)
+        .def_ro("field_path", &termin::prefab::PrefabReconcileFailure::field_path)
+        .def_ro("message", &termin::prefab::PrefabReconcileFailure::message);
+
+    nb::class_<termin::prefab::PrefabReconcileResult>(m, "PrefabReconcileResult")
+        .def_prop_ro("ok", &termin::prefab::PrefabReconcileResult::ok)
+        .def_ro("source_field_count", &termin::prefab::PrefabReconcileResult::source_field_count)
+        .def_ro("source_fields_applied", &termin::prefab::PrefabReconcileResult::source_fields_applied)
+        .def_ro("override_count", &termin::prefab::PrefabReconcileResult::override_count)
+        .def_ro("overrides_applied", &termin::prefab::PrefabReconcileResult::overrides_applied)
+        .def_ro("revision_updated", &termin::prefab::PrefabReconcileResult::revision_updated)
+        .def_ro("previous_revision", &termin::prefab::PrefabReconcileResult::previous_revision)
+        .def_ro("target_revision", &termin::prefab::PrefabReconcileResult::target_revision)
+        .def_ro("failures", &termin::prefab::PrefabReconcileResult::failures);
 
     nb::class_<termin::prefab::PrefabInstanceState, termin::CxxComponent>(
         m,
@@ -428,6 +476,15 @@ NB_MODULE(_prefab_native, m) {
             nb::arg("source_entity_id"),
             nb::arg("source_component_id"),
             nb::arg("field_path")
+        )
+        .def(
+            "reconcile_properties",
+            [](termin::prefab::PrefabInstanceState& self,
+               const termin::prefab::PrefabDocument& source) {
+                const PythonBindingResourceResolver resource_resolver;
+                return self.reconcile_properties(source, &resource_resolver);
+            },
+            nb::arg("source")
         )
         .def(
             "clear_all_property_overrides",

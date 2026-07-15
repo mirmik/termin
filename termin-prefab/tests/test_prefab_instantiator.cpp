@@ -54,6 +54,29 @@ public:
     TestResourceHandle resource;
 };
 
+class TestOverrideResourceResolver final
+    : public termin::prefab::PrefabOverrideResourceResolver {
+public:
+    bool resolve(
+        std::string_view resource_type,
+        std::string_view target_kind,
+        std::string_view uuid,
+        std::string_view display_name,
+        tc::trent& result,
+        std::string& error
+    ) const override {
+        if (resource_type != "test" || target_kind != "test_resource" ||
+            uuid != "resource-local") {
+            error = "test resource override does not resolve";
+            return false;
+        }
+        result = tc::trent::dict();
+        result.set("uuid", std::string(uuid));
+        result.set("name", std::string(display_name));
+        return true;
+    }
+};
+
 static termin::ComponentRegistrar<PrefabRefProbe>
     prefab_ref_probe_registrar("PrefabRefProbe", "CxxComponent");
 
@@ -337,6 +360,194 @@ int main() {
                 "clear-one should use the current document even when its revision is newer");
     TEST_ASSERT(document_state->source_revision() == original_revision,
                 "clear-one against a newer document should not rewrite instance revision");
+
+    termin::prefab::PrefabInstantiateResult reconcile_instance =
+        termin::prefab::PrefabInstantiator::instantiate(
+            parsed_document.document, scene.handle(), parent);
+    TEST_ASSERT(reconcile_instance.ok(), "property reconcile fixture should instantiate");
+    auto* reconcile_state = reconcile_instance.root.get_component<
+        termin::prefab::PrefabInstanceState>();
+    auto* reconcile_probe = reconcile_instance.root.get_component<PrefabRefProbe>();
+    TEST_ASSERT(reconcile_state != nullptr && reconcile_probe != nullptr,
+                "property reconcile fixture should expose state and source component");
+    termin::Entity reconcile_local = reconcile_instance.root.create_child("ReconcileLocal");
+    reconcile_instance.root.set_name("stale-name");
+    reconcile_probe->weight = 42.5;
+    reconcile_probe->labels = {"stale"};
+    std::string reconcile_override_error;
+    auto reconcile_override_value = termin::prefab::PrefabOverrideValue::parse_json(
+        R"({"schema":"termin.prefab.override-value","version":1,"value":{"tag":"float64","value":"42.5"}})",
+        reconcile_override_error);
+    TEST_ASSERT(reconcile_override_value.has_value(),
+                "reconcile typed override fixture should parse");
+    termin::prefab::PrefabPropertyOverride reconcile_override;
+    reconcile_override.source_entity_id = "prefab-source-root";
+    reconcile_override.source_component_id = "prefab-source-probe-component";
+    reconcile_override.field_path = "weight";
+    reconcile_override.target_kind = "double";
+    reconcile_override.value = std::move(*reconcile_override_value);
+    TEST_ASSERT(reconcile_state->set_property_override(
+                    std::move(reconcile_override), reconcile_override_error),
+                "reconcile typed override should be stored");
+    auto reconcile_resource_value = termin::prefab::PrefabOverrideValue::parse_json(
+        R"({"schema":"termin.prefab.override-value","version":1,"value":{"tag":"resource","resource_type":"test","kind":"test_resource","uuid":"resource-local","name":"Local Resource"}})",
+        reconcile_override_error);
+    TEST_ASSERT(reconcile_resource_value.has_value(),
+                "reconcile resource override fixture should parse");
+    termin::prefab::PrefabPropertyOverride reconcile_resource_override;
+    reconcile_resource_override.source_entity_id = "prefab-source-root";
+    reconcile_resource_override.source_component_id = "prefab-source-probe-component";
+    reconcile_resource_override.field_path = "resource";
+    reconcile_resource_override.target_kind = "test_resource";
+    reconcile_resource_override.value = std::move(*reconcile_resource_value);
+    reconcile_probe->resource = TestResourceHandle::from_uuid("resource-local");
+    TEST_ASSERT(reconcile_state->set_property_override(
+                    std::move(reconcile_resource_override), reconcile_override_error),
+                "reconcile resource override should be stored");
+    auto reconcile_layer_value = termin::prefab::PrefabOverrideValue::parse_json(
+        R"({"schema":"termin.prefab.override-value","version":1,"value":{"tag":"uint64","value":"18446744073709551615"}})",
+        reconcile_override_error);
+    TEST_ASSERT(reconcile_layer_value.has_value(),
+                "reconcile uint64 override fixture should parse");
+    termin::prefab::PrefabPropertyOverride reconcile_layer_override;
+    reconcile_layer_override.source_entity_id = "prefab-source-root";
+    reconcile_layer_override.field_path = "layer";
+    reconcile_layer_override.target_kind = "uint64";
+    reconcile_layer_override.value = std::move(*reconcile_layer_value);
+    reconcile_instance.root.set_layer(std::numeric_limits<uint64_t>::max());
+    TEST_ASSERT(reconcile_state->set_property_override(
+                    std::move(reconcile_layer_override), reconcile_override_error),
+                "reconcile uint64 override should be stored");
+    const TestOverrideResourceResolver reconcile_resource_resolver;
+
+    nos::trent refreshed_data = document_data;
+    refreshed_data["root"]["name"] = "RefreshedRoot";
+    refreshed_data["root"]["components"].as_list()[0]["data"]["weight"] = 7.25;
+    refreshed_data["root"]["components"].as_list()[0]["data"]["labels"].as_list().clear();
+    refreshed_data["root"]["components"].as_list()[0]["data"]["labels"].push_back("fresh");
+    termin::prefab::PrefabDocumentResult refreshed_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(refreshed_data));
+    TEST_ASSERT(refreshed_document.ok(), "refreshed reconcile document should parse");
+    const std::string revision_before_resource_failure = reconcile_state->source_revision();
+    termin::prefab::PrefabReconcileResult unresolved_override_reconcile =
+        reconcile_state->reconcile_properties(refreshed_document.document);
+    TEST_ASSERT(!unresolved_override_reconcile.ok() &&
+                    !unresolved_override_reconcile.revision_updated &&
+                    unresolved_override_reconcile.failures.size() == 1 &&
+                    unresolved_override_reconcile.failures[0].phase ==
+                        termin::prefab::PrefabReconcilePhase::OverrideValue &&
+                    unresolved_override_reconcile.failures[0].error ==
+                        termin::prefab::PrefabPropertyApplyError::ResourceResolutionFailed &&
+                    reconcile_state->source_revision() == revision_before_resource_failure &&
+                    reconcile_state->property_override_count() == 3 &&
+                    reconcile_probe->resource ==
+                        TestResourceHandle::from_uuid("resource-local"),
+                "missing explicit resource resolver should retain live value, metadata, and revision");
+    termin::prefab::PrefabReconcileResult reconcile_result =
+        reconcile_state->reconcile_properties(
+            refreshed_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(reconcile_result.ok() && reconcile_result.revision_updated,
+                "complete property reconcile should advance the source revision");
+    TEST_ASSERT(reconcile_result.override_count == 3 &&
+                    reconcile_result.overrides_applied == 3 &&
+                    reconcile_state->property_override_count() == 3,
+                "reconcile should reapply and retain typed override metadata");
+    TEST_ASSERT(std::string(reconcile_instance.root.name()) == "RefreshedRoot" &&
+                    reconcile_probe->weight == 42.5 &&
+                    reconcile_probe->resource ==
+                        TestResourceHandle::from_uuid("resource-local") &&
+                    reconcile_instance.root.layer() ==
+                        std::numeric_limits<uint64_t>::max() &&
+                    reconcile_probe->labels == std::vector<std::string>({"fresh"}),
+                "source values should refresh while the exact override wins");
+    TEST_ASSERT(reconcile_local.valid() &&
+                    reconcile_instance.root.find_child("ReconcileLocal") == reconcile_local,
+                "property reconcile should preserve unrelated local structure");
+    TEST_ASSERT(reconcile_state->source_revision() ==
+                    refreshed_document.document.source_revision(),
+                "successful reconcile should publish the exact target revision");
+
+    nos::trent broken_refresh_data = refreshed_data;
+    broken_refresh_data["root"]["components"].as_list()[0]["data"]["unknown_field"] = 1;
+    broken_refresh_data["root"]["visible"] = false;
+    termin::prefab::PrefabDocumentResult broken_refresh_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(broken_refresh_data));
+    TEST_ASSERT(broken_refresh_document.ok(), "field drift fixture should parse");
+    const std::string completed_revision = reconcile_state->source_revision();
+    termin::prefab::PrefabReconcileResult broken_reconcile =
+        reconcile_state->reconcile_properties(
+            broken_refresh_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(!broken_reconcile.ok() && !broken_reconcile.revision_updated &&
+                    reconcile_state->source_revision() == completed_revision,
+                "partial property reconciliation must retain the previous revision");
+    TEST_ASSERT(!reconcile_instance.root.visible(),
+                "independent source fields should still apply during best-effort reconciliation");
+    TEST_ASSERT(broken_reconcile.failures.size() == 1 &&
+                    broken_reconcile.failures[0].phase ==
+                        termin::prefab::PrefabReconcilePhase::SourceValue &&
+                    broken_reconcile.failures[0].field_path == "unknown_field",
+                "field drift should produce one deterministic source diagnostic");
+    TEST_ASSERT(reconcile_state->property_override_count() == 3 &&
+                    reconcile_probe->weight == 42.5,
+                "partial reconcile should retain and reapply stored overrides");
+
+    nos::trent structural_refresh_data = refreshed_data;
+    nos::trent added_source_child;
+    added_source_child["uuid"] = "prefab-source-added-later";
+    added_source_child["name"] = "AddedLater";
+    added_source_child["components"].init(nos::trent::type::list);
+    added_source_child["children"].init(nos::trent::type::list);
+    structural_refresh_data["root"]["children"].push_back(
+        std::move(added_source_child));
+    termin::prefab::PrefabDocumentResult structural_refresh_document =
+        termin::prefab::PrefabDocument::parse_json(
+            nos::json::dump(structural_refresh_data));
+    TEST_ASSERT(structural_refresh_document.ok(), "source addition fixture should parse");
+    termin::prefab::PrefabReconcileResult structural_reconcile =
+        reconcile_state->reconcile_properties(
+            structural_refresh_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(!structural_reconcile.ok() && !structural_reconcile.revision_updated &&
+                    structural_reconcile.failures.size() == 1 &&
+                    structural_reconcile.failures[0].phase ==
+                        termin::prefab::PrefabReconcilePhase::Structure &&
+                    structural_reconcile.failures[0].source_entity_id ==
+                        "prefab-source-added-later",
+                "source additions should produce one stable structural diagnostic");
+    TEST_ASSERT(!reconcile_instance.root.find_child("AddedLater").valid() &&
+                    reconcile_instance.root.find_child("ReconcileLocal") == reconcile_local,
+                "property reconciliation must neither create source structure nor disturb local structure");
+    termin::prefab::PrefabReconcileResult repaired_reconcile =
+        reconcile_state->reconcile_properties(
+            refreshed_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(repaired_reconcile.ok() && repaired_reconcile.revision_updated &&
+                    reconcile_state->source_revision() ==
+                        refreshed_document.document.source_revision(),
+                "retry after removing the conflicting source drift should complete normally");
+
+    termin::prefab::PrefabInstantiateOptions customized_options;
+    customized_options.root_name = "CustomizedRoot";
+    customized_options.has_position = true;
+    customized_options.position[0] = 10.0;
+    customized_options.position[1] = 11.0;
+    customized_options.position[2] = 12.0;
+    termin::prefab::PrefabInstantiateResult customized_instance =
+        termin::prefab::PrefabInstantiator::instantiate(
+            parsed_document.document, scene.handle(), parent, customized_options);
+    TEST_ASSERT(customized_instance.ok(), "customized prefab instance should instantiate");
+    auto* customized_state = customized_instance.root.get_component<
+        termin::prefab::PrefabInstanceState>();
+    TEST_ASSERT(customized_state != nullptr &&
+                    customized_state->property_override_count() == 2,
+                "canonical instantiation options should publish typed overrides");
+    termin::prefab::PrefabReconcileResult customized_reconcile =
+        customized_state->reconcile_properties(refreshed_document.document);
+    double customized_position[3] = {};
+    customized_instance.root.get_local_position(customized_position);
+    TEST_ASSERT(customized_reconcile.ok() && customized_reconcile.revision_updated &&
+                    std::string(customized_instance.root.name()) == "CustomizedRoot" &&
+                    customized_position[0] == 10.0 && customized_position[1] == 11.0 &&
+                    customized_position[2] == 12.0,
+                "reconcile should preserve explicit root name and position options as overrides");
 
     nos::trent missing_resource_data = document_data;
     missing_resource_data["root"]["components"].as_list()[0]
@@ -676,7 +887,7 @@ int main() {
                     "scene teardown should invalidate every previously returned handle");
     }
     TEST_ASSERT(
-        termin::prefab::count_live_prefab_instances("prefab-document-asset") == 6,
+        termin::prefab::count_live_prefab_instances("prefab-document-asset") == 8,
         "all-scenes query should retain only instances in still-live scenes"
     );
 

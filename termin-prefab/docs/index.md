@@ -18,13 +18,27 @@ The package contains:
 - checked native override clearing against the current `PrefabDocument`.
   Successful fields are restored before metadata is erased; failed batch
   entries remain present with structured diagnostics.
+- native property reconciliation for existing instances. It audits mapped
+  structure without mutating it, refreshes non-overridden source fields,
+  reapplies and retains typed overrides, and advances the source revision only
+  after a completely successful pass. `PrefabAsset` hot reload is a thin caller
+  of this native transaction.
 - `termin.prefab.property_path.PropertyPath` for prefab override paths.
 
 Current boundary note: `Entity` is imported from `termin.scene`. Resource
-reference capture in Python uses registered inspect-kind serializers. Applying
-a tagged resource `PrefabOverrideValue` directly requires an explicit
-`PrefabOverrideResourceResolver`. Restoring a source value during clear uses
-the registered native handle kind and rejects unresolved non-empty UUIDs;
+reference capture in Python uses registered inspect-kind serializers. Native
+callers applying a tagged resource `PrefabOverrideValue` supply an explicit
+`PrefabOverrideResourceResolver`; the Python binding supplies a canonical
+UUID-payload adapter and leaves actual resolution to the registered target
+kind. Restoring a source value during clear uses the registered native handle
+kind and rejects unresolved non-empty UUIDs;
 UUID names are diagnostic only and are never a lookup fallback. The application
 `ResourceManager` still provides concrete editor-side lookup methods until
 those facades move to a non-editor package.
+
+Property reconciliation is intentionally not full structural reconciliation.
+Source additions/removals, owner/type/parent drift and missing runtime targets
+are diagnosed deterministically and leave the previous revision in place;
+entities and components are not created, deleted, reordered or reparented.
+Local entities/components absent from the source mapping are unrelated local
+structure and are preserved.

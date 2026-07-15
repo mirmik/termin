@@ -231,11 +231,28 @@ Instantiation is one native transaction:
 6. Apply instance overrides, if loading saved instance state.
 7. Publish the instance record only after the hierarchy is complete.
 
-Reconciliation compares source revisions by stable source-local identity. It
-updates source-owned values, creates/removes/reorders source-owned structure and
-preserves explicit local overrides. Unsupported structural conflicts produce a
-diagnostic and remain represented in instance state; they are not silently
-dropped.
+Property reconciliation compares the current document with the instance by
+stable source-local identity. It updates source-owned values, skips keys with
+explicit overrides, and then reapplies every stored typed override. It audits
+source additions/removals, missing or duplicate runtime targets, owner/type and
+parent drift, but deliberately does not create, remove, reparent or reorder
+structure. Those conflicts produce stable diagnostics and prevent revision
+advancement; unrelated local structure is ignored and preserved. Full
+structural reconciliation remains a later layer over this property transaction.
+
+The operation is deterministic best effort. A global document/asset/state
+preflight happens before mutation. Independent source and override fields then
+run in property-key order through checked native setters. Failed override
+records remain untouched, successful override records also remain because they
+continue to define instance intent. The instance revision advances to the
+document revision only when structural audit, every planned source field and
+every override all succeed. Explicit reconciliation is not skipped merely
+because revisions already match, so it can repair accidental live drift.
+
+Canonical instantiation options such as an explicit root name and position are
+recorded immediately as typed overrides. They therefore obey the same rules as
+later editor changes instead of relying on a special-case exclusion during
+refresh.
 
 Clearing a property override is itself a narrow reconciliation operation. The
 caller supplies the current `PrefabDocument`; the runtime resolves the source
@@ -345,6 +362,15 @@ The first native execution slice is in place:
   live value. Entity source references are remapped to the concrete instance;
   scalar/container/reference/resource, malformed source and mixed batch tests
   run in the Python-disabled native target.
+- native property reconciliation now performs global preflight, a non-mutating
+  structural audit, a source-value pass that skips exact override keys, and a
+  typed override pass. Failures are returned in stable phase/key order and keep
+  the previous source revision; a complete pass advances it. Explicit root
+  name/position instantiation options are published as ordinary typed
+  overrides;
+- `PrefabAsset` hot reload now calls this native transaction for each live
+  instance. The old Python `PropertyPath` traversal, resource-name heuristics
+  and unconditional revision assignment are no longer part of refresh.
 
 The remaining violations and gaps are:
 
@@ -356,9 +382,11 @@ The remaining violations and gaps are:
 - `termin-runtime` itself is already a native, Python-free library and is the
   correct packaged-project loading boundary, but it does not yet load prefab
   resources;
-- applying stored override values and full structural reconciliation are not
-  implemented yet. Checked inspect setters and source-value restoration are in
-  place; full refresh still needs value application plus structural diff.
+- full structural reconciliation is not implemented yet. The current native
+  transaction diagnoses additions, removals, missing targets, parent/owner and
+  component-type drift without changing structure. Editor mutation capture is
+  also still separate; once an override is recorded, refresh semantics are
+  native and complete at property level.
 
 `termin_player` requiring and packaging Python is intentional for its role as
 an editor-adjacent development/source host and is not a violation of this
@@ -382,9 +410,9 @@ link against Python.
 5. Add native prefab resources to runtime-package export, validation and
    `termin-runtime` loading.
 6. Add native reconciliation and editor override capture, then retire the old
-   Python implementation and schemas. **The versioned value codec and native
-   property-override storage are done; checked apply, structural diff and editor
-   mutation capture remain.**
+   Python implementation and schemas. **The versioned value codec, native
+   property-override storage and property-level source/override reconciliation
+   are done. Structural mutation and editor mutation capture remain.**
 
 The first four steps establish correctness. The last two close the runtime
 boundary and make prefab behavior independent of whether a particular host

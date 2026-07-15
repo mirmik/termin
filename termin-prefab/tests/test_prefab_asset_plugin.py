@@ -146,6 +146,8 @@ def test_prefab_hot_reload_reaches_only_live_native_instances() -> None:
         from termin.inspect import InspectField
         from termin.prefab import (
             PrefabInstanceState,
+            PrefabOverrideValue,
+            PrefabReconcilePhase,
             count_live_instances,
             find_live_instances,
         )
@@ -199,6 +201,45 @@ def test_prefab_hot_reload_reaches_only_live_native_instances() -> None:
         expected_revision = document_from_data(updated_data).source_revision
         assert first.get_component(PrefabInstanceState).source_revision == expected_revision
         assert second.get_component(PrefabInstanceState).source_revision == expected_revision
+
+        first_state = first.get_component(PrefabInstanceState)
+        first_probe = first.get_python_component("PrefabHotReloadProbe")
+        first_probe.value = 42
+        first_state.set_property_override(
+            updated_data["root"]["uuid"],
+            updated_data["root"]["components"][0]["source_id"],
+            "value",
+            "int",
+            PrefabOverrideValue.from_python(42, kind="int"),
+        )
+        overridden_data = copy.deepcopy(updated_data)
+        overridden_data["root"]["components"][0]["data"]["value"] = 11
+        overridden = PrefabAsset(
+            data=overridden_data,
+            name="HotReload",
+            uuid=asset.uuid,
+        )
+        overridden_result = overridden.apply_to_instance(first)
+        assert overridden_result.ok
+        assert overridden_result.revision_updated
+        assert overridden_result.override_count == 1
+        assert overridden_result.overrides_applied == 1
+        assert first_probe.value == 42
+        assert first_state.property_override_count == 1
+
+        broken_data = copy.deepcopy(overridden_data)
+        broken_data["root"]["components"][0]["data"]["unknown_field"] = 5
+        broken = PrefabAsset(data=broken_data, name="HotReload", uuid=asset.uuid)
+        completed_revision = first_state.source_revision
+        broken_result = broken.apply_to_instance(first)
+        assert not broken_result.ok
+        assert not broken_result.revision_updated
+        assert first_state.source_revision == completed_revision
+        assert len(broken_result.failures) == 1
+        assert broken_result.failures[0].phase == PrefabReconcilePhase.SOURCE_VALUE
+        assert broken_result.failures[0].field_path == "unknown_field"
+        assert first_state.property_override_count == 1
+        assert first_probe.value == 42
 
         first_scene.destroy()
         assert count_live_instances(asset.uuid) == 1
