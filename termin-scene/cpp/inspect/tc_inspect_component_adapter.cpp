@@ -52,15 +52,36 @@ tc_value tc_component_inspect_get(tc_component* c, const char* path) {
 }
 
 void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, void* context) {
-    if (!c || !path) return;
+    (void)tc_component_inspect_set_checked(c, path, value, context);
+}
+
+bool tc_component_inspect_set_checked(tc_component* c, const char* path, tc_value value, void* context) {
+    if (!c || !path) return false;
 
     const char* type_name = tc_component_type_name(c);
-    if (!type_name) return;
+    if (!type_name) return false;
 
     void* obj = get_inspect_object(c);
-    if (!obj) return;
+    if (!obj) return false;
 
-    tc_inspect_set(obj, type_name, path, value, context);
+    return tc_inspect_set_checked(obj, type_name, path, value, context);
+}
+
+tc_inspect_apply_result tc_component_inspect_deserialize_checked(
+    tc_component* c, const tc_value* data, void* context
+) {
+    tc_inspect_apply_result invalid = {
+        TC_INSPECT_APPLY_INVALID_ARGUMENT, 0, nullptr
+    };
+    if (!c || !data) return invalid;
+
+    const char* type_name = tc_component_type_name(c);
+    if (!type_name) return invalid;
+
+    void* obj = get_inspect_object(c);
+    if (!obj) return invalid;
+
+    return tc_inspect_deserialize_checked(obj, type_name, data, context);
 }
 
 void tc_component_set_field_vec3(tc_component* c, const char* path, tc_vec3 value, void* context) {

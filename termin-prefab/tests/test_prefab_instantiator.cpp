@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include <inspect/tc_inspect_context.h>
 #include <inspect/tc_inspect_init.h>
@@ -22,24 +23,35 @@
 
 namespace {
 
+class TestResourceHandle {
+public:
+    TestResourceHandle() = default;
+    explicit TestResourceHandle(std::string uuid) : _uuid(std::move(uuid)) {}
+
+    static TestResourceHandle from_uuid(const std::string& uuid) {
+        if (uuid == "resource-source" || uuid == "resource-local") {
+            return TestResourceHandle(uuid);
+        }
+        return TestResourceHandle();
+    }
+
+    bool is_valid() const { return !_uuid.empty(); }
+    const char* uuid() const { return _uuid.c_str(); }
+    const char* name() const { return _uuid.c_str(); }
+    bool operator==(const TestResourceHandle&) const = default;
+
+private:
+    std::string _uuid;
+};
+
 class PrefabRefProbe : public termin::CxxComponent {
 public:
     PrefabRefProbe() : termin::CxxComponent("PrefabRefProbe") {}
 
     termin::Entity target;
-
-    tc_value serialize_data() const override {
-        tc_value data = tc_value_dict_new();
-        tc_value_dict_set(&data, "target", target.serialize_to_value());
-        return data;
-    }
-
-    void deserialize_data(const tc_value* data, tc_scene_handle scene) override {
-        if (data == nullptr || data->type != TC_VALUE_DICT) return;
-        tc_value* target_data = tc_value_dict_get(const_cast<tc_value*>(data), "target");
-        tc_scene_inspect_context context = tc_scene_inspect_context_make(scene);
-        target.deserialize_from(target_data, &context);
-    }
+    double weight = 0.0;
+    std::vector<std::string> labels;
+    TestResourceHandle resource;
 };
 
 static termin::ComponentRegistrar<PrefabRefProbe>
@@ -47,6 +59,7 @@ static termin::ComponentRegistrar<PrefabRefProbe>
 
 void register_inspect() {
     tc::register_cpp_handle_kind<termin::Entity>("entity");
+    tc::register_cpp_handle_kind<TestResourceHandle>("test_resource");
     tc::InspectRegistry::instance().add_handle(
         "PrefabRefProbe",
         &PrefabRefProbe::target,
@@ -54,18 +67,53 @@ void register_inspect() {
         "Target",
         "entity"
     );
+    tc::InspectRegistry::instance().add<PrefabRefProbe, double>(
+        "PrefabRefProbe", &PrefabRefProbe::weight, "weight", "Weight", "double"
+    );
+    tc::InspectRegistry::instance().add<PrefabRefProbe, std::vector<std::string>>(
+        "PrefabRefProbe", &PrefabRefProbe::labels, "labels", "Labels", "list[string]"
+    );
+    tc::InspectRegistry::instance().add<PrefabRefProbe, TestResourceHandle>(
+        "PrefabRefProbe", &PrefabRefProbe::resource, "resource", "Resource", "test_resource"
+    );
 }
 
 nos::trent source_hierarchy() {
     nos::trent root;
     root["uuid"] = "prefab-source-root";
     root["name"] = "PrefabRoot";
+    root["priority"] = int64_t{3};
+    root["visible"] = true;
+    root["enabled"] = true;
+    root["pickable"] = true;
+    root["selectable"] = true;
+    root["layer"] = int64_t{1};
+    root["flags"] = int64_t{2};
+    root["pose"]["position"].init(nos::trent::type::list);
+    root["pose"]["position"].push_back(1.0);
+    root["pose"]["position"].push_back(2.0);
+    root["pose"]["position"].push_back(3.0);
+    root["pose"]["rotation"].init(nos::trent::type::list);
+    root["pose"]["rotation"].push_back(0.0);
+    root["pose"]["rotation"].push_back(0.0);
+    root["pose"]["rotation"].push_back(0.0);
+    root["pose"]["rotation"].push_back(1.0);
+    root["scale"].init(nos::trent::type::list);
+    root["scale"].push_back(1.0);
+    root["scale"].push_back(1.0);
+    root["scale"].push_back(1.0);
     root["components"].init(nos::trent::type::list);
 
     nos::trent component;
     component["source_id"] = "prefab-source-probe-component";
     component["type"] = "PrefabRefProbe";
     component["data"]["target"]["uuid"] = "prefab-source-child";
+    component["data"]["weight"] = 2.5;
+    component["data"]["labels"].init(nos::trent::type::list);
+    component["data"]["labels"].push_back("source");
+    component["data"]["labels"].push_back("values");
+    component["data"]["resource"]["uuid"] = "resource-source";
+    component["data"]["resource"]["name"] = "Source Resource";
     root["components"].push_back(std::move(component));
 
     root["children"].init(nos::trent::type::list);
@@ -191,6 +239,179 @@ int main() {
     TEST_ASSERT(document_state->component_owner_for_source(
                     "prefab-source-probe-component") == document_instance.root,
                 "component source mapping should resolve its runtime owner");
+
+    auto record_override = [](
+        termin::prefab::PrefabInstanceState& state,
+        const std::string& source_entity_id,
+        const std::string& source_component_id,
+        const std::string& field_path,
+        const std::string& target_kind
+    ) {
+        std::string error;
+        auto value = termin::prefab::PrefabOverrideValue::parse_json(
+            R"({"schema":"termin.prefab.override-value","version":1,"value":{"tag":"none"}})",
+            error
+        );
+        if (!value) return false;
+        termin::prefab::PrefabPropertyOverride item;
+        item.source_entity_id = source_entity_id;
+        item.source_component_id = source_component_id;
+        item.field_path = field_path;
+        item.target_kind = target_kind;
+        item.value = std::move(*value);
+        return state.set_property_override(std::move(item), error);
+    };
+
+    PrefabRefProbe* document_probe =
+        document_instance.root.get_component<PrefabRefProbe>();
+    termin::Entity document_child = document_instance.root.find_child("Child");
+    TEST_ASSERT(document_probe != nullptr && document_child.valid(),
+                "restore fixture should expose component and mapped child");
+    termin::Entity local_extra = document_instance.root.create_child("LocalExtra");
+    document_instance.root.set_visible(false);
+    document_instance.root.set_name("LocallyRenamed");
+    double local_position[3] = {9.0, 8.0, 7.0};
+    document_instance.root.set_local_position(local_position);
+    document_probe->labels = {"local"};
+    document_probe->target = document_instance.root;
+    document_probe->resource = TestResourceHandle::from_uuid("resource-local");
+    TEST_ASSERT(record_override(*document_state, "prefab-source-root", "", "name", "string") &&
+                record_override(*document_state, "prefab-source-root", "", "transform.position", "vec3") &&
+                record_override(*document_state, "prefab-source-root",
+                                "prefab-source-probe-component", "labels", "list[string]") &&
+                record_override(*document_state, "prefab-source-root",
+                                "prefab-source-probe-component", "target", "entity") &&
+                record_override(*document_state, "prefab-source-root",
+                                "prefab-source-probe-component", "resource", "test_resource") &&
+                record_override(*document_state, "prefab-source-root",
+                                "prefab-source-probe-component", "missing", "double"),
+                "restore fixture overrides should be accepted");
+
+    const std::string original_revision = document_state->source_revision();
+    termin::prefab::PrefabOverrideRestoreResult batch_restore =
+        document_state->clear_all_property_overrides(parsed_document.document);
+    TEST_ASSERT(batch_restore.requested_count == 6 && batch_restore.restored_count == 5,
+                "clear-all should restore every independently resolvable override");
+    TEST_ASSERT(batch_restore.failures.size() == 1 &&
+                    batch_restore.failures[0].error ==
+                        termin::prefab::PrefabOverrideRestoreError::FieldNotFound,
+                "clear-all should retain and diagnose an unresolvable field");
+    TEST_ASSERT(document_state->property_override_count() == 1,
+                "failed clear-all entries should remain visible in native state");
+    TEST_ASSERT(std::string(document_instance.root.name()) == "PrefabRoot",
+                "entity property clear should restore the current source name");
+    double restored_position[3] = {};
+    document_instance.root.get_local_position(restored_position);
+    TEST_ASSERT(restored_position[0] == 1.0 && restored_position[1] == 2.0 &&
+                    restored_position[2] == 3.0,
+                "transform clear should restore the current source position");
+    TEST_ASSERT(document_probe->labels == std::vector<std::string>({"source", "values"}),
+                "container clear should restore the serialized source container");
+    TEST_ASSERT(document_probe->target == document_child,
+                "entity-reference clear should remap source identity into this instance");
+    TEST_ASSERT(document_probe->resource == TestResourceHandle::from_uuid("resource-source"),
+                "resource clear should restore a resolvable native runtime handle");
+    TEST_ASSERT(local_extra.valid() && document_instance.root.find_child("LocalExtra") == local_extra,
+                "field reconciliation should preserve unrelated local structure");
+    TEST_ASSERT(!document_instance.root.visible(),
+                "field reconciliation should preserve unrelated local property changes");
+    TEST_ASSERT(document_state->source_revision() == original_revision,
+                "partial property reconciliation must not claim a fully refreshed revision");
+    document_state->discard_all_property_overrides();
+
+    nos::trent newer_document_data = document_data;
+    newer_document_data["root"]["components"].as_list()[0]["data"]["weight"] = 7.0;
+    termin::prefab::PrefabDocumentResult newer_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(newer_document_data));
+    TEST_ASSERT(newer_document.ok(), "newer source fixture should parse");
+    document_probe->weight = 99.0;
+    TEST_ASSERT(record_override(*document_state, "prefab-source-root",
+                                "prefab-source-probe-component", "weight", "double"),
+                "scalar restore fixture should be accepted");
+    termin::prefab::PrefabOverrideRestoreResult scalar_restore =
+        document_state->clear_property_override(
+            newer_document.document,
+            "prefab-source-root", "prefab-source-probe-component", "weight");
+    TEST_ASSERT(scalar_restore.ok() && scalar_restore.restored_count == 1 &&
+                    document_probe->weight == 7.0,
+                "clear-one should use the current document even when its revision is newer");
+    TEST_ASSERT(document_state->source_revision() == original_revision,
+                "clear-one against a newer document should not rewrite instance revision");
+
+    nos::trent missing_resource_data = document_data;
+    missing_resource_data["root"]["components"].as_list()[0]
+        ["data"]["resource"]["uuid"] = "resource-missing";
+    termin::prefab::PrefabDocumentResult missing_resource_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(missing_resource_data));
+    TEST_ASSERT(missing_resource_document.ok(), "missing resource source fixture should parse");
+    document_probe->resource = TestResourceHandle::from_uuid("resource-local");
+    TEST_ASSERT(record_override(*document_state, "prefab-source-root",
+                                "prefab-source-probe-component", "resource", "test_resource"),
+                "missing resource restore fixture should be accepted");
+    termin::prefab::PrefabOverrideRestoreResult missing_resource_restore =
+        document_state->clear_property_override(
+            missing_resource_document.document,
+            "prefab-source-root", "prefab-source-probe-component", "resource");
+    TEST_ASSERT(!missing_resource_restore.ok() &&
+                    missing_resource_restore.failures[0].error ==
+                        termin::prefab::PrefabOverrideRestoreError::ResourceResolutionFailed &&
+                    document_probe->resource ==
+                        TestResourceHandle::from_uuid("resource-local") &&
+                    document_state->property_override_count() == 1,
+                "unresolved resource UUID should retain both live value and override metadata");
+    document_state->discard_all_property_overrides();
+
+    nos::trent foreign_document_data = document_data;
+    foreign_document_data["uuid"] = "foreign-prefab-document";
+    termin::prefab::PrefabDocumentResult foreign_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(foreign_document_data));
+    document_probe->weight = 101.0;
+    TEST_ASSERT(record_override(*document_state, "prefab-source-root",
+                                "prefab-source-probe-component", "weight", "double"),
+                "asset mismatch fixture should be accepted");
+    termin::prefab::PrefabOverrideRestoreResult mismatch_restore =
+        document_state->clear_property_override(
+            foreign_document.document,
+            "prefab-source-root", "prefab-source-probe-component", "weight");
+    TEST_ASSERT(!mismatch_restore.ok() &&
+                    mismatch_restore.failures[0].error ==
+                        termin::prefab::PrefabOverrideRestoreError::DocumentMismatch &&
+                    document_probe->weight == 101.0 &&
+                    document_state->property_override_count() == 1,
+                "asset mismatch should leave both live value and override metadata intact");
+    document_state->discard_all_property_overrides();
+
+    termin::prefab::PrefabOverrideRestoreResult absent_restore =
+        document_state->clear_property_override(
+            parsed_document.document, "prefab-source-root", "", "name");
+    TEST_ASSERT(!absent_restore.ok() && absent_restore.failures[0].error ==
+                    termin::prefab::PrefabOverrideRestoreError::OverrideNotFound,
+                "clear-one should diagnose a missing override without mutating the instance");
+
+    nos::trent malformed_transform_data = document_data;
+    malformed_transform_data["root"]["pose"]["position"].as_list().pop_back();
+    termin::prefab::PrefabDocumentResult malformed_transform_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(malformed_transform_data));
+    TEST_ASSERT(malformed_transform_document.ok(),
+                "field-level restore should defend against source shapes not rejected by v3 parsing");
+    double malformed_local_position[3] = {4.0, 5.0, 6.0};
+    document_instance.root.set_local_position(malformed_local_position);
+    TEST_ASSERT(record_override(*document_state, "prefab-source-root", "",
+                                "transform.position", "vec3"),
+                "malformed transform restore fixture should be accepted");
+    termin::prefab::PrefabOverrideRestoreResult malformed_transform_restore =
+        document_state->clear_property_override(
+            malformed_transform_document.document,
+            "prefab-source-root", "", "transform.position");
+    document_instance.root.get_local_position(restored_position);
+    TEST_ASSERT(!malformed_transform_restore.ok() &&
+                    malformed_transform_restore.failures[0].error ==
+                        termin::prefab::PrefabOverrideRestoreError::InvalidSourceValue &&
+                    restored_position[0] == 4.0 && restored_position[1] == 5.0 &&
+                    restored_position[2] == 6.0 &&
+                    document_state->property_override_count() == 1,
+                "malformed transform source should preserve live value and override metadata");
+    document_state->discard_all_property_overrides();
 
     const size_t stable_count = scene.entity_count();
     nos::trent malformed = source;

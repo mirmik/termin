@@ -272,7 +272,7 @@ bool PrefabInstanceState::set_property_override(
     return true;
 }
 
-bool PrefabInstanceState::clear_property_override(
+bool PrefabInstanceState::discard_property_override(
     const std::string& source_entity_id,
     const std::string& source_component_id,
     const std::string& field_path
@@ -291,7 +291,7 @@ bool PrefabInstanceState::clear_property_override(
     return true;
 }
 
-void PrefabInstanceState::clear_all_property_overrides() {
+void PrefabInstanceState::discard_all_property_overrides() {
     _property_overrides.clear();
     _invalid_serialized_overrides = tc::trent::nil();
     _overrides_valid = true;
