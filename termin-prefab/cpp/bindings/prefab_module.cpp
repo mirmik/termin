@@ -2,18 +2,304 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
 
+#include <algorithm>
+#include <charconv>
+#include <cmath>
+#include <limits>
+#include <optional>
+
 #include <trent/json.h>
 #include <termin/bindings/entity_helpers.hpp>
 #include <termin/entity/entity.hpp>
 #include <termin/prefab/prefab_document.hpp>
 #include <termin/prefab/prefab_instance_state.hpp>
 #include <termin/prefab/prefab_instantiator.hpp>
+#include <termin/prefab/prefab_override_value.hpp>
 
 namespace nb = nanobind;
+
+namespace {
+
+std::string canonical_float(double value) {
+    if (!std::isfinite(value)) {
+        throw nb::value_error("prefab override floats must be finite");
+    }
+    char buffer[64];
+    auto result = std::to_chars(
+        buffer, buffer + sizeof(buffer), value,
+        std::chars_format::general, std::numeric_limits<double>::max_digits10
+    );
+    if (result.ec != std::errc()) {
+        throw nb::value_error("failed to encode prefab override float");
+    }
+    return std::string(buffer, result.ptr);
+}
+
+nb::dict tagged(const char* tag) {
+    nb::dict result;
+    result["tag"] = tag;
+    return result;
+}
+
+nb::object encode_python_node(nb::object value, size_t depth = 0) {
+    if (depth > 64) {
+        throw nb::value_error("prefab override value exceeds nesting limit");
+    }
+    if (value.is_none()) return tagged("none");
+    if (nb::isinstance<nb::bool_>(value)) {
+        nb::dict result = tagged("bool");
+        result["value"] = value;
+        return result;
+    }
+    if (nb::isinstance<nb::int_>(value)) {
+        int64_t integer = 0;
+        try {
+            integer = nb::cast<int64_t>(value);
+        } catch (const nb::cast_error&) {
+            uint64_t unsigned_integer = 0;
+            try {
+                unsigned_integer = nb::cast<uint64_t>(value);
+            } catch (const nb::cast_error&) {
+                throw nb::value_error("prefab override integer is outside uint64 range");
+            }
+            nb::dict result = tagged("uint64");
+            const std::string encoded = std::to_string(unsigned_integer);
+            result["value"] = nb::str(encoded.c_str());
+            return result;
+        }
+        nb::dict result = tagged("int64");
+        const std::string encoded = std::to_string(integer);
+        result["value"] = nb::str(encoded.c_str());
+        return result;
+    }
+    if (nb::isinstance<nb::float_>(value)) {
+        nb::dict result = tagged("float64");
+        const std::string encoded = canonical_float(nb::cast<double>(value));
+        result["value"] = nb::str(encoded.c_str());
+        return result;
+    }
+    if (nb::isinstance<nb::str>(value)) {
+        nb::dict result = tagged("string");
+        result["value"] = value;
+        return result;
+    }
+    if (nb::isinstance<nb::list>(value) || nb::isinstance<nb::tuple>(value)) {
+        const bool is_tuple = nb::isinstance<nb::tuple>(value);
+        nb::dict result = tagged(is_tuple ? "tuple" : "list");
+        nb::list items;
+        for (nb::handle item : value) {
+            items.append(encode_python_node(nb::borrow<nb::object>(item), depth + 1));
+        }
+        result["items"] = std::move(items);
+        return result;
+    }
+    if (nb::isinstance<nb::dict>(value)) {
+        nb::dict result = tagged("dict");
+        nb::list entries;
+        for (auto item : nb::cast<nb::dict>(value)) {
+            if (!nb::isinstance<nb::str>(item.first)) {
+                throw nb::type_error("prefab override dictionaries require string keys");
+            }
+            nb::dict entry;
+            entry["key"] = nb::borrow<nb::object>(item.first);
+            entry["value"] = encode_python_node(
+                nb::borrow<nb::object>(item.second), depth + 1
+            );
+            entries.append(std::move(entry));
+        }
+        result["entries"] = std::move(entries);
+        return result;
+    }
+
+    nb::module_ numpy = nb::module_::import_("numpy");
+    if (nb::isinstance(value, numpy.attr("ndarray"))) {
+        const std::string dtype = nb::cast<std::string>(value.attr("dtype").attr("name"));
+        static const std::vector<std::string> supported = {
+            "bool", "int8", "int16", "int32", "int64",
+            "uint8", "uint16", "uint32", "uint64", "float32", "float64"
+        };
+        if (std::find(supported.begin(), supported.end(), dtype) == supported.end()) {
+            throw nb::type_error(("unsupported prefab override ndarray dtype '" + dtype + "'").c_str());
+        }
+        nb::dict result = tagged("array");
+        result["dtype"] = nb::str(dtype.c_str());
+        nb::list shape;
+        for (nb::handle dimension : value.attr("shape")) shape.append(dimension);
+        result["shape"] = std::move(shape);
+        nb::list items;
+        nb::object flattened = value.attr("reshape")(-1).attr("tolist")();
+        for (nb::handle item : flattened) {
+            items.append(encode_python_node(nb::borrow<nb::object>(item), depth + 1));
+        }
+        result["items"] = std::move(items);
+        return result;
+    }
+    if (nb::isinstance(value, numpy.attr("generic"))) {
+        return encode_python_node(value.attr("item")(), depth + 1);
+    }
+
+    nb::object inspect = nb::module_::import_("termin.inspect");
+    nb::object registry = inspect.attr("KindRegistry").attr("instance")();
+    const std::string kind = nb::cast<std::string>(registry.attr("kind_for_object")(value));
+    if (!kind.empty()) {
+        nb::object payload = registry.attr("serialize")(kind, value);
+        nb::dict result = tagged("kind");
+        result["kind"] = nb::str(kind.c_str());
+        result["payload"] = encode_python_node(payload, depth + 1);
+        return result;
+    }
+    throw nb::type_error("unsupported Python value for prefab override");
+}
+
+nb::object decode_python_node(nb::dict node) {
+    const std::string tag = nb::cast<std::string>(node["tag"]);
+    if (tag == "none") return nb::none();
+    if (tag == "bool") return nb::borrow<nb::object>(node["value"]);
+    if (tag == "int64") return nb::module_::import_("builtins").attr("int")(node["value"]);
+    if (tag == "uint64") return nb::module_::import_("builtins").attr("int")(node["value"]);
+    if (tag == "float64") return nb::module_::import_("builtins").attr("float")(node["value"]);
+    if (tag == "string") return nb::borrow<nb::object>(node["value"]);
+    if (tag == "list" || tag == "tuple") {
+        nb::list items;
+        for (nb::handle item : nb::cast<nb::list>(node["items"])) {
+            items.append(decode_python_node(nb::cast<nb::dict>(item)));
+        }
+        if (tag == "tuple") return nb::tuple(items);
+        return items;
+    }
+    if (tag == "dict") {
+        nb::dict result;
+        for (nb::handle item : nb::cast<nb::list>(node["entries"])) {
+            nb::dict entry = nb::cast<nb::dict>(item);
+            result[entry["key"]] = decode_python_node(nb::cast<nb::dict>(entry["value"]));
+        }
+        return result;
+    }
+    if (tag == "array") {
+        nb::list items;
+        for (nb::handle item : nb::cast<nb::list>(node["items"])) {
+            items.append(decode_python_node(nb::cast<nb::dict>(item)));
+        }
+        nb::module_ numpy = nb::module_::import_("numpy");
+        nb::object array = numpy.attr("asarray")(items, nb::arg("dtype") = node["dtype"]);
+        return array.attr("reshape")(node["shape"]);
+    }
+    if (tag == "kind") {
+        nb::object registry = nb::module_::import_("termin.inspect")
+            .attr("KindRegistry").attr("instance")();
+        nb::object payload = decode_python_node(nb::cast<nb::dict>(node["payload"]));
+        if (!nb::cast<bool>(registry.attr("has_python")(node["kind"]))) {
+            return payload;
+        }
+        return registry.attr("deserialize")(node["kind"], payload);
+    }
+    if (tag == "resource") {
+        nb::dict payload;
+        payload["uuid"] = node["uuid"];
+        if (node.contains("name")) payload["name"] = node["name"];
+        nb::object registry = nb::module_::import_("termin.inspect")
+            .attr("KindRegistry").attr("instance")();
+        return registry.attr("deserialize")(node["kind"], payload);
+    }
+    throw nb::value_error("unknown prefab override value tag");
+}
+
+termin::prefab::PrefabOverrideValue parse_override_data(nb::object data) {
+    nb::object json = nb::module_::import_("json");
+    const std::string encoded = nb::cast<std::string>(json.attr("dumps")(data));
+    std::string error;
+    auto result = termin::prefab::PrefabOverrideValue::parse_json(encoded, error);
+    if (!result) throw nb::value_error(error.c_str());
+    return std::move(*result);
+}
+
+termin::prefab::PrefabOverrideValue encode_python_override(
+    nb::object value,
+    nb::object explicit_kind,
+    nb::object resource_type
+) {
+    nb::object node;
+    if (!explicit_kind.is_none()) {
+        const std::string kind = nb::cast<std::string>(explicit_kind);
+        if (kind.empty()) throw nb::value_error("override kind must not be empty");
+        nb::object registry = nb::module_::import_("termin.inspect")
+            .attr("KindRegistry").attr("instance")();
+        const bool has_python_kind = nb::cast<bool>(registry.attr("has_python")(kind));
+        nb::object payload = has_python_kind
+            ? registry.attr("serialize")(kind, value)
+            : value;
+        if (!resource_type.is_none()) {
+            if (!has_python_kind) {
+                throw nb::value_error(
+                    "resource override kind requires a registered Python serializer"
+                );
+            }
+            if (!nb::isinstance<nb::dict>(payload)) {
+                throw nb::type_error("resource kind serializer must return a dictionary");
+            }
+            nb::dict serialized = nb::cast<nb::dict>(payload);
+            if (!serialized.contains("uuid") || !nb::isinstance<nb::str>(serialized["uuid"])) {
+                throw nb::value_error("resource override requires a serialized UUID");
+            }
+            nb::dict resource = tagged("resource");
+            resource["resource_type"] = resource_type;
+            resource["kind"] = explicit_kind;
+            resource["uuid"] = serialized["uuid"];
+            if (serialized.contains("name") && nb::isinstance<nb::str>(serialized["name"])) {
+                resource["name"] = serialized["name"];
+            }
+            node = std::move(resource);
+        } else {
+            nb::dict semantic = tagged("kind");
+            semantic["kind"] = explicit_kind;
+            semantic["payload"] = encode_python_node(payload);
+            node = std::move(semantic);
+        }
+    } else {
+        if (!resource_type.is_none()) {
+            throw nb::value_error("resource_type requires an explicit inspect kind");
+        }
+        node = encode_python_node(value);
+    }
+
+    nb::dict envelope;
+    envelope["schema"] = termin::prefab::PrefabOverrideValue::Schema;
+    envelope["version"] = termin::prefab::PrefabOverrideValue::Version;
+    envelope["value"] = node;
+    return parse_override_data(envelope);
+}
+
+} // namespace
 
 NB_MODULE(_prefab_native, m) {
     m.doc() = "Native prefab document instantiation";
     nb::module_::import_("termin.scene._scene_native");
+
+    nb::class_<termin::prefab::PrefabOverrideValue>(m, "PrefabOverrideValue")
+        .def(nb::init<>())
+        .def_static("from_json", [](const std::string& json) {
+            std::string error;
+            auto value = termin::prefab::PrefabOverrideValue::parse_json(json, error);
+            if (!value) throw nb::value_error(error.c_str());
+            return std::move(*value);
+        }, nb::arg("json"))
+        .def_static("from_data", &parse_override_data, nb::arg("data"))
+        .def_static(
+            "from_python", &encode_python_override,
+            nb::arg("value").none(), nb::arg("kind") = nb::none(),
+            nb::arg("resource_type") = nb::none()
+        )
+        .def_prop_ro("tag", &termin::prefab::PrefabOverrideValue::tag)
+        .def("to_json", &termin::prefab::PrefabOverrideValue::to_json, nb::arg("indent") = -1)
+        .def("to_data", [](const termin::prefab::PrefabOverrideValue& value) {
+            return nb::module_::import_("json").attr("loads")(value.to_json());
+        })
+        .def("to_python", [](const termin::prefab::PrefabOverrideValue& value) {
+            nb::dict envelope = nb::cast<nb::dict>(
+                nb::module_::import_("json").attr("loads")(value.to_json())
+            );
+            return decode_python_node(nb::cast<nb::dict>(envelope["value"]));
+        });
 
     nb::class_<termin::prefab::PrefabInstanceState, termin::CxxComponent>(
         m,
@@ -44,6 +330,14 @@ NB_MODULE(_prefab_native, m) {
             "component_mapping_count",
             &termin::prefab::PrefabInstanceState::component_mapping_count
         )
+        .def_prop_ro(
+            "property_override_count",
+            &termin::prefab::PrefabInstanceState::property_override_count
+        )
+        .def_prop_ro(
+            "overrides_valid",
+            &termin::prefab::PrefabInstanceState::overrides_valid
+        )
         .def(
             "entity_for_source",
             &termin::prefab::PrefabInstanceState::entity_for_source,
@@ -53,6 +347,58 @@ NB_MODULE(_prefab_native, m) {
             "component_owner_for_source",
             &termin::prefab::PrefabInstanceState::component_owner_for_source,
             nb::arg("source_id")
+        )
+        .def(
+            "set_property_override",
+            [](termin::prefab::PrefabInstanceState& self,
+               const std::string& source_entity_id,
+               const std::string& source_component_id,
+               const std::string& field_path,
+               const std::string& target_kind,
+               termin::prefab::PrefabOverrideValue value) {
+                termin::prefab::PrefabPropertyOverride property_override;
+                property_override.source_entity_id = source_entity_id;
+                property_override.source_component_id = source_component_id;
+                property_override.field_path = field_path;
+                property_override.target_kind = target_kind;
+                property_override.value = std::move(value);
+                std::string error;
+                if (!self.set_property_override(std::move(property_override), error)) {
+                    throw nb::value_error(error.c_str());
+                }
+            },
+            nb::arg("source_entity_id"),
+            nb::arg("source_component_id"),
+            nb::arg("field_path"),
+            nb::arg("target_kind"),
+            nb::arg("value")
+        )
+        .def(
+            "get_property_override",
+            [](const termin::prefab::PrefabInstanceState& self,
+               const std::string& source_entity_id,
+               const std::string& source_component_id,
+               const std::string& field_path) -> nb::object {
+                const auto* found = self.property_override(
+                    source_entity_id, source_component_id, field_path
+                );
+                if (found == nullptr) return nb::none();
+                return nb::cast(found->value);
+            },
+            nb::arg("source_entity_id"),
+            nb::arg("source_component_id"),
+            nb::arg("field_path")
+        )
+        .def(
+            "clear_property_override",
+            &termin::prefab::PrefabInstanceState::clear_property_override,
+            nb::arg("source_entity_id"),
+            nb::arg("source_component_id"),
+            nb::arg("field_path")
+        )
+        .def(
+            "clear_all_property_overrides",
+            &termin::prefab::PrefabInstanceState::clear_all_property_overrides
         );
 
     m.def(

@@ -21,6 +21,7 @@ add_library(termin_prefab SHARED
     src/prefab_document.cpp
     src/prefab_instance_state.cpp
     src/prefab_instantiator.cpp
+    src/prefab_override_value.cpp
 )
 add_library(termin_prefab::termin_prefab ALIAS termin_prefab)
 
@@ -47,6 +48,17 @@ endif()
 
 if(TERMIN_PREFAB_BUILD_TESTS)
     enable_testing()
+    add_executable(termin_prefab_override_value_test
+        tests/test_prefab_override_value.cpp
+    )
+    target_link_libraries(termin_prefab_override_value_test PRIVATE
+        termin_prefab
+    )
+    set_target_properties(termin_prefab_override_value_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(NAME termin_prefab_override_value_test COMMAND termin_prefab_override_value_test)
+
     add_executable(termin_prefab_instantiator_test
         tests/test_prefab_instantiator.cpp
     )

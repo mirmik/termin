@@ -291,6 +291,15 @@ The first native execution slice is in place:
   entity handles. Entity/component removal and scene teardown remove records
   through the ordinary native lifecycle; the Python `WeakSet` registry and
   `PrefabInstanceMarker` have been removed.
+- native `PrefabOverrideValue` now owns codec version 1 as a strict tagged tree
+  over `tc_value`. It preserves `none`, scalar width, list/tuple distinction,
+  ordered string-key dictionaries, dense-array dtype/shape, registered inspect
+  kinds and typed UUID resource references. Invalid versions, tags, shapes,
+  duplicate keys, unsupported Python objects and non-finite numbers fail
+  explicitly;
+- `PrefabInstanceState` stores typed property overrides by source entity ID,
+  optional source component ID, field path and target inspect kind. Generic
+  clone and scene serialization round-trip this metadata without Python.
 
 The remaining violations and gaps are:
 
@@ -302,7 +311,10 @@ The remaining violations and gaps are:
 - `termin-runtime` itself is already a native, Python-free library and is the
   correct packaged-project loading boundary, but it does not yet load prefab
   resources;
-- native typed overrides and reconciliation are not implemented yet.
+- native typed override storage is implemented, but applying override sets and
+  structural reconciliation are not implemented yet. Checked inspect setters
+  must first propagate conversion/assignment failures reliably; tracked by
+  Kanboard #467.
 
 `termin_player` requiring and packaging Python is intentional for its role as
 an editor-adjacent development/source host and is not a violation of this
@@ -326,7 +338,9 @@ link against Python.
 5. Add native prefab resources to runtime-package export, validation and
    `termin-runtime` loading.
 6. Add native reconciliation and editor override capture, then retire the old
-   Python implementation and schemas.
+   Python implementation and schemas. **The versioned value codec and native
+   property-override storage are done; checked apply, structural diff and editor
+   mutation capture remain.**
 
 The first four steps establish correctness. The last two close the runtime
 boundary and make prefab behavior independent of whether a particular host
@@ -342,3 +356,5 @@ embeds Python.
 - Kanboard #462: canonical editor persistence and lossless round-trip.
 - Kanboard #463: live instance tracking and hot reload.
 - Kanboard #464: editor mutation capture and undo/redo integration.
+- Kanboard #467: make checked inspect setters propagate assignment failures
+  before transactional override application.

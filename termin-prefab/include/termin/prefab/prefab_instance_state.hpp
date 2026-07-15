@@ -7,8 +7,17 @@
 
 #include <termin/entity/component.hpp>
 #include <termin/prefab/export.hpp>
+#include <termin/prefab/prefab_override_value.hpp>
 
 namespace termin::prefab {
+
+struct TERMIN_PREFAB_API PrefabPropertyOverride {
+    std::string source_entity_id;
+    std::string source_component_id;
+    std::string field_path;
+    std::string target_kind;
+    PrefabOverrideValue value;
+};
 
 class TERMIN_PREFAB_API PrefabInstanceState : public CxxComponent {
 public:
@@ -38,7 +47,31 @@ public:
     Entity component_owner_for_source(const std::string& source_id) const;
     size_t entity_mapping_count() const;
     size_t component_mapping_count() const;
-    bool mapping_valid() const { return _mapping_valid; }
+    bool mapping_valid() const { return _mapping_valid && _overrides_valid; }
+
+    bool set_property_override(PrefabPropertyOverride property_override, std::string& error);
+    bool clear_property_override(
+        const std::string& source_entity_id,
+        const std::string& source_component_id,
+        const std::string& field_path
+    );
+    void clear_all_property_overrides();
+    const PrefabPropertyOverride* property_override(
+        const std::string& source_entity_id,
+        const std::string& source_component_id,
+        const std::string& field_path
+    ) const;
+    const std::vector<PrefabPropertyOverride>& property_overrides() const {
+        return _property_overrides;
+    }
+    size_t property_override_count() const { return _property_overrides.size(); }
+    bool overrides_valid() const { return _overrides_valid; }
+
+    tc_value serialize_data() const override;
+    void deserialize_data(
+        const tc_value* data,
+        tc_scene_handle scene = TC_SCENE_HANDLE_INVALID
+    ) override;
 
     void on_added() override;
 
@@ -51,7 +84,10 @@ private:
     std::vector<Entity> _runtime_entities;
     std::vector<std::string> _source_component_ids;
     std::vector<Entity> _component_owners;
+    std::vector<PrefabPropertyOverride> _property_overrides;
+    tc::trent _invalid_serialized_overrides;
     bool _mapping_valid = true;
+    bool _overrides_valid = true;
 };
 
 TERMIN_PREFAB_API void register_prefab_component_types();
