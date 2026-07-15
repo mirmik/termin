@@ -252,11 +252,13 @@ void register_fov_mode_field() {
             auto* c = static_cast<CameraComponent*>(obj);
             return tc_value_string(c->get_fov_mode_str().c_str());
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<CameraComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_fov_mode_str(value.data.s);
+                return true;
             }
+            return false;
         };
         tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
 }
@@ -273,13 +275,15 @@ void register_camera_layer_mask_field() {
         snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)c->layer_mask);
         return tc_value_string(buf);
     };
-    info.setter = [](void* obj, tc_value value, void*) {
+    info.setter = [](void* obj, tc_value value, void*) -> bool {
         auto* c = static_cast<CameraComponent*>(obj);
         if (value.type == TC_VALUE_STRING && value.data.s) {
             c->layer_mask = strtoull(value.data.s, nullptr, 0);
         } else if (value.type == TC_VALUE_INT) {
             c->layer_mask = static_cast<uint64_t>(value.data.i);
+            return true;
         }
+        return false;
     };
     tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
 }
@@ -296,13 +300,15 @@ void register_camera_render_category_mask_field() {
         snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)c->render_category_mask);
         return tc_value_string(buf);
     };
-    info.setter = [](void* obj, tc_value value, void*) {
+    info.setter = [](void* obj, tc_value value, void*) -> bool {
         auto* c = static_cast<CameraComponent*>(obj);
         if (value.type == TC_VALUE_STRING && value.data.s) {
             c->render_category_mask = strtoull(value.data.s, nullptr, 0);
         } else if (value.type == TC_VALUE_INT) {
             c->render_category_mask = static_cast<uint64_t>(value.data.i);
+            return true;
         }
+        return false;
     };
     tc::InspectRegistry::instance().add_field_with_choices("CameraComponent", std::move(info));
 }

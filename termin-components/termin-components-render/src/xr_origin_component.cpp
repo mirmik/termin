@@ -94,11 +94,13 @@ void register_xr_origin_reference_space_field() {
             auto* c = static_cast<XrOriginComponent*>(obj);
             return tc_value_string(c->get_reference_space_str().c_str());
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<XrOriginComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_reference_space_str(value.data.s);
+                return true;
             }
+            return false;
         };
         tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
 }
@@ -115,11 +117,13 @@ void register_xr_origin_reference_alignment_field() {
             auto* c = static_cast<XrOriginComponent*>(obj);
             return tc_value_string(c->get_reference_alignment_str().c_str());
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<XrOriginComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_reference_alignment_str(value.data.s);
+                return true;
             }
+            return false;
         };
         tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
 }
@@ -136,15 +140,17 @@ void register_xr_origin_layer_mask_field() {
             snprintf(buf, sizeof(buf), "0x%llx", (unsigned long long)c->layer_mask);
             return tc_value_string(buf);
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<XrOriginComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->layer_mask = strtoull(value.data.s, nullptr, 0);
-                return;
+                return true;
             }
             if (value.type == TC_VALUE_INT) {
                 c->layer_mask = static_cast<uint64_t>(value.data.i);
+                return true;
             }
+            return false;
         };
         tc::InspectRegistry::instance().add_field_with_choices("XrOriginComponent", std::move(info));
 }

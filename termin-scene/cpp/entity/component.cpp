@@ -21,10 +21,12 @@ void register_component_base_inspect_fields() {
     display_name_field.getter = [](void* obj) -> tc_value {
         return tc_value_string(static_cast<CxxComponent*>(obj)->display_name().c_str());
     };
-    display_name_field.setter = [](void* obj, tc_value value, void*) {
+    display_name_field.setter = [](void* obj, tc_value value, void*) -> bool {
         if (value.type == TC_VALUE_STRING) {
             static_cast<CxxComponent*>(obj)->set_display_name(value.data.s ? value.data.s : "");
+            return true;
         }
+        return false;
     };
     tc::InspectRegistry::instance().add_field_with_choices("Component", std::move(display_name_field));
 

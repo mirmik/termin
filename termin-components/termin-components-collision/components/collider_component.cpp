@@ -24,11 +24,13 @@ void register_collider_type_field() {
             return tc_value_string(c->collider_type.c_str());
         };
 
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<ColliderComponent*>(obj);
             if (value.type == TC_VALUE_STRING) {
                 c->set_collider_type(value.data.s);
+                return true;
             }
+            return false;
         };
 
         info.choices.push_back({"Box", "Box"});
@@ -52,11 +54,13 @@ void register_convex_hull_mesh_source_field() {
             return tc_value_string(c->convex_hull_mesh_source.c_str());
         };
 
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<ColliderComponent*>(obj);
             if (value.type == TC_VALUE_STRING) {
                 c->set_convex_hull_mesh_source(value.data.s);
+                return true;
             }
+            return false;
         };
 
         info.choices.push_back({"Field", "Field"});

@@ -313,8 +313,9 @@ The remaining violations and gaps are:
   resources;
 - native typed override storage is implemented, but applying override sets and
   structural reconciliation are not implemented yet. Checked inspect setters
-  must first propagate conversion/assignment failures reliably; tracked by
-  Kanboard #467.
+  now propagate missing/read-only fields, conversion errors and assignment
+  failures separately from nullable values; transactional override application
+  can rely on that result.
 
 `termin_player` requiring and packaging Python is intentional for its role as
 an editor-adjacent development/source host and is not a violation of this
@@ -356,5 +357,4 @@ embeds Python.
 - Kanboard #462: canonical editor persistence and lossless round-trip.
 - Kanboard #463: live instance tracking and hot reload.
 - Kanboard #464: editor mutation capture and undo/redo integration.
-- Kanboard #467: make checked inspect setters propagate assignment failures
-  before transactional override application.
+- Kanboard #467: checked inspect setter failure propagation. **Done.**

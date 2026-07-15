@@ -106,17 +106,18 @@ void register_rotator_axis_scale_field() {
             return tc_value_string(std::to_string(deg_scale).c_str());
         };
 
-        info.setter = [](void* obj, tc_value value, void*) {
-            if (value.type != TC_VALUE_STRING || !value.data.s) return;
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
+            if (value.type != TC_VALUE_STRING || !value.data.s) return false;
             double new_scale = std::atof(value.data.s);
-            if (new_scale < 1e-12) return;
+            if (new_scale < 1e-12) return false;
 
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             double len = std::sqrt(c->axis_x*c->axis_x + c->axis_y*c->axis_y + c->axis_z*c->axis_z);
-            if (len < 1e-12) return;
+            if (len < 1e-12) return false;
 
             double factor = new_scale / len;
             c->set_axis(c->axis_x * factor, c->axis_y * factor, c->axis_z * factor);
+            return true;
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("RotatorComponent", std::move(info));
