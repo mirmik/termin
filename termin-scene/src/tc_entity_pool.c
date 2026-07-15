@@ -294,10 +294,42 @@ static void component_array_push(ComponentArray* arr, tc_component* c) {
 static void component_array_remove(ComponentArray* arr, tc_component* c) {
     for (size_t i = 0; i < arr->count; i++) {
         if (arr->items[i] == c) {
-            arr->items[i] = arr->items[--arr->count];
+            if (i + 1 < arr->count) {
+                memmove(&arr->items[i], &arr->items[i + 1],
+                        (arr->count - i - 1) * sizeof(tc_component*));
+            }
+            arr->count--;
             return;
         }
     }
+}
+
+static bool component_array_move(ComponentArray* arr, tc_component* c, size_t index) {
+    if (!arr || !c || arr->count == 0)
+        return false;
+    size_t current = SIZE_MAX;
+    for (size_t i = 0; i < arr->count; ++i) {
+        if (arr->items[i] == c) {
+            current = i;
+            break;
+        }
+    }
+    if (current == SIZE_MAX)
+        return false;
+    if (index >= arr->count)
+        index = arr->count - 1;
+    if (current == index)
+        return true;
+    tc_component* value = arr->items[current];
+    if (current < index) {
+        memmove(&arr->items[current], &arr->items[current + 1],
+                (index - current) * sizeof(tc_component*));
+    } else {
+        memmove(&arr->items[index + 1], &arr->items[index],
+                (current - index) * sizeof(tc_component*));
+    }
+    arr->items[index] = value;
+    return true;
 }
 
 static bool string_array_contains(const StringArray* arr, const char* value) {
@@ -1325,10 +1357,21 @@ tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_entity_id id) 
     return parent_id;
 }
 
-void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent) {
+bool tc_entity_pool_set_parent_checked(tc_entity_pool* pool, tc_entity_id id,
+                                       tc_entity_id parent) {
+    if (!pool) return false;
     if (!tc_entity_pool_alive(pool, id)) {
         WARN_DEAD_ENTITY("set_parent", id);
-        return;
+        return false;
+    }
+
+    if (tc_entity_id_valid(parent) && !tc_entity_pool_alive(pool, parent))
+        return false;
+    for (tc_entity_id ancestor = parent;
+         tc_entity_id_valid(ancestor) && tc_entity_pool_alive(pool, ancestor);
+         ancestor = pool->parent_ids[ancestor.index]) {
+        if (tc_entity_id_eq(ancestor, id))
+            return false;
     }
 
     uint32_t idx = id.index;
@@ -1337,7 +1380,7 @@ void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_
                                      ? parent
                                      : TC_ENTITY_ID_INVALID;
     if (tc_entity_id_eq(old_parent_id, new_parent_id))
-        return;
+        return true;
 
     // Remove from old parent's children
     if (tc_entity_id_valid(old_parent_id) && tc_entity_pool_alive(pool, old_parent_id)) {
@@ -1360,6 +1403,14 @@ void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_
     if (old_parent_id.index != new_parent_id.index ||
         old_parent_id.generation != new_parent_id.generation) {
         publish_structure_changed(pool, TC_SCENE_STRUCTURE_PARENT_CHANGED, id, new_parent_id, NULL);
+    }
+    return true;
+}
+
+void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent) {
+    if (!tc_entity_pool_set_parent_checked(pool, id, parent)) {
+        tc_log(TC_LOG_ERROR,
+               "[tc_entity_pool_set_parent] rejected invalid parent relationship");
     }
 }
 
@@ -1568,8 +1619,12 @@ static bool tc_entity_pool_add_component_with_requirements(
     return true;
 }
 
-void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
-    if (!tc_entity_pool_alive(pool, id) || !c) { if (!tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id); return; }
+bool tc_entity_pool_add_component_checked(tc_entity_pool* pool, tc_entity_id id,
+                                          tc_component* c) {
+    if (!pool || !tc_entity_pool_alive(pool, id) || !c) {
+        if (pool && !tc_entity_pool_alive(pool, id)) WARN_DEAD_ENTITY("add_component", id);
+        return false;
+    }
 
     StringArray resolving_stack = {0};
     bool added = tc_entity_pool_add_component_with_requirements(
@@ -1581,6 +1636,11 @@ void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_comp
                "[tc_entity_pool_add_component] add component '%s' aborted",
                tc_component_type_name(c));
     }
+    return added;
+}
+
+void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
+    (void)tc_entity_pool_add_component_checked(pool, id, c);
 }
 
 void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c) {
@@ -1627,6 +1687,41 @@ tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_
     if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("component_at", id); return NULL; }
     if (index >= pool->components[id.index].count) return NULL;
     return pool->components[id.index].items[index];
+}
+
+size_t tc_entity_pool_component_index(const tc_entity_pool* pool, tc_entity_id id,
+                                      const tc_component* c) {
+    if (!pool || !tc_entity_pool_alive(pool, id) || !c) return SIZE_MAX;
+    const ComponentArray* components = &pool->components[id.index];
+    for (size_t index = 0; index < components->count; ++index) {
+        if (components->items[index] == c) return index;
+    }
+    return SIZE_MAX;
+}
+
+bool tc_entity_pool_set_component_index(tc_entity_pool* pool, tc_entity_id id,
+                                        tc_component* c, size_t index) {
+    if (!pool) return false;
+    const tc_entity_handle owner = tc_entity_handle_make(
+        tc_entity_pool_registry_find(pool), id);
+    if (!tc_entity_pool_alive(pool, id) || !c ||
+        !tc_entity_handle_eq(c->owner, owner)) {
+        return false;
+    }
+    ComponentArray* components = &pool->components[id.index];
+    const size_t previous = tc_entity_pool_component_index(pool, id, c);
+    if (previous == SIZE_MAX) return false;
+    if (index >= components->count) index = components->count - 1;
+    if (previous == index) return true;
+    if (!component_array_move(components, c, index)) return false;
+    publish_structure_changed(
+        pool,
+        TC_SCENE_STRUCTURE_COMPONENT_ORDER_CHANGED,
+        id,
+        pool->parent_ids[id.index],
+        tc_component_type_name(c)
+    );
+    return true;
 }
 
 // ============================================================================

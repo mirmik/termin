@@ -202,11 +202,76 @@ GUARD_C_TEST(test_component_removal_lifecycle_runs_once_in_order) {
     return 0;
 }
 
+GUARD_C_TEST(test_component_reorder_preserves_attachment_and_lifecycle) {
+    tc_scene_handle scene = tc_scene_new_named("component-reorder");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    GUARD_C_REQUIRE(pool != NULL);
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "entity");
+    GUARD_C_REQUIRE(tc_entity_id_valid(entity));
+
+    lifecycle_probe_component first;
+    lifecycle_probe_component second;
+    lifecycle_probe_component third;
+    lifecycle_probe_init(&first);
+    lifecycle_probe_init(&second);
+    lifecycle_probe_init(&third);
+    tc_entity_pool_add_component(pool, entity, &first.component);
+    tc_entity_pool_add_component(pool, entity, &second.component);
+    tc_entity_pool_add_component(pool, entity, &third.component);
+
+    GUARD_C_CHECK_EQ_UINT(0, tc_entity_pool_component_index(
+        pool, entity, &first.component));
+    GUARD_C_REQUIRE(tc_entity_pool_set_component_index(
+        pool, entity, &third.component, 0));
+    GUARD_C_CHECK_PTR_EQ(&third.component,
+                         tc_entity_pool_component_at(pool, entity, 0));
+    GUARD_C_CHECK_PTR_EQ(&first.component,
+                         tc_entity_pool_component_at(pool, entity, 1));
+    GUARD_C_CHECK_PTR_EQ(&second.component,
+                         tc_entity_pool_component_at(pool, entity, 2));
+    GUARD_C_CHECK_EQ_INT(0, first.removed_count);
+    GUARD_C_CHECK_EQ_INT(0, second.removed_count);
+    GUARD_C_CHECK_EQ_INT(0, third.removed_count);
+    GUARD_C_CHECK(tc_entity_handle_eq(first.component.owner,
+                                      tc_entity_handle_make(
+                                          tc_entity_pool_registry_find(pool), entity)));
+
+    tc_entity_pool_remove_component(pool, entity, &first.component);
+    GUARD_C_CHECK_PTR_EQ(&third.component,
+                         tc_entity_pool_component_at(pool, entity, 0));
+    GUARD_C_CHECK_PTR_EQ(&second.component,
+                         tc_entity_pool_component_at(pool, entity, 1));
+
+    tc_scene_free(scene);
+    return 0;
+}
+
+GUARD_C_TEST(test_checked_parent_rejects_cycle) {
+    tc_scene_handle scene = tc_scene_new_named("checked-parent");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    GUARD_C_REQUIRE(pool != NULL);
+    tc_entity_id root = tc_entity_pool_alloc(pool, "root");
+    tc_entity_id child = tc_entity_pool_alloc(pool, "child");
+    tc_entity_id grandchild = tc_entity_pool_alloc(pool, "grandchild");
+    GUARD_C_REQUIRE(tc_entity_pool_set_parent_checked(pool, child, root));
+    GUARD_C_REQUIRE(tc_entity_pool_set_parent_checked(pool, grandchild, child));
+    GUARD_C_CHECK_FALSE(tc_entity_pool_set_parent_checked(pool, root, grandchild));
+    GUARD_C_CHECK_FALSE(tc_entity_id_valid(tc_entity_pool_parent(pool, root)));
+    GUARD_C_CHECK(tc_entity_id_eq(root, tc_entity_pool_parent(pool, child)));
+    GUARD_C_CHECK(tc_entity_id_eq(child, tc_entity_pool_parent(pool, grandchild)));
+    tc_scene_free(scene);
+    return 0;
+}
+
 int main(int argc, char** argv) {
     GUARD_C_BEGIN_ARGS(argc, argv);
     GUARD_C_RUN(test_capability_register_and_attach);
     GUARD_C_RUN(test_scene_capability_iteration);
     GUARD_C_RUN(test_scene_capability_priority_iteration);
     GUARD_C_RUN(test_component_removal_lifecycle_runs_once_in_order);
+    GUARD_C_RUN(test_component_reorder_preserves_attachment_and_lifecycle);
+    GUARD_C_RUN(test_checked_parent_rejects_cycle);
     return GUARD_C_END();
 }

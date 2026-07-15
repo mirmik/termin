@@ -54,6 +54,13 @@ public:
     TestResourceHandle resource;
 };
 
+class PrefabRefProbeV2 : public termin::CxxComponent {
+public:
+    PrefabRefProbeV2() : termin::CxxComponent("PrefabRefProbeV2") {}
+
+    double gain = 0.0;
+};
+
 class TestOverrideResourceResolver final
     : public termin::prefab::PrefabOverrideResourceResolver {
 public:
@@ -79,6 +86,8 @@ public:
 
 static termin::ComponentRegistrar<PrefabRefProbe>
     prefab_ref_probe_registrar("PrefabRefProbe", "CxxComponent");
+static termin::ComponentRegistrar<PrefabRefProbeV2>
+    prefab_ref_probe_v2_registrar("PrefabRefProbeV2", "CxxComponent");
 
 void register_inspect() {
     tc::register_cpp_handle_kind<termin::Entity>("entity");
@@ -98,6 +107,9 @@ void register_inspect() {
     );
     tc::InspectRegistry::instance().add<PrefabRefProbe, TestResourceHandle>(
         "PrefabRefProbe", &PrefabRefProbe::resource, "resource", "Resource", "test_resource"
+    );
+    tc::InspectRegistry::instance().add<PrefabRefProbeV2, double>(
+        "PrefabRefProbeV2", &PrefabRefProbeV2::gain, "gain", "Gain", "double"
     );
 }
 
@@ -504,25 +516,269 @@ int main() {
             nos::json::dump(structural_refresh_data));
     TEST_ASSERT(structural_refresh_document.ok(), "source addition fixture should parse");
     termin::prefab::PrefabReconcileResult structural_reconcile =
-        reconcile_state->reconcile_properties(
+        reconcile_state->reconcile(
             structural_refresh_document.document, &reconcile_resource_resolver);
-    TEST_ASSERT(!structural_reconcile.ok() && !structural_reconcile.revision_updated &&
-                    structural_reconcile.failures.size() == 1 &&
-                    structural_reconcile.failures[0].phase ==
-                        termin::prefab::PrefabReconcilePhase::Structure &&
-                    structural_reconcile.failures[0].source_entity_id ==
-                        "prefab-source-added-later",
-                "source additions should produce one stable structural diagnostic");
-    TEST_ASSERT(!reconcile_instance.root.find_child("AddedLater").valid() &&
+    TEST_ASSERT(structural_reconcile.ok() && structural_reconcile.revision_updated &&
+                    structural_reconcile.structure_operation_count >= 1 &&
+                    structural_reconcile.structure_operations_applied ==
+                        structural_reconcile.structure_operation_count,
+                "source additions should converge through native structural mutation");
+    TEST_ASSERT(reconcile_instance.root.find_child("AddedLater").valid() &&
                     reconcile_instance.root.find_child("ReconcileLocal") == reconcile_local,
-                "property reconciliation must neither create source structure nor disturb local structure");
+                "structural reconciliation should create source structure and preserve local structure");
+    const size_t converged_entity_mapping_count = reconcile_state->entity_mapping_count();
+    termin::prefab::PrefabReconcileResult idempotent_structural_reconcile =
+        reconcile_state->reconcile(
+            structural_refresh_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(idempotent_structural_reconcile.ok() &&
+                    idempotent_structural_reconcile.structure_operation_count == 0 &&
+                    reconcile_state->entity_mapping_count() ==
+                        converged_entity_mapping_count,
+                "repeated structural reconciliation should be idempotent");
     termin::prefab::PrefabReconcileResult repaired_reconcile =
-        reconcile_state->reconcile_properties(
+        reconcile_state->reconcile(
             refreshed_document.document, &reconcile_resource_resolver);
     TEST_ASSERT(repaired_reconcile.ok() && repaired_reconcile.revision_updated &&
+                    !reconcile_instance.root.find_child("AddedLater").valid() &&
                     reconcile_state->source_revision() ==
                         refreshed_document.document.source_revision(),
-                "retry after removing the conflicting source drift should complete normally");
+                "source removal should delete the source-owned runtime entity");
+
+    nos::trent reparent_data = refreshed_data;
+    nos::trent reparent_child = reparent_data["root"]["children"].as_list()[0];
+    nos::trent reparent_grandchild = reparent_child["children"].as_list()[0];
+    reparent_child["children"].as_list().clear();
+    reparent_data["root"]["children"].as_list().clear();
+    reparent_data["root"]["children"].push_back(std::move(reparent_grandchild));
+    reparent_data["root"]["children"].push_back(std::move(reparent_child));
+    termin::prefab::PrefabDocumentResult reparent_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(reparent_data));
+    TEST_ASSERT(reparent_document.ok(), "reparent fixture should parse");
+    termin::prefab::PrefabReconcileResult reparent_result = reconcile_state->reconcile(
+        reparent_document.document, &reconcile_resource_resolver);
+    termin::Entity reparented_grandchild =
+        reconcile_state->entity_for_source("prefab-source-grandchild");
+    termin::Entity reordered_child =
+        reconcile_state->entity_for_source("prefab-source-child");
+    TEST_ASSERT(reparent_result.ok() && reparented_grandchild.parent() == reconcile_instance.root &&
+                    reparented_grandchild.sibling_index() == 0 &&
+                    reconcile_local.sibling_index() == 1 &&
+                    reordered_child.sibling_index() == 2,
+                "source reparent and reorder should converge while local sibling keeps its slot");
+    TEST_ASSERT(reconcile_state->reconcile(
+                    refreshed_document.document, &reconcile_resource_resolver).ok() &&
+                    reparented_grandchild.parent() == reordered_child,
+                "reversing a source reparent should converge idempotently");
+
+    auto* local_component = new PrefabRefProbeV2();
+    reconcile_instance.root.add_component(local_component);
+    TEST_ASSERT(local_component->entity() == reconcile_instance.root,
+                "local component fixture should attach");
+    nos::trent component_add_data = refreshed_data;
+    nos::trent added_component;
+    added_component["source_id"] = "prefab-source-added-component";
+    added_component["type"] = "PrefabRefProbeV2";
+    added_component["data"]["gain"] = 9.5;
+    component_add_data["root"]["components"].as_list().insert(
+        component_add_data["root"]["components"].as_list().begin(),
+        std::move(added_component)
+    );
+    termin::prefab::PrefabDocumentResult component_add_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(component_add_data));
+    TEST_ASSERT(component_add_document.ok(), "component addition fixture should parse");
+    termin::prefab::PrefabReconcileResult component_add_result = reconcile_state->reconcile(
+        component_add_document.document, &reconcile_resource_resolver);
+    PrefabRefProbeV2* added_runtime_component = nullptr;
+    for (size_t index = 0; index < reconcile_instance.root.component_count(); ++index) {
+        tc_component* candidate = reconcile_instance.root.component_at(index);
+        if (candidate != nullptr &&
+            std::string(tc_component_get_source_id(candidate)) ==
+                "prefab-source-added-component") {
+            added_runtime_component = dynamic_cast<PrefabRefProbeV2*>(
+                termin::CxxComponent::from_tc(candidate));
+        }
+    }
+    TEST_ASSERT(component_add_result.ok() && added_runtime_component != nullptr &&
+                    added_runtime_component->gain == 9.5 &&
+                    local_component->entity() == reconcile_instance.root,
+                "source component addition should attach checked data and preserve local components");
+    TEST_ASSERT(reconcile_state->reconcile(
+                    refreshed_document.document, &reconcile_resource_resolver).ok() &&
+                    local_component->entity() == reconcile_instance.root,
+                "source component removal should preserve unrelated local components");
+
+    nos::trent incompatible_type_data = refreshed_data;
+    incompatible_type_data["root"]["components"].as_list()[0]["type"] =
+        "PrefabRefProbeV2";
+    incompatible_type_data["root"]["components"].as_list()[0]["data"] = nos::trent();
+    incompatible_type_data["root"]["components"].as_list()[0]["data"]["gain"] = 4.0;
+    termin::prefab::PrefabDocumentResult incompatible_type_document =
+        termin::prefab::PrefabDocument::parse_json(nos::json::dump(incompatible_type_data));
+    TEST_ASSERT(incompatible_type_document.ok(), "component type-change fixture should parse");
+    termin::prefab::PrefabReconcileResult incompatible_type_result =
+        reconcile_state->reconcile(
+            incompatible_type_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(!incompatible_type_result.ok() && reconcile_probe->entity().valid() &&
+                    reconcile_instance.root.get_component<PrefabRefProbe>() == reconcile_probe,
+                "incompatible typed overrides should retain the old component during type change");
+
+    termin::prefab::PrefabInstantiateResult structural_instance =
+        termin::prefab::PrefabInstantiator::instantiate(
+            refreshed_document.document, scene.handle(), parent);
+    TEST_ASSERT(structural_instance.ok(), "structural policy instance should instantiate");
+    auto* structural_state = structural_instance.root.get_component<
+        termin::prefab::PrefabInstanceState>();
+    TEST_ASSERT(structural_state != nullptr, "structural policy state should exist");
+    TEST_ASSERT(structural_state->reconcile(
+                    incompatible_type_document.document,
+                    &reconcile_resource_resolver).ok() &&
+                    structural_instance.root.get_component<PrefabRefProbeV2>() != nullptr &&
+                    structural_instance.root.get_component<PrefabRefProbeV2>()->gain == 4.0,
+                "component type change without incompatible overrides should replace checked data");
+    TEST_ASSERT(structural_state->reconcile(
+                    refreshed_document.document, &reconcile_resource_resolver).ok() &&
+                    structural_instance.root.get_component<PrefabRefProbe>() != nullptr,
+                "component type replacement should converge in both directions");
+    nos::trent unavailable_component_data = refreshed_data;
+    nos::trent unavailable_component;
+    unavailable_component["source_id"] = "prefab-source-unavailable-component";
+    unavailable_component["type"] = "MissingPrefabComponentFactory";
+    unavailable_component["data"].init(nos::trent::type::dict);
+    unavailable_component_data["root"]["components"].push_back(
+        std::move(unavailable_component));
+    termin::prefab::PrefabDocumentResult unavailable_component_document =
+        termin::prefab::PrefabDocument::parse_json(
+            nos::json::dump(unavailable_component_data));
+    TEST_ASSERT(unavailable_component_document.ok(),
+                "unavailable component factory fixture should parse");
+    const std::string structural_revision_before_failure =
+        structural_state->source_revision();
+    termin::prefab::PrefabReconcileResult unavailable_component_result =
+        structural_state->reconcile(
+            unavailable_component_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(!unavailable_component_result.ok() &&
+                    !unavailable_component_result.revision_updated &&
+                    structural_state->source_revision() ==
+                        structural_revision_before_failure,
+                "unavailable component factory should leave the revision retryable");
+    TEST_ASSERT(structural_state->reconcile(
+                    refreshed_document.document, &reconcile_resource_resolver).ok(),
+                "retry after removing an unavailable source component should converge");
+    termin::Entity structural_child =
+        structural_state->entity_for_source("prefab-source-child");
+    termin::Entity surviving_local = structural_child.create_child("SurvivingLocal");
+    auto dormant_name_value = termin::prefab::PrefabOverrideValue::parse_json(
+        R"({"schema":"termin.prefab.override-value","version":1,"value":{"tag":"string","value":"LocalChildName"}})",
+        reconcile_override_error);
+    TEST_ASSERT(dormant_name_value.has_value(),
+                "dormant property override fixture should parse");
+    termin::prefab::PrefabPropertyOverride dormant_name_override;
+    dormant_name_override.source_entity_id = "prefab-source-child";
+    dormant_name_override.field_path = "name";
+    dormant_name_override.target_kind = "string";
+    dormant_name_override.value = std::move(*dormant_name_value);
+    structural_child.set_name("LocalChildName");
+    TEST_ASSERT(structural_state->set_property_override(
+                    std::move(dormant_name_override), reconcile_override_error),
+                "property intent below a future tombstone should be accepted");
+    termin::prefab::PrefabStructuralOverride suppress_child;
+    suppress_child.kind = termin::prefab::PrefabStructuralOverrideKind::SuppressEntity;
+    suppress_child.source_entity_id = "prefab-source-child";
+    TEST_ASSERT(structural_state->set_structural_override(
+                    std::move(suppress_child), reconcile_override_error),
+                "entity tombstone should be accepted");
+    termin::prefab::PrefabReconcileResult suppress_result = structural_state->reconcile(
+        refreshed_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(suppress_result.ok() && suppress_result.dormant_override_count == 1 &&
+                    structural_state->property_override_count() == 1 &&
+                    !structural_state->entity_for_source("prefab-source-child").valid() &&
+                    !structural_state->entity_for_source("prefab-source-grandchild").valid() &&
+                    surviving_local.valid() && surviving_local.parent() == structural_instance.root,
+                "entity tombstone should suppress its source subtree and splice local children");
+    TEST_ASSERT(structural_state->discard_structural_override(
+                    termin::prefab::PrefabStructuralOverrideKind::SuppressEntity,
+                    "prefab-source-child") &&
+                    structural_state->reconcile(
+                        refreshed_document.document, &reconcile_resource_resolver).ok() &&
+                    structural_state->entity_for_source("prefab-source-child").valid() &&
+                    structural_state->entity_for_source("prefab-source-grandchild").valid() &&
+                    std::string(structural_state->entity_for_source(
+                        "prefab-source-child").name()) == "LocalChildName" &&
+                    surviving_local.valid(),
+                "clearing a tombstone should recreate source structure without consuming locals");
+
+    termin::prefab::PrefabStructuralOverride place_grandchild;
+    place_grandchild.kind = termin::prefab::PrefabStructuralOverrideKind::PlaceEntity;
+    place_grandchild.source_entity_id = "prefab-source-grandchild";
+    place_grandchild.parent.kind = termin::prefab::PrefabStructureReferenceKind::Source;
+    place_grandchild.parent.source_id = "prefab-source-root";
+    place_grandchild.before.kind = termin::prefab::PrefabStructureReferenceKind::Source;
+    place_grandchild.before.source_id = "prefab-source-child";
+    TEST_ASSERT(structural_state->set_structural_override(
+                    std::move(place_grandchild), reconcile_override_error) &&
+                    structural_state->reconcile(
+                        refreshed_document.document, &reconcile_resource_resolver).ok(),
+                "explicit entity placement should reconcile");
+    termin::Entity placed_grandchild =
+        structural_state->entity_for_source("prefab-source-grandchild");
+    TEST_ASSERT(placed_grandchild.parent() == structural_instance.root &&
+                    placed_grandchild.sibling_index() <
+                        structural_state->entity_for_source("prefab-source-child").sibling_index(),
+                "explicit placement should win over canonical source parent and order");
+    termin::Entity structural_clone = structural_instance.root.clone("_clone");
+    auto* cloned_structural_state = structural_clone.get_component<
+        termin::prefab::PrefabInstanceState>();
+    TEST_ASSERT(cloned_structural_state != nullptr &&
+                    cloned_structural_state->structural_override_count() == 1,
+                "clone serialization should retain structural override metadata");
+    TEST_ASSERT(structural_state->discard_structural_override(
+                    termin::prefab::PrefabStructuralOverrideKind::PlaceEntity,
+                    "prefab-source-grandchild") &&
+                    structural_state->reconcile(
+                        refreshed_document.document, &reconcile_resource_resolver).ok() &&
+                    placed_grandchild.parent() ==
+                        structural_state->entity_for_source("prefab-source-child"),
+                "clearing placement should restore canonical source structure");
+    termin::prefab::PrefabStructuralOverride cyclic_placement;
+    cyclic_placement.kind = termin::prefab::PrefabStructuralOverrideKind::PlaceEntity;
+    cyclic_placement.source_entity_id = "prefab-source-child";
+    cyclic_placement.parent.kind = termin::prefab::PrefabStructureReferenceKind::Source;
+    cyclic_placement.parent.source_id = "prefab-source-grandchild";
+    TEST_ASSERT(structural_state->set_structural_override(
+                    std::move(cyclic_placement), reconcile_override_error),
+                "cyclic placement fixture should be stored for reconcile validation");
+    termin::Entity canonical_child =
+        structural_state->entity_for_source("prefab-source-child");
+    termin::Entity canonical_grandchild =
+        structural_state->entity_for_source("prefab-source-grandchild");
+    termin::prefab::PrefabReconcileResult cyclic_placement_result =
+        structural_state->reconcile(
+            refreshed_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(!cyclic_placement_result.ok() &&
+                    canonical_child.parent() == structural_instance.root &&
+                    canonical_grandchild.parent() == canonical_child,
+                "placement cycle preflight should reject the graph without structural mutation");
+    TEST_ASSERT(structural_state->discard_structural_override(
+                    termin::prefab::PrefabStructuralOverrideKind::PlaceEntity,
+                    "prefab-source-child"),
+                "cyclic placement fixture should be removable");
+    auto* duplicate_runtime_component = new PrefabRefProbe();
+    duplicate_runtime_component->set_source_id("prefab-source-probe-component");
+    structural_instance.root.add_component(duplicate_runtime_component);
+    termin::prefab::PrefabReconcileResult duplicate_runtime_component_result =
+        structural_state->reconcile(
+            refreshed_document.document, &reconcile_resource_resolver);
+    TEST_ASSERT(!duplicate_runtime_component_result.ok() &&
+                    !duplicate_runtime_component_result.revision_updated,
+                "duplicate runtime component identities should be diagnosed without remapping");
+    structural_instance.root.remove_component(duplicate_runtime_component);
+    TEST_ASSERT(structural_state->reconcile(
+                    refreshed_document.document, &reconcile_resource_resolver).ok(),
+                "retry after removing a duplicate runtime identity should converge");
+    structural_clone.destroy_children();
+    tc_entity_free(structural_clone.handle());
+    structural_instance.root.destroy_children();
+    tc_entity_free(structural_instance.root.handle());
 
     termin::prefab::PrefabInstantiateOptions customized_options;
     customized_options.root_name = "CustomizedRoot";
@@ -812,6 +1068,44 @@ int main() {
     TEST_ASSERT(reserialized_malformed.find("unknown-test-tag") != std::string::npos,
                 "malformed override payload should remain visible for diagnosis and repair");
 
+    nos::trent malformed_structural_data = tracking_scene_data;
+    bool corrupted_structural_override = false;
+    for (nos::trent& root_data : malformed_structural_data["entities"].as_list()) {
+        for (nos::trent& component_data : root_data["components"].as_list()) {
+            if (component_data["type"].as_string_default("") !=
+                termin::prefab::PrefabInstanceState::TypeName) {
+                continue;
+            }
+            nos::trent malformed;
+            malformed["kind"] = "unknown-structural-kind";
+            malformed["source_entity_id"] = "prefab-source-child";
+            malformed["source_component_id"] = "";
+            component_data["data"]["structural_overrides"].push_back(
+                std::move(malformed));
+            corrupted_structural_override = true;
+            break;
+        }
+        if (corrupted_structural_override) break;
+    }
+    TEST_ASSERT(corrupted_structural_override,
+                "fixture should contain serialized structural metadata");
+    termin::TcSceneRef malformed_structural_scene =
+        termin::TcSceneRef::create("prefab-instance-structural-malformed");
+    TEST_ASSERT(malformed_structural_scene.load_from_data(
+                    malformed_structural_data) == 12,
+                "malformed structural metadata should not corrupt hierarchy loading");
+    TEST_ASSERT(
+        termin::prefab::find_live_prefab_instances(
+            malformed_structural_scene.handle(), "prefab-document-asset"
+        ).size() == 2,
+        "instance with malformed structural intent should be excluded from live queries"
+    );
+    TEST_ASSERT(
+        nos::json::dump(malformed_structural_scene.serialize()).find(
+            "unknown-structural-kind") != std::string::npos,
+        "malformed structural payload should remain visible for repair"
+    );
+
     nos::trent malformed_tracking_data = tracking_scene_data;
     bool malformed_state = false;
     for (nos::trent& root_data : malformed_tracking_data["entities"].as_list()) {
@@ -882,6 +1176,7 @@ int main() {
         );
     tracking_scene.destroy();
     malformed_override_scene.destroy();
+    malformed_structural_scene.destroy();
     for (const termin::Entity& stale : scene_teardown_snapshot) {
         TEST_ASSERT(!stale.valid(),
                     "scene teardown should invalidate every previously returned handle");

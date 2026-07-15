@@ -106,7 +106,7 @@ class PrefabAsset(DataAsset[dict]):
                 self._reconcile_instance(entity, document)
 
     def apply_to_instance(self, entity: "Entity"):
-        """Reconcile source-owned properties while preserving typed overrides."""
+        """Reconcile source-owned structure and properties with stored intent."""
         from termin.prefab.persistence import document_from_data
 
         if self._data is None:
@@ -115,7 +115,7 @@ class PrefabAsset(DataAsset[dict]):
         return self._reconcile_instance(entity, document_from_data(self._data))
 
     def _reconcile_instance(self, entity: "Entity", document):
-        """Run the native property reconciler and report every retained failure."""
+        """Run the native reconciler and report every retained failure."""
         from termin.prefab._prefab_native import PrefabInstanceState
 
         state = entity.get_component(PrefabInstanceState)
@@ -125,7 +125,7 @@ class PrefabAsset(DataAsset[dict]):
             )
             return None
 
-        result = state.reconcile_properties(document)
+        result = state.reconcile(document)
         for failure in result.failures:
             log.error(
                 "[PrefabAsset] Reconcile failed "

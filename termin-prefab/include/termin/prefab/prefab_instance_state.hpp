@@ -31,6 +31,12 @@ enum class PrefabPropertyApplyError {
     InvalidSourceValue,
     ResourceResolutionFailed,
     SetterFailed,
+    StructuralOverrideInvalid,
+    FactoryUnavailable,
+    AttachmentFailed,
+    ParentCycle,
+    OrderFailed,
+    RemovalConflict,
 };
 
 using PrefabOverrideRestoreError = PrefabPropertyApplyError;
@@ -68,16 +74,47 @@ struct TERMIN_PREFAB_API PrefabReconcileFailure {
 };
 
 struct TERMIN_PREFAB_API PrefabReconcileResult {
+    size_t structure_operation_count = 0;
+    size_t structure_operations_applied = 0;
     size_t source_field_count = 0;
     size_t source_fields_applied = 0;
     size_t override_count = 0;
     size_t overrides_applied = 0;
+    size_t dormant_override_count = 0;
     bool revision_updated = false;
     std::string previous_revision;
     std::string target_revision;
     std::vector<PrefabReconcileFailure> failures;
 
     bool ok() const { return failures.empty(); }
+};
+
+enum class PrefabStructuralOverrideKind {
+    SuppressEntity = 0,
+    SuppressComponent,
+    PlaceEntity,
+    PlaceComponent,
+};
+
+enum class PrefabStructureReferenceKind {
+    End = 0,
+    Source,
+    Local,
+};
+
+struct TERMIN_PREFAB_API PrefabStructureReference {
+    PrefabStructureReferenceKind kind = PrefabStructureReferenceKind::End;
+    std::string source_id;
+    Entity local_entity;
+    std::string local_component_source_id;
+};
+
+struct TERMIN_PREFAB_API PrefabStructuralOverride {
+    PrefabStructuralOverrideKind kind = PrefabStructuralOverrideKind::SuppressEntity;
+    std::string source_entity_id;
+    std::string source_component_id;
+    PrefabStructureReference parent;
+    PrefabStructureReference before;
 };
 
 struct TERMIN_PREFAB_API PrefabPropertyOverride {
@@ -116,7 +153,9 @@ public:
     Entity component_owner_for_source(const std::string& source_id) const;
     size_t entity_mapping_count() const;
     size_t component_mapping_count() const;
-    bool mapping_valid() const { return _mapping_valid && _overrides_valid; }
+    bool mapping_valid() const {
+        return _mapping_valid && _overrides_valid && _structural_overrides_valid;
+    }
 
     bool set_property_override(PrefabPropertyOverride property_override, std::string& error);
     PrefabOverrideRestoreResult clear_property_override(
@@ -132,6 +171,24 @@ public:
         const PrefabDocument& source,
         const PrefabOverrideResourceResolver* resource_resolver = nullptr
     );
+    PrefabReconcileResult reconcile(
+        const PrefabDocument& source,
+        const PrefabOverrideResourceResolver* resource_resolver = nullptr
+    );
+    bool set_structural_override(
+        PrefabStructuralOverride structural_override,
+        std::string& error
+    );
+    bool discard_structural_override(
+        PrefabStructuralOverrideKind kind,
+        const std::string& source_id
+    );
+    const std::vector<PrefabStructuralOverride>& structural_overrides() const {
+        return _structural_overrides;
+    }
+    size_t structural_override_count() const { return _structural_overrides.size(); }
+    bool structural_overrides_valid() const { return _structural_overrides_valid; }
+    bool source_entity_suppressed(const std::string& source_id) const;
     // Explicit metadata-only escape hatch for repair/migration tools. Normal
     // editing must use clear_* so live values and metadata cannot diverge.
     bool discard_property_override(
@@ -161,6 +218,10 @@ public:
 
 private:
     bool validate_mapping(bool require_live_references, std::string& message) const;
+    void reconcile_structure(
+        const PrefabDocument& source,
+        PrefabReconcileResult& result
+    );
 
     std::string _prefab_asset_uuid;
     std::string _source_revision;
@@ -169,9 +230,12 @@ private:
     std::vector<std::string> _source_component_ids;
     std::vector<Entity> _component_owners;
     std::vector<PrefabPropertyOverride> _property_overrides;
+    std::vector<PrefabStructuralOverride> _structural_overrides;
     tc::trent _invalid_serialized_overrides;
+    tc::trent _invalid_serialized_structural_overrides;
     bool _mapping_valid = true;
     bool _overrides_valid = true;
+    bool _structural_overrides_valid = true;
 };
 
 TERMIN_PREFAB_API void register_prefab_component_types();

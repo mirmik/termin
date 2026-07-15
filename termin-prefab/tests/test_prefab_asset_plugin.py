@@ -202,6 +202,30 @@ def test_prefab_hot_reload_reaches_only_live_native_instances() -> None:
         assert first.get_component(PrefabInstanceState).source_revision == expected_revision
         assert second.get_component(PrefabInstanceState).source_revision == expected_revision
 
+        structural_data = copy.deepcopy(updated_data)
+        structural_data["root"]["children"].append({
+            "uuid": "hot-reload-added-child",
+            "name": "AddedChild",
+            "components": [],
+            "children": [],
+        })
+        structural = PrefabAsset(
+            data=structural_data,
+            name="HotReload",
+            uuid=asset.uuid,
+        )
+        structural_result = structural.apply_to_instance(first)
+        assert structural_result.ok
+        assert structural_result.structure_operation_count >= 1
+        assert (
+            structural_result.structure_operations_applied
+            == structural_result.structure_operation_count
+        )
+        assert first.find_child("AddedChild").valid()
+        removal_result = updated.apply_to_instance(first)
+        assert removal_result.ok
+        assert not first.find_child("AddedChild").valid()
+
         first_state = first.get_component(PrefabInstanceState)
         first_probe = first.get_python_component("PrefabHotReloadProbe")
         first_probe.value = 42

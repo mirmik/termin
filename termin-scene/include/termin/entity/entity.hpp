@@ -139,11 +139,20 @@ public:
 
     void add_component(Component* component);
     void add_component_ptr(tc_component* c);
+    bool add_component_ptr_checked(tc_component* c) {
+        return valid() && tc_entity_pool_add_component_checked(pool_ptr(), id(), c);
+    }
     void remove_component(Component* component);
     void remove_component_ptr(tc_component* c);
 
     size_t component_count() const { return tc_entity_component_count(_h); }
     tc_component* component_at(size_t index) const { return tc_entity_component_at(_h, index); }
+    size_t component_index(const tc_component* component) const {
+        return tc_entity_component_index(_h, component);
+    }
+    bool set_component_index(tc_component* component, size_t index) {
+        return tc_entity_set_component_index(_h, component, index);
+    }
 
     // Validate all components - returns true if all ok, prints errors if not
     bool validate_components() const;
@@ -160,6 +169,9 @@ public:
     // --- Hierarchy ---
 
     void set_parent(const Entity& parent);
+    bool set_parent_checked(const Entity& parent) {
+        return valid() && tc_entity_set_parent_checked(_h, parent._h);
+    }
     Entity parent() const;
     std::vector<Entity> children() const;
     size_t sibling_index() const;

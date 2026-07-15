@@ -36,7 +36,8 @@ typedef enum tc_scene_structure_change_kind {
     TC_SCENE_STRUCTURE_PARENT_CHANGED = 3,
     TC_SCENE_STRUCTURE_COMPONENT_ADDED = 4,
     TC_SCENE_STRUCTURE_COMPONENT_REMOVED = 5,
-    TC_SCENE_STRUCTURE_SIBLING_ORDER_CHANGED = 6
+    TC_SCENE_STRUCTURE_SIBLING_ORDER_CHANGED = 6,
+    TC_SCENE_STRUCTURE_COMPONENT_ORDER_CHANGED = 7
 } tc_scene_structure_change_kind;
 
 typedef struct tc_scene_structure_changed_event {
