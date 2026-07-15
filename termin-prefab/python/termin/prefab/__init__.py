@@ -12,7 +12,11 @@ from termin.prefab.asset_plugin import (
     register_prefab_runtime_plugin,
 )
 from termin.prefab._prefab_native import (
+    PrefabDocument,
     PrefabInstanceState,
+    PrefabOverrideRestoreError,
+    PrefabOverrideRestoreFailure,
+    PrefabOverrideRestoreResult,
     PrefabOverrideValue,
     count_live_instances,
     find_live_instances,
@@ -23,7 +27,11 @@ __all__ = [
     "PrefabAsset",
     "PrefabAssetPlugin",
     "PrefabImportPlugin",
+    "PrefabDocument",
     "PrefabInstanceState",
+    "PrefabOverrideRestoreError",
+    "PrefabOverrideRestoreFailure",
+    "PrefabOverrideRestoreResult",
     "PrefabOverrideValue",
     "PrefabRuntimePlugin",
     "PropertyPath",

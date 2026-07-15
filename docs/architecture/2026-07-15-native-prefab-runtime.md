@@ -207,6 +207,18 @@ used to resolve ownership. Override values use an explicit versioned tagged
 codec for scalar, container, math and resource-reference values; numeric lists
 are never guessed to be vectors.
 
+The native property-key grammar is deliberately separate from the legacy
+Python `PropertyPath` traversal syntax:
+
+- an empty component ID addresses the source entity. Supported base paths are
+  `name`, `visible`, `enabled`, `pickable`, `selectable`, `priority`, `layer`
+  and `flags`; transform paths are `transform.position`,
+  `transform.rotation` and `transform.scale`;
+- a non-empty component ID addresses exactly that component `source_id`, and
+  the path is its registered inspect field path without a hierarchy/type
+  prefix;
+- child names, component types and list indices are never identity fallbacks.
+
 ## Instantiation and reconciliation
 
 Instantiation is one native transaction:
@@ -224,6 +236,29 @@ updates source-owned values, creates/removes/reorders source-owned structure and
 preserves explicit local overrides. Unsupported structural conflicts produce a
 diagnostic and remain represented in instance state; they are not silently
 dropped.
+
+Clearing a property override is itself a narrow reconciliation operation. The
+caller supplies the current `PrefabDocument`; the runtime resolves the source
+entity/component and current serialized field value, applies it through a
+checked native setter, and erases metadata only after confirmed success. It
+does not require source revision equality and does not update the instance
+revision, because clearing several fields is not a full source reconciliation.
+
+`clear_all_property_overrides` is deterministic best effort, not falsely
+atomic: keys are processed in `(source entity ID, source component ID, field
+path)` order, successful entries are restored and erased, and failed entries
+remain serialized with structured diagnostics. Arbitrary component setters do
+not currently provide a reversible transaction protocol, so rolling back
+already successful independent setters would be less reliable than retaining
+only the failures. The operation never creates, deletes, reparents or reorders
+entities/components and therefore preserves unrelated local structural edits.
+
+Entity references in source component values are translated through the
+instance source-to-runtime mapping before assignment. Native handle kinds also
+carry an inspect-registry capability marker: a non-empty UUID that resolves to
+an invalid handle fails before assignment. Names are diagnostic only and are
+not resource lookup fallbacks. Metadata-only deletion remains available under
+the explicit `discard_*` API solely for repair/migration tooling.
 
 Editor property commits and undo/redo write the same typed native override
 model. Editing a prefab source in isolation modifies the source document and
@@ -300,6 +335,16 @@ The first native execution slice is in place:
 - `PrefabInstanceState` stores typed property overrides by source entity ID,
   optional source component ID, field path and target inspect kind. Generic
   clone and scene serialization round-trip this metadata without Python.
+- clearing native property overrides now restores values from an explicit
+  current `PrefabDocument`. Entity/transform fields use a closed native path
+  grammar; component fields resolve strictly by source IDs and checked inspect
+  metadata. Single clear is erase-on-success, while clear-all restores every
+  resolvable entry in stable order and retains diagnosed failures;
+- native handle-kind deserialization now rejects unresolved non-empty UUIDs,
+  allowing component resource restoration to fail without overwriting the
+  live value. Entity source references are remapped to the concrete instance;
+  scalar/container/reference/resource, malformed source and mixed batch tests
+  run in the Python-disabled native target.
 
 The remaining violations and gaps are:
 
@@ -311,11 +356,9 @@ The remaining violations and gaps are:
 - `termin-runtime` itself is already a native, Python-free library and is the
   correct packaged-project loading boundary, but it does not yet load prefab
   resources;
-- native typed override storage is implemented, but applying override sets and
-  structural reconciliation are not implemented yet. Checked inspect setters
-  now propagate missing/read-only fields, conversion errors and assignment
-  failures separately from nullable values; transactional override application
-  can rely on that result.
+- applying stored override values and full structural reconciliation are not
+  implemented yet. Checked inspect setters and source-value restoration are in
+  place; full refresh still needs value application plus structural diff.
 
 `termin_player` requiring and packaging Python is intentional for its role as
 an editor-adjacent development/source host and is not a violation of this

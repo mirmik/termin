@@ -15,11 +15,16 @@ The package contains:
   Ordinary numeric lists are never guessed to be vectors or arrays.
 - scene-owned live-instance queries backed by the scene's exact component-type
   index; no Python registry or wrapper retention is involved.
+- checked native override clearing against the current `PrefabDocument`.
+  Successful fields are restored before metadata is erased; failed batch
+  entries remain present with structured diagnostics.
 - `termin.prefab.property_path.PropertyPath` for prefab override paths.
 
 Current boundary note: `Entity` is imported from `termin.scene`. Resource
-reference capture in Python uses registered inspect-kind serializers. Native
-application requires an explicit `PrefabOverrideResourceResolver`; UUID names
-are diagnostic only and are never a lookup fallback. The application
+reference capture in Python uses registered inspect-kind serializers. Applying
+a tagged resource `PrefabOverrideValue` directly requires an explicit
+`PrefabOverrideResourceResolver`. Restoring a source value during clear uses
+the registered native handle kind and rejects unresolved non-empty UUIDs;
+UUID names are diagnostic only and are never a lookup fallback. The application
 `ResourceManager` still provides concrete editor-side lookup methods until
 those facades move to a non-editor package.

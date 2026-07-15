@@ -11,6 +11,44 @@
 
 namespace termin::prefab {
 
+class PrefabDocument;
+
+enum class PrefabOverrideRestoreError {
+    None = 0,
+    InvalidState,
+    InvalidDocument,
+    DocumentMismatch,
+    OverrideNotFound,
+    SourceEntityNotFound,
+    RuntimeEntityNotFound,
+    SourceComponentNotFound,
+    RuntimeComponentNotFound,
+    ComponentOwnerMismatch,
+    ComponentTypeMismatch,
+    FieldNotFound,
+    FieldNotSerializable,
+    KindMismatch,
+    InvalidSourceValue,
+    ResourceResolutionFailed,
+    SetterFailed,
+};
+
+struct TERMIN_PREFAB_API PrefabOverrideRestoreFailure {
+    PrefabOverrideRestoreError error = PrefabOverrideRestoreError::None;
+    std::string source_entity_id;
+    std::string source_component_id;
+    std::string field_path;
+    std::string message;
+};
+
+struct TERMIN_PREFAB_API PrefabOverrideRestoreResult {
+    size_t requested_count = 0;
+    size_t restored_count = 0;
+    std::vector<PrefabOverrideRestoreFailure> failures;
+
+    bool ok() const { return failures.empty(); }
+};
+
 struct TERMIN_PREFAB_API PrefabPropertyOverride {
     std::string source_entity_id;
     std::string source_component_id;
@@ -50,12 +88,23 @@ public:
     bool mapping_valid() const { return _mapping_valid && _overrides_valid; }
 
     bool set_property_override(PrefabPropertyOverride property_override, std::string& error);
-    bool clear_property_override(
+    PrefabOverrideRestoreResult clear_property_override(
+        const PrefabDocument& source,
         const std::string& source_entity_id,
         const std::string& source_component_id,
         const std::string& field_path
     );
-    void clear_all_property_overrides();
+    PrefabOverrideRestoreResult clear_all_property_overrides(
+        const PrefabDocument& source
+    );
+    // Explicit metadata-only escape hatch for repair/migration tools. Normal
+    // editing must use clear_* so live values and metadata cannot diverge.
+    bool discard_property_override(
+        const std::string& source_entity_id,
+        const std::string& source_component_id,
+        const std::string& field_path
+    );
+    void discard_all_property_overrides();
     const PrefabPropertyOverride* property_override(
         const std::string& source_entity_id,
         const std::string& source_component_id,

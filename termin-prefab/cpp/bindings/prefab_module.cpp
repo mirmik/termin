@@ -301,6 +301,38 @@ NB_MODULE(_prefab_native, m) {
             return decode_python_node(nb::cast<nb::dict>(envelope["value"]));
         });
 
+    nb::enum_<termin::prefab::PrefabOverrideRestoreError>(m, "PrefabOverrideRestoreError")
+        .value("NONE", termin::prefab::PrefabOverrideRestoreError::None)
+        .value("INVALID_STATE", termin::prefab::PrefabOverrideRestoreError::InvalidState)
+        .value("INVALID_DOCUMENT", termin::prefab::PrefabOverrideRestoreError::InvalidDocument)
+        .value("DOCUMENT_MISMATCH", termin::prefab::PrefabOverrideRestoreError::DocumentMismatch)
+        .value("OVERRIDE_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::OverrideNotFound)
+        .value("SOURCE_ENTITY_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::SourceEntityNotFound)
+        .value("RUNTIME_ENTITY_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::RuntimeEntityNotFound)
+        .value("SOURCE_COMPONENT_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::SourceComponentNotFound)
+        .value("RUNTIME_COMPONENT_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::RuntimeComponentNotFound)
+        .value("COMPONENT_OWNER_MISMATCH", termin::prefab::PrefabOverrideRestoreError::ComponentOwnerMismatch)
+        .value("COMPONENT_TYPE_MISMATCH", termin::prefab::PrefabOverrideRestoreError::ComponentTypeMismatch)
+        .value("FIELD_NOT_FOUND", termin::prefab::PrefabOverrideRestoreError::FieldNotFound)
+        .value("FIELD_NOT_SERIALIZABLE", termin::prefab::PrefabOverrideRestoreError::FieldNotSerializable)
+        .value("KIND_MISMATCH", termin::prefab::PrefabOverrideRestoreError::KindMismatch)
+        .value("INVALID_SOURCE_VALUE", termin::prefab::PrefabOverrideRestoreError::InvalidSourceValue)
+        .value("RESOURCE_RESOLUTION_FAILED", termin::prefab::PrefabOverrideRestoreError::ResourceResolutionFailed)
+        .value("SETTER_FAILED", termin::prefab::PrefabOverrideRestoreError::SetterFailed);
+
+    nb::class_<termin::prefab::PrefabOverrideRestoreFailure>(m, "PrefabOverrideRestoreFailure")
+        .def_ro("error", &termin::prefab::PrefabOverrideRestoreFailure::error)
+        .def_ro("source_entity_id", &termin::prefab::PrefabOverrideRestoreFailure::source_entity_id)
+        .def_ro("source_component_id", &termin::prefab::PrefabOverrideRestoreFailure::source_component_id)
+        .def_ro("field_path", &termin::prefab::PrefabOverrideRestoreFailure::field_path)
+        .def_ro("message", &termin::prefab::PrefabOverrideRestoreFailure::message);
+
+    nb::class_<termin::prefab::PrefabOverrideRestoreResult>(m, "PrefabOverrideRestoreResult")
+        .def_prop_ro("ok", &termin::prefab::PrefabOverrideRestoreResult::ok)
+        .def_ro("requested_count", &termin::prefab::PrefabOverrideRestoreResult::requested_count)
+        .def_ro("restored_count", &termin::prefab::PrefabOverrideRestoreResult::restored_count)
+        .def_ro("failures", &termin::prefab::PrefabOverrideRestoreResult::failures);
+
     nb::class_<termin::prefab::PrefabInstanceState, termin::CxxComponent>(
         m,
         "PrefabInstanceState"
@@ -392,13 +424,26 @@ NB_MODULE(_prefab_native, m) {
         .def(
             "clear_property_override",
             &termin::prefab::PrefabInstanceState::clear_property_override,
+            nb::arg("source"),
             nb::arg("source_entity_id"),
             nb::arg("source_component_id"),
             nb::arg("field_path")
         )
         .def(
             "clear_all_property_overrides",
-            &termin::prefab::PrefabInstanceState::clear_all_property_overrides
+            &termin::prefab::PrefabInstanceState::clear_all_property_overrides,
+            nb::arg("source")
+        )
+        .def(
+            "discard_property_override",
+            &termin::prefab::PrefabInstanceState::discard_property_override,
+            nb::arg("source_entity_id"),
+            nb::arg("source_component_id"),
+            nb::arg("field_path")
+        )
+        .def(
+            "discard_all_property_overrides",
+            &termin::prefab::PrefabInstanceState::discard_all_property_overrides
         );
 
     m.def(

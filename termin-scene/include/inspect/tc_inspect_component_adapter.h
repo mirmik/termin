@@ -20,6 +20,12 @@ TC_API void tc_inspect_component_adapter_init(void);
 // component bodies.
 TC_API tc_value tc_component_inspect_get(tc_component* c, const char* path);
 TC_API void tc_component_inspect_set(tc_component* c, const char* path, tc_value value, void* context);
+// Checked counterpart for restore/migration code. Returns false when the
+// component, inspect object, field, or setter cannot accept the value.
+TC_API bool tc_component_inspect_set_checked(
+    tc_component* c, const char* path, tc_value value, void* context);
+TC_API tc_inspect_apply_result tc_component_inspect_deserialize_checked(
+    tc_component* c, const tc_value* data, void* context);
 
 // Simplified field setters for FFI (no tc_value marshalling needed).
 TC_API void tc_component_set_field_int(tc_component* c, const char* path, int64_t value, void* context);

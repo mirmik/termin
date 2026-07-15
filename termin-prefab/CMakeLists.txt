@@ -20,6 +20,7 @@ include(TerminRpath)
 add_library(termin_prefab SHARED
     src/prefab_document.cpp
     src/prefab_instance_state.cpp
+    src/prefab_override_restore.cpp
     src/prefab_instantiator.cpp
     src/prefab_override_value.cpp
 )
