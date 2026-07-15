@@ -18,11 +18,13 @@ The package contains:
 - checked native override clearing against the current `PrefabDocument`.
   Successful fields are restored before metadata is erased; failed batch
   entries remain present with structured diagnostics.
-- native property reconciliation for existing instances. It audits mapped
-  structure without mutating it, refreshes non-overridden source fields,
-  reapplies and retains typed overrides, and advances the source revision only
-  after a completely successful pass. `PrefabAsset` hot reload is a thin caller
-  of this native transaction.
+- native structural and property reconciliation for existing instances. Stable
+  source mappings distinguish source-owned structure from unrelated local
+  additions. The transaction creates/removes/reparents/reorders source-owned
+  entities and components, applies tombstone/placement intent, refreshes
+  non-overridden fields, reapplies typed overrides, and advances the source
+  revision only after a completely successful pass. `PrefabAsset` hot reload is
+  a thin caller of this native transaction.
 - `termin.prefab.property_path.PropertyPath` for prefab override paths.
 
 Current boundary note: `Entity` is imported from `termin.scene`. Resource
@@ -36,9 +38,10 @@ UUID names are diagnostic only and are never a lookup fallback. The application
 `ResourceManager` still provides concrete editor-side lookup methods until
 those facades move to a non-editor package.
 
-Property reconciliation is intentionally not full structural reconciliation.
-Source additions/removals, owner/type/parent drift and missing runtime targets
-are diagnosed deterministically and leave the previous revision in place;
-entities and components are not created, deleted, reordered or reparented.
-Local entities/components absent from the source mapping are unrelated local
-structure and are preserved.
+Mapped entities/components are source-owned; unmapped entities/components are
+local and survive reconciliation. Tombstones suppress source targets while
+retaining dormant property intent. Placement records override canonical source
+parent/order. Source removal splices local children into a surviving parent and
+demotes an entity carrying local components to a local shell. Structural
+operations are checked, deterministic best effort: a failure retains the old
+revision and the next pass continues from a coherent partial mapping.

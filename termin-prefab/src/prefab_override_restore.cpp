@@ -88,6 +88,24 @@ tc_component* find_runtime_component(
     return result;
 }
 
+bool source_entity_is_suppressed(
+    const nos::trent& source,
+    const std::string& target_id,
+    const PrefabInstanceState& state,
+    bool ancestor_suppressed = false
+) {
+    if (!source.is_dict()) return false;
+    const std::string source_id = source["uuid"].as_string_default("");
+    const bool suppressed = ancestor_suppressed ||
+        state.source_entity_suppressed(source_id);
+    if (source_id == target_id) return suppressed;
+    if (!source.contains("children") || !source["children"].is_list()) return false;
+    for (const nos::trent& child : source["children"].as_list()) {
+        if (source_entity_is_suppressed(child, target_id, state, suppressed)) return true;
+    }
+    return false;
+}
+
 bool finite_vector(const nos::trent& value, size_t size, double* result) {
     if (!value.is_list() || value.as_list().size() != size) return false;
     for (size_t index = 0; index < size; ++index) {
@@ -219,7 +237,8 @@ std::optional<Failure> apply_component_value(
     const PrefabPropertyOverride& item,
     const nos::trent& source_entity,
     Entity runtime_entity,
-    const PrefabInstanceState& state
+    const PrefabInstanceState& state,
+    const nos::trent& source_root
 ) {
     const nos::trent* source_component = find_source_component(
         source_entity, item.source_component_id);
@@ -300,11 +319,18 @@ std::optional<Failure> apply_component_value(
                        "stored target kind does not match current inspect field kind");
     }
     nos::trent source_value = component_data[item.field_path];
-    auto remap_entity_reference = [&state](nos::trent& reference) -> bool {
+    auto remap_entity_reference = [&state, &source_root](nos::trent& reference) -> bool {
         if (!reference.is_dict() || !reference.contains("uuid") ||
             !reference["uuid"].is_string()) return false;
         Entity mapped = state.entity_for_source(reference["uuid"].as_string());
-        if (!mapped.valid()) return false;
+        if (!mapped.valid()) {
+            if (source_entity_is_suppressed(
+                    source_root, reference["uuid"].as_string(), state)) {
+                reference["uuid"] = "";
+                return true;
+            }
+            return false;
+        }
         reference["uuid"] = std::string(mapped.uuid() ? mapped.uuid() : "");
         return true;
     };
@@ -371,7 +397,8 @@ std::optional<Failure> apply_source_value(
     if (item.source_component_id.empty()) {
         return apply_entity_value(item, *source_entity, runtime_entity);
     }
-    return apply_component_value(item, *source_entity, runtime_entity, state);
+    return apply_component_value(
+        item, *source_entity, runtime_entity, state, document.source_hierarchy());
 }
 
 std::optional<Failure> validate_operation(
@@ -735,6 +762,13 @@ PrefabReconcileResult PrefabInstanceState::reconcile_properties(
     const PrefabDocument& source,
     const PrefabOverrideResourceResolver* resource_resolver
 ) {
+    return reconcile(source, resource_resolver);
+}
+
+PrefabReconcileResult PrefabInstanceState::reconcile(
+    const PrefabDocument& source,
+    const PrefabOverrideResourceResolver* resource_resolver
+) {
     PrefabReconcileResult result;
     result.previous_revision = source_revision();
     result.target_revision = source.source_revision();
@@ -756,96 +790,42 @@ PrefabReconcileResult PrefabInstanceState::reconcile_properties(
         return std::find(_source_component_ids.begin(), _source_component_ids.end(), source_id) !=
             _source_component_ids.end();
     };
-    const auto structural = [&result](
-        Error error,
-        std::string entity_id,
-        std::string component_id,
-        std::string message
-    ) {
-        Failure item;
-        item.error = error;
-        item.source_entity_id = std::move(entity_id);
-        item.source_component_id = std::move(component_id);
-        item.message = std::move(message);
-        tc::Log::error("[PrefabReconcile] %s", item.message.c_str());
-        result.failures.push_back(reconcile_failure(
-            PrefabReconcilePhase::Structure, item));
-    };
+    reconcile_structure(source, result);
 
-    const std::string root_source_id =
-        source.source_hierarchy()["uuid"].as_string_default("");
-    if (root_source_id.empty() || entity_for_source(root_source_id) != entity()) {
-        structural(Error::ComponentOwnerMismatch, root_source_id, "",
-                   "PrefabInstanceState is not attached to its mapped source root");
+    std::unordered_set<std::string> suppressed_entities;
+    std::unordered_set<std::string> suppressed_components;
+    for (const PrefabStructuralOverride& item : _structural_overrides) {
+        if (item.kind == PrefabStructuralOverrideKind::SuppressEntity) {
+            suppressed_entities.insert(item.source_entity_id);
+        } else if (item.kind == PrefabStructuralOverrideKind::SuppressComponent) {
+            suppressed_components.insert(item.source_component_id);
+        }
     }
-
-    for (const auto& [source_id, source_entity] : index.entities) {
-        (void)source_entity;
-        if (!has_entity_mapping(source_id)) {
-            structural(Error::RuntimeEntityNotFound, source_id, "",
-                       "source entity has no runtime mapping; structural additions are not reconciled");
-            continue;
-        }
-        Entity runtime = entity_for_source(source_id);
-        if (!runtime.valid()) {
-            structural(Error::RuntimeEntityNotFound, source_id, "",
-                       "mapped runtime entity is no longer live");
-            continue;
-        }
-        const std::string& source_parent_id = index.entity_parents.at(source_id);
-        if (!source_parent_id.empty()) {
-            Entity expected_parent = entity_for_source(source_parent_id);
-            if (!expected_parent.valid() || runtime.parent() != expected_parent) {
-                structural(Error::ComponentOwnerMismatch, source_id, "",
-                           "mapped entity parent differs from the current source hierarchy");
+    bool suppression_changed = true;
+    while (suppression_changed) {
+        suppression_changed = false;
+        for (const auto& [entity_id, parent_id] : index.entity_parents) {
+            if (!parent_id.empty() && suppressed_entities.contains(parent_id) &&
+                suppressed_entities.insert(entity_id).second) {
+                suppression_changed = true;
             }
         }
     }
-    for (const std::string& source_id : _source_entity_ids) {
-        if (!index.entities.contains(source_id)) {
-            structural(Error::SourceEntityNotFound, source_id, "",
-                       "mapped source entity was removed; structural removals are not reconciled");
+    for (const auto& [component_id, owner_id] : index.component_owners) {
+        if (suppressed_entities.contains(owner_id)) {
+            suppressed_components.insert(component_id);
         }
     }
-    for (const auto& [component_id, source_component] : index.components) {
-        if (!has_component_mapping(component_id)) {
-            structural(Error::RuntimeComponentNotFound,
-                       index.component_owners.at(component_id), component_id,
-                       "source component has no runtime mapping; structural additions are not reconciled");
-            continue;
-        }
-        const std::string& entity_id = index.component_owners.at(component_id);
-        Entity owner = component_owner_for_source(component_id);
-        Entity expected_owner = entity_for_source(entity_id);
-        if (!owner.valid() || owner != expected_owner) {
-            structural(Error::ComponentOwnerMismatch, entity_id, component_id,
-                       "mapped component owner differs from the source owner");
-            continue;
-        }
-        bool duplicate = false;
-        tc_component* runtime = find_runtime_component(owner, component_id, duplicate);
-        if (runtime == nullptr) {
-            structural(Error::RuntimeComponentNotFound, entity_id, component_id,
-                       duplicate ? "multiple runtime components share the source component ID"
-                                 : "mapped runtime component is absent");
-            continue;
-        }
-        const std::string source_type =
-            source_component->operator[]("type").as_string_default("");
-        const char* runtime_type = tc_component_type_name(runtime);
-        if (runtime_type == nullptr || source_type != runtime_type) {
-            structural(Error::ComponentTypeMismatch, entity_id, component_id,
-                       "mapped runtime component type differs from the current source type");
+    std::vector<PrefabPropertyOverride> overrides;
+    for (const PrefabPropertyOverride& item : _property_overrides) {
+        if (suppressed_entities.contains(item.source_entity_id) ||
+            (!item.source_component_id.empty() &&
+             suppressed_components.contains(item.source_component_id))) {
+            ++result.dormant_override_count;
+        } else {
+            overrides.push_back(item);
         }
     }
-    for (const std::string& source_id : _source_component_ids) {
-        if (!index.components.contains(source_id)) {
-            structural(Error::SourceComponentNotFound, "", source_id,
-                       "mapped source component was removed; structural removals are not reconciled");
-        }
-    }
-
-    std::vector<PrefabPropertyOverride> overrides = _property_overrides;
     std::sort(overrides.begin(), overrides.end(), [](const auto& left, const auto& right) {
         return std::tie(left.source_entity_id, left.source_component_id, left.field_path) <
             std::tie(right.source_entity_id, right.source_component_id, right.field_path);

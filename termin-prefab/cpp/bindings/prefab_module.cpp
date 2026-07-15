@@ -340,7 +340,13 @@ NB_MODULE(_prefab_native, m) {
         .value("KIND_MISMATCH", termin::prefab::PrefabPropertyApplyError::KindMismatch)
         .value("INVALID_SOURCE_VALUE", termin::prefab::PrefabPropertyApplyError::InvalidSourceValue)
         .value("RESOURCE_RESOLUTION_FAILED", termin::prefab::PrefabPropertyApplyError::ResourceResolutionFailed)
-        .value("SETTER_FAILED", termin::prefab::PrefabPropertyApplyError::SetterFailed);
+        .value("SETTER_FAILED", termin::prefab::PrefabPropertyApplyError::SetterFailed)
+        .value("STRUCTURAL_OVERRIDE_INVALID", termin::prefab::PrefabPropertyApplyError::StructuralOverrideInvalid)
+        .value("FACTORY_UNAVAILABLE", termin::prefab::PrefabPropertyApplyError::FactoryUnavailable)
+        .value("ATTACHMENT_FAILED", termin::prefab::PrefabPropertyApplyError::AttachmentFailed)
+        .value("PARENT_CYCLE", termin::prefab::PrefabPropertyApplyError::ParentCycle)
+        .value("ORDER_FAILED", termin::prefab::PrefabPropertyApplyError::OrderFailed)
+        .value("REMOVAL_CONFLICT", termin::prefab::PrefabPropertyApplyError::RemovalConflict);
     m.attr("PrefabOverrideRestoreError") = m.attr("PrefabPropertyApplyError");
 
     nb::class_<termin::prefab::PrefabOverrideRestoreFailure>(m, "PrefabOverrideRestoreFailure")
@@ -372,14 +378,46 @@ NB_MODULE(_prefab_native, m) {
 
     nb::class_<termin::prefab::PrefabReconcileResult>(m, "PrefabReconcileResult")
         .def_prop_ro("ok", &termin::prefab::PrefabReconcileResult::ok)
+        .def_ro("structure_operation_count", &termin::prefab::PrefabReconcileResult::structure_operation_count)
+        .def_ro("structure_operations_applied", &termin::prefab::PrefabReconcileResult::structure_operations_applied)
         .def_ro("source_field_count", &termin::prefab::PrefabReconcileResult::source_field_count)
         .def_ro("source_fields_applied", &termin::prefab::PrefabReconcileResult::source_fields_applied)
         .def_ro("override_count", &termin::prefab::PrefabReconcileResult::override_count)
         .def_ro("overrides_applied", &termin::prefab::PrefabReconcileResult::overrides_applied)
+        .def_ro("dormant_override_count", &termin::prefab::PrefabReconcileResult::dormant_override_count)
         .def_ro("revision_updated", &termin::prefab::PrefabReconcileResult::revision_updated)
         .def_ro("previous_revision", &termin::prefab::PrefabReconcileResult::previous_revision)
         .def_ro("target_revision", &termin::prefab::PrefabReconcileResult::target_revision)
         .def_ro("failures", &termin::prefab::PrefabReconcileResult::failures);
+
+    nb::enum_<termin::prefab::PrefabStructuralOverrideKind>(m, "PrefabStructuralOverrideKind")
+        .value("SUPPRESS_ENTITY", termin::prefab::PrefabStructuralOverrideKind::SuppressEntity)
+        .value("SUPPRESS_COMPONENT", termin::prefab::PrefabStructuralOverrideKind::SuppressComponent)
+        .value("PLACE_ENTITY", termin::prefab::PrefabStructuralOverrideKind::PlaceEntity)
+        .value("PLACE_COMPONENT", termin::prefab::PrefabStructuralOverrideKind::PlaceComponent);
+
+    nb::enum_<termin::prefab::PrefabStructureReferenceKind>(m, "PrefabStructureReferenceKind")
+        .value("END", termin::prefab::PrefabStructureReferenceKind::End)
+        .value("SOURCE", termin::prefab::PrefabStructureReferenceKind::Source)
+        .value("LOCAL", termin::prefab::PrefabStructureReferenceKind::Local);
+
+    nb::class_<termin::prefab::PrefabStructureReference>(m, "PrefabStructureReference")
+        .def(nb::init<>())
+        .def_rw("kind", &termin::prefab::PrefabStructureReference::kind)
+        .def_rw("source_id", &termin::prefab::PrefabStructureReference::source_id)
+        .def_rw("local_entity", &termin::prefab::PrefabStructureReference::local_entity)
+        .def_rw(
+            "local_component_source_id",
+            &termin::prefab::PrefabStructureReference::local_component_source_id
+        );
+
+    nb::class_<termin::prefab::PrefabStructuralOverride>(m, "PrefabStructuralOverride")
+        .def(nb::init<>())
+        .def_rw("kind", &termin::prefab::PrefabStructuralOverride::kind)
+        .def_rw("source_entity_id", &termin::prefab::PrefabStructuralOverride::source_entity_id)
+        .def_rw("source_component_id", &termin::prefab::PrefabStructuralOverride::source_component_id)
+        .def_rw("parent", &termin::prefab::PrefabStructuralOverride::parent)
+        .def_rw("before", &termin::prefab::PrefabStructuralOverride::before);
 
     nb::class_<termin::prefab::PrefabInstanceState, termin::CxxComponent>(
         m,
@@ -413,6 +451,10 @@ NB_MODULE(_prefab_native, m) {
         .def_prop_ro(
             "property_override_count",
             &termin::prefab::PrefabInstanceState::property_override_count
+        )
+        .def_prop_ro(
+            "structural_override_count",
+            &termin::prefab::PrefabInstanceState::structural_override_count
         )
         .def_prop_ro(
             "overrides_valid",
@@ -485,6 +527,32 @@ NB_MODULE(_prefab_native, m) {
                 return self.reconcile_properties(source, &resource_resolver);
             },
             nb::arg("source")
+        )
+        .def(
+            "reconcile",
+            [](termin::prefab::PrefabInstanceState& self,
+               const termin::prefab::PrefabDocument& source) {
+                const PythonBindingResourceResolver resource_resolver;
+                return self.reconcile(source, &resource_resolver);
+            },
+            nb::arg("source")
+        )
+        .def(
+            "set_structural_override",
+            [](termin::prefab::PrefabInstanceState& self,
+               termin::prefab::PrefabStructuralOverride item) {
+                std::string error;
+                if (!self.set_structural_override(std::move(item), error)) {
+                    throw nb::value_error(error.c_str());
+                }
+            },
+            nb::arg("structural_override")
+        )
+        .def(
+            "discard_structural_override",
+            &termin::prefab::PrefabInstanceState::discard_structural_override,
+            nb::arg("kind"),
+            nb::arg("source_id")
         )
         .def(
             "clear_all_property_overrides",

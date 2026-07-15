@@ -231,21 +231,37 @@ Instantiation is one native transaction:
 6. Apply instance overrides, if loading saved instance state.
 7. Publish the instance record only after the hierarchy is complete.
 
-Property reconciliation compares the current document with the instance by
-stable source-local identity. It updates source-owned values, skips keys with
-explicit overrides, and then reapplies every stored typed override. It audits
-source additions/removals, missing or duplicate runtime targets, owner/type and
-parent drift, but deliberately does not create, remove, reparent or reorder
-structure. Those conflicts produce stable diagnostics and prevent revision
-advancement; unrelated local structure is ignored and preserved. Full
-structural reconciliation remains a later layer over this property transaction.
+Reconciliation compares the current document with the instance by stable
+source-local identity. A mapped entity/component is source-owned; an unmapped
+one is local. The structural phase creates missing source-owned targets,
+replaces changed component types through checked factories, removes disappeared
+source targets, converges parent and order, and then runs the property source
+and override passes. Unmapped local structure is never removed merely because
+it is absent from the source.
+
+Structural intent is stored as versioned tombstone and placement records.
+Entity/component tombstones suppress source recreation. Entity placements name
+an explicit source or local parent plus a source/local/end order anchor;
+component placements use a source/local/end component anchor. Tombstones make
+property overrides below the suppressed target dormant rather than deleting
+them. Removing a tombstone reactivates the same stable identities. Placement
+records win over canonical source parent/order and survive generic clone and
+scene serialization through real `Entity` handles for local anchors.
+
+Ordering uses a stable slot merge: local siblings retain their positions and
+relative order, while source-owned siblings occupy the source-owned slots in
+the current source order. Source entity removal splices local children into the
+nearest surviving parent. If a removed source entity owns local components,
+the runtime entity is demoted to an unmapped local shell instead of being
+destroyed. Source removal conflicts with retained property/placement intent
+unless a tombstone explicitly authorizes suppression.
 
 The operation is deterministic best effort. A global document/asset/state
 preflight happens before mutation. Independent source and override fields then
 run in property-key order through checked native setters. Failed override
 records remain untouched, successful override records also remain because they
 continue to define instance intent. The instance revision advances to the
-document revision only when structural audit, every planned source field and
+document revision only when every structural operation, planned source field and
 every override all succeed. Explicit reconciliation is not skipped merely
 because revisions already match, so it can repair accidental live drift.
 
@@ -362,12 +378,15 @@ The first native execution slice is in place:
   live value. Entity source references are remapped to the concrete instance;
   scalar/container/reference/resource, malformed source and mixed batch tests
   run in the Python-disabled native target.
-- native property reconciliation now performs global preflight, a non-mutating
-  structural audit, a source-value pass that skips exact override keys, and a
-  typed override pass. Failures are returned in stable phase/key order and keep
-  the previous source revision; a complete pass advances it. Explicit root
+- native reconciliation now performs global preflight, convergent structural
+  mutation, a source-value pass that skips exact override keys, and a typed
+  override pass. It creates/removes/reparents/reorders source-owned entities
+  and components by stable IDs, preserves unmapped local structure, supports
+  tombstone and placement intent, and keeps mappings coherent for retry after
+  partial failure. Failures are returned in stable phase/key order and keep the
+  previous source revision; a complete pass advances it. Explicit root
   name/position instantiation options are published as ordinary typed
-  overrides;
+  property overrides;
 - `PrefabAsset` hot reload now calls this native transaction for each live
   instance. The old Python `PropertyPath` traversal, resource-name heuristics
   and unconditional revision assignment are no longer part of refresh.
@@ -382,11 +401,10 @@ The remaining violations and gaps are:
 - `termin-runtime` itself is already a native, Python-free library and is the
   correct packaged-project loading boundary, but it does not yet load prefab
   resources;
-- full structural reconciliation is not implemented yet. The current native
-  transaction diagnoses additions, removals, missing targets, parent/owner and
-  component-type drift without changing structure. Editor mutation capture is
-  also still separate; once an override is recorded, refresh semantics are
-  native and complete at property level.
+- structural and property reconciliation are native and complete for recorded
+  source ownership and override intent. Editor mutation capture is still
+  separate: editor commands do not yet atomically create tombstone/placement
+  records when the user deletes, reparents or reorders prefab-owned structure.
 
 `termin_player` requiring and packaging Python is intentional for its role as
 an editor-adjacent development/source host and is not a violation of this
@@ -411,8 +429,8 @@ link against Python.
    `termin-runtime` loading.
 6. Add native reconciliation and editor override capture, then retire the old
    Python implementation and schemas. **The versioned value codec, native
-   property-override storage and property-level source/override reconciliation
-   are done. Structural mutation and editor mutation capture remain.**
+   property/structural override storage and full native reconciliation are
+   done. Editor mutation capture remains.**
 
 The first four steps establish correctness. The last two close the runtime
 boundary and make prefab behavior independent of whether a particular host

@@ -212,6 +212,8 @@ TC_POOL_API void tc_entity_pool_update_transforms(tc_entity_pool* pool);
 
 TC_POOL_API tc_entity_id tc_entity_pool_parent(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API void tc_entity_pool_set_parent(tc_entity_pool* pool, tc_entity_id id, tc_entity_id parent);
+TC_POOL_API bool tc_entity_pool_set_parent_checked(tc_entity_pool* pool, tc_entity_id id,
+                                                   tc_entity_id parent);
 
 TC_POOL_API size_t tc_entity_pool_children_count(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API tc_entity_id tc_entity_pool_child_at(const tc_entity_pool* pool, tc_entity_id id,
@@ -227,9 +229,15 @@ TC_POOL_API bool tc_entity_pool_set_sibling_index(tc_entity_pool* pool, tc_entit
 // ============================================================================
 
 TC_POOL_API void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c);
+TC_POOL_API bool tc_entity_pool_add_component_checked(tc_entity_pool* pool, tc_entity_id id,
+                                                      tc_component* c);
 TC_POOL_API void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c);
 TC_POOL_API size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_id id, size_t index);
+TC_POOL_API size_t tc_entity_pool_component_index(const tc_entity_pool* pool, tc_entity_id id,
+                                                  const tc_component* c);
+TC_POOL_API bool tc_entity_pool_set_component_index(tc_entity_pool* pool, tc_entity_id id,
+                                                    tc_component* c, size_t index);
 
 // ============================================================================
 // Migration between pools
@@ -484,6 +492,14 @@ static inline void tc_entity_set_parent(tc_entity_handle h, tc_entity_handle par
     if (pool) tc_entity_pool_set_parent(pool, h.id, parent.id);
 }
 
+static inline bool tc_entity_set_parent_checked(tc_entity_handle h, tc_entity_handle parent) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    if (!pool) return false;
+    if (tc_entity_handle_valid(parent) &&
+        !tc_entity_pool_handle_eq(h.pool, parent.pool)) return false;
+    return tc_entity_pool_set_parent_checked(pool, h.id, parent.id);
+}
+
 static inline size_t tc_entity_children_count(tc_entity_handle h) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     return pool ? tc_entity_pool_children_count(pool, h.id) : 0;
@@ -528,6 +544,16 @@ static inline size_t tc_entity_component_count(tc_entity_handle h) {
 static inline tc_component* tc_entity_component_at(tc_entity_handle h, size_t index) {
     tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
     return pool ? tc_entity_pool_component_at(pool, h.id, index) : NULL;
+}
+
+static inline size_t tc_entity_component_index(tc_entity_handle h, const tc_component* c) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool ? tc_entity_pool_component_index(pool, h.id, c) : SIZE_MAX;
+}
+
+static inline bool tc_entity_set_component_index(tc_entity_handle h, tc_component* c, size_t index) {
+    tc_entity_pool* pool = tc_entity_pool_registry_get(h.pool);
+    return pool && tc_entity_pool_set_component_index(pool, h.id, c, index);
 }
 
 // SoA Components (handle-based)
