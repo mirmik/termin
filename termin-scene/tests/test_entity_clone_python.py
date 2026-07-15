@@ -36,11 +36,13 @@ def test_entity_clone_preserves_python_component_data_and_parent():
         component = ProbeClonePythonComponent()
         component.value = 37
         root.add_component(component)
+        assert component.source_id
 
         source_data = root.serialize_hierarchy()
         assert source_data["uuid"] == root.uuid
         assert source_data["name"] == "root"
         assert source_data["components"][0]["type"] == "ProbeClonePythonComponent"
+        assert source_data["components"][0]["source_id"] == component.source_id
         assert source_data["components"][0]["data"]["value"] == 37
 
         clone_data, uuid_remap = Entity.make_clone_payload(source_data, "_copy")
@@ -58,6 +60,7 @@ def test_entity_clone_preserves_python_component_data_and_parent():
         cloned_from_data_component = clone_from_data.get_python_component("ProbeClonePythonComponent")
         assert cloned_from_data_component is not None
         assert cloned_from_data_component.value == 37
+        assert cloned_from_data_component.source_id == component.source_id
 
         clone = root.clone("_copy")
         assert clone is not None

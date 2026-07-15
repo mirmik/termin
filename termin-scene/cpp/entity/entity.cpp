@@ -95,6 +95,7 @@ nos::trent serialize_entity_hierarchy(const Entity& entity) {
         }
 
         nos::trent comp_data;
+        comp_data["source_id"] = tc_component_ensure_source_id(tc);
         comp_data["type"] = type_name;
         if (!tc_inspect_has_type(type_name)) {
             tc::Log::warn(
@@ -955,6 +956,7 @@ void Entity::deserialize_components_trent(
 
         std::string type_name = comp_data["type"].as_string_default("");
         if (type_name.empty()) continue;
+        const std::string source_id = comp_data["source_id"].as_string_default("");
 
         if (mode == ComponentDeserializationMode::UnknownOnly) {
             tc_component* unk = tc_component_registry_create("UnknownComponent");
@@ -965,6 +967,7 @@ void Entity::deserialize_components_trent(
                 continue;
             }
 
+            tc_component_set_source_id(unk, source_id.c_str());
             add_component_ptr(unk);
             auto* unknown_obj =
                 (unk->kind == TC_CXX_COMPONENT)
@@ -987,6 +990,7 @@ void Entity::deserialize_components_trent(
             // Create UnknownComponent placeholder
             tc_component* unk = tc_component_registry_create("UnknownComponent");
             if (unk) {
+                tc_component_set_source_id(unk, source_id.c_str());
                 add_component_ptr(unk);
                 // Store original type and data
                 auto* unknown_obj =
@@ -1010,6 +1014,8 @@ void Entity::deserialize_components_trent(
             tc::Log::warn("[Entity] Failed to create component: %s", type_name.c_str());
             continue;
         }
+
+        tc_component_set_source_id(tc, source_id.c_str());
 
         // Deserialize data BEFORE adding to entity
         if (comp_data.contains("data")) {

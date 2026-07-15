@@ -60,6 +60,7 @@ nos::trent source_hierarchy() {
     root["components"].init(nos::trent::type::list);
 
     nos::trent component;
+    component["source_id"] = "prefab-source-probe-component";
     component["type"] = "PrefabRefProbe";
     component["data"]["target"]["uuid"] = "prefab-source-child";
     root["components"].push_back(std::move(component));
@@ -139,6 +140,20 @@ int main() {
                 "duplicate source UUID should have a stable error code");
     TEST_ASSERT(scene.entity_count() == stable_count,
                 "duplicate source UUID should not modify the target scene");
+
+    nos::trent duplicate_component = source;
+    nos::trent second_component = duplicate_component["components"].as_list()[0];
+    duplicate_component["components"].push_back(std::move(second_component));
+    termin::prefab::PrefabInstantiateResult duplicate_component_result =
+        termin::prefab::PrefabInstantiator::instantiate(
+            duplicate_component,
+            scene.handle(),
+            parent
+        );
+    TEST_ASSERT(duplicate_component_result.error == termin::prefab::PrefabInstantiateError::InvalidDocument,
+                "duplicate component source ID should be rejected");
+    TEST_ASSERT(scene.entity_count() == stable_count,
+                "duplicate component source ID should not modify the target scene");
 
     termin::TcSceneRef other_scene = termin::TcSceneRef::create("prefab-other-scene");
     termin::Entity foreign_parent = other_scene.create_entity("ForeignParent");

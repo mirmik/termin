@@ -175,6 +175,8 @@ int main() {
     component->target = child;
     component->plain_uuid_string = child.uuid();
     root.add_component_ptr(raw_component);
+    const std::string component_source_id = component->source_id();
+    TEST_ASSERT(!component_source_id.empty(), "attached component should receive a source ID");
 
     nos::trent source_data = root.serialize_hierarchy();
     TEST_ASSERT(source_data.is_dict(), "hierarchy serialization should return a dict");
@@ -184,6 +186,8 @@ int main() {
                 "hierarchy serialization should keep source child uuid");
     TEST_ASSERT(source_data["components"].as_list()[0]["data"]["target"]["uuid"].as_string() == std::string(child.uuid()),
                 "hierarchy serialization should keep source entity refs");
+    TEST_ASSERT(source_data["components"].as_list()[0]["source_id"].as_string() == component_source_id,
+                "hierarchy serialization should keep component source identity");
 
     std::unordered_map<std::string, std::string> uuid_remap;
     nos::trent clone_data = termin::Entity::make_clone_payload(source_data, "_ghost", uuid_remap);
@@ -226,6 +230,8 @@ int main() {
     CloneRefComponent* cloned_component = clone.get_component<CloneRefComponent>();
     TEST_ASSERT(cloned_component != nullptr, "clone component should exist");
     TEST_ASSERT(cloned_component != component, "clone component should be a different instance");
+    TEST_ASSERT(cloned_component->source_id() == component_source_id,
+                "runtime clone should retain the component source identity");
     TEST_ASSERT(cloned_component->value == 42, "clone component should preserve scalar data");
     TEST_ASSERT(cloned_component->target.valid(), "clone component entity ref should resolve");
     TEST_ASSERT(cloned_component->target == cloned_child, "clone component entity ref should be remapped to cloned child");

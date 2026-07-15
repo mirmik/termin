@@ -347,6 +347,8 @@ int test_degrade_upgrade_roundtrip() {
     component->value = 123;
     component->set_display_name("Reloadable Label");
     entity.add_component(component);
+    const std::string source_id = component->source_id();
+    TEST_ASSERT(!source_id.empty(), "attached component receives source identity");
     TEST_ASSERT(component->type_name() != nullptr, "type entry linked on add");
     TEST_ASSERT(tc_component_registry_instance_count("ReloadableComponent") == before_count + 1,
                 "manual component instance is linked on add");
@@ -365,6 +367,7 @@ int test_degrade_upgrade_roundtrip() {
     auto* unknown = static_cast<termin::UnknownComponent*>(termin::CxxComponent::from_tc(unknown_tc));
     TEST_ASSERT(unknown != nullptr, "unknown component cast succeeds");
     TEST_ASSERT(unknown->original_type == "ReloadableComponent", "original type preserved");
+    TEST_ASSERT(unknown->source_id() == source_id, "source identity preserved on degrade");
 
     TEST_ASSERT(unknown->original_data.type == TC_VALUE_DICT, "original data stored as dict");
     tc_value* stored_value = tc_value_dict_get(&unknown->original_data, "value");
@@ -382,6 +385,7 @@ int test_degrade_upgrade_roundtrip() {
     TEST_ASSERT(restored != nullptr, "reloadable component restored");
     TEST_ASSERT(restored->value == 123, "restored value matches");
     TEST_ASSERT(restored->display_name() == "Reloadable Label", "display_name preserved on upgrade");
+    TEST_ASSERT(restored->source_id() == source_id, "source identity preserved on upgrade");
 
     tc_value restored_data = restored->serialize_data();
     tc_value* display_name = tc_value_dict_get(&restored_data, "display_name");

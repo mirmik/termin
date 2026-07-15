@@ -366,6 +366,7 @@ nos::trent serialize_entity_recursive(const Entity& e) {
         if (!type_name) continue;
 
         nos::trent comp_data;
+        comp_data["source_id"] = tc_component_ensure_source_id(tc);
         comp_data["type"] = type_name;
         if (tc->kind == TC_CXX_COMPONENT || tc->body) {
             tc_value v = serialize_component_data(tc);

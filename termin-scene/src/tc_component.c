@@ -1,5 +1,6 @@
 // tc_component.c - Component registry implementation
 #include "core/tc_component.h"
+#include <tcbase/tc_uuid.h>
 #include "inspect/tc_runtime_type_registry.h"
 #include "tc_type_registry.h"
 #include <tcbase/tc_log.h>
@@ -800,6 +801,27 @@ void tc_component_registry_cleanup(void) {
 
 const char* tc_component_get_type_name(const tc_component* c) {
     return tc_component_type_name(c);
+}
+
+const char* tc_component_get_source_id(const tc_component* c) {
+    return (c && c->source_id) ? c->source_id : "";
+}
+
+void tc_component_set_source_id(tc_component* c, const char* source_id) {
+    if (!c) return;
+    c->source_id = (source_id && source_id[0] != '\0')
+        ? tc_intern_string(source_id)
+        : NULL;
+}
+
+const char* tc_component_ensure_source_id(tc_component* c) {
+    if (!c) return "";
+    if (!c->source_id || c->source_id[0] == '\0') {
+        char uuid[64] = {0};
+        tc_generate_uuid(uuid);
+        c->source_id = tc_intern_string(uuid);
+    }
+    return c->source_id;
 }
 
 const char* tc_component_get_display_name(const tc_component* c) {

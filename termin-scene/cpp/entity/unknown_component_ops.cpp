@@ -228,6 +228,10 @@ bool upgrade_unknown_component_ref_impl(const Entity& entity,
     }
 
     apply_component_core_fields(upgraded_tc, data_to_apply);
+    tc_component_set_source_id(
+        upgraded_tc,
+        tc_component_get_source_id(component)
+    );
 
     tc_value_free(&empty_data);
 
@@ -395,6 +399,10 @@ bool degrade_component_ref_to_unknown(const Entity& entity, tc_component* compon
     unknown_tc->enabled = component->enabled;
     unknown_tc->active_in_editor = component->active_in_editor;
     tc_component_set_display_name(unknown_tc, tc_component_get_display_name(component));
+    tc_component_set_source_id(
+        unknown_tc,
+        tc_component_get_source_id(component)
+    );
 
     Entity mutable_entity = entity;
     mutable_entity.add_component_ptr(unknown_tc);

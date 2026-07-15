@@ -253,14 +253,19 @@ The first native execution slice is in place:
   native transaction rather than a second Python hierarchy loader;
 - native and Python integration tests cover nested hierarchies, two disjoint
   instances, internal references, parented target-pool creation and malformed
-  input without partial scene mutation.
+  input without partial scene mutation;
+- native components now carry a persistent `source_id` separate from their
+  runtime pointer/owner handle. It is generated on attachment, serialized with
+  hierarchy data, retained by runtime clones and preserved through
+  `UnknownComponent` degradation and upgrade. This is the component-identity
+  substrate required by the next `PrefabDocument` schema.
 
 The remaining violations and gaps are:
 
-- document parsing, versioning and stable source-local IDs have not yet moved
-  into the native library; the current instantiator accepts the existing
-  serialized hierarchy representation and uses its source UUIDs only as clone
-  identities;
+- document parsing and versioning have not yet moved into the native library;
+  the current instantiator accepts the existing serialized hierarchy
+  representation. Entity source IDs are still represented by source UUIDs,
+  while component `source_id` is now explicit;
 - prefab instance state is still a `PythonComponent`, and live tracking still
   uses a Python `WeakSet`;
 - the Python runtime asset plugin remains until native asset registration and

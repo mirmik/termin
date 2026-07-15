@@ -20,6 +20,7 @@ PrefabInstantiateResult failure(PrefabInstantiateError error, std::string messag
 bool validate_entity_node(
     const nos::trent& node,
     std::unordered_set<std::string>& source_uuids,
+    std::unordered_set<std::string>& component_source_ids,
     std::string& message,
     const std::string& path
 ) {
@@ -54,6 +55,12 @@ bool validate_entity_node(
                 message = component_path + ".type must be a non-empty string";
                 return false;
             }
+            const std::string source_id = component["source_id"].as_string_default("");
+            if (!source_id.empty() && !component_source_ids.insert(source_id).second) {
+                message = component_path + ".source_id duplicates component source id '" +
+                    source_id + "'";
+                return false;
+            }
             ++index;
         }
     }
@@ -68,6 +75,7 @@ bool validate_entity_node(
             if (!validate_entity_node(
                     child,
                     source_uuids,
+                    component_source_ids,
                     message,
                     path + ".children[" + std::to_string(index) + "]")) {
                 return false;
@@ -108,8 +116,14 @@ PrefabInstantiateResult PrefabInstantiator::instantiate(
     }
 
     std::unordered_set<std::string> source_uuids;
+    std::unordered_set<std::string> component_source_ids;
     std::string validation_message;
-    if (!validate_entity_node(source_hierarchy, source_uuids, validation_message, "root")) {
+    if (!validate_entity_node(
+            source_hierarchy,
+            source_uuids,
+            component_source_ids,
+            validation_message,
+            "root")) {
         const PrefabInstantiateError error = validation_message.find("duplicates source uuid") != std::string::npos
             ? PrefabInstantiateError::DuplicateSourceUuid
             : PrefabInstantiateError::InvalidDocument;

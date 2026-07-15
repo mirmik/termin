@@ -1451,6 +1451,7 @@ static void tc_entity_pool_add_component_raw(tc_entity_pool* pool, tc_entity_id 
     }
 
     tc_component_try_link_declared_type(c);
+    tc_component_ensure_source_id(c);
 
     // Set owner entity handle
     tc_entity_pool_handle pool_h = tc_entity_pool_registry_find(pool);
