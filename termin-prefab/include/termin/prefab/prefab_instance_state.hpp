@@ -151,6 +151,21 @@ public:
 
     Entity entity_for_source(const std::string& source_id) const;
     Entity component_owner_for_source(const std::string& source_id) const;
+    std::string source_for_entity(const Entity& runtime_entity) const;
+    std::string source_for_component(
+        const Entity& runtime_owner,
+        const std::string& runtime_component_source_id
+    ) const;
+    bool rebind_entity_mapping(
+        const std::string& source_id,
+        const Entity& runtime_entity,
+        std::string& error
+    );
+    bool rebind_component_mapping(
+        const std::string& source_id,
+        const Entity& runtime_owner,
+        std::string& error
+    );
     size_t entity_mapping_count() const;
     size_t component_mapping_count() const;
     bool mapping_valid() const {
@@ -201,6 +216,10 @@ public:
         const std::string& source_entity_id,
         const std::string& source_component_id,
         const std::string& field_path
+    ) const;
+    const PrefabStructuralOverride* structural_override(
+        PrefabStructuralOverrideKind kind,
+        const std::string& source_id
     ) const;
     const std::vector<PrefabPropertyOverride>& property_overrides() const {
         return _property_overrides;

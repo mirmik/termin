@@ -13,6 +13,15 @@ from termin.scene import Entity, Component
 from termin.scene import TcComponentRef
 from termin.inspect import InspectField
 from termin.render import scene_render_state
+from termin.editor_core.prefab_override_capture import (
+    capture_component_property,
+    capture_component_suppression,
+    capture_entity_placement,
+    capture_entity_property,
+    capture_entity_suppression,
+    place_entity_from_live_state,
+    suppress_component,
+)
 
 
 _logger = logging.getLogger(__name__)
@@ -251,6 +260,15 @@ class TransformEditCommand(UndoCommand):
         self._transform = transform
         self._old_pose = _clone_pose(old_pose)
         self._new_pose = _clone_pose(new_pose)
+        self._prefab_overrides = tuple(
+            capture
+            for capture in (
+                capture_entity_property(entity, "transform.position", "vec3"),
+                capture_entity_property(entity, "transform.rotation", "quat"),
+                capture_entity_property(entity, "transform.scale", "vec3"),
+            )
+            if capture is not None
+        ) if entity is not None else ()
 
     @property
     def entity(self) -> Entity | None:
@@ -270,10 +288,34 @@ class TransformEditCommand(UndoCommand):
         return self._transform
 
     def do(self) -> None:
-        self._current_transform().relocate(self._new_pose)
+        transform = self._current_transform()
+        transform.relocate(self._new_pose)
+        try:
+            if self._prefab_overrides:
+                values = (self._new_pose.lin, self._new_pose.ang, self._new_pose.scale)
+                for capture, value in zip(self._prefab_overrides, values, strict=True):
+                    capture.set(value)
+        except Exception:
+            _logger.exception("Failed to record prefab transform overrides")
+            transform.relocate(self._old_pose)
+            for capture in self._prefab_overrides:
+                capture.restore()
+            raise
 
     def undo(self) -> None:
-        self._current_transform().relocate(self._old_pose)
+        transform = self._current_transform()
+        transform.relocate(self._old_pose)
+        try:
+            for capture in self._prefab_overrides:
+                capture.restore()
+        except Exception:
+            _logger.exception("Failed to restore prefab transform override metadata")
+            transform.relocate(self._new_pose)
+            if self._prefab_overrides:
+                values = (self._new_pose.lin, self._new_pose.ang, self._new_pose.scale)
+                for capture, value in zip(self._prefab_overrides, values, strict=True):
+                    capture.set(value)
+            raise
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
@@ -316,6 +358,8 @@ class ComponentFieldEditCommand(UndoCommand):
         self._field = field
         self._old_value = _clone_value(old_value)
         self._new_value = _clone_value(new_value)
+        self._prefab_override = capture_component_property(
+            component, field.path or "", field.kind)
 
     def _current_component(self) -> Component | TcComponentRef:
         if self._scene is not None:
@@ -342,10 +386,30 @@ class ComponentFieldEditCommand(UndoCommand):
     def do(self) -> None:
         # При каждом применении берём копию, чтобы не делиться
         # внутренними массивами между командой и объектом.
-        self._field.set_value(self._current_component(), _clone_value(self._new_value))
+        component = self._current_component()
+        self._field.set_value(component, _clone_value(self._new_value))
+        if self._prefab_override is None:
+            return
+        try:
+            self._prefab_override.set(self._new_value)
+        except Exception:
+            _logger.exception("Failed to record prefab component field override")
+            self._field.set_value(component, _clone_value(self._old_value))
+            self._prefab_override.restore()
+            raise
 
     def undo(self) -> None:
-        self._field.set_value(self._current_component(), _clone_value(self._old_value))
+        component = self._current_component()
+        self._field.set_value(component, _clone_value(self._old_value))
+        if self._prefab_override is None:
+            return
+        try:
+            self._prefab_override.restore()
+        except Exception:
+            _logger.exception("Failed to restore prefab component field override metadata")
+            self._field.set_value(component, _clone_value(self._new_value))
+            self._prefab_override.set(self._new_value)
+            raise
 
     def merge_with(self, other: UndoCommand) -> bool:
         """
@@ -387,6 +451,7 @@ class AddComponentCommand(UndoCommand):
         self._type_name = type_name
         self._ref = ref
         self._data: dict | None = None
+        self._source_id = ref.source_id if ref is not None and ref.valid else ""
 
     def _current_entity(self) -> Entity:
         if _entity_is_valid(self._entity):
@@ -419,6 +484,8 @@ class AddComponentCommand(UndoCommand):
         # Применяем сохранённые данные (при redo)
         if self._data is not None and self._ref.valid:
             self._ref.deserialize_data(self._data)
+        if self._source_id and self._ref.valid:
+            self._ref.source_id = self._source_id
 
     def undo(self) -> None:
         entity = self._current_entity()
@@ -427,6 +494,7 @@ class AddComponentCommand(UndoCommand):
         if self._ref is not None and self._ref.valid:
             # Сохраняем данные перед удалением (для redo)
             self._data = self._ref.serialize_data()
+            self._source_id = self._ref.source_id
             entity.remove_component_ref(self._ref)
             self._ref = None
 
@@ -451,6 +519,12 @@ class RemoveComponentCommand(UndoCommand):
         self._entity_uuid = _entity_uuid(entity)
         self._type_name = type_name
         self._data: dict | None = None
+        existing = entity.get_tc_component(type_name)
+        self._source_id = existing.source_id if existing is not None and existing.valid else ""
+        self._prefab_suppression = (
+            capture_component_suppression(existing)
+            if existing is not None and existing.valid else None
+        )
 
     def _current_entity(self) -> Entity:
         if _entity_is_valid(self._entity):
@@ -464,7 +538,16 @@ class RemoveComponentCommand(UndoCommand):
         if ref is not None and ref.valid:
             # Сохраняем данные перед удалением (для undo)
             self._data = ref.serialize_data()
-            entity.remove_component_ref(ref)
+            self._source_id = ref.source_id
+            if self._prefab_suppression is not None:
+                suppress_component(self._prefab_suppression)
+            try:
+                entity.remove_component_ref(ref)
+            except Exception:
+                _logger.exception("Failed to remove source-owned prefab component")
+                if self._prefab_suppression is not None:
+                    self._prefab_suppression.restore()
+                raise
 
     def undo(self) -> None:
         entity = self._current_entity()
@@ -478,6 +561,17 @@ class RemoveComponentCommand(UndoCommand):
         # Восстанавливаем данные
         if self._data is not None and ref.valid:
             ref.deserialize_data(self._data)
+        if self._source_id and ref.valid:
+            ref.source_id = self._source_id
+        if self._prefab_suppression is not None:
+            try:
+                self._prefab_suppression.state.rebind_component_mapping(
+                    self._prefab_suppression.source_id, entity)
+                self._prefab_suppression.restore()
+            except Exception:
+                _logger.exception("Failed to restore prefab component suppression metadata")
+                entity.remove_component_ref(ref)
+                raise
 
 
 class ComponentDisplayNameEditCommand(UndoCommand):
@@ -498,6 +592,8 @@ class ComponentDisplayNameEditCommand(UndoCommand):
         self._component = component
         self._old_name = old_name
         self._new_name = new_name
+        self._prefab_override = capture_component_property(
+            component, "display_name", "string")
 
     def _current_component(self) -> TcComponentRef:
         if self._scene is not None:
@@ -518,10 +614,28 @@ class ComponentDisplayNameEditCommand(UndoCommand):
         raise RuntimeError("ComponentDisplayNameEditCommand has no live component")
 
     def do(self) -> None:
-        self._current_component().set_field("display_name", self._new_name)
+        component = self._current_component()
+        component.set_field("display_name", self._new_name)
+        if self._prefab_override is not None:
+            try:
+                self._prefab_override.set(self._new_name)
+            except Exception:
+                _logger.exception("Failed to record prefab component display-name override")
+                component.set_field("display_name", self._old_name)
+                self._prefab_override.restore()
+                raise
 
     def undo(self) -> None:
-        self._current_component().set_field("display_name", self._old_name)
+        component = self._current_component()
+        component.set_field("display_name", self._old_name)
+        if self._prefab_override is not None:
+            try:
+                self._prefab_override.restore()
+            except Exception:
+                _logger.exception("Failed to restore prefab component display-name metadata")
+                component.set_field("display_name", self._new_name)
+                self._prefab_override.set(self._new_name)
+                raise
 
 
 class EntityPropertyEditCommand(UndoCommand):
@@ -544,6 +658,9 @@ class EntityPropertyEditCommand(UndoCommand):
         self._property_name = property_name
         self._old_value = old_value
         self._new_value = new_value
+        kinds = {"name": "string", "layer": "uint64", "visible": "bool"}
+        self._prefab_override = capture_entity_property(
+            entity, property_name, kinds[property_name]) if property_name in kinds else None
 
     def _current_entity(self) -> Entity:
         if _entity_is_valid(self._entity):
@@ -567,9 +684,25 @@ class EntityPropertyEditCommand(UndoCommand):
 
     def do(self) -> None:
         self._apply(self._new_value)
+        if self._prefab_override is not None:
+            try:
+                self._prefab_override.set(self._new_value)
+            except Exception:
+                _logger.exception("Failed to record prefab entity property override")
+                self._apply(self._old_value)
+                self._prefab_override.restore()
+                raise
 
     def undo(self) -> None:
         self._apply(self._old_value)
+        if self._prefab_override is not None:
+            try:
+                self._prefab_override.restore()
+            except Exception:
+                _logger.exception("Failed to restore prefab entity property metadata")
+                self._apply(self._new_value)
+                self._prefab_override.set(self._new_value)
+                raise
 
     def merge_with(self, other: UndoCommand) -> bool:
         if not isinstance(other, EntityPropertyEditCommand):
@@ -597,13 +730,38 @@ class RecursiveLayerChangeCommand(UndoCommand):
             for entity, old_layer in entities_and_old_layers
         ]
         self._new_layer = int(new_layer)
+        self._prefab_overrides = [
+            capture_entity_property(entity, "layer", "uint64")
+            for entity, _scene, _uuid, _old_layer in self._items
+        ]
 
     def _apply(self, use_new_layer: bool) -> None:
-        for entity, scene, entity_uuid, old_layer in self._items:
+        applied: list[tuple[Entity, int, object | None]] = []
+        for item_index, (entity, scene, entity_uuid, old_layer) in enumerate(self._items):
             current = entity
             if not _entity_is_valid(current):
                 current = _resolve_command_entity(scene, entity_uuid, self.text)
+            previous_live = int(current.layer)
+            override = self._prefab_overrides[item_index]
             current.layer = self._new_layer if use_new_layer else old_layer
+            try:
+                if override is not None:
+                    if use_new_layer:
+                        override.set(self._new_layer)
+                    else:
+                        override.restore()
+            except Exception:
+                _logger.exception("Failed to update recursive prefab layer override")
+                current.layer = previous_live
+                for applied_entity, applied_layer, applied_override in reversed(applied):
+                    applied_entity.layer = applied_layer
+                    if applied_override is not None:
+                        if use_new_layer:
+                            applied_override.restore()
+                        else:
+                            applied_override.set(self._new_layer)
+                raise
+            applied.append((current, previous_live, override))
 
     def do(self) -> None:
         self._apply(True)
@@ -810,6 +968,7 @@ class DeleteEntityCommand(UndoCommand):
         self._entity_uuid = _entity_uuid(entity)
         self._parent_uuid = _transform_entity_uuid(entity.transform.parent)
         self._serialized_data = _snapshot_entity(entity)
+        self._prefab_suppression = capture_entity_suppression(entity)
 
     @property
     def entity(self) -> Entity | None:
@@ -827,7 +986,15 @@ class DeleteEntityCommand(UndoCommand):
             _logger.warning("DeleteEntityCommand.do: entity uuid=%s is already absent", self._entity_uuid)
             return
         self._serialized_data = _snapshot_entity(entity)
-        _remove_entity_tree(self._scene, entity)
+        if self._prefab_suppression is not None:
+            self._prefab_suppression.suppress()
+        try:
+            _remove_entity_tree(self._scene, entity)
+        except Exception:
+            _logger.exception("Failed to remove source-owned prefab entity")
+            if self._prefab_suppression is not None:
+                self._prefab_suppression.restore()
+            raise
         self._entity = None
 
     def undo(self) -> None:
@@ -839,6 +1006,15 @@ class DeleteEntityCommand(UndoCommand):
             with_children=True,
         )
         self._entity_uuid = _entity_uuid(self._entity)
+        if self._prefab_suppression is not None:
+            try:
+                self._prefab_suppression.rebind_restored_mappings(self._scene)
+                self._prefab_suppression.restore()
+            except Exception:
+                _logger.exception("Failed to restore prefab entity suppression metadata")
+                _remove_entity_tree(self._scene, self._entity)
+                self._entity = None
+                raise
 
 
 class ReparentEntityCommand(UndoCommand):
@@ -874,6 +1050,7 @@ class ReparentEntityCommand(UndoCommand):
         self._new_sibling_index = new_sibling_index
         # Сохраняем local pose для undo
         self._old_local_pose = _clone_pose(entity.transform.local_pose())
+        self._prefab_placement = capture_entity_placement(entity)
 
     @property
     def entity(self) -> Entity | None:
@@ -897,13 +1074,37 @@ class ReparentEntityCommand(UndoCommand):
             entity.sibling_index = self._new_sibling_index
         # Восстанавливаем global pose (пересчитывает local pose)
         entity.transform.relocate_global(global_pose)
+        if self._prefab_placement is not None:
+            try:
+                place_entity_from_live_state(self._prefab_placement, entity)
+            except Exception:
+                _logger.exception("Failed to record prefab entity placement")
+                entity.transform.set_parent(
+                    _resolve_parent_transform(self._scene, self._old_parent_uuid))
+                entity.sibling_index = self._old_sibling_index
+                entity.transform.relocate(self._old_local_pose)
+                self._prefab_placement.restore()
+                raise
 
     def undo(self) -> None:
         entity = self._current_entity()
+        rollback_global_pose = entity.transform.global_pose()
         # Возвращаем родителя и восстанавливаем оригинальный local pose
         entity.transform.set_parent(_resolve_parent_transform(self._scene, self._old_parent_uuid))
         entity.sibling_index = self._old_sibling_index
         entity.transform.relocate(self._old_local_pose)
+        if self._prefab_placement is not None:
+            try:
+                self._prefab_placement.restore()
+            except Exception:
+                _logger.exception("Failed to restore prefab entity placement metadata")
+                entity.transform.set_parent(
+                    _resolve_parent_transform(self._scene, self._new_parent_uuid))
+                if self._new_sibling_index is not None:
+                    entity.sibling_index = self._new_sibling_index
+                entity.transform.relocate_global(rollback_global_pose)
+                place_entity_from_live_state(self._prefab_placement, entity)
+                raise
 
 
 __all__ = [
@@ -948,6 +1149,7 @@ class RenameEntityCommand(UndoCommand):
         self._entity_uuid = _entity_uuid(entity)
         self._old_name = old_name
         self._new_name = new_name
+        self._prefab_override = capture_entity_property(entity, "name", "string")
 
     @property
     def entity(self) -> Entity | None:
@@ -962,10 +1164,28 @@ class RenameEntityCommand(UndoCommand):
         return self._entity
 
     def do(self) -> None:
-        self._current_entity().name = self._new_name
+        entity = self._current_entity()
+        entity.name = self._new_name
+        if self._prefab_override is not None:
+            try:
+                self._prefab_override.set(self._new_name)
+            except Exception:
+                _logger.exception("Failed to record prefab entity rename override")
+                entity.name = self._old_name
+                self._prefab_override.restore()
+                raise
 
     def undo(self) -> None:
-        self._current_entity().name = self._old_name
+        entity = self._current_entity()
+        entity.name = self._old_name
+        if self._prefab_override is not None:
+            try:
+                self._prefab_override.restore()
+            except Exception:
+                _logger.exception("Failed to restore prefab entity rename metadata")
+                entity.name = self._new_name
+                self._prefab_override.set(self._new_name)
+                raise
 
     def merge_with(self, other: UndoCommand) -> bool:
         """

@@ -25,6 +25,10 @@ The package contains:
   non-overridden fields, reapplies typed overrides, and advances the source
   revision only after a completely successful pass. `PrefabAsset` hot reload is
   a thin caller of this native transaction.
+- editor undo commands capture typed property changes, source tombstones and
+  source placements atomically with their live mutations. Undo/Redo restores
+  both metadata and live state, including mapping rebind after refresh. The
+  entity inspector reports prefab ownership, override counts and invalid state.
 - `termin.prefab.property_path.PropertyPath` for prefab override paths.
 
 Current boundary note: `Entity` is imported from `termin.scene`. Resource

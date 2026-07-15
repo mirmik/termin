@@ -43,6 +43,7 @@ class NativeEntityInspector:
     root: WidgetRef
     name_input: object
     uuid_value: object
+    prefab_status: object
     layer_combo: object
     apply_layer_button: object
     transform_boxes: tuple[tuple[object, object, object], ...]
@@ -72,6 +73,8 @@ class NativeEntityInspector:
             self.name_input.text = snapshot.name
             self.name_input.widget.enabled = snapshot.entity is not None
             self.uuid_value.text = snapshot.uuid or "No entity selected"
+            self.prefab_status.text = snapshot.prefab_status
+            self.prefab_status.widget.visible = bool(snapshot.prefab_status)
             if self.layer_combo.item_count != len(snapshot.layer_names):
                 self.layer_combo.clear()
                 for name in snapshot.layer_names:
@@ -262,6 +265,11 @@ def build_native_entity_inspector(
     uuid_row.add_stretch_child(uuid_value.widget)
     content.add_fixed_child(uuid_row, 26.0)
 
+    prefab_status = document.create_status_bar("")
+    prefab_status.widget.stable_id = "editor.inspector.prefab-status"
+    prefab_status.widget.visible = False
+    content.add_fixed_child(prefab_status.widget, 26.0)
+
     layer_row = document.create_hstack("native-inspector-entity-layer-row")
     layer_row.set_layout_spacing(4.0)
     layer_label = document.create_label("Layer", "native-inspector-entity-layer-label")
@@ -331,6 +339,7 @@ def build_native_entity_inspector(
         root=root,
         name_input=name_input,
         uuid_value=uuid_value,
+        prefab_status=prefab_status,
         layer_combo=layer_combo,
         apply_layer_button=apply_layer_button,
         transform_boxes=tuple(transform_boxes),
