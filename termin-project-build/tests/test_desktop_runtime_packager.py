@@ -1596,6 +1596,109 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
 
 
 @full_runtime_package_exporter
+def test_export_runtime_package_includes_project_texture_referenced_by_material(tmp_path: Path) -> None:
+    import tgfx
+    from termin.image import write_png_rgba8_file
+    from termin.materials import TcMaterial
+
+    project = tmp_path / "TexturedMaterialGame"
+    project.mkdir()
+    material_uuid = "textured-material-uuid"
+    shader_uuid = "textured-material-shader-uuid"
+    texture_uuid = "textured-albedo-uuid"
+    texture_path = project / "Textures" / "Albedo.png"
+    texture_path.parent.mkdir()
+    write_png_rgba8_file(texture_path, np.full((1, 1, 4), 255, dtype=np.uint8))
+    _write_json(
+        Path(f"{texture_path}.meta"),
+        {"uuid": texture_uuid, "flip_x": True, "flip_y": False, "transpose": True},
+    )
+
+    material = TcMaterial.create("Textured Material", material_uuid)
+    phase = material.add_phase_from_sources(
+        "#version 450\nlayout(location=0) in vec3 in_position;\nvoid main(){gl_Position=vec4(in_position,1.0);}\n",
+        "#version 450\nlayout(binding=0) uniform sampler2D u_albedo_texture;\n"
+        "layout(location=0) out vec4 out_color;\nvoid main(){out_color=texture(u_albedo_texture,vec2(0.0));}\n",
+        "",
+        "TexturedMaterialShader",
+        "opaque",
+        0,
+        shader_uuid=shader_uuid,
+    )
+    assert phase is not None
+    texture = tgfx.TcTexture.from_data(
+        data=np.full((1, 1, 4), 255, dtype=np.uint8),
+        width=1,
+        height=1,
+        channels=4,
+        flip_x=True,
+        flip_y=False,
+        transpose=True,
+        name="Albedo",
+        uuid=texture_uuid,
+    )
+    assert texture.is_valid
+    phase.set_texture("u_albedo_texture", texture)
+    assert material.textures["u_albedo_texture"].uuid == texture_uuid
+
+    _write_json(
+        project / "Main.scene",
+        {
+            "uuid": "scene-uuid",
+            "entities": [
+                {
+                    "uuid": "entity-uuid",
+                    "components": [
+                        {
+                            "type": "MeshRenderer",
+                            "data": {
+                                "material": {
+                                    "uuid": material_uuid,
+                                    "name": "Textured Material",
+                                    "type": "uuid",
+                                    "kind": "tc_material",
+                                }
+                            },
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+
+    result = export_runtime_package(
+        project_root=project,
+        entry_scene="Main.scene",
+        output_dir=project / "dist" / "desktop" / "TexturedMaterialGame" / "package",
+        shader_compiler=_write_fake_shader_compiler(tmp_path),
+    )
+
+    material_spec = json.loads(
+        (result.package_dir / "materials" / f"{material_uuid}.tmat.json").read_text(encoding="utf-8")
+    )
+    texture_spec = json.loads(
+        (result.package_dir / "textures" / f"{texture_uuid}.texture.json").read_text(encoding="utf-8")
+    )
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert material_spec["textures"] == {
+        "u_albedo_texture": {"kind": "asset", "uuid": texture_uuid, "name": "Albedo"}
+    }
+    assert texture_spec == {
+        "uuid": texture_uuid,
+        "name": "Albedo",
+        "source_path": f"textures/{texture_uuid}.png",
+        "import_settings": {"flip_x": True, "flip_y": False, "transpose": True},
+    }
+    assert (result.package_dir / "textures" / f"{texture_uuid}.png").read_bytes() == texture_path.read_bytes()
+    assert {
+        "type": "texture",
+        "uuid": texture_uuid,
+        "path": f"textures/{texture_uuid}.texture.json",
+    } in manifest["resources"]
+    assert result.diagnostics == []
+
+
+@full_runtime_package_exporter
 def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -> None:
     import tgfx
     from termin.materials import TcMaterial

@@ -10,6 +10,7 @@ from termin.project_build.runtime_package.models import (
     ShaderSpec,
 )
 from termin.project_build.runtime_package.package_files import write_json
+from termin.project_build.runtime_package.textures import collect_material_texture_refs
 
 
 def write_materials(
@@ -22,6 +23,7 @@ def write_materials(
     resource_policy: str,
     default_shader_uuid: str,
     default_shader_spec_factory: Callable[[str], ShaderSpec],
+    texture_refs: dict[str, str],
 ) -> None:
     material_dir = package_dir / "materials"
     material_dir.mkdir(parents=True, exist_ok=True)
@@ -41,6 +43,12 @@ def write_materials(
         if material_spec is None:
             continue
         write_json(path, material_spec)
+        collect_material_texture_refs(
+            material_spec,
+            texture_refs,
+            diagnostics,
+            f"materials/{uuid_value}.tmat.json",
+        )
         resources.append(
             {
                 "type": "material",

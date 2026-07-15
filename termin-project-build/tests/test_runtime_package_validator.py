@@ -358,6 +358,56 @@ def test_validate_runtime_package_reports_material_phase_missing_shader(tmp_path
     ]
 
 
+def test_validate_runtime_package_checks_texture_resource_and_material_reference(tmp_path: Path) -> None:
+    package_dir = _write_valid_package(tmp_path)
+    _write_json(
+        package_dir / "materials" / "material-uuid.tmat.json",
+        {
+            "uuid": "material-uuid",
+            "phases": [{"mark": "opaque", "shader": "shader-uuid", "priority": 0}],
+            "textures": {
+                "u_albedo": {"kind": "asset", "uuid": "texture-uuid", "name": "Albedo"},
+            },
+        },
+    )
+    _write_shader_resource(package_dir)
+    _write_json(
+        package_dir / "textures" / "texture-uuid.texture.json",
+        {
+            "uuid": "texture-uuid",
+            "name": "Albedo",
+            "source_path": "textures/texture-uuid.png",
+            "import_settings": {"flip_x": False, "flip_y": True, "transpose": False},
+        },
+    )
+    (package_dir / "textures" / "texture-uuid.png").write_bytes(b"PNG")
+    _write_json(
+        package_dir / "manifest.json",
+        {
+            "version": 1,
+            "scene": "scene.json",
+            "resources": [
+                {"type": "shader", "uuid": "shader-uuid", "path": "shaders/shader-uuid.shader.json"},
+                {"type": "material", "uuid": "material-uuid", "path": "materials/material-uuid.tmat.json"},
+                {"type": "texture", "uuid": "texture-uuid", "path": "textures/texture-uuid.texture.json"},
+            ],
+        },
+    )
+
+    assert validate_runtime_package(package_dir) == []
+
+    (package_dir / "textures" / "texture-uuid.png").unlink()
+    diagnostics = validate_runtime_package(package_dir)
+
+    assert [(diagnostic.level, diagnostic.path, diagnostic.message) for diagnostic in diagnostics] == [
+        (
+            "error",
+            "textures/texture-uuid.png",
+            "Runtime package path does not exist: textures/texture-uuid.png",
+        )
+    ]
+
+
 def test_validate_runtime_package_reports_pipeline_missing_shader_resource(tmp_path: Path) -> None:
     package_dir = _write_valid_package(tmp_path)
     _write_json(

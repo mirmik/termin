@@ -7,6 +7,8 @@ The exporter writes the package contract consumed by termin-runtime:
     pipelines/*.pipeline.json
     meshes/*.tmesh.json
     materials/*.tmat.json
+    textures/*.texture.json
+    textures/*.{png,jpg,jpeg,tga,bmp}
     shaders/*.shader.json
     shaders/vulkan/*.spv
 
@@ -62,6 +64,7 @@ from termin.project_build.runtime_package.shaders import (
     write_default_pipeline_shader_artifacts as _write_default_pipeline_shader_artifacts,
     write_shaders as _write_shaders,
 )
+from termin.project_build.runtime_package.textures import write_textures as _write_textures
 
 
 DEFAULT_RESOURCE_POLICY = "strict"
@@ -125,7 +128,9 @@ def export_runtime_package(
         shaders,
         default_shader_language,
         resource_policy,
+        refs.textures,
     )
+    _write_textures(project_root_path, output_dir_path, refs.textures, resources, diagnostics)
     _write_pipelines(project_root_path, output_dir_path, refs.pipelines, resources, diagnostics)
     _collect_pipeline_shader_usages(output_dir_path, scene_data, refs.pipelines, diagnostics, shaders)
     if not shaders:
@@ -258,6 +263,7 @@ def _write_materials(
     shaders: dict[str, _ShaderSpec],
     default_shader_language: str,
     resource_policy: str,
+    texture_refs: dict[str, str],
 ) -> None:
     write_materials(
         package_dir,
@@ -269,6 +275,7 @@ def _write_materials(
         resource_policy,
         DEFAULT_SHADER_UUID,
         _default_shader_spec,
+        texture_refs,
     )
 
 

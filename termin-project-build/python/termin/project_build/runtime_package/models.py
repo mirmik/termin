@@ -32,6 +32,7 @@ class RuntimePackageExportResult:
 class RuntimeRefs:
     meshes: dict[str, str] = field(default_factory=dict)
     materials: dict[str, str] = field(default_factory=dict)
+    textures: dict[str, str] = field(default_factory=dict)
     pipelines: dict[str, str] = field(default_factory=dict)
 
 
@@ -49,4 +50,3 @@ class ShaderSpec:
     geometry_entry: str = "main"
     allow_precompiled_default: bool = False
     features: int = 0
-
