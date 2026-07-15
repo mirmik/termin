@@ -13,6 +13,7 @@ from termin.prefab.asset_plugin import (
 )
 from termin.prefab._prefab_native import (
     PrefabInstanceState,
+    PrefabOverrideValue,
     count_live_instances,
     find_live_instances,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "PrefabAssetPlugin",
     "PrefabImportPlugin",
     "PrefabInstanceState",
+    "PrefabOverrideValue",
     "PrefabRuntimePlugin",
     "PropertyPath",
     "PropertyPathError",

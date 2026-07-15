@@ -273,6 +273,30 @@ int main() {
         "asset filtering should exclude instances of other prefabs"
     );
 
+    auto* tracked_first_state =
+        tracked_first.root.get_component<termin::prefab::PrefabInstanceState>();
+    TEST_ASSERT(tracked_first_state != nullptr, "tracked instance should expose native state");
+    std::string override_error;
+    auto override_value = termin::prefab::PrefabOverrideValue::parse_json(
+        R"({"schema":"termin.prefab.override-value","version":1,"value":{"tag":"float64","value":"42.5"}})",
+        override_error
+    );
+    TEST_ASSERT(override_value.has_value(), "typed override fixture should parse");
+    termin::prefab::PrefabPropertyOverride property_override;
+    property_override.source_entity_id = "prefab-source-root";
+    property_override.source_component_id = "prefab-source-probe-component";
+    property_override.field_path = "weight";
+    property_override.target_kind = "double";
+    property_override.value = std::move(*override_value);
+    TEST_ASSERT(
+        tracked_first_state->set_property_override(
+            std::move(property_override), override_error
+        ),
+        "native state should accept a valid typed property override"
+    );
+    TEST_ASSERT(tracked_first_state->property_override_count() == 1,
+                "typed property override should be stored exactly once");
+
     termin::Entity cloned_instance = tracked_first.root.clone("_copy");
     TEST_ASSERT(cloned_instance.valid(), "generic entity clone should clone prefab state");
     auto* cloned_state =
@@ -284,6 +308,13 @@ int main() {
     TEST_ASSERT(cloned_state->component_owner_for_source(
                     "prefab-source-probe-component") == cloned_instance,
                 "generic clone should remap component owner references");
+    TEST_ASSERT(cloned_state->property_override_count() == 1,
+                "generic clone should preserve typed property overrides");
+    const auto* cloned_override = cloned_state->property_override(
+        "prefab-source-root", "prefab-source-probe-component", "weight"
+    );
+    TEST_ASSERT(cloned_override != nullptr && cloned_override->value.tag() == "float64",
+                "cloned typed override should retain its codec identity");
 
     nos::trent tracking_scene_data = tracking_scene.serialize();
     termin::TcSceneRef restored_tracking_scene =
@@ -297,6 +328,7 @@ int main() {
         );
     TEST_ASSERT(restored_instances.size() == 3,
                 "scene load should restore all matching native instance states");
+    size_t restored_override_count = 0;
     for (termin::Entity& restored_root : restored_instances) {
         auto* restored_state =
             restored_root.get_component<termin::prefab::PrefabInstanceState>();
@@ -305,7 +337,48 @@ int main() {
         TEST_ASSERT(restored_state->entity_for_source("prefab-source-child") ==
                         restored_root.find_child("Child"),
                     "scene load should rebuild mapping handles from serialized entity refs");
+        restored_override_count += restored_state->property_override_count();
     }
+    TEST_ASSERT(restored_override_count == 2,
+                "scene load should round-trip overrides on original and cloned instances");
+
+    nos::trent malformed_override_data = tracking_scene_data;
+    bool corrupted_override = false;
+    for (nos::trent& root_data : malformed_override_data["entities"].as_list()) {
+        for (nos::trent& component_data : root_data["components"].as_list()) {
+            if (component_data["type"].as_string_default("") !=
+                termin::prefab::PrefabInstanceState::TypeName) {
+                continue;
+            }
+            if (!component_data["data"]["property_overrides"].as_list().empty()) {
+                component_data["data"]["property_overrides"].as_list()[0]
+                    ["value"]["value"]["tag"] = "unknown-test-tag";
+                corrupted_override = true;
+                break;
+            }
+        }
+        if (corrupted_override) break;
+    }
+    TEST_ASSERT(corrupted_override, "fixture should contain a serialized typed override");
+    TEST_ASSERT(
+        nos::json::dump(malformed_override_data).find("unknown-test-tag") != std::string::npos,
+        "fixture mutation should replace the serialized override tag"
+    );
+    termin::TcSceneRef malformed_override_scene =
+        termin::TcSceneRef::create("prefab-instance-override-malformed");
+    TEST_ASSERT(malformed_override_scene.load_from_data(malformed_override_data) == 12,
+                "malformed override metadata should not corrupt hierarchy loading");
+    TEST_ASSERT(
+        termin::prefab::find_live_prefab_instances(
+            malformed_override_scene.handle(), "prefab-document-asset"
+        ).size() == 2,
+        "instance with malformed typed overrides should be excluded from live queries"
+    );
+    const std::string reserialized_malformed = nos::json::dump(
+        malformed_override_scene.serialize()
+    );
+    TEST_ASSERT(reserialized_malformed.find("unknown-test-tag") != std::string::npos,
+                "malformed override payload should remain visible for diagnosis and repair");
 
     nos::trent malformed_tracking_data = tracking_scene_data;
     bool malformed_state = false;
@@ -376,6 +449,7 @@ int main() {
             "prefab-document-asset"
         );
     tracking_scene.destroy();
+    malformed_override_scene.destroy();
     for (const termin::Entity& stale : scene_teardown_snapshot) {
         TEST_ASSERT(!stale.valid(),
                     "scene teardown should invalidate every previously returned handle");

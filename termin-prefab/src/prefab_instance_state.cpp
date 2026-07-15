@@ -66,6 +66,56 @@ bool collect_scene(tc_scene_handle scene, void* user_data) {
     return true;
 }
 
+const tc_value* override_field(const tc_value* value, const char* key) {
+    if (value == nullptr || value->type != TC_VALUE_DICT) return nullptr;
+    return tc_value_dict_get(const_cast<tc_value*>(value), key);
+}
+
+bool override_string_field(
+    const tc_value* value,
+    const char* key,
+    std::string& result,
+    bool allow_empty,
+    std::string& error
+) {
+    const tc_value* field = override_field(value, key);
+    if (field == nullptr || field->type != TC_VALUE_STRING || field->data.s == nullptr) {
+        error = "property override field '" + std::string(key) + "' must be a string";
+        return false;
+    }
+    result = field->data.s;
+    if (!allow_empty && result.empty()) {
+        error = "property override field '" + std::string(key) + "' must not be empty";
+        return false;
+    }
+    return true;
+}
+
+std::string override_identity(const PrefabPropertyOverride& property_override) {
+    return property_override.source_entity_id + "\x1f" +
+        property_override.source_component_id + "\x1f" +
+        property_override.field_path;
+}
+
+bool validate_property_override(
+    const PrefabPropertyOverride& property_override,
+    std::string& error
+) {
+    if (property_override.source_entity_id.empty()) {
+        error = "property override source entity ID must not be empty";
+        return false;
+    }
+    if (property_override.field_path.empty()) {
+        error = "property override field path must not be empty";
+        return false;
+    }
+    if (property_override.target_kind.empty()) {
+        error = "property override target kind must not be empty";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 PrefabInstanceState::PrefabInstanceState()
@@ -193,6 +243,174 @@ size_t PrefabInstanceState::component_mapping_count() const {
     return std::min(_source_component_ids.size(), _component_owners.size());
 }
 
+bool PrefabInstanceState::set_property_override(
+    PrefabPropertyOverride property_override_value,
+    std::string& error
+) {
+    error.clear();
+    if (!_overrides_valid) {
+        error = "cannot mutate an invalid property override set; clear all overrides first";
+        tc::Log::error("[PrefabInstanceState] %s", error.c_str());
+        return false;
+    }
+    if (!validate_property_override(property_override_value, error)) {
+        tc::Log::error("[PrefabInstanceState] rejected property override: %s", error.c_str());
+        return false;
+    }
+    const std::string identity = override_identity(property_override_value);
+    for (PrefabPropertyOverride& existing : _property_overrides) {
+        if (override_identity(existing) == identity) {
+            existing = std::move(property_override_value);
+            _overrides_valid = true;
+            _invalid_serialized_overrides = tc::trent::nil();
+            return true;
+        }
+    }
+    _property_overrides.push_back(std::move(property_override_value));
+    _overrides_valid = true;
+    _invalid_serialized_overrides = tc::trent::nil();
+    return true;
+}
+
+bool PrefabInstanceState::clear_property_override(
+    const std::string& source_entity_id,
+    const std::string& source_component_id,
+    const std::string& field_path
+) {
+    const std::string identity = source_entity_id + "\x1f" + source_component_id +
+        "\x1f" + field_path;
+    auto found = std::find_if(
+        _property_overrides.begin(),
+        _property_overrides.end(),
+        [&identity](const PrefabPropertyOverride& candidate) {
+            return override_identity(candidate) == identity;
+        }
+    );
+    if (found == _property_overrides.end()) return false;
+    _property_overrides.erase(found);
+    return true;
+}
+
+void PrefabInstanceState::clear_all_property_overrides() {
+    _property_overrides.clear();
+    _invalid_serialized_overrides = tc::trent::nil();
+    _overrides_valid = true;
+}
+
+const PrefabPropertyOverride* PrefabInstanceState::property_override(
+    const std::string& source_entity_id,
+    const std::string& source_component_id,
+    const std::string& field_path
+) const {
+    const std::string identity = source_entity_id + "\x1f" + source_component_id +
+        "\x1f" + field_path;
+    auto found = std::find_if(
+        _property_overrides.begin(),
+        _property_overrides.end(),
+        [&identity](const PrefabPropertyOverride& candidate) {
+            return override_identity(candidate) == identity;
+        }
+    );
+    return found == _property_overrides.end() ? nullptr : &*found;
+}
+
+tc_value PrefabInstanceState::serialize_data() const {
+    tc_value data = CxxComponent::serialize_data();
+    tc_value serialized = tc_value_list_new();
+    if (!_overrides_valid && !_invalid_serialized_overrides.is_nil()) {
+        tc_value_free(&serialized);
+        serialized = tc_value_copy(_invalid_serialized_overrides.raw());
+    } else {
+        for (const PrefabPropertyOverride& property_override_value : _property_overrides) {
+            tc_value item = tc_value_dict_new();
+            tc_value_dict_set(
+                &item,
+                "source_entity_id",
+                tc_value_string(property_override_value.source_entity_id.c_str())
+            );
+            tc_value_dict_set(
+                &item,
+                "source_component_id",
+                tc_value_string(property_override_value.source_component_id.c_str())
+            );
+            tc_value_dict_set(
+                &item,
+                "field_path",
+                tc_value_string(property_override_value.field_path.c_str())
+            );
+            tc_value_dict_set(
+                &item,
+                "target_kind",
+                tc_value_string(property_override_value.target_kind.c_str())
+            );
+            tc_value_dict_set(&item, "value", property_override_value.value.serialize());
+            tc_value_list_push(&serialized, item);
+        }
+    }
+    tc_value_dict_set(&data, "property_overrides", serialized);
+    return data;
+}
+
+void PrefabInstanceState::deserialize_data(const tc_value* data, tc_scene_handle scene) {
+    CxxComponent::deserialize_data(data, scene);
+    _property_overrides.clear();
+    _invalid_serialized_overrides = tc::trent::nil();
+    _overrides_valid = true;
+
+    const tc_value* serialized = override_field(data, "property_overrides");
+    if (serialized == nullptr) return;
+    if (serialized->type != TC_VALUE_LIST) {
+        _overrides_valid = false;
+        _invalid_serialized_overrides = tc::trent::copy_of(serialized);
+        tc::Log::error("[PrefabInstanceState] property_overrides must be a list");
+        return;
+    }
+
+    std::unordered_set<std::string> identities;
+    for (size_t index = 0; index < tc_value_list_size(serialized); ++index) {
+        const tc_value* item = tc_value_list_get(const_cast<tc_value*>(serialized), index);
+        PrefabPropertyOverride property_override_value;
+        std::string error;
+        if (item == nullptr || item->type != TC_VALUE_DICT ||
+            !override_string_field(
+                item, "source_entity_id", property_override_value.source_entity_id,
+                false, error
+            ) ||
+            !override_string_field(
+                item, "source_component_id", property_override_value.source_component_id,
+                true, error
+            ) ||
+            !override_string_field(item, "field_path", property_override_value.field_path, false, error) ||
+            !override_string_field(item, "target_kind", property_override_value.target_kind, false, error)) {
+            _overrides_valid = false;
+        } else {
+            auto value = PrefabOverrideValue::parse(override_field(item, "value"), error);
+            if (!value) {
+                _overrides_valid = false;
+            } else {
+                property_override_value.value = std::move(*value);
+                const std::string identity = override_identity(property_override_value);
+                if (!identities.insert(identity).second) {
+                    error = "duplicate property override identity";
+                    _overrides_valid = false;
+                } else {
+                    _property_overrides.push_back(std::move(property_override_value));
+                }
+            }
+        }
+        if (!_overrides_valid) {
+            _property_overrides.clear();
+            _invalid_serialized_overrides = tc::trent::copy_of(serialized);
+            tc::Log::error(
+                "[PrefabInstanceState] rejected property override at index %zu: %s",
+                index,
+                error.c_str()
+            );
+            return;
+        }
+    }
+}
+
 bool PrefabInstanceState::validate_mapping(
     bool require_live_references,
     std::string& message
@@ -246,6 +464,12 @@ void PrefabInstanceState::on_added() {
             "[PrefabInstanceState] rejected invalid state on entity '%s': %s",
             entity().valid() ? entity().name() : "<invalid>",
             message.c_str()
+        );
+    }
+    if (!_overrides_valid) {
+        tc::Log::error(
+            "[PrefabInstanceState] entity '%s' contains invalid property overrides",
+            entity().valid() ? entity().name() : "<invalid>"
         );
     }
 }
