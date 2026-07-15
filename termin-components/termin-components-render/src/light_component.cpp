@@ -109,15 +109,17 @@ void register_light_type_field() {
             return tc_value_string(c->get_light_type_str().c_str());
         };
 
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<LightComponent*>(obj);
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 c->set_light_type_str(value.data.s);
-                return;
+                return true;
             }
             if (value.type == TC_VALUE_INT) {
                 c->light_type = static_cast<LightType>(value.data.i);
+                return true;
             }
+            return false;
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
@@ -139,7 +141,7 @@ void register_light_color_field() {
             return list;
         };
 
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<LightComponent*>(obj);
             if (value.type == TC_VALUE_LIST && tc_value_list_size(&value) >= 3) {
                 tc_value* r = tc_value_list_get(&value, 0);
@@ -153,7 +155,9 @@ void register_light_color_field() {
                     return 0.0;
                 };
                 c->color = Vec3(get_double(r), get_double(g), get_double(b));
+                return true;
             }
+            return false;
         };
 
         tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
@@ -170,15 +174,17 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_bool(c->shadows.enabled);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_BOOL) {
                     c->shadows.enabled = value.data.b;
-                    return;
+                    return true;
                 }
                 if (value.type == TC_VALUE_INT) {
                     c->shadows.enabled = value.data.i != 0;
+                    return true;
                 }
+                return false;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
@@ -196,11 +202,12 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_double(c->shadows.bias);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.bias = value.data.d;
                 if (value.type == TC_VALUE_FLOAT) c->shadows.bias = static_cast<double>(value.data.f);
                 if (value.type == TC_VALUE_INT) c->shadows.bias = static_cast<double>(value.data.i);
+                return value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_INT;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
@@ -218,11 +225,12 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_double(c->shadows.normal_bias);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.normal_bias = value.data.d;
                 if (value.type == TC_VALUE_FLOAT) c->shadows.normal_bias = static_cast<double>(value.data.f);
                 if (value.type == TC_VALUE_INT) c->shadows.normal_bias = static_cast<double>(value.data.i);
+                return value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_INT;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
@@ -240,11 +248,12 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_int(c->shadows.map_resolution);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_INT) c->shadows.map_resolution = static_cast<int>(value.data.i);
                 if (value.type == TC_VALUE_FLOAT) c->shadows.map_resolution = static_cast<int>(value.data.f);
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.map_resolution = static_cast<int>(value.data.d);
+                return value.type == TC_VALUE_INT || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
@@ -262,11 +271,12 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_int(c->shadows.cascade_count);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_INT) c->shadows.cascade_count = static_cast<int>(value.data.i);
                 if (value.type == TC_VALUE_FLOAT) c->shadows.cascade_count = static_cast<int>(value.data.f);
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.cascade_count = static_cast<int>(value.data.d);
+                return value.type == TC_VALUE_INT || value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
@@ -284,11 +294,12 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_float(c->shadows.max_distance);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_FLOAT) c->shadows.max_distance = value.data.f;
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.max_distance = static_cast<float>(value.data.d);
                 if (value.type == TC_VALUE_INT) c->shadows.max_distance = static_cast<float>(value.data.i);
+                return value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_INT;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
@@ -306,11 +317,12 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_float(c->shadows.split_lambda);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_FLOAT) c->shadows.split_lambda = value.data.f;
                 if (value.type == TC_VALUE_DOUBLE) c->shadows.split_lambda = static_cast<float>(value.data.d);
                 if (value.type == TC_VALUE_INT) c->shadows.split_lambda = static_cast<float>(value.data.i);
+                return value.type == TC_VALUE_FLOAT || value.type == TC_VALUE_DOUBLE || value.type == TC_VALUE_INT;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }
@@ -325,15 +337,17 @@ void register_light_shadow_fields() {
                 auto* c = static_cast<LightComponent*>(obj);
                 return tc_value_bool(c->shadows.cascade_blend);
             };
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<LightComponent*>(obj);
                 if (value.type == TC_VALUE_BOOL) {
                     c->shadows.cascade_blend = value.data.b;
-                    return;
+                    return true;
                 }
                 if (value.type == TC_VALUE_INT) {
                     c->shadows.cascade_blend = value.data.i != 0;
+                    return true;
                 }
+                return false;
             };
             tc::InspectRegistry::instance().add_field_with_choices("LightComponent", std::move(info));
         }

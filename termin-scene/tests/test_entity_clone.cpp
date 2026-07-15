@@ -76,10 +76,12 @@ void register_clone_ref_inspect_fields() {
         info.getter = [](void* obj) -> tc_value {
             return tc_value_int(static_cast<CloneRefComponent*>(obj)->value);
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             if (value.type == TC_VALUE_INT) {
                 static_cast<CloneRefComponent*>(obj)->value = static_cast<int>(value.data.i);
+                return true;
             }
+            return false;
         };
         tc::InspectRegistry::instance().add_field_with_choices("CloneRefComponent", std::move(info));
     }
@@ -100,10 +102,12 @@ void register_clone_ref_inspect_fields() {
         info.getter = [](void* obj) -> tc_value {
             return tc_value_string(static_cast<CloneRefComponent*>(obj)->plain_uuid_string.c_str());
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 static_cast<CloneRefComponent*>(obj)->plain_uuid_string = value.data.s;
+                return true;
             }
+            return false;
         };
         tc::InspectRegistry::instance().add_field_with_choices("CloneRefComponent", std::move(info));
     }

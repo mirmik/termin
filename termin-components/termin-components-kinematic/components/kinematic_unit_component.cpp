@@ -56,12 +56,14 @@ void KinematicUnitComponent::register_type() {
             tc_value_list_push(&list, tc_value_double(c->axis_z));
             return list;
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             tc_vec3 v;
             if (tc_value_to_vec3(value, v)) {
                 c->set_axis(v.x, v.y, v.z);
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
     }
@@ -80,7 +82,7 @@ void KinematicUnitComponent::register_type() {
             tc_value_list_push(&list, tc_value_double(c->max_coordinate));
             return list;
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             if (value.type == TC_VALUE_LIST && value.data.list.count >= 3) {
                 c->min_coordinate = tc::tc_value_to_double(&value.data.list.items[1]);
@@ -92,8 +94,10 @@ void KinematicUnitComponent::register_type() {
                 if (value.type == TC_VALUE_DOUBLE) v = value.data.d;
                 else if (value.type == TC_VALUE_FLOAT) v = value.data.f;
                 else if (value.type == TC_VALUE_INT) v = static_cast<double>(value.data.i);
+                else return false;
                 c->set_coordinate(v);
             }
+            return true;
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
     }
@@ -115,13 +119,15 @@ void KinematicUnitComponent::register_type() {
             tc_value_list_push(&list, tc_value_double(c->base_position.z));
             return list;
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             tc_vec3 v;
             if (tc_value_to_vec3(value, v)) {
                 c->base_position = v;
                 c->apply();
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
     }
@@ -146,14 +152,16 @@ void KinematicUnitComponent::register_type() {
             tc_value_list_push(&list, tc_value_double(degrees(euler.z)));
             return list;
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             tc_vec3 v;
             if (tc_value_to_vec3(value, v)) {
                 Pose3 p = Pose3::from_euler(radians(v.x), radians(v.y), radians(v.z));
                 c->base_rotation = {p.ang.x, p.ang.y, p.ang.z, p.ang.w};
                 c->apply();
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
     }
@@ -175,13 +183,15 @@ void KinematicUnitComponent::register_type() {
             tc_value_list_push(&list, tc_value_double(c->base_scale.z));
             return list;
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* c = static_cast<KinematicUnitComponent*>(obj);
             tc_vec3 v;
             if (tc_value_to_vec3(value, v)) {
                 c->base_scale = v;
                 c->apply();
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
     }
@@ -195,11 +205,12 @@ void KinematicUnitComponent::register_type() {
         info.getter = [](void*) -> tc_value {
             return tc_value_bool(false);
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             if (value.type == TC_VALUE_BOOL && value.data.b) {
                 auto* c = static_cast<KinematicUnitComponent*>(obj);
                 c->capture_base();
             }
+            return value.type == TC_VALUE_BOOL;
         };
         inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
     }

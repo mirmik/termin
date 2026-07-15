@@ -60,11 +60,13 @@ void register_unknown_component_inspect_fields() {
                 return tc_value_string(c->original_type.c_str());
             };
 
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<UnknownComponent*>(obj);
                 if (value.type == TC_VALUE_STRING && value.data.s) {
                     c->original_type = value.data.s;
+                    return true;
                 }
+                return false;
             };
 
             tc::InspectRegistry::instance().add_field_with_choices("UnknownComponent", std::move(info));
@@ -84,10 +86,11 @@ void register_unknown_component_inspect_fields() {
                 return tc_value_copy(&c->original_data);
             };
 
-            info.setter = [](void* obj, tc_value value, void*) {
+            info.setter = [](void* obj, tc_value value, void*) -> bool {
                 auto* c = static_cast<UnknownComponent*>(obj);
                 tc_value_free(&c->original_data);
                 c->original_data = tc_value_copy(&value);
+                return true;
             };
 
             tc::InspectRegistry::instance().add_field_with_choices("UnknownComponent", std::move(info));

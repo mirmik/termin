@@ -307,11 +307,13 @@ void register_camera_runtime_fields(tc::InspectRegistry& inspect) {
         info.getter = [](void* obj) -> tc_value {
             return tc_value_string(static_cast<termin::CameraComponent*>(obj)->get_fov_mode_str().c_str());
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* camera = static_cast<termin::CameraComponent*>(obj);
             if (camera && value.type == TC_VALUE_STRING && value.data.s) {
                 camera->set_fov_mode_str(value.data.s);
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("CameraComponent", std::move(info));
     }
@@ -327,16 +329,19 @@ void register_camera_runtime_fields(tc::InspectRegistry& inspect) {
             snprintf(buf, sizeof(buf), "0x%llx", static_cast<unsigned long long>(camera->layer_mask));
             return tc_value_string(buf);
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* camera = static_cast<termin::CameraComponent*>(obj);
             if (!camera) {
-                return;
+                return false;
             }
             if (value.type == TC_VALUE_STRING && value.data.s) {
                 camera->layer_mask = strtoull(value.data.s, nullptr, 0);
+                return true;
             } else if (value.type == TC_VALUE_INT) {
                 camera->layer_mask = static_cast<uint64_t>(value.data.i);
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("CameraComponent", std::move(info));
     }
@@ -353,11 +358,13 @@ void register_light_runtime_fields(tc::InspectRegistry& inspect) {
         info.getter = [](void* obj) -> tc_value {
             return tc_value_string(static_cast<termin::LightComponent*>(obj)->get_light_type_str().c_str());
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* light = static_cast<termin::LightComponent*>(obj);
             if (light && value.type == TC_VALUE_STRING && value.data.s) {
                 light->set_light_type_str(value.data.s);
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("LightComponent", std::move(info));
     }
@@ -375,7 +382,7 @@ void register_light_runtime_fields(tc::InspectRegistry& inspect) {
             tc_value_list_push(&list, tc_value_double(light->color.z));
             return list;
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             auto* light = static_cast<termin::LightComponent*>(obj);
             if (light && value.type == TC_VALUE_LIST && tc_value_list_size(&value) >= 3) {
                 light->color = termin::Vec3(
@@ -383,7 +390,9 @@ void register_light_runtime_fields(tc::InspectRegistry& inspect) {
                     value_to_double(tc_value_list_get(&value, 1), 1.0),
                     value_to_double(tc_value_list_get(&value, 2), 1.0)
                 );
+                return true;
             }
+            return false;
         };
         inspect.add_field_with_choices("LightComponent", std::move(info));
     }
@@ -456,8 +465,9 @@ void register_android_runtime_inspect_fields() {
         info.getter = [](void* obj) -> tc_value {
             return static_cast<termin::MeshRenderer*>(obj)->get_override_data();
         };
-        info.setter = [](void* obj, tc_value value, void*) {
+        info.setter = [](void* obj, tc_value value, void*) -> bool {
             static_cast<termin::MeshRenderer*>(obj)->set_override_data(&value);
+            return true;
         };
         inspect.add_serializable_field("MeshRenderer", std::move(info));
     }
