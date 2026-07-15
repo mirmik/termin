@@ -8,11 +8,83 @@
 #include <tcbase/tc_log.hpp>
 #include <tcbase/tc_uuid.h>
 #include <algorithm>
+#include <functional>
+#include <numeric>
 #include <unordered_map>
 
 namespace termin {
 
 namespace {
+
+std::vector<size_t> component_deserialization_order(const nos::trent& components_data) {
+    const auto& components = components_data.as_list();
+    std::vector<size_t> order;
+    order.reserve(components.size());
+
+    std::vector<uint8_t> state(components.size(), 0);
+    bool cycle_detected = false;
+
+    auto component_type = [&components](size_t index) -> std::string {
+        const nos::trent& component = components[index];
+        if (!component.is_dict() || !component.contains("type")) {
+            return {};
+        }
+        return component["type"].as_string_default("");
+    };
+
+    std::function<void(size_t)> visit = [&](size_t index) {
+        if (state[index] == 2) {
+            return;
+        }
+        if (state[index] == 1) {
+            cycle_detected = true;
+            return;
+        }
+
+        state[index] = 1;
+        const std::string type_name = component_type(index);
+        const size_t requirement_count = type_name.empty()
+            ? 0
+            : tc_component_registry_requirement_count(type_name.c_str());
+
+        for (size_t requirement_index = 0;
+             requirement_index < requirement_count;
+             ++requirement_index) {
+            const char* required_type = tc_component_registry_requirement_at(
+                type_name.c_str(), requirement_index);
+            if (!required_type) {
+                continue;
+            }
+
+            for (size_t candidate_index = 0;
+                 candidate_index < components.size();
+                 ++candidate_index) {
+                if (candidate_index == index) {
+                    continue;
+                }
+                const std::string candidate_type = component_type(candidate_index);
+                if (!candidate_type.empty()
+                    && tc_component_registry_is_a(
+                        candidate_type.c_str(), required_type)) {
+                    visit(candidate_index);
+                    break;
+                }
+            }
+        }
+
+        state[index] = 2;
+        order.push_back(index);
+    };
+
+    for (size_t index = 0; index < components.size(); ++index) {
+        visit(index);
+    }
+
+    if (cycle_detected) {
+        std::iota(order.begin(), order.end(), size_t{0});
+    }
+    return order;
+}
 
 std::string generate_entity_clone_uuid() {
     char uuid[64] = {};
@@ -948,9 +1020,18 @@ void Entity::deserialize_components_trent(
     if (!valid()) return;
     if (!data.contains("components") || !data["components"].is_list()) return;
 
-    const auto& components = data["components"].as_list();
+    const auto& components_data = data["components"];
+    const auto& components = components_data.as_list();
+    const std::vector<size_t> component_order =
+        mode == ComponentDeserializationMode::Direct
+            ? component_deserialization_order(components_data)
+            : std::vector<size_t>();
 
-    for (const auto& comp_data : components) {
+    for (size_t ordered_index = 0; ordered_index < components.size(); ++ordered_index) {
+        const size_t component_index = mode == ComponentDeserializationMode::Direct
+            ? component_order[ordered_index]
+            : ordered_index;
+        const auto& comp_data = components[component_index];
         if (!comp_data.is_dict()) continue;
         if (!comp_data.contains("type")) continue;
 

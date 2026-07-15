@@ -158,6 +158,15 @@ def _register_python_component_metadata(
         record_inspect_type(cls.__name__)
 
 
+def _register_python_component_requirements(cls, component_registry) -> None:
+    for required_name in cls.__dict__.get("required_components", ()):
+        if not isinstance(required_name, str) or not required_name:
+            raise TypeError(
+                f"{cls.__name__}.required_components must contain non-empty component type names"
+            )
+        component_registry.register_requirement(cls.__name__, required_name)
+
+
 def restore_python_components() -> None:
     """Restore loaded Python component classes after native runtime bootstrap."""
     if not _python_component_registrations:
@@ -201,6 +210,7 @@ def restore_python_components() -> None:
                 record_component=None,
                 record_inspect_type=None,
             )
+            _register_python_component_requirements(cls, component_registry)
     except Exception:
         log.error("[PythonComponent] failed to restore loaded component registrations", exc_info=True)
         raise
@@ -220,6 +230,7 @@ class PythonComponent:
     # Class-level inspect fields - enabled is inherited by all subclasses
     component_category = "Project"
     component_display_name = ""
+    required_components: tuple[str, ...] = ()
 
     inspect_fields: Dict[str, Any] = {
         "display_name": InspectField(
@@ -288,6 +299,7 @@ class PythonComponent:
             record_component=record_component,
             record_inspect_type=record_inspect_type,
         )
+        _register_python_component_requirements(cls, component_registry)
         _python_component_registrations[cls.__name__] = _PythonComponentRegistration(
             cls=cls,
             owner=component_registry.registration_owner(),

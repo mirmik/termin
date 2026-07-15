@@ -17,6 +17,10 @@ def rendering_manager():
         del engine
 
 
+def test_rendering_manager_instance_or_none_without_engine():
+    assert RenderingManager.instance_or_none() is None
+
+
 def test_builtin_default_pipeline_color_fbos_follow_output_render_target(rendering_manager):
     pipeline = rendering_manager.create_pipeline("Default")
 
