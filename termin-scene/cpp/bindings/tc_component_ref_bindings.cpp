@@ -50,6 +50,14 @@ public:
         if (_c) tc_component_set_display_name(_c, v.c_str());
     }
 
+    std::string source_id() const {
+        return _c ? tc_component_get_source_id(_c) : "";
+    }
+
+    void set_source_id(const std::string& value) {
+        if (_c) tc_component_set_source_id(_c, value.c_str());
+    }
+
     // is_drawable moved to termin-render bindings
 
     // Call on_destroy via vtable
@@ -96,6 +104,7 @@ public:
                 tc_value orig_data = tc_inspect_get(cxx, "UnknownComponent", "original_data");
 
                 nb::dict result;
+                result["source_id"] = source_id();
                 if (orig_type.type == TC_VALUE_STRING && orig_type.data.s && orig_type.data.s[0]) {
                     result["type"] = orig_type.data.s;
                 } else {
@@ -121,6 +130,7 @@ public:
         }
 
         nb::dict result;
+        result["source_id"] = source_id();
         result["type"] = type_name();
         result["data"] = serialize_data();
         return result;
@@ -140,6 +150,9 @@ public:
 
         if (nb::isinstance<nb::dict>(data)) {
             nb::dict dict = nb::cast<nb::dict>(data);
+            if (dict.contains("source_id") && !dict["source_id"].is_none()) {
+                set_source_id(nb::cast<std::string>(dict["source_id"]));
+            }
             if (dict.contains("display_name") && !dict["display_name"].is_none()) {
                 set_display_name(nb::cast<std::string>(dict["display_name"]));
             }
@@ -291,6 +304,7 @@ void bind_tc_component_ref(nb::module_& m) {
             return std::string("<TcComponentRef: ") + self.type_name() + ">";
         })
         .def_prop_ro("type_name", &TcComponentRef::type_name)
+        .def_prop_rw("source_id", &TcComponentRef::source_id, &TcComponentRef::set_source_id)
         .def_prop_rw("enabled", &TcComponentRef::enabled, &TcComponentRef::set_enabled)
         .def_prop_rw("active_in_editor", &TcComponentRef::active_in_editor, &TcComponentRef::set_active_in_editor)
         .def_prop_rw("display_name", &TcComponentRef::display_name, &TcComponentRef::set_display_name)

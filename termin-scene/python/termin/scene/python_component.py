@@ -326,6 +326,15 @@ class PythonComponent:
         self._tc.display_name = value
 
     @property
+    def source_id(self) -> str:
+        """Stable identity used by scene and prefab serialization."""
+        return self._tc.source_id
+
+    @source_id.setter
+    def source_id(self, value: str) -> None:
+        self._tc.source_id = value
+
+    @property
     def is_python_component(self) -> bool:
         return True
 

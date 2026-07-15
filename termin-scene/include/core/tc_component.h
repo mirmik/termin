@@ -107,6 +107,10 @@ struct tc_component {
     // This is optional; registry-created components already have type_entry.
     const char* declared_type_name;
 
+    // Stable authoring/serialization identity. This is deliberately separate
+    // from the runtime component pointer and owner handle.
+    const char* source_id;
+
     // Flags
     const char* display_name;
     bool enabled;
@@ -156,6 +160,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->native_language = TC_LANGUAGE_CXX;
     c->body = NULL;
     c->declared_type_name = NULL;
+    c->source_id = NULL;
     c->display_name = NULL;
     c->enabled = true;
     c->active_in_editor = false;
@@ -432,6 +437,9 @@ static inline bool tc_component_is_language(tc_component* c, tc_language lang) {
 // ============================================================================
 
 TC_API const char* tc_component_get_type_name(const tc_component* c);
+TC_API const char* tc_component_get_source_id(const tc_component* c);
+TC_API void tc_component_set_source_id(tc_component* c, const char* source_id);
+TC_API const char* tc_component_ensure_source_id(tc_component* c);
 TC_API const char* tc_component_get_display_name(const tc_component* c);
 TC_API void tc_component_set_display_name(tc_component* c, const char* display_name);
 TC_API bool tc_component_get_enabled(const tc_component* c);

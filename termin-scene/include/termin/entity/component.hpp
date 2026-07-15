@@ -91,6 +91,8 @@ public:
     // Accessors for tc_component flags
     std::string display_name() const { return tc_component_get_display_name(&_c); }
     void set_display_name(const std::string& v) { tc_component_set_display_name(&_c, v.c_str()); }
+    std::string source_id() const { return tc_component_get_source_id(&_c); }
+    void set_source_id(const std::string& v) { tc_component_set_source_id(&_c, v.c_str()); }
 
     bool enabled() const { return _c.enabled; }
     void set_enabled(bool v) { _c.enabled = v; }

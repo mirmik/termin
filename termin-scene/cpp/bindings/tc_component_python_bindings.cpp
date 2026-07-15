@@ -294,6 +294,11 @@ public:
         if (_c) tc_component_set_display_name(_c, v.c_str());
     }
 
+    std::string get_source_id() const { return _c ? tc_component_get_source_id(_c) : ""; }
+    void set_source_id(const std::string& v) {
+        if (_c) tc_component_set_source_id(_c, v.c_str());
+    }
+
     bool is_cxx_component() const { return _c ? _c->kind == TC_CXX_COMPONENT : false; }
     bool is_python_component() const { return _c ? _c->kind == TC_PYTHON_COMPONENT : true; }
 
@@ -337,6 +342,7 @@ void bind_tc_component_python(nb::module_& m) {
         .def_prop_rw("enabled", &TcComponent::get_enabled, &TcComponent::set_enabled)
         .def_prop_rw("active_in_editor", &TcComponent::get_active_in_editor, &TcComponent::set_active_in_editor)
         .def_prop_rw("display_name", &TcComponent::get_display_name, &TcComponent::set_display_name)
+        .def_prop_rw("source_id", &TcComponent::get_source_id, &TcComponent::set_source_id)
         .def_prop_ro("is_cxx_component", &TcComponent::is_cxx_component)
         .def_prop_ro("is_python_component", &TcComponent::is_python_component)
         .def_prop_rw("_started", &TcComponent::get_started, &TcComponent::set_started)
