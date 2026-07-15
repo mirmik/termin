@@ -8,7 +8,9 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.about_model import EditorAboutInfo
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, RichTextModel, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, RichTextModel, Size, WidgetRef
+
+from .metrics import EDITOR_UI_METRICS
 
 
 @dataclass
@@ -52,7 +54,7 @@ def build_native_about_dialog(
     root = document.create_vstack("native-about-dialog")
     root.stable_id = "editor.about"
     root.preferred_size = Size(520.0, 280.0)
-    root.set_layout_padding(EdgeInsets(10.0, 10.0, 10.0, 10.0))
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     model = RichTextModel()
     model.set_html(
         "<b>Termin Editor</b><br>"

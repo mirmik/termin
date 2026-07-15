@@ -1,5 +1,6 @@
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_native.dialog_service import NativeDialogService
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.settings_dialog import build_native_settings_dialog
 from termin.gui_native import Document, Rect
 
@@ -28,6 +29,16 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     )
 
     assert dialog.show()
+    editor_row = dialog.root.children[0]
+    assert editor_row.bounds.x - dialog.root.bounds.x == EDITOR_UI_METRICS.dialog_padding
+    assert editor_row.bounds.height == (
+        EDITOR_UI_METRICS.compact_status_row
+        + EDITOR_UI_METRICS.compact_spacing
+        + EDITOR_UI_METRICS.field_row
+    )
+    assert editor_row.children[0].bounds.height == EDITOR_UI_METRICS.compact_status_row
+    assert editor_row.children[1].bounds.height == EDITOR_UI_METRICS.field_row
+    assert dialog.root.children[-2].bounds.height == EDITOR_UI_METRICS.field_row
     assert dialog.text_editor.text == "/usr/bin/editor"
     dialog.text_editor.text = " /opt/code "
     dialog.slang_compiler.text = " /opt/slangc "

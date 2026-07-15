@@ -12,9 +12,10 @@ from termin.editor_core.project_settings_model import (
     ProjectSettingsSnapshot,
     RENDER_SYNC_MODES,
 )
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
+from .metrics import EDITOR_UI_METRICS
 
 
 _logger = logging.getLogger(__name__)
@@ -24,10 +25,10 @@ def _ref(document: Document, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
-def _row(document: Document, label: str, control, *, label_width: float = 150.0) -> WidgetRef:
+def _row(document: Document, label: str, control) -> WidgetRef:
     row = document.create_hstack(f"project-settings-{label.lower().replace(' ', '-')}")
-    row.set_layout_spacing(4.0)
-    row.add_fixed_child(document.create_label(label), label_width)
+    row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    row.add_fixed_child(document.create_label(label), EDITOR_UI_METRICS.form_label)
     row.add_stretch_child(_ref(document, control))
     return row
 
@@ -139,34 +140,34 @@ def build_native_project_settings_dialog(
     root = document.create_vstack("native-project-settings")
     root.stable_id = "editor.project-settings"
     root.preferred_size = Size(620.0, 520.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(6.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     render_sync = document.create_combo_box()
     for mode in RENDER_SYNC_MODES:
         render_sync.add_item(mode.value.capitalize())
-    root.add_fixed_child(_row(document, "Render Sync Mode", render_sync), 30.0)
+    root.add_fixed_child(_row(document, "Render Sync Mode", render_sync), EDITOR_UI_METRICS.field_row)
     build_output = document.create_text_input()
-    root.add_fixed_child(_row(document, "Build Output Dir", build_output), 30.0)
+    root.add_fixed_child(_row(document, "Build Output Dir", build_output), EDITOR_UI_METRICS.field_row)
     width = document.create_spin_box()
     width.set_range(1.0, 16384.0)
     width.step = 16.0
     width.decimals = 0
-    root.add_fixed_child(_row(document, "Player Width", width), 30.0)
+    root.add_fixed_child(_row(document, "Player Width", width), EDITOR_UI_METRICS.field_row)
     height = document.create_spin_box()
     height.set_range(1.0, 16384.0)
     height.step = 16.0
     height.decimals = 0
-    root.add_fixed_child(_row(document, "Player Height", height), 30.0)
+    root.add_fixed_child(_row(document, "Player Height", height), EDITOR_UI_METRICS.field_row)
     fullscreen_row = document.create_hstack("project-settings-fullscreen")
     fullscreen_row.add_stretch_child(document.create_label("Player Fullscreen"))
     fullscreen = document.create_checkbox(False)
     fullscreen_row.add_fixed_child(_ref(document, fullscreen), 30.0)
-    root.add_fixed_child(fullscreen_row, 30.0)
-    root.add_fixed_child(document.create_label("Ignored Resource Paths"), 24.0)
+    root.add_fixed_child(fullscreen_row, EDITOR_UI_METRICS.field_row)
+    root.add_fixed_child(document.create_label("Ignored Resource Paths"), EDITOR_UI_METRICS.section_row)
     ignored = document.create_text_area()
     root.add_stretch_child(_ref(document, ignored))
     status = document.create_status_bar("Project settings")
-    root.add_fixed_child(_ref(document, status), 24.0)
+    root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
     dialog = document.create_dialog("Project Settings")
     dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
     dialog.set_content(root)

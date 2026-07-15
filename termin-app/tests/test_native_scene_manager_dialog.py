@@ -3,6 +3,7 @@ import weakref
 
 from termin.editor_core.scene_manager_model import SceneManagerController, SceneMode
 from termin.editor_native.dialog_service import NativeDialogService
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.scene_manager_dialog import build_native_scene_manager_dialog
 from termin.engine import SceneManager
 from termin.gui_native import Document, Rect
@@ -27,6 +28,9 @@ def test_native_scene_manager_selects_mutates_reopens_and_releases():
     )
     try:
         assert dialog.show()
+        root = dialog.dialog.widget.children[0]
+        assert root.children[0].bounds.height == EDITOR_UI_METRICS.field_row
+        assert root.children[-1].bounds.height == EDITOR_UI_METRICS.action_row
         dialog.select(1)
         assert dialog.snapshot.selected_name == "B"
         dialog.perform(lambda: controller.set_selected_mode(SceneMode.PLAY))

@@ -9,9 +9,10 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.settings_model import EditorSettingsController, EditorSettingsSnapshot
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
+from .metrics import EDITOR_UI_METRICS
 
 
 _logger = logging.getLogger(__name__)
@@ -112,21 +113,21 @@ class NativeSettingsDialog:
 
 def _path_row(document: Document, label_text: str):
     root = document.create_vstack(f"settings-{label_text.lower().replace(' ', '-')}")
-    root.set_layout_spacing(2.0)
-    root.add_fixed_child(document.create_label(label_text), 22.0)
+    root.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
+    root.add_fixed_child(document.create_label(label_text), EDITOR_UI_METRICS.compact_status_row)
     row = document.create_hstack("settings-path-row")
-    row.set_layout_spacing(4.0)
+    row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     value = document.create_text_input()
     row.add_stretch_child(_ref(document, value))
     browse = document.create_button("Browse...")
     row.add_fixed_child(_ref(document, browse), 86.0)
-    root.add_fixed_child(row, 30.0)
+    root.add_fixed_child(row, EDITOR_UI_METRICS.field_row)
     return root, value, browse
 
 
 def _spin_row(document: Document, label: str, minimum: float, maximum: float):
     row = document.create_hstack(f"settings-{label.lower().replace(' ', '-')}")
-    row.set_layout_spacing(4.0)
+    row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     row.add_stretch_child(document.create_label(label))
     spin = document.create_spin_box()
     spin.set_range(minimum, maximum)
@@ -148,28 +149,33 @@ def build_native_settings_dialog(
     root = document.create_vstack("native-settings-dialog")
     root.stable_id = "editor.settings"
     root.preferred_size = Size(560.0, 430.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(7.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     editor_row, text_editor, editor_browse = _path_row(document, "External Text Editor")
-    root.add_fixed_child(editor_row, 56.0)
+    path_row_height = (
+        EDITOR_UI_METRICS.compact_status_row
+        + EDITOR_UI_METRICS.compact_spacing
+        + EDITOR_UI_METRICS.field_row
+    )
+    root.add_fixed_child(editor_row, path_row_height)
     slang_row, slang_compiler, slang_browse = _path_row(document, "Slang Compiler")
-    root.add_fixed_child(slang_row, 56.0)
+    root.add_fixed_child(slang_row, path_row_height)
     font_row, font_size = _spin_row(document, "Font Size", 8.0, 32.0)
-    root.add_fixed_child(font_row, 30.0)
+    root.add_fixed_child(font_row, EDITOR_UI_METRICS.field_row)
     small_row, font_size_small = _spin_row(document, "Font Size (small)", 8.0, 24.0)
-    root.add_fixed_child(small_row, 30.0)
+    root.add_fixed_child(small_row, EDITOR_UI_METRICS.field_row)
     mcp_row = document.create_hstack("settings-mcp-row")
-    mcp_row.set_layout_spacing(4.0)
+    mcp_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     mcp_row.add_stretch_child(
         document.create_label("Enable local editor MCP server on startup")
     )
     mcp_enabled = document.create_checkbox(False)
     mcp_row.add_fixed_child(_ref(document, mcp_enabled), 28.0)
-    root.add_fixed_child(mcp_row, 30.0)
+    root.add_fixed_child(mcp_row, EDITOR_UI_METRICS.field_row)
     apply_button = document.create_button("Apply Font")
-    root.add_fixed_child(_ref(document, apply_button), 32.0)
+    root.add_fixed_child(_ref(document, apply_button), EDITOR_UI_METRICS.field_row)
     status = document.create_status_bar("Settings")
-    root.add_fixed_child(_ref(document, status), 24.0)
+    root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
     dialog = document.create_dialog("Settings")
     dialog.actions = [
         DialogAction("ok", "OK", is_default=True),

@@ -10,7 +10,9 @@ from termin.editor_core.spacemouse_settings_model import (
     SpaceMouseSettingsController,
     SpaceMouseSettingsSnapshot,
 )
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
+
+from .metrics import EDITOR_UI_METRICS
 
 
 def _ref(document: Document, widget) -> WidgetRef:
@@ -19,8 +21,8 @@ def _ref(document: Document, widget) -> WidgetRef:
 
 def _row(document: Document, label: str, control) -> WidgetRef:
     row = document.create_hstack(f"spacemouse-{label.lower().replace(' ', '-')}")
-    row.set_layout_spacing(6.0)
-    row.add_fixed_child(document.create_label(label), 120.0)
+    row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    row.add_fixed_child(document.create_label(label), EDITOR_UI_METRICS.form_label)
     row.add_stretch_child(_ref(document, control))
     return row
 
@@ -103,14 +105,14 @@ def build_native_spacemouse_settings_dialog(document, controller, *, viewport, r
     root = document.create_vstack("native-spacemouse-settings")
     root.stable_id = "editor.spacemouse-settings"
     root.preferred_size = Size(460.0, 560.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(5.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     mode = document.create_combo_box()
     mode.add_item("Orbit")
     mode.add_item("Fly")
     horizon_lock = document.create_checkbox(False)
-    root.add_fixed_child(_row(document, "Mode", mode), 30.0)
-    root.add_fixed_child(_row(document, "Horizon Lock", horizon_lock), 28.0)
+    root.add_fixed_child(_row(document, "Mode", mode), EDITOR_UI_METRICS.field_row)
+    root.add_fixed_child(_row(document, "Horizon Lock", horizon_lock), EDITOR_UI_METRICS.compact_row)
     controls = []
     for label, minimum, maximum, step, decimals in (
         ("Pan", 0.000001, 0.01, 0.000005, 6),
@@ -123,9 +125,9 @@ def build_native_spacemouse_settings_dialog(document, controller, *, viewport, r
         control.set_range(minimum, maximum)
         control.step = step
         control.decimals = decimals
-        root.add_fixed_child(_row(document, label, control), 30.0)
+        root.add_fixed_child(_row(document, label, control), EDITOR_UI_METRICS.field_row)
         controls.append(control)
-    root.add_fixed_child(document.create_label("Invert Axes"), 24.0)
+    root.add_fixed_child(document.create_label("Invert Axes"), EDITOR_UI_METRICS.section_row)
     inversion_labels = (
         "Invert X (Left/Right)", "Invert Y (Forward/Backward)",
         "Invert Z (Up/Down)", "Invert RX (Pitch)", "Invert RY (Yaw)",
@@ -133,7 +135,7 @@ def build_native_spacemouse_settings_dialog(document, controller, *, viewport, r
     )
     inversions = tuple(document.create_checkbox(False) for _label in inversion_labels)
     for label, control in zip(inversion_labels, inversions, strict=True):
-        root.add_fixed_child(_row(document, label, control), 28.0)
+        root.add_fixed_child(_row(document, label, control), EDITOR_UI_METRICS.compact_row)
     dialog = document.create_dialog("SpaceMouse Settings")
     dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
     dialog.set_content(root)

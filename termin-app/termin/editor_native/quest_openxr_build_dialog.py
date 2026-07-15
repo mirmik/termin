@@ -7,7 +7,9 @@ from typing import Callable
 import weakref
 
 from termin.editor_core.quest_openxr_build_model import QuestOpenXRBuildController
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, Size
+from termin.gui_native import DialogAction, Document, Rect, Size
+
+from .metrics import EDITOR_UI_METRICS
 
 
 @dataclass
@@ -78,17 +80,17 @@ def build_native_quest_openxr_build_dialog(
 ) -> NativeQuestOpenXRBuildDialog:
     root = document.create_vstack("native-quest-openxr-build")
     root.preferred_size = Size(780.0, 470.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(6.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     project_label = document.create_status_bar("Project:")
     scene_label = document.create_status_bar("Entry scene:")
     status = document.create_status_bar("Idle")
-    root.add_fixed_child(project_label.widget, 24.0)
-    root.add_fixed_child(scene_label.widget, 24.0)
-    root.add_fixed_child(status.widget, 24.0)
+    root.add_fixed_child(project_label.widget, EDITOR_UI_METRICS.status_row)
+    root.add_fixed_child(scene_label.widget, EDITOR_UI_METRICS.status_row)
+    root.add_fixed_child(status.widget, EDITOR_UI_METRICS.status_row)
 
     actions = document.create_hstack("native-quest-openxr-actions")
-    actions.set_layout_spacing(4.0)
+    actions.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     button_labels = (
         "Build APK",
         "Install",
@@ -101,7 +103,7 @@ def build_native_quest_openxr_build_dialog(
         button = document.create_button(label)
         actions.add_stretch_child(button.widget)
         buttons.append(button)
-    root.add_fixed_child(actions, 34.0)
+    root.add_fixed_child(actions, EDITOR_UI_METRICS.action_row)
     log_view = document.create_text_area()
     log_view.widget.enabled = False
     root.add_stretch_child(log_view.widget)

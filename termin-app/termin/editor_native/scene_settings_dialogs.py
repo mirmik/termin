@@ -17,9 +17,10 @@ from termin.editor_core.scene_settings_model import (
     ShadowSettingsController,
     ShadowSettingsSnapshot,
 )
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
+from .metrics import EDITOR_UI_METRICS
 
 
 _logger = logging.getLogger(__name__)
@@ -29,10 +30,10 @@ def _ref(document: Document, reference) -> WidgetRef:
     return reference if isinstance(reference, WidgetRef) else document.ref(reference.handle)
 
 
-def _row(document: Document, label: str, control, *, label_width: float = 130.0) -> WidgetRef:
+def _row(document: Document, label: str, control) -> WidgetRef:
     row = document.create_hstack(f"scene-settings-{label.lower().replace(' ', '-')}")
-    row.set_layout_spacing(4.0)
-    row.add_fixed_child(document.create_label(label), label_width)
+    row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    row.add_fixed_child(document.create_label(label), EDITOR_UI_METRICS.form_label)
     row.add_stretch_child(_ref(document, control))
     return row
 
@@ -260,12 +261,12 @@ def build_native_scene_names_dialog(document, controller, *, viewport, request_r
     root = document.create_hstack("native-scene-names")
     root.stable_id = "editor.scene-names"
     root.preferred_size = Size(760.0, 560.0)
-    root.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
-    root.set_layout_spacing(8.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     columns = []
     for title in ("Layers (0-63)", "Flags (0-63)"):
         column = document.create_vstack(f"scene-names-{title[:5].lower()}")
-        column.add_fixed_child(document.create_label(title), 24.0)
+        column.add_fixed_child(document.create_label(title), EDITOR_UI_METRICS.section_row)
         area = document.create_text_area()
         column.add_stretch_child(_ref(document, area))
         root.add_stretch_child(column)
@@ -294,21 +295,21 @@ def build_native_shadow_settings_dialog(document, controller, *, viewport, reque
     root = document.create_vstack("native-shadow-settings")
     root.stable_id = "editor.shadow-settings"
     root.preferred_size = Size(440.0, 260.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(6.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     method = document.create_combo_box()
     _set_combo_items(method, SHADOW_METHODS)
-    root.add_fixed_child(_row(document, "Method", method), 30.0)
+    root.add_fixed_child(_row(document, "Method", method), EDITOR_UI_METRICS.field_row)
     softness = document.create_spin_box()
     softness.set_range(0.0, 10.0)
     softness.step = 0.1
     softness.decimals = 2
-    root.add_fixed_child(_row(document, "Softness", softness), 30.0)
+    root.add_fixed_child(_row(document, "Softness", softness), EDITOR_UI_METRICS.field_row)
     bias = document.create_spin_box()
     bias.set_range(0.0, 0.05)
     bias.step = 0.0001
     bias.decimals = 5
-    root.add_fixed_child(_row(document, "Receiver Bias", bias), 30.0)
+    root.add_fixed_child(_row(document, "Receiver Bias", bias), EDITOR_UI_METRICS.field_row)
     dialog = document.create_dialog("Shadow Settings")
     dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
     dialog.set_content(root)
@@ -339,8 +340,8 @@ def build_native_scene_properties_dialog(
     root = document.create_vstack("native-scene-properties")
     root.stable_id = "editor.scene-properties"
     root.preferred_size = Size(600.0, 570.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(5.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     background = document.create_button("Background")
     ambient = document.create_button("Ambient")
     intensity = document.create_spin_box()
@@ -360,15 +361,15 @@ def build_native_scene_properties_dialog(
         ("Gradient Top", skybox_top),
         ("Gradient Bottom", skybox_bottom),
     ):
-        root.add_fixed_child(_row(document, label, control), 30.0)
-    root.add_fixed_child(document.create_label("Scene Pipelines"), 24.0)
+        root.add_fixed_child(_row(document, label, control), EDITOR_UI_METRICS.field_row)
+    root.add_fixed_child(document.create_label("Scene Pipelines"), EDITOR_UI_METRICS.section_row)
     pipelines = document.create_combo_box()
-    root.add_fixed_child(_ref(document, pipelines), 30.0)
+    root.add_fixed_child(_ref(document, pipelines), EDITOR_UI_METRICS.field_row)
     pipeline_row = document.create_hstack("scene-pipeline-actions")
-    pipeline_row.set_layout_spacing(4.0)
+    pipeline_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     remove_pipeline = document.create_button("Remove")
     pipeline_row.add_fixed_child(_ref(document, remove_pipeline), 78.0)
-    root.add_fixed_child(pipeline_row, 30.0)
+    root.add_fixed_child(pipeline_row, EDITOR_UI_METRICS.field_row)
     dialog = document.create_dialog("Scene Properties")
     dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
     dialog.set_content(root)

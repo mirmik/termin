@@ -11,9 +11,10 @@ from termin.editor_core.navigation_settings_model import (
     NavigationSettingsController,
     NavigationSettingsSnapshot,
 )
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
+from .metrics import EDITOR_UI_METRICS
 
 
 def _ref(document: Document, widget) -> WidgetRef:
@@ -22,8 +23,8 @@ def _ref(document: Document, widget) -> WidgetRef:
 
 def _row(document: Document, label: str, control) -> WidgetRef:
     row = document.create_hstack(f"navigation-{label.lower().replace(' ', '-')}")
-    row.set_layout_spacing(6.0)
-    row.add_fixed_child(document.create_label(label), 110.0)
+    row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    row.add_fixed_child(document.create_label(label), EDITOR_UI_METRICS.form_label)
     row.add_stretch_child(_ref(document, control))
     return row
 
@@ -182,17 +183,17 @@ def build_native_agent_types_dialog(document, controller, *, dialog_service, vie
     root = document.create_vstack("native-agent-types")
     root.stable_id = "editor.agent-types"
     root.preferred_size = Size(520.0, 360.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(6.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     agents = document.create_combo_box()
-    root.add_fixed_child(_row(document, "Agent", agents), 30.0)
+    root.add_fixed_child(_row(document, "Agent", agents), EDITOR_UI_METRICS.field_row)
     action_row = document.create_hstack("agent-actions")
-    action_row.set_layout_spacing(4.0)
+    action_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     add_button = document.create_button("Add")
     remove_button = document.create_button("Remove")
     action_row.add_fixed_child(_ref(document, add_button), 80.0)
     action_row.add_fixed_child(_ref(document, remove_button), 80.0)
-    root.add_fixed_child(action_row, 30.0)
+    root.add_fixed_child(action_row, EDITOR_UI_METRICS.field_row)
     name = document.create_text_input()
     radius = document.create_spin_box()
     height = document.create_spin_box()
@@ -211,7 +212,7 @@ def build_native_agent_types_dialog(document, controller, *, dialog_service, vie
         ("Name", name), ("Radius", radius), ("Height", height),
         ("Max Slope", max_slope), ("Step Height", step_height),
     ):
-        root.add_fixed_child(_row(document, label, control), 30.0)
+        root.add_fixed_child(_row(document, label, control), EDITOR_UI_METRICS.field_row)
     dialog = document.create_dialog("Agent Types")
     dialog.actions = [
         DialogAction("ok", "OK", is_default=True),
@@ -240,9 +241,12 @@ def build_native_navmesh_areas_dialog(document, controller, *, dialog_service, v
     root = document.create_vstack("native-navmesh-areas")
     root.stable_id = "editor.navmesh-areas"
     root.preferred_size = Size(520.0, 620.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(4.0)
-    root.add_fixed_child(document.create_label("Area names, one per line (indices 0-63)"), 24.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    root.add_fixed_child(
+        document.create_label("Area names, one per line (indices 0-63)"),
+        EDITOR_UI_METRICS.section_row,
+    )
     names = document.create_text_area()
     root.add_stretch_child(_ref(document, names))
     dialog = document.create_dialog("NavMesh Areas")
