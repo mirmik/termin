@@ -11,13 +11,14 @@ from termin.gui_native import (
     Color,
     DialogAction,
     Document,
-    EdgeInsets,
     FileDialogMode,
     FileDialogModel,
     MessageBoxKind,
     Rect,
     Size,
 )
+
+from .metrics import EDITOR_UI_METRICS
 
 
 _logger = logging.getLogger(__name__)
@@ -215,22 +216,22 @@ class NativeDialogService(DialogService):
             raise ValueError("native layer mask dialog requires 64 layer names")
         dialog = self._document.create_dialog("Layer Mask")
         content = self._document.create_vstack("native-layer-mask-content")
-        content.set_layout_spacing(4.0)
-        content.set_layout_padding(EdgeInsets(4.0, 4.0, 4.0, 4.0))
+        content.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+        content.set_layout_padding(EDITOR_UI_METRICS.collection_insets)
         button_row = self._document.create_hstack("native-layer-mask-buttons")
-        button_row.set_layout_spacing(4.0)
+        button_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
         all_button = self._document.create_button("All", "native-layer-mask-all")
         none_button = self._document.create_button("None", "native-layer-mask-none")
         button_row.add_stretch_child(all_button.widget)
         button_row.add_stretch_child(none_button.widget)
-        content.add_fixed_child(button_row, 30.0)
+        content.add_fixed_child(button_row, EDITOR_UI_METRICS.field_row)
 
         layer_list = self._document.create_vstack("native-layer-mask-list")
-        layer_list.set_layout_spacing(2.0)
+        layer_list.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
         checkboxes = []
         for index, name in enumerate(layer_names):
             row = self._document.create_hstack(f"native-layer-mask-row-{index}")
-            row.set_layout_spacing(4.0)
+            row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
             checkbox = self._document.create_checkbox(bool(current_mask & (1 << index)))
             label = self._document.create_label(
                 f"{index}: {name}",
@@ -238,7 +239,7 @@ class NativeDialogService(DialogService):
             )
             row.add_fixed_child(checkbox.widget, 26.0)
             row.add_stretch_child(label)
-            layer_list.add_fixed_child(row, 28.0)
+            layer_list.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
             checkboxes.append(checkbox)
         layer_list.preferred_size = Size(320.0, 64.0 * 30.0)
         scroll = self._document.create_scroll_area("native-layer-mask-scroll")

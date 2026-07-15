@@ -1,12 +1,17 @@
 import gc
 
 from termin.editor_native.tool_inspector import build_native_tool_inspector
-from termin.gui_native import Document
+from termin.editor_native.metrics import EDITOR_UI_METRICS
+from termin.gui_native import Document, Rect
 
 
 def test_native_tool_inspector_register_show_and_unregister():
     document = Document()
     inspector = build_native_tool_inspector(document)
+    inspector.root.layout(Rect(0.0, 0.0, 340.0, 200.0))
+    assert inspector.empty.bounds.x == EDITOR_UI_METRICS.embedded_panel_padding
+    assert inspector.empty.bounds.y == EDITOR_UI_METRICS.embedded_panel_padding
+    assert inspector.empty.bounds.height == EDITOR_UI_METRICS.compact_row
     panel = document.create_vstack("terrain-panel")
     assert document.add_root(inspector.root.handle)
 

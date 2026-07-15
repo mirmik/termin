@@ -3,6 +3,7 @@ import weakref
 
 from termin.editor_core.project_settings_model import ProjectSettingsController
 from termin.editor_native.dialog_service import NativeDialogService
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.project_settings_dialog import build_native_project_settings_dialog
 from termin.gui_native import Document, Rect
 from termin.project.settings import ProjectSettingsManager
@@ -29,6 +30,11 @@ def test_native_project_settings_dialog_saves_reopens_and_releases(tmp_path):
     )
 
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    first_row = root.children[0]
+    assert first_row.bounds.height == EDITOR_UI_METRICS.field_row
+    assert first_row.children[0].bounds.width == EDITOR_UI_METRICS.form_label
+    assert root.children[-1].bounds.height == EDITOR_UI_METRICS.status_row
     dialog.build_output.text = "out"
     dialog.ignored_paths.text = "cache\ngenerated/assets"
     dialog.player_width.value = 1600

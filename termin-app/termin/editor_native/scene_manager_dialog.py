@@ -11,9 +11,10 @@ from termin.editor_core.scene_manager_model import (
     SceneManagerSnapshot,
     SceneMode,
 )
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, Size, WidgetRef
 
 from .dialog_service import NativeDialogService
+from .metrics import EDITOR_UI_METRICS
 
 
 def _ref(document: Document, widget) -> WidgetRef:
@@ -148,17 +149,17 @@ def build_native_scene_manager_dialog(document, controller, *, dialog_service, v
     root = document.create_vstack("native-scene-manager")
     root.stable_id = "editor.scene-manager"
     root.preferred_size = Size(860.0, 610.0)
-    root.set_layout_padding(EdgeInsets(8.0, 8.0, 8.0, 8.0))
-    root.set_layout_spacing(5.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     scenes = document.create_combo_box()
-    root.add_fixed_child(_ref(document, scenes), 30.0)
+    root.add_fixed_child(_ref(document, scenes), EDITOR_UI_METRICS.field_row)
     details = document.create_text_area()
     root.add_stretch_child(_ref(document, details))
     status = document.create_button("")
     status.widget.enabled = False
-    root.add_fixed_child(_ref(document, status), 24.0)
+    root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
     action_row = document.create_hstack("scene-manager-actions")
-    action_row.set_layout_spacing(4.0)
+    action_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     labels = (
         "Unload", "Duplicate", "Inactive", "Stop", "Play",
         "Render Attach", "Render Detach", "Editor Attach", "Editor Detach", "Refresh",
@@ -166,7 +167,7 @@ def build_native_scene_manager_dialog(document, controller, *, dialog_service, v
     buttons = tuple(document.create_button(label) for label in labels)
     for button in buttons:
         action_row.add_stretch_child(_ref(document, button))
-    root.add_fixed_child(action_row, 34.0)
+    root.add_fixed_child(action_row, EDITOR_UI_METRICS.action_row)
     dialog = document.create_dialog("Scene Manager")
     dialog.actions = [DialogAction("close", "Close", is_default=True, is_cancel=True)]
     dialog.set_content(root)

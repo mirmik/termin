@@ -8,6 +8,7 @@ from termin.editor_native.diagnostic_dialogs import (
     build_native_audio_debugger_dialog,
     build_native_undo_history_dialog,
 )
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import Document, Rect
 
 from test_editor_diagnostic_models import _AudioEngine
@@ -34,6 +35,8 @@ def test_native_undo_history_dialog_refreshes_reopens_and_releases():
     )
 
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    assert root.children[-1].bounds.height == EDITOR_UI_METRICS.field_row
     assert "rename entity" in dialog.done_model.text
     stack.undo()
     dialog.refresh()
@@ -61,6 +64,9 @@ def test_native_audio_debugger_dialog_refreshes_reopens_and_releases():
     )
 
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    assert root.children[0].bounds.height == EDITOR_UI_METRICS.compact_row
+    assert root.children[-1].bounds.height == EDITOR_UI_METRICS.field_row
     assert "2 / 3" in dialog.status.text
     assert "Ch 2  Paused" in dialog.channels_model.text
     assert dialog.dialog.activate("close")

@@ -5,7 +5,8 @@ from types import SimpleNamespace
 from termin.editor_core.foliage_layer_editor_extension import FoliageLayerEditorExtension
 from termin.editor_native.component_extensions import NativeComponentExtensionContext
 from termin.editor_native.foliage_extension import project_native_foliage_extension
-from termin.gui_native import Document
+from termin.editor_native.metrics import EDITOR_UI_METRICS
+from termin.gui_native import Document, Rect
 
 
 class _ComponentRef:
@@ -42,7 +43,11 @@ def test_native_foliage_projector_tracks_shared_extension_state_and_lifetime():
     presentation = project_native_foliage_extension(extension, document)
     root = presentation.right_panel
     assert root is not None
+    root.layout(Rect(0.0, 0.0, 340.0, 178.0))
     assert root.stable_id == "editor.inspector.extension.foliage"
+    assert root.children[0].bounds.x == EDITOR_UI_METRICS.embedded_panel_padding
+    assert root.children[0].bounds.height == EDITOR_UI_METRICS.section_row
+    assert root.children[3].bounds.height == EDITOR_UI_METRICS.compact_row
     mode_label = _find(root, "native-foliage-mode")
     radius_label = _find(root, "native-foliage-radius")
     count_label = _find(root, "native-foliage-count")

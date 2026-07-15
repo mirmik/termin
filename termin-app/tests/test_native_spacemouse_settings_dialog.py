@@ -6,6 +6,7 @@ from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsContr
 from termin.editor_native.spacemouse_settings_dialog import (
     build_native_spacemouse_settings_dialog,
 )
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import Document, Rect
 
 
@@ -21,6 +22,12 @@ def test_native_spacemouse_settings_applies_reopens_and_releases():
     )
 
     assert dialog.show()
+    root = dialog.dialog.widget.children[0]
+    mode_row = root.children[0]
+    horizon_row = root.children[1]
+    assert mode_row.bounds.height == EDITOR_UI_METRICS.field_row
+    assert horizon_row.bounds.height == EDITOR_UI_METRICS.compact_row
+    assert mode_row.children[0].bounds.width == EDITOR_UI_METRICS.form_label
     dialog.mode.selected_index = 0
     dialog.deadzone.value = 25
     dialog.inversions[0].checked = True
