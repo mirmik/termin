@@ -11,11 +11,12 @@ from termin.editor_core.component_editor_extension import (
 from termin.gui_native import (
     CollectionItem,
     Document,
-    EdgeInsets,
     Size,
     TreeExpansionModel,
     TreeModel,
 )
+
+from .metrics import EDITOR_UI_METRICS
 
 
 _logger = logging.getLogger(__name__)
@@ -39,8 +40,8 @@ def project_native_procedural_mesh_extension(
 
     root = document.create_vstack("native-procedural-mesh-extension")
     root.stable_id = "editor.inspector.extension.procedural-mesh"
-    root.set_layout_padding(EdgeInsets(2.0, 2.0, 2.0, 2.0))
-    root.set_layout_spacing(4.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.embedded_panel_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     root.preferred_size = Size(340.0, 702.0)
 
     title = document.create_label("Procedural Geometry", "native-procedural-title")
@@ -52,15 +53,16 @@ def project_native_procedural_mesh_extension(
     selection.widget.debug_name = "native-procedural-selection"
     status = document.create_status_bar("Status: Ready")
     status.widget.debug_name = "native-procedural-status"
-    root.add_fixed_child(title, 24.0)
-    root.add_fixed_child(mode.widget, 22.0)
-    root.add_fixed_child(summary.widget, 22.0)
-    root.add_fixed_child(selection.widget, 22.0)
+    root.add_fixed_child(title, EDITOR_UI_METRICS.section_row)
+    root.add_fixed_child(mode.widget, EDITOR_UI_METRICS.compact_status_row)
+    root.add_fixed_child(summary.widget, EDITOR_UI_METRICS.compact_status_row)
+    root.add_fixed_child(selection.widget, EDITOR_UI_METRICS.compact_status_row)
 
     tree_model = TreeModel()
     tree_expansion = TreeExpansionModel()
     tree = document.create_tree_widget(tree_model, tree_expansion)
     tree.widget.debug_name = "native-procedural-document-tree"
+    # Tree density and viewport height belong to this document projection, not editor chrome.
     tree.set_row_height(22.0)
     tree.set_row_spacing(1.0)
     root.add_fixed_child(tree.widget, 176.0)
@@ -70,7 +72,7 @@ def project_native_procedural_mesh_extension(
     applying_snapshot = False
 
     tool_row = document.create_hstack("native-procedural-tool-row")
-    tool_row.set_layout_spacing(4.0)
+    tool_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     draw = document.create_button("Draw", "native-procedural-draw")
     close = document.create_button("Close", "native-procedural-close")
     finish = document.create_button("Finish", "native-procedural-finish")
@@ -79,42 +81,43 @@ def project_native_procedural_mesh_extension(
     tool_row.add_stretch_child(close.widget)
     tool_row.add_stretch_child(finish.widget)
     tool_row.add_stretch_child(clear_tool.widget)
-    root.add_fixed_child(tool_row, 28.0)
+    root.add_fixed_child(tool_row, EDITOR_UI_METRICS.compact_row)
 
     primitive_row = document.create_hstack("native-procedural-primitive-row")
-    primitive_row.set_layout_spacing(4.0)
+    primitive_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     for spec in ordered_primitive_specs():
         button = document.create_button(spec.label, f"native-procedural-primitive-{spec.kind}")
         button.connect_clicked(lambda kind=spec.kind: extension.add_primitive(kind))
         primitive_row.add_stretch_child(button.widget)
-    root.add_fixed_child(primitive_row, 28.0)
+    root.add_fixed_child(primitive_row, EDITOR_UI_METRICS.compact_row)
 
     operation_row = document.create_hstack("native-procedural-operation-row")
-    operation_row.set_layout_spacing(4.0)
+    operation_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     for spec in ordered_boolean_operation_specs():
         button = document.create_button(spec.label, f"native-procedural-boolean-{spec.kind}")
         button.connect_clicked(lambda kind=spec.kind: extension.add_boolean_operation(kind))
         operation_row.add_stretch_child(button.widget)
-    root.add_fixed_child(operation_row, 28.0)
+    root.add_fixed_child(operation_row, EDITOR_UI_METRICS.compact_row)
 
     action_row = document.create_hstack("native-procedural-action-row")
-    action_row.set_layout_spacing(4.0)
+    action_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     extrude = document.create_button("Extrude", "native-procedural-extrude")
     wall = document.create_button("Wall", "native-procedural-wall")
     clear = document.create_button("Clear", "native-procedural-clear")
     action_row.add_stretch_child(extrude.widget)
     action_row.add_stretch_child(wall.widget)
     action_row.add_stretch_child(clear.widget)
-    root.add_fixed_child(action_row, 28.0)
+    root.add_fixed_child(action_row, EDITOR_UI_METRICS.compact_row)
 
     param_host = document.create_vstack("native-procedural-param-host")
-    param_host.set_layout_spacing(3.0)
-    param_host.set_layout_padding(EdgeInsets(2.0, 2.0, 2.0, 2.0))
+    param_host.set_layout_spacing(EDITOR_UI_METRICS.dense_spacing)
+    param_host.set_layout_padding(EDITOR_UI_METRICS.embedded_panel_insets)
     param_host.visible = False
     param_scroll = document.create_scroll_area("native-procedural-param-scroll")
     param_scroll.set_content(param_host)
+    # The parameter viewport is content-driven and intentionally remains panel-local.
     root.add_fixed_child(param_scroll.widget, 270.0)
-    root.add_fixed_child(status.widget, 22.0)
+    root.add_fixed_child(status.widget, EDITOR_UI_METRICS.compact_status_row)
 
     def clear_param_host() -> None:
         for child in tuple(param_host.children):
@@ -150,7 +153,7 @@ def project_native_procedural_mesh_extension(
                 20.0,
             )
             row = document.create_hstack(f"native-procedural-param-row-{key}")
-            row.set_layout_spacing(2.0)
+            row.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
             boxes = []
             for axis, value in zip(("x", "y", "z"), values, strict=True):
                 box = document.create_spin_box(float(value))
@@ -161,7 +164,7 @@ def project_native_procedural_mesh_extension(
                 boxes.append(box)
                 row.add_stretch_child(box.widget)
             groups[key] = tuple(boxes)
-            param_host.add_fixed_child(row, 28.0)
+            param_host.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
 
         def plane_changed(_value: float) -> None:
             def values(key: str) -> tuple[float, float, float]:
@@ -192,7 +195,7 @@ def project_native_procedural_mesh_extension(
         )
         for index, point in enumerate(item.points):
             row = document.create_hstack(f"native-procedural-param-row-point-{index}")
-            row.set_layout_spacing(3.0)
+            row.set_layout_spacing(EDITOR_UI_METRICS.dense_spacing)
             row.add_fixed_child(document.create_label(f"P{index}"), 32.0)
             boxes = []
             for axis, value in zip(("x", "y"), point, strict=True):
@@ -217,7 +220,7 @@ def project_native_procedural_mesh_extension(
 
             for box in boxes:
                 box.connect_changed(point_changed)
-            param_host.add_fixed_child(row, 28.0)
+            param_host.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
 
     def rebuild_operation_params(operation) -> bool:
         from termin.csg.operation_specs import (
@@ -247,7 +250,7 @@ def project_native_procedural_mesh_extension(
                 20.0,
             )
             row = document.create_hstack(f"native-procedural-param-row-{key}")
-            row.set_layout_spacing(2.0)
+            row.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
             boxes = []
             for axis, value in zip(("x", "y", "z"), values, strict=True):
                 box = document.create_spin_box(value)
@@ -263,7 +266,7 @@ def project_native_procedural_mesh_extension(
 
             for box in boxes:
                 box.connect_changed(vector_changed)
-            param_host.add_fixed_child(row, 28.0)
+            param_host.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
 
         def append_scalar(
             key: str,
@@ -274,7 +277,7 @@ def project_native_procedural_mesh_extension(
             min_value: float = 0.001,
         ) -> None:
             row = document.create_hstack(f"native-procedural-param-row-{key}")
-            row.set_layout_spacing(3.0)
+            row.set_layout_spacing(EDITOR_UI_METRICS.dense_spacing)
             row.add_fixed_child(
                 document.create_label(label, f"native-procedural-param-label-{key}"),
                 104.0,
@@ -286,7 +289,7 @@ def project_native_procedural_mesh_extension(
             box.decimals = 3
             box.connect_changed(lambda updated: changed(float(updated)))
             row.add_stretch_child(box.widget)
-            param_host.add_fixed_child(row, 28.0)
+            param_host.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
 
         if operation.kind == OPERATION_KIND_EXTRUDE:
             append_vector(
@@ -335,7 +338,7 @@ def project_native_procedural_mesh_extension(
             alignment.widget.debug_name = "native-procedural-param-alignment"
             param_host.add_fixed_child(alignment.widget, 20.0)
             alignment_row = document.create_hstack("native-procedural-param-alignment-row")
-            alignment_row.set_layout_spacing(3.0)
+            alignment_row.set_layout_spacing(EDITOR_UI_METRICS.dense_spacing)
             for value, label in (("center", "Center"), ("left", "Left"), ("right", "Right")):
                 button = document.create_button(
                     label,
@@ -343,7 +346,7 @@ def project_native_procedural_mesh_extension(
                 )
                 button.connect_clicked(lambda next_value=value: update_wall(alignment=next_value))
                 alignment_row.add_stretch_child(button.widget)
-            param_host.add_fixed_child(alignment_row, 28.0)
+            param_host.add_fixed_child(alignment_row, EDITOR_UI_METRICS.compact_row)
 
             from termin.csg.wall_height_offsets import (
                 MIN_WALL_CORNER_HEIGHT,
@@ -475,7 +478,7 @@ def project_native_procedural_mesh_extension(
                     20.0,
                 )
                 row = document.create_hstack(f"native-procedural-param-row-{param.key}")
-                row.set_layout_spacing(2.0)
+                row.set_layout_spacing(EDITOR_UI_METRICS.compact_spacing)
                 values = vector_param(operation.params, param.key, param.default)
                 boxes = []
                 for axis, value in zip(("x", "y", "z"), values, strict=True):
@@ -503,11 +506,11 @@ def project_native_procedural_mesh_extension(
 
                 for box in boxes:
                     box.connect_changed(vector_changed)
-                param_host.add_fixed_child(row, 28.0)
+                param_host.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
                 continue
             if param.kind in ("float", "int"):
                 row = document.create_hstack(f"native-procedural-param-row-{param.key}")
-                row.set_layout_spacing(3.0)
+                row.set_layout_spacing(EDITOR_UI_METRICS.dense_spacing)
                 row.add_fixed_child(
                     document.create_label(
                         param.label,
@@ -535,7 +538,7 @@ def project_native_procedural_mesh_extension(
 
                 box.connect_changed(scalar_changed)
                 row.add_stretch_child(box.widget)
-                param_host.add_fixed_child(row, 28.0)
+                param_host.add_fixed_child(row, EDITOR_UI_METRICS.compact_row)
                 continue
             if param.kind == "bool":
                 checkbox = document.create_checkbox(bool(operation.params.get(param.key, param.default)))
@@ -550,7 +553,7 @@ def project_native_procedural_mesh_extension(
 
                 checkbox.connect_changed(bool_changed)
                 row = document.create_hstack(f"native-procedural-param-row-{param.key}")
-                row.set_layout_spacing(3.0)
+                row.set_layout_spacing(EDITOR_UI_METRICS.dense_spacing)
                 row.add_fixed_child(checkbox.widget, 24.0)
                 row.add_stretch_child(
                     document.create_label(

@@ -8,7 +8,9 @@ import weakref
 
 from termin.editor_core.audio_debugger_model import AudioDebuggerController, AudioDebuggerSnapshot
 from termin.editor_core.undo_history_model import UndoHistoryController, UndoHistorySnapshot
-from termin.gui_native import DialogAction, Document, EdgeInsets, Rect, RichTextModel, Size, WidgetRef
+from termin.gui_native import DialogAction, Document, Rect, RichTextModel, Size, WidgetRef
+
+from .metrics import EDITOR_UI_METRICS
 
 
 def _ref(document: Document, reference) -> WidgetRef:
@@ -124,9 +126,10 @@ def build_native_undo_history_dialog(
     root = document.create_vstack("native-undo-history")
     root.stable_id = "editor.undo-history"
     root.preferred_size = Size(760.0, 480.0)
-    root.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
-    root.set_layout_spacing(5.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     columns = document.create_hstack("undo-history-columns")
+    # The wider gutter separates two peer history documents, not ordinary controls.
     columns.set_layout_spacing(8.0)
     done_model = RichTextModel()
     done = document.create_rich_text_view(done_model)
@@ -138,7 +141,7 @@ def build_native_undo_history_dialog(
     columns.add_stretch_child(_ref(document, undone))
     root.add_stretch_child(columns)
     refresh = document.create_button("Refresh")
-    root.add_fixed_child(_ref(document, refresh), 30.0)
+    root.add_fixed_child(_ref(document, refresh), EDITOR_UI_METRICS.field_row)
     dialog = document.create_dialog("Undo/Redo Stack")
     dialog.actions = [DialogAction("close", "Close", is_cancel=True)]
     dialog.set_content(root)
@@ -169,16 +172,16 @@ def build_native_audio_debugger_dialog(
     root = document.create_vstack("native-audio-debugger")
     root.stable_id = "editor.audio-debugger"
     root.preferred_size = Size(650.0, 440.0)
-    root.set_layout_padding(EdgeInsets(6.0, 6.0, 6.0, 6.0))
-    root.set_layout_spacing(5.0)
+    root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
+    root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     status = document.create_status_bar("Audio status")
-    root.add_fixed_child(_ref(document, status), 28.0)
+    root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.compact_row)
     channels_model = RichTextModel()
     channels = document.create_rich_text_view(channels_model)
     channels.placeholder = "No active channels"
     root.add_stretch_child(_ref(document, channels))
     refresh = document.create_button("Refresh")
-    root.add_fixed_child(_ref(document, refresh), 30.0)
+    root.add_fixed_child(_ref(document, refresh), EDITOR_UI_METRICS.field_row)
     dialog = document.create_dialog("Audio Debugger")
     dialog.actions = [DialogAction("close", "Close", is_cancel=True)]
     dialog.set_content(root)

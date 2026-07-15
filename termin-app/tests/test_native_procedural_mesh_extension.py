@@ -8,6 +8,7 @@ from tcbase._geom_native import Vec3
 from termin.csg.procedural_document import ProceduralMeshDocument, ProceduralPlane
 from termin.editor_core.procedural_mesh_editor_extension import ProceduralMeshExtensionModel
 from termin.editor_native.component_extensions import NativeComponentExtensionContext
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.editor_native.procedural_mesh_extension import (
     project_native_procedural_mesh_extension,
 )
@@ -140,7 +141,14 @@ def test_native_procedural_mesh_projector_mutates_shared_document_and_state():
     presentation = project_native_procedural_mesh_extension(extension, document)
     root = presentation.right_panel
     assert root is not None
+    root.layout(Rect(0.0, 0.0, 340.0, 702.0))
     assert root.stable_id == "editor.inspector.extension.procedural-mesh"
+    assert root.children[0].bounds.x == EDITOR_UI_METRICS.embedded_panel_padding
+    assert root.children[0].bounds.height == EDITOR_UI_METRICS.section_row
+    assert all(
+        root.children[index].bounds.height == EDITOR_UI_METRICS.compact_row
+        for index in (5, 6, 7, 8)
+    )
     summary = _find(root, "native-procedural-summary")
     selection = _find(root, "native-procedural-selection")
     status = _find(root, "native-procedural-status")

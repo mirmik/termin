@@ -1,5 +1,6 @@
 from termin.editor_core.about_model import EditorAboutInfo
 from termin.editor_native.about_dialog import build_native_about_dialog
+from termin.editor_native.metrics import EDITOR_UI_METRICS
 from termin.gui_native import Document, Rect
 
 
@@ -16,6 +17,9 @@ def test_native_about_dialog_escapes_info_reopens_and_releases():
     assert "1<2" in dialog.content_model.text
     assert "vulkan<debug>" in dialog.content_model.text
     assert dialog.show()
+    content = dialog.root.children[0]
+    assert content.bounds.x - dialog.root.bounds.x == EDITOR_UI_METRICS.dialog_padding
+    assert content.bounds.y - dialog.root.bounds.y == EDITOR_UI_METRICS.dialog_padding
     assert dialog.dialog.activate("ok")
     assert dialog.show()
 
