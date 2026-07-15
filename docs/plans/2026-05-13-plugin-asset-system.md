@@ -147,6 +147,12 @@ Prefab resource lookups use the process resource-manager factory from
 app-owned boundary is the concrete typed lookup surface still implemented by
 the app `ResourceManager`.
 
+Status 2026-07-15: `PrefabInstanceMarker` and `PrefabRegistry` were retired.
+Canonical instance identity and live tracking now use native
+`PrefabInstanceState` plus the scene-owned component type index; Python prefab
+assets query snapshots of generation-checked entity handles for authoring-side
+hot reload.
+
 Status 2026-06-18: GLB/glTF ownership moved from `termin-app` to a dedicated
 `termin-glb` importer package. `termin.glb` now owns the loader, `GLBAsset`,
 GLB import/runtime plugins, runtime instantiator, and extractor helpers.

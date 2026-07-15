@@ -14,6 +14,7 @@
 #include <termin/entity/entity.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/navmesh/tc_navmesh_handle.hpp>
+#include <termin/prefab/prefab_instance_state.hpp>
 #include <termin/skeleton/tc_skeleton_handle.hpp>
 #include <termin/voxels/tc_voxel_grid_handle.hpp>
 #include <tcbase/tc_string.h>
@@ -218,6 +219,7 @@ void register_builtin_component_types() {
     }
 
     register_builtin_scene_component_types();
+    prefab::register_prefab_component_types();
     register_builtin_mesh_component_types();
     register_builtin_collision_component_types();
     register_builtin_kinematic_component_types();

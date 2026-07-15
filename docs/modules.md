@@ -61,8 +61,9 @@ packages stay focused on runtime/data APIs.
 
 Source of truth: [termin-prefab docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-prefab/docs/index.md)
 
-Owns prefab runtime and `.prefab` asset integration: `PrefabAsset`,
-`PrefabInstanceMarker`, `PrefabRegistry`, property override paths, and prefab
+Owns prefab runtime and `.prefab` asset integration: native `PrefabDocument`,
+`PrefabInstantiator` and `PrefabInstanceState`, scene-owned live-instance
+queries, the authoring-side `PrefabAsset`, property override paths, and prefab
 import/runtime plugins. The package is separate from `termin-default-assets`
 because prefab behavior is scene-composition runtime, not a thin default
 adapter over a lower-level domain package.

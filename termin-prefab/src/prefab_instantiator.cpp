@@ -1,10 +1,13 @@
 #include <termin/prefab/prefab_instantiator.hpp>
+#include <termin/prefab/prefab_document.hpp>
+#include <termin/prefab/prefab_instance_state.hpp>
 
 #include <unordered_map>
 #include <unordered_set>
 
 #include <tcbase/tc_log.hpp>
 #include <termin/tc_scene.hpp>
+#include <termin/entity/component_registry.hpp>
 
 namespace termin::prefab {
 namespace {
@@ -86,13 +89,108 @@ bool validate_entity_node(
     return true;
 }
 
-} // namespace
+bool collect_instance_mapping(
+    const nos::trent& source,
+    const std::unordered_map<std::string, std::string>& uuid_remap,
+    tc_entity_pool* target_pool,
+    tc_entity_pool_handle target_pool_handle,
+    std::vector<std::string>& source_entity_ids,
+    std::vector<Entity>& runtime_entities,
+    std::vector<std::string>& source_component_ids,
+    std::vector<Entity>& component_owners,
+    std::string& message
+) {
+    const std::string source_entity_id = source["uuid"].as_string_default("");
+    const auto remap_it = uuid_remap.find(source_entity_id);
+    if (remap_it == uuid_remap.end()) {
+        message = "missing runtime UUID mapping for source entity '" + source_entity_id + "'";
+        return false;
+    }
+    const tc_entity_id runtime_id = tc_entity_pool_find_by_uuid(
+        target_pool,
+        remap_it->second.c_str()
+    );
+    Entity runtime_entity(target_pool_handle, runtime_id);
+    if (!runtime_entity.valid()) {
+        message = "runtime entity for source '" + source_entity_id + "' is unavailable";
+        return false;
+    }
 
-PrefabInstantiateResult PrefabInstantiator::instantiate(
+    source_entity_ids.push_back(source_entity_id);
+    runtime_entities.push_back(runtime_entity);
+    if (source.contains("components")) {
+        for (const nos::trent& component : source["components"].as_list()) {
+            source_component_ids.push_back(component["source_id"].as_string_default(""));
+            component_owners.push_back(runtime_entity);
+        }
+    }
+    if (source.contains("children")) {
+        for (const nos::trent& child : source["children"].as_list()) {
+            if (!collect_instance_mapping(
+                    child,
+                    uuid_remap,
+                    target_pool,
+                    target_pool_handle,
+                    source_entity_ids,
+                    runtime_entities,
+                    source_component_ids,
+                    component_owners,
+                    message)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+void destroy_hierarchy(Entity root) {
+    if (!root.valid()) {
+        return;
+    }
+    root.destroy_children();
+    tc_entity_free(root.handle());
+}
+
+PrefabInstantiateResult instantiate_hierarchy(
     const nos::trent& source_hierarchy,
     tc_scene_handle target_scene,
     const Entity& parent,
+    const PrefabInstantiateOptions& options,
+    const PrefabDocument* document
+);
+
+} // namespace
+
+PrefabInstantiateResult PrefabInstantiator::instantiate(
+    const PrefabDocument& document,
+    tc_scene_handle target_scene,
+    const Entity& parent,
     const PrefabInstantiateOptions& options
+) {
+    PrefabDocumentResult validation = document.validate();
+    if (!validation.ok()) {
+        return failure(
+            PrefabInstantiateError::InvalidDocument,
+            validation.message
+        );
+    }
+    return instantiate_hierarchy(
+        document.source_hierarchy(),
+        target_scene,
+        parent,
+        options,
+        &document
+    );
+}
+
+namespace {
+
+PrefabInstantiateResult instantiate_hierarchy(
+    const nos::trent& source_hierarchy,
+    tc_scene_handle target_scene,
+    const Entity& parent,
+    const PrefabInstantiateOptions& options,
+    const PrefabDocument* document
 ) {
     if (!tc_scene_handle_valid(target_scene)) {
         return failure(
@@ -130,6 +228,16 @@ PrefabInstantiateResult PrefabInstantiator::instantiate(
         return failure(error, std::move(validation_message));
     }
 
+    if (document != nullptr) {
+        register_prefab_component_types();
+        if (!ComponentRegistry::instance().has(PrefabInstanceState::TypeName)) {
+            return failure(
+                PrefabInstantiateError::InstanceStatePublicationFailed,
+                "PrefabInstanceState component type is not registered"
+            );
+        }
+    }
+
     std::unordered_map<std::string, std::string> uuid_remap;
     nos::trent instance_data = Entity::make_clone_payload(source_hierarchy, "", uuid_remap);
     if (!instance_data.is_dict()) {
@@ -155,10 +263,85 @@ PrefabInstantiateResult PrefabInstantiator::instantiate(
         root.set_local_position(options.position);
     }
 
+    if (document != nullptr) {
+        std::vector<std::string> source_entity_ids;
+        std::vector<Entity> runtime_entities;
+        std::vector<std::string> source_component_ids;
+        std::vector<Entity> component_owners;
+        std::string mapping_message;
+        if (!collect_instance_mapping(
+                source_hierarchy,
+                uuid_remap,
+                target_pool,
+                root.pool_handle(),
+                source_entity_ids,
+                runtime_entities,
+                source_component_ids,
+                component_owners,
+                mapping_message)) {
+            destroy_hierarchy(root);
+            return failure(
+                PrefabInstantiateError::InstanceStatePublicationFailed,
+                std::move(mapping_message)
+            );
+        }
+
+        PrefabInstanceState* state = nullptr;
+        try {
+            state = new PrefabInstanceState(document->asset_uuid());
+            state->set_source_revision(document->source_revision());
+            state->set_entity_mapping(
+                std::move(source_entity_ids),
+                std::move(runtime_entities)
+            );
+            state->set_component_mapping(
+                std::move(source_component_ids),
+                std::move(component_owners)
+            );
+            root.add_component(state);
+            if (root.get_component<PrefabInstanceState>() != state) {
+                if (state->entity().valid()) {
+                    root.remove_component(state);
+                } else {
+                    delete state;
+                }
+                destroy_hierarchy(root);
+                return failure(
+                    PrefabInstantiateError::InstanceStatePublicationFailed,
+                    "failed to attach PrefabInstanceState to instance root"
+                );
+            }
+        } catch (const std::exception& error) {
+            if (state != nullptr) {
+                if (state->entity().valid()) {
+                    root.remove_component(state);
+                } else {
+                    delete state;
+                }
+            }
+            destroy_hierarchy(root);
+            return failure(
+                PrefabInstantiateError::InstanceStatePublicationFailed,
+                std::string("failed to publish PrefabInstanceState: ") + error.what()
+            );
+        }
+    }
+
     PrefabInstantiateResult result;
     result.root = root;
     result.message = "ok";
     return result;
+}
+
+} // namespace
+
+PrefabInstantiateResult PrefabInstantiator::instantiate(
+    const nos::trent& source_hierarchy,
+    tc_scene_handle target_scene,
+    const Entity& parent,
+    const PrefabInstantiateOptions& options
+) {
+    return instantiate_hierarchy(source_hierarchy, target_scene, parent, options, nullptr);
 }
 
 } // namespace termin::prefab

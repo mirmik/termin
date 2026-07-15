@@ -46,7 +46,7 @@ def test_prefab_runtime_plugin_registers_lazy_asset() -> None:
 def test_prefab_import_plugin_extracts_uuid(tmp_path: Path) -> None:
     prefab_path = tmp_path / "Enemy.prefab"
     prefab_path.write_text(
-        '{"version": "2.0", "uuid": "prefab-uuid", "root": {"name": "Enemy"}}',
+        '{"version": "3.0", "uuid": "prefab-uuid", "root": {"uuid": "enemy-root", "name": "Enemy", "components": [], "children": []}}',
         encoding="utf-8",
     )
 
@@ -61,7 +61,7 @@ def test_prefab_import_plugin_extracts_uuid(tmp_path: Path) -> None:
 def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
     prefab_path = tmp_path / "Enemy.prefab"
     prefab_path.write_text(
-        '{"version": "2.0", "uuid": "prefab-uuid", "root": {"name": "Enemy", "children": []}}',
+        '{"version": "3.0", "uuid": "prefab-uuid", "root": {"uuid": "enemy-root", "name": "Enemy", "components": [], "children": []}}',
         encoding="utf-8",
     )
 
@@ -69,7 +69,12 @@ def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
 
     assert asset.name == "Enemy"
     assert asset.uuid == "prefab-uuid"
-    assert asset.root_data == {"name": "Enemy", "children": []}
+    assert asset.root_data == {
+        "uuid": "enemy-root",
+        "name": "Enemy",
+        "components": [],
+        "children": [],
+    }
     assert asset.get_entity_count() == 1
 
 

@@ -154,7 +154,7 @@ class PrefabEditController:
 
         # Save prefab
         try:
-            from termin.editor_core.prefab_persistence import PrefabPersistence
+            from termin.prefab.persistence import PrefabPersistence
 
             persistence = PrefabPersistence(self._resource_manager)
             stats = persistence.save(root_entity, self._prefab_path)
@@ -174,7 +174,7 @@ class PrefabEditController:
         Looks for entity named "[Root]" first, then falls back to
         the first root entity (without parent).
         """
-        from termin.editor_core.prefab_persistence import PrefabPersistence
+        from termin.prefab.persistence import PrefabPersistence
 
         scene = self._scene_manager.get_scene("prefab")
         if scene is None:
@@ -250,21 +250,27 @@ class PrefabEditController:
         """
         Load prefab contents into a new "prefab" scene.
         """
-        from termin.editor_core.prefab_persistence import PrefabPersistence
+        from termin.prefab.persistence import PrefabPersistence
         from termin.engine import scene as engine_scene
         from termin.engine import default_scene_extensions
         SceneMode = engine_scene.SceneMode
 
-        # Load prefab entity
-        persistence = PrefabPersistence(self._resource_manager)
-        root_entity = persistence.load(prefab_path)
+        if self._scene_manager.has_scene("prefab"):
+            self._scene_manager.close_scene("prefab")
+
+        prefab_scene = self._scene_manager.create_scene(
+            "prefab",
+            default_scene_extensions(),
+        )
+        try:
+            persistence = PrefabPersistence(self._resource_manager)
+            root_entity = persistence.load(prefab_path, prefab_scene)
+        except Exception:
+            if self._scene_manager.has_scene("prefab"):
+                self._scene_manager.close_scene("prefab")
+            raise
+
         self._root_entity = root_entity
-
-        # Create new "prefab" scene
-        prefab_scene = self._scene_manager.create_scene("prefab", default_scene_extensions())
-
-        # Add prefab root entity to scene
-        prefab_scene.add(root_entity)
 
         # Set mode to EDITOR for prefab scene
         self._scene_manager.set_mode("prefab", SceneMode.STOP)

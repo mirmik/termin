@@ -163,22 +163,32 @@ The next prefab schema is a deliberate new version. Existing `1.0` and `2.0`
 documents are not silently reinterpreted. During active development they may be
 handled by an explicit one-shot editor migration or rejected with a diagnostic.
 
-A source document contains at least:
+A canonical source document currently uses schema `3.0`. It deliberately wraps
+the existing native hierarchy serialization instead of introducing a second
+flat entity codec:
 
 ```text
 PrefabDocument
-  schema_version
-  asset_uuid
-  root_source_id
-  entities[]
-    source_id
-    parent_source_id
+  version = "3.0"
+  uuid                         # prefab asset UUID
+  root
+    uuid                       # entity source-local ID
     name, pose, flags, order
     components[]
       source_id
       native type identity
       typed serialized fields
+    children[]                 # recursive entity hierarchy
 ```
+
+Entity source-local IDs are stored in the hierarchy's `uuid` fields. Runtime
+instantiation treats those values as source identity and allocates fresh entity
+UUIDs for every concrete instance. Source editing materializes the hierarchy
+without remapping so that save preserves stable entity and component source
+identities.
+
+Readers accept exactly `3.0`. Versions `1.0` and `2.0` require an explicit
+migration tool and are never upgraded as a side effect of load or save.
 
 An instance contains at least:
 
@@ -258,16 +268,35 @@ The first native execution slice is in place:
   runtime pointer/owner handle. It is generated on attachment, serialized with
   hierarchy data, retained by runtime clones and preserved through
   `UnknownComponent` degradation and upgrade. This is the component-identity
-  substrate required by the next `PrefabDocument` schema.
+  substrate required by `PrefabDocument` schema `3.0`;
+- native `PrefabDocument` owns strict `3.0` parsing, validation, canonical JSON
+  serialization, source capture and direct source materialization. It rejects
+  legacy schemas and duplicate entity/component source identities;
+- editor persistence is now a thin `termin.prefab.persistence` transaction:
+  reads validate without modifying the source, writes validate before an
+  `fsync` plus same-directory atomic replace, and failures retain the previous
+  file;
+- prefab edit mode creates a fresh isolation scene and materializes the source
+  document directly into it. A failed load closes that temporary scene and
+  leaves the normal editor scene and play state untouched;
+- `PrefabAsset` and editor persistence use the same native document parser and
+  serializer; the duplicate `termin.editor_core.prefab_persistence` serializer
+  has been removed;
+- instantiated roots now carry native `PrefabInstanceState`. It serializes the
+  prefab asset UUID, deterministic source revision and ordered source IDs plus
+  entity references; generic hierarchy cloning therefore remaps its runtime
+  references without a prefab-specific scene serializer;
+- live instance lookup uses the exact `PrefabInstanceState` component index
+  already owned by each scene and returns snapshots of generation-checked
+  entity handles. Entity/component removal and scene teardown remove records
+  through the ordinary native lifecycle; the Python `WeakSet` registry and
+  `PrefabInstanceMarker` have been removed.
 
 The remaining violations and gaps are:
 
-- document parsing and versioning have not yet moved into the native library;
-  the current instantiator accepts the existing serialized hierarchy
-  representation. Entity source IDs are still represented by source UUIDs,
-  while component `source_id` is now explicit;
-- prefab instance state is still a `PythonComponent`, and live tracking still
-  uses a Python `WeakSet`;
+- the low-level hierarchy overload on `PrefabInstantiator` remains as a legacy
+  adapter for existing native callers. Canonical asset/editor callers pass a
+  validated `PrefabDocument`;
 - the Python runtime asset plugin remains until native asset registration and
   packaged loading replace it;
 - `termin-runtime` itself is already a native, Python-free library and is the
@@ -283,14 +312,17 @@ link against Python.
 
 ## Migration order
 
-1. Introduce the native prefab document, identity and typed-value contracts,
-   with Python-free unit tests.
+1. Introduce the native prefab document and identity contracts, with
+   Python-free unit tests. **Done for schema `3.0`; the typed override value
+   contract remains part of the override/reconciliation phase.**
 2. Move hierarchy instantiation to the native clone/deserialization path and
-   prove multiple instances, full hierarchy and reference remapping.
+   prove multiple instances, full hierarchy and reference remapping. **Done.**
 3. Replace `PrefabInstanceMarker` and `PrefabRegistry` with native instance
-   state and scene-owned tracking.
+   state and scene-owned tracking. **Done.**
 4. Make editor persistence and UI consume bindings to the canonical native
-   document; remove the second serializer and old runtime plugin.
+   document; remove the second serializer and old runtime plugin. **Persistence
+   and prefab edit isolation are done; removal of the Python runtime plugin is
+   coupled to steps 3 and 5.**
 5. Add native prefab resources to runtime-package export, validation and
    `termin-runtime` loading.
 6. Add native reconciliation and editor override capture, then retire the old
