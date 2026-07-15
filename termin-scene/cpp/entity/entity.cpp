@@ -275,16 +275,17 @@ void remap_component_entity_refs(
     }
 }
 
-Entity deserialize_entity_hierarchy(
+bool deserialize_entity_hierarchy(
     const nos::trent& data,
     tc_scene_handle scene,
     Entity* parent,
-    std::vector<std::pair<Entity, nos::trent>>& entity_data_pairs
+    std::vector<std::pair<Entity, nos::trent>>& entity_data_pairs,
+    Entity& result
 ) {
     Entity entity = Entity::deserialize_base_trent(data, scene);
     if (!entity.valid()) {
         tc::Log::error("[Entity] hierarchy deserialization failed: could not deserialize entity base");
-        return Entity();
+        return false;
     }
 
     if (parent != nullptr && parent->valid()) {
@@ -295,11 +296,31 @@ Entity deserialize_entity_hierarchy(
 
     if (data.contains("children") && data["children"].is_list()) {
         for (const nos::trent& child_data : data["children"].as_list()) {
-            deserialize_entity_hierarchy(child_data, scene, &entity, entity_data_pairs);
+            Entity child;
+            if (!deserialize_entity_hierarchy(
+                    child_data,
+                    scene,
+                    &entity,
+                    entity_data_pairs,
+                    child)) {
+                return false;
+            }
         }
     }
 
-    return entity;
+    result = entity;
+    return true;
+}
+
+void rollback_deserialized_entities(
+    std::vector<std::pair<Entity, nos::trent>>& entity_data_pairs
+) {
+    for (auto it = entity_data_pairs.rbegin(); it != entity_data_pairs.rend(); ++it) {
+        Entity& entity = it->first;
+        if (entity.valid()) {
+            tc_entity_pool_free(entity.pool(), entity.id());
+        }
+    }
 }
 
 } // namespace
@@ -557,15 +578,28 @@ Entity Entity::deserialize_hierarchy(
         tc::Log::error("[Entity] hierarchy deserialization failed: data must be a dict");
         return Entity();
     }
+    tc_entity_pool* target_pool = tc_scene_handle_valid(scene)
+        ? tc_scene_entity_pool(scene)
+        : Entity::standalone_pool();
+    if (target_pool == nullptr) {
+        tc::Log::error("[Entity] hierarchy deserialization failed: target entity pool is unavailable");
+        return Entity();
+    }
+    if (parent.valid() && parent.pool() != target_pool) {
+        tc::Log::error("[Entity] hierarchy deserialization failed: parent belongs to another entity pool");
+        return Entity();
+    }
+
     std::vector<std::pair<Entity, nos::trent>> entity_data_pairs;
     Entity parent_copy = parent;
-    Entity cloned_root = deserialize_entity_hierarchy(
-        data,
-        scene,
-        parent_copy.valid() ? &parent_copy : nullptr,
-        entity_data_pairs
-    );
-    if (!cloned_root.valid()) {
+    Entity cloned_root;
+    if (!deserialize_entity_hierarchy(
+            data,
+            scene,
+            parent_copy.valid() ? &parent_copy : nullptr,
+            entity_data_pairs,
+            cloned_root)) {
+        rollback_deserialized_entities(entity_data_pairs);
         tc::Log::error("[Entity] hierarchy deserialization failed: root entity was not deserialized");
         return Entity();
     }

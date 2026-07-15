@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from termin.navmesh.types import NavMesh
     from termin.prefab.asset import PrefabAsset
     from termin.render.texture import Texture
-    from termin.scene import Entity, GeneralTransform3
+    from termin.scene import Entity, GeneralTransform3, TcScene
     from termin.render_framework import RenderPipeline
     from termin.voxels._voxels_native import TcVoxelGrid
     from termin.voxels.grid import VoxelGrid
@@ -110,6 +110,7 @@ class DefaultAssetResourceMixin:
     def instantiate_prefab(
         self,
         name_or_uuid: str,
+        scene: "TcScene | None" = None,
         parent: "GeneralTransform3 | None" = None,
         position: tuple[float, float, float] | None = None,
         instance_name: str | None = None,
@@ -122,7 +123,12 @@ class DefaultAssetResourceMixin:
             return None
         if not asset.is_loaded:
             asset.ensure_loaded()
-        return asset.instantiate(parent=parent, position=position, name=instance_name)
+        return asset.instantiate(
+            scene=scene,
+            parent=parent,
+            position=position,
+            name=instance_name,
+        )
 
     def unregister_prefab(self, name: str) -> None:
         """Remove prefab by name."""
