@@ -13,13 +13,41 @@ from termin.editor_core.editor_commands import (
     ScenePropertyEditCommand,
     SkyboxTypeEditCommand,
     TransformEditCommand,
+    ComponentFieldEditCommand,
+    RemoveComponentCommand,
 )
 from termin.editor_core.undo_stack import UndoStack
+from termin.editor_core.inspector_fields_model import collect_inspect_fields
+from termin.editor_core.entity_inspector_model import EntityInspectorController
 from termin.geombase import GeneralPose3, Vec3
 from termin.inspect import InspectField
 from termin.scene import PythonComponent, TcScene
 from termin.bootstrap import bootstrap_player, shutdown_player
 from termin.render import scene_render_state
+from termin.prefab import (
+    PrefabAsset,
+    PrefabInstanceState,
+    PrefabStructuralOverrideKind,
+)
+
+
+_EDITOR_PREFAB_PROBE_CLASS = None
+
+
+def _editor_prefab_probe_class():
+    global _EDITOR_PREFAB_PROBE_CLASS
+    if _EDITOR_PREFAB_PROBE_CLASS is None:
+        class EditorPrefabProbe(PythonComponent):
+            inspect_fields = {
+                "weight": InspectField(path="weight", label="Weight", kind="float"),
+            }
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.weight = 1.0
+
+        _EDITOR_PREFAB_PROBE_CLASS = EditorPrefabProbe
+    return _EDITOR_PREFAB_PROBE_CLASS
 
 
 class TestEditorUndoCommands(unittest.TestCase):
@@ -267,6 +295,152 @@ class TestEditorUndoCommands(unittest.TestCase):
 
         stack.redo()
         self.assertEqual(entity.name, "renamed")
+
+    def _create_prefab_instance(self):
+        source_scene = TcScene.create("editor-command-prefab-source")
+        source_root = source_scene.create_entity("PrefabRoot")
+        source_child = source_root.create_child("SourceChild")
+        source_probe = _editor_prefab_probe_class()()
+        source_child.add_component(source_probe)
+        asset = PrefabAsset.from_entity(source_root, name="EditorCommandPrefab")
+        source_ids = (source_child.uuid, source_probe.source_id)
+        instance = asset.instantiate(scene=self.scene)
+        return source_scene, asset, instance, source_ids
+
+    def test_prefab_property_commands_capture_and_restore_override_metadata(self) -> None:
+        source_scene, asset, instance, (child_source_id, component_source_id) = (
+            self._create_prefab_instance())
+        try:
+            state = instance.get_component(PrefabInstanceState)
+            child = state.entity_for_source(child_source_id)
+            component = child.get_tc_component("EditorPrefabProbe")
+            field = collect_inspect_fields(component)["weight"]
+            stack = UndoStack()
+
+            stack.push(EntityPropertyEditCommand(child, "name", child.name, "Customized"))
+            stack.push(ComponentFieldEditCommand(component, field, 1.0, 4.5))
+
+            self.assertEqual(state.property_override_count, 2)
+            refresh = asset.apply_to_instance(instance)
+            self.assertTrue(refresh.ok)
+            self.assertEqual(child.name, "Customized")
+            self.assertAlmostEqual(component.get_field("weight"), 4.5)
+
+            stack.undo()
+            self.assertEqual(state.property_override_count, 1)
+            self.assertAlmostEqual(component.get_field("weight"), 1.0)
+            stack.undo()
+            self.assertEqual(state.property_override_count, 0)
+            self.assertEqual(child.name, "SourceChild")
+
+            stack.redo()
+            stack.redo()
+            self.assertEqual(state.property_override_count, 2)
+
+            inspector = EntityInspectorController()
+            inspector.set_scene(self.scene)
+            status = inspector.set_target(child).prefab_status
+            self.assertIn(asset.uuid, status)
+            self.assertIn("2 property", status)
+            self.assertIn("valid", status)
+
+            restored_scene = TcScene.create("editor-command-prefab-restored")
+            try:
+                self.assertGreater(restored_scene.load_from_data(self.scene.serialize()), 0)
+                restored_instance = restored_scene.get_entity(instance.uuid)
+                restored_state = restored_instance.get_component(PrefabInstanceState)
+                self.assertEqual(restored_state.property_override_count, 2)
+                self.assertTrue(asset.apply_to_instance(restored_instance).ok)
+                restored_child = restored_state.entity_for_source(child_source_id)
+                self.assertEqual(restored_child.name, "Customized")
+            finally:
+                restored_scene.destroy()
+        finally:
+            source_scene.destroy()
+
+    def test_prefab_delete_undo_rebinds_mapping_and_refreshes(self) -> None:
+        source_scene, asset, instance, (child_source_id, _component_source_id) = (
+            self._create_prefab_instance())
+        try:
+            state = instance.get_component(PrefabInstanceState)
+            child = state.entity_for_source(child_source_id)
+            child_uuid = child.uuid
+            stack = UndoStack()
+
+            stack.push(DeleteEntityCommand(self.scene, child))
+            self.assertFalse(state.entity_for_source(child_source_id).valid())
+            self.assertIsNotNone(state.get_structural_override(
+                PrefabStructuralOverrideKind.SUPPRESS_ENTITY, child_source_id))
+            self.assertTrue(asset.apply_to_instance(instance).ok)
+            self.assertIsNone(self.scene.get_entity(child_uuid))
+
+            stack.undo()
+            restored = state.entity_for_source(child_source_id)
+            self.assertTrue(restored.valid())
+            self.assertEqual(restored.uuid, child_uuid)
+            self.assertIsNone(state.get_structural_override(
+                PrefabStructuralOverrideKind.SUPPRESS_ENTITY, child_source_id))
+            self.assertTrue(asset.apply_to_instance(instance).ok)
+            self.assertEqual(state.entity_for_source(child_source_id), restored)
+        finally:
+            source_scene.destroy()
+
+    def test_prefab_reparent_to_local_entity_records_placement_with_undo(self) -> None:
+        source_scene, asset, instance, (child_source_id, _component_source_id) = (
+            self._create_prefab_instance())
+        try:
+            state = instance.get_component(PrefabInstanceState)
+            child = state.entity_for_source(child_source_id)
+            local_parent = instance.create_child("LocalParent")
+            stack = UndoStack()
+
+            stack.push(ReparentEntityCommand(
+                child,
+                instance.transform,
+                local_parent.transform,
+            ))
+            self.assertEqual(child.parent, local_parent)
+            self.assertIsNotNone(state.get_structural_override(
+                PrefabStructuralOverrideKind.PLACE_ENTITY, child_source_id))
+            self.assertTrue(asset.apply_to_instance(instance).ok)
+            self.assertEqual(child.parent, local_parent)
+
+            stack.undo()
+            self.assertEqual(child.parent, instance)
+            self.assertIsNone(state.get_structural_override(
+                PrefabStructuralOverrideKind.PLACE_ENTITY, child_source_id))
+            self.assertTrue(asset.apply_to_instance(instance).ok)
+            self.assertEqual(child.parent, instance)
+        finally:
+            source_scene.destroy()
+
+    def test_prefab_component_remove_undo_rebinds_mapping_after_refresh(self) -> None:
+        source_scene, asset, instance, (child_source_id, component_source_id) = (
+            self._create_prefab_instance())
+        try:
+            state = instance.get_component(PrefabInstanceState)
+            child = state.entity_for_source(child_source_id)
+            stack = UndoStack()
+
+            stack.push(RemoveComponentCommand(child, "EditorPrefabProbe"))
+            self.assertIsNone(child.get_tc_component("EditorPrefabProbe"))
+            self.assertIsNotNone(state.get_structural_override(
+                PrefabStructuralOverrideKind.SUPPRESS_COMPONENT, component_source_id))
+            self.assertTrue(asset.apply_to_instance(instance).ok)
+
+            stack.undo()
+            restored = child.get_tc_component("EditorPrefabProbe")
+            self.assertIsNotNone(restored)
+            self.assertEqual(restored.source_id, component_source_id)
+            self.assertEqual(
+                state.source_for_component(child, restored.source_id),
+                component_source_id,
+            )
+            self.assertIsNone(state.get_structural_override(
+                PrefabStructuralOverrideKind.SUPPRESS_COMPONENT, component_source_id))
+            self.assertTrue(asset.apply_to_instance(instance).ok)
+        finally:
+            source_scene.destroy()
 
     def test_entity_property_command_edits_visibility(self) -> None:
         entity = self.scene.create_entity("entity")

@@ -27,6 +27,10 @@ from termin.editor_core.inspector_fields_model import (
 )
 from termin.editor_core.undo_stack import UndoCommand
 from termin.inspect import InspectField
+from termin.editor_core.prefab_override_capture import (
+    find_containing_instance,
+    find_mapped_instance,
+)
 from termin.kinematic.general_transform import GeneralTransform3
 from termin.kinematic.transform import Transform3
 from termin.scene import Entity, TcComponentRef
@@ -133,6 +137,7 @@ class EntityInspectorSnapshot:
     uuid: str
     layer: int
     layer_names: tuple[str, ...]
+    prefab_status: str
     components: tuple[EntityInspectorComponent, ...]
     selected_component: int
     transform: EntityTransformSnapshot
@@ -442,6 +447,7 @@ class EntityInspectorController:
                 uuid="",
                 layer=-1,
                 layer_names=layer_names,
+                prefab_status="",
                 components=(),
                 selected_component=-1,
                 transform=EntityTransformSnapshot(
@@ -479,10 +485,25 @@ class EntityInspectorController:
             uuid=entity.uuid or "-",
             layer=int(entity.layer),
             layer_names=layer_names,
+            prefab_status=self._prefab_status(entity),
             components=tuple(components),
             selected_component=self._selected_component,
             transform=self._transform_snapshot(entity),
             fields=self.fields.snapshot,
+        )
+
+    @staticmethod
+    def _prefab_status(entity: Entity) -> str:
+        state = find_containing_instance(entity)
+        if state is None:
+            return ""
+        mapped = find_mapped_instance(entity)
+        ownership = f"source {mapped[1]}" if mapped is not None else "local addition"
+        validity = "valid" if state.mapping_valid else "INVALID METADATA"
+        return (
+            f"{state.prefab_asset_uuid} · {ownership} · "
+            f"{state.property_override_count} property / "
+            f"{state.structural_override_count} structural overrides · {validity}"
         )
 
     def _transform_snapshot(self, entity: Entity) -> EntityTransformSnapshot:

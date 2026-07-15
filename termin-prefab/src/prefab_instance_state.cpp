@@ -380,6 +380,145 @@ Entity PrefabInstanceState::component_owner_for_source(const std::string& source
     return Entity();
 }
 
+std::string PrefabInstanceState::source_for_entity(const Entity& runtime_entity) const {
+    if (!runtime_entity.valid()) return {};
+    const size_t count = std::min(_source_entity_ids.size(), _runtime_entities.size());
+    for (size_t index = 0; index < count; ++index) {
+        if (_runtime_entities[index] == runtime_entity) return _source_entity_ids[index];
+    }
+    return {};
+}
+
+std::string PrefabInstanceState::source_for_component(
+    const Entity& runtime_owner,
+    const std::string& runtime_component_source_id
+) const {
+    if (!runtime_owner.valid() || runtime_component_source_id.empty()) return {};
+    const size_t count = std::min(_source_component_ids.size(), _component_owners.size());
+    for (size_t index = 0; index < count; ++index) {
+        if (_source_component_ids[index] == runtime_component_source_id &&
+            _component_owners[index] == runtime_owner) {
+            return _source_component_ids[index];
+        }
+    }
+    return {};
+}
+
+bool PrefabInstanceState::rebind_entity_mapping(
+    const std::string& source_id,
+    const Entity& runtime_entity,
+    std::string& error
+) {
+    error.clear();
+    if (source_id.empty() || !runtime_entity.valid()) {
+        error = "prefab entity mapping rebind requires a source id and live entity";
+        tc::Log::error("[PrefabInstanceState] %s", error.c_str());
+        return false;
+    }
+    const auto found = std::find(_source_entity_ids.begin(), _source_entity_ids.end(), source_id);
+    const bool insert = found == _source_entity_ids.end();
+    const size_t index = insert
+        ? _source_entity_ids.size()
+        : static_cast<size_t>(found - _source_entity_ids.begin());
+    if (!insert && index >= _runtime_entities.size()) {
+        error = "prefab entity mapping storage is inconsistent for source id '" + source_id + "'";
+        tc::Log::error("[PrefabInstanceState] %s", error.c_str());
+        return false;
+    }
+    for (size_t other = 0; other < _runtime_entities.size(); ++other) {
+        if (other != index && _runtime_entities[other] == runtime_entity) {
+            error = "runtime entity is already mapped to source id '" +
+                _source_entity_ids[other] + "'";
+            tc::Log::error("[PrefabInstanceState] %s", error.c_str());
+            return false;
+        }
+    }
+    Entity previous_runtime_entity;
+    std::vector<size_t> rebound_component_indices;
+    if (insert) {
+        _source_entity_ids.push_back(source_id);
+        _runtime_entities.push_back(runtime_entity);
+    } else {
+        previous_runtime_entity = _runtime_entities[index];
+        _runtime_entities[index] = runtime_entity;
+        const size_t component_count = std::min(
+            _source_component_ids.size(), _component_owners.size());
+        for (size_t component_index = 0; component_index < component_count; ++component_index) {
+            if (_component_owners[component_index] == previous_runtime_entity) {
+                _component_owners[component_index] = runtime_entity;
+                rebound_component_indices.push_back(component_index);
+            }
+        }
+    }
+    std::string message;
+    _mapping_valid = validate_mapping(false, message);
+    if (!_mapping_valid) {
+        if (insert) {
+            _source_entity_ids.pop_back();
+            _runtime_entities.pop_back();
+        } else {
+            _runtime_entities[index] = previous_runtime_entity;
+            for (size_t component_index : rebound_component_indices) {
+                _component_owners[component_index] = previous_runtime_entity;
+            }
+        }
+        std::string ignored;
+        _mapping_valid = validate_mapping(false, ignored);
+        error = std::move(message);
+        tc::Log::error("[PrefabInstanceState] invalid rebound entity mapping: %s", error.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool PrefabInstanceState::rebind_component_mapping(
+    const std::string& source_id,
+    const Entity& runtime_owner,
+    std::string& error
+) {
+    error.clear();
+    if (source_id.empty() || !runtime_owner.valid()) {
+        error = "prefab component mapping rebind requires a source id and live owner";
+        tc::Log::error("[PrefabInstanceState] %s", error.c_str());
+        return false;
+    }
+    const auto found = std::find(
+        _source_component_ids.begin(), _source_component_ids.end(), source_id);
+    const bool insert = found == _source_component_ids.end();
+    Entity previous_owner;
+    size_t index = _source_component_ids.size();
+    if (insert) {
+        _source_component_ids.push_back(source_id);
+        _component_owners.push_back(runtime_owner);
+    } else {
+        index = static_cast<size_t>(found - _source_component_ids.begin());
+        if (index >= _component_owners.size()) {
+            error = "prefab component mapping storage is inconsistent for source id '" +
+                source_id + "'";
+            tc::Log::error("[PrefabInstanceState] %s", error.c_str());
+            return false;
+        }
+        previous_owner = _component_owners[index];
+        _component_owners[index] = runtime_owner;
+    }
+    std::string message;
+    _mapping_valid = validate_mapping(false, message);
+    if (!_mapping_valid) {
+        if (insert) {
+            _source_component_ids.pop_back();
+            _component_owners.pop_back();
+        } else {
+            _component_owners[index] = previous_owner;
+        }
+        std::string ignored;
+        _mapping_valid = validate_mapping(false, ignored);
+        error = std::move(message);
+        tc::Log::error("[PrefabInstanceState] invalid rebound component mapping: %s", error.c_str());
+        return false;
+    }
+    return true;
+}
+
 size_t PrefabInstanceState::entity_mapping_count() const {
     return std::min(_source_entity_ids.size(), _runtime_entities.size());
 }
@@ -478,6 +617,29 @@ bool PrefabInstanceState::source_entity_suppressed(const std::string& source_id)
                 item.source_entity_id == source_id;
         }
     );
+}
+
+const PrefabStructuralOverride* PrefabInstanceState::structural_override(
+    PrefabStructuralOverrideKind kind,
+    const std::string& source_id
+) const {
+    PrefabStructuralOverride identity;
+    identity.kind = kind;
+    if (kind == PrefabStructuralOverrideKind::SuppressComponent ||
+        kind == PrefabStructuralOverrideKind::PlaceComponent) {
+        identity.source_component_id = source_id;
+    } else {
+        identity.source_entity_id = source_id;
+    }
+    const std::string key = structural_identity(identity);
+    const auto found = std::find_if(
+        _structural_overrides.begin(),
+        _structural_overrides.end(),
+        [&key](const PrefabStructuralOverride& candidate) {
+            return structural_identity(candidate) == key;
+        }
+    );
+    return found == _structural_overrides.end() ? nullptr : &*found;
 }
 
 bool PrefabInstanceState::discard_property_override(

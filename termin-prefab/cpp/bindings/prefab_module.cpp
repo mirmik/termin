@@ -460,6 +460,14 @@ NB_MODULE(_prefab_native, m) {
             "overrides_valid",
             &termin::prefab::PrefabInstanceState::overrides_valid
         )
+        .def_prop_ro(
+            "structural_overrides_valid",
+            &termin::prefab::PrefabInstanceState::structural_overrides_valid
+        )
+        .def_prop_ro(
+            "mapping_valid",
+            &termin::prefab::PrefabInstanceState::mapping_valid
+        )
         .def(
             "entity_for_source",
             &termin::prefab::PrefabInstanceState::entity_for_source,
@@ -469,6 +477,34 @@ NB_MODULE(_prefab_native, m) {
             "component_owner_for_source",
             &termin::prefab::PrefabInstanceState::component_owner_for_source,
             nb::arg("source_id")
+        )
+        .def("source_for_entity", &termin::prefab::PrefabInstanceState::source_for_entity,
+             nb::arg("runtime_entity"))
+        .def("source_for_component", &termin::prefab::PrefabInstanceState::source_for_component,
+             nb::arg("runtime_owner"), nb::arg("runtime_component_source_id"))
+        .def(
+            "rebind_entity_mapping",
+            [](termin::prefab::PrefabInstanceState& self,
+               const std::string& source_id,
+               const termin::Entity& runtime_entity) {
+                std::string error;
+                if (!self.rebind_entity_mapping(source_id, runtime_entity, error)) {
+                    throw nb::value_error(error.c_str());
+                }
+            },
+            nb::arg("source_id"), nb::arg("runtime_entity")
+        )
+        .def(
+            "rebind_component_mapping",
+            [](termin::prefab::PrefabInstanceState& self,
+               const std::string& source_id,
+               const termin::Entity& runtime_owner) {
+                std::string error;
+                if (!self.rebind_component_mapping(source_id, runtime_owner, error)) {
+                    throw nb::value_error(error.c_str());
+                }
+            },
+            nb::arg("source_id"), nb::arg("runtime_owner")
         )
         .def(
             "set_property_override",
@@ -506,6 +542,22 @@ NB_MODULE(_prefab_native, m) {
                 );
                 if (found == nullptr) return nb::none();
                 return nb::cast(found->value);
+            },
+            nb::arg("source_entity_id"),
+            nb::arg("source_component_id"),
+            nb::arg("field_path")
+        )
+        .def(
+            "get_property_override_kind",
+            [](const termin::prefab::PrefabInstanceState& self,
+               const std::string& source_entity_id,
+               const std::string& source_component_id,
+               const std::string& field_path) -> nb::object {
+                const auto* found = self.property_override(
+                    source_entity_id, source_component_id, field_path
+                );
+                if (found == nullptr) return nb::none();
+                return nb::str(found->target_kind.c_str());
             },
             nb::arg("source_entity_id"),
             nb::arg("source_component_id"),
@@ -553,6 +605,16 @@ NB_MODULE(_prefab_native, m) {
             &termin::prefab::PrefabInstanceState::discard_structural_override,
             nb::arg("kind"),
             nb::arg("source_id")
+        )
+        .def(
+            "get_structural_override",
+            [](const termin::prefab::PrefabInstanceState& self,
+               termin::prefab::PrefabStructuralOverrideKind kind,
+               const std::string& source_id) -> nb::object {
+                const auto* found = self.structural_override(kind, source_id);
+                return found == nullptr ? nb::none() : nb::cast(*found);
+            },
+            nb::arg("kind"), nb::arg("source_id")
         )
         .def(
             "clear_all_property_overrides",

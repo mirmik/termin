@@ -293,9 +293,17 @@ an invalid handle fails before assignment. Names are diagnostic only and are
 not resource lookup fallbacks. Metadata-only deletion remains available under
 the explicit `discard_*` API solely for repair/migration tooling.
 
-Editor property commits and undo/redo write the same typed native override
-model. Editing a prefab source in isolation modifies the source document and
-must not create instance overrides.
+Editor mutation commands update the live object and `PrefabInstanceState`
+metadata as one undoable operation. Entity/transform/component-field commits
+write typed property records. Removing mapped entities/components writes
+tombstones; reparenting or reordering a mapped entity writes a placement with
+source/local anchors. Undo restores the exact prior record (including the
+absence of a record), and rebinds source mappings if a refresh removed a
+tombstoned target before Undo recreated it. Locally added unmapped structure is
+already explicit by ownership and therefore does not receive a fake source
+record. Editing a prefab source in isolation has no instance state and modifies
+the source document without creating instance overrides. The entity inspector
+shows source/local ownership, property/structural counts and invalid metadata.
 
 ## Python-free library gate
 
@@ -402,9 +410,10 @@ The remaining violations and gaps are:
   correct packaged-project loading boundary, but it does not yet load prefab
   resources;
 - structural and property reconciliation are native and complete for recorded
-  source ownership and override intent. Editor mutation capture is still
-  separate: editor commands do not yet atomically create tombstone/placement
-  records when the user deletes, reparents or reorders prefab-owned structure.
+  source ownership and override intent. Editor property, transform, component,
+  delete and reparent/reorder commands atomically maintain that intent through
+  Undo/Redo. New editor mutation entry points must use the same command layer;
+  direct scene writes remain outside the editor transaction contract.
 
 `termin_player` requiring and packaging Python is intentional for its role as
 an editor-adjacent development/source host and is not a violation of this
@@ -430,7 +439,8 @@ link against Python.
 6. Add native reconciliation and editor override capture, then retire the old
    Python implementation and schemas. **The versioned value codec, native
    property/structural override storage and full native reconciliation are
-   done. Editor mutation capture remains.**
+   done. The existing editor mutation commands now capture typed and structural
+   intent with Undo/Redo and refresh/save/load coverage.**
 
 The first four steps establish correctness. The last two close the runtime
 boundary and make prefab behavior independent of whether a particular host
