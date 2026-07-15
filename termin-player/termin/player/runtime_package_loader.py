@@ -52,7 +52,7 @@ def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
 
     loaded = 0
     shaders: dict[str, _RuntimeShader] = {}
-    for resource_type in ("shader", "mesh", "material", "pipeline", "foliage_data"):
+    for resource_type in ("shader", "mesh", "texture", "material", "pipeline", "foliage_data"):
         for entry in resources:
             if not isinstance(entry, dict) or entry.get("type") != resource_type:
                 continue
@@ -143,6 +143,8 @@ def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, 
             return True
         if resource_type == "mesh":
             return _load_mesh(spec, path)
+        if resource_type == "texture":
+            return _load_texture(package_dir, spec, path)
         if resource_type == "material":
             return _load_material(spec, path, shaders)
     except (OSError, ValueError) as exc:
@@ -253,6 +255,48 @@ def _load_mesh(spec: dict[str, Any], path: Path) -> bool:
 
     rm = DefaultResourceManager.instance()
     rm.register_mesh_asset(name, MeshAsset(mesh_data=mesh, name=name, source_path=path, uuid=uuid_value), str(path), uuid_value)
+    return True
+
+
+def _load_texture(package_dir: Path, spec: dict[str, Any], path: Path) -> bool:
+    from tcbase import log
+    from termin.default_assets.render.texture_asset import TextureAsset
+    from termin.default_assets.resource_manager import DefaultResourceManager
+
+    uuid_value = _string(spec, "uuid")
+    name = _string(spec, "name", uuid_value)
+    source_rel_path = _string(spec, "source_path")
+    import_settings = spec.get("import_settings")
+    if uuid_value == "" or name == "" or source_rel_path == "":
+        log.error(f"[PlayerRuntime] Runtime texture requires uuid, name and source_path: {path}")
+        return False
+    if not isinstance(import_settings, dict):
+        log.error(f"[PlayerRuntime] Runtime texture import_settings must be an object: {uuid_value}")
+        return False
+    if any(not isinstance(import_settings.get(key), bool) for key in ("flip_x", "flip_y", "transpose")):
+        log.error(f"[PlayerRuntime] Runtime texture import_settings are invalid: {uuid_value}")
+        return False
+    try:
+        source_path = _package_path(package_dir, source_rel_path)
+    except ValueError as exc:
+        log.error(f"[PlayerRuntime] Runtime texture source path is invalid: {uuid_value}: {exc}")
+        return False
+    if not source_path.is_file():
+        log.error(f"[PlayerRuntime] Runtime texture source file not found: {source_path}")
+        return False
+
+    texture_asset = TextureAsset(
+        texture_data=None,
+        name=name,
+        source_path=source_path,
+        uuid=uuid_value,
+    )
+    texture_asset.parse_spec(import_settings)
+    if not texture_asset.ensure_loaded() or texture_asset.texture_data is None or not texture_asset.texture_data.is_valid:
+        log.error(f"[PlayerRuntime] Failed to load runtime texture: {uuid_value}")
+        return False
+
+    DefaultResourceManager.instance().register_texture_asset(name, texture_asset, str(source_path), uuid_value)
     return True
 
 

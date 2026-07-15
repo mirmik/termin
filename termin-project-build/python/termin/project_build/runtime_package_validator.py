@@ -181,6 +181,8 @@ def _validate_resources(
             spec = _validate_shader_resource(package_root, path, resolved_path, diagnostics)
         elif resource_type == "material" and resolved_path is not None and isinstance(path, str):
             spec = _validate_material_resource(package_root, path, resolved_path, diagnostics)
+        elif resource_type == "texture" and resolved_path is not None and isinstance(path, str):
+            spec = _validate_texture_resource(package_root, path, resolved_path, diagnostics)
         elif resource_type == "pipeline" and resolved_path is not None and isinstance(path, str):
             spec = _validate_pipeline_resource(package_root, path, resolved_path, diagnostics)
 
@@ -214,6 +216,14 @@ def _validate_resources(
                 "path": path,
                 "spec": spec,
             }
+            if resource_type == "texture" and isinstance(spec, dict) and spec.get("uuid") != uuid:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        path,
+                        f"Runtime texture spec UUID '{spec.get('uuid')}' does not match manifest UUID '{uuid}'",
+                    )
+                )
     return resource_index
 
 
@@ -346,7 +356,130 @@ def _validate_material_resource(
                 )
             )
 
+    _validate_material_textures(resource_path, material_spec, diagnostics)
     return material_spec
+
+
+def _validate_material_textures(
+    resource_path: str,
+    material_spec: dict[str, Any],
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> None:
+    textures = material_spec.get("textures")
+    if textures is None:
+        return
+    if not isinstance(textures, dict):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                "Runtime material field 'textures' must be an object when present",
+            )
+        )
+        return
+
+    for slot_name, reference in textures.items():
+        context = f"{resource_path}:textures.{slot_name}"
+        if not isinstance(slot_name, str) or slot_name == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    resource_path,
+                    "Runtime material texture slot name must be a non-empty string",
+                )
+            )
+            continue
+        if not isinstance(reference, dict):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    "Runtime material texture reference must be an object",
+                )
+            )
+            continue
+        kind = reference.get("kind")
+        if kind == "builtin":
+            name = reference.get("name")
+            if name not in {"normal", "white"}:
+                diagnostics.append(
+                    RuntimePackageExportDiagnostic(
+                        "error",
+                        context,
+                        "Runtime builtin material texture must be 'normal' or 'white'",
+                    )
+                )
+            continue
+        if kind != "asset":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    "Runtime material texture reference kind must be 'asset' or 'builtin'",
+                )
+            )
+            continue
+        uuid_value = reference.get("uuid")
+        if not isinstance(uuid_value, str) or uuid_value == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    context,
+                    "Runtime material asset texture reference must contain a non-empty UUID",
+                )
+            )
+
+
+def _validate_texture_resource(
+    package_root: Path,
+    resource_path: str,
+    texture_spec_path: Path,
+    diagnostics: list[RuntimePackageExportDiagnostic],
+) -> dict[str, Any] | None:
+    texture_spec = _read_json_file(texture_spec_path, resource_path, diagnostics)
+    if texture_spec is None:
+        return None
+
+    for field_name in ("uuid", "name", "source_path"):
+        value = texture_spec.get(field_name)
+        if not isinstance(value, str) or value == "":
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    resource_path,
+                    f"Runtime texture spec must contain non-empty string field '{field_name}'",
+                )
+            )
+
+    source_path = texture_spec.get("source_path")
+    if isinstance(source_path, str) and source_path != "":
+        _validate_relative_existing_path(
+            package_root,
+            source_path,
+            f"{resource_path}:source_path",
+            diagnostics,
+        )
+
+    settings = texture_spec.get("import_settings")
+    if not isinstance(settings, dict):
+        diagnostics.append(
+            RuntimePackageExportDiagnostic(
+                "error",
+                resource_path,
+                "Runtime texture spec must contain object field 'import_settings'",
+            )
+        )
+        return texture_spec
+    for field_name in ("flip_x", "flip_y", "transpose"):
+        if not isinstance(settings.get(field_name), bool):
+            diagnostics.append(
+                RuntimePackageExportDiagnostic(
+                    "error",
+                    f"{resource_path}:import_settings.{field_name}",
+                    "Runtime texture import setting must be boolean",
+                )
+            )
+    return texture_spec
 
 
 def _validate_pipeline_resource(
@@ -658,6 +791,24 @@ def _validate_material_graph(
         shader_uuid = phase.get("shader")
         if isinstance(shader_uuid, str) and shader_uuid != "":
             _validate_resource_ref(shader_uuid, "shader", resource_index, diagnostics, f"{phase_context}.shader")
+
+    textures = material_spec.get("textures")
+    if not isinstance(textures, dict):
+        return
+    for slot_name, reference in textures.items():
+        if not isinstance(slot_name, str) or not isinstance(reference, dict):
+            continue
+        if reference.get("kind") != "asset":
+            continue
+        uuid_value = reference.get("uuid")
+        if isinstance(uuid_value, str) and uuid_value != "":
+            _validate_resource_ref(
+                uuid_value,
+                "texture",
+                resource_index,
+                diagnostics,
+                f"{resource_path}:textures.{slot_name}",
+            )
 
 
 def _validate_pipeline_graph(
