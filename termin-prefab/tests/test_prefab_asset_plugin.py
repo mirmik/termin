@@ -3,9 +3,11 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 from termin.prefab.asset import PrefabAsset
 from termin.prefab.asset_plugin import create_import_plugin, create_runtime_plugin
-from termin_assets import AssetContext, PreLoadResult, set_resource_manager_factory
+from termin_assets import AssetContext, PreLoadResult
 
 
 class FakeResourceManager:
@@ -53,7 +55,7 @@ def test_prefab_runtime_plugin_registers_lazy_asset() -> None:
 def test_prefab_import_plugin_extracts_uuid(tmp_path: Path) -> None:
     prefab_path = tmp_path / "Enemy.prefab"
     prefab_path.write_text(
-        '{"version": "2.0", "uuid": "prefab-uuid", "root": {"name": "Enemy"}}',
+        '{"version": "3.0", "uuid": "prefab-uuid", "root": {"uuid": "enemy-root", "name": "Enemy", "components": [], "children": []}}',
         encoding="utf-8",
     )
 
@@ -68,7 +70,7 @@ def test_prefab_import_plugin_extracts_uuid(tmp_path: Path) -> None:
 def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
     prefab_path = tmp_path / "Enemy.prefab"
     prefab_path.write_text(
-        '{"version": "2.0", "uuid": "prefab-uuid", "root": {"name": "Enemy", "children": []}}',
+        '{"version": "3.0", "uuid": "prefab-uuid", "root": {"uuid": "enemy-root", "name": "Enemy", "components": [], "children": []}}',
         encoding="utf-8",
     )
 
@@ -76,28 +78,18 @@ def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
 
     assert asset.name == "Enemy"
     assert asset.uuid == "prefab-uuid"
-    assert asset.root_data == {"name": "Enemy", "children": []}
+    assert asset.root_data == {
+        "uuid": "enemy-root",
+        "name": "Enemy",
+        "components": [],
+        "children": [],
+    }
     assert asset.get_entity_count() == 1
 
 
 def test_prefab_entry_point_factories() -> None:
     assert create_import_plugin().type_id == "prefab"
     assert create_runtime_plugin().type_id == "prefab"
-
-
-def test_prefab_instance_marker_uses_configured_resource_manager() -> None:
-    from termin.prefab.instance_marker import PrefabInstanceMarker
-
-    asset = PrefabAsset(name="Enemy", uuid="prefab-uuid")
-    resource_manager = FakeResourceManager()
-    resource_manager.by_uuid[asset.uuid] = asset
-
-    set_resource_manager_factory(lambda: resource_manager)
-    try:
-        marker = PrefabInstanceMarker(prefab_uuid=asset.uuid)
-        assert marker.get_prefab_asset() is asset
-    finally:
-        set_resource_manager_factory(None)
 
 
 def test_prefab_asset_instantiates_complete_hierarchy_in_target_scene() -> None:
@@ -145,6 +137,79 @@ def test_prefab_asset_instantiates_complete_hierarchy_in_target_scene() -> None:
     )
 
 
+def test_prefab_hot_reload_reaches_only_live_native_instances() -> None:
+    _run_python(
+        """
+        import copy
+
+        import termin.bootstrap
+        from termin.inspect import InspectField
+        from termin.prefab import (
+            PrefabInstanceState,
+            count_live_instances,
+            find_live_instances,
+        )
+        from termin.prefab.asset import PrefabAsset
+        from termin.prefab.persistence import document_from_data
+        from termin.scene import PythonComponent, TcScene
+
+        class PrefabHotReloadProbe(PythonComponent):
+            inspect_fields = {
+                "value": InspectField(path="value", label="Value", kind="int"),
+            }
+
+            def __init__(self):
+                super().__init__()
+                self.value = 0
+
+        termin.bootstrap.bootstrap_player()
+        source_scene = TcScene.create("prefab-hot-reload-source")
+        source_root = source_scene.create_entity("Root")
+        source_component = PrefabHotReloadProbe()
+        source_component.value = 1
+        source_root.add_component(source_component)
+        asset = PrefabAsset.from_entity(source_root, name="HotReload")
+
+        first_scene = TcScene.create("prefab-hot-reload-first")
+        second_scene = TcScene.create("prefab-hot-reload-second")
+        first = asset.instantiate(scene=first_scene)
+        doomed = asset.instantiate(scene=first_scene)
+        second = asset.instantiate(scene=second_scene)
+        assert count_live_instances(asset.uuid) == 3
+        assert len(find_live_instances(asset.uuid)) == 3
+
+        doomed_state = doomed.get_component(PrefabInstanceState)
+        assert doomed_state is not None
+        assert doomed_state.prefab_asset_uuid == asset.uuid
+        first_scene.remove_entity(doomed)
+        assert not doomed.valid()
+        assert count_live_instances(asset.uuid) == 2
+
+        updated_data = copy.deepcopy(asset.data)
+        updated_data["root"]["components"][0]["data"]["value"] = 9
+        updated = PrefabAsset(
+            data=updated_data,
+            name="HotReload",
+            uuid=asset.uuid,
+        )
+        asset.update_from(updated)
+
+        assert first.get_python_component("PrefabHotReloadProbe").value == 9
+        assert second.get_python_component("PrefabHotReloadProbe").value == 9
+        expected_revision = document_from_data(updated_data).source_revision
+        assert first.get_component(PrefabInstanceState).source_revision == expected_revision
+        assert second.get_component(PrefabInstanceState).source_revision == expected_revision
+
+        first_scene.destroy()
+        assert count_live_instances(asset.uuid) == 1
+        second_scene.destroy()
+        assert count_live_instances(asset.uuid) == 0
+        source_scene.destroy()
+        termin.bootstrap.shutdown_player()
+        """
+    )
+
+
 def test_prefab_asset_reports_invalid_source_without_partial_scene_changes() -> None:
     _run_python(
         """
@@ -159,7 +224,7 @@ def test_prefab_asset_reports_invalid_source_without_partial_scene_changes() -> 
             name="Broken",
             uuid="broken-prefab",
             data={
-                "version": "2.0",
+                "version": "3.0",
                 "uuid": "broken-prefab",
                 "root": {
                     "uuid": "duplicate-source-id",
@@ -178,7 +243,7 @@ def test_prefab_asset_reports_invalid_source_without_partial_scene_changes() -> 
         try:
             asset.instantiate(scene=scene)
         except RuntimeError as exc:
-            assert "duplicates source uuid" in str(exc)
+            assert "duplicates entity source identity" in str(exc)
         else:
             raise AssertionError("invalid prefab must fail")
 
@@ -187,3 +252,34 @@ def test_prefab_asset_reports_invalid_source_without_partial_scene_changes() -> 
         termin.bootstrap.shutdown_player()
         """
     )
+
+
+def test_prefab_v3_persistence_rejects_legacy_and_saves_atomically(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from termin.prefab._prefab_native import PrefabDocument
+    from termin.prefab.persistence import atomic_write_document, load_document
+
+    legacy_path = tmp_path / "Legacy.prefab"
+    legacy_path.write_text(
+        '{"version":"2.0","uuid":"legacy","root":{}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="unsupported prefab version"):
+        load_document(legacy_path)
+    assert legacy_path.read_text(encoding="utf-8").startswith('{"version":"2.0"')
+
+    target = tmp_path / "Atomic.prefab"
+    target.write_text("original", encoding="utf-8")
+    document = PrefabDocument.empty("asset-id", "root-id", "[Root]")
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise OSError(f"replace failed: {source} -> {destination}")
+
+    monkeypatch.setattr("termin.prefab.persistence.os.replace", fail_replace)
+    with pytest.raises(OSError, match="replace failed"):
+        atomic_write_document(document, target)
+
+    assert target.read_text(encoding="utf-8") == "original"
+    assert list(tmp_path.glob("*.tmp")) == []

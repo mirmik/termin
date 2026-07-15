@@ -372,6 +372,7 @@ def test_component_registry_names_survive_repeated_player_rebootstrap():
             component_infos = registry.list_info()
             component_names = {info["name"] for info in component_infos}
             assert "CameraComponent" in component_names
+            assert "PrefabInstanceState" in component_names
 
             camera_info = registry.get_info("CameraComponent")
             assert camera_info["name"] == "CameraComponent"
@@ -383,11 +384,17 @@ def test_component_registry_names_survive_repeated_player_rebootstrap():
             assert component.type_name == "CameraComponent"
             assert entity.has_component_type("CameraComponent")
 
+            prefab_state = entity.add_component_by_name("PrefabInstanceState")
+            assert prefab_state.type_name == "PrefabInstanceState"
+            assert entity.has_component_type("PrefabInstanceState")
+
+            del prefab_state
             del component
             del entity
             gc.collect()
             shutdown_player()
             assert not registry.has("CameraComponent")
+            assert not registry.has("PrefabInstanceState")
         """
     )
 

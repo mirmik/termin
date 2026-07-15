@@ -41,8 +41,8 @@
 
 При `tc_entity_pool_remove_component(pool, entity, c)`:
 
-1. Вызывается `on_removed`.
-2. Unregister из scene-списков.
+1. Компонент удаляется из scene-списков и type/capability индексов.
+2. Вызывается `on_removed`.
 3. Вызывается `on_removed_from_entity`.
 4. `owner` сбрасывается в `TC_ENTITY_HANDLE_INVALID`.
 5. Вызывается `release`.

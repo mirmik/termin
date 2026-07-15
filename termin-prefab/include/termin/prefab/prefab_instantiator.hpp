@@ -8,6 +8,8 @@
 
 namespace termin::prefab {
 
+class PrefabDocument;
+
 enum class PrefabInstantiateError {
     None = 0,
     InvalidDocument,
@@ -15,6 +17,7 @@ enum class PrefabInstantiateError {
     InvalidParent,
     DuplicateSourceUuid,
     HierarchyCreationFailed,
+    InstanceStatePublicationFailed,
 };
 
 struct PrefabInstantiateOptions {
@@ -33,6 +36,15 @@ struct PrefabInstantiateResult {
 
 class TERMIN_PREFAB_API PrefabInstantiator {
 public:
+    static PrefabInstantiateResult instantiate(
+        const PrefabDocument& document,
+        tc_scene_handle target_scene,
+        const Entity& parent = Entity(),
+        const PrefabInstantiateOptions& options = {}
+    );
+
+    // Legacy hierarchy adapter. Canonical v3 callers should pass a validated
+    // PrefabDocument through the overload above.
     static PrefabInstantiateResult instantiate(
         const nos::trent& source_hierarchy,
         tc_scene_handle target_scene,

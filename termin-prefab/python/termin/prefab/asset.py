@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import uuid as uuid_module
 from pathlib import Path
 from typing import Any, Protocol, TYPE_CHECKING, cast
 
@@ -31,21 +31,10 @@ class PrefabResourceManager(Protocol):
         ...
 
 
-def _numpy_encoder(obj: Any) -> Any:
-    """JSON encoder for numpy values."""
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, (np.float32, np.float64)):
-        return float(obj)
-    if isinstance(obj, (np.int32, np.int64)):
-        return int(obj)
-    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
-
-
 class PrefabAsset(DataAsset[dict]):
     """Asset for .prefab files."""
 
-    VERSION = "2.0"
+    VERSION = "3.0"
     _uses_binary = False
 
     def __init__(
@@ -79,8 +68,6 @@ class PrefabAsset(DataAsset[dict]):
         name: str | None = None,
     ) -> "Entity":
         """Create an instance of this prefab."""
-        from termin.prefab.instance_marker import PrefabInstanceMarker
-
         self.ensure_loaded()
 
         root_data = self.root_data
@@ -94,11 +81,13 @@ class PrefabAsset(DataAsset[dict]):
         if target_scene is None:
             raise ValueError(f"Prefab '{self.name}' requires an explicit target scene")
 
-        from termin.prefab._prefab_native import instantiate_hierarchy
+        from termin.prefab._prefab_native import instantiate_document
+        from termin.prefab.persistence import document_from_data
 
         try:
-            entity = instantiate_hierarchy(
-                root_data,
+            document = document_from_data(self._data)
+            entity = instantiate_document(
+                document,
                 target_scene,
                 parent_entity,
                 name,
@@ -111,11 +100,6 @@ class PrefabAsset(DataAsset[dict]):
             )
             raise RuntimeError(f"Failed to instantiate prefab '{self.name}': {exc}") from exc
 
-        existing_marker = entity.get_component(PrefabInstanceMarker)
-        if existing_marker is None:
-            marker = PrefabInstanceMarker(prefab_uuid=self.uuid)
-            entity.add_component(marker)
-
         return entity
 
     def update_from(self, other: "PrefabAsset") -> None:
@@ -126,19 +110,30 @@ class PrefabAsset(DataAsset[dict]):
 
     def _update_all_instances(self) -> None:
         """Update all instances of this prefab."""
-        from termin.prefab.registry import PrefabRegistry
+        from termin.prefab._prefab_native import PrefabInstanceState, find_live_instances
+        from termin.prefab.persistence import document_from_data
 
-        instances = PrefabRegistry.get_instances(self.uuid)
+        if self._data is None:
+            log.error(f"[PrefabAsset] Cannot update instances of unloaded prefab '{self.name}'")
+            return
+
+        source_revision = document_from_data(self._data).source_revision
+        instances = find_live_instances(self.uuid)
         for entity in instances:
-            self.apply_to_instance(entity)
+            if entity.valid():
+                self.apply_to_instance(entity)
+                state = entity.get_component(PrefabInstanceState)
+                if state is not None:
+                    state.source_revision = source_revision
 
     def apply_to_instance(self, entity: "Entity") -> None:
         """Apply prefab data to an instance, preserving overrides."""
-        from termin.prefab.instance_marker import PrefabInstanceMarker
         from termin.prefab.property_path import PropertyPath, PropertyPathError
 
-        marker = entity.get_component(PrefabInstanceMarker)
-        if marker is None:
+        from termin.prefab._prefab_native import PrefabInstanceState
+
+        state = entity.get_component(PrefabInstanceState)
+        if state is None:
             return
 
         root_data = self.root_data
@@ -146,9 +141,6 @@ class PrefabAsset(DataAsset[dict]):
             return
 
         for path, value in PropertyPath.iter_from_data(root_data):
-            if marker.is_overridden(path):
-                continue
-
             if path == "name" and entity.name != root_data.get("name"):
                 continue
 
@@ -190,7 +182,10 @@ class PrefabAsset(DataAsset[dict]):
 
     def _parse_content(self, content: str) -> dict | None:
         """Parse JSON content into prefab data."""
-        data = json.loads(content)
+        from termin.prefab._prefab_native import PrefabDocument
+
+        document = PrefabDocument.from_json(content)
+        data = document.data
 
         file_uuid = data.get("uuid")
         if file_uuid:
@@ -199,16 +194,6 @@ class PrefabAsset(DataAsset[dict]):
             self._has_uuid_in_spec = True
 
         return data
-
-    def _on_loaded(self) -> None:
-        """After loading, save file if it did not have a UUID."""
-        if self._source_path is not None and self._data is not None:
-            try:
-                if "uuid" not in self._data:
-                    self._data["uuid"] = self.uuid
-                    self.save_to_file()
-            except Exception:
-                log.warning(f"[PrefabAsset] Failed to auto-save UUID to {self._source_path}", exc_info=True)
 
     def save_spec_file(self) -> bool:
         """Prefabs store UUID in the file itself, not in a spec sidecar."""
@@ -226,17 +211,10 @@ class PrefabAsset(DataAsset[dict]):
         try:
             self._data["uuid"] = self.uuid
             self._data["version"] = self.VERSION
+            from termin.prefab.persistence import atomic_write_document, document_from_data
 
-            json_str = json.dumps(
-                self._data,
-                indent=2,
-                ensure_ascii=False,
-                default=_numpy_encoder,
-            )
-
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(save_path, "w", encoding="utf-8") as f:
-                f.write(json_str)
+            document = document_from_data(self._data)
+            atomic_write_document(document, save_path)
 
             self._source_path = Path(save_path)
             self.mark_just_saved()
@@ -250,16 +228,16 @@ class PrefabAsset(DataAsset[dict]):
         """Create PrefabAsset from a .prefab file."""
         path = Path(path)
 
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        from termin.prefab.persistence import load_document
 
-        file_uuid = data.get("uuid")
+        document = load_document(path)
+        data = document.data
 
         return cls(
             data=data,
             name=name or path.stem,
             source_path=path,
-            uuid=file_uuid,
+            uuid=document.uuid,
         )
 
     @classmethod
@@ -270,19 +248,16 @@ class PrefabAsset(DataAsset[dict]):
         source_path: str | Path | None = None,
     ) -> "PrefabAsset":
         """Create PrefabAsset from an existing Entity."""
-        entity_data = entity.serialize_hierarchy()
-        if entity_data is None:
-            raise ValueError(f"Entity '{entity.name}' could not be serialized")
+        from termin.prefab._prefab_native import PrefabDocument
 
-        data = {
-            "version": cls.VERSION,
-            "root": entity_data,
-        }
+        asset_uuid = str(uuid_module.uuid4())
+        document = PrefabDocument.capture(asset_uuid, entity)
 
         return cls(
-            data=data,
+            data=document.data,
             name=name or entity.name,
             source_path=source_path,
+            uuid=asset_uuid,
         )
 
     def get_entity_count(self) -> int:

@@ -24,6 +24,11 @@ else()
     find_package(termin_scene REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_prefab termin_prefab::termin_prefab)
+else()
+    find_package(termin_prefab REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_render termin_render::termin_render)
 else()
     find_package(termin_render REQUIRED)
@@ -177,6 +182,7 @@ target_link_libraries(termin_bootstrap
         tcbase::termin_base
         termin_inspect::termin_inspect
         termin_scene::termin_scene
+        termin_prefab::termin_prefab
         termin_render::termin_render
         termin_render_passes::termin_render_passes
         termin_collision::termin_collision

@@ -18,6 +18,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/../cmake")
 include(TerminRpath)
 
 add_library(termin_prefab SHARED
+    src/prefab_document.cpp
+    src/prefab_instance_state.cpp
     src/prefab_instantiator.cpp
 )
 add_library(termin_prefab::termin_prefab ALIAS termin_prefab)
