@@ -23,6 +23,7 @@ from termin.engine._engine_native import (
 
 TermModulesIntegration = modules.TermModulesIntegration
 RenderingManager = render.RenderingManager
+RenderAttachmentContext = render.RenderAttachmentContext
 RenderTopology = render.RenderTopology
 SceneManager = scene.SceneManager
 ViewportRenderState = render.ViewportRenderState
@@ -30,6 +31,7 @@ ViewportRenderState = render.ViewportRenderState
 __all__ = [
     "EngineCore",
     "RenderingManager",
+    "RenderAttachmentContext",
     "RenderTopology",
     "SCENE_EXT_TYPE_COLLISION_WORLD",
     "SceneManager",

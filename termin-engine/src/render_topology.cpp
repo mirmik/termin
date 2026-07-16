@@ -1,5 +1,6 @@
 #include "termin/render/render_topology.hpp"
 
+#include "termin/render/render_attachment_context.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
 
@@ -131,7 +132,12 @@ bool RenderTopology::attach_scene(tc_scene_handle scene) {
         record.attached = true;
         attached_scenes_.push_back(scene);
     }
-    tc_scene_notify_render_attach(scene);
+    RenderAttachmentContext context(*this, scene);
+    tc_scene_notify_render_attach(
+        scene,
+        reinterpret_cast<const tc_render_attachment_context*>(&context)
+    );
+    context.invalidate();
     return true;
 }
 
@@ -146,7 +152,12 @@ void RenderTopology::detach_scene(tc_scene_handle scene) {
         return;
     }
 
-    tc_scene_notify_render_detach(scene);
+    RenderAttachmentContext context(*this, scene);
+    tc_scene_notify_render_detach(
+        scene,
+        reinterpret_cast<const tc_render_attachment_context*>(&context)
+    );
+    context.invalidate();
     destroy_pipelines(*record);
     record->attached = false;
     attached_scenes_.erase(
@@ -310,7 +321,12 @@ void RenderTopology::clear_scene_pipelines(tc_scene_handle scene, bool notify_de
     SceneRecord* record = find_record(scene);
     if (record == nullptr) return;
     if (notify_detach && record->attached && tc_scene_handle_valid(scene)) {
-        tc_scene_notify_render_detach(scene);
+        RenderAttachmentContext context(*this, scene);
+        tc_scene_notify_render_detach(
+            scene,
+            reinterpret_cast<const tc_render_attachment_context*>(&context)
+        );
+        context.invalidate();
     }
     destroy_pipelines(*record);
     if (record->attached) {
@@ -330,7 +346,12 @@ void RenderTopology::clear_scene_pipelines(tc_scene_handle scene, bool notify_de
 void RenderTopology::clear_all() {
     for (tc_scene_handle scene : attached_scenes_) {
         if (tc_scene_handle_valid(scene)) {
-            tc_scene_notify_render_detach(scene);
+            RenderAttachmentContext context(*this, scene);
+            tc_scene_notify_render_detach(
+                scene,
+                reinterpret_cast<const tc_render_attachment_context*>(&context)
+            );
+            context.invalidate();
         }
     }
     for (auto& [key, record] : scenes_) {

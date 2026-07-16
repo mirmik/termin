@@ -463,12 +463,6 @@ void bind_tc_scene_core(nb::module_& m) {
         .def("notify_scene_active", [](TcSceneRef& self) {
             tc_scene_notify_scene_active(self._h);
         })
-        .def("notify_render_attach", [](TcSceneRef& self) {
-            tc_scene_notify_render_attach(self._h);
-        })
-        .def("notify_render_detach", [](TcSceneRef& self) {
-            tc_scene_notify_render_detach(self._h);
-        })
 
         .def("subscribe_event", [](TcSceneRef& self, const std::string& event_type, nb::callable callback) {
             if (!tc_scene_alive(self._h)) {

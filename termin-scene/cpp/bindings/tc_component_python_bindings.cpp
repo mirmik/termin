@@ -17,6 +17,20 @@ namespace nb = nanobind;
 
 namespace termin {
 
+static PyObject* g_render_attachment_context_wrapper = nullptr;
+
+static nb::object wrap_render_attachment_context(
+    const tc_render_attachment_context* context
+) {
+    nb::object capsule = nb::steal<nb::object>(PyCapsule_New(
+        const_cast<tc_render_attachment_context*>(context),
+        "termin.RenderAttachmentContext",
+        nullptr
+    ));
+    if (!g_render_attachment_context_wrapper) return capsule;
+    return nb::borrow<nb::object>(g_render_attachment_context_wrapper)(capsule);
+}
+
 // ============================================================================
 // Core Python callback implementations
 // Called from C code, dispatch to Python methods.
@@ -177,12 +191,15 @@ static void py_cb_on_editor_start(void* py_self) {
     PyGILState_Release(gstate);
 }
 
-static void py_cb_on_render_attach(void* py_self) {
+static void py_cb_on_render_attach(
+    void* py_self,
+    const tc_render_attachment_context* context
+) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
         if (nb::hasattr(self, "on_render_attach")) {
-            self.attr("on_render_attach")();
+            self.attr("on_render_attach")(wrap_render_attachment_context(context));
         }
     } catch (const std::exception& e) {
         tc::Log::error(e, "PythonComponent::on_render_attach");
@@ -191,12 +208,15 @@ static void py_cb_on_render_attach(void* py_self) {
     PyGILState_Release(gstate);
 }
 
-static void py_cb_on_render_detach(void* py_self) {
+static void py_cb_on_render_detach(
+    void* py_self,
+    const tc_render_attachment_context* context
+) {
     PyGILState_STATE gstate = PyGILState_Ensure();
     try {
         nb::handle self((PyObject*)py_self);
         if (nb::hasattr(self, "on_render_detach")) {
-            self.attr("on_render_detach")();
+            self.attr("on_render_detach")(wrap_render_attachment_context(context));
         }
     } catch (const std::exception& e) {
         tc::Log::error(e, "PythonComponent::on_render_detach");
@@ -335,6 +355,13 @@ public:
 // ============================================================================
 
 void bind_tc_component_python(nb::module_& m) {
+    m.def("_set_render_attachment_context_wrapper", [](nb::object wrapper) {
+        PyObject* replacement = wrapper.is_none() ? nullptr : wrapper.ptr();
+        Py_XINCREF(replacement);
+        Py_XDECREF(g_render_attachment_context_wrapper);
+        g_render_attachment_context_wrapper = replacement;
+    });
+
     nb::class_<TcComponent>(m, "TcComponent")
         .def(nb::init<nb::object, const std::string&>(),
              nb::arg("py_self"), nb::arg("type_name"))

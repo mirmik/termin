@@ -6,6 +6,7 @@
 #include <nanobind/nanobind.h>
 
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/render_attachment_context.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/tc_display_handle.hpp"
@@ -98,6 +99,40 @@ void bind_rendering_manager(nb::module_& m) {
         .def_prop_ro("output_depth_tex", [](ViewportRenderState& self) {
             return self.output_depth_tex;
         })
+    ;
+
+    nb::class_<RenderAttachmentContext>(m, "RenderAttachmentContext")
+        .def_static("_from_capsule", [](nb::object capsule) {
+            void* pointer = PyCapsule_GetPointer(
+                capsule.ptr(),
+                "termin.RenderAttachmentContext"
+            );
+            if (!pointer) throw nb::python_error();
+            return *reinterpret_cast<const RenderAttachmentContext*>(pointer);
+        })
+        .def_prop_ro("valid", &RenderAttachmentContext::valid)
+        .def_prop_ro("scene_handle", [](const RenderAttachmentContext& self) {
+            return self.scene();
+        })
+        .def_prop_ro("render_targets", &RenderAttachmentContext::render_targets)
+        .def("find_render_target", [](const RenderAttachmentContext& self,
+                                       const std::string& name) -> nb::object {
+            tc_render_target_handle target = self.find_render_target(name);
+            return tc_render_target_handle_valid(target) ? nb::cast(target) : nb::none();
+        }, nb::arg("name"))
+        .def("find_camera_target", [](const RenderAttachmentContext& self,
+                                       nb::object camera) -> nb::object {
+            if (camera.is_none()) return nb::none();
+            uintptr_t pointer = nb::cast<uintptr_t>(camera.attr("c_ptr_int")());
+            tc_render_target_handle target = self.find_camera_target(
+                reinterpret_cast<const tc_component*>(pointer)
+            );
+            return tc_render_target_handle_valid(target) ? nb::cast(target) : nb::none();
+        }, nb::arg("camera"))
+        .def("get_pipeline", [](const RenderAttachmentContext& self,
+                                 const std::string& name) -> nb::object {
+            return pipeline_to_python(self.get_pipeline(name));
+        }, nb::arg("name"))
     ;
 
     nb::class_<RenderTopology>(m, "RenderTopology")

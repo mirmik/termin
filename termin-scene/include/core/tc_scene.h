@@ -270,11 +270,17 @@ TC_API void tc_scene_set_metadata(tc_scene_handle h, tc_value value);
 
 // Notify all components that scene is attached to rendering
 // Called after scene pipelines are compiled, components can find passes
-TC_API void tc_scene_notify_render_attach(tc_scene_handle h);
+TC_API void tc_scene_notify_render_attach(
+    tc_scene_handle h,
+    const tc_render_attachment_context* context
+);
 
 // Notify all components that scene is detached from rendering
 // Called before scene pipelines are destroyed, components should clear pass references
-TC_API void tc_scene_notify_render_detach(tc_scene_handle h);
+TC_API void tc_scene_notify_render_detach(
+    tc_scene_handle h,
+    const tc_render_attachment_context* context
+);
 
 #ifdef __cplusplus
 }

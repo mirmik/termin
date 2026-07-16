@@ -14,6 +14,8 @@
 
 namespace termin {
 
+class RenderAttachmentContext;
+
 // Base class for all C++ components.
 // Built-in C++ components are registered from explicit bootstrap code.
 // Module-owned C++ components register from module_init/module bootstrap code.
@@ -134,8 +136,8 @@ public:
     virtual void on_scene_active() {}
 
     // Render lifecycle
-    virtual void on_render_attach() {}
-    virtual void on_render_detach() {}
+    virtual void on_render_attach(const RenderAttachmentContext& context) { (void)context; }
+    virtual void on_render_detach(const RenderAttachmentContext& context) { (void)context; }
 
     // Serialization uses C API tc_inspect fields registered during bootstrap.
     virtual tc_value serialize_data() const {
@@ -200,8 +202,8 @@ private:
     static void _cb_on_removed(tc_component* c);
     static void _cb_on_scene_inactive(tc_component* c);
     static void _cb_on_scene_active(tc_component* c);
-    static void _cb_on_render_attach(tc_component* c);
-    static void _cb_on_render_detach(tc_component* c);
+    static void _cb_on_render_attach(tc_component* c, const tc_render_attachment_context* context);
+    static void _cb_on_render_detach(tc_component* c, const tc_render_attachment_context* context);
     static void _cb_on_editor_start(tc_component* c);
     static void _cb_setup_editor_defaults(tc_component* c);
 };

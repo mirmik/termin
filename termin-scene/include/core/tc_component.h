@@ -26,6 +26,10 @@ typedef enum tc_component_kind {
     TC_CSHARP_COMPONENT = 2     // C# component
 } tc_component_kind;
 
+// Opaque, call-scoped render attachment context. Its concrete API is owned by
+// termin-engine; termin-scene only transports it through lifecycle dispatch.
+typedef struct tc_render_attachment_context tc_render_attachment_context;
+
 // ============================================================================
 // Reference counting VTable - separate from main vtable
 // ============================================================================
@@ -61,8 +65,8 @@ struct tc_component_vtable {
     // Render lifecycle (called when scene is attached/detached from rendering)
     // on_render_attach: scene pipelines are compiled, components can find passes
     // on_render_detach: scene pipelines will be destroyed, clear references
-    void (*on_render_attach)(tc_component* self);
-    void (*on_render_detach)(tc_component* self);
+    void (*on_render_attach)(tc_component* self, const tc_render_attachment_context* context);
+    void (*on_render_detach)(tc_component* self, const tc_render_attachment_context* context);
 
     // Editor hooks
     void (*on_editor_start)(tc_component* self);
@@ -256,15 +260,21 @@ static inline void tc_component_on_scene_active(tc_component* c) {
     }
 }
 
-static inline void tc_component_on_render_attach(tc_component* c) {
+static inline void tc_component_on_render_attach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
     if (c && c->vtable && c->vtable->on_render_attach) {
-        c->vtable->on_render_attach(c);
+        c->vtable->on_render_attach(c, context);
     }
 }
 
-static inline void tc_component_on_render_detach(tc_component* c) {
+static inline void tc_component_on_render_detach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
     if (c && c->vtable && c->vtable->on_render_detach) {
-        c->vtable->on_render_detach(c);
+        c->vtable->on_render_detach(c, context);
     }
 }
 
