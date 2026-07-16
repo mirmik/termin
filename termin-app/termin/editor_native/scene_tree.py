@@ -218,7 +218,7 @@ class NativeSceneTree:
             if selected_node is None:
                 self.tree_widget.clear_selection()
             else:
-                self.tree_widget.select(selected_node, reveal=True)
+                self.tree_widget.select(selected_node, reveal=False)
             self.status_bar.text = snapshot.status
         finally:
             self._applying_snapshot = False
