@@ -51,6 +51,52 @@ def test_project_runtime_close_removes_python_modules_and_paths(tmp_path: Path) 
     assert str(source_root.resolve()) not in sys.path
 
 
+def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Path) -> None:
+    from termin.scene import ComponentRegistry
+
+    source_root = tmp_path / "Scripts"
+    package = source_root / "owned_components"
+    package.mkdir(parents=True)
+    descriptor = tmp_path / "components.pymodule"
+    descriptor.write_text(
+        "name: components\nroot: Scripts\npackages: [owned_components]\n",
+        encoding="utf-8",
+    )
+
+    def write_component(version: int) -> None:
+        (package / "__init__.py").write_text(
+            "from termin.scene import PythonComponent\n"
+            "class OwnedLifecycleComponent(PythonComponent):\n"
+            f"    version = {version}\n",
+            encoding="utf-8",
+        )
+
+    registry = ComponentRegistry.instance()
+    registry.unregister_python("OwnedLifecycleComponent")
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    try:
+        write_component(1)
+        assert runtime.load_project(tmp_path)
+        first_class = sys.modules["owned_components"].OwnedLifecycleComponent
+        assert registry.has("OwnedLifecycleComponent")
+        assert first_class.version == 1
+
+        write_component(2)
+        assert runtime.reload_module("components")
+        second_class = sys.modules["owned_components"].OwnedLifecycleComponent
+        assert registry.has("OwnedLifecycleComponent")
+        assert second_class is not first_class
+        assert second_class.version == 2
+
+        assert runtime.unload_module("components")
+        assert not registry.has("OwnedLifecycleComponent")
+        assert "owned_components" not in sys.modules
+    finally:
+        runtime.close()
+        registry.unregister_python("OwnedLifecycleComponent")
+
+
 def test_failed_python_load_does_not_orphan_imports_or_paths(tmp_path: Path) -> None:
     source_root = _write_python_module(
         tmp_path,

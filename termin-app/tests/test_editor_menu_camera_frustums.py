@@ -29,7 +29,6 @@ def _menu_config() -> EditorMenuSpecConfig:
                 load_scene=_noop,
                 close_scene=_noop,
                 load_material=_noop,
-                load_components=_noop,
                 deploy_stdlib=_noop,
                 exit=_noop,
             ),
@@ -112,3 +111,4 @@ def test_editor_file_menu_does_not_own_project_selection():
 
     assert "New Project..." not in labels
     assert "Open Project..." not in labels
+    assert "Load Components..." not in labels

@@ -6,8 +6,6 @@ import importlib
 from typing import TYPE_CHECKING
 
 from tcbase import log
-from termin.scene.class_scanner import scan_for_subclasses
-from termin.scene.python_component import PythonComponent
 
 if TYPE_CHECKING:
     from termin.scene import Component
@@ -68,20 +66,3 @@ class ComponentClassRegistry:
                 log.warning(f"Failed to register component {class_name} from {module_name}: {e}")
 
         return registered
-
-    def scan(
-        self,
-        paths: list[str],
-        *,
-        project_root: str | None = None,
-        namespace: str | None = None,
-    ) -> list[str]:
-        """Scan directories, modules or files and register PythonComponent subclasses."""
-        return scan_for_subclasses(
-            paths,
-            PythonComponent,
-            self.classes,
-            "_dynamic_components_",
-            project_root=project_root,
-            namespace=namespace,
-        )

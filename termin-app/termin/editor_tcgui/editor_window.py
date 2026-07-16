@@ -761,7 +761,6 @@ class EditorWindowTcgui:
                     load_scene=self._load_scene,
                     close_scene=self._close_scene,
                     load_material=self._load_material_from_file,
-                    load_components=self._load_components_from_file,
                     deploy_stdlib=self._deploy_stdlib,
                     exit=self.close,
                 ),
@@ -1429,9 +1428,6 @@ class EditorWindowTcgui:
     def _load_material_from_file(self) -> None:
         self._resource_actions.load_material_from_file()
 
-    def _load_components_from_file(self) -> None:
-        self._resource_actions.load_components_from_file()
-
     def _deploy_stdlib(self) -> None:
         self._resource_actions.deploy_stdlib()
 
@@ -1544,11 +1540,6 @@ class EditorWindowTcgui:
         if not modules_runtime.prepare_changed_modules_for_play():
             log.error(f"[EditorWindow] Module update before Play failed: {modules_runtime.last_error}")
             return False
-
-        if self._component_file_processor is not None:
-            if not self._component_file_processor.reload_dirty_components():
-                log.error("[EditorWindow] Loose Python component update before Play failed")
-                return False
 
         return True
 

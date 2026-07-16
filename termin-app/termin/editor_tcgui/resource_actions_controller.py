@@ -41,21 +41,6 @@ class ResourceActionsController:
             windowed=True,
         )
 
-    def load_components_from_file(self) -> None:
-        ui = self._get_ui()
-        if ui is None:
-            return
-        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
-
-        show_open_file_dialog(
-            ui,
-            title="Load Components",
-            directory=self._get_project_path() or str(Path.home()),
-            filter_str="Python Files (*.py);;All Files (*)",
-            on_result=self.on_components_file_selected,
-            windowed=True,
-        )
-
     def deploy_stdlib(self) -> None:
         ui = self._get_ui()
         if ui is None:
@@ -87,11 +72,6 @@ class ResourceActionsController:
         if inspector is not None:
             inspector.show_material_inspector_for_file(path)
         self._request_viewport_update()
-
-    def on_components_file_selected(self, path: str | None) -> None:
-        if not path:
-            return
-        self._resource_loader.load_components_from_path(path)
 
     def deploy_stdlib_to(self, path: str | None) -> None:
         ui = self._get_ui()
