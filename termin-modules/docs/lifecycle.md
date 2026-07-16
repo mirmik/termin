@@ -110,14 +110,21 @@ collision-safe session directory, поэтому параллельные runtim
   уже загруженные editor/SDK библиотеки и Python-side preload не должны быть
   обязательным условием для успешного native load
 
-## 5. load для Python модуля
+## 5. Session environment и load для Python модуля
 
-`PythonModuleBackend`:
+После успешного discovery `ModuleRuntime` один раз вызывает session-level
+`PythonModuleBackend::prepare_environment` до первого импорта. Backend:
 
 1. инициализирует embedded Python, если он ещё не поднят
-2. добавляет `root` в `sys.path`
-3. импортирует все пакеты из `packages`
-4. сохраняет список импортированных модулей и добавленных путей в `PythonModuleHandle`
+2. создаёт/проверяет общий project `.venv`
+3. канонизирует и добавляет его site-packages и все `root` обнаруженных
+   `.pymodule` в `sys.path`, не присваивая уже существующие равные entries
+
+Module load проверяет requirements в общем environment, импортирует все пакеты
+из `packages` и сохраняет в `PythonModuleHandle` только import-transaction state.
+Module unload не меняет session paths. `ModuleRuntime::shutdown` сначала
+выгружает модули, затем ровно один раз снимает только добавленные этой session
+entries. Ошибка prepare откатывает добавленные entries и не допускает imports.
 
 ## 6. unload
 
@@ -150,12 +157,12 @@ collision-safe session directory, поэтому параллельные runtim
 
 - runtime-type registry сначала вызывает prepare-unload lifecycle у всех типов
   владельца и не удаляет ни один type/facet, пока весь owner set не подготовлен
-- ошибка prepare прерывает операцию до Python backend: handle, registrations,
-  `sys.modules` и `sys.path` остаются на месте, state остаётся `Loaded`
+- ошибка prepare-unload прерывает операцию до Python backend: handle,
+  registrations и `sys.modules` остаются на месте, state остаётся `Loaded`;
+  session-owned `sys.path` при module unload не меняется
 - после успешного prepare `module_context` commit-ит Python-side registries и
   runtime types; исключение не проглатывается и сохраняет retryable handle/state
 - импортированный package subtree удаляется из `sys.modules`
-- добавленные пути удаляются из `sys.path`
 - регистрации, выполненные под module import context, снимаются по `module_id`
 
 Python backend включает `termin_modules.module_context` на время импорта

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <functional>
+#include <string>
+#include <vector>
 
 #include "termin_modules/module_types.hpp"
 #include "termin_modules/termin_modules_api.hpp"
@@ -20,6 +22,28 @@ public:
     virtual ~IModuleBackend() = default;
 
     virtual ModuleKind kind() const = 0;
+
+    virtual bool prepare_environment(
+        const std::vector<ModuleRecord>& records,
+        const ModuleEnvironment& environment,
+        std::string& diagnostics,
+        std::string& error
+    ) {
+        (void)records;
+        (void)environment;
+        diagnostics.clear();
+        error.clear();
+        return true;
+    }
+
+    virtual bool teardown_environment(
+        const ModuleEnvironment& environment,
+        std::string& error
+    ) {
+        (void)environment;
+        error.clear();
+        return true;
+    }
 
     virtual bool load(
         ModuleRecord& record,

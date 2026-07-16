@@ -7,7 +7,12 @@ from pathlib import Path
 import pytest
 
 from termin.project_modules.runtime import ProjectModulesRuntime
-from termin_modules import module_context
+from termin_modules import (
+    ModuleEnvironment,
+    ModuleRuntime,
+    PythonModuleBackend,
+    module_context,
+)
 
 
 def _write_python_module(
@@ -55,8 +60,102 @@ def test_failed_python_load_does_not_orphan_imports_or_paths(tmp_path: Path) -> 
 
     assert not runtime.load_project(tmp_path)
     assert "sample_module" not in sys.modules
-    assert str(source_root.resolve()) not in sys.path
+    assert str(source_root.resolve()) in sys.path
     assert runtime.close()
+    assert str(source_root.resolve()) not in sys.path
+
+
+def test_python_session_paths_survive_module_unload_and_reload(tmp_path: Path) -> None:
+    first_root = _write_python_module(tmp_path)
+    second_root = tmp_path / "SecondScripts"
+    second_package = second_root / "second_module"
+    second_package.mkdir(parents=True)
+    (second_package / "__init__.py").write_text("VALUE = 84\n", encoding="utf-8")
+    (tmp_path / "second.pymodule").write_text(
+        "name: second\nroot: SecondScripts\npackages: [second_module]\n",
+        encoding="utf-8",
+    )
+
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    assert runtime.load_project(tmp_path)
+
+    first_path = str(first_root.resolve())
+    second_path = str(second_root.resolve())
+    assert sys.path.count(first_path) == 1
+    assert sys.path.count(second_path) == 1
+
+    assert runtime.unload_module("sample")
+    assert first_path in sys.path
+    assert second_path in sys.path
+    assert runtime.load_module("sample")
+    assert runtime.reload_module("sample")
+    assert sys.path.count(first_path) == 1
+    assert sys.path.count(second_path) == 1
+
+    assert runtime.close()
+    assert first_path not in sys.path
+    assert second_path not in sys.path
+
+
+def test_python_session_does_not_claim_preexisting_equal_path(tmp_path: Path) -> None:
+    source_root = _write_python_module(tmp_path)
+    source_path = str(source_root.resolve())
+    sys.path.insert(0, source_path)
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    try:
+        assert runtime.load_project(tmp_path)
+        assert sys.path.count(source_path) == 1
+        assert runtime.close()
+        assert sys.path.count(source_path) == 1
+    finally:
+        if not runtime.closed:
+            runtime.close()
+        sys.path.remove(source_path)
+        sys.modules.pop("sample_module", None)
+
+
+def test_repeated_project_runtimes_own_independent_path_lifecycles(tmp_path: Path) -> None:
+    source_root = _write_python_module(tmp_path)
+    source_path = str(source_root.resolve())
+
+    for _ in range(2):
+        runtime = ProjectModulesRuntime()
+        runtime.set_sync_live_scenes(False)
+        assert runtime.load_project(tmp_path)
+        assert sys.path.count(source_path) == 1
+        assert runtime.close()
+        assert source_path not in sys.path
+        assert "sample_module" not in sys.modules
+
+    venv_python = tmp_path / ".venv" / (
+        "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    )
+    assert venv_python.is_file()
+
+
+def test_python_environment_setup_failure_prevents_import_and_leaves_no_paths(
+    tmp_path: Path,
+) -> None:
+    source_root = _write_python_module(tmp_path)
+    incomplete_venv = tmp_path / ".venv"
+    incomplete_venv.mkdir()
+    environment = ModuleEnvironment()
+    environment.python_executable = sys.executable
+    environment.project_root = str(tmp_path)
+    environment.project_venv_path = str(incomplete_venv)
+    environment.use_project_venv = True
+
+    runtime = ModuleRuntime()
+    runtime.set_environment(environment)
+    runtime.register_python_backend(PythonModuleBackend())
+
+    assert not runtime.discover(tmp_path)
+    assert "Project venv is incomplete" in runtime.last_error
+    assert str(source_root.resolve()) not in sys.path
+    assert "sample_module" not in sys.modules
+    assert runtime.shutdown()
 
 
 def test_loading_new_descriptor_rebuilds_runtime_without_orphaning_handles(
