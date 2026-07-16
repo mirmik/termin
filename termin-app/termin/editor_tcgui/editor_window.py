@@ -510,14 +510,20 @@ class EditorWindowTcgui:
 
             # GameModeModel owns Play/Stop/Pause state + transitions.
             from termin.editor_core.game_mode_model import GameModeModel
+            from termin.editor_core.primary_render_scene_binding import (
+                PrimaryRenderSceneBinding,
+            )
 
             self._game_mode_model = GameModeModel(
                 scene_manager=self.scene_manager,
                 editor_connector=self,
                 rendering_controller=self._rendering_controller,
                 get_editor_scene_name=lambda: self._editor_scene_name,
+                render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
+                    self,
+                    scene_name,
+                ),
                 scene_tree_controller=self.scene_tree_controller,
-                render_connector=self,
                 prepare_code_for_play=self._prepare_code_for_play,
             )
             self._game_mode_model.mode_entered.connect(self._on_game_mode_entered)

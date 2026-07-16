@@ -17,6 +17,10 @@ def _load_source_module(name: str, relative_path: str):
     return module
 
 
+PrimaryRenderSceneBinding = _load_source_module(
+    "primary_render_scene_binding_under_test",
+    "termin-app/termin/editor_core/primary_render_scene_binding.py",
+).PrimaryRenderSceneBinding
 GameModeModel = _load_source_module(
     "game_mode_model_under_test",
     "termin-app/termin/editor_core/game_mode_model.py",
@@ -157,6 +161,10 @@ class _EditorConnector:
     def __init__(self):
         self.events = []
         self.attached_scene_name = None
+        self._failed_attach_scene_names: set[str] = set()
+
+    def fail_next_attach(self, scene_name: str) -> None:
+        self._failed_attach_scene_names.add(scene_name)
 
     def attach_editor_to_scene(
         self,
@@ -165,7 +173,6 @@ class _EditorConnector:
         transfer_camera_state: bool = False,
         update_editor_scene_name: bool = True,
     ) -> bool:
-        self.attached_scene_name = scene_name
         self.events.append(
             (
                 "attach_editor_to_scene",
@@ -175,6 +182,10 @@ class _EditorConnector:
                 update_editor_scene_name,
             )
         )
+        if scene_name in self._failed_attach_scene_names:
+            self._failed_attach_scene_names.remove(scene_name)
+            return False
+        self.attached_scene_name = scene_name
         return True
 
     def detach_editor_from_scene(
@@ -194,14 +205,25 @@ class _RenderConnector:
 
     def __init__(self):
         self.events = []
+        self._failures: set[tuple[str, str]] = set()
+
+    def fail_next(self, operation: str, scene_name: str) -> None:
+        self._failures.add((operation, scene_name))
+
+    def _should_fail(self, operation: str, scene_name: str) -> bool:
+        key = (operation, scene_name)
+        if key not in self._failures:
+            return False
+        self._failures.remove(key)
+        return True
 
     def sync_scene_render_state(self, scene_name: str) -> bool:
         self.events.append(("sync_scene_render_state", scene_name))
-        return True
+        return not self._should_fail("sync", scene_name)
 
     def attach_scene_to_render(self, scene_name: str) -> bool:
         self.events.append(("attach_scene_to_render", scene_name))
-        return True
+        return not self._should_fail("attach", scene_name)
 
     def detach_scene_from_render(
         self,
@@ -209,7 +231,7 @@ class _RenderConnector:
         save_state: bool = True,
     ) -> bool:
         self.events.append(("detach_scene_from_render", scene_name, save_state))
-        return True
+        return not self._should_fail("detach", scene_name)
 
 
 class _SceneTreeController:
@@ -339,6 +361,19 @@ class _Display:
             self.viewports.remove(viewport)
 
 
+def _make_game_mode_model(scene_manager, editor_connector, render_connector):
+    return GameModeModel(
+        scene_manager=scene_manager,
+        editor_connector=editor_connector,
+        rendering_controller=_RenderingController(),
+        get_editor_scene_name=lambda: "Editor",
+        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
+            render_connector,
+            scene_name,
+        ),
+    )
+
+
 def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments():
     scene_manager = SceneManager()
     editor_scene = scene_manager.create_scene("Editor", [])
@@ -356,8 +391,11 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments()
         editor_connector=connector,
         rendering_controller=rendering,
         get_editor_scene_name=lambda: "Editor",
+        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
+            render_connector,
+            scene_name,
+        ),
         scene_tree_controller=tree,
-        render_connector=render_connector,
         prepare_code_for_play=lambda: prepare_calls.append("prepare") or True,
     )
 
@@ -388,8 +426,8 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments()
         assert rendering.attach_calls == []
         assert render_connector.events == [
             ("sync_scene_render_state", "Editor"),
-            ("detach_scene_from_render", "Editor", False),
             ("attach_scene_to_render", "Editor(game)"),
+            ("detach_scene_from_render", "Editor", False),
         ]
         assert connector.events == [
             (
@@ -427,10 +465,10 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments()
         assert rendering.attach_calls == []
         assert render_connector.events == [
             ("sync_scene_render_state", "Editor"),
-            ("detach_scene_from_render", "Editor", False),
             ("attach_scene_to_render", "Editor(game)"),
-            ("detach_scene_from_render", "Editor(game)", False),
+            ("detach_scene_from_render", "Editor", False),
             ("attach_scene_to_render", "Editor"),
+            ("detach_scene_from_render", "Editor(game)", False),
         ]
         assert connector.events == [
             (
@@ -440,7 +478,6 @@ def test_game_mode_model_switches_scene_modes_rendering_and_editor_attachments()
                 True,
                 False,
             ),
-            ("detach_editor_from_scene", True, False),
             (
                 "attach_editor_to_scene",
                 "Editor",
@@ -474,7 +511,10 @@ def test_game_mode_model_blocks_play_when_code_prepare_fails():
         editor_connector=connector,
         rendering_controller=_RenderingController(),
         get_editor_scene_name=lambda: "Editor",
-        render_connector=render_connector,
+        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
+            render_connector,
+            scene_name,
+        ),
         prepare_code_for_play=lambda: False,
     )
 
@@ -486,6 +526,153 @@ def test_game_mode_model_blocks_play_when_code_prepare_fails():
         assert scene_manager.get_mode("Editor") == SceneMode.STOP
         assert connector.events == []
         assert render_connector.events == []
+    finally:
+        scene_manager.close_all_scenes()
+
+
+def test_game_mode_model_rolls_back_failed_start_render_rebind():
+    scene_manager = SceneManager()
+    editor_scene = scene_manager.create_scene("Editor", [])
+    assert editor_scene is not None
+    scene_manager.set_mode("Editor", SceneMode.STOP)
+    editor_connector = _EditorConnector()
+    editor_connector.attached_scene_name = "Editor"
+    render_connector = _RenderConnector()
+    render_connector.fail_next("attach", "Editor(game)")
+    model = _make_game_mode_model(
+        scene_manager,
+        editor_connector,
+        render_connector,
+    )
+    state_events = []
+    model.state_changed.connect(lambda _model: state_events.append("changed"))
+
+    try:
+        model.toggle_game_mode()
+
+        assert model.is_game_mode is False
+        assert scene_manager.has_scene("Editor(game)") is False
+        assert scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert editor_connector.attached_scene_name == "Editor"
+        assert state_events == []
+    finally:
+        scene_manager.close_all_scenes()
+
+
+def test_game_mode_model_rolls_back_failed_start_editor_switch():
+    scene_manager = SceneManager()
+    editor_scene = scene_manager.create_scene("Editor", [])
+    assert editor_scene is not None
+    scene_manager.set_mode("Editor", SceneMode.STOP)
+    editor_connector = _EditorConnector()
+    editor_connector.attached_scene_name = "Editor"
+    editor_connector.fail_next_attach("Editor(game)")
+    render_connector = _RenderConnector()
+    model = _make_game_mode_model(
+        scene_manager,
+        editor_connector,
+        render_connector,
+    )
+
+    try:
+        model.toggle_game_mode()
+
+        assert model.is_game_mode is False
+        assert scene_manager.has_scene("Editor(game)") is False
+        assert scene_manager.get_mode("Editor") == SceneMode.STOP
+        assert editor_connector.attached_scene_name == "Editor"
+        assert render_connector.events[-2:] == [
+            ("attach_scene_to_render", "Editor"),
+            ("detach_scene_from_render", "Editor(game)", False),
+        ]
+    finally:
+        scene_manager.close_all_scenes()
+
+
+def test_game_mode_model_keeps_playing_when_stop_render_rebind_fails():
+    scene_manager = SceneManager()
+    editor_scene = scene_manager.create_scene("Editor", [])
+    assert editor_scene is not None
+    scene_manager.set_mode("Editor", SceneMode.STOP)
+    editor_connector = _EditorConnector()
+    editor_connector.attached_scene_name = "Editor"
+    render_connector = _RenderConnector()
+    model = _make_game_mode_model(
+        scene_manager,
+        editor_connector,
+        render_connector,
+    )
+
+    try:
+        model.toggle_game_mode()
+        render_connector.fail_next("attach", "Editor")
+        model.toggle_game_mode()
+
+        assert model.is_game_mode is True
+        assert scene_manager.has_scene("Editor(game)") is True
+        assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
+        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+        assert editor_connector.attached_scene_name == "Editor(game)"
+    finally:
+        scene_manager.close_all_scenes()
+
+
+def test_game_mode_model_rolls_back_failed_stop_editor_switch():
+    scene_manager = SceneManager()
+    editor_scene = scene_manager.create_scene("Editor", [])
+    assert editor_scene is not None
+    scene_manager.set_mode("Editor", SceneMode.STOP)
+    editor_connector = _EditorConnector()
+    editor_connector.attached_scene_name = "Editor"
+    render_connector = _RenderConnector()
+    model = _make_game_mode_model(
+        scene_manager,
+        editor_connector,
+        render_connector,
+    )
+
+    try:
+        model.toggle_game_mode()
+        editor_connector.fail_next_attach("Editor")
+        model.toggle_game_mode()
+
+        assert model.is_game_mode is True
+        assert scene_manager.has_scene("Editor(game)") is True
+        assert scene_manager.get_mode("Editor") == SceneMode.INACTIVE
+        assert scene_manager.get_mode("Editor(game)") == SceneMode.PLAY
+        assert editor_connector.attached_scene_name == "Editor(game)"
+        assert render_connector.events[-2:] == [
+            ("attach_scene_to_render", "Editor(game)"),
+            ("detach_scene_from_render", "Editor", False),
+        ]
+    finally:
+        scene_manager.close_all_scenes()
+
+
+def test_game_mode_model_supports_repeated_play_stop_cycles():
+    scene_manager = SceneManager()
+    editor_scene = scene_manager.create_scene("Editor", [])
+    assert editor_scene is not None
+    scene_manager.set_mode("Editor", SceneMode.STOP)
+    editor_connector = _EditorConnector()
+    editor_connector.attached_scene_name = "Editor"
+    render_connector = _RenderConnector()
+    model = _make_game_mode_model(
+        scene_manager,
+        editor_connector,
+        render_connector,
+    )
+
+    try:
+        for _ in range(3):
+            model.toggle_game_mode()
+            assert model.is_game_mode is True
+            assert scene_manager.has_scene("Editor(game)") is True
+            model.toggle_game_mode()
+            assert model.is_game_mode is False
+            assert scene_manager.has_scene("Editor(game)") is False
+        assert editor_connector.attached_scene_name == "Editor"
+        assert scene_manager.get_mode("Editor") == SceneMode.STOP
     finally:
         scene_manager.close_all_scenes()
 
@@ -507,7 +694,10 @@ def test_game_mode_model_restores_render_counts_with_shared_render_attachment():
         editor_connector=connector,
         rendering_controller=rendering,
         get_editor_scene_name=lambda: "Editor",
-        render_connector=render_attachment,
+        render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
+            render_attachment,
+            scene_name,
+        ),
     )
 
     try:
