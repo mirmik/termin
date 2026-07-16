@@ -32,16 +32,22 @@ def _generate_action(component) -> None:
 
 
 def _request_render_update() -> None:
-    try:
-        from termin.engine import RenderingManager
+    from termin.engine import RenderingManager
 
-        RenderingManager.instance().request_render_update()
+    manager = RenderingManager.instance_or_none()
+    if manager is None:
+        return
+
+    try:
+        manager.request_render_update()
     except Exception as e:
         log.error(f"[ScriptMeshComponent] Failed to request render update: {e}")
 
 
 class ScriptMeshComponent(PythonComponent):
     """Builds a TcMesh from a small termin-csg script and writes MeshComponent."""
+
+    required_components = ("MeshComponent",)
 
     inspect_fields = {
         "script": InspectField(

@@ -107,6 +107,9 @@ void bind_component_registry(nb::module_& m) {
         .def("set_category", &ComponentRegistry::set_category,
             nb::arg("name"), nb::arg("category"))
         .def("category_of", &ComponentRegistry::category_of, nb::arg("name"))
+        .def("register_requirement", &ComponentRegistry::register_requirement,
+            nb::arg("name"), nb::arg("required_name"))
+        .def("requirements_of", &ComponentRegistry::requirements_of, nb::arg("name"))
         .def("get_info", [](ComponentRegistry& reg, const std::string& name) {
             nb::dict info;
             info["name"] = name;

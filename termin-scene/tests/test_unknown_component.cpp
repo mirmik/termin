@@ -530,6 +530,40 @@ int test_requirement_satisfied_by_derived_component() {
     return 0;
 }
 
+int test_serialized_requirements_load_before_dependents() {
+    std::cout << "Testing serialized requirement ordering...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("requirements_deserialize");
+    const std::string json = R"({
+        "entities": [{
+            "uuid": "44444444-4444-4444-4444-444444444444",
+            "name": "entity",
+            "components": [
+                { "type": "NeedsBaseComponent", "data": {} },
+                { "type": "RequiredBaseComponent", "data": {} }
+            ]
+        }]
+    })";
+
+    scene.from_json_string(json);
+    const auto entities = scene.get_all_entities();
+    TEST_ASSERT(entities.size() == 1, "single entity created");
+
+    termin::Entity entity = entities.front();
+    TEST_ASSERT(entity.component_count() == 2,
+                "serialized required component is not duplicated");
+    TEST_ASSERT(std::string(tc_component_type_name(entity.component_at(0)))
+                    == "RequiredBaseComponent",
+                "serialized requirement loads before dependent");
+    TEST_ASSERT(std::string(tc_component_type_name(entity.component_at(1)))
+                    == "NeedsBaseComponent",
+                "dependent loads after serialized requirement");
+
+    scene.destroy();
+    std::cout << "  Serialized requirement ordering: PASS\n";
+    return 0;
+}
+
 int test_requirement_cycle_blocks_add() {
     std::cout << "Testing component dependency cycle detection...\n";
 
@@ -813,6 +847,7 @@ int main() {
     result |= test_upgrade_requires_registered_type();
     result |= test_auto_add_required_component();
     result |= test_requirement_satisfied_by_derived_component();
+    result |= test_serialized_requirements_load_before_dependents();
     result |= test_requirement_cycle_blocks_add();
     result |= test_unknown_only_deserialization();
     result |= test_unknown_only_auto_upgrade_keeps_default_enabled();
