@@ -150,6 +150,12 @@ if(TERMIN_BUILD_PYTHON)
         DESTINATION lib/python/termin/engine
         PATTERN "__pycache__" EXCLUDE
         PATTERN "*.pyc" EXCLUDE
+        # Native modules are installed from their CMake targets above.  A
+        # locally cached setuptools artifact in the source package must never
+        # overwrite the freshly linked module in the install tree.
+        PATTERN "*.so" EXCLUDE
+        PATTERN "*.pyd" EXCLUDE
+        PATTERN "*.dylib" EXCLUDE
     )
 endif()
 
