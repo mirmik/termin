@@ -1078,6 +1078,12 @@ Phase 12 host notes:
   Launcher project activation invokes the same path; backend override and the
   production tcgui import were removed. An SDK-backed three-frame offscreen
   OpenGL smoke passed through the production command.
+- Launcher project/session behavior now lives in the toolkit-neutral
+  `LauncherController`: recent selection, screen/form state, validation,
+  create/open/remove actions and launch outcomes have headless coverage.
+  Filesystem pickers and process dispatch are explicit injected services;
+  the remaining tcgui `LauncherApp` only builds widgets and projects controller
+  state, so a native launcher frontend no longer needs to duplicate behavior.
 - The migrated tcgui Core/Inspect/NavMesh/Resource viewer modules, their shared
   `RegistryViewerDialog`, launcher methods and menu callbacks were deleted.
   An architecture test fixes their absence. Card #302 remains open only for

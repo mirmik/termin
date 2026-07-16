@@ -404,6 +404,15 @@ def test_framegraph_automation_service_is_toolkit_neutral() -> None:
     assert "tcgui" not in _read_text(canonical)
 
 
+def test_launcher_controller_is_toolkit_neutral() -> None:
+    controller = REPO_ROOT / "termin-app/termin/launcher/controller.py"
+
+    assert controller.is_file()
+    source = _read_text(controller)
+    assert "tcgui" not in source
+    assert "termin.gui_native" not in source
+
+
 def test_editor_utility_dialog_policy_is_toolkit_neutral() -> None:
     shared_models = (
         "about_model.py",
