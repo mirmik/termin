@@ -411,6 +411,54 @@ def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
     assert manager.get_asset_by_uuid("dummy-uuid") is None
 
 
+def test_asset_reload_events_are_manager_local_versioned_and_unsubscribable() -> None:
+    manager = AssetRuntimeManager()
+    other_manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=Asset,
+        asset_store=manager._asset_store,
+        data_from_asset=lambda asset: asset,
+    )
+    manager.register_runtime_asset_registry("dummy", registry)
+
+    class VersionedRuntimePlugin:
+        type_id = "dummy"
+
+        def register(self, context, result: PreLoadResult) -> None:
+            context.resource_manager.register_runtime_asset(
+                self.type_id,
+                context.name,
+                Asset(name=context.name, uuid=result.uuid),
+                source_path=result.path,
+                uuid=result.uuid,
+            )
+
+        def reload(self, context, result: PreLoadResult) -> bool:
+            asset = context.resource_manager.get_runtime_asset_by_uuid(self.type_id, result.uuid)
+            assert asset is not None
+            asset._bump_version()
+            return True
+
+    manager.asset_type_plugins.register_runtime(VersionedRuntimePlugin())
+    events = []
+    other_events = []
+    subscription = manager.subscribe_asset_reloaded(events.append)
+    other_manager.subscribe_asset_reloaded(other_events.append)
+
+    result = PreLoadResult(resource_type="dummy", path="/tmp/probe.dummy", uuid="dummy-uuid")
+    manager.register_file(result)
+    assert manager.reload_file(result)
+
+    assert [(event.type_id, event.name, event.uuid, event.version) for event in events] == [
+        ("dummy", "probe", "dummy-uuid", 1)
+    ]
+    assert other_events == []
+
+    subscription.close()
+    assert manager.reload_file(result)
+    assert len(events) == 1
+
+
 def test_spec_file_helpers_use_meta_only_and_leave_unrelated_spec_files(tmp_path) -> None:
     asset_path = tmp_path / "probe.obj"
     asset_path.write_text("", encoding="utf-8")

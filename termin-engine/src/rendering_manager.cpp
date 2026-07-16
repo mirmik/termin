@@ -199,6 +199,10 @@ size_t RenderingManager::recreate_render_target_pipelines_for_asset(
         }
 
         tc_render_target_set_pipeline(target.render_target, new_pipeline);
+        tc_scene_handle scene = tc_render_target_get_scene(target.render_target);
+        if (tc_scene_handle_valid(scene)) {
+            tc_scene_request_render(scene);
+        }
         old_pipelines.push_back(target.old_pipeline);
         rebound++;
 

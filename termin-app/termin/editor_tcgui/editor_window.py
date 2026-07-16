@@ -486,6 +486,7 @@ class EditorWindowTcgui:
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
                 rendering_manager=self._engine.rendering_manager,
+                resource_manager=self.resource_manager,
                 viewport_list_widget=self._viewport_list,
                 ctx=self._ctx,
                 get_scene=lambda: self.scene,
@@ -1437,6 +1438,12 @@ class EditorWindowTcgui:
 
     def close(self) -> None:
         self._should_close = True
+
+    def shutdown(self) -> None:
+        """Release session-owned engine integrations before backend teardown."""
+        if self._rendering_controller is not None:
+            self._rendering_controller.close()
+            self._rendering_controller = None
 
     def _update_window_title(self) -> None:
         scene_label = "No Scene"

@@ -27,6 +27,7 @@ class RenderingControllerTcgui:
     def __init__(
         self,
         rendering_manager,
+        resource_manager,
         viewport_list_widget,
         ctx: "Tgfx2Context",
         get_scene: Callable[[], "Scene | None"] | None = None,
@@ -40,14 +41,15 @@ class RenderingControllerTcgui:
     ) -> None:
         from termin.editor_core.rendering_factories import PipelineAssetResolver
         from termin.editor_core.rendering_model import RenderingModel
-        from termin.editor_core.resource_manager import ResourceManager
+        from termin.default_assets.render.pipeline_reload_binding import PipelineReloadBinding
 
         self._manager = rendering_manager
         self._model = RenderingModel(self._manager)
         self._pipeline_resolver = PipelineAssetResolver(
-            ResourceManager.instance(),
+            resource_manager,
             make_editor_pipeline=make_editor_pipeline,
         )
+        self._pipeline_reload_binding = PipelineReloadBinding(resource_manager, self._manager)
         # Process-global tgfx2 context — every FBOSurface this controller
         # creates allocates its color/depth textures on this device.
         self._ctx = ctx
@@ -75,6 +77,15 @@ class RenderingControllerTcgui:
         self._manager.set_display_removed_callback(self._on_display_removed)
 
         self._connect_viewport_list_signals()
+
+    def close(self) -> None:
+        """Detach every callback and asset subscription owned by this controller."""
+        self._pipeline_reload_binding.close()
+        self._manager.set_display_removed_callback(None)
+        self._manager.set_render_request_callback(None)
+        self._manager.set_pipeline_factory(None)
+        self._manager.set_display_factory(None)
+        self._manager.set_make_current_callback(None)
 
     def _connect_viewport_list_signals(self) -> None:
         vl = self._viewport_list

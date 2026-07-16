@@ -247,6 +247,8 @@ class PlayerRuntime:
         self._input_manager = None
         self._mcp_executor = None
         self._mcp_server = None
+        self._resource_manager = None
+        self._pipeline_reload_binding = None
         self.exit_code = 0
 
     @property
@@ -281,6 +283,15 @@ class PlayerRuntime:
 
         if not self._ensure_engine_core():
             return False
+
+        from termin.default_assets.resource_manager import DefaultResourceManager
+        from termin.default_assets.render.pipeline_reload_binding import PipelineReloadBinding
+
+        self._resource_manager = DefaultResourceManager.instance()
+        self._pipeline_reload_binding = PipelineReloadBinding(
+            self._resource_manager,
+            self._engine.rendering_manager,
+        )
 
         if self.app_manifest_path is not None:
             log.info(f"[PlayerRuntime] Initializing bundle: {self.app_manifest_path}")
@@ -409,9 +420,9 @@ class PlayerRuntime:
         if not name or name in ("Default", "(Default)"):
             return None
 
-        from termin.default_assets.resource_manager import DefaultResourceManager
-
-        rm = DefaultResourceManager.instance()
+        rm = self._resource_manager
+        if rm is None:
+            raise RuntimeError("PlayerRuntime resource manager is not initialized")
         if "-" in name:
             pipeline = rm.get_pipeline_by_uuid(name)
             if pipeline is not None:
@@ -871,6 +882,13 @@ class PlayerRuntime:
             self._mcp_server = None
         self._mcp_executor = None
 
+        if self._pipeline_reload_binding is not None:
+            try:
+                self._pipeline_reload_binding.close()
+            except Exception as e:
+                log.error(f"[PlayerRuntime] Failed to close pipeline reload binding: {e}")
+            self._pipeline_reload_binding = None
+
         # Remove display from manager
         manager = None
         if self._engine is not None or self.scene is not None or self._display is not None:
@@ -913,6 +931,7 @@ class PlayerRuntime:
         # Release a borrowed wrapper only after all engine-backed resources are
         # detached. For standalone runtimes this also destroys the owned engine.
         self._engine = None
+        self._resource_manager = None
 
         self.running = False
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from tcbase import log
@@ -17,6 +19,31 @@ from termin_assets.plugin import AssetContext, AssetRuntimeUnregisterPlugin, Ass
 if TYPE_CHECKING:
     from termin_assets.asset_registry import AssetRegistry
     from termin_assets.preload import PreLoadResult
+
+
+@dataclass(frozen=True)
+class AssetReloadEvent:
+    """Typed notification emitted by one resource manager after a real reload."""
+
+    type_id: str
+    name: str
+    uuid: str
+    version: int
+
+
+class AssetReloadSubscription:
+    """Explicit lifetime token for a resource-manager-local reload listener."""
+
+    def __init__(self, manager: "AssetRuntimeManager", subscription_id: int) -> None:
+        self._manager: AssetRuntimeManager | None = manager
+        self._subscription_id = subscription_id
+
+    def close(self) -> None:
+        manager = self._manager
+        if manager is None:
+            return
+        manager._unsubscribe_asset_reloaded(self._subscription_id)
+        self._manager = None
 
 
 class AssetRuntimeManager:
@@ -34,6 +61,8 @@ class AssetRuntimeManager:
         self._asset_type_plugins = AssetTypeRegistry()
         self.external_assets = AssetCatalog()
         self._runtime_asset_registries: dict[str, "AssetRegistry"] = {}
+        self._asset_reload_subscribers: dict[int, Callable[[AssetReloadEvent], None]] = {}
+        self._next_asset_reload_subscription_id = 1
 
     @property
     def asset_type_plugins(self) -> AssetTypeRegistry:
@@ -204,6 +233,8 @@ class AssetRuntimeManager:
             )
             return False
 
+        asset_before = self._find_reloaded_asset(result.resource_type, name, result.uuid)
+        version_before = asset_before.version if asset_before is not None else None
         try:
             reload_result = plugin.reload(AssetContext(resource_manager=self, name=name), result)
         except Exception:
@@ -212,7 +243,49 @@ class AssetRuntimeManager:
                 exc_info=True,
             )
             return False
-        return reload_result is not False
+        if reload_result is False:
+            return False
+
+        asset_after = self._find_reloaded_asset(result.resource_type, name, result.uuid)
+        if asset_after is not None and asset_after.version != version_before:
+            self._publish_asset_reloaded(
+                AssetReloadEvent(
+                    type_id=result.resource_type,
+                    name=asset_after.name,
+                    uuid=asset_after.uuid,
+                    version=asset_after.version,
+                )
+            )
+        return True
+
+    def subscribe_asset_reloaded(
+        self,
+        callback: Callable[[AssetReloadEvent], None],
+    ) -> AssetReloadSubscription:
+        """Subscribe to successful reloads from this manager only."""
+        subscription_id = self._next_asset_reload_subscription_id
+        self._next_asset_reload_subscription_id += 1
+        self._asset_reload_subscribers[subscription_id] = callback
+        return AssetReloadSubscription(self, subscription_id)
+
+    def _find_reloaded_asset(self, type_id: str, name: str, uuid: str | None) -> Asset | None:
+        if uuid:
+            return self.get_runtime_asset_by_uuid(type_id, uuid)
+        return self.get_runtime_asset(type_id, name)
+
+    def _publish_asset_reloaded(self, event: AssetReloadEvent) -> None:
+        for callback in tuple(self._asset_reload_subscribers.values()):
+            try:
+                callback(event)
+            except Exception:
+                log.error(
+                    f"[AssetRuntimeManager] Asset reload subscriber failed for "
+                    f"{event.type_id} '{event.name}' ({event.uuid})",
+                    exc_info=True,
+                )
+
+    def _unsubscribe_asset_reloaded(self, subscription_id: int) -> None:
+        self._asset_reload_subscribers.pop(subscription_id, None)
 
     def unregister_file(self, result: "PreLoadResult") -> None:
         """Dispatch a preloaded file removal to the registered runtime asset plugin."""

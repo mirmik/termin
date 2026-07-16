@@ -216,40 +216,13 @@ class PipelineAsset(DataAsset["RenderPipeline"]):
         return True
 
     def reload(self) -> bool:
-        """Reload the asset and rebind live render targets using this pipeline."""
+        """Reload the asset; its owning resource manager publishes the change."""
         if self._source_path is None:
             return False
         result = self._load_from_file()
         if result:
             self._bump_version()
-            self._notify_rendering_manager_reloaded()
         return result
-
-    def _notify_rendering_manager_reloaded(self) -> None:
-        try:
-            from termin.engine import RenderingManager
-        except Exception as e:
-            log.debug(
-                f"[PipelineAsset] RenderingManager is not available; "
-                f"skipping live pipeline rebind for '{self._name}': {e}"
-            )
-            return
-
-        try:
-            rebound = RenderingManager.instance().recreate_render_target_pipelines_for_asset(
-                self._name,
-                self.uuid,
-            )
-            if rebound:
-                log.info(
-                    f"[PipelineAsset] Rebound {rebound} render target(s) "
-                    f"after reloading pipeline '{self._name}'"
-                )
-        except Exception:
-            log.error(
-                f"[PipelineAsset] Failed to rebind render targets for pipeline '{self._name}'",
-                exc_info=True,
-            )
 
     def save_graph_to_file(self, path: Path | str | None = None) -> bool:
         """Save graph data to .pipeline file.

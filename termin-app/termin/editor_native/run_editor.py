@@ -842,7 +842,10 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
 
     rendering_model = RenderingModel(engine.rendering_manager)
     rendering_factory_registration = None
+    pipeline_reload_binding = None
     if display_workspace is not None:
+        from termin.default_assets.render.pipeline_reload_binding import PipelineReloadBinding
+
         pipeline_resolver = PipelineAssetResolver(resource_manager)
         rendering_factory_registration = RenderingFactoryRegistration(
             engine.rendering_manager,
@@ -850,6 +853,10 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             pipeline_factory=pipeline_resolver.resolve,
         )
         rendering_factory_registration.install()
+        pipeline_reload_binding = PipelineReloadBinding(
+            resource_manager,
+            engine.rendering_manager,
+        )
 
     render_scene_session = None
     if display_workspace is not None:
@@ -1720,6 +1727,11 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
         extension_context.on_viewport_tool_state_changed = None
         extension_context.viewport_geometry = None
         engine.scene_manager.set_on_after_render(None)
+        if pipeline_reload_binding is not None:
+            try:
+                pipeline_reload_binding.close()
+            except Exception:
+                _logger.exception("Native pipeline reload binding shutdown cleanup failed")
         if rendering_factory_registration is not None:
             try:
                 rendering_factory_registration.close()
