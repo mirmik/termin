@@ -39,7 +39,7 @@ class VoxelGridRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        if rm.get_runtime_asset(self.type_id, name) is not None:
+        if result.uuid is None and rm.get_runtime_asset(self.type_id, name) is not None:
             return
 
         asset = None
@@ -62,7 +62,11 @@ class VoxelGridRuntimePlugin:
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
         name = context.name
-        asset = rm.get_runtime_asset(self.type_id, name)
+        asset = (
+            rm.get_runtime_asset_by_uuid(self.type_id, result.uuid)
+            if result.uuid
+            else rm.get_runtime_asset(self.type_id, name)
+        )
         if asset is None:
             return
 
@@ -81,7 +85,7 @@ class VoxelGridRuntimePlugin:
             rm.voxel_grids[name] = TcVoxelGrid.from_uuid(asset.uuid)
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
-        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name, uuid=result.uuid)
 
 
 class VoxelGridAssetPlugin(VoxelGridImportPlugin, VoxelGridRuntimePlugin):

@@ -97,69 +97,100 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
     def _register_builtin_asset_type_plugins(self) -> None:
         self.register_default_asset_type_plugins()
 
-    def unregister_runtime_asset(self, type_id: str, name: str) -> None:
+    def unregister_runtime_asset(
+        self,
+        type_id: str,
+        name: str,
+        *,
+        uuid: str | None = None,
+    ):
         """Remove a runtime asset and any legacy direct-data cache entry."""
-        super().unregister_runtime_asset(type_id, name)
+        removed = super().unregister_runtime_asset(type_id, name, uuid=uuid)
+        removed_name = removed.name if removed is not None else name
         if type_id == "material":
-            self.materials.pop(name, None)
+            self.materials.pop(removed_name, None)
         elif type_id == "shader":
-            self.shaders.pop(name, None)
+            self.shaders.pop(removed_name, None)
         elif type_id == "voxel_grid":
-            self.voxel_grids.pop(name, None)
+            self.voxel_grids.pop(removed_name, None)
         elif type_id == "navmesh":
-            self.navmeshes.pop(name, None)
+            self.navmeshes.pop(removed_name, None)
         elif type_id == "animation_clip":
-            self.animation_clips.pop(name, None)
+            self.animation_clips.pop(removed_name, None)
         elif type_id == "skeleton":
-            self.skeletons.pop(name, None)
+            self.skeletons.pop(removed_name, None)
+        return removed
+
+    def rename_runtime_asset(self, type_id: str, uuid: str, name: str) -> bool:
+        asset = self.get_asset_by_uuid(uuid)
+        old_name = asset.name if asset is not None else None
+        renamed = super().rename_runtime_asset(type_id, uuid, name)
+        if not renamed:
+            return False
+        for candidate in (old_name, name):
+            if candidate is None:
+                continue
+            if type_id == "material":
+                self.materials.pop(candidate, None)
+            elif type_id == "shader":
+                self.shaders.pop(candidate, None)
+            elif type_id == "voxel_grid":
+                self.voxel_grids.pop(candidate, None)
+            elif type_id == "navmesh":
+                self.navmeshes.pop(candidate, None)
+            elif type_id == "animation_clip":
+                self.animation_clips.pop(candidate, None)
+            elif type_id == "skeleton":
+                self.skeletons.pop(candidate, None)
+        return True
 
     @property
     def _prefab_assets(self) -> dict[str, "PrefabAsset"]:
-        return self._prefab_registry.assets
+        return self._prefab_registry.unique_assets_by_name
 
     @property
     def _glb_assets(self) -> dict[str, "GLBAsset"]:
-        return self._glb_registry.assets
+        return self._glb_registry.unique_assets_by_name
 
     @property
     def _material_assets(self) -> dict[str, "MaterialAsset"]:
-        return self._material_registry.assets
+        return self._material_registry.unique_assets_by_name
 
     @property
     def _shader_assets(self) -> dict[str, "ShaderAsset"]:
-        return self._shader_registry.assets
+        return self._shader_registry.unique_assets_by_name
 
     @property
     def _mesh_assets(self) -> dict[str, "MeshAsset"]:
-        return self._mesh_registry.assets
+        return self._mesh_registry.unique_assets_by_name
 
     @property
     def _texture_assets(self) -> dict[str, "TextureAsset"]:
-        return self._texture_registry.assets
+        return self._texture_registry.unique_assets_by_name
 
     @property
     def _voxel_grid_assets(self) -> dict[str, "VoxelGridAsset"]:
-        return self._voxel_grid_registry.assets
+        return self._voxel_grid_registry.unique_assets_by_name
 
     @property
     def _navmesh_assets(self) -> dict[str, "NavMeshAsset"]:
-        return self._navmesh_registry.assets
+        return self._navmesh_registry.unique_assets_by_name
 
     @property
     def _animation_clip_assets(self) -> dict[str, "AnimationClipAsset"]:
-        return self._animation_clip_registry.assets
+        return self._animation_clip_registry.unique_assets_by_name
 
     @property
     def _skeleton_assets(self) -> dict[str, "SkeletonAsset"]:
-        return self._skeleton_registry.assets
+        return self._skeleton_registry.unique_assets_by_name
 
     @property
     def _audio_clip_assets(self) -> dict[str, "AudioClipAsset"]:
-        return self._audio_clip_registry.assets
+        return self._audio_clip_registry.unique_assets_by_name
 
     @property
     def _ui_assets(self):
-        return self._ui_registry.assets
+        return self._ui_registry.unique_assets_by_name
 
     @property
     def glsl(self):
@@ -180,7 +211,7 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
 
         for registry in list(self._runtime_asset_registries.values()):
             registry.clear()
-        self._assets_by_uuid.clear()
+        self._asset_store.clear()
         self.external_assets.clear()
 
         self.materials.clear()
@@ -196,7 +227,7 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self._clear_default_texture_caches()
 
     def _destroy_cached_pipelines(self) -> None:
-        for asset in list(self._pipeline_registry.assets.values()):
+        for asset in list(self._pipeline_registry.iter_assets()):
             pipeline = asset.cached_data
             if pipeline is None:
                 continue

@@ -144,8 +144,7 @@ class PrefabAsset(DataAsset[dict]):
 
         file_uuid = data.get("uuid")
         if file_uuid:
-            self._uuid = file_uuid
-            self._runtime_id = hash(self._uuid) & 0xFFFFFFFFFFFFFFFF
+            self._adopt_uuid(file_uuid)
             self._has_uuid_in_spec = True
 
         return data

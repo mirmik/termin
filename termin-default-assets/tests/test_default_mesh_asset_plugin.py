@@ -122,7 +122,9 @@ def test_mesh_runtime_plugin_registers_lazy_asset() -> None:
 def test_mesh_runtime_reload_stays_in_asset_layer() -> None:
     resource_manager = FakeResourceManager()
     asset = FakeLoadedMeshAsset()
-    resource_manager.by_name[("mesh", "triangle")] = asset
+    same_name_asset = FakeLoadedMeshAsset()
+    resource_manager.by_name[("mesh", "triangle")] = same_name_asset
+    resource_manager.by_uuid[("mesh", "mesh-uuid")] = asset
     result = PreLoadResult(
         resource_type="mesh",
         path="/tmp/triangle.obj",
@@ -137,6 +139,7 @@ def test_mesh_runtime_reload_stays_in_asset_layer() -> None:
 
     assert asset.parsed_spec == {"scale": 2.0}
     assert asset.reload_count == 1
+    assert same_name_asset.reload_count == 0
 
 
 def test_mesh_entry_point_factories() -> None:
