@@ -2,6 +2,14 @@
 
 Дата: 2026-06-26
 
+> **Status: superseded in architecture and schema details.** The editor goal
+> remains relevant, but the schema-v2 sketch, separate runtime backend/shader
+> artifact fields, v1 migration and profile-owned toolchain/deploy capability
+> fields below are historical. The current contract is
+> [Build Profiles And Product Composition](../architecture/2026-07-16-build-profiles-and-product-composition.md),
+> and execution is tracked by
+> [Build Profiles And Product Build System Plan](2026-07-16-build-profiles-product-build-system-plan.md).
+
 Связанные документы:
 
 - `docs/plans/2026-06-17-build-system-target-architecture.md`

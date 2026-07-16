@@ -1,4 +1,4 @@
-"""Profile build backend used by the C++ termin_builder entry point."""
+"""CLI and target dispatch for typed Termin product build profiles."""
 
 from __future__ import annotations
 
@@ -7,78 +7,30 @@ import json
 import os
 import shutil
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Sequence
 
 from termin.project_build.android_build import build_android_project
-from termin.project_build.build_context import BuildContext, create_build_context
 from termin.project_build.desktop_build import build_desktop_project
-from termin.project_build.desktop_runtime_packager import (
-    MINIMAL_PYTHON_PACKAGE_POLICY,
-    SUPPORTED_PYTHON_PACKAGE_POLICIES,
-)
 from termin.project_build.pipeline import ProjectBuildPipelineError
+from termin.project_build.profile_requests import (
+    ProfileBuildRequest,
+    ToolchainContext,
+    compile_profile_build_request,
+    validate_resolved_profile_request,
+)
 from termin.project_build.profiles import (
     BuildProfile,
+    BuildProfileStore,
     ProfileBuildError,
+    ProfileDiagnostic,
     load_build_profile,
-    resolve_project_path,
 )
 from termin.project_build.quest_openxr_build import build_quest_openxr_project
-from termin.project_build.target_preflight import TargetPreflightError, preflight_project_build_context
 
 
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
-SUPPORTED_CONFIGURATIONS = ("dev", "debug", "release")
-SUPPORTED_RESOURCE_POLICIES = ("dev_smoke", "strict")
 SUPPORTED_SHADER_TARGETS = ("vulkan", "opengl", "d3d11")
-COMMON_PROFILE_KEYS = {
-    "target",
-    "configuration",
-    "entry_scene",
-    "output_dir",
-    "resource_policy",
-    "shader_compiler",
-    "default_shader_language",
-    "shader_targets",
-    "termin_root",
-    "build_script",
-    "python",
-    "runtime",
-}
-TARGET_OPTION_BLOCKS = {
-    "android": {"android"},
-    "desktop": {"desktop"},
-    "quest_openxr": {"android", "openxr"},
-}
-
-
-class UnsupportedBuildTargetError(ProfileBuildError):
-    def __init__(self, target: str) -> None:
-        supported = ", ".join(SUPPORTED_TARGETS)
-        super().__init__(
-            f"unsupported build target '{target}'. Supported targets: {supported}",
-            exit_code=3,
-        )
-
-
-@dataclass(frozen=True)
-class ProfileBuildRequest:
-    name: str
-    target: str
-    context: BuildContext
-    shader_compiler: Path | None
-    default_shader_language: str
-    shader_targets: tuple[str, ...] | None
-    sdk_root: Path | None
-    python_package_policy: str
-    python_requirements: tuple[str, ...]
-    termin_root: Path | None
-    build_script: Path | None
-    gradle: Path | None
-    abi: str
-    platform: str
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -88,6 +40,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "build":
             return build_profile_from_args(args)
+        if args.command == "profiles":
+            return list_profiles_from_args(args)
+        if args.command == "profile":
+            return show_profile_from_args(args)
+        if args.command == "resolve":
+            return resolve_profile_from_args(args)
         if args.command == "desktop":
             return _build_desktop_from_args(args)
     except ProfileBuildError as exc:
@@ -103,39 +61,112 @@ def build_profile_from_args(args: argparse.Namespace) -> int:
         profiles_path=args.profiles_path,
         profile_name=args.profile,
     )
-    if args.target is not None and args.target != profile.target:
+    if args.target is not None and args.target != profile.target_kind:
         raise ProfileBuildError(
             f"profile '{profile.name}' target mismatch: C++ launcher selected "
-            f"'{args.target}', profile file contains '{profile.target}'"
+            f"'{args.target}', profile file contains '{profile.target_kind}'"
         )
-    return build_profile(profile, shader_compiler=args.shader_compiler)
+    request = compile_profile_build_request(
+        profile,
+        ToolchainContext(shader_compiler=args.shader_compiler),
+    )
+    if args.dry_run:
+        _print_request_summary(request)
+        print("Dry run: build execution skipped.")
+        return 0
+    validate_resolved_profile_request(request)
+    _validate_request_capabilities(request)
+    return execute_profile_build_request(request)
 
 
-def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) -> int:
-    request = normalize_profile_build_request(profile, shader_compiler=shader_compiler)
+def list_profiles_from_args(args: argparse.Namespace) -> int:
+    store = BuildProfileStore.load(args.project_root, args.profiles_path)
+    print(f"Project: {store.project_root}")
+    print(f"Profiles: {store.path}")
+    names = store.profile_names()
+    if not names:
+        print("No build profiles defined.")
+        return 0
+    for name in names:
+        print(f"{name} ({store.get_profile(name).target_kind})")
+    return 0
 
+
+def show_profile_from_args(args: argparse.Namespace) -> int:
+    profile = load_build_profile(args.project_root, args.profiles_path, args.profile)
+    request = compile_profile_build_request(profile)
+    _print_request_summary(request)
+    return 0
+
+
+def resolve_profile_from_args(args: argparse.Namespace) -> int:
+    profile = load_build_profile(args.project_root, args.profiles_path, args.profile)
+    request = compile_profile_build_request(profile)
+    destination = args.request_output.resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.tmp")
+    try:
+        temporary.write_text(
+            json.dumps(_request_summary(request), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary, destination)
+    except OSError as exc:
+        temporary.unlink(missing_ok=True)
+        raise ProfileBuildError(f"failed to write resolved profile request {destination}: {exc}") from exc
+    return 0
+
+
+def normalize_profile_build_request(
+    profile: BuildProfile,
+    shader_compiler: Path | None = None,
+    toolchain: ToolchainContext | None = None,
+) -> ProfileBuildRequest:
+    """Compatibility name for the canonical pure profile request compiler."""
+
+    if shader_compiler is not None and toolchain is not None:
+        raise ValueError("pass either shader_compiler or toolchain, not both")
+    local = toolchain or ToolchainContext(shader_compiler=shader_compiler)
+    return compile_profile_build_request(profile, local)
+
+
+def build_profile(
+    profile: BuildProfile,
+    shader_compiler: Path | None = None,
+    toolchain: ToolchainContext | None = None,
+) -> int:
+    request = normalize_profile_build_request(
+        profile,
+        shader_compiler=shader_compiler,
+        toolchain=toolchain,
+    )
+    validate_resolved_profile_request(request)
+    _validate_request_capabilities(request)
+    return execute_profile_build_request(request)
+
+
+def execute_profile_build_request(request: ProfileBuildRequest) -> int:
     try:
         if request.target == "desktop":
-            kwargs: dict[str, Any] = {
-                "project_root": request.context.project_root,
-                "entry_scene": request.context.entry_scene,
-                "output_dir": request.context.dist_dir,
-                "shader_compiler": request.shader_compiler,
-                "default_shader_language": request.default_shader_language,
-                "shader_targets": request.shader_targets,
-                "sdk_root": request.sdk_root,
-                "configuration": request.context.configuration,
-                "resource_policy": request.context.resource_policy,
-            }
-            if request.python_package_policy != MINIMAL_PYTHON_PACKAGE_POLICY:
-                kwargs["python_package_policy"] = request.python_package_policy
-            if request.python_requirements:
-                kwargs["python_requirements"] = request.python_requirements
-            result = build_desktop_project(**kwargs)
+            result = build_desktop_project(
+                project_root=request.context.project_root,
+                entry_scene=request.context.entry_scene,
+                output_dir=request.context.dist_dir,
+                shader_compiler=request.shader_compiler,
+                default_shader_language=request.default_shader_language,
+                shader_targets=request.shader_targets,
+                sdk_root=request.sdk_root,
+                configuration=request.context.configuration,
+                resource_policy=request.context.resource_policy,
+                python_package_policy=request.python_package_policy,
+                python_requirements=request.python_requirements,
+            )
             _print_desktop_result(result)
             return _exit_code_for_diagnostics(result.diagnostics)
 
         if request.target == "android":
+            if request.abi is None or request.platform is None:
+                raise AssertionError("typed Android request must contain ABI and NDK platform")
             result = build_android_project(
                 project_root=request.context.project_root,
                 entry_scene=request.context.entry_scene,
@@ -155,6 +186,8 @@ def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) ->
             return _exit_code_for_diagnostics(result.diagnostics)
 
         if request.target == "quest_openxr":
+            if request.abi is None or request.platform is None:
+                raise AssertionError("typed Quest request must contain ABI and NDK platform")
             result = build_quest_openxr_project(
                 project_root=request.context.project_root,
                 entry_scene=request.context.entry_scene,
@@ -176,330 +209,40 @@ def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) ->
         _print_diagnostics(exc.diagnostics)
         return 1
 
-    raise UnsupportedBuildTargetError(request.target)
+    raise AssertionError(f"Unhandled typed build request target: {request.target}")
 
 
-def normalize_profile_build_request(
-    profile: BuildProfile,
-    shader_compiler: Path | None = None,
-) -> ProfileBuildRequest:
-    _validate_supported_target(profile.target)
-    _validate_target_option_blocks(profile)
-
-    target_options = _target_options(profile)
-    configuration = _profile_string_choice(
-        profile,
-        "configuration",
-        "dev",
-        SUPPORTED_CONFIGURATIONS,
-    )
-    resource_policy = _profile_string_choice(
-        profile,
-        "resource_policy",
-        "strict",
-        SUPPORTED_RESOURCE_POLICIES,
-    )
-    context = create_build_context(
-        project_root=profile.project_root,
-        entry_scene=profile.entry_scene,
-        target=profile.target,
-        output_dir=profile.output_dir,
-        configuration=configuration,
-        resource_policy=resource_policy,
-        target_options=target_options,
-    )
-    try:
-        preflight_project_build_context(context, _target_display_name(profile.target))
-    except TargetPreflightError as exc:
-        raise ProfileBuildError(f"profile '{profile.name}' failed build preflight: {exc}") from exc
-
-    android = _optional_object(profile.data, "android", context=f"profile '{profile.name}'")
-    openxr = _optional_object(profile.data, "openxr", context=f"profile '{profile.name}'")
-    shader_compiler_path = _profile_path(profile, "shader_compiler", shader_compiler)
-    shader_targets = _profile_shader_targets(profile)
-    sdk_root = _desktop_path(profile, "sdk_root") if profile.target == "desktop" else None
-    _validate_shader_target_tools(profile, shader_targets, shader_compiler_path, sdk_root)
-    python_package_policy = (
-        _desktop_python_package_policy(profile)
-        if profile.target == "desktop"
-        else MINIMAL_PYTHON_PACKAGE_POLICY
-    )
-    python_requirements = (
-        _desktop_python_requirements(profile)
-        if profile.target == "desktop"
-        else ()
-    )
-
-    return ProfileBuildRequest(
-        name=profile.name,
-        target=profile.target,
-        context=context,
-        shader_compiler=shader_compiler_path,
-        default_shader_language=_profile_string(profile, "default_shader_language", "slang"),
-        shader_targets=shader_targets,
-        sdk_root=sdk_root,
-        python_package_policy=python_package_policy,
-        python_requirements=python_requirements,
-        termin_root=_target_termin_root(profile, android),
-        build_script=_target_build_script(profile, android, openxr),
-        gradle=_android_path(profile, android, "gradle")
-        if profile.target in ("android", "quest_openxr")
-        else None,
-        abi=_android_string(android, "abi", "arm64-v8a"),
-        platform=_android_string(android, "platform", "android-26"),
-    )
-
-
-def _validate_supported_target(target: str) -> None:
-    if target not in SUPPORTED_TARGETS:
-        raise UnsupportedBuildTargetError(target)
-
-
-def _validate_target_option_blocks(profile: BuildProfile) -> None:
-    allowed_blocks = TARGET_OPTION_BLOCKS[profile.target]
-    supported_block_names = set(TARGET_OPTION_BLOCKS["desktop"])
-    supported_block_names.update(TARGET_OPTION_BLOCKS["android"])
-    supported_block_names.update(TARGET_OPTION_BLOCKS["quest_openxr"])
-
-    for key, value in profile.data.items():
-        if key in COMMON_PROFILE_KEYS or key in allowed_blocks:
-            continue
-        if key in supported_block_names or isinstance(value, dict):
+def _validate_request_capabilities(request: ProfileBuildRequest) -> None:
+    if request.target == "desktop" and "d3d11" in request.shader_targets:
+        if request.shader_compiler is None and not _d3d11_shader_compiler_available(request.sdk_root):
             raise ProfileBuildError(
-                f"profile '{profile.name}' target '{profile.target}' does not support option block '{key}'"
+                diagnostics=(
+                    ProfileDiagnostic(
+                        code="capability.shader_compiler",
+                        path="toolchain.shader_compiler",
+                        message=(
+                            f"profile '{request.name}' requests runtime backend 'd3d11', but fxc "
+                            "was not found; D3D11 shader artifacts require TERMIN_FXC, fxc in "
+                            "PATH, or fxc under TERMIN_SDK/bin"
+                        ),
+                    ),
+                )
             )
-
-
-def _target_options(profile: BuildProfile) -> dict[str, object]:
-    options: dict[str, object] = {}
-    allowed_blocks = TARGET_OPTION_BLOCKS[profile.target]
-    for key in allowed_blocks:
-        value = profile.data.get(key)
-        if value is not None:
-            if not isinstance(value, dict):
-                raise ProfileBuildError(f"profile '{profile.name}' field '{key}' must be an object")
-            options[key] = dict(value)
-    return options
-
-
-def _target_display_name(target: str) -> str:
-    if target == "desktop":
-        return "Desktop"
-    if target == "android":
-        return "Android"
-    if target == "quest_openxr":
-        return "Quest/OpenXR"
-    return target
-
-
-def _target_termin_root(
-    profile: BuildProfile,
-    android: Mapping[str, Any],
-) -> Path | None:
-    if profile.target not in ("android", "quest_openxr"):
-        return None
-    return _path_from_mapping(
-        android,
-        "termin_root",
-        _profile_path(profile, "termin_root", None),
-        profile.project_root,
-    )
-
-
-def _target_build_script(
-    profile: BuildProfile,
-    android: Mapping[str, Any],
-    openxr: Mapping[str, Any],
-) -> Path | None:
-    if profile.target == "android":
-        return _path_from_mapping(
-            android,
-            "build_script",
-            _profile_path(profile, "build_script", None),
-            profile.project_root,
-        )
-    if profile.target == "quest_openxr":
-        return _path_from_mapping(
-            openxr,
-            "build_script",
-            _profile_path(profile, "build_script", None),
-            profile.project_root,
-        )
-    return None
-
-
-def _create_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Execute a resolved Termin build profile")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    build_parser = subparsers.add_parser("build", help="Build a resolved project profile")
-    build_parser.add_argument("--project-root", type=Path, required=True)
-    build_parser.add_argument("--profiles-path", type=Path, required=True)
-    build_parser.add_argument("--profile", required=True)
-    build_parser.add_argument("--target", default=None)
-    build_parser.add_argument("--shader-compiler", type=Path, default=None)
-
-    desktop_parser = subparsers.add_parser(
-        "desktop",
-        help="Build desktop project artifacts using the direct argument form",
-    )
-    desktop_parser.add_argument("--project-root", type=Path, required=True)
-    desktop_parser.add_argument("--entry-scene", type=Path, required=True)
-    desktop_parser.add_argument("--output-dir", type=Path, required=True)
-    desktop_parser.add_argument("--shader-compiler", type=Path, default=None)
-    desktop_parser.add_argument(
-        "--shader-target",
-        action="append",
-        dest="shader_targets",
-        choices=SUPPORTED_SHADER_TARGETS,
-        default=None,
-        help="Add a runtime shader artifact target. Repeat for multiple targets.",
-    )
-
-    return parser
-
-
-def _build_desktop_from_args(args: argparse.Namespace) -> int:
-    project_root = args.project_root.resolve()
-    result = build_desktop_project(
-        project_root=project_root,
-        entry_scene=resolve_project_path(project_root, args.entry_scene),
-        output_dir=resolve_project_path(project_root, args.output_dir),
-        shader_compiler=args.shader_compiler,
-        shader_targets=tuple(args.shader_targets) if args.shader_targets is not None else None,
-    )
-    _print_desktop_result(result)
-    return _exit_code_for_diagnostics(result.diagnostics)
-
-
-def _optional_object(data: Mapping[str, Any], key: str, context: str) -> Mapping[str, Any]:
-    value = data.get(key)
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise ProfileBuildError(f"{context} field '{key}' must be an object")
-    return value
-
-
-def _profile_string(profile: BuildProfile, key: str, default: str) -> str:
-    value = profile.data.get(key)
-    if value is None:
-        return default
-    if not isinstance(value, str) or value == "":
-        raise ProfileBuildError(f"profile '{profile.name}' field '{key}' must be a non-empty string")
-    return value
-
-
-def _profile_string_choice(
-    profile: BuildProfile,
-    key: str,
-    default: str,
-    supported_values: Sequence[str],
-) -> str:
-    value = _profile_string(profile, key, default)
-    if value not in supported_values:
-        supported = ", ".join(supported_values)
+    host_os = "windows" if os.name == "nt" else "linux"
+    if request.target == "desktop" and request.target_os != host_os:
         raise ProfileBuildError(
-            f"profile '{profile.name}' field '{key}' has unsupported value '{value}'. "
-            f"Supported values: {supported}"
-        )
-    return value
-
-
-def _profile_shader_targets(profile: BuildProfile) -> tuple[str, ...] | None:
-    value = profile.data.get("shader_targets")
-    if value is None:
-        if profile.target == "desktop":
-            raise ProfileBuildError(
-                f"profile '{profile.name}' target 'desktop' must set ordered field "
-                "'shader_targets' to the packaged backend priority, for example "
-                '["vulkan", "opengl"] or ["d3d11", "vulkan"]'
+            diagnostics=(
+                ProfileDiagnostic(
+                    code="capability.host_platform",
+                    path="toolchain.host_platform",
+                    message=(
+                        f"profile '{request.name}' targets desktop {request.target_os}, but this "
+                        f"host is {host_os}; cross-platform desktop toolchain validation is not "
+                        "implemented yet"
+                    ),
+                ),
             )
-        return None
-    if not isinstance(value, list):
-        raise ProfileBuildError(f"profile '{profile.name}' field 'shader_targets' must be a list")
-
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for index, target in enumerate(value):
-        if not isinstance(target, str) or target == "":
-            raise ProfileBuildError(
-                f"profile '{profile.name}' field 'shader_targets[{index}]' must be a non-empty string"
-            )
-        if target not in SUPPORTED_SHADER_TARGETS:
-            supported = ", ".join(SUPPORTED_SHADER_TARGETS)
-            raise ProfileBuildError(
-                f"profile '{profile.name}' field 'shader_targets[{index}]' has unsupported "
-                f"value '{target}'. Supported values: {supported}"
-            )
-        if target in seen:
-            continue
-        seen.add(target)
-        normalized.append(target)
-
-    if not normalized:
-        raise ProfileBuildError(f"profile '{profile.name}' field 'shader_targets' must not be empty")
-    return tuple(normalized)
-
-
-def _desktop_python_package_policy(profile: BuildProfile) -> str:
-    python = _optional_object(profile.data, "python", context=f"profile '{profile.name}'")
-    value = python.get("package_policy")
-    if value is None:
-        return MINIMAL_PYTHON_PACKAGE_POLICY
-    if not isinstance(value, str) or value == "":
-        raise ProfileBuildError(
-            f"profile '{profile.name}' field 'python.package_policy' must be a non-empty string"
         )
-    if value not in SUPPORTED_PYTHON_PACKAGE_POLICIES:
-        supported = ", ".join(SUPPORTED_PYTHON_PACKAGE_POLICIES)
-        raise ProfileBuildError(
-            f"profile '{profile.name}' field 'python.package_policy' has unsupported value "
-            f"'{value}'. Supported values: {supported}"
-        )
-    return value
-
-
-def _desktop_python_requirements(profile: BuildProfile) -> tuple[str, ...]:
-    python = _optional_object(profile.data, "python", context=f"profile '{profile.name}'")
-    value = python.get("requirements")
-    if value is None:
-        return ()
-    if not isinstance(value, list):
-        raise ProfileBuildError(
-            f"profile '{profile.name}' field 'python.requirements' must be a list"
-        )
-    result: list[str] = []
-    for index, requirement in enumerate(value):
-        if not isinstance(requirement, str) or requirement == "":
-            raise ProfileBuildError(
-                f"profile '{profile.name}' field 'python.requirements[{index}]' "
-                "must be a non-empty string"
-            )
-        result.append(requirement)
-    return tuple(result)
-
-
-def _validate_shader_target_tools(
-    profile: BuildProfile,
-    shader_targets: tuple[str, ...] | None,
-    shader_compiler: Path | None,
-    sdk_root: Path | None,
-) -> None:
-    if profile.target != "desktop":
-        return
-    if shader_targets is None or "d3d11" not in shader_targets:
-        return
-    if shader_compiler is not None:
-        return
-    if _d3d11_shader_compiler_available(sdk_root):
-        return
-    raise ProfileBuildError(
-        f"profile '{profile.name}' requests shader target 'd3d11', but fxc was not found. "
-        "D3D11 shader artifacts require TERMIN_FXC, fxc in PATH, or fxc under TERMIN_SDK/bin. "
-        "For a Linux desktop build, use shader_targets [\"vulkan\", \"opengl\"] or build the "
-        "D3D11 artifacts on a Windows SDK host."
-    )
 
 
 def _d3d11_shader_compiler_available(sdk_root: Path | None) -> bool:
@@ -519,48 +262,103 @@ def _d3d11_shader_compiler_available(sdk_root: Path | None) -> bool:
         if (sdk / "bin" / "fxc").is_file() or (sdk / "bin" / "fxc.exe").is_file():
             return True
 
-    if os.name == "nt":
-        return True
-    return False
+    return os.name == "nt"
 
 
-def _android_string(android: Mapping[str, Any], key: str, default: str) -> str:
-    value = android.get(key)
-    if value is None:
-        return default
-    if not isinstance(value, str) or value == "":
-        raise ProfileBuildError(f"android field '{key}' must be a non-empty string")
-    return value
+def _create_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Execute a resolved Termin build profile")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    build_parser = subparsers.add_parser("build", help="Build a resolved project profile")
+    build_parser.add_argument("--project-root", type=Path, required=True)
+    build_parser.add_argument("--profiles-path", type=Path, required=True)
+    build_parser.add_argument("--profile", required=True)
+    build_parser.add_argument("--target", default=None)
+    build_parser.add_argument("--shader-compiler", type=Path, default=None)
+    build_parser.add_argument("--dry-run", action="store_true")
+
+    profiles_parser = subparsers.add_parser("profiles", help="List typed project build profiles")
+    _add_profile_document_args(profiles_parser)
+
+    profile_parser = subparsers.add_parser("profile", help="Show one normalized build profile")
+    _add_profile_document_args(profile_parser)
+    profile_parser.add_argument("--profile", required=True)
+
+    resolve_parser = subparsers.add_parser(
+        "resolve",
+        help=argparse.SUPPRESS,
+    )
+    _add_profile_document_args(resolve_parser)
+    resolve_parser.add_argument("--profile", required=True)
+    resolve_parser.add_argument("--request-output", type=Path, required=True)
+
+    desktop_parser = subparsers.add_parser(
+        "desktop",
+        help="Build desktop project artifacts using the direct argument form",
+    )
+    desktop_parser.add_argument("--project-root", type=Path, required=True)
+    desktop_parser.add_argument("--entry-scene", type=Path, required=True)
+    desktop_parser.add_argument("--output-dir", type=Path, required=True)
+    desktop_parser.add_argument("--shader-compiler", type=Path, default=None)
+    desktop_parser.add_argument(
+        "--shader-target",
+        action="append",
+        dest="shader_targets",
+        choices=SUPPORTED_SHADER_TARGETS,
+        default=None,
+        help="Add a runtime backend/shader artifact target. Repeat for multiple targets.",
+    )
+    return parser
 
 
-def _path_from_mapping(
-    data: Mapping[str, Any],
-    key: str,
-    default: Path | None,
-    base_dir: Path | None = None,
-) -> Path | None:
-    value = data.get(key)
-    if value is None:
-        return default
-    if not isinstance(value, str) or value == "":
-        raise ProfileBuildError(f"field '{key}' must be a non-empty string")
-    path = Path(value).expanduser()
-    if base_dir is not None and not path.is_absolute():
-        path = base_dir / path
-    return path
+def _add_profile_document_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--project-root", type=Path, required=True)
+    parser.add_argument("--profiles-path", type=Path, required=True)
 
 
-def _profile_path(profile: BuildProfile, key: str, default: Path | None) -> Path | None:
-    return _path_from_mapping(profile.data, key, default, profile.project_root)
+def _build_desktop_from_args(args: argparse.Namespace) -> int:
+    project_root = args.project_root.resolve()
+    result = build_desktop_project(
+        project_root=project_root,
+        entry_scene=_resolve_direct_path(project_root, args.entry_scene),
+        output_dir=_resolve_direct_path(project_root, args.output_dir),
+        shader_compiler=args.shader_compiler,
+        shader_targets=tuple(args.shader_targets) if args.shader_targets is not None else None,
+    )
+    _print_desktop_result(result)
+    return _exit_code_for_diagnostics(result.diagnostics)
 
 
-def _desktop_path(profile: BuildProfile, key: str) -> Path | None:
-    desktop = _optional_object(profile.data, "desktop", context=f"profile '{profile.name}'")
-    return _path_from_mapping(desktop, key, None, profile.project_root)
+def _resolve_direct_path(project_root: Path, path: Path) -> Path:
+    if path.is_absolute():
+        return path.resolve()
+    return (project_root / path).resolve()
 
 
-def _android_path(profile: BuildProfile, android: Mapping[str, Any], key: str) -> Path | None:
-    return _path_from_mapping(android, key, None, profile.project_root)
+def _request_summary(request: ProfileBuildRequest) -> dict[str, object]:
+    return {
+        "backends": list(request.shader_targets),
+        "entry_scene": str(request.context.entry_scene),
+        "modules": list(request.modules),
+        "output_dir": str(request.context.dist_dir),
+        "profile": request.name,
+        "scenes": [str(scene) for scene in request.scenes],
+        "target": request.target,
+        "target_arch": request.target_arch,
+        "target_os": request.target_os,
+    }
+
+
+def _print_request_summary(request: ProfileBuildRequest) -> None:
+    summary = _request_summary(request)
+    print(f"Profile: {summary['profile']}")
+    print(f"Project: {request.context.project_root}")
+    print(f"Target: {summary['target']}")
+    if summary["target_os"] is not None:
+        print(f"Target platform: {summary['target_os']}/{summary['target_arch']}")
+    print(f"Entry scene: {summary['entry_scene']}")
+    print(f"Output dir: {summary['output_dir']}")
+    print(f"Runtime backends: {', '.join(request.shader_targets)}")
 
 
 def _print_desktop_result(result: Any) -> None:
@@ -595,14 +393,12 @@ def _print_quest_openxr_result(result: Any) -> None:
 
 
 def _manifest_resources(manifest_path: Path) -> list[object]:
-    with manifest_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
+    with manifest_path.open("r", encoding="utf-8") as stream:
+        data = json.load(stream)
     if not isinstance(data, dict):
         raise ProfileBuildError(f"runtime package manifest must be a JSON object: {manifest_path}")
     resources = data.get("resources")
-    if isinstance(resources, list):
-        return resources
-    return []
+    return resources if isinstance(resources, list) else []
 
 
 def _print_diagnostics(diagnostics: Sequence[Any]) -> None:
@@ -611,9 +407,7 @@ def _print_diagnostics(diagnostics: Sequence[Any]) -> None:
 
 
 def _exit_code_for_diagnostics(diagnostics: Sequence[Any]) -> int:
-    if any(diagnostic.level == "error" for diagnostic in diagnostics):
-        return 1
-    return 0
+    return 1 if any(diagnostic.level == "error" for diagnostic in diagnostics) else 0
 
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@
 
 ## 2026-07
 
+- [Build profiles and product build system](2026-07-16-build-profiles-product-build-system-plan.md)
 - [C++ class layout migration map](2026-07-10-cpp-class-layout-migration-map.md)
 - [D3D11 Slang scope preservation](2026-07-02-d3d11-slang-scope-preservation-plan.md)
 - [TcMesh submesh and multi-material GLB plan](2026-07-03-tcmesh-submesh-glb-plan.md)

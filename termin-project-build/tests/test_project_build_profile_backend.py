@@ -5,9 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from termin.project_build import profile_build
+from termin.project_build.profile_requests import ToolchainContext, compile_profile_build_request
+from termin.project_build.profiles import BuildProfileStore, ProfileBuildError
 
 
-def _write_json(path: Path, data: dict) -> None:
+def _write_json(path: Path, data: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -17,8 +19,54 @@ def _write_project(tmp_path: Path) -> tuple[Path, Path]:
     project.mkdir()
     _write_json(project / "ProfileGame.terminproj", {"version": 1, "name": "ProfileGame"})
     _write_json(project / "Scenes" / "Main.scene", {"uuid": "main-scene", "entities": []})
-    profiles_path = project / "project_settings" / "build_profiles.json"
-    return project, profiles_path
+    return project, project / "project_settings" / "build_profiles.json"
+
+
+def _content(**overrides: object) -> dict[str, object]:
+    result: dict[str, object] = {
+        "entry_scene": "Scenes/Main.scene",
+        "scenes": ["Scenes/Main.scene"],
+        "modules": [],
+        "python": {"requirements": []},
+        "resources": {"policy": "strict", "include": []},
+    }
+    result.update(overrides)
+    return result
+
+
+def _desktop_profile(**overrides: object) -> dict[str, object]:
+    result: dict[str, object] = {
+        "target": {"kind": "desktop", "os": "linux", "arch": "x86_64"},
+        "configuration": "dev",
+        "content": _content(),
+        "runtime": {"backends": ["vulkan", "opengl"]},
+    }
+    result.update(overrides)
+    return result
+
+
+def _android_profile(**overrides: object) -> dict[str, object]:
+    result: dict[str, object] = {
+        "target": {"kind": "android", "abi": "x86_64", "ndk_api": 29},
+        "configuration": "debug",
+        "content": _content(),
+    }
+    result.update(overrides)
+    return result
+
+
+def _quest_profile(**overrides: object) -> dict[str, object]:
+    result: dict[str, object] = {
+        "target": {"kind": "quest_openxr", "abi": "arm64-v8a", "ndk_api": 26},
+        "configuration": "debug",
+        "content": _content(),
+    }
+    result.update(overrides)
+    return result
+
+
+def _write_profiles(path: Path, profiles: dict[str, object], version: int = 2) -> None:
+    _write_json(path, {"version": version, "profiles": profiles})
 
 
 def _package_result(tmp_path: Path) -> SimpleNamespace:
@@ -29,24 +77,73 @@ def _package_result(tmp_path: Path) -> SimpleNamespace:
     return SimpleNamespace(package_dir=package_dir, manifest_path=manifest_path)
 
 
-def test_profile_build_routes_desktop_profile(tmp_path: Path, monkeypatch) -> None:
+def test_compile_desktop_request_is_pure_and_uses_profile_defaults(tmp_path: Path) -> None:
     project, profiles_path = _write_project(tmp_path)
-    _write_json(
+    _write_profiles(profiles_path, {"dev": _desktop_profile()})
+    profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
+
+    request = compile_profile_build_request(profile)
+
+    assert request.target == "desktop"
+    assert request.target_os == "linux"
+    assert request.target_arch == "x86_64"
+    assert request.context.entry_scene == (project / "Scenes/Main.scene").resolve()
+    assert request.context.dist_dir == (project / "dist/dev").resolve()
+    assert request.context.target_options == {"desktop": {"os": "linux", "arch": "x86_64"}}
+    assert request.shader_targets == ("vulkan", "opengl")
+    assert request.shader_compiler is None
+    assert request.sdk_root is None
+
+
+def test_compile_android_and_quest_requests_use_local_toolchain_context(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_profiles(
         profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                    "default_shader_language": "slang",
-                    "shader_targets": ["vulkan", "opengl"],
-                    "desktop": {"sdk_root": str(tmp_path / "sdk")},
-                }
-            }
+        {"mobile": _android_profile(), "quest": _quest_profile()},
+    )
+    store = BuildProfileStore.load(project, profiles_path)
+    local = ToolchainContext(
+        termin_root=tmp_path / "termin-root",
+        android_build_script=tmp_path / "build-android.sh",
+        quest_openxr_build_script=tmp_path / "build-quest.sh",
+        gradle=tmp_path / "gradle",
+    )
+
+    android = compile_profile_build_request(store.get_profile("mobile"), local)
+    quest = compile_profile_build_request(store.get_profile("quest"), local)
+
+    assert android.target == "android"
+    assert android.target_os == "android"
+    assert android.abi == "x86_64"
+    assert android.platform == "android-29"
+    assert android.shader_targets == ("vulkan",)
+    assert android.build_script == tmp_path / "build-android.sh"
+    assert android.gradle == tmp_path / "gradle"
+    assert android.context.target_options == {"android": {"abi": "x86_64", "ndk_api": 29}}
+
+    assert quest.target == "quest_openxr"
+    assert quest.abi == "arm64-v8a"
+    assert quest.platform == "android-26"
+    assert quest.build_script == tmp_path / "build-quest.sh"
+    assert quest.context.target_options == {
+        "quest_openxr": {"abi": "arm64-v8a", "ndk_api": 26}
+    }
+
+
+def test_profile_build_routes_desktop_typed_request(tmp_path: Path, monkeypatch) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    profile_data = _desktop_profile(
+        output_dir="dist/linux-dev",
+        runtime={
+            "backends": ["vulkan", "opengl"],
+            "python_package_policy": "sdk_broad_copy",
         },
     )
+    profile_data["content"] = _content(
+        python={"requirements": ["python-chess"]},
+        resources={"policy": "dev_smoke", "include": []},
+    )
+    _write_profiles(profiles_path, {"dev": profile_data})
     calls: list[dict] = []
 
     def fake_build_desktop_project(**kwargs):
@@ -77,715 +174,58 @@ def test_profile_build_routes_desktop_profile(tmp_path: Path, monkeypatch) -> No
     assert calls == [
         {
             "project_root": project.resolve(),
-            "entry_scene": (project / "Scenes" / "Main.scene").resolve(),
-            "output_dir": (project / "dist" / "dev").resolve(),
+            "entry_scene": (project / "Scenes/Main.scene").resolve(),
+            "output_dir": (project / "dist/linux-dev").resolve(),
             "shader_compiler": None,
             "default_shader_language": "slang",
             "shader_targets": ("vulkan", "opengl"),
-            "sdk_root": tmp_path / "sdk",
+            "sdk_root": None,
             "configuration": "dev",
-            "resource_policy": "strict",
+            "resource_policy": "dev_smoke",
+            "python_package_policy": "sdk_broad_copy",
+            "python_requirements": ("python-chess",),
         }
     ]
 
 
-def test_profile_build_routes_android_profile(tmp_path: Path, monkeypatch) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "mobile": {
-                    "target": "android",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/android/mobile",
-                    "android": {
-                        "abi": "x86_64",
-                        "platform": "android-29",
-                        "gradle": str(tmp_path / "gradle"),
-                    },
-                }
-            }
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_android_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace(
-            apk_path=kwargs["output_dir"] / "apk" / "ProfileGame-debug.apk",
-            package_result=_package_result(tmp_path),
-            log_path=kwargs["output_dir"] / "logs" / "android-build.log",
-            application_id="org.termin.builds.profilegame",
-            launch_activity="org.termin.android.TerminActivity",
-            diagnostics=[],
-        )
-
-    monkeypatch.setattr(profile_build, "build_android_project", fake_build_android_project)
-
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "mobile",
-            "--target",
-            "android",
-        ]
-    ) == 0
-
-    assert calls == [
-        {
-            "project_root": project.resolve(),
-            "entry_scene": (project / "Scenes" / "Main.scene").resolve(),
-            "output_dir": (project / "dist" / "android" / "mobile").resolve(),
-            "termin_root": None,
-            "build_script": None,
-            "gradle": tmp_path / "gradle",
-            "shader_compiler": None,
-            "default_shader_language": "slang",
-            "shader_targets": None,
-            "abi": "x86_64",
-            "platform": "android-29",
-            "configuration": "dev",
-            "resource_policy": "strict",
-        }
-    ]
-
-
-def test_profile_build_routes_quest_openxr_profile(tmp_path: Path, monkeypatch) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "quest": {
-                    "target": "quest_openxr",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/quest",
-                    "android": {
-                        "abi": "arm64-v8a",
-                        "platform": "android-26",
-                        "gradle": str(tmp_path / "gradle"),
-                    },
-                    "openxr": {
-                        "build_script": str(tmp_path / "build-quest-openxr-apk.sh"),
-                    },
-                }
-            }
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_quest_openxr_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace(
-            apk_path=kwargs["output_dir"] / "apk" / "ProfileGame-quest-openxr-debug.apk",
-            package_result=_package_result(tmp_path),
-            log_path=kwargs["output_dir"] / "logs" / "quest-openxr-build.log",
-            application_id="org.termin.openxr",
-            launch_activity="android.app.NativeActivity",
-            diagnostics=[],
-        )
-
-    monkeypatch.setattr(profile_build, "build_quest_openxr_project", fake_build_quest_openxr_project)
-
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "quest",
-            "--target",
-            "quest_openxr",
-        ]
-    ) == 0
-
-    assert calls == [
-        {
-            "project_root": project.resolve(),
-            "entry_scene": (project / "Scenes" / "Main.scene").resolve(),
-            "output_dir": (project / "dist" / "quest").resolve(),
-            "termin_root": None,
-            "build_script": tmp_path / "build-quest-openxr-apk.sh",
-            "gradle": tmp_path / "gradle",
-            "shader_compiler": None,
-            "default_shader_language": "slang",
-            "shader_targets": None,
-            "abi": "arm64-v8a",
-            "platform": "android-26",
-            "configuration": "dev",
-            "resource_policy": "strict",
-        }
-    ]
-
-
-def test_profile_build_normalizes_desktop_request(tmp_path: Path) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                    "shader_targets": ["vulkan", "opengl"],
-                    "desktop": {"sdk_root": str(tmp_path / "sdk")},
-                }
-            },
-        },
-    )
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    request = profile_build.normalize_profile_build_request(profile)
-
-    assert request.name == "dev"
-    assert request.target == "desktop"
-    assert request.context.project_root == project.resolve()
-    assert request.context.entry_scene == (project / "Scenes" / "Main.scene").resolve()
-    assert request.context.dist_dir == (project / "dist" / "dev").resolve()
-    assert request.context.configuration == "dev"
-    assert request.context.resource_policy == "strict"
-    assert request.context.target_options == {"desktop": {"sdk_root": str(tmp_path / "sdk")}}
-    assert request.shader_targets == ("vulkan", "opengl")
-    assert request.sdk_root == tmp_path / "sdk"
-    assert request.termin_root is None
-    assert request.gradle is None
-
-
-def test_profile_build_routes_profile_shader_targets(tmp_path: Path, monkeypatch) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "d3d": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/d3d",
-                    "shader_targets": ["vulkan", "opengl", "d3d11", "d3d11"],
-                }
-            },
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace(
-            dist_dir=kwargs["output_dir"],
-            app_manifest_path=kwargs["output_dir"] / "app.json",
-            package_result=_package_result(tmp_path),
-            diagnostics=[],
-        )
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-    monkeypatch.setattr(profile_build, "_d3d11_shader_compiler_available", lambda sdk_root: True)
-
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "d3d",
-            "--target",
-            "desktop",
-        ]
-    ) == 0
-
-    assert calls[0]["shader_targets"] == ("vulkan", "opengl", "d3d11")
-
-
-def test_profile_build_routes_direct_desktop_shader_targets(tmp_path: Path, monkeypatch) -> None:
-    project, _profiles_path = _write_project(tmp_path)
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace(
-            dist_dir=kwargs["output_dir"],
-            app_manifest_path=kwargs["output_dir"] / "app.json",
-            package_result=_package_result(tmp_path),
-            diagnostics=[],
-        )
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    assert profile_build.main(
-        [
-            "desktop",
-            "--project-root",
-            str(project),
-            "--entry-scene",
-            "Scenes/Main.scene",
-            "--output-dir",
-            "dist/d3d",
-            "--shader-target",
-            "vulkan",
-            "--shader-target",
-            "d3d11",
-        ]
-    ) == 0
-
-    assert calls[0]["shader_targets"] == ("vulkan", "d3d11")
-
-
-def test_profile_build_rejects_desktop_profile_without_shader_targets(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                }
-            },
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match="must set ordered field 'shader_targets'"):
-        profile_build.build_profile(profile)
-
-    assert calls == []
-
-
-def test_profile_build_normalizes_explicit_profile_policy(tmp_path: Path) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "release": {
-                    "target": "desktop",
-                    "configuration": "release",
-                    "resource_policy": "dev_smoke",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/release",
-                    "shader_targets": ["vulkan", "opengl"],
-                }
-            },
-        },
-    )
-
-    profile = profile_build.load_build_profile(project, profiles_path, "release")
-    request = profile_build.normalize_profile_build_request(profile)
-
-    assert request.context.configuration == "release"
-    assert request.context.resource_policy == "dev_smoke"
-
-
-def test_profile_build_routes_desktop_python_package_policy(tmp_path: Path, monkeypatch) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                    "shader_targets": ["vulkan", "opengl"],
-                    "python": {
-                        "package_policy": "sdk_broad_copy",
-                        "requirements": ["python-chess"],
-                    },
-                }
-            },
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace(
-            dist_dir=kwargs["output_dir"],
-            app_manifest_path=kwargs["output_dir"] / "app.json",
-            package_result=_package_result(tmp_path),
-            diagnostics=[],
-        )
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "dev",
-            "--target",
-            "desktop",
-        ]
-    ) == 0
-
-    assert calls[0]["python_package_policy"] == "sdk_broad_copy"
-    assert calls[0]["python_requirements"] == ("python-chess",)
-
-
-def test_profile_build_rejects_invalid_desktop_python_package_policy(tmp_path: Path) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                    "shader_targets": ["vulkan", "opengl"],
-                    "python": {"package_policy": "guess_imports"},
-                }
-            },
-        },
-    )
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match="python.package_policy"):
-        profile_build.normalize_profile_build_request(profile)
-
-
 @pytest.mark.parametrize(
-    ("shader_targets", "message"),
-    [
-        ("d3d11", "field 'shader_targets' must be a list"),
-        ([], "field 'shader_targets' must not be empty"),
-        (["vulkan", ""], "field 'shader_targets\\[1\\]' must be a non-empty string"),
-        (["metal"], "Supported values: vulkan, opengl, d3d11"),
-    ],
-)
-def test_profile_build_rejects_invalid_shader_targets_before_wrapper(
-    tmp_path: Path,
-    monkeypatch,
-    shader_targets: object,
-    message: str,
-) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                    "shader_targets": shader_targets,
-                }
-            },
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match=message):
-        profile_build.build_profile(profile)
-
-    assert calls == []
-
-
-def test_profile_build_rejects_d3d11_without_fxc_before_wrapper(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                    "shader_targets": ["vulkan", "opengl", "d3d11"],
-                }
-            },
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-    monkeypatch.setattr(profile_build, "_d3d11_shader_compiler_available", lambda sdk_root: False)
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match="requests shader target 'd3d11'.*fxc"):
-        profile_build.build_profile(profile)
-
-    assert calls == []
-
-
-def test_profile_build_normalizes_android_request(tmp_path: Path) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "mobile": {
-                    "target": "android",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/android/mobile",
-                    "android": {
-                        "abi": "x86_64",
-                        "platform": "android-29",
-                        "build_script": "tools/build-android.sh",
-                    },
-                }
-            },
-        },
-    )
-
-    profile = profile_build.load_build_profile(project, profiles_path, "mobile")
-    request = profile_build.normalize_profile_build_request(profile)
-
-    assert request.target == "android"
-    assert request.context.dist_dir == (project / "dist" / "android" / "mobile").resolve()
-    assert request.context.configuration == "dev"
-    assert request.context.resource_policy == "strict"
-    assert request.context.target_options == {
-        "android": {
-            "abi": "x86_64",
-            "platform": "android-29",
-            "build_script": "tools/build-android.sh",
-        }
-    }
-    assert request.build_script == project.resolve() / "tools" / "build-android.sh"
-    assert request.abi == "x86_64"
-    assert request.platform == "android-29"
-
-
-def test_profile_build_normalizes_quest_openxr_request(tmp_path: Path) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "quest": {
-                    "target": "quest_openxr",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/quest",
-                    "android": {
-                        "gradle": str(tmp_path / "gradle"),
-                    },
-                    "openxr": {
-                        "build_script": str(tmp_path / "build-quest-openxr-apk.sh"),
-                    },
-                }
-            },
-        },
-    )
-
-    profile = profile_build.load_build_profile(project, profiles_path, "quest")
-    request = profile_build.normalize_profile_build_request(profile)
-
-    assert request.target == "quest_openxr"
-    assert request.context.configuration == "dev"
-    assert request.context.resource_policy == "strict"
-    assert request.context.target_options == {
-        "android": {"gradle": str(tmp_path / "gradle")},
-        "openxr": {"build_script": str(tmp_path / "build-quest-openxr-apk.sh")},
-    }
-    assert request.gradle == tmp_path / "gradle"
-    assert request.build_script == tmp_path / "build-quest-openxr-apk.sh"
-    assert request.abi == "arm64-v8a"
-    assert request.platform == "android-26"
-
-
-def test_profile_build_rejects_unsupported_target_block_before_wrapper(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                    "android": {"abi": "x86_64"},
-                }
-            },
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match="does not support option block 'android'"):
-        profile_build.build_profile(profile)
-
-    assert calls == []
-
-
-@pytest.mark.parametrize(
-    ("field_name", "field_value", "message"),
-    [
-        ("configuration", "shipping", "Supported values: dev, debug, release"),
-        ("resource_policy", "placeholder", "Supported values: dev_smoke, strict"),
-    ],
-)
-def test_profile_build_rejects_unsupported_profile_policy_before_wrapper(
-    tmp_path: Path,
-    monkeypatch,
-    field_name: str,
-    field_value: str,
-    message: str,
-) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    field_name: field_value,
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                }
-            },
-        },
-    )
-    calls: list[dict] = []
-
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match=message):
-        profile_build.build_profile(profile)
-
-    assert calls == []
-
-
-@pytest.mark.parametrize(
-    ("profile_target", "builder_name", "result_fields"),
+    ("profile_data", "builder_name", "target", "expected"),
     [
         (
-            "desktop",
-            "build_desktop_project",
-            {
-                "dist_dir": "dist/dev",
-                "app_manifest_path": "dist/dev/app.json",
-            },
-        ),
-        (
-            "android",
+            _android_profile(output_dir="dist/mobile"),
             "build_android_project",
-            {
-                "apk_path": "dist/dev/apk/ProfileGame-debug.apk",
-                "log_path": "dist/dev/logs/android-build.log",
-                "application_id": "org.termin.builds.profilegame",
-                "launch_activity": "org.termin.android.TerminActivity",
-            },
+            "android",
+            {"abi": "x86_64", "platform": "android-29"},
         ),
         (
-            "quest_openxr",
+            _quest_profile(output_dir="dist/quest"),
             "build_quest_openxr_project",
-            {
-                "apk_path": "dist/dev/apk/ProfileGame-quest-openxr-debug.apk",
-                "log_path": "dist/dev/logs/quest-openxr-build.log",
-                "application_id": "org.termin.openxr",
-                "launch_activity": "android.app.NativeActivity",
-            },
+            "quest_openxr",
+            {"abi": "arm64-v8a", "platform": "android-26"},
         ),
     ],
 )
-def test_profile_build_returns_nonzero_when_builder_reports_error_diagnostic(
+def test_profile_build_routes_android_family_typed_request(
     tmp_path: Path,
     monkeypatch,
-    profile_target: str,
+    profile_data: dict[str, object],
     builder_name: str,
-    result_fields: dict[str, str],
-    capsys,
+    target: str,
+    expected: dict[str, str],
 ) -> None:
     project, profiles_path = _write_project(tmp_path)
-    profile_data = {
-        "target": profile_target,
-        "entry_scene": "Scenes/Main.scene",
-        "output_dir": "dist/dev",
-    }
-    if profile_target == "desktop":
-        profile_data["shader_targets"] = ["vulkan", "opengl"]
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {"dev": profile_data},
-        },
-    )
-    diagnostic = SimpleNamespace(
-        level="error",
-        path="manifest.json",
-        message="package is invalid",
-    )
+    _write_profiles(profiles_path, {"product": profile_data})
+    calls: list[dict] = []
 
     def fake_builder(**kwargs):
-        resolved_fields = {
-            key: project / value
-            if key.endswith("_path") or key.endswith("_dir")
-            else value
-            for key, value in result_fields.items()
-        }
+        calls.append(kwargs)
         return SimpleNamespace(
+            apk_path=kwargs["output_dir"] / "apk/app-debug.apk",
             package_result=_package_result(tmp_path),
-            diagnostics=[diagnostic],
-            **resolved_fields,
+            log_path=kwargs["output_dir"] / "logs/build.log",
+            application_id="org.termin.product",
+            launch_activity="android.app.NativeActivity",
+            diagnostics=[],
         )
 
     monkeypatch.setattr(profile_build, builder_name, fake_builder)
@@ -798,47 +238,103 @@ def test_profile_build_returns_nonzero_when_builder_reports_error_diagnostic(
             "--profiles-path",
             str(profiles_path),
             "--profile",
-            "dev",
+            "product",
             "--target",
-            profile_target,
+            target,
         ]
-    ) == 1
+    ) == 0
 
-    captured = capsys.readouterr()
-    assert "error: manifest.json: package is invalid" in captured.out
+    assert calls[0]["abi"] == expected["abi"]
+    assert calls[0]["platform"] == expected["platform"]
+    assert calls[0]["shader_targets"] == ("vulkan",)
+    assert calls[0]["termin_root"] is None
+    assert calls[0]["build_script"] is None
+    assert calls[0]["gradle"] is None
 
 
-def test_profile_build_rejects_unsafe_output_before_wrapper(
+def test_build_rejects_pending_content_features_instead_of_ignoring_them(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "build/dev",
-                }
-            },
-        },
+    _write_json(project / "Scenes" / "Menu.scene", {"uuid": "menu", "entities": []})
+    profile_data = _desktop_profile()
+    profile_data["content"] = _content(
+        scenes=["Scenes/Main.scene", "Scenes/Menu.scene"],
+        modules=["gameplay"],
+        resources={"policy": "strict", "include": ["Materials/Dynamic.material"]},
     )
+    _write_profiles(profiles_path, {"dev": profile_data})
     calls: list[dict] = []
+    monkeypatch.setattr(profile_build, "build_desktop_project", lambda **kwargs: calls.append(kwargs))
+    profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
 
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match="Refusing to use project-internal"):
+    with pytest.raises(ProfileBuildError) as raised:
         profile_build.build_profile(profile)
 
     assert calls == []
+    assert {diagnostic.path.rsplit(".", 1)[-1] for diagnostic in raised.value.diagnostics} == {
+        "scenes",
+        "modules",
+        "include",
+    }
+
+
+def test_build_rejects_d3d11_without_local_fxc(tmp_path: Path, monkeypatch) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    profile_data = _desktop_profile()
+    profile_data["target"] = {"kind": "desktop", "os": "windows", "arch": "x86_64"}
+    profile_data["runtime"] = {"backends": ["d3d11"]}
+    _write_profiles(profiles_path, {"windows": profile_data})
+    profile = BuildProfileStore.load(project, profiles_path).get_profile("windows")
+    calls: list[dict] = []
+    monkeypatch.setattr(profile_build, "build_desktop_project", lambda **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(profile_build, "_d3d11_shader_compiler_available", lambda sdk_root: False)
+
+    with pytest.raises(ProfileBuildError, match="runtime backend 'd3d11'.*fxc") as raised:
+        profile_build.build_profile(profile)
+
+    assert calls == []
+    assert raised.value.diagnostics[0].code == "capability.shader_compiler"
+    assert raised.value.diagnostics[0].path == "toolchain.shader_compiler"
+
+
+def test_explicit_shader_compiler_is_local_context_not_profile_data(tmp_path: Path) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    profile_data = _desktop_profile()
+    profile_data["target"] = {"kind": "desktop", "os": "windows", "arch": "x86_64"}
+    profile_data["runtime"] = {"backends": ["d3d11"]}
+    _write_profiles(profiles_path, {"windows": profile_data})
+    profile = BuildProfileStore.load(project, profiles_path).get_profile("windows")
+    compiler = tmp_path / "fxc.exe"
+
+    request = compile_profile_build_request(
+        profile,
+        ToolchainContext(shader_compiler=compiler),
+    )
+
+    assert request.shader_compiler == compiler
+    assert request.target_os == "windows"
+
+
+@pytest.mark.parametrize(
+    ("output_dir", "message"),
+    [
+        ("build/dev", "Refusing to use project-internal"),
+        (".", "path must not resolve to the project root"),
+    ],
+)
+def test_profile_build_rejects_unsafe_output(
+    tmp_path: Path,
+    output_dir: str,
+    message: str,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_profiles(profiles_path, {"dev": _desktop_profile(output_dir=output_dir)})
+
+    with pytest.raises(ProfileBuildError, match=message):
+        profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
+        profile_build.build_profile(profile)
 
 
 def test_profile_build_rejects_missing_entry_scene_before_wrapper(
@@ -846,84 +342,24 @@ def test_profile_build_rejects_missing_entry_scene_before_wrapper(
     monkeypatch,
 ) -> None:
     project, profiles_path = _write_project(tmp_path)
-    _write_json(
+    _write_profiles(
         profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Missing.scene",
-                    "output_dir": "dist/dev",
-                }
-            },
-        },
+        {"dev": _desktop_profile(content=_content(entry_scene="Scenes/Missing.scene", scenes=["Scenes/Missing.scene"]))},
     )
     calls: list[dict] = []
+    monkeypatch.setattr(profile_build, "build_desktop_project", lambda **kwargs: calls.append(kwargs))
+    profile = BuildProfileStore.load(project, profiles_path).get_profile("dev")
 
-    def fake_build_desktop_project(**kwargs):
-        calls.append(kwargs)
-        return SimpleNamespace()
-
-    monkeypatch.setattr(profile_build, "build_desktop_project", fake_build_desktop_project)
-
-    profile = profile_build.load_build_profile(project, profiles_path, "dev")
-    with pytest.raises(profile_build.ProfileBuildError, match="Entry scene does not exist"):
+    with pytest.raises(ProfileBuildError, match="Entry scene does not exist") as raised:
         profile_build.build_profile(profile)
 
     assert calls == []
-
-
-def test_profile_build_rejects_unsupported_target_with_supported_list(tmp_path: Path, capsys) -> None:
-    project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "web": {
-                    "target": "web",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/web",
-                }
-            }
-        },
-    )
-
-    assert profile_build.main(
-        [
-            "build",
-            "--project-root",
-            str(project),
-            "--profiles-path",
-            str(profiles_path),
-            "--profile",
-            "web",
-            "--target",
-            "web",
-        ]
-    ) == 3
-
-    captured = capsys.readouterr()
-    assert "unsupported build target 'web'" in captured.err
-    assert "Supported targets: android, desktop, quest_openxr" in captured.err
+    assert raised.value.diagnostics[0].code == "project.resolution"
 
 
 def test_profile_build_rejects_launcher_target_mismatch(tmp_path: Path, capsys) -> None:
     project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 1,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                }
-            }
-        },
-    )
+    _write_profiles(profiles_path, {"dev": _desktop_profile()})
 
     assert profile_build.main(
         [
@@ -938,25 +374,12 @@ def test_profile_build_rejects_launcher_target_mismatch(tmp_path: Path, capsys) 
             "android",
         ]
     ) == 2
-
-    captured = capsys.readouterr()
-    assert "target mismatch" in captured.err
+    assert "target mismatch" in capsys.readouterr().err
 
 
-def test_profile_build_rejects_missing_schema_version(tmp_path: Path, capsys) -> None:
+def test_profile_build_cli_rejects_schema_v1(tmp_path: Path, capsys) -> None:
     project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                }
-            }
-        },
-    )
+    _write_profiles(profiles_path, {"dev": _desktop_profile()}, version=1)
 
     assert profile_build.main(
         [
@@ -969,26 +392,91 @@ def test_profile_build_rejects_missing_schema_version(tmp_path: Path, capsys) ->
             "dev",
         ]
     ) == 2
-
-    captured = capsys.readouterr()
-    assert "must contain integer field 'version' with value 1" in captured.err
+    assert "schema v1 is not migrated automatically" in capsys.readouterr().err
 
 
-def test_profile_build_rejects_unsupported_schema_version(tmp_path: Path, capsys) -> None:
+def test_profile_build_resolve_writes_canonical_request_summary(tmp_path: Path) -> None:
     project, profiles_path = _write_project(tmp_path)
-    _write_json(
-        profiles_path,
-        {
-            "version": 2,
-            "profiles": {
-                "dev": {
-                    "target": "desktop",
-                    "entry_scene": "Scenes/Main.scene",
-                    "output_dir": "dist/dev",
-                }
-            },
-        },
-    )
+    _write_profiles(profiles_path, {"dev": _desktop_profile()})
+    request_path = tmp_path / "request.json"
+
+    assert profile_build.main(
+        [
+            "resolve",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+            "--profile",
+            "dev",
+            "--request-output",
+            str(request_path),
+        ]
+    ) == 0
+
+    summary = json.loads(request_path.read_text(encoding="utf-8"))
+    assert summary == {
+        "backends": ["vulkan", "opengl"],
+        "entry_scene": str((project / "Scenes/Main.scene").resolve()),
+        "modules": [],
+        "output_dir": str((project / "dist/dev").resolve()),
+        "profile": "dev",
+        "scenes": [str((project / "Scenes/Main.scene").resolve())],
+        "target": "desktop",
+        "target_arch": "x86_64",
+        "target_os": "linux",
+    }
+
+
+def test_profile_build_list_and_show_use_typed_store(tmp_path: Path, capsys) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_profiles(profiles_path, {"dev": _desktop_profile()})
+
+    assert profile_build.main(
+        [
+            "profiles",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+        ]
+    ) == 0
+    assert "dev (desktop)" in capsys.readouterr().out
+
+    assert profile_build.main(
+        [
+            "profile",
+            "--project-root",
+            str(project),
+            "--profiles-path",
+            str(profiles_path),
+            "--profile",
+            "dev",
+        ]
+    ) == 0
+    output = capsys.readouterr().out
+    assert "Target: desktop" in output
+    assert "Runtime backends: vulkan, opengl" in output
+
+
+def test_profile_build_returns_nonzero_for_builder_error_diagnostic(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    project, profiles_path = _write_project(tmp_path)
+    _write_profiles(profiles_path, {"dev": _desktop_profile()})
+    diagnostic = SimpleNamespace(level="error", path="manifest.json", message="package is invalid")
+
+    def fake_builder(**kwargs):
+        return SimpleNamespace(
+            dist_dir=kwargs["output_dir"],
+            app_manifest_path=kwargs["output_dir"] / "app.json",
+            package_result=_package_result(tmp_path),
+            diagnostics=[diagnostic],
+        )
+
+    monkeypatch.setattr(profile_build, "build_desktop_project", fake_builder)
 
     assert profile_build.main(
         [
@@ -1000,7 +488,5 @@ def test_profile_build_rejects_unsupported_schema_version(tmp_path: Path, capsys
             "--profile",
             "dev",
         ]
-    ) == 2
-
-    captured = capsys.readouterr()
-    assert "unsupported build profile schema version 2" in captured.err
+    ) == 1
+    assert "error: manifest.json: package is invalid" in capsys.readouterr().out

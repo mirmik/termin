@@ -62,28 +62,32 @@ Build profiles are project data. The default location is:
 project_settings/build_profiles.json
 ```
 
-Initial schema:
+Current schema (v1 is deliberately rejected):
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "profiles": {
     "dev": {
-      "target": "desktop",
-      "entry_scene": "Main.scene",
+      "target": {"kind": "desktop", "os": "linux", "arch": "x86_64"},
+      "configuration": "dev",
       "output_dir": "dist/dev",
-      "shader_targets": ["vulkan", "opengl", "d3d11"]
+      "content": {
+        "entry_scene": "Scenes/Main.scene",
+        "scenes": ["Scenes/Main.scene"],
+        "modules": [],
+        "python": {"requirements": []},
+        "resources": {"policy": "strict", "include": []}
+      },
+      "runtime": {"backends": ["vulkan", "opengl"]}
     },
     "quest": {
-      "target": "quest_openxr",
-      "entry_scene": "Main.scene",
+      "target": {"kind": "quest_openxr", "abi": "arm64-v8a", "ndk_api": 26},
+      "configuration": "debug",
       "output_dir": "dist/quest",
-      "android": {
-        "abi": "arm64-v8a",
-        "platform": "android-26"
-      },
-      "openxr": {
-        "required": true
+      "content": {
+        "entry_scene": "Scenes/Main.scene",
+        "scenes": ["Scenes/Main.scene"]
       }
     }
   }
@@ -97,7 +101,7 @@ Supported build targets:
 - `quest_openxr` - exports the shared runtime package and assembles a
   Quest/OpenXR APK.
 
-Desktop profiles must set `shader_targets` to an ordered list of `vulkan`,
+Desktop profiles must set `runtime.backends` to an ordered list of `vulkan`,
 `opengl`, and `d3d11`. The list is both the set of shipped shader artifact
 families and the packaged player backend priority. Linux-friendly profiles
 normally use `["vulkan", "opengl"]`; Windows/D3D-first profiles can use
@@ -111,12 +115,18 @@ canonical Python backend:
 python -m termin.project_build.profile_build build \
   --project-root PROJECT \
   --profiles-path project_settings/build_profiles.json \
-  --profile PROFILE \
-  --target TARGET
+  --profile PROFILE
 ```
 
-Unknown targets fail before build work starts and print the supported target
-list.
+The same typed request compiler powers `profiles`, `profile`, `build --dry-run`,
+normal builds, and `termin_runner run --profile`. Unknown fields and targets
+fail before build work starts. Local SDK/compiler/Gradle paths are toolchain
+inputs and are never serialized into the portable profile.
+
+The v2 model already reserves explicit scene, module, Python-requirement and
+resource roots. Builds currently reject non-trivial roots with a structured
+`profile.feature_pending` diagnostic until their dependency-closure stages are
+implemented; they are never silently ignored.
 
 The backend-only `python -m termin.project_build.profile_build desktop ...`
 entrypoint also accepts repeated `--shader-target` values for direct desktop
