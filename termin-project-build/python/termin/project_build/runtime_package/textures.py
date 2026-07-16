@@ -10,7 +10,9 @@ from termin.project_build.runtime_package.models import RuntimePackageExportDiag
 from termin.project_build.runtime_package.package_files import project_relative_path, write_json
 
 
-SUPPORTED_TEXTURE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tga"}
+# Keep this contract aligned with termin-image, which decodes package texture
+# bytes in both the Python and native runtime loaders.
+SUPPORTED_TEXTURE_SUFFIXES = {".jpeg", ".jpg", ".png", ".webp"}
 _IGNORED_PATH_PARTS = {".git", "__pycache__", "build", "dist"}
 _IMPORT_SETTING_NAMES = ("flip_x", "flip_y", "transpose")
 

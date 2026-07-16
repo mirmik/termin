@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <any>
+#include <array>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -23,11 +24,13 @@
 #include <tgfx2/tc_shader_bridge.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/foliage/foliage_data_registry.hpp>
+#include <termin/image/image_decode.hpp>
 
 namespace termin::runtime {
 
 struct RuntimePackageResourceKeepalive {
     std::vector<TcShader> shaders;
+    std::vector<TcTexture> textures;
     std::vector<TcMaterial> materials;
     std::vector<TcMesh> meshes;
     std::vector<TcFoliageData> foliage_data;
@@ -46,6 +49,26 @@ std::string read_text_file(const std::filesystem::path& path) {
         throw std::runtime_error("failed to read file: " + path.string());
     }
     return out.str();
+}
+
+std::vector<std::uint8_t> read_binary_file(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in) {
+        throw std::runtime_error("failed to open file: " + path.string());
+    }
+    const std::streampos end = in.tellg();
+    if (end < 0) {
+        throw std::runtime_error("failed to determine file size: " + path.string());
+    }
+    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(end));
+    in.seekg(0, std::ios::beg);
+    if (!bytes.empty()) {
+        in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    }
+    if (!in) {
+        throw std::runtime_error("failed to read file: " + path.string());
+    }
+    return bytes;
 }
 
 const nos::trent* dict_get(const nos::trent& t, const char* key) {
@@ -721,6 +744,108 @@ bool load_material_resource(
     return true;
 }
 
+bool required_bool_field(
+    const nos::trent& object,
+    const char* field_name,
+    bool& value,
+    std::string& error,
+    const std::string& context
+) {
+    const nos::trent* field = dict_get(object, field_name);
+    if (!field || !field->is_bool()) {
+        error = context + " field '" + field_name + "' must be boolean";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    value = field->as_bool();
+    return true;
+}
+
+bool load_texture_resource(
+    const std::filesystem::path& root,
+    const nos::trent& entry,
+    const std::filesystem::path& spec_path,
+    const nos::trent& spec,
+    RuntimePackageResourceKeepalive& keepalive,
+    std::string& error
+) {
+    if (!spec.is_dict()) {
+        error = "texture spec must be an object";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    const std::string uuid = string_field(spec, "uuid");
+    const std::string name = string_field(spec, "name");
+    const std::string source_rel_path = string_field(spec, "source_path");
+    if (uuid.empty() || name.empty() || source_rel_path.empty()) {
+        error = "texture resource requires uuid, name and source_path";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+    const std::string manifest_uuid = string_field(entry, "uuid");
+    if (manifest_uuid.empty() || manifest_uuid != uuid) {
+        error = "texture resource manifest uuid does not match spec uuid '" + uuid + "'";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    const nos::trent* import_settings = dict_get(spec, "import_settings");
+    if (!import_settings || !import_settings->is_dict()) {
+        error = "texture '" + uuid + "' import_settings must be an object";
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
+    TextureTransformFlags transform;
+    const std::string settings_context = "texture '" + uuid + "' import_settings";
+    if (!required_bool_field(*import_settings, "flip_x", transform.flip_x, error, settings_context) ||
+        !required_bool_field(*import_settings, "flip_y", transform.flip_y, error, settings_context) ||
+        !required_bool_field(*import_settings, "transpose", transform.transpose, error, settings_context)) {
+        return false;
+    }
+
+    try {
+        const std::filesystem::path source_path = package_path(root, source_rel_path);
+        if (!std::filesystem::is_regular_file(source_path)) {
+            error = "texture '" + uuid + "' source file not found: " + source_path.string();
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        const std::vector<std::uint8_t> encoded = read_binary_file(source_path);
+        const image::DecodedImage decoded = image::decode_rgba8(encoded, source_path.string());
+        if (decoded.width <= 0 || decoded.height <= 0 || decoded.channels != 4) {
+            error = "texture '" + uuid + "' decoder returned an invalid RGBA8 image";
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+
+        TcTexture texture = TcTexture::from_data(TcTextureCreateInfo{
+            TexturePixelDataView{
+                decoded.pixels.data(),
+                static_cast<std::uint32_t>(decoded.width),
+                static_cast<std::uint32_t>(decoded.height),
+                static_cast<std::uint8_t>(decoded.channels),
+            },
+            transform,
+            name,
+            source_path.string(),
+            uuid,
+        });
+        if (!texture.is_valid()) {
+            error = "failed to create texture '" + uuid + "' from " + spec_path.string();
+            tc_log_error("RuntimePackageLoader: %s", error.c_str());
+            return false;
+        }
+        keepalive.textures.push_back(std::move(texture));
+        return true;
+    } catch (const std::exception& ex) {
+        error = "failed to load texture '" + uuid + "': " + ex.what();
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+}
+
 tc_draw_mode parse_draw_mode(const std::string& value) {
     if (value == "lines") {
         return TC_DRAW_LINES;
@@ -943,6 +1068,9 @@ bool load_resource(
     if (type == "material") {
         return load_material_resource(spec, keepalive, error);
     }
+    if (type == "texture") {
+        return load_texture_resource(root, entry, spec_path, spec, keepalive, error);
+    }
     if (type == "mesh") {
         return load_mesh_resource(spec, keepalive, error);
     }
@@ -1014,14 +1142,39 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
         }
         auto keepalive = std::make_shared<RuntimePackageResourceKeepalive>();
         ensure_runtime_builtin_textures();
-        for (const nos::trent& resource : resources->as_list()) {
+        constexpr std::array<const char*, 6> resource_order = {
+            "shader", "mesh", "texture", "material", "pipeline", "foliage_data"
+        };
+        const auto& resource_list = resources->as_list();
+        auto load_entry = [&](const nos::trent& resource) -> bool {
             std::string resource_error;
-            if (!load_resource(root, resource, *keepalive, resource_error)) {
-                result.message = "failed to load resource " + resource_label(resource);
-                if (!resource_error.empty()) {
-                    result.message += ": " + resource_error;
+            if (load_resource(root, resource, *keepalive, resource_error)) {
+                return true;
+            }
+            result.message = "failed to load resource " + resource_label(resource);
+            if (!resource_error.empty()) {
+                result.message += ": " + resource_error;
+            }
+            tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+            return false;
+        };
+        for (const char* ordered_type : resource_order) {
+            for (const nos::trent& resource : resource_list) {
+                if (string_field(resource, "type") == ordered_type && !load_entry(resource)) {
+                    return result;
                 }
-                tc_log_error("RuntimePackageLoader: %s", result.message.c_str());
+            }
+        }
+        for (const nos::trent& resource : resource_list) {
+            const std::string type = string_field(resource, "type");
+            bool is_known = false;
+            for (const char* ordered_type : resource_order) {
+                if (type == ordered_type) {
+                    is_known = true;
+                    break;
+                }
+            }
+            if (!is_known && !load_entry(resource)) {
                 return result;
             }
         }
