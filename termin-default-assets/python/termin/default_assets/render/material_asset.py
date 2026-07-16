@@ -166,7 +166,9 @@ class MaterialAsset(DataAsset["TcMaterial"]):
             material=material,
             name=name or material.name or "material",
             source_path=source_path or material.source_path,
-            uuid=uuid,
+            # TcMaterial is itself UUID-addressed by the native registry.  The
+            # asset and its runtime handle must never acquire separate IDs.
+            uuid=uuid or material.uuid,
         )
 
 

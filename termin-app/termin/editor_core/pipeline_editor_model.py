@@ -54,7 +54,7 @@ def _default_for_param_kind(kind: str, choices) -> object:
     if kind == "float":
         return 0.0
     if kind == "tc_material":
-        return "(None)"
+        return ""
     return ""
 
 
@@ -78,7 +78,66 @@ def _material_choices() -> list[tuple[str, str]]:
     from termin.editor_core.resource_manager import ResourceManager
 
     manager = ResourceManager.instance()
-    return [("(None)", "(None)"), *((name, name) for name in manager.list_material_names())]
+    choices = [("", "(None)")]
+    for name in manager.list_material_names():
+        asset = manager.get_material_asset(name)
+        if asset is None:
+            _logger.error("Pipeline editor cannot resolve UUID for material '%s'", name)
+            continue
+        choices.append((asset.uuid, name))
+    return choices
+
+
+def _material_reference_for_editor(value: object) -> str:
+    """Convert a persisted material handle into the UUID used by editor widgets."""
+    if isinstance(value, dict):
+        uuid = value.get("uuid")
+        if isinstance(uuid, str) and uuid:
+            return uuid
+        if value.get("type") == "none":
+            return ""
+        _logger.error("Pipeline editor found an invalid material reference: %r", value)
+        return ""
+
+    if not isinstance(value, str) or not value or value == "(None)":
+        return ""
+
+    from termin.editor_core.resource_manager import ResourceManager
+
+    manager = ResourceManager.instance()
+    asset = manager.get_material_asset_by_uuid(value)
+    if asset is not None:
+        return asset.uuid
+    asset = manager.get_material_asset(value)
+    if asset is not None:
+        return asset.uuid
+    _logger.error("Pipeline editor cannot migrate unknown material reference '%s'", value)
+    return value
+
+
+def _material_reference_for_storage(value: object) -> dict[str, str]:
+    """Return the canonical serialized tc_material handle for a graph document."""
+    if not value or value == "(None)":
+        return {"type": "none"}
+
+    from termin.editor_core.resource_manager import ResourceManager
+
+    manager = ResourceManager.instance()
+    identifier = str(value)
+    asset = manager.get_material_asset_by_uuid(identifier)
+    if asset is None:
+        # This is the one-way migration path for pre-UUID pipeline documents.
+        asset = manager.get_material_asset(identifier)
+    if asset is None:
+        message = f"Pipeline editor cannot serialize unknown material reference '{identifier}'"
+        _logger.error(message)
+        raise ValueError(message)
+    return {
+        "uuid": asset.uuid,
+        "name": asset.name,
+        "type": "uuid",
+        "kind": "tc_material",
+    }
 
 
 def _add_node_param(
@@ -370,6 +429,8 @@ def load_pipeline_graph(data: dict) -> Graph:
         node.width = float(node_data.get("width", node.width))
         node.height = float(node_data.get("height", node.height))
         node.params.update(dict(node_data.get("params", {})))
+        if graph_type == "MaterialPass" and "material" in node.params:
+            node.params["material"] = _material_reference_for_editor(node.params["material"])
         node.data.update(
             {
                 "graph_type": graph_type,
@@ -458,7 +519,10 @@ def save_pipeline_graph(graph: Graph) -> dict:
         if instance_name:
             entry["name"] = instance_name
         if node.params:
-            entry["params"] = dict(node.params)
+            params = dict(node.params)
+            if graph_type == "MaterialPass" and "material" in params:
+                params["material"] = _material_reference_for_storage(params["material"])
+            entry["params"] = params
         entry["width"] = node.width
         entry["height"] = node.height
         dynamic_inputs = node.data.get("dynamic_inputs", [])
