@@ -10,7 +10,12 @@ from typing import Callable
 from tcbase import log
 from termin.editor_core.dialog_service import DialogService
 from termin.editor_core.editor_state_io import EditorStateIO
-from termin.engine import default_scene_extensions, scene as engine_scene
+from termin.engine import (
+    create_scene_with_extensions,
+    default_scene_extensions,
+    destroy_scene,
+    scene as engine_scene,
+)
 
 SceneMode = engine_scene.SceneMode
 
@@ -170,22 +175,12 @@ class SceneFileController:
             return
         if not self.validate_scene_path(path):
             return
+        stage = "parse"
+        staged_scene = None
         try:
             from termin.editor_core import scene_name_from_file_path
 
-            old_scene_name = self._get_editor_scene_name()
             scene_name = scene_name_from_file_path(path)
-
-            if old_scene_name and self._scene_manager.has_scene(old_scene_name):
-                self._detach_editor_from_scene(
-                    save_state=True,
-                    clear_editor_scene_name=False,
-                )
-                self._detach_scene_from_render(old_scene_name, save_state=True)
-                self._scene_manager.close_scene(old_scene_name)
-
-            self._set_editor_scene_name(scene_name)
-
             with open(path, "r", encoding="utf-8") as f:
                 file_data = json.load(f)
 
@@ -194,49 +189,120 @@ class SceneFileController:
                 repair_glb_animation_player_clip_refs,
             )
 
+            stage = "extract"
             scene_data = extract_scene_data(file_data)
-            self._scene_manager.create_scene(scene_name, default_scene_extensions())
-            scene = self._scene_manager.get_scene(scene_name)
-            if scene is None:
-                raise RuntimeError(f"Failed to create scene '{scene_name}'")
             if scene_data is not None:
+                stage = "repair"
                 repair_glb_animation_player_clip_refs(scene_data)
-                scene.load_from_data(scene_data, context=None, update_settings=True)
-            self._scene_manager.set_scene_path(scene_name, path)
-            scene.notify_editor_start()
+
+            stage = "staging-create"
+            staged_scene = create_scene_with_extensions(
+                scene_name,
+                "",
+                default_scene_extensions(),
+            )
+            if staged_scene is None or not staged_scene.is_alive():
+                raise RuntimeError(f"Failed to create staging scene '{scene_name}'")
+
+            if scene_data is not None:
+                stage = "deserialize"
+                staged_scene.load_from_data(
+                    scene_data,
+                    context=None,
+                    update_settings=True,
+                )
+
+            stage = "editor-start"
+            staged_scene.notify_editor_start()
 
             from termin.project_modules.runtime import upgrade_scene_unknown_components
 
-            upgrade_scene_unknown_components(self._scene_manager.get_scene(scene_name))
-            self._scene_manager.set_mode(scene_name, SceneMode.STOP)
+            stage = "unknown-component-upgrade"
+            upgrade_scene_unknown_components(staged_scene)
 
-            from termin.project.settings import ProjectSettingsManager
-
-            ProjectSettingsManager.instance().set_last_scene(path)
-
-            self._log_to_console(f"Loaded: {path}")
-            self._sync_scene_tree()
-            self._observe_scene_events(self._get_scene())
-            inspector = self._get_inspector_controller()
-            if inspector is not None:
-                inspector.set_scene(self._get_scene())
-                inspector.clear()
-
+            stage = "editor-state"
             editor_data = EditorStateIO.extract_from_file(path)
-
-            if self._has_editor_attachment():
-                self._attach_editor_to_scene(scene_name, restore_state=False)
-                self._attach_scene_to_render(scene_name)
-
-            state_io = self._get_editor_state_io()
-            if state_io is not None:
-                state_io.apply(editor_data)
-            self._on_rendering_changed()
-            self._request_viewport_update()
-            self._update_window_title()
         except Exception as e:
-            log.error(f"Failed to load scene: {e}")
-            self._log_to_console(f"Error loading: {e}")
+            if staged_scene is not None:
+                try:
+                    destroy_scene(staged_scene)
+                except Exception as cleanup_error:
+                    log.error(
+                        f"Failed to destroy staging scene for '{path}': {cleanup_error}"
+                    )
+            message = f"Failed to load scene '{path}' during {stage}: {e}"
+            log.error(message)
+            self._log_to_console(message)
+            return
+
+        try:
+            self._replace_scene(
+                scene_name=scene_name,
+                path=path,
+                staged_scene=staged_scene,
+                editor_data=editor_data,
+            )
+        except Exception as e:
+            message = f"Failed to load scene '{path}' during commit: {e}"
+            log.error(message)
+            self._log_to_console(message)
+
+    def _replace_scene(
+        self,
+        *,
+        scene_name: str,
+        path: str,
+        staged_scene,
+        editor_data,
+    ) -> None:
+        old_scene_name = self._get_editor_scene_name()
+        if (
+            self._scene_manager.has_scene(scene_name)
+            and scene_name != old_scene_name
+        ):
+            destroy_scene(staged_scene)
+            raise RuntimeError(
+                f"Scene '{scene_name}' is already open and is not the active scene"
+            )
+
+        if old_scene_name and self._scene_manager.has_scene(old_scene_name):
+            self._detach_editor_from_scene(
+                save_state=True,
+                clear_editor_scene_name=False,
+            )
+            self._detach_scene_from_render(old_scene_name, save_state=True)
+            self._scene_manager.close_scene(old_scene_name)
+
+        self._scene_manager.register_scene(
+            scene_name,
+            staged_scene.scene_handle(),
+        )
+        self._scene_manager.set_scene_path(scene_name, path)
+        self._scene_manager.set_mode(scene_name, SceneMode.STOP)
+        self._set_editor_scene_name(scene_name)
+
+        from termin.project.settings import ProjectSettingsManager
+
+        ProjectSettingsManager.instance().set_last_scene(path)
+
+        self._log_to_console(f"Loaded: {path}")
+        self._sync_scene_tree()
+        self._observe_scene_events(self._get_scene())
+        inspector = self._get_inspector_controller()
+        if inspector is not None:
+            inspector.set_scene(self._get_scene())
+            inspector.clear()
+
+        if self._has_editor_attachment():
+            self._attach_editor_to_scene(scene_name, restore_state=False)
+            self._attach_scene_to_render(scene_name)
+
+        state_io = self._get_editor_state_io()
+        if state_io is not None:
+            state_io.apply(editor_data)
+        self._on_rendering_changed()
+        self._request_viewport_update()
+        self._update_window_title()
 
     def validate_scene_path(self, path: str) -> bool:
         project_path = self._get_project_path()
