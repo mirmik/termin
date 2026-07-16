@@ -27,7 +27,10 @@ def material_pass_materials(graph_data: dict | None) -> set[str]:
             params = node.get("params", {})
             if not isinstance(params, dict):
                 continue
-            material_name = params.get("material")
+            material_ref = params.get("material")
+            material_name = (
+                material_ref.get("name") if isinstance(material_ref, dict) else material_ref
+            )
             if isinstance(material_name, str) and material_name:
                 result.add(material_name)
 
@@ -45,7 +48,10 @@ def material_pass_materials(graph_data: dict | None) -> set[str]:
                 field_data = pass_data.get(field_name, {})
                 if not isinstance(field_data, dict):
                     continue
-                material_name = field_data.get("material")
+                material_ref = field_data.get("material")
+                material_name = (
+                    material_ref.get("name") if isinstance(material_ref, dict) else material_ref
+                )
                 if isinstance(material_name, str) and material_name:
                     result.add(material_name)
 

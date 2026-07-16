@@ -264,6 +264,7 @@ void register_camera_layer_mask_field() {
         auto* c = static_cast<CameraComponent*>(obj);
         if (value.type == TC_VALUE_STRING && value.data.s) {
             c->layer_mask = strtoull(value.data.s, nullptr, 0);
+            return true;
         } else if (value.type == TC_VALUE_INT) {
             c->layer_mask = static_cast<uint64_t>(value.data.i);
             return true;
@@ -289,6 +290,7 @@ void register_camera_render_category_mask_field() {
         auto* c = static_cast<CameraComponent*>(obj);
         if (value.type == TC_VALUE_STRING && value.data.s) {
             c->render_category_mask = strtoull(value.data.s, nullptr, 0);
+            return true;
         } else if (value.type == TC_VALUE_INT) {
             c->render_category_mask = static_cast<uint64_t>(value.data.i);
             return true;

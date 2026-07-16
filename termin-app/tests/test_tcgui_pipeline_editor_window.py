@@ -117,6 +117,9 @@ void main() {}
 
     node = graph.nodes["node_0"]
 
+    asset = rm.get_material_asset("TestMaterialPassDynamicInputsMaterial")
+    assert asset is not None
+    assert node.params["material"] == asset.uuid
     assert [socket.name for socket in node.inputs] == [
         "output_res_target",
         "u_input_tex",
@@ -126,6 +129,14 @@ void main() {}
         ("u_input_tex", "fbo"),
         ("u_depth_texture", "fbo"),
     ]
+
+    saved = _save_graph_to_pipeline_dict(graph)
+    assert saved["nodes"][0]["params"]["material"] == {
+        "uuid": asset.uuid,
+        "name": "TestMaterialPassDynamicInputsMaterial",
+        "type": "uuid",
+        "kind": "tc_material",
+    }
 
 
 def test_pipeline_graph_loads_explicit_render_target_nodes():
