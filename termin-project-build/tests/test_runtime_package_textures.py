@@ -91,6 +91,30 @@ def test_runtime_texture_export_reports_missing_or_unsupported_source(tmp_path: 
     ]
 
 
+def test_runtime_texture_export_rejects_formats_missing_from_runtime_codec_contract(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    source_path = project / "Textures" / "Legacy.tga"
+    source_path.parent.mkdir(parents=True)
+    source_path.write_bytes(b"TGA")
+    _write_json(Path(f"{source_path}.meta"), {"uuid": "legacy-uuid"})
+
+    resources: list[dict[str, str]] = []
+    diagnostics = []
+    write_textures(
+        project,
+        tmp_path / "package",
+        {"legacy-uuid": "Legacy"},
+        resources,
+        diagnostics,
+    )
+
+    assert resources == []
+    assert len(diagnostics) == 1
+    assert diagnostics[0].message == (
+        "Runtime exporter does not support texture source format '.tga' for UUID 'legacy-uuid'"
+    )
+
+
 def test_material_texture_reference_collection_excludes_builtins() -> None:
     references: dict[str, str] = {}
     diagnostics = []

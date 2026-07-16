@@ -3,13 +3,16 @@
 GUARD_TEST_MAIN();
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include <termin/entity/entity.hpp>
+#include <termin/image/image_decode.hpp>
 #include <termin/render/mesh_renderer.hpp>
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/runtime/runtime_package.hpp>
@@ -29,6 +32,8 @@ constexpr const char* kShaderUuid = "runtime-loader-test-shader";
 constexpr const char* kMaterialUuid = "runtime-loader-test-material";
 constexpr const char* kMeshUuid = "runtime-loader-test-mesh";
 constexpr const char* kMeshName = "RuntimeLoaderTestMesh";
+constexpr const char* kTextureUuid = "runtime-loader-test-texture";
+constexpr const char* kTextureName = "RuntimeLoaderTestTexture";
 
 std::filesystem::path make_package_root() {
     std::filesystem::path root = std::filesystem::temp_directory_path()
@@ -37,7 +42,15 @@ std::filesystem::path make_package_root() {
     std::filesystem::create_directories(root / "shaders");
     std::filesystem::create_directories(root / "materials");
     std::filesystem::create_directories(root / "meshes");
+    std::filesystem::create_directories(root / "textures");
     return root;
+}
+
+void write_binary(const std::filesystem::path& path, const std::vector<std::uint8_t>& bytes) {
+    std::ofstream out(path, std::ios::binary);
+    REQUIRE(static_cast<bool>(out));
+    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    REQUIRE(static_cast<bool>(out));
 }
 
 void write_text(const std::filesystem::path& path, const std::string& text) {
@@ -118,6 +131,40 @@ std::string replace_once(std::string text, const std::string& needle, const std:
     REQUIRE(offset != std::string::npos);
     text.replace(offset, needle.size(), replacement);
     return text;
+}
+
+std::string texture_spec(const std::string& source_path = "textures/albedo.png") {
+    std::ostringstream out;
+    out
+        << "{\n"
+        << "  \"uuid\": \"" << kTextureUuid << "\",\n"
+        << "  \"name\": \"" << kTextureName << "\",\n"
+        << "  \"source_path\": \"" << source_path << "\",\n"
+        << "  \"import_settings\": {\"flip_x\": true, \"flip_y\": false, \"transpose\": true}\n"
+        << "}\n";
+    return out.str();
+}
+
+std::string material_spec_with_asset_texture() {
+    return replace_once(
+        material_spec(),
+        "{\"kind\": \"builtin\", \"name\": \"white\"}",
+        std::string("{\"kind\": \"asset\", \"uuid\": \"") + kTextureUuid + "\"}"
+    );
+}
+
+std::string manifest_with_packaged_texture() {
+    return R"({
+  "version": 1,
+  "resources": [
+    {"type": "material", "uuid": "runtime-loader-test-material", "path": "materials/test.tmat.json"},
+    {"type": "texture", "uuid": "runtime-loader-test-texture", "path": "textures/test.texture.json"},
+    {"type": "mesh", "uuid": "runtime-loader-test-mesh", "path": "meshes/test.tmesh.json"},
+    {"type": "shader", "uuid": "runtime-loader-test-shader", "path": "shaders/test.shader.json"}
+  ],
+  "scene": "scene.json"
+}
+)";
 }
 
 std::string scene_json() {
@@ -238,6 +285,18 @@ void main() {
 )");
     write_text(root / "materials" / "test.tmat.json", material_spec());
     write_text(root / "meshes" / "test.tmesh.json", mesh_spec());
+}
+
+void write_test_package_with_texture(const std::filesystem::path& root) {
+    write_test_package(root);
+    write_text(root / "manifest.json", manifest_with_packaged_texture());
+    write_text(root / "materials" / "test.tmat.json", material_spec_with_asset_texture());
+    write_text(root / "textures" / "test.texture.json", texture_spec());
+    const std::vector<std::uint8_t> rgba = {
+        0x10, 0x20, 0x30, 0x40,
+        0x50, 0x60, 0x70, 0x80,
+    };
+    write_binary(root / "textures" / "albedo.png", termin::image::encode_png_rgba8(rgba, 2, 1));
 }
 
 tc_uniform_value* require_uniform(tc_material_phase* phase, const char* name, tc_uniform_type type) {
@@ -362,6 +421,87 @@ TEST_CASE("RuntimePackageLoader keeps package meshes alive after scene entity re
 
     tc_mesh_handle still_loaded = tc_mesh_find_by_name(kMeshName);
     CHECK(tc_mesh_is_valid(still_loaded));
+}
+
+TEST_CASE("RuntimePackageLoader loads packaged textures before dependent materials") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package_with_texture(root);
+
+    termin::runtime::RuntimePackageLoadResult result = termin::runtime::load_runtime_package(root.string());
+    REQUIRE(result.ok);
+    REQUIRE(result.resources != nullptr);
+
+    termin::TcTexture texture = termin::TcTexture::from_uuid(kTextureUuid);
+    REQUIRE(texture.is_valid());
+    CHECK_EQ(texture.width(), 2);
+    CHECK_EQ(texture.height(), 1);
+    CHECK_EQ(texture.channels(), 4);
+    CHECK(texture.flip_x());
+    CHECK_FALSE(texture.flip_y());
+    CHECK(texture.transpose());
+    CHECK_EQ(std::string(texture.name()), std::string(kTextureName));
+    CHECK_EQ(std::filesystem::path(texture.source_path()), root / "textures" / "albedo.png");
+
+    const auto* pixels = static_cast<const std::uint8_t*>(texture.data());
+    REQUIRE(pixels != nullptr);
+    CHECK_EQ(pixels[0], 0x10);
+    CHECK_EQ(pixels[7], 0x80);
+
+    termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
+    REQUIRE(material.is_valid());
+    tc_material_texture* binding = require_texture(material.default_phase(), "u_albedo_texture");
+    tc_texture* bound_texture = tc_texture_get(binding->texture);
+    REQUIRE(bound_texture != nullptr);
+    CHECK_EQ(std::string(bound_texture->header.uuid), std::string(kTextureUuid));
+}
+
+TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package_with_texture(root);
+
+    write_text(root / "textures" / "test.texture.json", texture_spec("textures/missing.png"));
+    termin::runtime::RuntimePackageLoadResult missing = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing.ok);
+    CHECK(missing.message.find("source file not found") != std::string::npos);
+
+    write_text(root / "textures" / "test.texture.json", texture_spec("../outside.png"));
+    termin::runtime::RuntimePackageLoadResult escaping = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(escaping.ok);
+    CHECK(escaping.message.find("dot segments") != std::string::npos);
+
+    write_text(root / "textures" / "test.texture.json", texture_spec("textures/unsupported.bin"));
+    write_binary(root / "textures" / "unsupported.bin", {0x01, 0x02, 0x03, 0x04});
+    termin::runtime::RuntimePackageLoadResult unsupported = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(unsupported.ok);
+    CHECK(unsupported.message.find("unsupported image format") != std::string::npos);
+
+    write_text(root / "textures" / "test.texture.json", texture_spec("textures/malformed.png"));
+    write_binary(
+        root / "textures" / "malformed.png",
+        {0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00}
+    );
+    termin::runtime::RuntimePackageLoadResult malformed = termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(malformed.ok);
+    CHECK(malformed.message.find("libpng") != std::string::npos);
+
+    write_text(
+        root / "textures" / "test.texture.json",
+        replace_once(texture_spec(), "\"flip_x\": true", "\"flip_x\": 1")
+    );
+    termin::runtime::RuntimePackageLoadResult invalid_settings =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(invalid_settings.ok);
+    CHECK(invalid_settings.message.find("must be boolean") != std::string::npos);
+
+    write_text(root / "textures" / "test.texture.json", texture_spec());
+    write_text(
+        root / "manifest.json",
+        replace_once(manifest_with_packaged_texture(), kTextureUuid, "different-texture-uuid")
+    );
+    termin::runtime::RuntimePackageLoadResult mismatched_uuid =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(mismatched_uuid.ok);
+    CHECK(mismatched_uuid.message.find("manifest uuid does not match") != std::string::npos);
 }
 
 TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform separators") {

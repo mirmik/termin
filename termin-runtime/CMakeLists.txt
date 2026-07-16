@@ -18,6 +18,11 @@ else()
     find_package(termin_graphics REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_image termin_image::termin_image)
+else()
+    find_package(termin_image REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_mesh tmesh::termin_mesh)
 else()
     find_package(termin_mesh REQUIRED)
@@ -96,6 +101,8 @@ target_link_libraries(termin_runtime
         termin_components_render::termin_components_render
         termin_components_foliage::termin_components_foliage
         termin_bootstrap::termin_bootstrap
+    PRIVATE
+        termin_image::termin_image
 )
 
 if(MSVC)
@@ -115,6 +122,7 @@ if(TERMIN_RUNTIME_BUILD_TESTS)
     )
     target_link_libraries(termin_runtime_package_loader_test PRIVATE
         termin_runtime
+        termin_image::termin_image
     )
     set_target_properties(termin_runtime_package_loader_test PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
