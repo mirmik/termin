@@ -50,7 +50,6 @@ using DisplayFactory = std::function<tc_display*(const std::string& name)>;
 using PipelineFactory = std::function<tc_pipeline_handle(const std::string& name)>;
 using MakeCurrentCallback = std::function<void()>;
 using DisplayRemovedCallback = std::function<void(tc_display*)>;
-using RenderRequestCallback = std::function<void()>;
 using RenderTargetContextProvider = std::function<bool(
     RenderingManager& manager,
     tc_render_target_handle render_target,
@@ -100,9 +99,6 @@ private:
     // Callback when a display is removed
     DisplayRemovedCallback display_removed_callback_;
 
-    // Callback to request another frame in pull-rendering hosts.
-    RenderRequestCallback render_request_callback_;
-
     // Attached scenes (for scene pipeline execution)
     std::vector<tc_scene_handle> attached_scenes_;
 
@@ -150,11 +146,6 @@ public:
 
     // Set factory for creating pipelines by special name (e.g., "(Editor)")
     void set_pipeline_factory(PipelineFactory factory);
-
-    // Set callback used when rendering state changes outside the editor UI
-    // event path and a pull-mode host must render another frame.
-    void set_render_request_callback(RenderRequestCallback callback);
-    void request_render_update();
 
     // Register a provider for special render target kinds. Texture targets
     // are built internally; XR stereo targets use this hook to supply per-eye

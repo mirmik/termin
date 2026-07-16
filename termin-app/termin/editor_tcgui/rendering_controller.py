@@ -73,7 +73,6 @@ class RenderingControllerTcgui:
         # Register factories
         self._manager.set_display_factory(self._create_display_for_name)
         self._manager.set_pipeline_factory(self._pipeline_resolver.resolve)
-        self._manager.set_render_request_callback(self._request_update)
         self._manager.set_display_removed_callback(self._on_display_removed)
 
         self._connect_viewport_list_signals()
@@ -82,7 +81,6 @@ class RenderingControllerTcgui:
         """Detach every callback and asset subscription owned by this controller."""
         self._pipeline_reload_binding.close()
         self._manager.set_display_removed_callback(None)
-        self._manager.set_render_request_callback(None)
         self._manager.set_pipeline_factory(None)
         self._manager.set_display_factory(None)
         self._manager.set_make_current_callback(None)

@@ -104,16 +104,6 @@ void RenderingManager::set_pipeline_factory(PipelineFactory factory) {
     pipeline_factory_ = std::move(factory);
 }
 
-void RenderingManager::set_render_request_callback(RenderRequestCallback callback) {
-    render_request_callback_ = std::move(callback);
-}
-
-void RenderingManager::request_render_update() {
-    if (render_request_callback_) {
-        render_request_callback_();
-    }
-}
-
 void RenderingManager::set_render_target_context_provider(
     tc_render_target_kind kind,
     RenderTargetContextProvider provider
@@ -230,10 +220,6 @@ size_t RenderingManager::recreate_render_target_pipelines_for_asset(
         if (!still_used) {
             tc_pipeline_destroy(old_pipeline);
         }
-    }
-
-    if (rebound > 0 && render_request_callback_) {
-        render_request_callback_();
     }
 
     return rebound;
