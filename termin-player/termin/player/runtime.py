@@ -589,7 +589,11 @@ class PlayerRuntime:
 
     def _load_modules(self) -> None:
         """Load all project modules through termin-modules runtime."""
-        load_project_modules(self.project_path, log_prefix="[PlayerRuntime]")
+        load_project_modules(
+            self.project_path,
+            log_prefix="[PlayerRuntime]",
+            scene_manager=self._engine.scene_manager,
+        )
 
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""

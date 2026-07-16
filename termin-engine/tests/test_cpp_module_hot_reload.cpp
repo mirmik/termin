@@ -261,6 +261,7 @@ int run_cpp_module_hot_reload_smoke() {
 
     termin::SceneManager scene_manager;
     termin::TermModulesIntegration integration;
+    integration.set_scene_manager(scene_manager);
 
     termin_modules::ModuleRuntime runtime;
     runtime.register_backend(std::make_shared<termin_modules::CppModuleBackend>());

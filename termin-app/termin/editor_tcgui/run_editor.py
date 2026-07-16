@@ -170,6 +170,9 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
     from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
     bootstrap_editor()
     configure_editor_resource_manager_factory()
+    from termin.project_modules.runtime import get_project_modules_runtime
+
+    get_project_modules_runtime(engine.scene_manager)
 
     configure_sdk_shader_runtime("editor")
 

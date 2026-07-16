@@ -32,13 +32,18 @@ def register_project_runtime_resources(*, include_render_resources: bool) -> Non
     rm.register_builtin_frame_passes()
 
 
-def load_project_modules(project_path: str | Path, *, log_prefix: str) -> None:
+def load_project_modules(
+    project_path: str | Path,
+    *,
+    log_prefix: str,
+    scene_manager=None,
+) -> None:
     """Load project modules through termin-modules runtime."""
     from tcbase import log
     from termin_modules import ModuleKind, ModuleState
     from termin.project_modules.runtime import get_project_modules_runtime
 
-    runtime = get_project_modules_runtime()
+    runtime = get_project_modules_runtime(scene_manager)
     success = runtime.load_project(Path(project_path))
     if not success and runtime.last_error:
         log.error(f"{log_prefix} Module load error: {runtime.last_error}")
