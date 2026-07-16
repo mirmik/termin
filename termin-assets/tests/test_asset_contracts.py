@@ -5,6 +5,7 @@ import pytest
 from termin_assets import (
     Asset,
     AssetRegistry,
+    AssetStore,
     AssetRuntimeManager,
     AssetTypeRegistry,
     DataAsset,
@@ -30,6 +31,7 @@ def test_asset_core_classes_are_exported() -> None:
     assert DataAsset is not None
     assert EmbeddedAssetSpec is not None
     assert AssetRegistry is not None
+    assert AssetStore is not None
     assert ResourceHandle is not None
 
 
@@ -73,7 +75,7 @@ def test_runtime_manager_get_or_create_embedded_asset_uses_runtime_registry() ->
     manager = AssetRuntimeManager()
     registry = AssetRegistry(
         asset_class=MemoryAsset,
-        uuid_registry=manager._assets_by_uuid,
+        asset_store=manager._asset_store,
         data_from_asset=lambda asset: asset.data,
     )
     manager.register_runtime_asset_registry("memory", registry)
@@ -124,7 +126,7 @@ def test_runtime_manager_can_list_and_find_runtime_asset_names() -> None:
 
     registry = AssetRegistry(
         asset_class=MemoryAsset,
-        uuid_registry=manager._assets_by_uuid,
+        asset_store=manager._asset_store,
         data_from_asset=lambda asset: asset.data,
         data_to_asset=data_to_asset,
     )
@@ -144,7 +146,7 @@ def test_asset_registry_rejects_uuid_collisions_without_corrupting_existing_mapp
     manager = AssetRuntimeManager()
     registry = AssetRegistry(
         asset_class=MemoryAsset,
-        uuid_registry=manager._assets_by_uuid,
+        asset_store=manager._asset_store,
         data_from_asset=lambda asset: asset.data,
     )
     first = MemoryAsset(data="first", name="first", uuid="shared-uuid")
@@ -157,6 +159,93 @@ def test_asset_registry_rejects_uuid_collisions_without_corrupting_existing_mapp
     assert registry.get_asset("first") is first
     assert registry.get_asset("second") is None
     assert manager.get_asset_by_uuid("shared-uuid") is first
+
+
+def test_asset_registry_allows_duplicate_names_with_uuid_canonical_identity() -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=MemoryAsset,
+        asset_store=manager._asset_store,
+        data_from_asset=lambda asset: asset.data,
+    )
+    manager.register_runtime_asset_registry("memory", registry)
+    first = MemoryAsset(data="first", name="shared", uuid="first-uuid")
+    second = MemoryAsset(data="second", name="shared", uuid="second-uuid")
+
+    registry.register("shared", first)
+    registry.register("shared", second)
+
+    assert registry.find_assets_by_name("shared") == (first, second)
+    assert manager.find_runtime_assets_by_name("memory", "shared") == (first, second)
+    assert registry.get_asset("shared") is None
+    assert registry.get_asset_by_uuid("first-uuid") is first
+    assert registry.get_asset_by_uuid("second-uuid") is second
+    assert manager.get_asset_by_uuid("first-uuid") is first
+    assert manager.get_asset_by_uuid("second-uuid") is second
+
+
+def test_asset_registry_rename_unregister_and_clear_keep_indexes_consistent() -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=MemoryAsset,
+        asset_store=manager._asset_store,
+        data_from_asset=lambda asset: asset.data,
+    )
+    first = MemoryAsset(data="first", name="shared", uuid="first-uuid")
+    second = MemoryAsset(data="second", name="shared", uuid="second-uuid")
+    registry.register("shared", first)
+    registry.register("shared", second)
+
+    assert registry.rename(first.uuid, "renamed")
+    assert first.name == "renamed"
+    assert registry.find_assets_by_name("shared") == (second,)
+    assert registry.find_assets_by_name("renamed") == (first,)
+    assert registry.get_asset("shared") is second
+
+    with pytest.raises(AttributeError, match="AssetRegistry.rename"):
+        first.name = "bypassed"
+
+    assert registry.unregister_by_uuid(second.uuid) is second
+    assert manager.get_asset_by_uuid(second.uuid) is None
+    assert registry.find_assets_by_name("shared") == ()
+
+    registry.clear()
+    assert len(registry) == 0
+    assert len(manager.assets_by_uuid) == 0
+    assert registry.find_assets_by_name("renamed") == ()
+
+
+def test_asset_registry_views_are_read_only_and_reload_preserves_identity(
+    tmp_path: Path,
+) -> None:
+    manager = AssetRuntimeManager()
+    registry = AssetRegistry(
+        asset_class=MemoryAsset,
+        asset_store=manager._asset_store,
+        data_from_asset=lambda asset: asset.data,
+    )
+    source = tmp_path / "probe.memory"
+    source.write_text("first", encoding="utf-8")
+    asset = MemoryAsset(name="probe", source_path=source, uuid="probe-uuid")
+    registry.register("probe", asset)
+
+    with pytest.raises(TypeError):
+        registry.assets["other"] = asset
+    with pytest.raises(TypeError):
+        manager.assets_by_uuid["other"] = asset
+
+    assert asset.ensure_loaded()
+    source.write_text("second", encoding="utf-8")
+    assert asset.reload()
+    assert asset.version == 1
+    assert registry.get_asset_by_uuid(asset.uuid) is asset
+    assert manager.get_asset_by_uuid(asset.uuid) is asset
+
+    with pytest.raises(ValueError, match="UUID identity is immutable"):
+        asset.parse_spec({"uuid": "replacement-uuid"})
+    assert asset.uuid == "probe-uuid"
+    assert manager.get_asset_by_uuid("probe-uuid") is asset
+    assert manager.get_asset_by_uuid("replacement-uuid") is None
 
 
 def test_resource_handle_can_lookup_assets_by_uuid() -> None:
@@ -274,7 +363,7 @@ def test_asset_runtime_manager_dispatches_runtime_plugins() -> None:
     manager = AssetRuntimeManager()
     registry = AssetRegistry(
         asset_class=Asset,
-        uuid_registry=manager._assets_by_uuid,
+        asset_store=manager._asset_store,
         data_from_asset=lambda asset: asset,
     )
     manager.register_runtime_asset_registry("dummy", registry)

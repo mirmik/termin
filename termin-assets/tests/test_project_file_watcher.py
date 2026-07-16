@@ -84,7 +84,7 @@ def test_plugin_preloader_unregisters_runtime_asset_on_delete(tmp_path: Path) ->
         "dummy",
         AssetRegistry(
             asset_class=Asset,
-            uuid_registry=manager._assets_by_uuid,
+            asset_store=manager._asset_store,
             data_from_asset=lambda asset: asset,
         ),
     )

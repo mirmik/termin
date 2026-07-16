@@ -86,8 +86,7 @@ class DataAsset(Asset, Generic[T]):
 
         spec_uuid = spec_data.get("uuid")
         if spec_uuid is not None:
-            self._uuid = spec_uuid
-            self._runtime_id = hash(self._uuid) & 0xFFFFFFFFFFFFFFFF
+            self._adopt_uuid(spec_uuid)
             self._has_uuid_in_spec = True
 
         self._parse_spec_fields(spec_data)

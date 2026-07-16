@@ -6,9 +6,13 @@ from termin.default_assets.render.texture_plugin import create_runtime_plugin
 class FakeResourceManager:
     def __init__(self) -> None:
         self.by_name = {}
+        self.by_uuid = {}
 
     def get_runtime_asset(self, type_id: str, name: str):
         return self.by_name.get((type_id, name))
+
+    def get_runtime_asset_by_uuid(self, type_id: str, uuid: str):
+        return self.by_uuid.get((type_id, uuid))
 
 
 class FakeLoadedTextureAsset:
@@ -37,7 +41,7 @@ def test_texture_asset_does_not_expose_gpu_lifecycle_api() -> None:
 def test_texture_runtime_reload_stays_in_asset_layer() -> None:
     resource_manager = FakeResourceManager()
     asset = FakeLoadedTextureAsset()
-    resource_manager.by_name[("texture", "albedo")] = asset
+    resource_manager.by_uuid[("texture", "texture-uuid")] = asset
     result = PreLoadResult(
         resource_type="texture",
         path="/tmp/albedo.png",

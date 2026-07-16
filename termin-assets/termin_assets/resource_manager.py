@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from tcbase import log
 
 from termin_assets.asset import Asset
+from termin_assets.asset_store import AssetStore
 from termin_assets.catalog import AssetCatalog
 from termin_assets.default_plugins import register_default_asset_plugins
 from termin_assets.embedded_asset import EmbeddedAssetSpec
@@ -29,7 +30,7 @@ class AssetRuntimeManager:
     _instance: "AssetRuntimeManager | None" = None
 
     def __init__(self) -> None:
-        self._assets_by_uuid: dict[str, Asset] = {}
+        self._asset_store = AssetStore()
         self._asset_type_plugins = AssetTypeRegistry()
         self.external_assets = AssetCatalog()
         self._runtime_asset_registries: dict[str, "AssetRegistry"] = {}
@@ -53,6 +54,14 @@ class AssetRuntimeManager:
             log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
             return None
         return registry.get_asset(name)
+
+    def find_runtime_assets_by_name(self, type_id: str, name: str) -> tuple[Asset, ...]:
+        """Return every runtime asset matching a non-unique display name."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
+            return ()
+        return registry.find_assets_by_name(name)
 
     def get_runtime_asset_by_uuid(self, type_id: str, uuid: str):
         """Get a registered runtime asset by plugin type id and UUID."""
@@ -93,13 +102,36 @@ class AssetRuntimeManager:
             raise KeyError(type_id)
         registry.register(name, asset, source_path, uuid)
 
-    def unregister_runtime_asset(self, type_id: str, name: str) -> None:
-        """Remove a runtime asset through its plugin type registry."""
+    def unregister_runtime_asset(
+        self,
+        type_id: str,
+        name: str,
+        *,
+        uuid: str | None = None,
+    ) -> Asset | None:
+        """Remove a runtime asset, preferring canonical UUID when available."""
         registry = self._runtime_asset_registries.get(type_id)
         if registry is None:
             log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
             raise KeyError(type_id)
-        registry.unregister(name)
+        if uuid is not None:
+            return registry.unregister_by_uuid(uuid)
+        return registry.unregister(name)
+
+    def unregister_runtime_asset_by_uuid(self, type_id: str, uuid: str) -> Asset | None:
+        """Remove a runtime asset by canonical UUID."""
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
+            raise KeyError(type_id)
+        return registry.unregister_by_uuid(uuid)
+
+    def rename_runtime_asset(self, type_id: str, uuid: str, name: str) -> bool:
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            log.error(f"[AssetRuntimeManager] Runtime asset registry is not registered: {type_id}")
+            raise KeyError(type_id)
+        return registry.rename(uuid, name)
 
     def get_or_create_runtime_asset(
         self,
@@ -143,7 +175,12 @@ class AssetRuntimeManager:
 
     def get_asset_by_uuid(self, uuid: str) -> Asset | None:
         """Get any registered asset by UUID."""
-        return self._assets_by_uuid.get(uuid)
+        return self._asset_store.get(uuid)
+
+    @property
+    def assets_by_uuid(self):
+        """Read-only view of canonical UUID-owned assets."""
+        return self._asset_store.assets_by_uuid
 
     def register_file(self, result: "PreLoadResult") -> None:
         """Dispatch a preloaded file to the registered runtime asset plugin."""

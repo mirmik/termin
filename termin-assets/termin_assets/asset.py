@@ -30,6 +30,7 @@ class Asset(Identifiable):
         self._version: int = 0
         self._loaded: bool = False
         self._last_save_mtime: float | None = None
+        self._registry_owner: object | None = None
 
     @property
     def name(self) -> str:
@@ -37,7 +38,11 @@ class Asset(Identifiable):
         return self._name
 
     @name.setter
-    def name(self, value: str) -> None:
+    def name(self, _value: str) -> None:
+        raise AttributeError("Registered asset names must be changed through AssetRegistry.rename()")
+
+    def _rename(self, value: str) -> None:
+        """Update the display name after registry indexes have been prepared."""
         self._name = value
 
     @property

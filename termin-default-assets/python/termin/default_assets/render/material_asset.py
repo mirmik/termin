@@ -320,7 +320,7 @@ def _parse_material_content(
     if shader_uuid:
         from termin.default_assets.render.shader_asset import ShaderAsset
 
-        candidate = rm._assets_by_uuid.get(shader_uuid)
+        candidate = rm.get_asset_by_uuid(shader_uuid)
         if isinstance(candidate, ShaderAsset):
             shader_asset = candidate
         program = rm.get_shader_by_uuid(shader_uuid)
@@ -357,7 +357,7 @@ def _parse_material_content(
     textures_data = data.get("textures", {})
     textures = {}
     for uniform_name, tex_asset_uuid in textures_data.items():
-        asset = rm._assets_by_uuid.get(tex_asset_uuid)
+        asset = rm.get_asset_by_uuid(tex_asset_uuid)
         if isinstance(asset, TextureAsset):
             if asset.texture_data is None and not asset.ensure_loaded():
                 log.warning(f"[MaterialAsset] Texture asset failed to load by UUID: {tex_asset_uuid}")

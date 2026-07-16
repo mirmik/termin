@@ -23,7 +23,7 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
     from termin.default_assets.render.texture_asset import TextureAsset
     from termin.render.texture import get_normal_texture, get_white_texture
 
-    if "__white_1x1__" not in rm._texture_registry.assets:
+    if rm._texture_registry.get_asset("__white_1x1__") is None:
         white_texture = get_white_texture().texture_data
         if white_texture is not None and white_texture.is_valid:
             white_asset = TextureAsset(
@@ -34,7 +34,7 @@ def register_builtin_textures(rm: DefaultAssetsResourceApiMixin) -> None:
             )
             rm.register_texture_asset("__white_1x1__", white_asset, uuid=white_texture.uuid)
 
-    if "__normal_1x1__" not in rm._texture_registry.assets:
+    if rm._texture_registry.get_asset("__normal_1x1__") is None:
         normal_texture = get_normal_texture().texture_data
         if normal_texture is not None and normal_texture.is_valid:
             normal_asset = TextureAsset(

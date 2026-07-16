@@ -2,6 +2,7 @@
 
 from termin_assets.asset import Asset
 from termin_assets.asset_registry import AssetRegistry
+from termin_assets.asset_store import AssetStore
 from termin_assets.data_asset import DataAsset
 from termin_assets.embedded_asset import EmbeddedAssetSpec
 from termin_assets.identifiable import Identifiable
@@ -50,6 +51,7 @@ __all__ = [
     "AssetImportPlugin",
     "Asset",
     "AssetRegistry",
+    "AssetStore",
     "AssetRecord",
     "AssetRuntimePlugin",
     "AssetRuntimeUnregisterPlugin",

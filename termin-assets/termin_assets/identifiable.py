@@ -20,6 +20,7 @@ class Identifiable:
         else:
             self._uuid = uuid
         self._runtime_id = hash(self._uuid) & 0xFFFFFFFFFFFFFFFF
+        self._identity_locked = False
 
     @property
     def uuid(self) -> str:
@@ -30,3 +31,15 @@ class Identifiable:
     def runtime_id(self) -> int:
         """64-bit hash of UUID for fast runtime lookup."""
         return self._runtime_id
+
+    def _adopt_uuid(self, uuid: str) -> None:
+        """Set declared identity before registration, or validate it afterwards."""
+        if self._identity_locked and uuid != self._uuid:
+            raise ValueError(
+                f"Registered UUID identity is immutable: {self._uuid} != {uuid}"
+            )
+        self._uuid = uuid
+        self._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
+
+    def _lock_identity(self) -> None:
+        self._identity_locked = True

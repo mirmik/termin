@@ -289,7 +289,7 @@ class MeshAsset(DataAsset[TcMesh]):
     ) -> "MeshAsset":
         """Create MeshAsset from existing Mesh3 (CPU mesh)."""
         tc_mesh = TcMesh.from_mesh3(mesh3, name, uuid or "")
-        return cls(mesh_data=tc_mesh, name=name, source_path=source_path)
+        return cls(mesh_data=tc_mesh, name=name, source_path=source_path, uuid=uuid)
 
     @classmethod
     def from_vertices_triangles(

@@ -1,52 +1,96 @@
-"""Generic registry for assets."""
+"""Typed UUID membership and name indexes for assets."""
 
 from __future__ import annotations
 
-from typing import Callable, Dict, Generic, TypeVar
+from types import MappingProxyType
+from typing import Callable, Generic, Mapping, TypeVar
 
 from tcbase import log
 
 from termin_assets.asset import Asset
+from termin_assets.asset_store import AssetStore
 
 AssetT = TypeVar("AssetT", bound=Asset)
 DataT = TypeVar("DataT")
 
 
 class AssetRegistry(Generic[AssetT, DataT]):
-    """Generic registry for asset wrappers and their data/handle values."""
+    """Typed view over an :class:`AssetStore` with ordered name buckets."""
 
     def __init__(
         self,
         asset_class: type[AssetT] | Callable[[], type[AssetT]],
-        uuid_registry: Dict[str, Asset],
+        asset_store: AssetStore,
         data_from_asset: Callable[[AssetT], DataT | None],
         data_to_asset: Callable[[DataT], AssetT | None] | None = None,
     ):
-        self._assets: Dict[str, AssetT] = {}
+        self._asset_uuids: dict[str, None] = {}
+        self._uuids_by_name: dict[str, list[str]] = {}
         self._asset_class_or_factory = asset_class
         self._asset_class_cached: type[AssetT] | None = None
-        self._uuid_registry = uuid_registry
+        self._asset_store = asset_store
         self._data_from_asset = data_from_asset
         self._data_to_asset = data_to_asset
 
     @property
     def _asset_class(self) -> type[AssetT]:
-        """Get asset class, resolving a lazy factory if needed."""
         if self._asset_class_cached is None:
-            if callable(self._asset_class_or_factory) and not isinstance(self._asset_class_or_factory, type):
+            if callable(self._asset_class_or_factory) and not isinstance(
+                self._asset_class_or_factory, type
+            ):
                 self._asset_class_cached = self._asset_class_or_factory()
             else:
                 self._asset_class_cached = self._asset_class_or_factory
         return self._asset_class_cached
 
     @property
-    def assets(self) -> Dict[str, AssetT]:
-        """Direct access to registered assets."""
-        return self._assets
+    def assets(self) -> Mapping[str, AssetT]:
+        """Read-only UUID-keyed membership view.
+
+        The returned mapping is a snapshot so callers cannot mutate registry
+        membership or the canonical store behind its back.
+        """
+        return MappingProxyType({asset.uuid: asset for asset in self.iter_assets()})
+
+    @property
+    def unique_assets_by_name(self) -> Mapping[str, AssetT]:
+        """Read-only compatibility view containing only unambiguous names."""
+        return MappingProxyType(
+            {
+                name: asset
+                for name, uuids in self._uuids_by_name.items()
+                if len(uuids) == 1
+                and (asset := self.get_asset_by_uuid(uuids[0])) is not None
+            }
+        )
+
+    def iter_assets(self) -> tuple[AssetT, ...]:
+        assets: list[AssetT] = []
+        for uuid in self._asset_uuids:
+            asset = self.get_asset_by_uuid(uuid)
+            if asset is not None:
+                assets.append(asset)
+        return tuple(assets)
+
+    def find_assets_by_name(self, name: str) -> tuple[AssetT, ...]:
+        assets: list[AssetT] = []
+        for uuid in self._uuids_by_name.get(name, ()):
+            asset = self.get_asset_by_uuid(uuid)
+            if asset is not None:
+                assets.append(asset)
+        return tuple(assets)
 
     def get_asset(self, name: str) -> AssetT | None:
-        """Get asset by name."""
-        return self._assets.get(name)
+        """Return the uniquely named asset, diagnosing ambiguity."""
+        assets = self.find_assets_by_name(name)
+        if len(assets) == 1:
+            return assets[0]
+        if len(assets) > 1:
+            log.error(
+                f"[AssetRegistry] Ambiguous asset name '{name}' matches UUIDs: "
+                + ", ".join(asset.uuid for asset in assets)
+            )
+        return None
 
     def get_or_create_asset(
         self,
@@ -56,37 +100,29 @@ class AssetRegistry(Generic[AssetT, DataT]):
         parent: "Asset | None" = None,
         parent_key: str | None = None,
     ) -> AssetT:
-        """Get asset by UUID/name or create a new one."""
         if uuid is not None:
-            asset = self._uuid_registry.get(uuid)
-            if asset is not None and isinstance(asset, self._asset_class):
-                self._set_parent_if_applicable(asset, parent, parent_key)
-                return asset
-
-        if uuid is None:
-            asset = self._assets.get(name)
+            asset = self.get_asset_by_uuid(uuid)
             if asset is not None:
+                if asset.name != name:
+                    self.rename(uuid, name)
                 self._set_parent_if_applicable(asset, parent, parent_key)
                 return asset
+        else:
+            matches = self.find_assets_by_name(name)
+            if len(matches) == 1:
+                asset = matches[0]
+                self._set_parent_if_applicable(asset, parent, parent_key)
+                return asset
+            if len(matches) > 1:
+                log.error(
+                    f"[AssetRegistry] Cannot get-or-create ambiguous asset name '{name}'"
+                )
+                raise ValueError(f"Asset name is ambiguous without UUID: {name}")
 
         asset = self._asset_class(name=name, source_path=source_path, uuid=uuid)
-
         self._set_parent_if_applicable(asset, parent, parent_key)
-
-        self._register_uuid(asset)
-        self._assets[name] = asset
+        self.register(name, asset)
         return asset
-
-    def _register_uuid(self, asset: AssetT) -> None:
-        """Record an asset without allowing another asset to steal its UUID."""
-        registered = self._uuid_registry.get(asset.uuid)
-        if registered is not None and registered is not asset:
-            log.error(
-                f"[AssetRegistry] UUID collision for '{asset.uuid}': "
-                f"cannot register '{asset.name}' over '{registered.name}'"
-            )
-            raise ValueError(f"Asset UUID is already registered: {asset.uuid}")
-        self._uuid_registry[asset.uuid] = asset
 
     def _set_parent_if_applicable(
         self,
@@ -96,7 +132,6 @@ class AssetRegistry(Generic[AssetT, DataT]):
     ) -> None:
         if parent is None or parent_key is None:
             return
-
         from termin_assets.data_asset import DataAsset
 
         if isinstance(asset, DataAsset):
@@ -109,92 +144,112 @@ class AssetRegistry(Generic[AssetT, DataT]):
         source_path: str | None = None,
         uuid: str | None = None,
     ) -> None:
-        """Register asset by name and UUID."""
-        target_uuid = uuid if uuid is not None else asset.uuid
-        registered = self._uuid_registry.get(target_uuid)
-        if registered is not None and registered is not asset:
-            log.error(
-                f"[AssetRegistry] UUID collision for '{target_uuid}': "
-                f"cannot register '{name}' over '{registered.name}'"
+        """Register an asset without replacing UUID identity."""
+        if not isinstance(asset, self._asset_class):
+            raise TypeError(
+                f"Expected {self._asset_class.__name__}, got {type(asset).__name__}"
             )
-            raise ValueError(f"Asset UUID is already registered: {target_uuid}")
+        if uuid is not None:
+            try:
+                asset._adopt_uuid(uuid)
+            except ValueError:
+                log.error(
+                    f"[AssetRegistry] Cannot change registered UUID '{asset.uuid}' to '{uuid}'"
+                )
+                raise
+        if asset._registry_owner is not None and asset._registry_owner is not self:
+            log.error(
+                f"[AssetRegistry] Asset UUID '{asset.uuid}' already belongs to another registry"
+            )
+            raise ValueError("Asset already belongs to another typed registry")
 
-        old_uuid = asset.uuid
-        asset._name = name
+        self._asset_store.register(asset)
+        asset._registry_owner = self
+        if asset.uuid in self._asset_uuids:
+            if asset.name != name:
+                self.rename(asset.uuid, name)
+        else:
+            self._asset_uuids[asset.uuid] = None
+            self._uuids_by_name.setdefault(name, []).append(asset.uuid)
+            asset._rename(name)
         if source_path:
             asset.source_path = source_path
-        if uuid is not None:
-            asset._uuid = uuid
-            asset._runtime_id = hash(uuid) & 0xFFFFFFFFFFFFFFFF
 
-        if old_uuid != asset.uuid and self._uuid_registry.get(old_uuid) is asset:
-            del self._uuid_registry[old_uuid]
+    def rename(self, uuid: str, name: str) -> bool:
+        """Atomically move an asset between name buckets."""
+        asset = self.get_asset_by_uuid(uuid)
+        if asset is None:
+            return False
+        if asset.name == name:
+            return True
 
-        self._assets[name] = asset
-        self._register_uuid(asset)
+        old_name = asset.name
+        old_bucket = self._uuids_by_name[old_name]
+        old_bucket.remove(uuid)
+        if not old_bucket:
+            del self._uuids_by_name[old_name]
+        self._uuids_by_name.setdefault(name, []).append(uuid)
+        asset._rename(name)
+        return True
 
     def get(self, name: str) -> DataT | None:
-        """Get data/handle by name."""
-        asset = self._assets.get(name)
-        if asset is None:
-            return None
-        return self._data_from_asset(asset)
+        asset = self.get_asset(name)
+        return None if asset is None else self._data_from_asset(asset)
 
     def list_names(self) -> list[str]:
-        """List all registered names."""
-        return sorted(self._assets.keys())
+        return sorted(self._uuids_by_name)
 
     def find_name(self, data: DataT) -> str | None:
-        """Find name by data/handle."""
         if self._data_to_asset is not None:
             asset = self._data_to_asset(data)
-            if asset is not None:
-                for name, registered in self._assets.items():
-                    if registered is asset:
-                        return name
+            if asset is not None and asset.uuid in self._asset_uuids:
+                return asset.name
         return None
 
     def find_uuid(self, data: DataT) -> str | None:
-        """Find UUID by data/handle."""
         if self._data_to_asset is not None:
             asset = self._data_to_asset(data)
-            if asset is not None:
+            if asset is not None and asset.uuid in self._asset_uuids:
                 return asset.uuid
         return None
 
     def get_by_uuid(self, uuid: str) -> DataT | None:
-        """Get data/handle by UUID."""
-        asset = self._uuid_registry.get(uuid)
-        if asset is None or not isinstance(asset, self._asset_class):
-            return None
-        return self._data_from_asset(asset)
+        asset = self.get_asset_by_uuid(uuid)
+        return None if asset is None else self._data_from_asset(asset)
 
     def get_asset_by_uuid(self, uuid: str) -> AssetT | None:
-        """Get asset by UUID."""
-        asset = self._uuid_registry.get(uuid)
+        if uuid not in self._asset_uuids:
+            return None
+        asset = self._asset_store.get(uuid)
         if asset is None or not isinstance(asset, self._asset_class):
             return None
         return asset
 
-    def unregister(self, name: str) -> None:
-        """Remove asset by name."""
-        asset = self._assets.get(name)
-        if asset is not None:
-            if self._uuid_registry.get(asset.uuid) is asset:
-                del self._uuid_registry[asset.uuid]
-            del self._assets[name]
+    def unregister_by_uuid(self, uuid: str) -> AssetT | None:
+        asset = self.get_asset_by_uuid(uuid)
+        if asset is None:
+            return None
+        bucket = self._uuids_by_name[asset.name]
+        bucket.remove(uuid)
+        if not bucket:
+            del self._uuids_by_name[asset.name]
+        del self._asset_uuids[uuid]
+        self._asset_store.unregister(uuid, expected=asset)
+        asset._registry_owner = None
+        return asset
+
+    def unregister(self, name: str) -> AssetT | None:
+        asset = self.get_asset(name)
+        if asset is None:
+            return None
+        return self.unregister_by_uuid(asset.uuid)
 
     def clear(self) -> None:
-        """Remove all assets."""
-        for asset in list(self._assets.values()):
-            if self._uuid_registry.get(asset.uuid) is asset:
-                del self._uuid_registry[asset.uuid]
-        self._assets.clear()
+        for uuid in tuple(self._asset_uuids):
+            self.unregister_by_uuid(uuid)
 
     def __contains__(self, name: str) -> bool:
-        """Check if name is registered."""
-        return name in self._assets
+        return bool(self._uuids_by_name.get(name))
 
     def __len__(self) -> int:
-        """Number of registered assets."""
-        return len(self._assets)
+        return len(self._asset_uuids)

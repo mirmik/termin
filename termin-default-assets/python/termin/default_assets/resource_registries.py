@@ -6,7 +6,7 @@ from __future__ import annotations
 class DefaultAssetRegistryFactoryMixin:
     """Create runtime registries for asset types owned by default-assets.
 
-    The host resource manager provides ``_assets_by_uuid`` and stores registry
+    The host resource manager provides the canonical ``_asset_store`` and stores registry
     attributes. Keeping the factories here lets application hosts assemble a
     concrete manager without making ``termin-app`` own default asset type
     wiring.
@@ -20,7 +20,7 @@ class DefaultAssetRegistryFactoryMixin:
             return asset
 
         def data_to_asset(data):
-            for asset in self._prefab_registry.assets.values():
+            for asset in self._prefab_registry.iter_assets():
                 if asset is data:
                     return asset
             return None
@@ -31,7 +31,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -44,7 +44,7 @@ class DefaultAssetRegistryFactoryMixin:
             return asset
 
         def data_to_asset(data):
-            for asset in self._glb_registry.assets.values():
+            for asset in self._glb_registry.iter_assets():
                 if asset is data:
                     return asset
             return None
@@ -55,7 +55,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -70,7 +70,7 @@ class DefaultAssetRegistryFactoryMixin:
             return asset.material
 
         def data_to_asset(data):
-            for asset in self._material_registry.assets.values():
+            for asset in self._material_registry.iter_assets():
                 if asset.material is data:
                     return asset
             return None
@@ -81,7 +81,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -96,7 +96,7 @@ class DefaultAssetRegistryFactoryMixin:
             return asset.program
 
         def data_to_asset(data):
-            for asset in self._shader_registry.assets.values():
+            for asset in self._shader_registry.iter_assets():
                 if asset.program is data:
                     return asset
             return None
@@ -107,7 +107,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -126,14 +126,14 @@ class DefaultAssetRegistryFactoryMixin:
         def data_to_asset(mesh: TcMesh) -> MeshAsset | None:
             if mesh is None or not mesh.is_valid:
                 return None
-            for asset in self._mesh_registry.assets.values():
+            for asset in self._mesh_registry.iter_assets():
                 if asset.mesh_data is not None and asset.mesh_data.uuid == mesh.uuid:
                     return asset
             return None
 
         return AssetRegistry[MeshAsset, TcMesh](
             asset_class=MeshAsset,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -155,14 +155,14 @@ class DefaultAssetRegistryFactoryMixin:
         def data_to_asset(texture: TcTexture) -> TextureAsset | None:
             if texture is None or not texture.is_valid:
                 return None
-            for asset in self._texture_registry.assets.values():
+            for asset in self._texture_registry.iter_assets():
                 if asset.uuid == texture.uuid:
                     return asset
             return None
 
         return AssetRegistry[TextureAsset, TcTexture](
             asset_class=TextureAsset,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -178,7 +178,7 @@ class DefaultAssetRegistryFactoryMixin:
         def data_to_asset(data: TcVoxelGrid):
             if not isinstance(data, TcVoxelGrid) or not data.is_valid:
                 return None
-            for asset in self._voxel_grid_registry.assets.values():
+            for asset in self._voxel_grid_registry.iter_assets():
                 if asset.uuid == data.uuid:
                     return asset
             return None
@@ -189,7 +189,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -205,7 +205,7 @@ class DefaultAssetRegistryFactoryMixin:
         def data_to_asset(data: TcNavMesh):
             if not isinstance(data, TcNavMesh) or not data.is_valid:
                 return None
-            for asset in self._navmesh_registry.assets.values():
+            for asset in self._navmesh_registry.iter_assets():
                 if asset.uuid == data.uuid:
                     return asset
             return None
@@ -216,7 +216,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -233,7 +233,7 @@ class DefaultAssetRegistryFactoryMixin:
             return clip
 
         def data_to_asset(data):
-            for asset in self._animation_clip_registry.assets.values():
+            for asset in self._animation_clip_registry.iter_assets():
                 if asset.clip is data:
                     return asset
             return None
@@ -244,7 +244,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -259,7 +259,7 @@ class DefaultAssetRegistryFactoryMixin:
             return asset.skeleton_data
 
         def data_to_asset(data):
-            for asset in self._skeleton_registry.assets.values():
+            for asset in self._skeleton_registry.iter_assets():
                 if asset.skeleton_data is data:
                     return asset
             return None
@@ -270,7 +270,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -285,7 +285,7 @@ class DefaultAssetRegistryFactoryMixin:
             return asset.source
 
         def data_to_asset(data):
-            for asset in self._glsl_registry.assets.values():
+            for asset in self._glsl_registry.iter_assets():
                 if asset.source is data:
                     return asset
             return None
@@ -296,7 +296,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -320,7 +320,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -344,7 +344,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )
@@ -359,7 +359,7 @@ class DefaultAssetRegistryFactoryMixin:
             return asset.pipeline
 
         def data_to_asset(data):
-            for asset in self._pipeline_registry.assets.values():
+            for asset in self._pipeline_registry.iter_assets():
                 if asset.pipeline is data:
                     return asset
             return None
@@ -370,7 +370,7 @@ class DefaultAssetRegistryFactoryMixin:
 
         return AssetRegistry(
             asset_class=get_asset_class,
-            uuid_registry=self._assets_by_uuid,
+            asset_store=self._asset_store,
             data_from_asset=data_from_asset,
             data_to_asset=data_to_asset,
         )

@@ -39,7 +39,7 @@ class GlslRuntimePlugin:
 
         rm = context.resource_manager
         name = context.name
-        uuid = result.spec_data.get("uuid") if result.spec_data else None
+        uuid = result.uuid
         if uuid:
             asset = rm.get_runtime_asset_by_uuid(self.type_id, uuid)
             if isinstance(asset, GlslAsset):
@@ -57,7 +57,11 @@ class GlslRuntimePlugin:
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
-        asset = rm.get_runtime_asset(self.type_id, context.name)
+        asset = (
+            rm.get_runtime_asset_by_uuid(self.type_id, result.uuid)
+            if result.uuid
+            else rm.get_runtime_asset(self.type_id, context.name)
+        )
         if asset is None:
             return
 
@@ -71,7 +75,7 @@ class GlslRuntimePlugin:
             asset.reload()
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
-        context.resource_manager.unregister_runtime_asset(self.type_id, context.name)
+        context.resource_manager.unregister_runtime_asset(self.type_id, context.name, uuid=result.uuid)
 
 
 class GlslAssetPlugin(GlslImportPlugin, GlslRuntimePlugin):
