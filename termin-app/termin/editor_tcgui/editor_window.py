@@ -755,8 +755,6 @@ class EditorWindowTcgui:
             menu_bar=menu_bar,
             config=MenuBarControllerConfig(
                 file=FileMenuActions(
-                    new_project=self._new_project,
-                    open_project=self._open_project,
                     new_scene=self._new_scene,
                     save_scene=self._save_scene,
                     save_scene_as=self._save_scene_as,
@@ -1180,49 +1178,16 @@ class EditorWindowTcgui:
     def _restore_project(self, on_complete=None) -> bool:
         return self._project_session_controller.restore_project(on_complete=on_complete)
 
-    def _finish_startup_project_restore(self) -> None:
-        # _rescan_file_resources is called inside _load_project, don't call again.
+    def _finish_startup_project_restore(self, _success: bool = True) -> None:
+        # Project initialization publishes and scans resources before loading modules.
         if self._current_project_path is None:
             self._rescan_file_resources()
         self._load_last_scene()
         self._update_window_title()
 
     # ------------------------------------------------------------------
-    # Project operations (stub — file dialogs via tcgui)
+    # Project operations
     # ------------------------------------------------------------------
-
-    def _new_project(self) -> None:
-        if self._ui is None:
-            return
-        from tcgui.widgets.file_dialog_overlay import show_save_file_dialog
-
-        show_save_file_dialog(
-            self._ui,
-            title="Create New Project",
-            directory=self._current_project_path or str(Path.cwd()),
-            filter_str="Termin Project (*.terminproj);;All Files (*)",
-            on_result=lambda path: self._create_project_file(path) if path else None,
-            windowed=True,
-        )
-
-    def _open_project(self) -> None:
-        if self._ui is None:
-            return
-        from tcgui.widgets.file_dialog_overlay import show_open_file_dialog
-
-        show_open_file_dialog(
-            self._ui,
-            title="Open Project",
-            filter_str="Project Files (*.terminproj);;All Files (*)",
-            on_result=lambda path: self._load_project(path) if path else None,
-            windowed=True,
-        )
-
-    def _create_project_file(self, path: str) -> None:
-        self._project_session_controller.create_project_file(path)
-
-    def _load_project(self, path: str) -> None:
-        self._project_session_controller.load_project(path)
 
     def _configure_shader_runtime_for_project(self, project_root: Path) -> None:
         ProjectSessionController.configure_shader_runtime_for_project(

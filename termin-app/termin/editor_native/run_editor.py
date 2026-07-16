@@ -1341,23 +1341,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
         root_path = project_browser_controller.root_path
         return str(root_path) if root_path is not None else str(Path.home())
 
-    def choose_new_project() -> None:
-        dialog_service.show_save_file(
-            "New Project",
-            project_dialog_directory(),
-            "Termin Projects (*.terminproj);;All Files (*)",
-            lambda path: project_session_controller.create_project_file(path) if path else None,
-            default_name="Project.terminproj",
-        )
-
-    def choose_open_project() -> None:
-        dialog_service.show_open_file(
-            "Open Project",
-            project_dialog_directory(),
-            "Termin Projects (*.terminproj);;All Files (*)",
-            lambda path: project_session_controller.load_project(path) if path else None,
-        )
-
     def choose_material() -> None:
         dialog_service.show_open_file(
             "Load Material",
@@ -1387,8 +1370,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             dialog_service.show_error("Deploy Standard Library", str(error))
 
     file_actions = {
-        shell.new_project_command: choose_new_project,
-        shell.open_project_command: choose_open_project,
         shell.close_scene_command: scene_file_controller.close_scene,
         shell.load_material_command: choose_material,
         shell.load_components_command: choose_components,
@@ -1441,9 +1422,9 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
 
     debug_menu.connect_activated(on_camera_frustums)
     if project_file is not None:
-        project_session_controller.load_project(
+        project_session_controller.initialize_project(
             project_file,
-            on_complete=scene_file_controller.load_last_scene,
+            on_complete=lambda _success: scene_file_controller.load_last_scene(),
         )
 
     def prepare_code_for_play() -> bool:
