@@ -159,22 +159,6 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("factory").none(),
            "Set factory for creating pipelines by special name")
 
-        .def("set_render_request_callback", [](RenderingManager& self, nb::object callback) {
-            if (callback.is_none()) {
-                self.set_render_request_callback(nullptr);
-            } else {
-                nb::object stored = callback;
-                self.set_render_request_callback([stored]() {
-                    nb::gil_scoped_acquire gil;
-                    stored();
-                });
-            }
-        }, nb::arg("callback").none(),
-           "Set callback called when rendering should be requested after internal render-state changes")
-
-        .def("request_render_update", &RenderingManager::request_render_update,
-           "Request another render frame through the registered host callback")
-
         .def("set_display_removed_callback", [](RenderingManager& self, nb::object callback) {
             if (callback.is_none()) {
                 self.set_display_removed_callback(nullptr);
