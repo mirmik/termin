@@ -65,7 +65,6 @@ struct CppModuleHandle : IModuleHandle {
 
 struct PythonModuleHandle : IModuleHandle {
     std::vector<std::string> imported_modules;
-    std::vector<std::filesystem::path> added_paths;
 };
 
 struct ModuleRecord {

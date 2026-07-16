@@ -113,12 +113,33 @@ public:
 
 class FakePythonBackend final : public IModuleBackend {
 public:
+    int prepare_calls = 0;
+    int teardown_calls = 0;
     int load_calls = 0;
     int unload_calls = 0;
+    bool fail_prepare = false;
     bool fail_unload = false;
 
     ModuleKind kind() const override {
         return ModuleKind::Python;
+    }
+
+    bool prepare_environment(
+        const std::vector<ModuleRecord>&,
+        const ModuleEnvironment&,
+        std::string& diagnostics,
+        std::string& error
+    ) override {
+        ++prepare_calls;
+        diagnostics = fail_prepare ? "injected prepare diagnostics" : "";
+        error = fail_prepare ? "injected environment prepare failure" : "";
+        return !fail_prepare;
+    }
+
+    bool teardown_environment(const ModuleEnvironment&, std::string& error) override {
+        ++teardown_calls;
+        error.clear();
+        return true;
     }
 
     bool load(ModuleRecord& record, const ModuleEnvironment&) override {
@@ -619,6 +640,50 @@ void test_python_unload_prepare_failure_preserves_loaded_handle() {
     backend->fail_unload = false;
     expect(runtime.unload_module("sample"), "retry should unload after prepare succeeds");
     expect(backend->unload_calls == 2, "failed backend commit and retry must each run once");
+}
+
+void test_python_environment_lifecycle_wraps_module_handles() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "sample.pymodule",
+        "name: sample\nroot: Scripts\npackages: [sample]\n"
+    );
+
+    ModuleRuntime runtime;
+    auto backend = std::make_shared<FakePythonBackend>();
+    runtime.register_backend(backend);
+
+    expect(runtime.discover(tmp.path), "Python environment discovery should succeed");
+    expect(backend->prepare_calls == 1, "environment must prepare once after discovery");
+    expect(backend->load_calls == 0, "environment prepare must precede module imports");
+    expect(runtime.load_module("sample"), "Python module should load in prepared environment");
+    expect(runtime.unload_module("sample"), "Python module should unload");
+    expect(backend->teardown_calls == 0, "module unload must not teardown session environment");
+    expect(runtime.load_module("sample"), "Python module should reload without environment prepare");
+    expect(backend->prepare_calls == 1, "repeated module loads must reuse session environment");
+    expect(runtime.shutdown(), "runtime shutdown should unload and teardown environment");
+    expect(backend->teardown_calls == 1, "shutdown must teardown session environment once");
+}
+
+void test_python_environment_prepare_failure_aborts_discovery() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "sample.pymodule",
+        "name: sample\nroot: Scripts\npackages: [sample]\n"
+    );
+
+    ModuleRuntime runtime;
+    auto backend = std::make_shared<FakePythonBackend>();
+    backend->fail_prepare = true;
+    runtime.register_backend(backend);
+
+    expect(!runtime.discover(tmp.path), "environment prepare failure must reject discovery");
+    expect(runtime.last_error().find("injected environment prepare failure") != std::string::npos,
+           "environment prepare error must cross the runtime boundary");
+    expect(backend->load_calls == 0, "failed environment must prevent module loads");
+    expect(backend->teardown_calls == 1, "failed prepare must run transaction rollback");
+    expect(runtime.find("sample")->diagnostics == "injected prepare diagnostics",
+           "environment diagnostics must remain visible on discovered records");
 }
 
 void test_live_mutation_thread_guard_fails_before_backend_calls() {
@@ -1253,6 +1318,14 @@ TEST_CASE("module runtime rejects duplicate ids and simultaneous cycles atomical
 
 TEST_CASE("module runtime keeps Python module loaded when unload preparation fails") {
     test_python_unload_prepare_failure_preserves_loaded_handle();
+}
+
+TEST_CASE("module runtime owns Python environment around module handles") {
+    test_python_environment_lifecycle_wraps_module_handles();
+}
+
+TEST_CASE("module runtime rolls back failed Python environment prepare") {
+    test_python_environment_prepare_failure_aborts_discovery();
 }
 
 TEST_CASE("module runtime rejects live mutation from a non-owner thread") {

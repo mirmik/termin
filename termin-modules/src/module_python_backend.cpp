@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <sstream>
 #include <string>
@@ -41,6 +42,53 @@ bool has_added_path(
     return false;
 }
 
+std::filesystem::path normalize_import_path(const std::filesystem::path& path) {
+    std::error_code error;
+    std::filesystem::path normalized = std::filesystem::weakly_canonical(path, error);
+    if (!error) {
+        return normalized;
+    }
+    normalized = std::filesystem::absolute(path, error);
+    if (!error) {
+        return normalized.lexically_normal();
+    }
+    return path.lexically_normal();
+}
+
+std::string import_path_key(const std::filesystem::path& path) {
+    std::string key = normalize_import_path(path).generic_string();
+#ifdef _WIN32
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+#endif
+    return key;
+}
+
+bool sys_path_contains(const std::filesystem::path& path) {
+    PyObject* sys_path = PySys_GetObject("path");
+    if (sys_path == nullptr) {
+        return false;
+    }
+
+    const std::string key = import_path_key(path);
+    const Py_ssize_t size = PyList_Size(sys_path);
+    for (Py_ssize_t i = 0; i < size; ++i) {
+        PyObject* item = PyList_GetItem(sys_path, i);
+        if (item == nullptr || !PyUnicode_Check(item)) {
+            continue;
+        }
+        const char* raw = PyUnicode_AsUTF8(item);
+        if (raw != nullptr && import_path_key(raw) == key) {
+            return true;
+        }
+        if (raw == nullptr) {
+            PyErr_Clear();
+        }
+    }
+    return false;
+}
+
 bool append_sys_path(const std::filesystem::path& path, std::string& error) {
     PyObject* sys_path = PySys_GetObject("path");
     if (sys_path == nullptr) {
@@ -69,36 +117,49 @@ bool append_sys_path_once(
     std::vector<std::filesystem::path>& added_paths,
     std::string& error
 ) {
-    if (has_added_path(added_paths, path)) {
+    const std::filesystem::path normalized = normalize_import_path(path);
+    if (has_added_path(added_paths, normalized) || sys_path_contains(normalized)) {
         return true;
     }
 
-    if (!append_sys_path(path, error)) {
+    if (!append_sys_path(normalized, error)) {
         return false;
     }
 
-    added_paths.push_back(path);
+    added_paths.push_back(normalized);
     return true;
 }
 
-void remove_sys_path(const std::filesystem::path& path) {
+void remove_one_sys_path_entry(const std::filesystem::path& path) {
     PyObject* sys_path = PySys_GetObject("path");
     if (sys_path == nullptr) {
         return;
     }
 
+    const std::string key = import_path_key(path);
     const Py_ssize_t size = PyList_Size(sys_path);
-    for (Py_ssize_t i = size - 1; i >= 0; --i) {
+    for (Py_ssize_t i = 0; i < size; ++i) {
         PyObject* item = PyList_GetItem(sys_path, i);
         if (item == nullptr || !PyUnicode_Check(item)) {
             continue;
         }
 
         const char* raw = PyUnicode_AsUTF8(item);
-        if (raw != nullptr && path == std::filesystem::path(raw)) {
+        if (raw != nullptr && import_path_key(raw) == key) {
             PySequence_DelItem(sys_path, i);
+            return;
+        }
+        if (raw == nullptr) {
+            PyErr_Clear();
         }
     }
+}
+
+void rollback_added_paths(std::vector<std::filesystem::path>& added_paths) {
+    for (auto it = added_paths.rbegin(); it != added_paths.rend(); ++it) {
+        remove_one_sys_path_entry(*it);
+    }
+    added_paths.clear();
 }
 
 bool call_module_context_function(
@@ -605,6 +666,81 @@ bool ensure_requirements(
 
 } // namespace
 
+bool PythonModuleBackend::prepare_environment(
+    const std::vector<ModuleRecord>& records,
+    const ModuleEnvironment& environment,
+    std::string& diagnostics,
+    std::string& error
+) {
+    diagnostics.clear();
+    error.clear();
+    if (_environment_prepared) {
+        return true;
+    }
+
+    std::vector<std::filesystem::path> python_roots;
+    for (const ModuleRecord& record : records) {
+        if (record.spec.kind != ModuleKind::Python) {
+            continue;
+        }
+        const auto config = std::dynamic_pointer_cast<PythonModuleConfig>(record.spec.config);
+        if (!config || config->ignored) {
+            continue;
+        }
+        python_roots.push_back(config->root);
+    }
+    if (python_roots.empty()) {
+        _environment_prepared = true;
+        return true;
+    }
+
+    if (!ensure_interpreter(error)) {
+        return false;
+    }
+
+    PyGILState_STATE gil = PyGILState_Ensure();
+    if (!ensure_project_venv(environment, diagnostics, error)) {
+        PyGILState_Release(gil);
+        return false;
+    }
+    if (!append_python_site_paths(environment, _session_added_paths, error)) {
+        rollback_added_paths(_session_added_paths);
+        PyGILState_Release(gil);
+        return false;
+    }
+    for (const std::filesystem::path& root : python_roots) {
+        if (!append_sys_path_once(root, _session_added_paths, error)) {
+            rollback_added_paths(_session_added_paths);
+            PyGILState_Release(gil);
+            return false;
+        }
+    }
+
+    _environment_prepared = true;
+    PyGILState_Release(gil);
+    return true;
+}
+
+bool PythonModuleBackend::teardown_environment(
+    const ModuleEnvironment& environment,
+    std::string& error
+) {
+    (void)environment;
+    error.clear();
+    if (!_environment_prepared && _session_added_paths.empty()) {
+        return true;
+    }
+    if (!ensure_interpreter(error)) {
+        return false;
+    }
+
+    PyGILState_STATE gil = PyGILState_Ensure();
+    rollback_added_paths(_session_added_paths);
+    _environment_prepared = false;
+    PyGILState_Release(gil);
+    return true;
+}
+
 bool PythonModuleBackend::load(
     ModuleRecord& record,
     const ModuleEnvironment& environment
@@ -620,6 +756,10 @@ bool PythonModuleBackend::load(
         record.error_message = error;
         return false;
     }
+    if (!_environment_prepared) {
+        record.error_message = "Python session environment is not prepared";
+        return false;
+    }
 
     record.error_message.clear();
     record.diagnostics.clear();
@@ -628,25 +768,7 @@ bool PythonModuleBackend::load(
 
     auto handle = std::make_shared<PythonModuleHandle>();
 
-    if (!ensure_project_venv(environment, record.diagnostics, error)) {
-        PyGILState_Release(gil);
-        record.error_message = error;
-        return false;
-    }
-
-    if (!append_python_site_paths(environment, handle->added_paths, error)) {
-        PyGILState_Release(gil);
-        record.error_message = error;
-        return false;
-    }
-
     if (!ensure_requirements(*config, environment, record.diagnostics, error)) {
-        PyGILState_Release(gil);
-        record.error_message = error;
-        return false;
-    }
-
-    if (!append_sys_path_once(config->root, handle->added_paths, error)) {
         PyGILState_Release(gil);
         record.error_message = error;
         return false;
@@ -725,10 +847,6 @@ bool PythonModuleBackend::unload(
     for (const std::string& name : handle->imported_modules) {
         remove_sys_module(name);
     }
-    for (const auto& path : handle->added_paths) {
-        remove_sys_path(path);
-    }
-
     PyGILState_Release(gil);
     return true;
 }

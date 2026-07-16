@@ -13,7 +13,7 @@
 
 - `ModuleRuntime`: orchestration, порядок зависимостей и состояние модулей
 - `CppModuleBackend`: build command, проверка versioned native ABI и lifecycle shared library
-- `PythonModuleBackend`: управление `sys.path` и импорт Python-пакетов
+- `PythonModuleBackend`: session-owned import environment и импорт Python-пакетов
 - `ModuleDescriptorParser`: разбор дескрипторов через `nos::trent`
 
 Типовой сценарий:

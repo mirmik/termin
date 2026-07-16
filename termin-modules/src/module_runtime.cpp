@@ -214,6 +214,10 @@ bool ModuleRuntime::discover(const std::filesystem::path& project_root) {
         }
     }
 
+    if (!teardown_backend_environments()) {
+        return false;
+    }
+
     _records.clear();
     _last_error.clear();
 
@@ -286,12 +290,15 @@ bool ModuleRuntime::discover(const std::filesystem::path& project_root) {
         ++it;
     }
 
-    return _last_error.empty();
+    if (!_last_error.empty()) {
+        return false;
+    }
+    return prepare_backend_environments();
 }
 
 bool ModuleRuntime::shutdown() {
     const std::vector<std::string> ordered = build_shutdown_order(_records);
-    if (ordered.empty()) {
+    if (ordered.empty() && !_backend_environments_prepared) {
         _last_error.clear();
         return true;
     }
@@ -340,6 +347,17 @@ bool ModuleRuntime::shutdown() {
         }
     }
 
+    bool has_active_handles = false;
+    for (const ModuleRecord& record : _records) {
+        if (is_loaded_or_holding_handle(record)) {
+            has_active_handles = true;
+            break;
+        }
+    }
+    if (!has_active_handles && !teardown_backend_environments()) {
+        failures.push_back(_last_error.empty() ? "environment teardown failed" : _last_error);
+    }
+
     if (failures.empty()) {
         _last_error.clear();
         return true;
@@ -349,6 +367,69 @@ bool ModuleRuntime::shutdown() {
     message << "Module runtime shutdown failed";
     for (const std::string& failure : failures) {
         message << "; " << failure;
+    }
+    _last_error = message.str();
+    tc::Log::error("ModuleRuntime: %s", _last_error.c_str());
+    return false;
+}
+
+bool ModuleRuntime::prepare_backend_environments() {
+    for (auto& [kind, backend] : _backends) {
+        std::string diagnostics;
+        std::string error;
+        if (backend->prepare_environment(_records, _environment, diagnostics, error)) {
+            continue;
+        }
+
+        for (ModuleRecord& record : _records) {
+            if (record.spec.kind == kind) {
+                record.diagnostics = diagnostics;
+            }
+        }
+        _last_error = "Failed to prepare module environment: " +
+            (error.empty() ? std::string("backend setup failed") : error);
+        tc::Log::error("ModuleRuntime: %s", _last_error.c_str());
+
+        for (auto& [rollback_kind, rollback_backend] : _backends) {
+            (void)rollback_kind;
+            std::string rollback_error;
+            if (!rollback_backend->teardown_environment(_environment, rollback_error)) {
+                tc::Log::error(
+                    "ModuleRuntime: environment rollback failed: %s",
+                    rollback_error.c_str()
+                );
+            }
+        }
+        _backend_environments_prepared = false;
+        return false;
+    }
+    _backend_environments_prepared = true;
+    _last_error.clear();
+    return true;
+}
+
+bool ModuleRuntime::teardown_backend_environments() {
+    if (!_backend_environments_prepared) {
+        return true;
+    }
+    std::vector<std::string> errors;
+    for (auto& [kind, backend] : _backends) {
+        (void)kind;
+        std::string error;
+        if (!backend->teardown_environment(_environment, error)) {
+            errors.push_back(error.empty() ? "backend teardown failed" : error);
+        }
+    }
+    if (errors.empty()) {
+        _backend_environments_prepared = false;
+        _last_error.clear();
+        return true;
+    }
+
+    std::ostringstream message;
+    message << "Failed to teardown module environment";
+    for (const std::string& error : errors) {
+        message << "; " << error;
     }
     _last_error = message.str();
     tc::Log::error("ModuleRuntime: %s", _last_error.c_str());

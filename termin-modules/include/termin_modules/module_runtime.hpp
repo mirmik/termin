@@ -31,6 +31,7 @@ private:
     MutationThreadChecker _mutation_thread_checker;
     std::vector<std::filesystem::path> _discovery_ignored_roots;
     std::string _last_error;
+    bool _backend_environments_prepared = false;
 
 public:
     ModuleRuntime() = default;
@@ -104,6 +105,8 @@ private:
     bool load_module_impl(const std::string& module_id, bool refresh_descriptors);
     bool unload_module_impl(const std::string& module_id, bool refresh_descriptor);
     bool ensure_mutation_thread(const char* operation);
+    bool prepare_backend_environments();
+    bool teardown_backend_environments();
 };
 
 } // namespace termin_modules
