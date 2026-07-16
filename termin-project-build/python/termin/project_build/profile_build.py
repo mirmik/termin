@@ -11,18 +11,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from termin.project_build import build_android_project, build_desktop_project, build_quest_openxr_project
+from termin.project_build.android_build import build_android_project
 from termin.project_build.build_context import BuildContext, create_build_context
+from termin.project_build.desktop_build import build_desktop_project
 from termin.project_build.desktop_runtime_packager import (
     MINIMAL_PYTHON_PACKAGE_POLICY,
     SUPPORTED_PYTHON_PACKAGE_POLICIES,
 )
 from termin.project_build.pipeline import ProjectBuildPipelineError
+from termin.project_build.profiles import (
+    BuildProfile,
+    ProfileBuildError,
+    load_build_profile,
+    resolve_project_path,
+)
+from termin.project_build.quest_openxr_build import build_quest_openxr_project
 from termin.project_build.target_preflight import TargetPreflightError, preflight_project_build_context
 
 
 SUPPORTED_TARGETS = ("android", "desktop", "quest_openxr")
-BUILD_PROFILE_SCHEMA_VERSION = 1
 SUPPORTED_CONFIGURATIONS = ("dev", "debug", "release")
 SUPPORTED_RESOURCE_POLICIES = ("dev_smoke", "strict")
 SUPPORTED_SHADER_TARGETS = ("vulkan", "opengl", "d3d11")
@@ -47,12 +54,6 @@ TARGET_OPTION_BLOCKS = {
 }
 
 
-class ProfileBuildError(RuntimeError):
-    def __init__(self, message: str, exit_code: int = 2) -> None:
-        super().__init__(message)
-        self.exit_code = exit_code
-
-
 class UnsupportedBuildTargetError(ProfileBuildError):
     def __init__(self, target: str) -> None:
         supported = ", ".join(SUPPORTED_TARGETS)
@@ -60,16 +61,6 @@ class UnsupportedBuildTargetError(ProfileBuildError):
             f"unsupported build target '{target}'. Supported targets: {supported}",
             exit_code=3,
         )
-
-
-@dataclass(frozen=True)
-class BuildProfile:
-    name: str
-    project_root: Path
-    target: str
-    entry_scene: Path
-    output_dir: Path
-    data: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -118,34 +109,6 @@ def build_profile_from_args(args: argparse.Namespace) -> int:
             f"'{args.target}', profile file contains '{profile.target}'"
         )
     return build_profile(profile, shader_compiler=args.shader_compiler)
-
-
-def load_build_profile(project_root: Path, profiles_path: Path, profile_name: str) -> BuildProfile:
-    project_root = project_root.resolve()
-    profiles_path = profiles_path.resolve()
-    root = _read_json_object(profiles_path)
-    _validate_schema_version(root, context=str(profiles_path))
-    profiles = _required_object(root, "profiles", context=str(profiles_path))
-    raw_profile = _required_object(profiles, profile_name, context="profiles")
-
-    target = _required_string(raw_profile, "target", context=f"profile '{profile_name}'")
-    entry_scene = _resolve_project_path(
-        project_root,
-        _required_string(raw_profile, "entry_scene", context=f"profile '{profile_name}'"),
-    )
-    output_dir = _resolve_project_path(
-        project_root,
-        _required_string(raw_profile, "output_dir", context=f"profile '{profile_name}'"),
-    )
-
-    return BuildProfile(
-        name=profile_name,
-        project_root=project_root,
-        target=target,
-        entry_scene=entry_scene,
-        output_dir=output_dir,
-        data=raw_profile,
-    )
 
 
 def build_profile(profile: BuildProfile, shader_compiler: Path | None = None) -> int:
@@ -400,49 +363,13 @@ def _build_desktop_from_args(args: argparse.Namespace) -> int:
     project_root = args.project_root.resolve()
     result = build_desktop_project(
         project_root=project_root,
-        entry_scene=_resolve_project_path(project_root, args.entry_scene),
-        output_dir=_resolve_project_path(project_root, args.output_dir),
+        entry_scene=resolve_project_path(project_root, args.entry_scene),
+        output_dir=resolve_project_path(project_root, args.output_dir),
         shader_compiler=args.shader_compiler,
         shader_targets=tuple(args.shader_targets) if args.shader_targets is not None else None,
     )
     _print_desktop_result(result)
     return _exit_code_for_diagnostics(result.diagnostics)
-
-
-def _read_json_object(path: Path) -> Mapping[str, Any]:
-    try:
-        with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-    except OSError as exc:
-        raise ProfileBuildError(f"failed to read build profiles file {path}: {exc}") from exc
-    except json.JSONDecodeError as exc:
-        raise ProfileBuildError(f"failed to parse build profiles file {path}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ProfileBuildError(f"build profiles root must be a JSON object: {path}")
-    return data
-
-
-def _validate_schema_version(data: Mapping[str, Any], context: str) -> None:
-    value = data.get("version")
-    if value is None:
-        raise ProfileBuildError(
-            f"{context} must contain integer field 'version' with value "
-            f"{BUILD_PROFILE_SCHEMA_VERSION}"
-        )
-    if not isinstance(value, int):
-        raise ProfileBuildError(f"{context} field 'version' must be an integer")
-    if value != BUILD_PROFILE_SCHEMA_VERSION:
-        raise ProfileBuildError(
-            f"{context} has unsupported build profile schema version {value}; "
-            f"supported version is {BUILD_PROFILE_SCHEMA_VERSION}"
-        )
-
-
-def _required_object(data: Mapping[str, Any], key: str, context: str) -> Mapping[str, Any]:
-    value = data.get(key)
-    if not isinstance(value, dict):
-        raise ProfileBuildError(f"{context} must contain object field '{key}'")
-    return value
 
 
 def _optional_object(data: Mapping[str, Any], key: str, context: str) -> Mapping[str, Any]:
@@ -451,13 +378,6 @@ def _optional_object(data: Mapping[str, Any], key: str, context: str) -> Mapping
         return {}
     if not isinstance(value, dict):
         raise ProfileBuildError(f"{context} field '{key}' must be an object")
-    return value
-
-
-def _required_string(data: Mapping[str, Any], key: str, context: str) -> str:
-    value = data.get(key)
-    if not isinstance(value, str) or value == "":
-        raise ProfileBuildError(f"{context} must contain non-empty string field '{key}'")
     return value
 
 
@@ -641,13 +561,6 @@ def _desktop_path(profile: BuildProfile, key: str) -> Path | None:
 
 def _android_path(profile: BuildProfile, android: Mapping[str, Any], key: str) -> Path | None:
     return _path_from_mapping(android, key, None, profile.project_root)
-
-
-def _resolve_project_path(project_root: Path, path: str | Path) -> Path:
-    candidate = Path(path)
-    if not candidate.is_absolute():
-        candidate = project_root / candidate
-    return candidate.resolve()
 
 
 def _print_desktop_result(result: Any) -> None:
