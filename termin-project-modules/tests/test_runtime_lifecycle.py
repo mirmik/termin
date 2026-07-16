@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import types
 from pathlib import Path
 
 import pytest
@@ -156,6 +157,129 @@ def test_python_environment_setup_failure_prevents_import_and_leaves_no_paths(
     assert str(source_root.resolve()) not in sys.path
     assert "sample_module" not in sys.modules
     assert runtime.shutdown()
+
+
+def test_preimported_package_survives_failed_load_and_unload(tmp_path: Path) -> None:
+    source_root = _write_python_module(
+        tmp_path,
+        packages=("sample_module", "missing_sample_module"),
+    )
+    source_path = str(source_root.resolve())
+    sys.path.insert(0, source_path)
+    __import__("sample_module")
+    original = sys.modules["sample_module"]
+    try:
+        failed_runtime = ProjectModulesRuntime()
+        failed_runtime.set_sync_live_scenes(False)
+        assert not failed_runtime.load_project(tmp_path)
+        assert sys.modules["sample_module"] is original
+        assert failed_runtime.close()
+        assert sys.modules["sample_module"] is original
+
+        (tmp_path / "sample.pymodule").write_text(
+            "name: sample\nroot: Scripts\npackages: [sample_module]\n",
+            encoding="utf-8",
+        )
+        runtime = ProjectModulesRuntime()
+        runtime.set_sync_live_scenes(False)
+        assert runtime.load_project(tmp_path)
+        assert runtime.unload_module("sample")
+        assert sys.modules["sample_module"] is original
+        assert runtime.close()
+        assert sys.modules["sample_module"] is original
+    finally:
+        sys.modules.pop("sample_module", None)
+        sys.path.remove(source_path)
+
+
+def test_overlapping_python_package_claims_fail_before_import(tmp_path: Path) -> None:
+    source_root = tmp_path / "Scripts"
+    package = source_root / "shared_package"
+    child = package / "child"
+    child.mkdir(parents=True)
+    (package / "__init__.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (child / "__init__.py").write_text("VALUE = 2\n", encoding="utf-8")
+    (tmp_path / "first.pymodule").write_text(
+        "name: first\nroot: Scripts\npackages: [shared_package]\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "second.pymodule").write_text(
+        "name: second\nroot: Scripts\npackages: [shared_package.child]\n",
+        encoding="utf-8",
+    )
+
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    assert not runtime.load_project(tmp_path)
+    assert "Python package namespace overlap" in runtime.last_error
+    assert "first" in runtime.last_error
+    assert "second" in runtime.last_error
+    assert "shared_package" not in sys.modules
+    assert str(source_root.resolve()) not in sys.path
+    assert runtime.close()
+
+
+def test_partial_python_import_evicts_only_transaction_modules(tmp_path: Path) -> None:
+    source_root = tmp_path / "Scripts"
+    package = source_root / "broken_package"
+    package.mkdir(parents=True)
+    (package / "child.py").write_text("VALUE = 42\n", encoding="utf-8")
+    (package / "__init__.py").write_text(
+        "from . import child\nraise RuntimeError('injected partial import failure')\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "broken.pymodule").write_text(
+        "name: broken\nroot: Scripts\npackages: [broken_package]\n",
+        encoding="utf-8",
+    )
+
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    assert not runtime.load_project(tmp_path)
+    assert "injected partial import failure" in runtime.last_error
+    assert "broken_package" not in sys.modules
+    assert "broken_package.child" not in sys.modules
+    assert runtime.close()
+
+
+def test_unload_preserves_replaced_sys_modules_mapping(tmp_path: Path) -> None:
+    _write_python_module(tmp_path)
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    assert runtime.load_project(tmp_path)
+    original = sys.modules["sample_module"]
+    replacement = types.ModuleType("sample_module")
+    sys.modules["sample_module"] = replacement
+
+    assert runtime.unload_module("sample")
+    assert sys.modules["sample_module"] is replacement
+    assert original is not replacement
+    assert runtime.close()
+    assert sys.modules["sample_module"] is replacement
+    sys.modules.pop("sample_module", None)
+
+
+def test_python_reload_publishes_new_namespace_and_keeps_old_references(
+    tmp_path: Path,
+) -> None:
+    source_root = _write_python_module(tmp_path)
+    runtime = ProjectModulesRuntime()
+    runtime.set_sync_live_scenes(False)
+    assert runtime.load_project(tmp_path)
+    old_module = sys.modules["sample_module"]
+    assert old_module.VALUE == 42
+
+    (source_root / "sample_module" / "__init__.py").write_text(
+        "VALUE = 840\n",
+        encoding="utf-8",
+    )
+    assert runtime.reload_module("sample")
+    new_module = sys.modules["sample_module"]
+    assert new_module is not old_module
+    assert new_module.VALUE == 840
+    assert old_module.VALUE == 42
+    assert runtime.close()
+    assert "sample_module" not in sys.modules
 
 
 def test_loading_new_descriptor_rebuilds_runtime_without_orphaning_handles(
