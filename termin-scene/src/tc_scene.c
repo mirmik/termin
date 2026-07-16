@@ -1107,35 +1107,51 @@ void tc_scene_set_metadata(tc_scene_handle h, tc_value value) {
 // ============================================================================
 
 static bool notify_render_attach_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
-    (void)user_data;
+    const tc_render_attachment_context* context =
+        (const tc_render_attachment_context*)user_data;
     size_t count = tc_entity_pool_component_count(pool, id);
     for (size_t i = 0; i < count; i++) {
         tc_component* c = tc_entity_pool_component_at(pool, id, i);
         if (c && c->vtable && c->vtable->on_render_attach) {
-            c->vtable->on_render_attach(c);
+            c->vtable->on_render_attach(c, context);
         }
     }
     return true;
 }
 
-void tc_scene_notify_render_attach(tc_scene_handle h) {
+void tc_scene_notify_render_attach(
+    tc_scene_handle h,
+    const tc_render_attachment_context* context
+) {
     if (!handle_alive(h)) return;
-    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_render_attach_callback, NULL);
+    if (!context) {
+        tc_log_error("[Scene] render attach notification requires a context");
+        return;
+    }
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_render_attach_callback, (void*)context);
 }
 
 static bool notify_render_detach_callback(tc_entity_pool* pool, tc_entity_id id, void* user_data) {
-    (void)user_data;
+    const tc_render_attachment_context* context =
+        (const tc_render_attachment_context*)user_data;
     size_t count = tc_entity_pool_component_count(pool, id);
     for (size_t i = 0; i < count; i++) {
         tc_component* c = tc_entity_pool_component_at(pool, id, i);
         if (c && c->vtable && c->vtable->on_render_detach) {
-            c->vtable->on_render_detach(c);
+            c->vtable->on_render_detach(c, context);
         }
     }
     return true;
 }
 
-void tc_scene_notify_render_detach(tc_scene_handle h) {
+void tc_scene_notify_render_detach(
+    tc_scene_handle h,
+    const tc_render_attachment_context* context
+) {
     if (!handle_alive(h)) return;
-    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_render_detach_callback, NULL);
+    if (!context) {
+        tc_log_error("[Scene] render detach notification requires a context");
+        return;
+    }
+    tc_entity_pool_foreach(g_pool->slots[h.index].pool, notify_render_detach_callback, (void*)context);
 }

@@ -710,7 +710,8 @@ void MeshRenderer::on_scene_active() {
     bind_mesh_component();
 }
 
-void MeshRenderer::on_render_attach() {
+void MeshRenderer::on_render_attach(const RenderAttachmentContext& context) {
+    (void)context;
     bind_mesh_component();
 }
 

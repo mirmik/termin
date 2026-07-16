@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from termin.engine import EngineCore, RenderTopology
 from termin.render_framework import render_target_new
+from termin.scene import PythonComponent
 
 
 def test_engine_owned_render_topology_isolates_same_named_scene_targets() -> None:
@@ -33,3 +34,61 @@ def test_engine_owned_render_topology_isolates_same_named_scene_targets() -> Non
         target_b.free()
         engine.scene_manager.close_scene("topology-a")
         engine.scene_manager.close_scene("topology-b")
+
+
+def test_python_render_lifecycle_context_is_scene_scoped_and_call_scoped() -> None:
+    class RenderContextProbe(PythonComponent):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attach_context = None
+            self.detach_context = None
+            self.attach_target = None
+            self.detach_target = None
+            self.foreign_target = "not-checked"
+
+        def on_render_attach(self, context) -> None:
+            assert context.valid
+            self.attach_context = context
+            self.attach_target = context.find_render_target("ProbeTarget")
+            self.foreign_target = context.find_render_target("ForeignTarget")
+            assert len(context.render_targets) == 1
+
+        def on_render_detach(self, context) -> None:
+            assert context.valid
+            self.detach_context = context
+            self.detach_target = context.find_render_target("ProbeTarget")
+
+    engine = EngineCore()
+    scene = engine.scene_manager.create_scene("context-probe")
+    foreign_scene = engine.scene_manager.create_scene("context-foreign")
+    entity = scene.create_entity("Probe")
+    probe = RenderContextProbe()
+    entity.add_component(probe)
+
+    target = render_target_new("ProbeTarget")
+    target.scene = scene
+    engine.rendering_manager.register_managed_render_target(target)
+    foreign_target = render_target_new("ForeignTarget")
+    foreign_target.scene = foreign_scene
+    engine.rendering_manager.register_managed_render_target(foreign_target)
+
+    engine.rendering_manager.attach_scene(scene)
+    assert probe.attach_target is not None
+    assert probe.foreign_target is None
+    assert not probe.attach_context.valid
+
+    engine.rendering_manager.detach_scene_full(scene)
+    assert probe.detach_target is not None
+    assert not probe.detach_context.valid
+
+    try:
+        _ = probe.detach_context.render_targets
+    except RuntimeError as error:
+        assert "no longer active" in str(error)
+    else:
+        raise AssertionError("retained RenderAttachmentContext remained usable")
+
+    engine.rendering_manager.unregister_managed_render_target(foreign_target)
+    foreign_target.free()
+    engine.scene_manager.close_scene("context-probe")
+    engine.scene_manager.close_scene("context-foreign")

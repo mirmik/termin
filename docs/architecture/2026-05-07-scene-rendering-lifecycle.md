@@ -137,13 +137,14 @@ RenderTarget (tc_render_target_handle)
 4. Добавить сцену в `attached_scenes_`
 
 **`detach_scene_full(scene)`** — полное отключение:
-1. `unmount_scene(scene, display)` для каждого сценового дисплея:
+1. Вызвать `on_render_detach(RenderAttachmentContext)` пока все scene-owned
+   pipelines, viewports и targets ещё доступны, затем удалить compiled pipelines
+2. `unmount_scene(scene, display)` для каждого сценового дисплея:
    - Найти все вьюпорты на дисплее, ссылающиеся на эту сцену
    - Для каждого: удалить с дисплея, освободить вьюпорт
    - Если render target не зарегистрирован в `managed_render_targets_` и больше нигде не используется — освободить и его
-2. Пройти по `managed_render_targets_`, освободить принадлежащие сцене
-3. Удалить сцену из `attached_scenes_`
-4. `detach_scene(scene)` — уничтожить скомпилированные пайплайны, уведомить компоненты через `on_render_detach`
+3. Пройти по scene index в `RenderTopology`, освободить принадлежащие сцене targets
+4. Удалить сцену из live topology
 
 Дисплеи **не удаляются автоматически** при detach — только если выставлен флаг `auto_remove_when_empty` и на дисплее не осталось вьюпортов (`try_auto_remove_display`).
 

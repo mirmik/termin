@@ -1,10 +1,12 @@
 #include "guard_main.h"
 #include "termin/render/rendering_manager.hpp"
+#include "termin/render/render_attachment_context.hpp"
 #include "termin/render/graph_compiler.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
 #include "termin/render/tc_pass.hpp"
 
 #include <string>
+#include <optional>
 #include <tcbase/trent/json.h>
 
 extern "C" {
@@ -39,18 +41,35 @@ struct RenderLifecycleCounter {
     tc_component component;
     int attach_count = 0;
     int detach_count = 0;
+    bool attach_context_valid = false;
+    bool detach_context_valid = false;
+    bool detach_saw_pipeline = false;
+    std::optional<termin::RenderAttachmentContext> retained_context;
 };
 
-void lifecycle_counter_on_render_attach(tc_component* component)
+void lifecycle_counter_on_render_attach(
+    tc_component* component,
+    const tc_render_attachment_context* context
+)
 {
     auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
     counter->attach_count++;
+    counter->attach_context_valid = tc_render_attachment_context_valid(context);
+    counter->retained_context = *reinterpret_cast<const termin::RenderAttachmentContext*>(context);
 }
 
-void lifecycle_counter_on_render_detach(tc_component* component)
+void lifecycle_counter_on_render_detach(
+    tc_component* component,
+    const tc_render_attachment_context* context
+)
 {
     auto* counter = reinterpret_cast<RenderLifecycleCounter*>(component);
     counter->detach_count++;
+    counter->detach_context_valid = tc_render_attachment_context_valid(context);
+    counter->detach_saw_pipeline = tc_pipeline_handle_valid(
+        tc_render_attachment_context_get_pipeline(context, "lifecycle-template")
+    );
+    counter->retained_context = *reinterpret_cast<const termin::RenderAttachmentContext*>(context);
 }
 
 const tc_component_vtable lifecycle_counter_vtable = {
@@ -766,6 +785,9 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     manager.attach_scene(scene);
     CHECK_EQ(counter.attach_count, 1);
     CHECK_EQ(counter.detach_count, 0);
+    CHECK(counter.attach_context_valid);
+    REQUIRE(counter.retained_context.has_value());
+    CHECK(!counter.retained_context->valid());
 
     manager.attach_scene(scene);
     CHECK_EQ(counter.attach_count, 2);
@@ -774,6 +796,9 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     manager.detach_scene(scene);
     CHECK_EQ(counter.attach_count, 2);
     CHECK_EQ(counter.detach_count, 1);
+    CHECK(counter.detach_context_valid);
+    CHECK(counter.detach_saw_pipeline);
+    CHECK(!counter.retained_context->valid());
 
     tc_spt_free(templ.handle());
     tc_scene_free(scene);

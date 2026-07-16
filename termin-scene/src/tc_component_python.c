@@ -83,15 +83,21 @@ static void py_vtable_on_editor_start(tc_component* c) {
     }
 }
 
-static void py_vtable_on_render_attach(tc_component* c) {
+static void py_vtable_on_render_attach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
     if (g_py_callbacks.on_render_attach && c->body) {
-        g_py_callbacks.on_render_attach(c->body);
+        g_py_callbacks.on_render_attach(c->body, context);
     }
 }
 
-static void py_vtable_on_render_detach(tc_component* c) {
+static void py_vtable_on_render_detach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
     if (g_py_callbacks.on_render_detach && c->body) {
-        g_py_callbacks.on_render_detach(c->body);
+        g_py_callbacks.on_render_detach(c->body, context);
     }
 }
 

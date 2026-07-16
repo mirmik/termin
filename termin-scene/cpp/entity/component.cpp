@@ -211,14 +211,24 @@ void CxxComponent::_cb_on_scene_active(tc_component* c) {
     if (self) self->on_scene_active();
 }
 
-void CxxComponent::_cb_on_render_attach(tc_component* c) {
+void CxxComponent::_cb_on_render_attach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
     auto* self = from_tc(c);
-    if (self) self->on_render_attach();
+    if (self && context) {
+        self->on_render_attach(*reinterpret_cast<const RenderAttachmentContext*>(context));
+    }
 }
 
-void CxxComponent::_cb_on_render_detach(tc_component* c) {
+void CxxComponent::_cb_on_render_detach(
+    tc_component* c,
+    const tc_render_attachment_context* context
+) {
     auto* self = from_tc(c);
-    if (self) self->on_render_detach();
+    if (self && context) {
+        self->on_render_detach(*reinterpret_cast<const RenderAttachmentContext*>(context));
+    }
 }
 
 void CxxComponent::_cb_on_editor_start(tc_component* c) {

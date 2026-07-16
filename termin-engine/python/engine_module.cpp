@@ -25,6 +25,10 @@ NB_MODULE(_engine_native, m) {
 
     termin::bind_scene_manager(scene_module);
     termin::bind_rendering_manager(render_module);
+    nb::module_::import_("termin.scene._scene_native")
+        .attr("_set_render_attachment_context_wrapper")(
+            render_module.attr("RenderAttachmentContext").attr("_from_capsule")
+        );
     termin::bind_term_modules_integration(modules_module);
     termin::bind_scene_render_ext(m);
     termin::bind_engine_core(m);

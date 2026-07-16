@@ -72,7 +72,7 @@ public:
     void start() override;
     void on_editor_start() override;
     void on_scene_active() override;
-    void on_render_attach() override;
+    void on_render_attach(const RenderAttachmentContext& context) override;
     void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
     Mat44f get_model_matrix(const Entity& entity) const override;
     bool collect_render_items(

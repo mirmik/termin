@@ -56,3 +56,8 @@
 | `on_editor_start` | Запуск editor mode |
 | `on_scene_inactive` / `on_scene_active` | Активация/деактивация сцены |
 | `on_render_attach` / `on_render_detach` | Подключение/отключение рендера |
+
+Обе render-нотификации получают `RenderAttachmentContext`. Это временный
+scene-scoped view живых targets и pipelines; сохранять ссылку на него после
+возврата из callback нельзя. `termin-scene` только транспортирует opaque
+context, а его API и lifetime принадлежат `termin-engine`.

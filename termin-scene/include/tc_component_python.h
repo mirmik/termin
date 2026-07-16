@@ -35,8 +35,8 @@ typedef void (*tc_py_on_removed_fn)(void* py_self);
 typedef void (*tc_py_on_scene_inactive_fn)(void* py_self);
 typedef void (*tc_py_on_scene_active_fn)(void* py_self);
 typedef void (*tc_py_on_editor_start_fn)(void* py_self);
-typedef void (*tc_py_on_render_attach_fn)(void* py_self);
-typedef void (*tc_py_on_render_detach_fn)(void* py_self);
+typedef void (*tc_py_on_render_attach_fn)(void* py_self, const tc_render_attachment_context* context);
+typedef void (*tc_py_on_render_detach_fn)(void* py_self, const tc_render_attachment_context* context);
 
 // Reference counting callbacks for Python objects
 typedef void (*tc_py_incref_fn)(void* py_obj);
