@@ -13,6 +13,11 @@ from tcgui.widgets.containers import HStack, VStack, Panel
 from tcgui.widgets.units import px, pct
 from tcbase import Key, MouseButton, log
 from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
+from termin.launcher.controller import (
+    LaunchResult,
+    LauncherController,
+    LauncherServices,
+)
 from termin.launcher.recent import RecentProjects, write_launch_project
 from termin.project import create_project
 
@@ -173,6 +178,31 @@ def _launch_editor_process(editor_exe: str, project_path: str) -> bool:
     return True
 
 
+def _dispatch_editor(project_path: str) -> LaunchResult:
+    """Platform adapter used by the toolkit-neutral launcher controller."""
+    editor_exe = _find_editor_executable()
+    if editor_exe is None:
+        return LaunchResult(started=False, error="Cannot find termin_editor executable")
+    write_launch_project(project_path)
+    started = _launch_editor_process(editor_exe, project_path)
+    if not started:
+        return LaunchResult(started=False, error="Failed to launch termin_editor")
+    return LaunchResult(started=True, should_quit=True)
+
+
+def _create_launcher_controller() -> LauncherController:
+    return LauncherController(
+        RecentProjects(),
+        LauncherServices(
+            choose_directory=_ask_directory,
+            choose_project_file=_ask_open_project,
+            create_project=create_project,
+            launch_editor=_dispatch_editor,
+            report_error=log.error,
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Launcher app
 # ---------------------------------------------------------------------------
@@ -189,11 +219,10 @@ class LauncherApp:
     _BTN_NORMAL_PRESSED = (0.18, 0.18, 0.22, 1.0)
     _BTN_DISABLED = (0.18, 0.18, 0.2, 0.6)
 
-    def __init__(self, graphics):
+    def __init__(self, graphics, controller: LauncherController):
         self.ui = UI(graphics=graphics)
-        self.recent = RecentProjects()
+        self.controller = controller
         self._bg_image_path = os.path.join(os.path.dirname(__file__), "back.png")
-        self.should_quit: bool = False
 
         # Selection-dependent buttons (updated when selection changes)
         self._open_btn: Button | None = None
@@ -201,6 +230,10 @@ class LauncherApp:
         self._project_list: ListWidget | None = None
 
         self.show_main_screen()
+
+    @property
+    def should_quit(self) -> bool:
+        return self.controller.state.should_quit
 
     # --- Screen builders ---
 
@@ -261,11 +294,11 @@ class LauncherApp:
 
         # Populate list
         items = []
-        for entry in self.recent.list()[:10]:
+        for entry in self.controller.state.recent_projects:
             items.append({
-                "text": entry.get("name", "???"),
-                "subtitle": os.path.dirname(entry["path"]),
-                "data": entry["path"],
+                "text": entry.name,
+                "subtitle": os.path.dirname(entry.path),
+                "data": entry.path,
             })
         project_list.set_items(items)
 
@@ -289,7 +322,7 @@ class LauncherApp:
 
         new_btn = self._make_button("New Project", self._BTN_PRIMARY,
                                      self._BTN_PRIMARY_HOVER, self._BTN_PRIMARY_PRESSED)
-        new_btn.on_click = self.show_new_project_screen
+        new_btn.on_click = self._on_show_new_project
         new_btn.preferred_width = px(180)
 
         open_btn = self._make_button("Open Project", self._BTN_DISABLED,
@@ -373,7 +406,11 @@ class LauncherApp:
         path_label.color = (0.6, 0.6, 0.65, 1.0)
 
         path_input = TextInput()
-        path_input.text = os.path.expanduser("~/projects")
+        name_input.text = self.controller.state.new_project_name
+        name_input.on_changed = self.controller.set_new_project_name
+
+        path_input.text = self.controller.state.new_project_location
+        path_input.on_changed = self.controller.set_new_project_location
         path_input.preferred_width = px(320)
         path_input.font_size = 15
 
@@ -385,7 +422,7 @@ class LauncherApp:
         browse_btn.hover_color = (0.35, 0.35, 0.4, 1.0)
 
         def on_browse():
-            chosen = _ask_directory()
+            chosen = self.controller.choose_new_project_location()
             if chosen:
                 path_input.text = chosen
                 path_input.cursor_pos = len(chosen)
@@ -420,19 +457,12 @@ class LauncherApp:
         back_btn.hover_color = (0.35, 0.35, 0.4, 1.0)
         back_btn.pressed_color = (0.18, 0.18, 0.22, 1.0)
         back_btn.border_radius = 6
-        back_btn.on_click = self.show_main_screen
+        back_btn.on_click = self._on_show_main
 
         def on_create():
-            name = name_input.text.strip()
-            location = path_input.text.strip()
-            if not name or not location:
-                log.error("Name and location are required")
-                return
-            try:
-                proj_file = create_project(name, location)
-                self._launch_editor(proj_file)
-            except Exception as e:
-                log.error(f"Failed to create project: {e}")
+            self.controller.set_new_project_name(name_input.text)
+            self.controller.set_new_project_location(path_input.text)
+            self.controller.create_new_project()
 
         create_btn.on_click = on_create
 
@@ -492,54 +522,39 @@ class LauncherApp:
 
     # --- Project list callbacks ---
 
+    def _on_show_main(self) -> None:
+        self.controller.show_main_screen()
+        self.show_main_screen()
+
+    def _on_show_new_project(self) -> None:
+        self.controller.show_new_project_screen()
+        self.show_new_project_screen()
+
     def _on_project_select(self, index: int, item: dict) -> None:
         """Single click — select project, enable Open/Remove buttons."""
+        self.controller.select_project(item["data"])
+        enabled = self.controller.state.can_open_selected
         if self._open_btn is not None:
-            self._set_button_enabled(self._open_btn, True)
+            self._set_button_enabled(self._open_btn, enabled)
         if self._remove_btn is not None:
-            self._set_button_enabled(self._remove_btn, True)
+            self._set_button_enabled(self._remove_btn, enabled)
 
     def _on_project_activate(self, index: int, item: dict) -> None:
         """Double click — open project."""
-        self._launch_editor(item["data"])
+        self.controller.open_project(item["data"])
 
     def _on_open_selected(self) -> None:
         """Open the currently selected project."""
-        if self._project_list is None:
-            return
-        item = self._project_list.selected_item
-        if item is None:
-            return
-        self._launch_editor(item["data"])
+        self.controller.open_selected_project()
 
     def _on_remove_selected(self) -> None:
         """Remove the currently selected project from the recent list."""
-        if self._project_list is None:
-            return
-        item = self._project_list.selected_item
-        if item is None:
-            return
-        self.recent.remove(item["data"])
-        # Rebuild screen
-        self.show_main_screen()
-
-    def _launch_editor(self, project_path: str) -> None:
-        """Launch termin_editor with the given project and quit the launcher."""
-        editor_exe = _find_editor_executable()
-        if editor_exe is None:
-            log.error("Cannot find termin_editor executable")
-            return
-
-        write_launch_project(project_path)
-        self.recent.add(project_path)
-
-        self.should_quit = _launch_editor_process(editor_exe, project_path)
+        if self.controller.remove_selected_project():
+            self.show_main_screen()
 
     def _on_open_project(self) -> None:
         """Handle 'Open Existing...' button — file dialog for .terminproj."""
-        path = _ask_open_project()
-        if path:
-            self._launch_editor(path)
+        self.controller.open_existing_project()
 
 
 # ---------------------------------------------------------------------------
@@ -614,13 +629,7 @@ def run():
 
     if project is not None:
         # Direct launch: skip UI, open editor with given project
-        write_launch_project(project)
-        RecentProjects().add(project)
-        editor_exe = _find_editor_executable()
-        if editor_exe is None:
-            log.error("Cannot find termin_editor executable")
-            return
-        _launch_editor_process(editor_exe, project)
+        _create_launcher_controller().open_project(project)
         return
 
     configure_sdk_shader_runtime("launcher")
@@ -638,7 +647,7 @@ def run():
     window = SDLBackendWindow("Termin Launcher", 1024, 640)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
-    app = LauncherApp(graphics=graphics)
+    app = LauncherApp(graphics=graphics, controller=_create_launcher_controller())
     presenting = False
 
     def present_ui() -> None:
