@@ -36,6 +36,27 @@ def _write_python_module(
     return source_root
 
 
+def test_live_scene_sync_requires_explicit_scene_manager() -> None:
+    runtime = ProjectModulesRuntime()
+    try:
+        assert not runtime.sync_live_scenes
+        with pytest.raises(RuntimeError, match="explicit SceneManager"):
+            runtime.set_sync_live_scenes(True)
+    finally:
+        runtime.close()
+
+
+def test_explicit_scene_manager_enables_live_scene_sync() -> None:
+    from termin.engine import SceneManager
+
+    manager = SceneManager()
+    runtime = ProjectModulesRuntime(scene_manager=manager)
+    try:
+        assert runtime.sync_live_scenes
+    finally:
+        runtime.close()
+
+
 def test_project_runtime_close_removes_python_modules_and_paths(tmp_path: Path) -> None:
     source_root = _write_python_module(tmp_path)
     runtime = ProjectModulesRuntime()

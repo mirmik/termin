@@ -39,6 +39,7 @@ class HeadlessRuntime:
         register_builtin_resources: bool = True,
         include_render_resources: bool = False,
         scene_extensions: Sequence[int] | None = None,
+        scene_manager=None,
     ) -> None:
         self.project_path = Path(project_path)
         self.scene_name = scene_name
@@ -51,6 +52,7 @@ class HeadlessRuntime:
             if scene_extensions is None
             else tuple(scene_extensions)
         )
+        self.scene_manager = scene_manager
         self.scene = None
         self.frames = 0
         self.simulated_time = 0.0
@@ -74,7 +76,11 @@ class HeadlessRuntime:
                 include_render_resources=self.include_render_resources
             )
         if self.load_modules:
-            load_project_modules(self.project_path, log_prefix="[HeadlessRuntime]")
+            load_project_modules(
+                self.project_path,
+                log_prefix="[HeadlessRuntime]",
+                scene_manager=self.scene_manager,
+            )
         if self.load_assets:
             scan_project_assets(self.project_path, log_prefix="[HeadlessRuntime]")
 

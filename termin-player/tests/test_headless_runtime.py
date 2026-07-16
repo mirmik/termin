@@ -239,11 +239,13 @@ def test_headless_runtime_reloads_python_module_component_in_live_scene(tmp_path
         load_modules=True,
         load_assets=False,
         register_builtin_resources=False,
+        scene_manager=scene_manager,
     )
 
     try:
         runtime.initialize()
-        # TermModulesIntegration discovers live scenes through SceneManager.
+        # The headless host explicitly registers the live scene with its
+        # injected SceneManager before enabling reload synchronization.
         scene_manager.register_scene("Main.scene", runtime.scene.scene_handle())
         components = runtime.scene.get_components_of_type("HotReloadProbeComponent")
         assert len(components) == 1
@@ -296,6 +298,7 @@ def test_headless_runtime_keeps_unknown_component_after_failed_python_reload(
         load_modules=True,
         load_assets=False,
         register_builtin_resources=False,
+        scene_manager=scene_manager,
     )
 
     try:
@@ -353,6 +356,7 @@ def test_repeated_python_reload_is_serialized_with_active_scene_ticks(tmp_path: 
         load_modules=True,
         load_assets=False,
         register_builtin_resources=False,
+        scene_manager=scene_manager,
     )
 
     try:

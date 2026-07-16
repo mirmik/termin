@@ -252,7 +252,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     from termin.project_modules.runtime import get_project_modules_runtime
 
     modules_controller = ModulesPanelController(
-        get_project_modules_runtime(),
+        get_project_modules_runtime(engine.scene_manager),
         defer=host.defer,
     )
     modules_panel = build_native_modules_panel(host.document, modules_controller)

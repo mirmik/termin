@@ -64,9 +64,12 @@ def _sdk_python_executable(prefix_root: Path) -> Path | None:
 
 
 class ProjectModulesRuntime:
-    def __init__(self) -> None:
+    def __init__(self, scene_manager=None) -> None:
         self._project_root: Path | None = None
         self._integration = TermModulesIntegration()
+        self._scene_manager = scene_manager
+        if scene_manager is not None:
+            self._integration.set_scene_manager(scene_manager)
         self._runtime = ModuleRuntime()
         self._listeners: list[Callable[[ModuleEvent], None]] = []
         self._build_output_listeners: list[Callable[[str, str], None]] = []
@@ -93,10 +96,25 @@ class ProjectModulesRuntime:
         return bool(self._integration.environment.sync_live_scenes)
 
     def set_sync_live_scenes(self, enabled: bool) -> None:
+        if enabled and self._scene_manager is None:
+            raise RuntimeError("live scene synchronization requires an explicit SceneManager")
         environment = self._integration.environment
         environment.sync_live_scenes = bool(enabled)
         self._integration.set_environment(environment)
         self._runtime.set_environment(environment)
+        self._integration.configure_runtime(self._runtime)
+
+    def set_scene_manager(self, scene_manager) -> None:
+        self._ensure_open()
+        if scene_manager is None:
+            raise ValueError("scene_manager must not be None")
+        self._scene_manager = scene_manager
+        self._integration.set_scene_manager(scene_manager)
+        environment = self._integration.environment
+        environment.sync_live_scenes = True
+        self._integration.set_environment(environment)
+        self._runtime.set_environment(environment)
+        self._integration.configure_runtime(self._runtime)
 
     def runtime(self) -> ModuleRuntime:
         return self._runtime
@@ -437,6 +455,8 @@ class ProjectModulesRuntime:
         if not self._shutdown_runtime():
             return False
         self._detach_runtime_callbacks()
+        self._integration.clear_scene_provider()
+        self._scene_manager = None
         self._listeners.clear()
         self._build_output_listeners.clear()
         self._closed = True
@@ -567,7 +587,7 @@ class ProjectModulesRuntime:
         environment.lib_dir = str(prefix_root / "lib")
         environment.allow_python_package_install = True
         environment.use_project_venv = False
-        environment.sync_live_scenes = True
+        environment.sync_live_scenes = self._scene_manager is not None
         self._integration.set_environment(environment)
         self._runtime.set_environment(environment)
 
@@ -644,10 +664,12 @@ class ProjectModulesRuntime:
 _instance: ProjectModulesRuntime | None = None
 
 
-def get_project_modules_runtime() -> ProjectModulesRuntime:
+def get_project_modules_runtime(scene_manager=None) -> ProjectModulesRuntime:
     global _instance
     if _instance is None or _instance.closed:
-        _instance = ProjectModulesRuntime()
+        _instance = ProjectModulesRuntime(scene_manager=scene_manager)
+    elif scene_manager is not None and _instance._scene_manager is not scene_manager:
+        _instance.set_scene_manager(scene_manager)
     return _instance
 
 

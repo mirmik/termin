@@ -6,7 +6,6 @@
 #include <termin/entity/component_registry.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/render/unknown_pass_ops.hpp>
-
 #include <termin/scene/scene_manager.hpp>
 
 #include <core/tc_component.h>
@@ -15,26 +14,15 @@
 #include <inspect/tc_runtime_type_registry.h>
 
 #include <thread>
+#include <stdexcept>
 
 namespace termin {
 namespace {
 
-std::vector<TcSceneRef> collect_scenes() {
-    std::vector<TcSceneRef> scenes;
-
-    SceneManager* manager = SceneManager::instance();
-    if (manager == nullptr) {
-        return scenes;
-    }
-
-    for (const std::string& name : manager->scene_names()) {
-        tc_scene_handle scene = manager->get_scene(name);
-        if (tc_scene_alive(scene)) {
-            scenes.emplace_back(scene);
-        }
-    }
-
-    return scenes;
+std::vector<TcSceneRef> collect_scenes(
+    const TermModulesIntegration::SceneProvider& provider
+) {
+    return provider ? provider() : std::vector<TcSceneRef>{};
 }
 
 std::vector<std::string> module_component_types(const termin_modules::ModuleRecord& record) {
@@ -177,10 +165,13 @@ bool prepare_pass_unload_for_runtime_type(
     return true;
 }
 
-void rollback_module_placeholders(const termin_modules::ModuleRecord& record) {
+void rollback_module_placeholders(
+    const termin_modules::ModuleRecord& record,
+    const TermModulesIntegration::SceneProvider& scene_provider
+) {
     const std::vector<std::string> component_types = module_component_types(record);
     if (!component_types.empty()) {
-        for (const TcSceneRef& scene : collect_scenes()) {
+        for (const TcSceneRef& scene : collect_scenes(scene_provider)) {
             const UnknownComponentStats stats =
                 upgrade_unknown_components(scene, component_types);
             if (stats.failed > 0) {
@@ -235,14 +226,15 @@ void end_module_registration_scope(const termin_modules::ModuleRecord& record) {
 bool cleanup_module_registrations(
     const termin_modules::ModuleRecord& record,
     std::string& error,
-    bool sync_live_scenes
+    bool sync_live_scenes,
+    const TermModulesIntegration::SceneProvider& scene_provider
 ) {
     error.clear();
 
     try {
         std::vector<TcSceneRef> scenes;
         if (sync_live_scenes) {
-            scenes = collect_scenes();
+            scenes = collect_scenes(scene_provider);
         }
         RuntimeUnloadContext context{
             sync_live_scenes,
@@ -256,7 +248,7 @@ bool cleanup_module_registrations(
             );
         const std::vector<std::string> remaining_types = module_runtime_types(record);
         if (!remaining_types.empty()) {
-            if (sync_live_scenes) rollback_module_placeholders(record);
+            if (sync_live_scenes) rollback_module_placeholders(record, scene_provider);
             error = "Failed to clean module registrations for '" + record.spec.id + "'";
             tc::Log::error("TermModulesIntegration: %s", error.c_str());
             return false;
@@ -283,13 +275,14 @@ bool cleanup_module_registrations(
 bool prepare_module_registration_unload(
     const termin_modules::ModuleRecord& record,
     std::string& error,
-    bool sync_live_scenes
+    bool sync_live_scenes,
+    const TermModulesIntegration::SceneProvider& scene_provider
 ) {
     error.clear();
     try {
         std::vector<TcSceneRef> scenes;
         if (sync_live_scenes) {
-            scenes = collect_scenes();
+            scenes = collect_scenes(scene_provider);
         }
         RuntimeUnloadContext context{
             sync_live_scenes,
@@ -297,7 +290,7 @@ bool prepare_module_registration_unload(
             record.spec.id.c_str()
         };
         if (!tc_runtime_type_registry_prepare_owner_unload(record.spec.id.c_str(), &context)) {
-            if (sync_live_scenes) rollback_module_placeholders(record);
+            if (sync_live_scenes) rollback_module_placeholders(record, scene_provider);
             error = "Failed to prepare module registrations for unload: '" + record.spec.id + "'";
             tc::Log::error("TermModulesIntegration: %s", error.c_str());
             return false;
@@ -314,13 +307,16 @@ bool prepare_module_registration_unload(
     }
 }
 
-void upgrade_module_components(const termin_modules::ModuleRecord& record) {
+void upgrade_module_components(
+    const termin_modules::ModuleRecord& record,
+    const TermModulesIntegration::SceneProvider& scene_provider
+) {
     const std::vector<std::string> type_names = module_component_types(record);
     if (type_names.empty()) {
         return;
     }
 
-    const std::vector<TcSceneRef> scenes = collect_scenes();
+    const std::vector<TcSceneRef> scenes = collect_scenes(scene_provider);
     if (scenes.empty()) {
         tc::Log::warn(
             "TermModulesIntegration: no scenes available to upgrade components for module '%s'",
@@ -371,6 +367,27 @@ const termin_modules::ModuleEnvironment& TermModulesIntegration::environment() c
     return _environment;
 }
 
+void TermModulesIntegration::set_scene_provider(SceneProvider provider) {
+    _scene_provider = std::move(provider);
+}
+
+void TermModulesIntegration::set_scene_manager(SceneManager& scene_manager) {
+    set_scene_provider([manager = &scene_manager]() {
+        std::vector<TcSceneRef> scenes;
+        for (const std::string& name : manager->scene_names()) {
+            tc_scene_handle scene = manager->get_scene(name);
+            if (tc_scene_alive(scene)) {
+                scenes.emplace_back(scene);
+            }
+        }
+        return scenes;
+    });
+}
+
+void TermModulesIntegration::clear_scene_provider() {
+    _scene_provider = nullptr;
+}
+
 void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& runtime) const {
     runtime.set_environment(_environment);
     const std::thread::id owner_thread = std::this_thread::get_id();
@@ -382,6 +399,12 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         return false;
     });
     const bool sync_live_scenes = _environment.sync_live_scenes;
+    const SceneProvider scene_provider = _scene_provider;
+    if (sync_live_scenes && !scene_provider) {
+        throw std::invalid_argument(
+            "TermModulesIntegration requires a scene provider when sync_live_scenes is enabled"
+        );
+    }
     tc_component_registry_set_prepare_unload_callback(
         prepare_component_unload_for_runtime_type,
         nullptr
@@ -392,22 +415,24 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     );
 
     auto cpp_before_unload = [](const termin_modules::ModuleRecord&) {};
-    auto after_load = [sync_live_scenes](const termin_modules::ModuleRecord& record) {
+    auto after_load = [sync_live_scenes, scene_provider](
+                          const termin_modules::ModuleRecord& record) {
         if (sync_live_scenes) {
-            upgrade_module_components(record);
+            upgrade_module_components(record, scene_provider);
             upgrade_module_passes(record);
         }
     };
-    auto restore_reload_state = [sync_live_scenes](const termin_modules::ModuleRecord& record,
-                                                   const std::shared_ptr<termin_modules::IModuleReloadState>&,
-                                                   std::string& error) {
+    auto restore_reload_state = [sync_live_scenes, scene_provider](
+                                    const termin_modules::ModuleRecord& record,
+                                    const std::shared_ptr<termin_modules::IModuleReloadState>&,
+                                    std::string& error) {
         if (!sync_live_scenes) {
             return true;
         }
 
         const std::vector<std::string> type_names = module_component_types(record);
 
-        const std::vector<TcSceneRef> scenes = collect_scenes();
+        const std::vector<TcSceneRef> scenes = collect_scenes(scene_provider);
         for (const TcSceneRef& scene : scenes) {
             const UnknownComponentStats stats = upgrade_unknown_components(scene, type_names);
             if (stats.failed > 0) {
@@ -425,14 +450,19 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     cpp_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
                                          const std::string&) {
         std::string error;
-        cleanup_module_registrations(record, error, false);
+        cleanup_module_registrations(record, error, false, {});
         end_module_registration_scope(record);
     };
     cpp_callbacks.before_unload = cpp_before_unload;
-    cpp_callbacks.before_native_close = [sync_live_scenes](
+    cpp_callbacks.before_native_close = [sync_live_scenes, scene_provider](
                                             const termin_modules::ModuleRecord& record,
                                             std::string& error) {
-        return cleanup_module_registrations(record, error, sync_live_scenes);
+        return cleanup_module_registrations(
+            record,
+            error,
+            sync_live_scenes,
+            scene_provider
+        );
     };
     cpp_callbacks.after_native_init = [](const termin_modules::ModuleRecord& record) {
         end_module_registration_scope(record);
@@ -449,13 +479,18 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     python_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
                                             const std::string&) {
         std::string error;
-        cleanup_module_registrations(record, error, false);
+        cleanup_module_registrations(record, error, false, {});
         end_module_registration_scope(record);
     };
-    python_callbacks.before_module_remove = [sync_live_scenes](
+    python_callbacks.before_module_remove = [sync_live_scenes, scene_provider](
                                                   const termin_modules::ModuleRecord& record,
                                                   std::string& error) {
-        return prepare_module_registration_unload(record, error, sync_live_scenes);
+        return prepare_module_registration_unload(
+            record,
+            error,
+            sync_live_scenes,
+            scene_provider
+        );
     };
     python_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
         end_module_registration_scope(record);
