@@ -10,12 +10,23 @@ from importlib import import_module
 from typing import Any
 
 from termin.project_build.profiles import (
+    AndroidTarget,
     BUILD_PROFILE_SCHEMA_VERSION,
     BuildProfile,
     BuildProfileStore,
+    DesktopTarget,
+    ProfileContent,
+    ProfileDiagnostic,
     ProfileBuildError,
+    QuestOpenXRTarget,
     load_build_profile,
     resolve_project_path,
+)
+from termin.project_build.profile_requests import (
+    ProfileBuildRequest,
+    ToolchainContext,
+    compile_profile_build_request,
+    validate_resolved_profile_request,
 )
 
 
@@ -70,6 +81,7 @@ def __dir__() -> list[str]:
 __all__ = [
     "AndroidBuildResult",
     "AndroidSDKCapabilities",
+    "AndroidTarget",
     "BuildContext",
     "BuildDiagnostic",
     "BuildProfile",
@@ -77,13 +89,18 @@ __all__ = [
     "BUILD_PROFILE_SCHEMA_VERSION",
     "DesktopBuildResult",
     "DesktopSDKCapabilities",
+    "DesktopTarget",
     "DiagnosticLike",
     "ProfileBuildError",
+    "ProfileBuildRequest",
+    "ProfileContent",
+    "ProfileDiagnostic",
     "ProjectBuildPipelineError",
     "ProjectBuildPipelineResult",
     "QuestOpenXRBuildResult",
     "QuestOpenXRDeployResult",
     "QuestOpenXRSDKCapabilities",
+    "QuestOpenXRTarget",
     "RuntimePackageExportDiagnostic",
     "RuntimePackageExportResult",
     "SDKCapabilities",
@@ -93,6 +110,7 @@ __all__ = [
     "build_android_project",
     "build_desktop_project",
     "build_quest_openxr_project",
+    "compile_profile_build_request",
     "create_build_context",
     "default_quest_openxr_apk_path",
     "default_quest_openxr_log_path",
@@ -103,5 +121,7 @@ __all__ = [
     "load_sdk_capabilities",
     "resolve_project_path",
     "run_project_build_pipeline",
+    "ToolchainContext",
     "validate_runtime_package",
+    "validate_resolved_profile_request",
 ]
