@@ -4,7 +4,7 @@ preload_sdk_libs("termin_engine")
 
 from termin.engine._engine_native import (
     EngineCore,
-    _borrow_engine_core,
+    _borrow_engine_core as _borrow_engine_core,
     SCENE_EXT_TYPE_COLLISION_WORLD,
     create_scene,
     create_scene_with_extensions,
@@ -23,12 +23,14 @@ from termin.engine._engine_native import (
 
 TermModulesIntegration = modules.TermModulesIntegration
 RenderingManager = render.RenderingManager
+RenderTopology = render.RenderTopology
 SceneManager = scene.SceneManager
 ViewportRenderState = render.ViewportRenderState
 
 __all__ = [
     "EngineCore",
     "RenderingManager",
+    "RenderTopology",
     "SCENE_EXT_TYPE_COLLISION_WORLD",
     "SceneManager",
     "TermModulesIntegration",

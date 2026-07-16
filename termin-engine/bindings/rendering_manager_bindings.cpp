@@ -100,6 +100,36 @@ void bind_rendering_manager(nb::module_& m) {
         })
     ;
 
+    nb::class_<RenderTopology>(m, "RenderTopology")
+        .def("is_attached", [](const RenderTopology& self, nb::object scene_py) {
+            return self.is_attached(get_scene_handle(scene_py));
+        }, nb::arg("scene"))
+        .def("get_pipeline", [](const RenderTopology& self,
+                                  nb::object scene_py,
+                                  const std::string& name) -> nb::object {
+            return pipeline_to_python(self.get_pipeline(get_scene_handle(scene_py), name));
+        }, nb::arg("scene"), nb::arg("name"))
+        .def("get_pipeline_names", [](const RenderTopology& self, nb::object scene_py) {
+            return self.get_pipeline_names(get_scene_handle(scene_py));
+        }, nb::arg("scene"))
+        .def("find_render_target", [](const RenderTopology& self,
+                                       nb::object scene_py,
+                                       const std::string& name) -> nb::object {
+            tc_render_target_handle target = self.find_render_target(
+                get_scene_handle(scene_py),
+                name
+            );
+            if (!tc_render_target_handle_valid(target)) return nb::none();
+            return nb::cast(target);
+        }, nb::arg("scene"), nb::arg("name"))
+        .def("render_targets", [](const RenderTopology& self, nb::object scene_py) {
+            return self.render_targets(get_scene_handle(scene_py));
+        }, nb::arg("scene"))
+        .def_prop_ro("managed_render_targets", [](const RenderTopology& self) {
+            return self.managed_render_targets();
+        })
+    ;
+
     // RenderingManager singleton
     nb::class_<RenderingManager>(m, "RenderingManager")
         .def_static("instance", &RenderingManager::instance, nb::rv_policy::reference)

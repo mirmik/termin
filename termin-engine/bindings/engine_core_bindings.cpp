@@ -39,6 +39,11 @@ void bind_engine_core(nb::module_& m) {
         }, nb::rv_policy::reference_internal,
            "Access to RenderingManager owned by this EngineCore")
 
+        .def_prop_ro("render_topology", [](EngineCore& self) -> RenderTopology& {
+            return self.render_topology;
+        }, nb::rv_policy::reference_internal,
+           "Access to live render topology owned by this EngineCore")
+
         // Configuration
         .def_prop_rw("target_fps",
             &EngineCore::target_fps,

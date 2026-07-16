@@ -8,7 +8,6 @@
 #include "render_state_store.hpp"
 #include "render_target_context_builder.hpp"
 #include "scene_light_collector.hpp"
-#include "scene_pipeline_manager.hpp"
 #include "termin/render/scene_pipeline_template.hpp"
 #include <termin/entity/entity.hpp>
 #include "termin/viewport/tc_viewport_handle.hpp"
@@ -61,10 +60,10 @@ void RenderingManager::reset_for_testing() {
     tc_rendering_manager_set_instance(nullptr);
 }
 
-RenderingManager::RenderingManager() {
+RenderingManager::RenderingManager(RenderTopology& topology)
+    : topology_(topology) {
     display_registry_ = std::make_unique<rendering_manager_detail::RenderDisplayRegistry>();
     render_states_ = std::make_unique<rendering_manager_detail::RenderStateStore>();
-    scene_pipelines_ = std::make_unique<rendering_manager_detail::ScenePipelineManager>();
     set_instance(this);
 }
 
@@ -153,10 +152,10 @@ size_t RenderingManager::recreate_render_target_pipelines_for_asset(
     };
     std::vector<TargetPipeline> targets;
 
-    // Do not scan the global render-target pool here. RenderingManager owns
-    // the render-target lifetime contract through managed_render_targets_;
+    // Do not scan the global render-target pool here. RenderTopology owns
+    // the render-target lifetime contract;
     // pool scans can accidentally touch stale or foreign editor/game targets.
-    for (tc_render_target_handle rt : managed_render_targets_) {
+    for (tc_render_target_handle rt : topology_.managed_render_targets()) {
         if (!tc_render_target_handle_valid(rt)) {
             continue;
         }
@@ -208,7 +207,7 @@ size_t RenderingManager::recreate_render_target_pipelines_for_asset(
             continue;
         }
         bool still_used = false;
-        for (tc_render_target_handle rt : managed_render_targets_) {
+        for (tc_render_target_handle rt : topology_.managed_render_targets()) {
             if (!tc_render_target_handle_valid(rt)) {
                 continue;
             }
@@ -356,12 +355,12 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
         tc_viewport_free(viewport);
 
         bool registered_managed = std::find_if(
-            managed_render_targets_.begin(),
-            managed_render_targets_.end(),
+            topology_.managed_render_targets().begin(),
+            topology_.managed_render_targets().end(),
             [rt](tc_render_target_handle candidate) {
                 return tc_render_target_handle_eq(candidate, rt);
             }
-        ) != managed_render_targets_.end();
+        ) != topology_.managed_render_targets().end();
 
         bool still_referenced = false;
         auto scan_display_list = [&still_referenced, rt](const std::vector<tc_display*>& displays) {
@@ -400,6 +399,10 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         tc_log(TC_LOG_ERROR, "[RenderingManager] attach_scene_full: invalid scene handle");
         return viewports;
     }
+    if (topology_.is_attached(scene)) {
+        tc_log(TC_LOG_ERROR, "[RenderingManager] attach_scene_full: scene is already attached");
+        return viewports;
+    }
 
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
     tc_entity_pool* pool = tc_scene_entity_pool(scene);
@@ -413,6 +416,15 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         if (rt_name.empty()) continue;
 
         tc_render_target_handle rt = tc_render_target_new(rt_name.c_str());
+        if (!tc_render_target_handle_valid(rt)) {
+            tc_log(
+                TC_LOG_ERROR,
+                "[RenderingManager] Failed to allocate render target '%s'",
+                rt_name.c_str()
+            );
+            detach_scene_full(scene);
+            return {};
+        }
         tc_render_target_set_scene(rt, scene);
         if (rtc->kind && rtc->kind[0] != '\0') {
             tc_render_target_kind kind;
@@ -507,7 +519,16 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
             tc_render_target_set_pipeline_params(rt, &rtc->pipeline_params);
         }
 
-        register_managed_render_target(rt);
+        if (!topology_.register_render_target(rt)) {
+            tc_log(
+                TC_LOG_ERROR,
+                "[RenderingManager] Failed to register render target '%s' in scene topology",
+                rt_name.c_str()
+            );
+            tc_render_target_free(rt);
+            detach_scene_full(scene);
+            return {};
+        }
     }
 
     // 2. Create viewports from viewport_configs
@@ -518,13 +539,22 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         std::string display_name = config->display_name ? config->display_name : "Main";
         tc_display* display = get_or_create_display(display_name);
         if (!display) {
-            tc_log(TC_LOG_WARN, "[RenderingManager] Cannot create display '%s'", display_name.c_str());
-            continue;
+            tc_log(TC_LOG_ERROR, "[RenderingManager] Cannot create display '%s'", display_name.c_str());
+            detach_scene_full(scene);
+            return {};
         }
 
         std::string vp_name = config->name ? config->name : "";
         tc_viewport_handle viewport = tc_viewport_pool_alloc(vp_name.c_str());
-        if (!tc_viewport_handle_valid(viewport)) continue;
+        if (!tc_viewport_handle_valid(viewport)) {
+            tc_log(
+                TC_LOG_ERROR,
+                "[RenderingManager] Failed to allocate viewport '%s'",
+                vp_name.c_str()
+            );
+            detach_scene_full(scene);
+            return {};
+        }
 
         tc_viewport_set_rect(viewport, config->region[0], config->region[1], config->region[2], config->region[3]);
         tc_viewport_set_depth(viewport, config->depth);
@@ -539,17 +569,7 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         tc_render_target_handle rt = TC_RENDER_TARGET_HANDLE_INVALID;
         std::string rt_name = config->render_target_name ? config->render_target_name : "";
         if (!rt_name.empty()) {
-            for (tc_render_target_handle candidate : managed_render_targets_) {
-                if (!tc_render_target_handle_valid(candidate)) continue;
-                const char* candidate_name = tc_render_target_get_name(candidate);
-                if (candidate_name && rt_name == candidate_name) {
-                    tc_scene_handle candidate_scene = tc_render_target_get_scene(candidate);
-                    if (tc_scene_handle_eq(candidate_scene, scene)) {
-                        rt = candidate;
-                        break;
-                    }
-                }
-            }
+            rt = topology_.find_render_target(scene, rt_name);
         }
 
         if (tc_render_target_handle_valid(rt)) {
@@ -566,19 +586,22 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
     }
 
     // Apply scene pipelines (compile templates, mark managed viewports)
-    apply_scene_pipelines(scene, viewports);
-
-    // Track attached scene
-    auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
-        [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
-    if (it == attached_scenes_.end()) {
-        attached_scenes_.push_back(scene);
+    if (!apply_scene_pipelines(scene, viewports)) {
+        tc_log(TC_LOG_ERROR, "[RenderingManager] Scene attach rolled back after topology failure");
+        detach_scene_full(scene);
+        return {};
     }
 
     return viewports;
 }
 
 void RenderingManager::detach_scene_full(tc_scene_handle scene) {
+    // Lifecycle observers must see the complete live attachment. RenderTopology
+    // notifies them before dropping pipelines; viewports and targets follow.
+    if (topology_.is_attached(scene)) {
+        detach_scene(scene);
+    }
+
     // Unmount from all displays
     for (tc_display* display : display_registry_->displays()) {
         unmount_scene(scene, display);
@@ -587,7 +610,7 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
     // Free managed render targets belonging to this scene.
     // Iterate the managed list — never scan the global pool.
     std::vector<tc_render_target_handle> to_free;
-    for (tc_render_target_handle rt : managed_render_targets_) {
+    for (tc_render_target_handle rt : topology_.managed_render_targets()) {
         if (!tc_render_target_handle_valid(rt)) continue;
         tc_scene_handle rt_scene = tc_render_target_get_scene(rt);
         if (tc_scene_handle_eq(rt_scene, scene)) {
@@ -605,21 +628,12 @@ void RenderingManager::detach_scene_full(tc_scene_handle scene) {
         tc_render_target_free(rt);
     }
 
-    // Remove from attached scenes
-    auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
-        [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
-    if (it != attached_scenes_.end()) {
-        attached_scenes_.erase(it);
-    }
-
-    // Detach scene pipelines
-    detach_scene(scene);
 }
 
-void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::vector<tc_viewport_handle>& viewports) {
-    // Compile scene pipeline templates (this calls attach_scene internally)
-    attach_scene(scene);
-
+bool RenderingManager::apply_scene_pipelines(
+    tc_scene_handle scene,
+    const std::vector<tc_viewport_handle>& viewports
+) {
     // Build viewport lookup by name
     std::unordered_map<std::string, tc_viewport_handle> viewport_by_name;
     for (tc_viewport_handle vp : viewports) {
@@ -631,12 +645,20 @@ void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::v
 
     // Also check all displays (scene + editor) for viewports.
     for (const auto& [name, viewport] : display_registry_->collect_all_viewports()) {
-        if (viewport_by_name.find(name) == viewport_by_name.end()) {
+        if (tc_scene_handle_eq(tc_viewport_get_scene(viewport), scene)
+                && viewport_by_name.find(name) == viewport_by_name.end()) {
             viewport_by_name[name] = viewport;
         }
     }
 
-    // Mark viewports as managed by their scene pipeline
+    struct PipelineViewportAssignment {
+        tc_viewport_handle viewport;
+        std::string pipeline_name;
+    };
+    std::vector<PipelineViewportAssignment> assignments;
+
+    // Validate every pipeline target before installing live topology or
+    // emitting lifecycle callbacks.
     tc_scene_render_mount* mount = tc_scene_render_mount_get(scene);
     size_t template_count = mount ? mount->pipeline_template_count : 0;
     for (size_t i = 0; i < template_count; i++) {
@@ -654,11 +676,22 @@ void RenderingManager::apply_scene_pipelines(tc_scene_handle scene, const std::v
             if (it == viewport_by_name.end()) {
                 tc_log(TC_LOG_ERROR, "[RenderingManager] Scene pipeline '%s' targets viewport '%s' but not found",
                        pipeline_name.c_str(), vp_name.c_str());
-                continue;
+                return false;
             }
-            tc_viewport_set_managed_by(it->second, pipeline_name.c_str());
+            assignments.push_back(PipelineViewportAssignment{it->second, pipeline_name});
         }
     }
+
+    if (!topology_.attach_scene(scene)) {
+        return false;
+    }
+    for (const PipelineViewportAssignment& assignment : assignments) {
+        tc_viewport_set_managed_by(
+            assignment.viewport,
+            assignment.pipeline_name.c_str()
+        );
+    }
+    return true;
 }
 
 std::unordered_map<std::string, tc_viewport_handle> RenderingManager::collect_all_viewports() const {
@@ -698,29 +731,11 @@ ViewportRenderState* RenderingManager::get_or_create_render_target_state(tc_rend
 // ============================================================================
 
 void RenderingManager::register_managed_render_target(tc_render_target_handle rt) {
-    if (!tc_render_target_handle_valid(rt)) return;
-    auto it = std::find_if(
-        managed_render_targets_.begin(),
-        managed_render_targets_.end(),
-        [rt](tc_render_target_handle candidate) {
-            return tc_render_target_handle_eq(candidate, rt);
-        }
-    );
-    if (it != managed_render_targets_.end()) return;
-    managed_render_targets_.push_back(rt);
+    topology_.register_render_target(rt);
 }
 
 void RenderingManager::unregister_managed_render_target(tc_render_target_handle rt) {
-    auto it = std::find_if(
-        managed_render_targets_.begin(),
-        managed_render_targets_.end(),
-        [rt](tc_render_target_handle candidate) {
-            return tc_render_target_handle_eq(candidate, rt);
-        }
-    );
-    if (it != managed_render_targets_.end()) {
-        managed_render_targets_.erase(it);
-    }
+    topology_.unregister_render_target(rt);
 }
 
 // ============================================================================
@@ -766,7 +781,7 @@ void RenderingManager::render_all_offscreen() {
     // 1. Render standalone managed render targets first. RTs attached to
     // viewports are intentionally delayed because we do not yet have a
     // dependency graph between render targets.
-    for (tc_render_target_handle rt : managed_render_targets_) {
+    for (tc_render_target_handle rt : topology_.managed_render_targets()) {
         if (tc_render_target_handle_valid(rt)
                 && !rendering_manager_detail::contains_render_target(render_plan.viewport_render_targets, rt)) {
             render_render_target_offscreen(rt);
@@ -775,7 +790,7 @@ void RenderingManager::render_all_offscreen() {
 
     // 2. Execute scene pipelines (can span multiple displays). These render
     // their viewport-bound render targets as a batch.
-    for (tc_scene_handle scene : attached_scenes_) {
+    for (tc_scene_handle scene : topology_.attached_scenes()) {
         if (!tc_scene_alive(scene)) continue;
 
         std::vector<std::string> pipeline_names = get_pipeline_names(scene);
@@ -833,7 +848,7 @@ void RenderingManager::render_display(tc_display* display) {
     rendering_manager_detail::OffscreenRenderPlan render_plan =
         rendering_manager_detail::build_offscreen_render_plan(displays, {});
 
-    for (tc_scene_handle scene : attached_scenes_) {
+    for (tc_scene_handle scene : topology_.attached_scenes()) {
         if (!tc_scene_alive(scene)) continue;
 
         std::vector<std::string> pipeline_names = get_pipeline_names(scene);
@@ -868,7 +883,7 @@ void RenderingManager::render_scene_pipeline_offscreen(
     }
 
     const std::vector<std::string>& target_names =
-        scene_pipelines_->get_pipeline_targets(scene, pipeline_name);
+        topology_.get_pipeline_targets(scene, pipeline_name);
     if (target_names.empty()) {
         return;
     }
@@ -966,7 +981,7 @@ bool RenderingManager::build_render_target_contexts(
         internal_entities,
         render_width,
         render_height,
-        managed_render_targets_,
+        topology_.managed_render_targets(),
         render_target_context_providers_,
         missing_render_target_provider_warnings_,
         contexts,
@@ -1113,26 +1128,27 @@ void RenderingManager::present_display(tc_display* display) {
 // ============================================================================
 
 void RenderingManager::attach_scene(tc_scene_handle scene) {
-    scene_pipelines_->attach_scene(scene);
+    if (!topology_.attach_scene(scene)) {
+        tc_log(TC_LOG_ERROR, "[RenderingManager] Failed to attach scene pipeline topology");
+    }
 }
 
 void RenderingManager::detach_scene(tc_scene_handle scene) {
     if (!tc_scene_handle_valid(scene)) return;
-    scene_pipelines_->detach_scene(scene);
-
-    auto it = std::find_if(attached_scenes_.begin(), attached_scenes_.end(),
-        [scene](tc_scene_handle h) { return tc_scene_handle_eq(h, scene); });
-    if (it != attached_scenes_.end()) {
-        attached_scenes_.erase(it);
-    }
+    topology_.detach_scene(scene);
 }
 
 tc_pipeline_handle RenderingManager::get_scene_pipeline(tc_scene_handle scene, const std::string& name) const {
-    return scene_pipelines_->get_scene_pipeline(scene, name);
+    return topology_.get_pipeline(scene, name);
 }
 
 tc_pipeline_handle RenderingManager::get_scene_pipeline(const std::string& name) const {
-    return scene_pipelines_->get_scene_pipeline(name);
+    for (tc_scene_handle scene : topology_.attached_scenes()) {
+        tc_pipeline_handle pipeline = topology_.get_pipeline(scene, name);
+        if (tc_pipeline_handle_valid(pipeline)) return pipeline;
+    }
+    tc_log(TC_LOG_WARN, "[RenderingManager] get_scene_pipeline NOT FOUND: '%s'", name.c_str());
+    return TC_PIPELINE_HANDLE_INVALID;
 }
 
 void RenderingManager::set_pipeline_targets(const std::string& pipeline_name, const std::vector<std::string>& targets) {
@@ -1151,15 +1167,15 @@ const std::vector<std::string>& RenderingManager::get_pipeline_targets(const std
 }
 
 std::vector<std::string> RenderingManager::get_pipeline_names(tc_scene_handle scene) const {
-    return scene_pipelines_->get_pipeline_names(scene);
+    return topology_.get_pipeline_names(scene);
 }
 
 void RenderingManager::clear_scene_pipelines(tc_scene_handle scene) {
-    scene_pipelines_->clear_scene_pipelines(scene);
+    topology_.clear_scene_pipelines(scene);
 }
 
 void RenderingManager::clear_all_scene_pipelines() {
-    scene_pipelines_->clear_all_scene_pipelines();
+    topology_.clear_all();
 }
 
 // ============================================================================
@@ -1171,13 +1187,7 @@ void RenderingManager::shutdown() {
         render_states_->clear_all(make_current_callback_);
     }
 
-    // Clear managed render targets list (don't free — we don't own them)
-    managed_render_targets_.clear();
-
-    // Clear attached scenes
-    attached_scenes_.clear();
-
-    // Clear scene pipelines (deletes owned pipelines)
+    // Clear engine-owned topology after hosts have detached live targets.
     clear_all_scene_pipelines();
 
     if (display_registry_) {

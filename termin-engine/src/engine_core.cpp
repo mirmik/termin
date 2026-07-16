@@ -12,13 +12,25 @@ extern "C" {
 
 namespace termin {
 
-EngineCore::EngineCore() {
+EngineCore::EngineCore()
+    : rendering_manager(render_topology) {
     termin_scene_runtime_init();
     tc_engine_core_set_instance(reinterpret_cast<tc_engine_core*>(this));
     tc_log(TC_LOG_INFO, "[EngineCore] Created");
 }
 
 EngineCore::~EngineCore() {
+    // Scene-owned render objects must be detached while scene handles and the
+    // scene runtime are still alive. Member destructors run after this body.
+    const std::vector<tc_scene_handle> attached_scenes(
+        render_topology.attached_scenes().begin(),
+        render_topology.attached_scenes().end()
+    );
+    for (tc_scene_handle scene : attached_scenes) {
+        rendering_manager.detach_scene_full(scene);
+    }
+    rendering_manager.shutdown();
+    scene_manager.close_all_scenes();
     if (tc_engine_core_instance() == reinterpret_cast<tc_engine_core*>(this)) {
         tc_engine_core_set_instance(nullptr);
     }

@@ -66,7 +66,7 @@ set(TERMIN_ENGINE_SOURCES
     src/render_target_context_builder.cpp
     src/render_state_store.cpp
     src/rendering_manager.cpp
-    src/scene_pipeline_manager.cpp
+    src/render_topology.cpp
     src/modules/term_modules_integration.cpp
     src/tc_scene_manager_instance.cpp
     src/tc_rendering_manager_instance.cpp
@@ -239,22 +239,16 @@ if(TERMIN_ENGINE_BUILD_TESTS)
         COMMAND termin_engine_cpp_module_hot_reload_test
     )
 
-    # ScenePipelineManager is implementation detail; compile it into this
-    # white-box test rather than exporting it from termin_engine.dll.
-    add_executable(termin_engine_scene_pipeline_manager_test
-        tests/test_scene_pipeline_manager.cpp
-        src/scene_pipeline_manager.cpp
+    add_executable(termin_engine_render_topology_test
+        tests/test_render_topology.cpp
     )
-    target_include_directories(termin_engine_scene_pipeline_manager_test PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-    target_link_libraries(termin_engine_scene_pipeline_manager_test PRIVATE
+    target_link_libraries(termin_engine_render_topology_test PRIVATE
         termin_engine
         termin_scene::termin_scene
     )
     add_test(
-        NAME termin_engine_scene_pipeline_manager_test
-        COMMAND termin_engine_scene_pipeline_manager_test
+        NAME termin_engine_render_topology_test
+        COMMAND termin_engine_render_topology_test
     )
 
     add_executable(termin_engine_viewport_render_state_test
