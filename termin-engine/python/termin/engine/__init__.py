@@ -4,6 +4,7 @@ preload_sdk_libs("termin_engine")
 
 from termin.engine._engine_native import (
     EngineCore,
+    _borrow_engine_core,
     SCENE_EXT_TYPE_COLLISION_WORLD,
     create_scene,
     create_scene_with_extensions,

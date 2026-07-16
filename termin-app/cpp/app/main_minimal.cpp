@@ -117,6 +117,46 @@ static bool is_python_layout_smoke_request(int argc, char* argv[]) {
     return argc == 2 && std::strcmp(argv[1], "--termin-python-layout-smoke") == 0;
 }
 
+static bool initialize_python_editor(termin::EngineCore& engine) {
+    PyObject* module = PyImport_ImportModule("termin.editor.run_editor");
+    if (module == nullptr) {
+        PyErr_Print();
+        std::cerr << "Failed to import termin.editor.run_editor" << std::endl;
+        return false;
+    }
+
+    PyObject* init_editor = PyObject_GetAttrString(module, "init_editor_from_host");
+    Py_DECREF(module);
+    if (init_editor == nullptr || !PyCallable_Check(init_editor)) {
+        Py_XDECREF(init_editor);
+        PyErr_Print();
+        std::cerr << "Missing callable init_editor_from_host" << std::endl;
+        return false;
+    }
+
+    PyObject* capsule = PyCapsule_New(
+        &engine,
+        "termin.EngineCore.borrowed",
+        nullptr);
+    if (capsule == nullptr) {
+        Py_DECREF(init_editor);
+        PyErr_Print();
+        std::cerr << "Failed to create borrowed EngineCore capsule" << std::endl;
+        return false;
+    }
+
+    PyObject* result = PyObject_CallFunctionObjArgs(init_editor, capsule, nullptr);
+    Py_DECREF(capsule);
+    Py_DECREF(init_editor);
+    if (result == nullptr) {
+        PyErr_Print();
+        std::cerr << "Failed to initialize Python editor" << std::endl;
+        return false;
+    }
+    Py_DECREF(result);
+    return true;
+}
+
 int main(int argc, char* argv[]) {
     fs::path exe_dir = get_executable_dir();
     fs::path install_root = exe_dir.parent_path();
@@ -188,8 +228,8 @@ int main(int argc, char* argv[]) {
 
     termin::register_default_scene_extensions();
 
-    // Create EngineCore BEFORE Python init
-    // This sets up RenderingManager::instance()
+    // The native host owns the engine. Python receives a borrowed reference
+    // explicitly during frontend initialization.
     termin::EngineCore engine;
 
     // Initialize Python
@@ -241,15 +281,8 @@ print(json.dumps({"tcbase": tcbase.__file__, "termin_editor": termin.editor.__fi
         return result == 0 ? 0 : 1;
     }
 
-    // Initialize editor (creates tcgui app, SDL, EditorWindow, sets up callbacks)
-    const char* init_code = R"(
-from termin.editor.run_editor import init_editor
-init_editor()
-)";
-
-    int result = PyRun_SimpleString(init_code);
-    if (result != 0) {
-        PyErr_Print();
+    // Initialize editor (creates UI/SDL and installs engine callbacks).
+    if (!initialize_python_editor(engine)) {
         return 1;
     }
 

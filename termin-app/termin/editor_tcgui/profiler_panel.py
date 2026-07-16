@@ -6,7 +6,6 @@ hierarchical section timings.  Activated via Debug → Profiler (F7).
 
 from __future__ import annotations
 
-from tcbase import log
 from tcgui.widgets.widget import Widget
 from tcgui.widgets.basic import Label, Button, Checkbox
 from tcgui.widgets.containers import VStack, HStack
@@ -16,6 +15,7 @@ from tcgui.widgets.frame_time_graph import FrameTimeGraph
 from tcgui.widgets.units import px
 
 from termin.editor_core.profiler_model import ProfilerController, ProfilerSnapshot
+from termin.engine import EngineCore
 
 
 # Colors
@@ -87,21 +87,14 @@ def _make_row_widget(name: str, cpu_ms: float, pct: float,
 class ProfilerPanel(VStack):
     """Profiler debug panel (right-side, toggled by F7)."""
 
-    def __init__(self):
+    def __init__(self, engine: EngineCore):
         super().__init__()
         self.spacing = 4
 
-        from termin.engine import EngineCore
-
-        engine = EngineCore.instance()
-
         def get_include_ui() -> bool:
-            return bool(engine.profile_ui) if engine is not None else False
+            return bool(engine.profile_ui)
 
         def set_include_ui(enabled: bool) -> None:
-            if engine is None:
-                log.error("[ProfilerPanel] cannot set profile_ui without EngineCore")
-                raise RuntimeError("cannot set profile_ui without EngineCore")
             engine.profile_ui = enabled
 
         self._controller = ProfilerController(

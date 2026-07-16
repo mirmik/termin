@@ -161,20 +161,15 @@ def _dispatch_native_events(bw: SDLBackendWindow, ui: UI, wm=None) -> tuple[bool
 # Entry point
 # ---------------------------------------------------------------------------
 
-def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False) -> None:
+def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
     """Initialize the tcgui editor and setup engine callbacks.
 
     Called from C++ before EngineCore.run(). Does NOT call engine.run().
     """
     from termin.bootstrap import bootstrap_editor
     from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
-    from termin.engine import EngineCore
-
     bootstrap_editor()
     configure_editor_resource_manager_factory()
-    engine = EngineCore.instance()
-    if engine is None:
-        raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")
 
     configure_sdk_shader_runtime("editor")
 
@@ -213,6 +208,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     # Create editor window and build UI
     from termin.editor_tcgui.editor_window import EditorWindowTcgui
     win = EditorWindowTcgui(
+        engine=engine,
         initial_scene=initial_scene,
         scene_manager=engine.scene_manager,
         ctx=tgfx2_ctx,
@@ -262,16 +258,7 @@ def init_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False)
     engine.set_on_shutdown_callback(on_shutdown)
 
 
-def run_editor_tcgui(debug_resource: str | None = None, no_scene: bool = False) -> None:
+def run_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
     """Run the tcgui editor (legacy entry point for C++ callers)."""
-    from termin.engine import EngineCore
-
-    engine = EngineCore.instance()
-    if engine is None:
-        raise RuntimeError(
-            "run_editor_tcgui() must be called from C++ entry point. "
-            "EngineCore is created in C++."
-        )
-
-    init_editor_tcgui(debug_resource=debug_resource, no_scene=no_scene)
+    init_editor_tcgui(engine, debug_resource=debug_resource, no_scene=no_scene)
     engine.run()
