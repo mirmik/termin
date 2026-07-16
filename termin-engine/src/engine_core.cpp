@@ -15,6 +15,24 @@ namespace termin {
 EngineCore::EngineCore()
     : rendering_manager(render_topology) {
     termin_scene_runtime_init();
+    scene_manager.set_before_scene_destroy_guard([this](tc_scene_handle scene) {
+        if (!render_topology.is_attached(scene)
+                && render_topology.render_targets(scene).empty()) {
+            return;
+        }
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineCore] Scene destruction requested with live render attachments; forcing detach"
+        );
+        rendering_manager.detach_scene_full(scene);
+        if (render_topology.is_attached(scene)
+                || !render_topology.render_targets(scene).empty()) {
+            tc_log(
+                TC_LOG_ERROR,
+                "[EngineCore] Mandatory render detach left live scene topology"
+            );
+        }
+    });
     tc_engine_core_set_instance(reinterpret_cast<tc_engine_core*>(this));
     tc_log(TC_LOG_INFO, "[EngineCore] Created");
 }

@@ -185,7 +185,7 @@ def _collect_pipeline_shader_usages(
     try:
         from termin.bootstrap import bootstrap_player
         from termin.default_assets.resource_manager import DefaultResourceManager
-        from termin.engine import deserialize_scene, destroy_scene
+        from termin.engine import deserialize_scene
         from termin.render_framework import RenderPipeline, collect_shader_usages_for_pipeline
 
         bootstrap_player()
@@ -243,7 +243,7 @@ def _collect_pipeline_shader_usages(
                     )
                 )
     finally:
-        destroy_scene(scene)
+        scene.destroy()
 
 
 def _validate_resource_policy(resource_policy: str) -> None:

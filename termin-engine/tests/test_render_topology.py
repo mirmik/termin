@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from termin.engine import EngineCore, RenderTopology
 from termin.render_framework import render_target_new
+from termin.render import scene_render_mount
 from termin.scene import PythonComponent
 
 
@@ -92,3 +93,29 @@ def test_python_render_lifecycle_context_is_scene_scoped_and_call_scoped() -> No
     foreign_target.free()
     engine.scene_manager.close_scene("context-probe")
     engine.scene_manager.close_scene("context-foreign")
+
+
+def test_scene_manager_forces_detach_before_destroying_attached_scene() -> None:
+    engine = EngineCore()
+    scene = engine.scene_manager.create_scene("mandatory-detach")
+    target = render_target_new("MandatoryDetachTarget")
+    target.scene = scene
+    engine.rendering_manager.register_managed_render_target(target)
+    engine.rendering_manager.attach_scene(scene)
+
+    engine.scene_manager.close_scene("mandatory-detach")
+
+    assert not engine.render_topology.is_attached(scene)
+    assert not engine.render_topology.managed_render_targets
+
+
+def test_scene_render_mount_exposes_only_declarative_recipe() -> None:
+    engine = EngineCore()
+    scene = engine.scene_manager.create_scene("declarative-mount")
+    mount = scene_render_mount(scene)
+
+    assert not hasattr(mount, "get_pipeline")
+    assert not hasattr(mount, "get_pipeline_names")
+    assert not hasattr(mount, "get_pipeline_targets")
+
+    engine.scene_manager.close_scene("declarative-mount")

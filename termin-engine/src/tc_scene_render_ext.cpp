@@ -2,7 +2,6 @@
 #include <termin/scene/tc_scene_render_ext.hpp>
 
 #include <termin/entity/entity.hpp>
-#include <termin/render/rendering_manager.hpp>
 #include <tcbase/tc_log.hpp>
 
 extern "C" {
@@ -90,27 +89,6 @@ TcSceneRef deserialize_scene_with_render(const nos::trent& data, const std::stri
 
     scene.load_from_data(load_data, true);
     return scene;
-}
-
-void destroy_scene_with_render(TcSceneRef& scene) {
-    if (scene.valid()) {
-        if (RenderingManager* manager = RenderingManager::instance_or_null()) {
-            manager->clear_scene_pipelines(scene.handle());
-        }
-        scene.destroy();
-    }
-}
-
-RenderPipeline scene_get_pipeline(const TcSceneRef& scene, const std::string& name) {
-    return RenderPipeline(RenderingManager::instance().get_scene_pipeline(scene._h, name));
-}
-
-std::vector<std::string> scene_get_pipeline_names(const TcSceneRef& scene) {
-    return RenderingManager::instance().get_pipeline_names(scene._h);
-}
-
-const std::vector<std::string>& scene_get_pipeline_targets(const std::string& name) {
-    return RenderingManager::instance().get_pipeline_targets(name);
 }
 
 } // namespace termin

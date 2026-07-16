@@ -25,12 +25,13 @@ if TYPE_CHECKING:
     from termin.scene import TcScene as Scene
     from termin.viewport import Viewport
     from termin.render_framework import RenderPipeline
-    from termin.engine import RenderingManager
+    from termin.engine import RenderingManager, RenderTopology
 
 
 class RenderingModel:
     def __init__(self, manager: "RenderingManager"):
         self._manager = manager
+        self._topology: "RenderTopology" = manager.topology
         self._editor_display_ptr: int | None = None
 
         self._selected_display: "Display | None" = None
@@ -224,8 +225,7 @@ class RenderingModel:
     def _pipeline_for_viewport(self, viewport: "Viewport"):
         managed_by = viewport.managed_by_scene_pipeline
         if managed_by and viewport.scene is not None:
-            from termin.render import scene_render_mount
-            return scene_render_mount(viewport.scene).get_pipeline(managed_by)
+            return self._topology.get_pipeline(viewport.scene, managed_by)
         render_target = viewport.render_target
         if render_target is not None:
             return render_target.pipeline
@@ -234,8 +234,7 @@ class RenderingModel:
     def _pipeline_for_viewport_render_target(self, viewport: "Viewport", render_target):
         managed_by = viewport.managed_by_scene_pipeline
         if managed_by and viewport.scene is not None:
-            from termin.render import scene_render_mount
-            return scene_render_mount(viewport.scene).get_pipeline(managed_by)
+            return self._topology.get_pipeline(viewport.scene, managed_by)
         return render_target.pipeline
 
     def remove_render_target(self, render_target, scene: "Scene | None" = None) -> None:

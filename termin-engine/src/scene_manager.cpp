@@ -63,6 +63,9 @@ void SceneManager::close_scene(const std::string& name) {
     // Rendering/editor attachments own scene-dependent native resources and
     // must release them while the scene handle is still valid.
     invoke_before_scene_close(name);
+    if (_before_scene_destroy_guard) {
+        _before_scene_destroy_guard(h);
+    }
 
     // Remove from maps first
     _scenes.erase(it);
@@ -246,6 +249,10 @@ void SceneManager::set_on_after_render(AfterRenderCallback callback) {
 
 void SceneManager::set_on_before_scene_close(BeforeSceneCloseCallback callback) {
     _on_before_scene_close = std::move(callback);
+}
+
+void SceneManager::set_before_scene_destroy_guard(BeforeSceneDestroyGuard guard) {
+    _before_scene_destroy_guard = std::move(guard);
 }
 
 void SceneManager::invoke_after_render() {

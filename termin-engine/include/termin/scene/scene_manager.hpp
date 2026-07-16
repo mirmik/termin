@@ -22,6 +22,7 @@ class TERMIN_ENGINE_API SceneManager {
 public:
     using AfterRenderCallback = std::function<void()>;
     using BeforeSceneCloseCallback = std::function<void(const std::string&)>;
+    using BeforeSceneDestroyGuard = std::function<void(tc_scene_handle)>;
 
 protected:
     // Registered scenes: name -> tc_scene_handle
@@ -36,6 +37,7 @@ protected:
     // Callbacks
     AfterRenderCallback _on_after_render;
     BeforeSceneCloseCallback _on_before_scene_close;
+    BeforeSceneDestroyGuard _before_scene_destroy_guard;
 
 public:
 public:
@@ -110,6 +112,9 @@ public:
     // --- Callbacks ---
     void set_on_after_render(AfterRenderCallback callback);
     void set_on_before_scene_close(BeforeSceneCloseCallback callback);
+    // Engine-owned invariant guard. Unlike the host callback, this is not
+    // exposed to Python and cannot be replaced by editor wiring.
+    void set_before_scene_destroy_guard(BeforeSceneDestroyGuard guard);
 
     void invoke_after_render();
     void invoke_before_scene_close(const std::string& name);

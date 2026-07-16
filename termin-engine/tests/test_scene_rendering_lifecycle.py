@@ -1,6 +1,5 @@
 from termin.engine import (
     deserialize_scene as engine_deserialize_scene,
-    destroy_scene as engine_destroy_scene,
     scene_ext_attached_names,
 )
 from termin.render import TcSceneLighting, scene_render_state
@@ -47,7 +46,7 @@ def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_
             0.3,
         )
     finally:
-        engine_destroy_scene(scene)
+        scene.destroy()
 
 
 def test_scene_local_render_request_is_consumed_by_scene_manager_tick():

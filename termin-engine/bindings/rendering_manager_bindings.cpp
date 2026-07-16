@@ -174,6 +174,10 @@ void bind_rendering_manager(nb::module_& m) {
             nb::rv_policy::reference,
             "Return the active RenderingManager, or None when rendering is not attached")
 
+        .def_prop_ro("topology", [](RenderingManager& self) -> RenderTopology& {
+            return self.topology();
+        }, nb::rv_policy::reference_internal)
+
         // ================================================================
         // Configuration
         // ================================================================

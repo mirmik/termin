@@ -13,7 +13,6 @@ from termin.editor_core.editor_state_io import EditorStateIO
 from termin.engine import (
     create_scene_with_extensions,
     default_scene_extensions,
-    destroy_scene,
     scene as engine_scene,
 )
 
@@ -225,7 +224,7 @@ class SceneFileController:
         except Exception as e:
             if staged_scene is not None:
                 try:
-                    destroy_scene(staged_scene)
+                    staged_scene.destroy()
                 except Exception as cleanup_error:
                     log.error(
                         f"Failed to destroy staging scene for '{path}': {cleanup_error}"
@@ -260,7 +259,7 @@ class SceneFileController:
             self._scene_manager.has_scene(scene_name)
             and scene_name != old_scene_name
         ):
-            destroy_scene(staged_scene)
+            staged_scene.destroy()
             raise RuntimeError(
                 f"Scene '{scene_name}' is already open and is not the active scene"
             )

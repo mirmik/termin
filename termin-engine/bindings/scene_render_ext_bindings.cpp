@@ -81,13 +81,6 @@ void bind_scene_render_ext(nb::module_& m) {
     }, nb::arg("name") = "", nb::arg("uuid") = "", nb::arg("extensions") = nb::none(),
        "Create a new scene with explicit extensions, or engine defaults when omitted.");
 
-    m.def("destroy_scene_with_render", &destroy_scene_with_render,
-        nb::arg("scene"),
-        "Destroy a scene and clear engine render pipeline state.");
-    m.def("destroy_scene", &destroy_scene_with_render,
-        nb::arg("scene"),
-        "Destroy a render-enabled scene and clear engine render pipeline state.");
-
     m.def("deserialize_scene_with_render", [](nb::handle data, const std::string& name) -> TcSceneRef {
         return deserialize_scene_with_render(python_to_trent(data), name);
     }, nb::arg("data"), nb::arg("name") = "",
