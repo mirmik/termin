@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "core/tc_entity_pool.h"
+#include "core/tc_scene.h"
 #include "render/tc_render_target.h"
 #include "render/tc_viewport.h"
 }
@@ -27,10 +28,12 @@ struct CameraRig {
     OrbitCameraController* controller = nullptr;
 };
 
-CameraRig make_camera_rig(const char* name)
+CameraRig make_camera_rig(
+    const char* name,
+    tc_entity_pool_handle pool = Entity::standalone_pool_handle())
 {
     CameraRig rig;
-    rig.entity = Entity::create(Entity::standalone_pool_handle(), name);
+    rig.entity = Entity::create(pool, name);
     rig.camera = new CameraComponent();
     rig.controller = new OrbitCameraController();
     rig.entity.add_component(rig.camera);
@@ -42,14 +45,22 @@ CameraRig make_camera_rig(const char* name)
 
 TEST_CASE("OrbitCameraController only handles events from viewports rendered by its camera")
 {
-    CameraRig primary = make_camera_rig("primary-camera");
-    CameraRig secondary = make_camera_rig("secondary-camera");
+    tc_scene_handle scene = tc_scene_new_named("orbit-camera-controller-test");
+    REQUIRE(tc_scene_alive(scene));
+    tc_entity_pool_handle scene_pool = tc_entity_pool_registry_find(
+        tc_scene_entity_pool(scene));
+    REQUIRE(tc_entity_pool_handle_valid(scene_pool));
+
+    CameraRig primary = make_camera_rig("primary-camera", scene_pool);
+    CameraRig secondary = make_camera_rig("secondary-camera", scene_pool);
 
     tc_render_target_handle primary_rt = tc_render_target_new("primary-rt");
     tc_render_target_handle secondary_rt = tc_render_target_new("secondary-rt");
     REQUIRE(tc_render_target_handle_valid(primary_rt));
     REQUIRE(tc_render_target_handle_valid(secondary_rt));
 
+    tc_render_target_set_scene(primary_rt, scene);
+    tc_render_target_set_scene(secondary_rt, scene);
     tc_render_target_set_camera(primary_rt, primary.camera->tc_component_ptr());
     tc_render_target_set_camera(secondary_rt, secondary.camera->tc_component_ptr());
 
@@ -77,6 +88,7 @@ TEST_CASE("OrbitCameraController only handles events from viewports rendered by 
     tc_render_target_free(secondary_rt);
     tc_entity_free(primary.entity.handle());
     tc_entity_free(secondary.entity.handle());
+    tc_scene_free(scene);
 }
 
 TEST_CASE("OrbitCameraController center_on keeps camera offset from target")

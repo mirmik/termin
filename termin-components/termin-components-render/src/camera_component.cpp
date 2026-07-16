@@ -9,7 +9,6 @@
 extern "C" {
 #include "tc_value.h"
 #include "core/tc_camera_capability.h"
-#include "render/tc_render_target.h"
 }
 
 #include <termin/entity/component_registry.hpp>
@@ -197,26 +196,12 @@ void CameraComponent::clear_viewports() {
 }
 
 void CameraComponent::on_destroy() {
-    for (auto& vp : viewports_) {
-        if (vp.is_valid()) {
-            tc_render_target_handle rt = tc_viewport_get_render_target(vp.handle_);
-            if (tc_render_target_get_camera(rt) == &_c) {
-                tc_render_target_set_camera(rt, nullptr);
-            }
-        }
-    }
+    // Render targets resolve cameras from their stable scene/entity handles.
+    // This reverse list is UI bookkeeping only and is not a lifetime owner.
     viewports_.clear();
 }
 
 void CameraComponent::on_removed() {
-    for (auto& vp : viewports_) {
-        if (vp.is_valid()) {
-            tc_render_target_handle rt = tc_viewport_get_render_target(vp.handle_);
-            if (tc_render_target_get_camera(rt) == &_c) {
-                tc_render_target_set_camera(rt, nullptr);
-            }
-        }
-    }
     viewports_.clear();
 }
 
