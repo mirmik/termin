@@ -316,6 +316,15 @@ def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, _Runtime
         log.error(f"[PlayerRuntime] Runtime material requires phases: {uuid_value}")
         return False
 
+    rm = DefaultResourceManager.instance()
+    registered = rm.get_material_asset_by_uuid(uuid_value)
+    if registered is not None:
+        log.error(
+            f"[PlayerRuntime] Runtime material UUID is already registered: "
+            f"{uuid_value} ({registered.name})"
+        )
+        return False
+
     material = TcMaterial.get_or_create(uuid_value, name)
     if not material.is_valid:
         log.error(f"[PlayerRuntime] Failed to create runtime material: {uuid_value}")
@@ -341,9 +350,26 @@ def _load_material(spec: dict[str, Any], path: Path, shaders: dict[str, _Runtime
     _apply_material_uniforms(material, spec.get("uniforms"), uuid_value)
     _apply_material_textures(material, spec.get("textures"), uuid_value)
 
-    rm = DefaultResourceManager.instance()
-    rm.register_material(name, material, str(path), uuid_value)
-    rm._assets_by_uuid[uuid_value] = MaterialAsset(material=material, name=name, source_path=path, uuid=uuid_value)
+    asset = MaterialAsset.from_material(
+        material,
+        name=name,
+        source_path=path,
+        uuid=uuid_value,
+    )
+    try:
+        rm.register_material_asset(
+            name,
+            asset,
+            source_path=str(path),
+            uuid=uuid_value,
+        )
+    except Exception:
+        log.error(
+            f"[PlayerRuntime] Failed to register runtime material asset: "
+            f"{uuid_value} ({path})",
+            exc_info=True,
+        )
+        return False
     return True
 
 
