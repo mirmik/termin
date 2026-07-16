@@ -319,7 +319,9 @@ Phase 3 notes:
 - `IconButton` supports UTF-8 text icons or a non-owning texture handle.
   `ImageWidget` preserves intrinsic aspect by default. `Canvas` supports a
   main/overlay texture pair, fit/zoom/pan transforms, image-coordinate pointer
-  signals and a clipped custom paint callback.
+  signals and a clipped custom paint callback. Fit is a persistent view mode
+  that recomputes on layout resize; Python exposes fit state, zoom/pointer
+  signals and explicit texture clearing for host-managed GPU lifetimes.
 - Media widgets deliberately do not decode files, retain CPU arrays or
   create/update/destroy GPU resources. Hosts inject registered tgfx2 texture
   handles and keep them alive through rendering, matching draw-list ownership.

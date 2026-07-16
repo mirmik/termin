@@ -5,7 +5,14 @@ from termin.editor_native.framegraph_debugger import (
     connect_framegraph_debugger_command,
 )
 from termin.editor_native.shell import build_native_editor_shell
-from termin.gui_native import Document
+from termin.gui_native import (
+    Document,
+    EventResult,
+    Point,
+    PointerEvent,
+    PointerEventType,
+    Rect,
+)
 
 
 class _Capture:
@@ -162,12 +169,24 @@ class _Context:
 class _Image:
     def __init__(self):
         self.textures = []
+        self.fit_mode = True
+        self.zoom = 1.0
+        self.widget = self
+        self.bounds = Rect(0.0, 0.0, 320.0, 240.0)
 
     def set_texture(self, texture, size):
         self.textures.append((texture, size))
 
     def clear_texture(self):
         self.textures.append((None, None))
+
+    def fit_in_view(self):
+        self.fit_mode = True
+        self.zoom = 0.5
+
+    def set_zoom(self, zoom, _anchor):
+        self.fit_mode = False
+        self.zoom = zoom
 
 
 class _Root:
@@ -241,6 +260,12 @@ def test_native_framegraph_preview_surface_presents_resizes_and_releases():
     draw = presenter.draws[-1]
     assert draw[-2:] == (4, True)
     assert image.textures[-1][1].width == 64
+    assert preview.status_text() == "Source: 64x32 | Zoom: Fit (100%) | Pixel: —"
+
+    preview.update_cursor(Point(12.75, 7.25))
+    assert preview.status_text() == "Source: 64x32 | Zoom: Fit (100%) | Pixel: 12, 7"
+    preview.actual_size()
+    assert preview.status_text() == "Source: 64x32 | Zoom: 100% | Pixel: 12, 7"
 
     capture.width = 128
     assert preview.render(context)
@@ -281,6 +306,59 @@ def test_native_framegraph_preview_keeps_layout_slot_while_capture_arrives():
     capture.capture_tex = None
     assert not preview.render(context)
     assert image.textures[-1] == (None, None)
+
+
+def _click(button) -> None:
+    bounds = button.widget.bounds
+    pointer = PointerEvent()
+    pointer.x = bounds.x + bounds.width * 0.5
+    pointer.y = bounds.y + bounds.height * 0.5
+    pointer.type = PointerEventType.Down
+    assert button.widget.dispatch_pointer_event(pointer) == EventResult.Handled
+    pointer.type = PointerEventType.Up
+    assert button.widget.dispatch_pointer_event(pointer) == EventResult.Handled
+
+
+def test_native_framegraph_canvases_keep_independent_fit_zoom_and_pixel_status():
+    model = _Model()
+    context = _Context()
+    window_manager = _WindowManager(context)
+    debugger = build_native_framegraph_debugger(
+        window_manager,
+        model,
+        request_render=lambda: None,
+    )
+    debugger.show()
+    debugger.document.layout_roots(Rect(0.0, 0.0, 1180.0, 760.0))
+
+    debugger.main_preview.target_size = (64, 32)
+    debugger.depth_preview.target_size = (64, 32)
+    debugger._refresh_preview_statuses()
+
+    assert debugger.main_preview.canvas.fit_mode
+    assert debugger.depth_preview.canvas.fit_mode
+    assert "Source: 64x32" in debugger.main_status.text
+    _click(debugger.main_actual_button)
+    assert not debugger.main_preview.canvas.fit_mode
+    assert debugger.main_preview.canvas.zoom == 1.0
+    assert debugger.depth_preview.canvas.fit_mode
+
+    target_point = debugger.main_preview.canvas.image_to_widget(Point(12.0, 7.0))
+    pointer = PointerEvent()
+    pointer.type = PointerEventType.Move
+    pointer.x = target_point.x
+    pointer.y = target_point.y
+    assert (
+        debugger.main_preview.canvas.widget.dispatch_pointer_event(pointer)
+        == EventResult.Handled
+    )
+    assert "Zoom: 100%" in debugger.main_status.text
+    assert "Pixel:" in debugger.main_status.text
+    assert "Pixel: —" not in debugger.main_status.text
+
+    _click(debugger.main_fit_button)
+    assert debugger.main_preview.canvas.fit_mode
+    debugger.close()
 
 
 def test_native_framegraph_debugger_f12_projection_reopens_and_closes():
