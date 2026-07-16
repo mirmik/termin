@@ -7,6 +7,7 @@ from termin.default_assets.resource_manager import DefaultResourceManager
 from termin.image import write_png_rgba8_file
 from termin.player import runtime_package_loader
 from termin.player.runtime_package_loader import (
+    _load_material,
     _load_mesh,
     _load_texture,
     _material_texture_resources_from_shader_spec,
@@ -100,6 +101,41 @@ def test_runtime_package_loader_registers_packaged_texture_before_materials(tmp_
     assert texture_asset.transpose is True
     assert texture_asset.texture_data is not None
     assert texture_asset.texture_data.is_valid
+
+
+def test_runtime_package_loader_registers_one_material_asset_and_preserves_it_on_duplicate(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    manager = DefaultResourceManager()
+    monkeypatch.setattr(DefaultResourceManager, "instance", classmethod(lambda cls: manager))
+
+    material_uuid = "runtime-loader-material-identity-uuid"
+    material_path = tmp_path / "RuntimeMaterial.tmat.json"
+    spec = {
+        "uuid": material_uuid,
+        "name": "RuntimeMaterial",
+        "phases": [],
+    }
+
+    assert _load_material(spec, material_path, {})
+
+    by_name = manager.get_material_asset("RuntimeMaterial")
+    by_uuid = manager.get_material_asset_by_uuid(material_uuid)
+    assert by_name is not None
+    assert by_uuid is by_name
+    assert by_name.material is manager.get_material("RuntimeMaterial")
+
+    previous_material = by_name.material
+    duplicate = {
+        "uuid": material_uuid,
+        "name": "ConflictingMaterial",
+        "phases": [],
+    }
+    assert not _load_material(duplicate, tmp_path / "Conflicting.tmat.json", {})
+    assert manager.get_material_asset_by_uuid(material_uuid) is by_name
+    assert manager.get_material_asset("ConflictingMaterial") is None
+    assert by_name.material is previous_material
 
 
 def test_runtime_package_loader_orders_textures_before_materials(tmp_path, monkeypatch) -> None:
