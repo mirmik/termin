@@ -179,6 +179,7 @@ class _Manager:
         self.managed_render_targets = []
         self.registered = []
         self.unregistered = []
+        self.topology = _Topology()
 
     def create_pipeline(self, name):
         self.created.append(name)
@@ -203,6 +204,11 @@ class _Manager:
         self.unregistered.append(rt)
         if rt in self.managed_render_targets:
             self.managed_render_targets.remove(rt)
+
+
+class _Topology:
+    def get_pipeline(self, scene, name):
+        return getattr(scene, "live_pipelines", {}).get(name)
 
 
 def _install_native_stubs(monkeypatch, pool):
@@ -544,3 +550,20 @@ def test_framegraph_targets_do_not_duplicate_viewport_owned_managed_target(monke
     assert len(targets) == 1
     assert targets[0].source is target
     assert targets[0].label == "Display / Viewport / MainRT"
+
+
+def test_framegraph_scene_pipeline_lookup_uses_explicit_topology(monkeypatch):
+    pool = []
+    _install_native_stubs(monkeypatch, pool)
+
+    manager = _Manager()
+    manager.get_display_name = lambda _display: "Display"
+    pipeline = _Pipeline("ScenePipeline")
+    scene = _Scene(_Mount([]))
+    scene.live_pipelines = {"ScenePipeline": pipeline}
+    viewport = _Viewport()
+    viewport.scene = scene
+    viewport.managed_by_scene_pipeline = "ScenePipeline"
+    model = RenderingModel(manager)
+
+    assert model._pipeline_for_viewport(viewport) is pipeline
