@@ -61,7 +61,7 @@ def _parse_editor_args() -> tuple[str | None, str | None, str]:
     return project, debug_resource, ui_backend
 
 
-def init_editor(debug_resource: str | None = None, no_scene: bool = False) -> None:
+def init_editor(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
     """Initialize the selected editor frontend and setup callbacks."""
     cli_project, cli_debug, ui_backend = _parse_editor_args()
     if cli_project in ("__help__", "__error__"):
@@ -76,28 +76,26 @@ def init_editor(debug_resource: str | None = None, no_scene: bool = False) -> No
     if ui_backend == "tcgui":
         from termin.editor_tcgui.run_editor import init_editor_tcgui
 
-        init_editor_tcgui(debug_resource=debug_resource, no_scene=no_scene)
+        init_editor_tcgui(engine, debug_resource=debug_resource, no_scene=no_scene)
         return
 
     from termin.editor_native.run_editor import init_editor_native
 
-    init_editor_native(debug_resource=debug_resource, no_scene=no_scene)
+    init_editor_native(engine, debug_resource=debug_resource, no_scene=no_scene)
 
 
-def run_editor(debug_resource: str | None = None, no_scene: bool = False) -> None:
-    """Run the selected editor frontend from the embedded C++ entry point."""
-    from termin.engine import EngineCore
+def init_editor_from_host(engine_capsule) -> None:
+    """Initialize from the C++ host's explicit borrowed-engine capsule."""
+    from termin.engine import _borrow_engine_core
 
-    engine = EngineCore.instance()
-    if engine is None:
-        raise RuntimeError(
-            "run_editor() must be called from C++ entry point (termin_editor). "
-            "EngineCore is created in C++."
-        )
+    init_editor(_borrow_engine_core(engine_capsule))
 
-    init_editor(debug_resource=debug_resource, no_scene=no_scene)
+
+def run_editor(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
+    """Initialize and run an explicitly supplied engine."""
+    init_editor(engine, debug_resource=debug_resource, no_scene=no_scene)
     engine.run()
 
 
 if __name__ == "__main__":
-    run_editor()
+    raise RuntimeError("Use the termin_editor native host to run the editor")

@@ -203,6 +203,7 @@ class PlayerRuntime:
         mcp_enabled: bool = False,
         mcp_options: dict | None = None,
         player_window: "ProjectPlayerWindowSettings | None" = None,
+        engine=None,
     ):
         self.project_path = Path(project_path)
         self.scene_name = scene_name
@@ -229,7 +230,8 @@ class PlayerRuntime:
         self.graphics = None
         self.surface = None
         self.camera = None
-        self._engine = None
+        self._engine = engine
+        self._owns_engine = engine is None
         self._surface_size: tuple[int, int] = (0, 0)
 
         # Timing
@@ -269,8 +271,6 @@ class PlayerRuntime:
         # materials/shaders. Importing tgfx-only helpers first leaves some
         # build materials in a state where the runtime pipeline clears but
         # draws no scene geometry.
-        from termin.engine import RenderingManager
-
         self._ensure_texture_registry()
 
         if not self._ensure_engine_core():
@@ -298,10 +298,10 @@ class PlayerRuntime:
         configure_glsl_preprocessor()
 
         # Create default pipeline and configure RenderingManager
-        pipeline = RenderingManager.instance().create_pipeline("Default")
+        manager = self._engine.rendering_manager
+        pipeline = manager.create_pipeline("Default")
         log.info(f"[PlayerRuntime] Created pipeline: {pipeline.name} with {len(pipeline.passes)} passes")
 
-        manager = RenderingManager.instance()
         manager.set_pipeline_factory(self._create_pipeline_for_name)
 
         # Create native backend window first. Its constructor publishes the
@@ -553,17 +553,15 @@ class PlayerRuntime:
     def _ensure_engine_core(self) -> bool:
         """Ensure EngineCore exists so RenderingManager has a real backend."""
         from tcbase import log
-        from termin.engine import EngineCore
-
-        engine = EngineCore.instance()
-        if engine is not None:
-            self._engine = engine
+        if self._engine is not None:
             return True
 
         try:
             from termin.engine import register_default_scene_extensions
 
             register_default_scene_extensions()
+            from termin.engine import EngineCore
+
             self._engine = EngineCore()
         except TypeError as e:
             log.error(
@@ -827,9 +825,7 @@ class PlayerRuntime:
 
     def _render(self):
         """Render using RenderingManager."""
-        from termin.engine import RenderingManager
-
-        manager = RenderingManager.instance()
+        manager = self._engine.rendering_manager
         manager.render_all(present=True)
         if self.window is not None and self.surface is not None:
             self.window.present(self.surface.color_tex)
@@ -869,9 +865,7 @@ class PlayerRuntime:
         manager = None
         if self._engine is not None or self.scene is not None or self._display is not None:
             try:
-                from termin.engine import RenderingManager
-
-                manager = RenderingManager.instance()
+                manager = self._engine.rendering_manager
             except Exception as e:
                 log.error(f"[PlayerRuntime] Failed to access RenderingManager during shutdown: {e}")
 
@@ -897,7 +891,6 @@ class PlayerRuntime:
             log.error(f"[PlayerRuntime] Failed to shutdown bootstrap runtime: {e}")
 
         self.scene = None
-        self._engine = None
 
         if self.surface is not None:
             self.surface.close()
@@ -906,6 +899,10 @@ class PlayerRuntime:
         if self.window is not None:
             self.window.close()
             self.window = None
+
+        # Release a borrowed wrapper only after all engine-backed resources are
+        # detached. For standalone runtimes this also destroys the owned engine.
+        self._engine = None
 
         self.running = False
 

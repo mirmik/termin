@@ -9,6 +9,16 @@ namespace nb = nanobind;
 namespace termin {
 
 void bind_engine_core(nb::module_& m) {
+    m.def("_borrow_engine_core", [](nb::handle capsule) -> EngineCore* {
+        constexpr const char* capsule_name = "termin.EngineCore.borrowed";
+        if (!PyCapsule_IsValid(capsule.ptr(), capsule_name)) {
+            throw nb::type_error("expected a borrowed EngineCore host capsule");
+        }
+        return static_cast<EngineCore*>(
+            PyCapsule_GetPointer(capsule.ptr(), capsule_name));
+    }, nb::arg("capsule"), nb::rv_policy::reference,
+       "Convert an explicit C++ host capsule into a borrowed EngineCore reference.");
+
     nb::class_<EngineCore>(m, "EngineCore")
         .def(nb::init<>(),
              "Create EngineCore. Python player uses this when it is not "

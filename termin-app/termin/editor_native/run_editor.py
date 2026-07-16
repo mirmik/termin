@@ -183,14 +183,14 @@ def _smoke_frame_limit() -> int:
         return 0
 
 
-def init_editor_native(debug_resource: str | None = None, no_scene: bool = False) -> None:
+def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool = False) -> None:
     """Initialize one native document and register it with the C++ engine loop."""
 
     from termin.bootstrap import bootstrap_editor
     from termin.editor_core.resource_manager import configure_editor_resource_manager_factory
     from termin.editor_core.mcp_server import start_editor_mcp_server
     from termin.editor_core.python_executor import EditorPythonExecutor
-    from termin.engine import EngineCore, create_scene, scene as engine_scene
+    from termin.engine import create_scene, scene as engine_scene
 
     bootstrap_editor()
     configure_editor_resource_manager_factory()
@@ -200,10 +200,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     from termin.editor_core.resource_loader import register_editor_builtin_resources
 
     register_editor_builtin_resources(resource_manager)
-    engine = EngineCore.instance()
-    if engine is None:
-        raise RuntimeError("EngineCore not created. Must be called from C++ entry point.")
-
     from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
 
     configure_sdk_shader_runtime("native-editor")

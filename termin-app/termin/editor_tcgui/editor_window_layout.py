@@ -24,6 +24,7 @@ from tcgui.widgets.vstack import VStack
 from termin.editor_tcgui.modules_panel import ModulesPanel
 from termin.editor_tcgui.profiler_panel import ProfilerPanel
 from termin.editor_tcgui.viewport_list_widget import ViewportListWidgetTcgui
+from termin.engine import EngineCore
 
 
 @dataclass
@@ -69,7 +70,10 @@ class EditorWindowLayoutCallbacks:
     viewport_external_drop: Callable[[object], bool]
 
 
-def build_editor_window_layout(callbacks: EditorWindowLayoutCallbacks) -> EditorWindowWidgets:
+def build_editor_window_layout(
+    engine: EngineCore,
+    callbacks: EditorWindowLayoutCallbacks,
+) -> EditorWindowWidgets:
     root = VStack()
     root.preferred_width = pct(100)
     root.preferred_height = pct(100)
@@ -207,7 +211,7 @@ def build_editor_window_layout(callbacks: EditorWindowLayoutCallbacks) -> Editor
     debug_panel.preferred_width = px(350)
     debug_panel.visible = False
 
-    profiler_panel = ProfilerPanel()
+    profiler_panel = ProfilerPanel(engine)
     debug_panel.add_tab("Profiler", profiler_panel)
 
     modules_panel = ModulesPanel()

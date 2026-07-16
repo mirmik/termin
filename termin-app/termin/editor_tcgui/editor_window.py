@@ -32,7 +32,7 @@ from termin.editor_core.menu_bar_model import (
     SceneMenuActions,
     ViewMenuActions,
 )
-from termin.engine import SceneManager, default_scene_extensions, scene as engine_scene
+from termin.engine import EngineCore, SceneManager, default_scene_extensions, scene as engine_scene
 from termin.editor_core.resource_loader import ResourceLoader, register_editor_builtin_resources
 from termin.editor_core.project_file_watcher import (
     create_editor_project_file_watcher,
@@ -95,11 +95,13 @@ class EditorWindowTcgui:
 
     def __init__(
         self,
+        engine: EngineCore,
         initial_scene,
         scene_manager: SceneManager,
         ctx=None,
         main_window=None,
     ) -> None:
+        self._engine = engine
         # Process-global tgfx2 context — the editor's FBOSurface and
         # RenderingControllerTcgui allocate their render targets here.
         # Supplied by run_editor_tcgui from SDLBackendWindow.
@@ -370,6 +372,7 @@ class EditorWindowTcgui:
         self._ui = ui
 
         widgets = build_editor_window_layout(
+            self._engine,
             EditorWindowLayoutCallbacks(
                 toggle_game_mode=self._toggle_game_mode,
                 toggle_pause=self._toggle_pause,
