@@ -21,6 +21,7 @@ namespace termin {
 class TERMIN_ENGINE_API EngineCore {
 public:
     SceneManager scene_manager;
+    RenderTopology render_topology;
     RenderingManager rendering_manager;
 
 private:

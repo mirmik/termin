@@ -1,16 +1,19 @@
 # RenderingManager
 
-`RenderingManager` владеет live render topology: displays, viewports, render targets, scene pipelines и presentation state.
+`EngineCore` владеет `RenderTopology` и `RenderingManager`. `RenderTopology`
+хранит scene-keyed live pipelines и render targets; `RenderingManager` исполняет
+рендер, управляет displays, GPU output state и presentation.
 
 Исходники:
 
 - `include/termin/render/rendering_manager.hpp`
+- `include/termin/render/render_topology.hpp`
 - `src/rendering_manager.cpp` - публичный фасад и orchestration.
 - `src/render_display_registry.cpp` - scene/editor display списки и display input routers.
 - `src/render_frame_planner.cpp` - обновление viewport rects и план render target на offscreen-кадр.
 - `src/render_state_store.cpp` - runtime GPU output state helpers.
 - `src/render_target_context_builder.cpp` - сбор `RenderTargetContext` для 2D и provider-backed render target.
-- `src/scene_pipeline_manager.cpp` - compiled scene pipelines и target viewport mappings.
+- `src/render_topology.cpp` - attached scenes, compiled pipelines и scene-owned render targets.
 - `src/display_presenter.cpp` - presentation/blit display surfaces.
 - `src/default_pipeline_factory.cpp` - builtin default pipeline.
 - `src/scene_light_collector.cpp` - сбор light data через capability system.
@@ -20,29 +23,36 @@
 
 `RenderingManager` отвечает на главный вопрос: куда и как рендерить currently attached scenes?
 
-Он отслеживает:
+`RenderTopology` отслеживает:
+
+- attached scenes;
+- managed render targets, индексированные по сцене;
+- compiled scene pipelines и их target names.
+
+`RenderingManager` отслеживает и исполняет:
 
 - scene displays;
 - editor displays;
 - связи viewport-to-render-target;
-- managed render targets;
-- compiled scene pipelines;
 - render output state;
-- display/pipeline factories и host callbacks.
+- display/pipeline factories и host integration callbacks.
 
 ## Managed Render Targets
 
-Самая важная граница владения - `managed_render_targets_`.
+Самая важная граница владения — `RenderTopology::managed_render_targets()`.
 
 В engine есть global pools для handles, но `RenderingManager` никогда не должен использовать global pool как источник владения или как способ найти “свои” render targets. В global pools могут лежать объекты, к которым `RenderingManager` вообще не имеет отношения: editor-owned, game-owned, временные, stale или duplicate handles.
 
-Authoritative render-target set для `RenderingManager` - только `managed_render_targets_`. Этот список определяет:
+Authoritative render-target set для одного `EngineCore` — только его
+`RenderTopology`. Этот список определяет:
 
 - какие render targets рендерятся;
 - какие render targets освобождаются при detach;
 - какие render targets участвуют в rebinding pipeline assets.
 
-Практическое правило: если код в `RenderingManager` хочет найти render target для render, detach, cleanup или pipeline rebinding, он должен идти через `managed_render_targets_`, а не сканировать global pool.
+Практическое правило: если runtime-код хочет найти render target для render,
+detach, cleanup или pipeline rebinding, он должен идти через scene-qualified
+`RenderTopology`, а не сканировать global pool.
 
 ## Подключение сцены
 
@@ -123,6 +133,8 @@ render_all()
 5. отрендерить unmanaged viewports;
 6. презентовать outputs на displays.
 
-## Pull Hosts
+## Планирование кадров
 
-Некоторые hosts не рендерят непрерывно. Для них `RenderingManager` предоставляет render-request callback integration. Когда assets/pipelines перебинжены, manager может попросить host запланировать еще один кадр.
+`RenderingManager` не планирует engine frames и не вызывает host в обратную
+сторону. Изменение scene-owned render state помечает конкретную сцену через
+`tc_scene_request_render`; UI repaint остается обязанностью host UI.

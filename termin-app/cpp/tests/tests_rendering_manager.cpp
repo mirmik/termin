@@ -28,6 +28,7 @@ extern "C" {
 }
 
 using termin::RenderingManager;
+using termin::RenderTopology;
 using termin::RenderPipeline;
 using termin::ResourceSpec;
 using termin::TcScenePipelineTemplate;
@@ -716,7 +717,8 @@ TEST_CASE("Graph compiler uses unnamed slot for External RT without name")
 
 TEST_CASE("RenderingManager detach_scene removes attached scene")
 {
-    RenderingManager manager;
+    RenderTopology topology;
+    RenderingManager manager(topology);
 
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -740,7 +742,8 @@ TEST_CASE("RenderingManager detach_scene removes attached scene")
 
 TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
 {
-    RenderingManager manager;
+    RenderTopology topology;
+    RenderingManager manager(topology);
     tc_scene_render_mount_extension_init();
 
     tc_scene_handle scene = tc_scene_new();
@@ -776,9 +779,71 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     tc_scene_free(scene);
 }
 
+TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fails")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_render_mount_extension_init();
+
+    const size_t baseline_targets = tc_render_target_pool_count();
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+
+    tc_render_target_config target_config;
+    tc_render_target_config_init(&target_config);
+    target_config.name = "RollbackTarget";
+    tc_scene_add_render_target_config(scene, &target_config);
+
+    TcScenePipelineTemplate unloaded = TcScenePipelineTemplate::declare(
+        "rollback-template-uuid",
+        "rollback-template"
+    );
+    REQUIRE(unloaded.is_valid());
+    REQUIRE(!unloaded.is_loaded());
+    tc_scene_add_pipeline_template(scene, unloaded.handle());
+
+    CHECK(manager.attach_scene_full(scene).empty());
+    CHECK(!topology.is_attached(scene));
+    CHECK(topology.render_targets(scene).empty());
+    CHECK(manager.managed_render_targets().empty());
+    CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
+
+    tc_spt_free(unloaded.handle());
+    tc_scene_free(scene);
+}
+
+TEST_CASE("RenderTopology preserves live pipelines when replacement compilation fails")
+{
+    RenderTopology topology;
+    tc_scene_render_mount_extension_init();
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+
+    TcScenePipelineTemplate live = make_empty_scene_pipeline_template("stable-pipeline");
+    tc_scene_add_pipeline_template(scene, live.handle());
+    REQUIRE(topology.attach_scene(scene));
+    tc_pipeline_handle original = topology.get_pipeline(scene, "stable-pipeline");
+    REQUIRE(tc_pipeline_handle_valid(original));
+
+    TcScenePipelineTemplate unloaded = TcScenePipelineTemplate::declare(
+        "failed-replacement-uuid",
+        "failed-replacement"
+    );
+    tc_scene_add_pipeline_template(scene, unloaded.handle());
+    CHECK(!topology.attach_scene(scene));
+    CHECK(tc_pipeline_handle_eq(topology.get_pipeline(scene, "stable-pipeline"), original));
+    CHECK(tc_pipeline_pool_alive(original));
+
+    topology.detach_scene(scene);
+    tc_spt_free(unloaded.handle());
+    tc_spt_free(live.handle());
+    tc_scene_free(scene);
+}
+
 TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
 {
-    RenderingManager manager;
+    RenderTopology topology;
+    RenderingManager manager(topology);
 
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -826,7 +891,8 @@ TEST_CASE("RenderingManager attach_scene_full binds config viewports to scene")
 
 TEST_CASE("RenderingManager attach_scene_full keeps config viewport empty without render target")
 {
-    RenderingManager manager;
+    RenderTopology topology;
+    RenderingManager manager(topology);
 
     tc_scene_handle scene = tc_scene_new();
     REQUIRE(tc_scene_handle_valid(scene));
@@ -927,7 +993,8 @@ TEST_CASE("Render target ensure_textures refreshes owned texture size")
 
 TEST_CASE("RenderingManager attach detach restores editor render counts")
 {
-    RenderingManager manager;
+    RenderTopology topology;
+    RenderingManager manager(topology);
     tc_scene_render_mount_extension_init();
 
     tc_scene_handle editor_scene = tc_scene_new();
@@ -1019,7 +1086,8 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
 
 TEST_CASE("Default pipeline color FBOs inherit output render target format")
 {
-    RenderingManager manager;
+    RenderTopology topology;
+    RenderingManager manager(topology);
     tc_pipeline_handle pipeline_handle = manager.make_default_pipeline();
     REQUIRE(tc_pipeline_handle_valid(pipeline_handle));
 

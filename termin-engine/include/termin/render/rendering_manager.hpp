@@ -18,6 +18,7 @@
 #include "termin/render/viewport_render_state.hpp"
 #include "termin/render/render_pipeline.hpp"
 #include "termin/render/render_engine.hpp"
+#include "termin/render/render_topology.hpp"
 
 extern "C" {
 #include "core/tc_scene.h"
@@ -42,7 +43,6 @@ class RenderingManager;
 namespace rendering_manager_detail {
 class RenderDisplayRegistry;
 class RenderStateStore;
-class ScenePipelineManager;
 }
 
 // Factory callback types
@@ -84,8 +84,8 @@ private:
     // Runtime GPU output state helpers.
     std::unique_ptr<rendering_manager_detail::RenderStateStore> render_states_;
 
-    // Compiled scene pipeline handles and target viewport mappings.
-    std::unique_ptr<rendering_manager_detail::ScenePipelineManager> scene_pipelines_;
+    // Engine-owned live scene/pipeline/target topology.
+    RenderTopology& topology_;
 
     // Callback to activate GL context before rendering
     MakeCurrentCallback make_current_callback_;
@@ -99,16 +99,6 @@ private:
     // Callback when a display is removed
     DisplayRemovedCallback display_removed_callback_;
 
-    // Attached scenes (for scene pipeline execution)
-    std::vector<tc_scene_handle> attached_scenes_;
-
-    // Render targets managed by this RenderingManager.
-    // Used for offscreen rendering, viewport target lookup, and scene-detach cleanup.
-    // RenderingManager code must use this list as the ownership boundary and
-    // must not scan the global render-target pool for lookup or rebinding:
-    // the pool may contain stale, foreign, or duplicate editor/game targets.
-    std::vector<tc_render_target_handle> managed_render_targets_;
-
     // Special target providers, keyed by tc_render_target_kind.
     std::unordered_map<int, RenderTargetContextProvider> render_target_context_providers_;
     std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
@@ -120,7 +110,7 @@ public:
     static void set_instance(RenderingManager* instance);
     static void reset_for_testing();
 
-    RenderingManager();
+    explicit RenderingManager(RenderTopology& topology);
     ~RenderingManager();
 
 private:
@@ -137,6 +127,8 @@ public:
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();
     const RenderEngine* render_engine_if_created() const { return render_engine_; }
+    RenderTopology& topology() { return topology_; }
+    const RenderTopology& topology() const { return topology_; }
 
     // Set callback to activate GL context before rendering
     void set_make_current_callback(MakeCurrentCallback callback);
@@ -277,7 +269,9 @@ public:
     void detach_scene_full(tc_scene_handle scene);
 
     // Get attached scenes list
-    const std::vector<tc_scene_handle>& attached_scenes() const { return attached_scenes_; }
+    const std::vector<tc_scene_handle>& attached_scenes() const {
+        return topology_.attached_scenes();
+    }
 
     // ========================================================================
     // Scene Pipeline Management
@@ -324,7 +318,7 @@ public:
 
     // Get all render targets managed by RenderingManager.
     const std::vector<tc_render_target_handle>& managed_render_targets() const {
-        return managed_render_targets_;
+        return topology_.managed_render_targets();
     }
 
     // ========================================================================
@@ -375,7 +369,10 @@ private:
     std::vector<Light> collect_lights(tc_scene_handle scene);
 
     // Apply scene pipelines after viewports are created
-    void apply_scene_pipelines(tc_scene_handle scene, const std::vector<tc_viewport_handle>& viewports);
+    bool apply_scene_pipelines(
+        tc_scene_handle scene,
+        const std::vector<tc_viewport_handle>& viewports
+    );
 
     // Collect all viewports from all displays by name
     std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
