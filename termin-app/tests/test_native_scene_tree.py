@@ -126,3 +126,40 @@ def test_native_scene_tree_external_drop_hit_testing() -> None:
         assert position == "inside"
     finally:
         scene.destroy()
+
+
+def test_native_scene_tree_collapse_all_keeps_selected_branch_collapsed() -> None:
+    scene = TcScene.create("native-scene-tree-collapse-test")
+    try:
+        parent = scene.create_entity("parent")
+        child = scene.create_entity("child")
+        child.transform.set_parent(parent.transform)
+        controller = SceneHierarchyController(
+            scene,
+            undo_handler=UndoStack().push,
+            dialog_service=ImmediateDialogService(),
+            on_object_selected=lambda _obj: None,
+        )
+        document = Document()
+        tree = build_native_scene_tree(
+            document,
+            controller,
+            viewport=lambda: Rect(0.0, 0.0, 420.0, 320.0),
+            request_render=lambda: None,
+        )
+        assert document.add_root(tree.root.handle)
+        document.layout_roots(Rect(0.0, 0.0, 420.0, 320.0))
+
+        tree.select_object(child)
+        parent_node = tree.id_nodes[parent.uuid]
+        child_node = tree.id_nodes[child.uuid]
+        assert tree.tree_widget.expanded(parent_node)
+        assert tree.tree_widget.selected_node == child_node
+
+        tree.collapse_all()
+
+        assert controller.snapshot().expanded_ids == frozenset()
+        assert not tree.tree_widget.expanded(tree.id_nodes[parent.uuid])
+        assert tree.tree_widget.selected_node == tree.id_nodes[child.uuid]
+    finally:
+        scene.destroy()
