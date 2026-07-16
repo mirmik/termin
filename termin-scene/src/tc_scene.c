@@ -80,6 +80,7 @@ typedef struct tc_scene_slot {
     ComponentList before_render_list;
     double fixed_timestep;
     double accumulated_time;
+    bool render_requested;
     tc_resource_map* type_heads;
     tc_value metadata;  // Extensible metadata storage (dict per scene)
     const char* name;
@@ -251,6 +252,7 @@ tc_scene_handle tc_scene_pool_alloc(const char* name) {
     list_init(&g_pool->slots[idx].before_render_list);
     g_pool->slots[idx].fixed_timestep = 1.0 / 60.0;
     g_pool->slots[idx].accumulated_time = 0.0;
+    g_pool->slots[idx].render_requested = false;
     g_pool->slots[idx].type_heads = tc_resource_map_new(NULL);
     g_pool->slots[idx].event_bus = tc_event_bus_create();
     g_pool->slots[idx].metadata = tc_value_dict_new();
@@ -763,6 +765,18 @@ void tc_scene_before_render(tc_scene_handle h) {
 
     // Extension before-render hooks
     tc_scene_ext_on_scene_before_render(h);
+}
+
+void tc_scene_request_render(tc_scene_handle h) {
+    if (!handle_alive(h)) return;
+    g_pool->slots[h.index].render_requested = true;
+}
+
+bool tc_scene_consume_render_request(tc_scene_handle h) {
+    if (!handle_alive(h)) return false;
+    bool requested = g_pool->slots[h.index].render_requested;
+    g_pool->slots[h.index].render_requested = false;
+    return requested;
 }
 
 void tc_scene_foreach_with_capability(

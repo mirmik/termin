@@ -1,5 +1,6 @@
 #include <components/mesh_component.hpp>
 #include <tc_inspect_cpp.hpp>
+#include <termin/tc_scene.hpp>
 
 namespace termin {
 
@@ -69,15 +70,19 @@ MeshComponent::MeshComponent()
 
 void MeshComponent::set_mesh(const TcMesh& value) {
     mesh = value;
+    TcSceneRef owner_scene = entity().scene();
+    if (owner_scene.valid()) {
+        owner_scene.request_render();
+    }
 }
 
 void MeshComponent::set_mesh_by_name(const std::string& name) {
     tc_mesh_handle h = tc_mesh_find_by_name(name.c_str());
     if (tc_mesh_handle_is_invalid(h)) {
-        mesh = TcMesh();
+        set_mesh(TcMesh());
         return;
     }
-    mesh = TcMesh(h);
+    set_mesh(TcMesh(h));
 }
 
 Mat44f MeshComponent::get_mesh_offset_matrix() const {

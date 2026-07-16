@@ -99,6 +99,8 @@ public:
     void update(double dt);
     void editor_update(double dt);
     void before_render();
+    void request_render();
+    bool consume_render_request();
 
     // Fixed timestep
     double fixed_timestep() const;

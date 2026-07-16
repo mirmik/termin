@@ -248,6 +248,10 @@ void bind_tc_scene_core(nb::module_& m) {
         .def("update", &TcSceneRef::update, nb::arg("dt"))
         .def("editor_update", &TcSceneRef::editor_update, nb::arg("dt"))
         .def("before_render", &TcSceneRef::before_render)
+        .def("request_render", &TcSceneRef::request_render,
+             "Request a render frame for this scene")
+        .def("consume_render_request", &TcSceneRef::consume_render_request,
+             "Consume and clear this scene's render request")
 
         // Fixed timestep
         .def_prop_rw("fixed_timestep", &TcSceneRef::fixed_timestep, &TcSceneRef::set_fixed_timestep)

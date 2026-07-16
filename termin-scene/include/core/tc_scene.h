@@ -99,6 +99,11 @@ TC_API void tc_scene_editor_update(tc_scene_handle h, double dt);
 // Should be called once per frame, before rendering begins
 TC_API void tc_scene_before_render(tc_scene_handle h);
 
+// Scene-local render invalidation. Mutations request a frame on their owning
+// scene; a host SceneManager consumes the flag when scheduling that scene.
+TC_API void tc_scene_request_render(tc_scene_handle h);
+TC_API bool tc_scene_consume_render_request(tc_scene_handle h);
+
 // Notify all components that scene started in editor mode
 TC_API void tc_scene_notify_editor_start(tc_scene_handle h);
 

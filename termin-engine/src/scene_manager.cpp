@@ -185,8 +185,14 @@ bool SceneManager::tick(double dt) {
         }
     }
 
+    bool scene_requested = false;
+    for (const auto& [name, scene] : _scenes) {
+        (void)name;
+        scene_requested = tc_scene_consume_render_request(scene) || scene_requested;
+    }
+
     bool has_play = has_play_scenes();
-    bool should_render = has_play || _render_requested;
+    bool should_render = has_play || _render_requested || scene_requested;
 
     if (should_render) {
         _render_requested = false;
