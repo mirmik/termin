@@ -23,8 +23,6 @@ HandleSetter = Callable[[object], None]
 
 @dataclass(frozen=True, slots=True)
 class FileMenuActions:
-    new_project: VoidCallback
-    open_project: VoidCallback
     new_scene: VoidCallback
     save_scene: VoidCallback
     save_scene_as: VoidCallback
@@ -210,9 +208,6 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
         MenuSpec(
             name="File",
             items=[
-                MenuItemSpec("New Project...", actions.file.new_project),
-                MenuItemSpec("Open Project...", actions.file.open_project),
-                None,  # separator
                 MenuItemSpec("New Scene", actions.file.new_scene, shortcut="Ctrl+N"),
                 None,
                 MenuItemSpec("Save Scene", actions.file.save_scene, shortcut="Ctrl+S"),
@@ -327,7 +322,7 @@ def build_editor_menu_inventory() -> list[MenuSpec]:
     return build_editor_menu_spec(
         EditorMenuSpecConfig(
             actions=EditorMenuActions(
-                file=FileMenuActions(*([noop] * 11)),
+                file=FileMenuActions(*([noop] * 9)),
                 edit=EditMenuActions(*([noop] * 4)),
                 view=ViewMenuActions(*([noop] * 2)),
                 scene=SceneMenuActions(*([noop] * 4)),

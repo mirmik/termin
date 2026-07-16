@@ -56,8 +56,6 @@ class NativeEditorShell:
     prefab_tool_bar: object
     status_bar: object
     new_scene_command: int
-    new_project_command: int
-    open_project_command: int
     close_scene_command: int
     load_material_command: int
     load_components_command: int
@@ -208,8 +206,6 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     debug_menu = models["debug"]
     help_menu = models["help"]
     new_scene_command = commands[("File", "New Scene")]
-    new_project_command = commands[("File", "New Project...")]
-    open_project_command = commands[("File", "Open Project...")]
     close_scene_command = commands[("File", "Close Scene")]
     load_material_command = commands[("File", "Load Material...")]
     load_components_command = commands[("File", "Load Components...")]
@@ -388,8 +384,6 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         prefab_tool_bar=prefab_tool_bar,
         status_bar=status_bar,
         new_scene_command=new_scene_command,
-        new_project_command=new_project_command,
-        open_project_command=open_project_command,
         close_scene_command=close_scene_command,
         load_material_command=load_material_command,
         load_components_command=load_components_command,

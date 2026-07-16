@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import runpy
 import sys
@@ -37,8 +38,17 @@ class ProjectSessionController:
         self._resolve_slangc = resolve_slangc
         self._show_error = show_error
         self._run_module_operation = run_module_operation
+        self._project_file: Path | None = None
+        self._initializing = False
 
-    def restore_project(self, on_complete: Callable[[], None] | None = None) -> bool:
+    @property
+    def project_file(self) -> Path | None:
+        return self._project_file
+
+    def restore_project(
+        self,
+        on_complete: Callable[[bool], None] | None = None,
+    ) -> bool:
         """Restore project from launcher or last session."""
         from termin.launcher.recent import read_launch_project
 
@@ -51,77 +61,161 @@ class ProjectSessionController:
                 project_file = str(p)
 
         if project_file is None:
-            last = EditorSettings.instance().get("last_project_file")
-            if last and Path(last).exists():
-                project_file = last
+            last = EditorSettings.instance().get_last_project_file()
+            if last is not None:
+                project_file = str(last)
 
         if project_file is not None:
-            self.load_project(project_file, on_complete=on_complete)
-            EditorSettings.instance().set("last_project_file", project_file)
-            return True
+            return self.initialize_project(project_file, on_complete=on_complete)
         return False
 
-    def create_project_file(self, path: str) -> None:
-        if not path:
-            return
-        project_file = Path(path)
-        if project_file.suffix != ".terminproj":
-            project_file = project_file.with_suffix(".terminproj")
+    def initialize_project(
+        self,
+        path: str,
+        on_complete: Callable[[bool], None] | None = None,
+    ) -> bool:
+        """Initialize the editor's single project session.
+
+        Descriptor validation and stdlib synchronization happen before any
+        process-global or frontend state is published.  Once publication has
+        begun, this controller permanently owns that project for the lifetime
+        of the editor process, including when module loading leaves the project
+        in a degraded state.
+        """
+        if self._project_file is not None or self._initializing:
+            current = self._project_file or Path(path)
+            self._report_error(
+                "Project Already Initialized",
+                f"This editor process already owns project session: {current}",
+            )
+            if on_complete is not None:
+                on_complete(False)
+            return False
+
         try:
-            from termin.project import create_project_file
-
-            project_file = Path(create_project_file(project_file.stem, project_file.parent))
+            project_file, project_name = self._validate_project_descriptor(path)
         except Exception as e:
-            log.error(f"Failed to create project file {project_file}: {e}")
-            if self._show_error is not None:
-                self._show_error("Create Project Failed", f"Failed to create project:\n{e}")
-            return
-        self.load_project(str(project_file))
+            self._report_error(
+                "Project Validation Failed",
+                f"Cannot initialize project '{path}': {e}",
+            )
+            if on_complete is not None:
+                on_complete(False)
+            return False
 
-    def load_project(self, path: str, on_complete: Callable[[], None] | None = None) -> None:
-        project_root = Path(path).parent
-        project_dir = str(project_root)
-        self._set_project_state(project_dir, Path(path).stem)
-        self._log_to_console(f"Project: {project_dir}")
-
-        from termin.editor_core.project_context import set_current_project_path
-
-        set_current_project_path(project_root)
+        project_root = project_file.parent
         try:
             sync_stdlib(project_root)
         except Exception as e:
-            log.error(f"[ProjectSessionController] stdlib sync failed for {project_root}: {e}")
-            if self._show_error is not None:
-                self._show_error(
-                    "Standard Library Sync Failed",
-                    f"Failed to sync project stdlib:\n{e}",
-                )
-            return
+            self._report_error(
+                "Standard Library Sync Failed",
+                f"Failed to sync project stdlib for '{project_root}': {e}",
+            )
+            if on_complete is not None:
+                on_complete(False)
+            return False
 
-        self.configure_shader_runtime_for_project(
-            project_root,
-            resolve_termin_shaderc=self._resolve_termin_shaderc,
-            resolve_slangc=self._resolve_slangc,
-        )
+        self._initializing = True
+        self._project_file = project_file
+        project_dir = str(project_root)
 
-        from termin.project.settings import ProjectSettingsManager
+        try:
+            from termin.editor_core.project_context import set_current_project_path
 
-        ProjectSettingsManager.instance().set_project_path(project_root)
+            set_current_project_path(project_root)
+            self.configure_shader_runtime_for_project(
+                project_root,
+                resolve_termin_shaderc=self._resolve_termin_shaderc,
+                resolve_slangc=self._resolve_slangc,
+            )
 
-        from termin.navmesh.settings import NavigationSettingsManager
+            from termin.project.settings import ProjectSettingsManager
 
-        NavigationSettingsManager.instance().set_project_path(project_root)
+            ProjectSettingsManager.instance().set_project_path(project_root)
 
-        EditorSettings.instance().set("last_project_file", path)
+            from termin.navmesh.settings import NavigationSettingsManager
 
-        def finish_project_load(_success: bool) -> None:
-            self.run_project_init_script(project_root)
+            NavigationSettingsManager.instance().set_project_path(project_root)
+            EditorSettings.instance().set_last_project_file(project_file)
+
+            self._set_project_state(project_dir, project_name)
             self._set_project_browser_root(project_dir)
             self._rescan_file_resources()
+            self._log_to_console(f"Project: {project_dir}")
+        except Exception as e:
+            self._initializing = False
+            self._report_error(
+                "Project Initialization Failed",
+                f"Failed to publish project session '{project_file}': {e}",
+            )
             if on_complete is not None:
-                on_complete()
+                on_complete(False)
+            return False
 
-        self.load_project_modules(project_root, on_complete=finish_project_load)
+        module_load_finished = False
+
+        def finish_project_load(success: bool) -> None:
+            nonlocal module_load_finished
+            if module_load_finished:
+                log.error(
+                    "[ProjectSessionController] module operation completed more than once "
+                    f"for {project_file}"
+                )
+                return
+            module_load_finished = True
+            self._initializing = False
+            if success:
+                self.run_project_init_script(project_root)
+            else:
+                self._report_error(
+                    "Project Module Load Failed",
+                    f"Project '{project_file}' is open in degraded mode because its modules failed to load.",
+                )
+            if on_complete is not None:
+                on_complete(success)
+
+        try:
+            self.load_project_modules(project_root, on_complete=finish_project_load)
+        except Exception as e:
+            if not module_load_finished:
+                module_load_finished = True
+                self._initializing = False
+                self._report_error(
+                    "Project Module Load Failed",
+                    f"Project '{project_file}' is open in degraded mode: {e}",
+                )
+                if on_complete is not None:
+                    on_complete(False)
+            else:
+                log.error(
+                    "[ProjectSessionController] module operation raised after completion "
+                    f"for {project_file}: {e}"
+                )
+        return True
+
+    @staticmethod
+    def _validate_project_descriptor(path: str) -> tuple[Path, str]:
+        project_file = Path(path).expanduser().resolve(strict=True)
+        if not project_file.is_file():
+            raise ValueError("project descriptor is not a regular file")
+        if project_file.suffix != ".terminproj":
+            raise ValueError("project descriptor must have the .terminproj extension")
+        with project_file.open("r", encoding="utf-8") as stream:
+            descriptor = json.load(stream)
+        if not isinstance(descriptor, dict):
+            raise ValueError("project descriptor root must be an object")
+        if descriptor.get("version") != 1:
+            raise ValueError("project descriptor version must be 1")
+        project_name = descriptor.get("name")
+        if not isinstance(project_name, str) or not project_name.strip():
+            raise ValueError("project descriptor name must be a non-empty string")
+        return project_file, project_name.strip()
+
+    def _report_error(self, title: str, message: str) -> None:
+        log.error(f"[ProjectSessionController] {title}: {message}")
+        self._log_to_console(f"{title}: {message}")
+        if self._show_error is not None:
+            self._show_error(title, message)
 
     @staticmethod
     def configure_shader_runtime_for_project(

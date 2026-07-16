@@ -23,8 +23,6 @@ def _menu_config() -> EditorMenuSpecConfig:
     return EditorMenuSpecConfig(
         actions=EditorMenuActions(
             file=FileMenuActions(
-                new_project=_noop,
-                open_project=_noop,
                 new_scene=_noop,
                 save_scene=_noop,
                 save_scene_as=_noop,
@@ -104,3 +102,13 @@ def test_debug_menu_contains_camera_frustums_toggle():
     assert item.is_checkable is True
     assert item.state_getter is not None
     assert item.state_getter() is True
+
+
+def test_editor_file_menu_does_not_own_project_selection():
+    specs = build_editor_menu_spec(_menu_config())
+
+    file_menu = next(spec for spec in specs if spec.name == "File")
+    labels = [item.label for item in file_menu.items if item is not None]
+
+    assert "New Project..." not in labels
+    assert "Open Project..." not in labels
