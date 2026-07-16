@@ -443,6 +443,7 @@ class EditorWindowTcgui:
         self._inspector_controller = InspectorControllerTcgui(
             container=widgets.inspector_container,
             resource_manager=self.resource_manager,
+            rendering_manager=self._engine.rendering_manager,
             push_undo_command=self.push_undo_command,
             on_transform_changed=self._on_inspector_transform_changed,
             on_component_changed=self._on_inspector_component_changed,
@@ -484,6 +485,7 @@ class EditorWindowTcgui:
 
             # Create rendering controller (registers factories with RenderingManager)
             self._rendering_controller = RenderingControllerTcgui(
+                rendering_manager=self._engine.rendering_manager,
                 viewport_list_widget=self._viewport_list,
                 ctx=self._ctx,
                 get_scene=lambda: self.scene,
@@ -864,6 +866,7 @@ class EditorWindowTcgui:
 
             self._framegraph_debugger_service = EditorFramegraphDebuggerService(
                 get_rendering_controller=lambda: self._rendering_controller,
+                rendering_manager=self._engine.rendering_manager,
                 on_request_update=self._request_viewport_update,
             )
         return self._framegraph_debugger_service
@@ -1080,9 +1083,7 @@ class EditorWindowTcgui:
         displays = self._rendering_controller.displays if self._rendering_controller is not None else None
         current_display = None
         if self._rendering_controller is not None:
-            from termin.engine import RenderingManager
-
-            current_display = RenderingManager.instance().get_display_for_viewport(viewport)
+            current_display = self._rendering_controller.get_display_for_viewport(viewport)
         self._inspector_controller.show_viewport_inspector(
             viewport=viewport,
             displays=displays,

@@ -100,7 +100,7 @@ def test_disconnect_removes_debugger_from_all_known_pipelines():
     connected.passes = [_Pass()]
     current.passes = [_Pass()]
 
-    model = FramegraphDebuggerModel(None, _Core())
+    model = FramegraphDebuggerModel(None, _Core(), object())
     model._connected_pipeline = connected
     viewport = _Viewport(current)
     model._current_target = FramegraphDebugTarget(
@@ -127,7 +127,7 @@ def test_refresh_uses_debug_targets_not_viewport_list():
         get_pipeline=lambda: pipeline,
     )
 
-    model = FramegraphDebuggerModel(_Controller([target]), _Core())
+    model = FramegraphDebuggerModel(_Controller([target]), _Core(), object())
     model.refresh_viewports()
 
     assert model.viewports == [(target.source, "RenderTarget / offscreen")]
@@ -142,7 +142,7 @@ def test_format_fbo_info_uses_color_capture_info_only():
     core.capture.height = 256
     core.capture.format = 7
 
-    model = FramegraphDebuggerModel(None, core)
+    model = FramegraphDebuggerModel(None, core, object())
     model._debug_source_res = "DepthToColorPass_5_output_res"
     model._current_target = FramegraphDebugTarget(
         source=object(),
@@ -166,7 +166,7 @@ def test_format_fbo_info_marks_depth_capture():
     core.capture.format = 13
     core.capture.is_depth = True
 
-    model = FramegraphDebuggerModel(None, core)
+    model = FramegraphDebuggerModel(None, core, object())
     model._debug_source_res = "RT_COLOR.depth"
 
     text = model.format_fbo_info()
@@ -178,7 +178,7 @@ def test_format_fbo_info_marks_depth_capture():
 
 
 def test_format_fbo_info_reports_missing_capture():
-    model = FramegraphDebuggerModel(None, _Core())
+    model = FramegraphDebuggerModel(None, _Core(), object())
     model._debug_source_res = "DepthToColorPass_5_output_res"
 
     text = model.format_fbo_info()
@@ -192,7 +192,7 @@ def test_duplicate_pass_selection_uses_pipeline_index():
     pipeline = _Pipeline("debug")
     pipeline.passes = [first, second]
 
-    model = FramegraphDebuggerModel(None, _Core())
+    model = FramegraphDebuggerModel(None, _Core(), object())
     model._current_target = FramegraphDebugTarget(
         source=object(),
         label="RenderTarget",

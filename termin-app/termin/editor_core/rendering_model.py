@@ -1,7 +1,7 @@
 """RenderingModel — UI-agnostic display/viewport state and config sync.
 
 Owns:
-- a reference to the RenderingManager singleton
+- an injected reference to the host EngineCore's RenderingManager
 - the "editor display" pointer (a non-serialized display the editor uses
   for its main viewport)
 

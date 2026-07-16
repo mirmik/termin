@@ -989,10 +989,7 @@ struct PlayerRuntimeHost::Impl {
     }
 
     void register_scene() {
-        SceneManager* manager = SceneManager::instance();
-        if (manager == nullptr) {
-            throw std::runtime_error("SceneManager instance is unavailable");
-        }
+        SceneManager* manager = &engine->scene_manager;
         scene_name = scene.name().empty() ? "runtime-scene" : scene.name();
         manager->register_scene(scene_name, scene.handle());
         manager->set_scene_path(scene_name, scene.source_path());
@@ -1031,7 +1028,7 @@ struct PlayerRuntimeHost::Impl {
         }
         display.emplace(surface->tc_surface(), "Main");
 
-        RenderingManager& manager = RenderingManager::instance();
+        RenderingManager& manager = engine->rendering_manager;
         manager.set_display_factory([this](const std::string& name) {
             return display_factory(name);
         });
@@ -1224,7 +1221,7 @@ struct PlayerRuntimeHost::Impl {
         clear_runtime_facade();
         unload_project_modules();
 
-        RenderingManager* manager = RenderingManager::instance_or_null();
+        RenderingManager* manager = engine ? &engine->rendering_manager : nullptr;
         if (manager != nullptr) {
             clear_input();
             manager->set_display_factory(nullptr);
@@ -1239,10 +1236,8 @@ struct PlayerRuntimeHost::Impl {
 
         display.reset();
 
-        if (scene_registered) {
-            if (SceneManager* scene_manager = SceneManager::instance()) {
-                scene_manager->unregister_scene(scene_name);
-            }
+        if (scene_registered && engine) {
+            engine->scene_manager.unregister_scene(scene_name);
             scene_registered = false;
         }
         if (scene.valid()) {

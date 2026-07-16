@@ -1,6 +1,3 @@
-import sys
-import types
-
 from termin.editor_tcgui.dialogs.framegraph_debugger import (
     _FramegraphDebuggerHandle,
     CapturePreviewWidget,
@@ -211,7 +208,7 @@ def test_pass_combo_event_selects_pass_by_pipeline_index():
     assert model.selected_indices == [4]
 
 
-def test_framegraph_render_stats_include_pipeline_cache_counters(monkeypatch):
+def test_framegraph_render_stats_include_pipeline_cache_counters():
     class Manager:
         def get_render_stats(self):
             return {
@@ -228,16 +225,8 @@ def test_framegraph_render_stats_include_pipeline_cache_counters(monkeypatch):
                 "pipeline_cache_vertex_layout_signature_hashes": [0x1234, 0xABCD],
             }
 
-    class RenderingManager:
-        @staticmethod
-        def instance():
-            return Manager()
-
-    engine_module = types.ModuleType("termin.engine")
-    engine_module.RenderingManager = RenderingManager
-    monkeypatch.setitem(sys.modules, "termin.engine", engine_module)
-
     model = FramegraphDebuggerModel.__new__(FramegraphDebuggerModel)
+    model._rendering_manager = Manager()
 
     text = model.format_render_stats()
 

@@ -206,9 +206,14 @@ class EditorDialogLauncher:
             return
         from termin.editor_tcgui.dialogs.framegraph_debugger import show_framegraph_debugger
 
+        rendering_controller = self._get_rendering_controller()
+        if rendering_controller is None:
+            log.error("Framegraph debugger requested without a rendering controller")
+            return
         self._framegraph_debugger = show_framegraph_debugger(
             ui,
-            self._get_rendering_controller(),
+            rendering_controller,
+            rendering_controller.rendering_manager,
             self._get_fbo_surface(),
             on_request_update=self._request_viewport_update,
         )

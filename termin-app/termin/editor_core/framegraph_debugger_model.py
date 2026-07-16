@@ -89,8 +89,15 @@ class FramegraphPassListItem:
 
 
 class FramegraphDebuggerModel:
-    def __init__(self, rendering_controller, core, on_request_update: Callable[[], None] | None = None):
+    def __init__(
+        self,
+        rendering_controller,
+        core,
+        rendering_manager,
+        on_request_update: Callable[[], None] | None = None,
+    ):
         self._rendering_controller = rendering_controller
+        self._rendering_manager = rendering_manager
         self._core = core
         self._on_request_update = on_request_update
 
@@ -123,6 +130,10 @@ class FramegraphDebuggerModel:
     @property
     def core(self):
         return self._core
+
+    @property
+    def rendering_manager(self):
+        return self._rendering_manager
 
     @property
     def current_viewport(self):
@@ -426,8 +437,7 @@ class FramegraphDebuggerModel:
         return "Timing: no data"
 
     def format_render_stats(self) -> str:
-        from termin.engine import RenderingManager
-        stats = RenderingManager.instance().get_render_stats()
+        stats = self._rendering_manager.get_render_stats()
         layout_hashes = stats["pipeline_cache_vertex_layout_signature_hashes"]
         layout_hash_text = (
             ",".join(f"{int(value):x}" for value in layout_hashes[:8])
@@ -565,8 +575,7 @@ class FramegraphDebuggerModel:
             self.hdr_stats_changed.emit(text)
             return text
 
-        from termin.engine import RenderingManager
-        render_engine = RenderingManager.instance().render_engine
+        render_engine = self._rendering_manager.render_engine
         if render_engine is None:
             text = "No render engine"
             self.hdr_stats_changed.emit(text)

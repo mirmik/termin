@@ -26,6 +26,7 @@ class RenderingControllerTcgui:
 
     def __init__(
         self,
+        rendering_manager,
         viewport_list_widget,
         ctx: "Tgfx2Context",
         get_scene: Callable[[], "Scene | None"] | None = None,
@@ -37,12 +38,11 @@ class RenderingControllerTcgui:
         on_entity_selected: Callable[[object], None] | None = None,
         on_render_target_selected: Callable[[object], None] | None = None,
     ) -> None:
-        from termin.engine import RenderingManager
         from termin.editor_core.rendering_factories import PipelineAssetResolver
         from termin.editor_core.rendering_model import RenderingModel
         from termin.editor_core.resource_manager import ResourceManager
 
-        self._manager = RenderingManager.instance()
+        self._manager = rendering_manager
         self._model = RenderingModel(self._manager)
         self._pipeline_resolver = PipelineAssetResolver(
             ResourceManager.instance(),
@@ -96,6 +96,13 @@ class RenderingControllerTcgui:
     def backend_name(self) -> str:
         """Return the active rendering backend name for diagnostics."""
         return self._ctx.backend
+
+    @property
+    def rendering_manager(self):
+        return self._manager
+
+    def get_display_for_viewport(self, viewport):
+        return self._manager.get_display_for_viewport(viewport)
 
     @property
     def displays(self) -> list["Display"]:

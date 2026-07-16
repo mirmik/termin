@@ -25,6 +25,11 @@ class _ResourceManager:
         return None
 
 
+class _RenderingManager:
+    def create_pipeline(self, name):
+        return _Pipeline(name)
+
+
 class _CameraComponent:
     pass
 
@@ -164,7 +169,7 @@ def test_render_target_inspector_reads_camera_from_render_target_scene(monkeypat
     game_scene = _Scene("Editor(game)", 2, [_Entity("GameCamera", game_camera)])
     render_target = _RenderTarget(game_scene, game_camera)
 
-    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector = RenderTargetInspectorTcgui(_ResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [editor_scene, game_scene])
     inspector.set_render_target(render_target, editor_scene)
 
@@ -187,7 +192,7 @@ def test_render_target_inspector_pipeline_params_use_texture_preview(monkeypatch
     render_target = _RenderTarget(scene, None)
     render_target.pipeline = _Pipeline("Pipe")
 
-    inspector = RenderTargetInspectorTcgui(_TextureResourceManager())
+    inspector = RenderTargetInspectorTcgui(_TextureResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
 
@@ -199,7 +204,7 @@ def test_render_target_inspector_edits_attachment_formats():
     scene = _Scene("Scene", 1, [])
     render_target = _RenderTarget(scene, None)
 
-    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector = RenderTargetInspectorTcgui(_ResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
 
@@ -225,7 +230,7 @@ def test_render_target_inspector_edits_clear_settings():
     scene = _Scene("Scene", 1, [])
     render_target = _RenderTarget(scene, None)
 
-    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector = RenderTargetInspectorTcgui(_ResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
 
@@ -249,7 +254,7 @@ def test_render_target_inspector_requests_layout_when_manual_size_visibility_cha
     scene = _Scene("Scene", 1, [])
     render_target = _RenderTarget(scene, None)
 
-    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector = RenderTargetInspectorTcgui(_ResourceManager(), _RenderingManager())
     fake_ui = _FakeUi()
     inspector._ui = fake_ui
     inspector.set_scene_getter(lambda: [scene])
@@ -274,7 +279,7 @@ def test_render_target_inspector_hides_texture_fields_for_xr_target(monkeypatch)
     render_target.kind = "xr_stereo"
     render_target.xr_origin = xr_origin
 
-    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector = RenderTargetInspectorTcgui(_ResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
 
@@ -304,7 +309,7 @@ def test_render_target_inspector_uses_xr_origin_when_switching_to_xr_target(monk
     render_target = _RenderTarget(scene, camera)
     render_target.xr_origin = xr_origin
 
-    inspector = RenderTargetInspectorTcgui(_ResourceManager())
+    inspector = RenderTargetInspectorTcgui(_ResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
     inspector._on_kind_changed(1, "XR Stereo")
@@ -400,7 +405,7 @@ def test_render_target_inspector_saves_file_pipeline_param_by_uuid(monkeypatch):
     render_target = _RenderTarget(scene, None)
     render_target.pipeline = _Pipeline("Pipe")
 
-    inspector = RenderTargetInspectorTcgui(_TextureResourceManager())
+    inspector = RenderTargetInspectorTcgui(_TextureResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
     inspector._on_pipeline_param_changed("input_texture", "file", "Grenade")
@@ -425,7 +430,7 @@ def test_render_target_inspector_rejects_unknown_file_pipeline_param(monkeypatch
     render_target.pipeline = _Pipeline("Pipe")
     render_target.pipeline_params = {"input_texture": "file:texture-uuid-grenade"}
 
-    inspector = RenderTargetInspectorTcgui(_TextureResourceManager())
+    inspector = RenderTargetInspectorTcgui(_TextureResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
     inspector._on_pipeline_param_changed("input_texture", "file", "MissingTexture")
@@ -450,7 +455,7 @@ def test_render_target_inspector_reads_uuid_file_pipeline_param(monkeypatch):
         "input_texture": "file:texture-uuid-grenade",
     }
 
-    inspector = RenderTargetInspectorTcgui(_TextureResourceManager())
+    inspector = RenderTargetInspectorTcgui(_TextureResourceManager(), _RenderingManager())
     inspector.set_scene_getter(lambda: [scene])
     inspector.set_render_target(render_target, scene)
 
