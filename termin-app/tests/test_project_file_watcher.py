@@ -101,26 +101,14 @@ class ReloadRuntimeUnderTest(RuntimeUnderTest):
         return module_id not in self.fail_modules
 
 
-class FailingComponentResourceManager:
-    def scan_components(self, paths: list[str]) -> list[str]:
-        raise AssertionError(f"package component files must not be scanned directly: {paths}")
+class InertComponentResourceManager:
+    """A resource manager without any dynamic Python scanning API."""
 
 
-class RecordingComponentResourceManager:
-    def __init__(self) -> None:
-        self.scanned_paths: list[list[str]] = []
-        self.scan_options: list[tuple[str | None, str | None]] = []
-
-    def scan_components(
-        self,
-        paths: list[str],
-        *,
-        project_root: str | None = None,
-        namespace: str | None = None,
-    ) -> list[str]:
-        self.scanned_paths.append(paths)
-        self.scan_options.append((project_root, namespace))
-        return [Path(paths[0]).stem]
+class UnownedModulesRuntime(RecordingModulesRuntime):
+    def mark_modules_dirty_for_path(self, path: str) -> list[str]:
+        self.dirty_paths.append(Path(path))
+        return []
 
 
 def test_project_file_watcher_poll_processes_pending_changes(tmp_path: Path) -> None:
@@ -409,7 +397,7 @@ def test_component_processor_marks_package_python_files_dirty(tmp_path: Path) ->
     component.write_text("class Probe: pass\n", encoding="utf-8")
     runtime = RecordingModulesRuntime()
     processor = ComponentFileProcessor(
-        FailingComponentResourceManager(),
+        InertComponentResourceManager(),
         modules_runtime_provider=lambda: runtime,
     )
 
@@ -419,16 +407,18 @@ def test_component_processor_marks_package_python_files_dirty(tmp_path: Path) ->
     assert runtime.reloaded_paths == []
 
 
-def test_project_file_watcher_initial_scan_loads_loose_python_components(tmp_path: Path) -> None:
-    script_path = tmp_path / "Scripts" / "PlayerComponent.py"
+def test_project_file_watcher_initial_scan_keeps_standalone_python_inert(tmp_path: Path) -> None:
+    marker = tmp_path / "executed.txt"
+    script_path = tmp_path / "Scripts" / "service.py"
     script_path.parent.mkdir()
-    script_path.write_text("class PlayerComponent: pass\n", encoding="utf-8")
-
-    resource_manager = RecordingComponentResourceManager()
-    reloaded: list[tuple[str, str]] = []
+    script_path.write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n",
+        encoding="utf-8",
+    )
+    runtime = UnownedModulesRuntime()
     processor = ComponentFileProcessor(
-        resource_manager,
-        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+        InertComponentResourceManager(),
+        modules_runtime_provider=lambda: runtime,
     )
     watcher = ProjectFileWatcher()
     watcher.register_processor(processor)
@@ -436,313 +426,31 @@ def test_project_file_watcher_initial_scan_loads_loose_python_components(tmp_pat
 
     watcher._scan_directory(str(tmp_path))
 
-    assert resource_manager.scanned_paths == [[str(script_path)]]
     assert watcher.watched_files == {str(script_path)}
-    assert processor.get_tracked_files() == {str(script_path): {"PlayerComponent"}}
-    assert reloaded == [("component", "PlayerComponent")]
+    assert processor.get_tracked_files() == {str(script_path): set()}
+    assert runtime.dirty_paths == []
+    assert not marker.exists()
 
 
-def test_component_processor_registers_real_loose_python_component(tmp_path: Path) -> None:
-    from termin.default_assets.resource_manager import DefaultResourceManager
-    from termin.scene import ComponentRegistry
-
-    component_name = "BrowserLooseProbeComponent"
-    script_path = tmp_path / "Scripts" / f"{component_name}.py"
+def test_component_processor_keeps_unowned_created_and_changed_python_inert(tmp_path: Path) -> None:
+    script_path = tmp_path / "Scripts" / "service.py"
     script_path.parent.mkdir()
-    script_path.write_text(
-        "\n".join(
-            [
-                "from termin.scene import PythonComponent",
-                "",
-                "",
-                f"class {component_name}(PythonComponent):",
-                "    pass",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    resource_manager = DefaultResourceManager()
-    processor = ComponentFileProcessor(resource_manager)
-
-    try:
-        processor.on_file_added(str(script_path))
-        assert processor.dirty_component_paths() == (str(script_path),)
-        assert resource_manager.get_component(component_name) is None
-
-        assert processor.reload_dirty_components()
-
-        assert resource_manager.get_component(component_name) is not None
-        assert ComponentRegistry.instance().has(component_name)
-        assert processor.get_tracked_files() == {str(script_path): {component_name}}
-        assert processor.dirty_component_paths() == ()
-    finally:
-        ComponentRegistry.instance().unregister_python(component_name)
-
-
-def test_component_processor_loads_loose_python_in_project_namespace(tmp_path: Path) -> None:
-    from termin.default_assets.resource_manager import DefaultResourceManager
-    from termin.scene import ComponentRegistry
-
-    component_name = "BrowserLooseNamespacedComponent"
-    scripts_dir = tmp_path / "Scripts"
-    shared_dir = tmp_path / "Shared"
-    scripts_dir.mkdir()
-    shared_dir.mkdir()
-    (scripts_dir / "helpers.py").write_text("SAME_DIR_VALUE = 2\n", encoding="utf-8")
-    (shared_dir / "values.py").write_text("SHARED_VALUE = 5\n", encoding="utf-8")
-    script_path = scripts_dir / f"{component_name}.py"
-    script_path.write_text(
-        "\n".join(
-            [
-                "from termin.scene import PythonComponent",
-                "from .helpers import SAME_DIR_VALUE",
-                "from termin_project.Shared.values import SHARED_VALUE",
-                "",
-                "",
-                f"class {component_name}(PythonComponent):",
-                "    value = SAME_DIR_VALUE + SHARED_VALUE",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    resource_manager = DefaultResourceManager()
-    processor = ComponentFileProcessor(resource_manager)
-    processor.set_project_root(str(tmp_path))
-
-    try:
-        processor.on_initial_file_added(str(script_path))
-
-        cls = resource_manager.get_component(component_name)
-        assert cls is not None
-        assert cls.__module__ == f"termin_project.Scripts.{component_name}"
-        assert cls.value == 7
-        assert ComponentRegistry.instance().has(component_name)
-    finally:
-        ComponentRegistry.instance().unregister_python(component_name)
-
-
-def test_component_processor_reloads_real_loose_python_component_class(tmp_path: Path) -> None:
-    from termin.default_assets.resource_manager import DefaultResourceManager
-    from termin.scene import ComponentRegistry
-
-    component_name = "BrowserLooseReloadProbeComponent"
-    script_path = tmp_path / "Scripts" / f"{component_name}.py"
-    script_path.parent.mkdir()
-
-    def write_component(version: int) -> None:
-        script_path.write_text(
-            "\n".join(
-                [
-                    "from termin.scene import PythonComponent",
-                    "",
-                    "",
-                    f"class {component_name}(PythonComponent):",
-                    f"    version = {version}",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-
-    write_component(1)
-    resource_manager = DefaultResourceManager()
-    reloaded: list[tuple[str, str]] = []
+    script_path.write_text("raise AssertionError('must remain inert')\n", encoding="utf-8")
+    runtime = UnownedModulesRuntime()
     processor = ComponentFileProcessor(
-        resource_manager,
-        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
+        InertComponentResourceManager(),
+        modules_runtime_provider=lambda: runtime,
     )
-
-    try:
-        processor.on_initial_file_added(str(script_path))
-        old_cls = resource_manager.get_component(component_name)
-        assert old_cls is not None
-        instance = old_cls()
-
-        write_component(2)
-        processor.on_file_changed(str(script_path))
-        assert processor.dirty_component_paths() == (str(script_path),)
-        assert resource_manager.get_component(component_name) is old_cls
-
-        assert processor.reload_dirty_components()
-
-        new_cls = resource_manager.get_component(component_name)
-        assert new_cls is not None
-        assert new_cls is not old_cls
-        assert new_cls.version == 2
-        assert type(instance) is new_cls
-        assert reloaded == [
-            ("component", component_name),
-            ("component", component_name),
-        ]
-    finally:
-        ComponentRegistry.instance().unregister_python(component_name)
-
-
-def test_component_processor_reloads_dependents_after_loose_helper_change(tmp_path: Path) -> None:
-    from termin.default_assets.resource_manager import DefaultResourceManager
-    from termin.scene import ComponentRegistry
-
-    component_name = "BrowserLooseHelperCascadeComponent"
-    scripts_dir = tmp_path / "Scripts"
-    scripts_dir.mkdir()
-    helper_path = scripts_dir / "helper_values.py"
-    script_path = scripts_dir / f"{component_name}.py"
-
-    def write_helper(value: int) -> None:
-        helper_path.write_text(f"HELPER_VALUE = {value}\n", encoding="utf-8")
-
-    write_helper(1)
-    script_path.write_text(
-        "\n".join(
-            [
-                "from termin.scene import PythonComponent",
-                "from .helper_values import HELPER_VALUE",
-                "",
-                "",
-                f"class {component_name}(PythonComponent):",
-                "    value = HELPER_VALUE",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    resource_manager = DefaultResourceManager()
-    reloaded: list[tuple[str, str]] = []
-    processor = ComponentFileProcessor(
-        resource_manager,
-        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
-    )
-    processor.set_project_root(str(tmp_path))
-
-    try:
-        processor.on_initial_file_added(str(helper_path))
-        processor.on_initial_file_added(str(script_path))
-        old_cls = resource_manager.get_component(component_name)
-        assert old_cls is not None
-        assert old_cls.value == 1
-
-        write_helper(5)
-        processor.on_file_changed(str(helper_path))
-        assert processor.dirty_component_paths() == (str(helper_path),)
-        assert resource_manager.get_component(component_name) is old_cls
-
-        assert processor.reload_dirty_components()
-
-        new_cls = resource_manager.get_component(component_name)
-        assert new_cls is not None
-        assert new_cls is not old_cls
-        assert new_cls.value == 5
-        assert reloaded == [
-            ("component", component_name),
-            ("component", component_name),
-        ]
-    finally:
-        ComponentRegistry.instance().unregister_python(component_name)
-
-
-def test_component_processor_reloads_cross_dir_termin_project_dependents(tmp_path: Path) -> None:
-    from termin.default_assets.resource_manager import DefaultResourceManager
-    from termin.scene import ComponentRegistry
-
-    component_name = "BrowserLooseCrossDirHelperCascadeComponent"
-    scripts_dir = tmp_path / "Scripts"
-    shared_dir = tmp_path / "Shared"
-    scripts_dir.mkdir()
-    shared_dir.mkdir()
-    helper_path = shared_dir / "values.py"
-    script_path = scripts_dir / f"{component_name}.py"
-
-    def write_helper(value: int) -> None:
-        helper_path.write_text(f"SHARED_VALUE = {value}\n", encoding="utf-8")
-
-    write_helper(3)
-    script_path.write_text(
-        "\n".join(
-            [
-                "from termin.scene import PythonComponent",
-                "from termin_project.Shared.values import SHARED_VALUE",
-                "",
-                "",
-                f"class {component_name}(PythonComponent):",
-                "    value = SHARED_VALUE",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    resource_manager = DefaultResourceManager()
-    processor = ComponentFileProcessor(resource_manager)
-    processor.set_project_root(str(tmp_path))
-
-    try:
-        processor.on_initial_file_added(str(helper_path))
-        processor.on_initial_file_added(str(script_path))
-        old_cls = resource_manager.get_component(component_name)
-        assert old_cls is not None
-        assert old_cls.value == 3
-
-        write_helper(8)
-        processor.on_file_changed(str(helper_path))
-        assert processor.dirty_component_paths() == (str(helper_path),)
-        assert resource_manager.get_component(component_name) is old_cls
-
-        assert processor.reload_dirty_components()
-
-        new_cls = resource_manager.get_component(component_name)
-        assert new_cls is not None
-        assert new_cls is not old_cls
-        assert new_cls.value == 8
-    finally:
-        ComponentRegistry.instance().unregister_python(component_name)
-
-
-def test_project_file_watcher_created_event_marks_loose_python_components_dirty(tmp_path: Path) -> None:
-    script_path = tmp_path / "Scripts" / "EnemyComponent.py"
-    script_path.parent.mkdir()
-    script_path.write_text("class EnemyComponent: pass\n", encoding="utf-8")
-
-    resource_manager = RecordingComponentResourceManager()
-    processor = ComponentFileProcessor(resource_manager)
     watcher = ProjectFileWatcher()
     watcher.register_processor(processor)
 
     _queue_change(watcher, script_path, "created")
     watcher.poll()
-
-    assert resource_manager.scanned_paths == []
-    assert watcher.watched_files == {str(script_path)}
-    assert processor.get_tracked_files() == {}
-    assert processor.dirty_component_paths() == (str(script_path),)
-
-
-def test_project_file_watcher_modified_event_marks_loose_python_components_dirty(tmp_path: Path) -> None:
-    script_path = tmp_path / "Scripts" / "InputComponent.py"
-    script_path.parent.mkdir()
-    script_path.write_text("class InputComponent: pass\n", encoding="utf-8")
-
-    resource_manager = RecordingComponentResourceManager()
-    reloaded: list[tuple[str, str]] = []
-    processor = ComponentFileProcessor(
-        resource_manager,
-        on_resource_reloaded=lambda resource_type, name: reloaded.append((resource_type, name)),
-    )
-    watcher = ProjectFileWatcher()
-    watcher.register_processor(processor)
-
     _queue_change(watcher, script_path, "modified")
     watcher.poll()
 
-    assert resource_manager.scanned_paths == []
-    assert resource_manager.scan_options == []
+    assert runtime.dirty_paths == [script_path, script_path]
     assert processor.get_tracked_files() == {}
-    assert processor.dirty_component_paths() == (str(script_path),)
-    assert reloaded == []
 
 
 def test_project_file_watcher_ignores_service_termin_directory_events(tmp_path: Path) -> None:

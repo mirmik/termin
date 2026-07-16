@@ -1349,14 +1349,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             lambda path: resource_loader.load_material_from_path(path) if path else None,
         )
 
-    def choose_components() -> None:
-        dialog_service.show_open_file(
-            "Load Components",
-            project_dialog_directory(),
-            "Python Files (*.py);;All Files (*)",
-            lambda path: resource_loader.load_components_from_path(path) if path else None,
-        )
-
     def deploy_stdlib() -> None:
         root_path = project_browser_controller.root_path
         if root_path is None:
@@ -1372,7 +1364,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
     file_actions = {
         shell.close_scene_command: scene_file_controller.close_scene,
         shell.load_material_command: choose_material,
-        shell.load_components_command: choose_components,
         shell.deploy_stdlib_command: deploy_stdlib,
         shell.exit_command: lambda: window.set_should_close(True),
     }
@@ -1436,9 +1427,6 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
                 "Native module update before Play failed: %s",
                 modules_runtime.last_error,
             )
-            return False
-        if not component_file_processor.reload_dirty_components():
-            _logger.error("Native loose Python component update before Play failed")
             return False
         return True
 

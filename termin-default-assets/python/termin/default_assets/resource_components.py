@@ -26,19 +26,6 @@ class DefaultComponentsMixin:
 
         return self.component_registry.register_builtins(get_default_builtin_component_specs())
 
-    def scan_components(
-        self,
-        paths: list[str],
-        *,
-        project_root: str | None = None,
-        namespace: str | None = None,
-    ) -> list[str]:
-        return self.component_registry.scan(
-            paths,
-            project_root=project_root,
-            namespace=namespace,
-        )
-
     def register_frame_pass(self, name: str, cls: type):
         self.frame_pass_registry.register(name, cls)
 
@@ -53,6 +40,3 @@ class DefaultComponentsMixin:
         from termin.default_assets.builtin_types import get_default_builtin_frame_pass_specs
 
         return self.frame_pass_registry.register_builtins(get_default_builtin_frame_pass_specs())
-
-    def scan_frame_passes(self, paths: list[str]) -> list[str]:
-        return self.frame_pass_registry.scan(paths)

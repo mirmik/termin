@@ -29,7 +29,6 @@ class FileMenuActions:
     load_scene: VoidCallback
     close_scene: VoidCallback
     load_material: VoidCallback
-    load_components: VoidCallback
     deploy_stdlib: VoidCallback
     exit: VoidCallback
 
@@ -216,7 +215,6 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
                 MenuItemSpec("Close Scene", actions.file.close_scene, shortcut="Ctrl+W"),
                 None,
                 MenuItemSpec("Load Material...", actions.file.load_material),
-                MenuItemSpec("Load Components...", actions.file.load_components),
                 None,
                 MenuItemSpec("Deploy Standard Library...", actions.file.deploy_stdlib),
                 None,
@@ -322,7 +320,7 @@ def build_editor_menu_inventory() -> list[MenuSpec]:
     return build_editor_menu_spec(
         EditorMenuSpecConfig(
             actions=EditorMenuActions(
-                file=FileMenuActions(*([noop] * 9)),
+                file=FileMenuActions(*([noop] * 8)),
                 edit=EditMenuActions(*([noop] * 4)),
                 view=ViewMenuActions(*([noop] * 2)),
                 scene=SceneMenuActions(*([noop] * 4)),

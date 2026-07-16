@@ -68,6 +68,8 @@ def test_resource_manager_delegates_component_and_frame_pass_facades() -> None:
     assert rm.frame_passes["ProbeFramePass"] is ProbeFramePass
     assert rm.get_frame_pass("ProbeFramePass") is ProbeFramePass
     assert rm.list_frame_pass_names() == ["ProbeFramePass"]
+    assert "scan_components" not in dir(rm)
+    assert "scan_frame_passes" not in dir(rm)
 
 
 def test_module_owner_context_unregisters_python_component_registrations() -> None:

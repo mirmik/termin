@@ -58,7 +58,6 @@ class NativeEditorShell:
     new_scene_command: int
     close_scene_command: int
     load_material_command: int
-    load_components_command: int
     deploy_stdlib_command: int
     exit_command: int
     undo_command: int
@@ -208,7 +207,6 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     new_scene_command = commands[("File", "New Scene")]
     close_scene_command = commands[("File", "Close Scene")]
     load_material_command = commands[("File", "Load Material...")]
-    load_components_command = commands[("File", "Load Components...")]
     deploy_stdlib_command = commands[("File", "Deploy Standard Library...")]
     exit_command = commands[("File", "Exit")]
     load_scene_command = commands[("File", "Load Scene...")]
@@ -386,7 +384,6 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         new_scene_command=new_scene_command,
         close_scene_command=close_scene_command,
         load_material_command=load_material_command,
-        load_components_command=load_components_command,
         deploy_stdlib_command=deploy_stdlib_command,
         exit_command=exit_command,
         undo_command=undo_command,

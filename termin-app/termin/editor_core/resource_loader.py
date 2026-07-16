@@ -1,7 +1,7 @@
 """
 Resource loading utilities for the editor.
 
-Handles loading materials, components, and scanning project resources.
+Handles explicit editor resource-loading actions.
 """
 
 from __future__ import annotations
@@ -42,11 +42,8 @@ class ResourceLoader:
     """
     Handles resource loading operations for the editor.
 
-    Provides:
-    - Loading materials from .shader files
-    - Loading components from Python files
-    - Scanning project directories for resources
-    - Registering scene resources in ResourceManager
+    Provides material loading and scene resource registration.  Python code is
+    loaded exclusively through the project module runtime.
     """
 
     def __init__(
@@ -181,32 +178,3 @@ class ResourceLoader:
 
         except Exception as e:
             log.error(f"[ResourceLoader] Failed to load material from {file_path}: {e}")
-
-    def load_components_from_file(self) -> None:
-        """Load components from a Python file."""
-        if self._show_open_file_dialog is None:
-            log.error("[ResourceLoader] load_components_from_file: no file dialog callback")
-            return
-
-        path = self._show_open_file_dialog(
-            "Load Components",
-            "Python Files (*.py);;All Files (*)",
-        )
-        if not path:
-            return
-
-        self.load_components_from_path(path)
-
-    def load_components_from_path(self, path: str) -> None:
-        """Load components from a Python file path."""
-        try:
-            loaded = self._resource_manager.scan_components([path])
-
-            if loaded:
-                log.info(f"[ResourceLoader] Loaded {len(loaded)} component(s): "
-                         + ", ".join(loaded))
-            else:
-                log.warn(f"[ResourceLoader] No new Component subclasses found in: {path}")
-
-        except Exception as e:
-            log.error(f"[ResourceLoader] Failed to load components from {path}: {e}")
