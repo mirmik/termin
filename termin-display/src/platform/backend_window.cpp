@@ -15,6 +15,7 @@
 #endif
 #include "tgfx2/render_context.hpp"
 #include "tgfx2/render_runtime.hpp"
+#include "tgfx/tgfx2_interop.h"
 #include "termin/platform/sdl_window.hpp"
 
 #ifdef TGFX2_HAS_D3D11
@@ -127,6 +128,11 @@ struct SDLBackendWindow::Impl {
 SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int height)
     : impl_(std::make_unique<Impl>())
 {
+    if (tgfx2_interop_get_device() != nullptr) {
+        throw std::runtime_error(
+            "BackendWindow(primary): an application graphics device is already installed; "
+            "create a secondary window sharing the primary instead");
+    }
     if (SDL_WasInit(SDL_INIT_VIDEO) == 0 && SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
         throw std::runtime_error(std::string("SDL_InitSubSystem failed: ") + SDL_GetError());
     }
@@ -171,7 +177,6 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         impl_->runtime = tgfx::RenderRuntime::create(tgfx::BackendType::OpenGL);
         impl_->device_ref = &impl_->runtime->device();
 
-        // RenderRuntime wires the process-wide tgfx2 interop pointer.
 #else
         throw std::runtime_error("BackendWindow: OpenGL backend not compiled");
 #endif
@@ -247,6 +252,7 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         SDL_DestroyWindow(window_);
         throw std::runtime_error("BackendWindow: unsupported backend");
     }
+    impl_->runtime->claim_interop();
 }
 
 // ---------------------------------------------------------------------------
@@ -419,8 +425,8 @@ void SDLBackendWindow::close() {
     }
 #endif
     if (impl_->shared_ctx_owner == nullptr) {
-        // Primary window — RenderRuntime owns the device/ctx/cache chain
-        // and clears the process-wide interop pointer before teardown.
+        // Primary window — RenderRuntime owns the device/ctx/cache chain and
+        // releases its explicit process-wide interop claim before teardown.
         impl_->runtime.reset();
     }
     // Shared devices still accessed through device_ref; stop using it.

@@ -1047,6 +1047,9 @@ void destroy_smoke_renderer_locked() {
             android_log_error("smoke: destroy failed: %s", e.what());
             tc_log_error("termin_android_smoke: destroy failed: %s", e.what());
         }
+        if (!tgfx2_interop_release_device(g_state.smoke_device.get(), &g_state)) {
+            android_log_error("smoke: failed to release application graphics device");
+        }
     } else {
         destroy_player_scene_locked();
     }
@@ -1055,7 +1058,6 @@ void destroy_smoke_renderer_locked() {
     g_state.smoke_width = 0;
     g_state.smoke_height = 0;
     g_state.smoke_frame = 0;
-    tgfx2_interop_set_device(nullptr);
 #endif
 }
 
@@ -1179,7 +1181,11 @@ bool create_smoke_renderer_locked() {
         };
 
         g_state.smoke_device = std::make_unique<tgfx::VulkanRenderDevice>(info);
-        tgfx2_interop_set_device(g_state.smoke_device.get());
+        if (!tgfx2_interop_claim_device(g_state.smoke_device.get(), &g_state)) {
+            g_state.smoke_device.reset();
+            throw std::runtime_error(
+                "another application graphics device is already installed");
+        }
 
         g_state.smoke_width = g_state.smoke_device->swapchain()->width();
         g_state.smoke_height = g_state.smoke_device->swapchain()->height();
