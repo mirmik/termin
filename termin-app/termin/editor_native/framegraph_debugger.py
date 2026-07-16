@@ -12,6 +12,7 @@ from termin.editor_native.ui_host import NativeUiWindow, NativeUiWindowManager
 from termin.gui_native import (
     Document,
     EdgeInsets,
+    Point,
     RichTextModel,
     Size,
     WidgetRef,
@@ -39,7 +40,7 @@ class NativeFramegraphPreviewSurface:
     """Render a debugger capture through its presenter into a sampled UI texture."""
 
     context: object
-    image: object
+    canvas: object
     root: WidgetRef
     capture: object
     presenter: object
@@ -48,7 +49,8 @@ class NativeFramegraphPreviewSurface:
     force_depth: bool = False
     target: object | None = None
     target_size: tuple[int, int] = (0, 0)
-    _image_has_texture: bool = False
+    cursor_pixel: tuple[int, int] | None = None
+    _canvas_has_texture: bool = False
 
     def __post_init__(self) -> None:
         # Keep the preview in its parent layout even before the first scene
@@ -58,16 +60,18 @@ class NativeFramegraphPreviewSurface:
 
     def render(self, context: object) -> bool:
         if not self.capture.has_capture() or not self.capture.capture_tex:
-            if self._image_has_texture:
-                self.image.clear_texture()
-                self._image_has_texture = False
+            if self._canvas_has_texture:
+                self.canvas.clear_texture()
+                self._canvas_has_texture = False
+            self.cursor_pixel = None
             return False
         width = int(self.capture.width)
         height = int(self.capture.height)
         if width <= 0 or height <= 0:
-            if self._image_has_texture:
-                self.image.clear_texture()
-                self._image_has_texture = False
+            if self._canvas_has_texture:
+                self.canvas.clear_texture()
+                self._canvas_has_texture = False
+            self.cursor_pixel = None
             return False
         target_recreated = False
         if self.target is None or self.target_size != (width, height):
@@ -87,15 +91,45 @@ class NativeFramegraphPreviewSurface:
             5 if depth else self.channel_mode,
             False if depth else self.highlight_hdr,
         )
-        if target_recreated or not self._image_has_texture:
-            self.image.set_texture(self.target, Size(float(width), float(height)))
-            self._image_has_texture = True
+        if target_recreated or not self._canvas_has_texture:
+            self.canvas.set_texture(self.target, Size(float(width), float(height)))
+            self._canvas_has_texture = True
         return True
 
+    def fit(self) -> None:
+        self.canvas.fit_in_view()
+
+    def actual_size(self) -> None:
+        bounds = self.canvas.widget.bounds
+        anchor = Point(
+            bounds.x + bounds.width * 0.5,
+            bounds.y + bounds.height * 0.5,
+        )
+        self.canvas.set_zoom(1.0, anchor)
+
+    def update_cursor(self, image_point: Point) -> None:
+        width, height = self.target_size
+        if 0.0 <= image_point.x < width and 0.0 <= image_point.y < height:
+            self.cursor_pixel = (int(image_point.x), int(image_point.y))
+        else:
+            self.cursor_pixel = None
+
+    def status_text(self) -> str:
+        width, height = self.target_size
+        source = f"{width}x{height}" if width > 0 and height > 0 else "—"
+        zoom = f"{self.canvas.zoom * 100.0:.0f}%"
+        mode = f"Fit ({zoom})" if self.canvas.fit_mode else zoom
+        pixel = (
+            f"{self.cursor_pixel[0]}, {self.cursor_pixel[1]}"
+            if self.cursor_pixel is not None
+            else "—"
+        )
+        return f"Source: {source} | Zoom: {mode} | Pixel: {pixel}"
+
     def close(self) -> None:
-        if self._image_has_texture:
-            self.image.clear_texture()
-            self._image_has_texture = False
+        if self._canvas_has_texture:
+            self.canvas.clear_texture()
+            self._canvas_has_texture = False
         self._destroy_target()
 
     def _destroy_target(self) -> None:
@@ -128,7 +162,12 @@ class NativeFramegraphDebugger:
     stats_bar: object
     timing_bar: object
     depth_status: object
+    depth_read_status: object
     main_status: object
+    main_fit_button: object
+    main_actual_button: object
+    depth_fit_button: object
+    depth_actual_button: object
     main_preview: NativeFramegraphPreviewSurface
     depth_preview: NativeFramegraphPreviewSurface
     request_scene_render: Callable[[], None]
@@ -197,16 +236,14 @@ class NativeFramegraphDebugger:
         self.main_preview.highlight_hdr = self.model.highlight_hdr
         main_ready = self.main_preview.render(context)
         depth_ready = self.depth_preview.render(context)
-        main_status = (
-            f"Capture: {self.main_preview.target_size[0]}x{self.main_preview.target_size[1]}"
-            if main_ready
-            else "Waiting for frame capture…"
-        )
+        main_status = self.main_preview.status_text()
         if self.main_status.text != main_status:
             self.main_status.text = main_status
-        # Pre-render runs after layout.  A ready capture may have changed the
-        # image's intrinsic size, so request a follow-up frame with a fresh
-        # layout before relying on the preview bounds.
+        depth_status = self.depth_preview.status_text()
+        if self.depth_status.text != depth_status:
+            self.depth_status.text = depth_status
+        # Pre-render runs after layout.  A newly registered capture changes the
+        # canvas source transform, so request one follow-up UI frame.
         if (
             main_ready != self._main_preview_ready
             or depth_ready != self._depth_preview_ready
@@ -229,7 +266,7 @@ class NativeFramegraphDebugger:
             except Exception as error:
                 _logger.exception("Native framegraph depth read failed")
                 text = f"Depth error: {error}"
-        self.depth_status.text = text
+        self.depth_read_status.text = text
         self.request_render()
         return text
 
@@ -366,6 +403,12 @@ class NativeFramegraphDebugger:
     def _preview_changed(self, _model=None) -> None:
         self.request_render()
 
+    def _refresh_preview_statuses(self) -> None:
+        self.main_status.text = self.main_preview.status_text()
+        self.depth_status.text = self.depth_preview.status_text()
+        if self.window is not None and not self.window.closed:
+            self.window.request_render_update()
+
     def _hdr_stats_changed(self, text: str) -> None:
         self.hdr_model.set_html(text)
         self.request_render()
@@ -453,28 +496,37 @@ def build_native_framegraph_debugger(
     previews.set_layout_spacing(8.0)
     main_panel = document.create_vstack("framegraph-main-preview-panel")
     main_panel.set_layout_spacing(4.0)
-    main_image = document.create_image_widget()
-    # The legacy debugger uses the entire preview canvas for the captured
-    # texture.  A capture may be 4:3 while this pane is wide; preserving the
-    # aspect ratio would make it look as though only a centred portion of the
-    # frame had been captured.  Framegraph inspection values coverage over
-    # pixel-perfect presentation, so match the established stretch behaviour.
-    main_image.set_preserve_aspect(False)
-    main_root = _ref(document, main_image)
+    main_canvas = document.create_canvas()
+    main_root = _ref(document, main_canvas)
     main_panel.add_stretch_child(main_root)
-    main_status = document.create_status_bar("Waiting for frame capture…")
+    main_view_controls = document.create_hstack("framegraph-main-view-controls")
+    main_view_controls.set_layout_spacing(4.0)
+    main_fit_button = document.create_button("Fit")
+    main_actual_button = document.create_button("1:1")
+    main_view_controls.add_fixed_child(_ref(document, main_fit_button), 64.0)
+    main_view_controls.add_fixed_child(_ref(document, main_actual_button), 64.0)
+    main_panel.add_fixed_child(_ref(document, main_view_controls), 30.0)
+    main_status = document.create_status_bar("Source: — | Zoom: Fit (100%) | Pixel: —")
     main_panel.add_fixed_child(_ref(document, main_status), 24.0)
     previews.add_stretch_child(_ref(document, main_panel))
     depth_panel = document.create_vstack("framegraph-depth-panel")
     depth_panel.set_layout_spacing(4.0)
-    depth_image = document.create_image_widget()
-    depth_image.set_preserve_aspect(False)
-    depth_root = _ref(document, depth_image)
+    depth_canvas = document.create_canvas()
+    depth_root = _ref(document, depth_canvas)
     depth_panel.add_stretch_child(depth_root)
+    depth_view_controls = document.create_hstack("framegraph-depth-view-controls")
+    depth_view_controls.set_layout_spacing(4.0)
+    depth_fit_button = document.create_button("Fit")
+    depth_actual_button = document.create_button("1:1")
+    depth_view_controls.add_fixed_child(_ref(document, depth_fit_button), 64.0)
+    depth_view_controls.add_fixed_child(_ref(document, depth_actual_button), 64.0)
     refresh_depth = document.create_button("Refresh Depth")
-    depth_panel.add_fixed_child(_ref(document, refresh_depth), 30.0)
-    depth_status = document.create_status_bar("No depth capture")
+    depth_view_controls.add_stretch_child(_ref(document, refresh_depth))
+    depth_panel.add_fixed_child(_ref(document, depth_view_controls), 30.0)
+    depth_status = document.create_status_bar("Source: — | Zoom: Fit (100%) | Pixel: —")
     depth_panel.add_fixed_child(_ref(document, depth_status), 24.0)
+    depth_read_status = document.create_status_bar("No depth capture")
+    depth_panel.add_fixed_child(_ref(document, depth_read_status), 24.0)
     previews.add_fixed_child(depth_panel, 320.0)
     root.add_stretch_child(previews)
 
@@ -486,14 +538,14 @@ def build_native_framegraph_debugger(
     context = window_manager.main_host.context
     main_preview = NativeFramegraphPreviewSurface(
         context,
-        main_image,
+        main_canvas,
         main_root,
         model.core.capture,
         model.core.presenter,
     )
     depth_preview = NativeFramegraphPreviewSurface(
         context,
-        depth_image,
+        depth_canvas,
         depth_root,
         model.core.depth_capture,
         model.core.presenter,
@@ -521,7 +573,12 @@ def build_native_framegraph_debugger(
         stats_bar=stats_bar,
         timing_bar=timing_bar,
         depth_status=depth_status,
+        depth_read_status=depth_read_status,
         main_status=main_status,
+        main_fit_button=main_fit_button,
+        main_actual_button=main_actual_button,
+        depth_fit_button=depth_fit_button,
+        depth_actual_button=depth_actual_button,
         main_preview=main_preview,
         depth_preview=depth_preview,
         request_scene_render=request_render,
@@ -580,6 +637,49 @@ def build_native_framegraph_debugger(
         lambda: current().model.refresh_render_stats() if current() is not None else None
     )
     refresh_depth.connect_clicked(lambda: current().refresh_depth() if current() is not None else None)
+
+    def update_preview_status(preview_name: str, image_point=None) -> None:
+        owner = current()
+        if owner is None:
+            return
+        surface = owner.main_preview if preview_name == "main" else owner.depth_preview
+        if image_point is not None:
+            surface.update_cursor(image_point)
+        owner._refresh_preview_statuses()
+
+    main_canvas.connect_zoom_changed(
+        lambda _zoom: update_preview_status("main")
+    )
+    depth_canvas.connect_zoom_changed(
+        lambda _zoom: update_preview_status("depth")
+    )
+    main_canvas.connect_pointer_input(
+        lambda image_point, _event: update_preview_status("main", image_point)
+    )
+    depth_canvas.connect_pointer_input(
+        lambda image_point, _event: update_preview_status("depth", image_point)
+    )
+
+    def fit_preview(preview_name: str) -> None:
+        owner = current()
+        if owner is None:
+            return
+        surface = owner.main_preview if preview_name == "main" else owner.depth_preview
+        surface.fit()
+        update_preview_status(preview_name)
+
+    def show_actual_size(preview_name: str) -> None:
+        owner = current()
+        if owner is None:
+            return
+        surface = owner.main_preview if preview_name == "main" else owner.depth_preview
+        surface.actual_size()
+        update_preview_status(preview_name)
+
+    main_fit_button.connect_clicked(lambda: fit_preview("main"))
+    main_actual_button.connect_clicked(lambda: show_actual_size("main"))
+    depth_fit_button.connect_clicked(lambda: fit_preview("depth"))
+    depth_actual_button.connect_clicked(lambda: show_actual_size("depth"))
 
     return result
 
