@@ -80,6 +80,14 @@ void TcSceneRef::before_render() {
     tc_scene_before_render(_h);
 }
 
+void TcSceneRef::request_render() {
+    tc_scene_request_render(_h);
+}
+
+bool TcSceneRef::consume_render_request() {
+    return tc_scene_consume_render_request(_h);
+}
+
 double TcSceneRef::fixed_timestep() const {
     return tc_scene_fixed_timestep(_h);
 }

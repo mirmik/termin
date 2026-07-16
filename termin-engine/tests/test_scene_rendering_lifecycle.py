@@ -48,6 +48,37 @@ def test_engine_deserialize_scene_registers_defaults_and_migrates_legacy_render_
         )
     finally:
         engine_destroy_scene(scene)
+
+
+def test_scene_local_render_request_is_consumed_by_scene_manager_tick():
+    from termin.engine import SceneManager, scene as engine_scene
+
+    manager = SceneManager()
+    scene = manager.create_scene("render-invalidated")
+    manager.set_mode("render-invalidated", engine_scene.SceneMode.STOP)
+
+    assert not manager.tick(0.0)
+    scene.request_render()
+    assert manager.tick(0.0)
+    assert not manager.tick(0.0)
+
+
+def test_scene_local_invalidation_preserves_host_wide_and_play_rendering():
+    from termin.engine import SceneManager, scene as engine_scene
+
+    manager = SceneManager()
+    manager.create_scene("render-modes")
+    manager.set_mode("render-modes", engine_scene.SceneMode.STOP)
+
+    manager.request_render()
+    assert manager.tick(0.0)
+    assert not manager.tick(0.0)
+
+    manager.set_mode("render-modes", engine_scene.SceneMode.PLAY)
+    assert manager.tick(0.0)
+    assert manager.tick(0.0)
+
+
 def test_scene_manager_callbacks_accept_none_for_shutdown_cleanup():
     from termin.engine import SceneManager
 

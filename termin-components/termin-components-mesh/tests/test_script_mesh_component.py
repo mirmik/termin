@@ -22,6 +22,7 @@ def test_script_mesh_roundtrip_has_one_mesh_and_no_missing_renderer_error() -> N
                 source = TcScene.create("script-mesh-source")
                 entity = source.create_entity("Generated")
                 entity.add_component(ScriptMeshComponent())
+                assert source.consume_render_request()
                 payload = source.serialize()
 
                 components = payload["entities"][0]["components"]
