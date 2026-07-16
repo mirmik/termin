@@ -63,9 +63,7 @@ struct CppModuleHandle : IModuleHandle {
     bool shutdown_called = false;
 };
 
-struct PythonModuleHandle : IModuleHandle {
-    std::vector<std::string> imported_modules;
-};
+struct PythonModuleHandle : IModuleHandle {};
 
 struct ModuleRecord {
     ModuleSpec spec;

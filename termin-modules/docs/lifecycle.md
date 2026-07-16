@@ -121,7 +121,10 @@ collision-safe session directory, поэтому параллельные runtim
    `.pymodule` в `sys.path`, не присваивая уже существующие равные entries
 
 Module load проверяет requirements в общем environment, импортирует все пакеты
-из `packages` и сохраняет в `PythonModuleHandle` только import-transaction state.
+из `packages` и сохраняет в Python-specific handle только exact module objects,
+которые import-транзакция впервые опубликовала или заменила в `sys.modules`.
+До импорта runtime отклоняет пересекающиеся package namespace claims разных
+`.pymodule`; pre-existing module objects не переходят во владение handle.
 Module unload не меняет session paths. `ModuleRuntime::shutdown` сначала
 выгружает модули, затем ровно один раз снимает только добавленные этой session
 entries. Ошибка prepare откатывает добавленные entries и не допускает imports.
@@ -162,14 +165,18 @@ entries. Ошибка prepare откатывает добавленные entrie
   session-owned `sys.path` при module unload не меняется
 - после успешного prepare `module_context` commit-ит Python-side registries и
   runtime types; исключение не проглатывается и сохраняет retryable handle/state
-- импортированный package subtree удаляется из `sys.modules`
+- entries import-транзакции удаляются из `sys.modules` только пока mapping всё
+  ещё указывает на записанный exact object; заменённая чужим кодом mapping
+  сохраняется с диагностикой
 - регистрации, выполненные под module import context, снимаются по `module_id`
 
 Python backend включает `termin_modules.module_context` на время импорта
 пакетов из `.pymodule`. Компоненты, inspect-типы, Python kind handlers и
 editor-side class registries, которые умеют читать этот context, помечают
 регистрации владельцем модуля. При unload backend сначала вызывает owner
-cleanup, затем удаляет package subtree из `sys.modules`.
+cleanup, затем evict-ит принадлежащие транзакции exact entries из `sys.modules`.
+Это очистка import cache, а не требование физически уничтожить старые module,
+class или function objects: внешние ссылки могут безопасно дожить после reload.
 
 Unowned C++ registrations считаются допустимыми для встроенных engine/component
 libraries. Project C++ modules, которые участвуют в hot reload, должны грузиться

@@ -2,6 +2,7 @@
 #include "termin_modules/text_encoding.hpp"
 
 #include <Python.h>
+#include <tcbase/tc_log.hpp>
 
 #include <cstdio>
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <filesystem>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #ifdef _WIN32
@@ -197,10 +199,73 @@ bool module_name_matches_package(const std::string& module_name, const std::stri
         module_name[package.size()] == '.';
 }
 
-std::vector<std::string> collect_imported_module_subtree(
+bool package_claims_overlap(const std::string& lhs, const std::string& rhs) {
+    return module_name_matches_package(lhs, rhs) || module_name_matches_package(rhs, lhs);
+}
+
+bool validate_package_namespace_claims(
+    const std::vector<ModuleRecord>& records,
+    std::string& error
+) {
+    struct Claim {
+        std::string module_id;
+        std::string package;
+    };
+    std::vector<Claim> claims;
+    for (const ModuleRecord& record : records) {
+        if (record.spec.kind != ModuleKind::Python) {
+            continue;
+        }
+        const auto config = std::dynamic_pointer_cast<PythonModuleConfig>(record.spec.config);
+        if (!config || config->ignored) {
+            continue;
+        }
+        for (const std::string& package : config->packages) {
+            for (const Claim& existing : claims) {
+                if (
+                    existing.module_id != record.spec.id &&
+                    package_claims_overlap(existing.package, package)
+                ) {
+                    error = "Python package namespace overlap: module '" + record.spec.id +
+                        "' claims '" + package + "', already claimed as '" +
+                        existing.package + "' by module '" + existing.module_id + "'";
+                    return false;
+                }
+            }
+            claims.push_back({record.spec.id, package});
+        }
+    }
+    return true;
+}
+
+struct OwnedPythonModule {
+    std::string name;
+    PyObject* object = nullptr;
+};
+
+class PythonImportHandle final : public PythonModuleHandle {
+public:
+    std::vector<OwnedPythonModule> owned_modules;
+
+    ~PythonImportHandle() override {
+        if (owned_modules.empty() || !Py_IsInitialized()) {
+            return;
+        }
+        PyGILState_STATE gil = PyGILState_Ensure();
+        for (OwnedPythonModule& owned : owned_modules) {
+            Py_XDECREF(owned.object);
+            owned.object = nullptr;
+        }
+        PyGILState_Release(gil);
+    }
+};
+
+using PythonModuleSnapshot = std::unordered_map<std::string, PyObject*>;
+
+std::vector<std::pair<std::string, PyObject*>> collect_module_subtree(
     const std::vector<std::string>& packages
 ) {
-    std::vector<std::string> result;
+    std::vector<std::pair<std::string, PyObject*>> result;
 
     PyObject* sys_modules = PyImport_GetModuleDict();
     if (sys_modules == nullptr) {
@@ -229,7 +294,10 @@ std::vector<std::string> collect_imported_module_subtree(
         std::string module_name(raw_name);
         for (const std::string& package : packages) {
             if (module_name_matches_package(module_name, package)) {
-                result.push_back(std::move(module_name));
+                PyObject* module = PyDict_GetItem(sys_modules, key);
+                if (module != nullptr) {
+                    result.emplace_back(std::move(module_name), module);
+                }
                 break;
             }
         }
@@ -237,24 +305,86 @@ std::vector<std::string> collect_imported_module_subtree(
 
     Py_DECREF(keys);
 
-    std::sort(result.begin(), result.end(), [](const std::string& lhs, const std::string& rhs) {
-        if (lhs.size() != rhs.size()) {
-            return lhs.size() > rhs.size();
+    std::sort(result.begin(), result.end(), [](const auto& lhs, const auto& rhs) {
+        if (lhs.first.size() != rhs.first.size()) {
+            return lhs.first.size() > rhs.first.size();
         }
-        return lhs > rhs;
+        return lhs.first > rhs.first;
     });
-    result.erase(std::unique(result.begin(), result.end()), result.end());
     return result;
 }
 
-void remove_sys_module(const std::string& name) {
+PythonModuleSnapshot snapshot_module_subtree(const std::vector<std::string>& packages) {
+    PythonModuleSnapshot snapshot;
+    for (const auto& [name, module] : collect_module_subtree(packages)) {
+        Py_INCREF(module);
+        snapshot.emplace(name, module);
+    }
+    return snapshot;
+}
+
+void release_module_snapshot(PythonModuleSnapshot& snapshot) {
+    for (auto& [name, module] : snapshot) {
+        (void)name;
+        Py_DECREF(module);
+    }
+    snapshot.clear();
+}
+
+void update_owned_module(
+    PythonImportHandle& handle,
+    const std::string& name,
+    PyObject* module
+) {
+    for (OwnedPythonModule& owned : handle.owned_modules) {
+        if (owned.name != name) {
+            continue;
+        }
+        if (owned.object != module) {
+            Py_INCREF(module);
+            Py_DECREF(owned.object);
+            owned.object = module;
+        }
+        return;
+    }
+    Py_INCREF(module);
+    handle.owned_modules.push_back({name, module});
+}
+
+void collect_import_transaction_delta(
+    const std::vector<std::string>& packages,
+    const PythonModuleSnapshot& before,
+    PythonImportHandle& handle
+) {
+    for (const auto& [name, module] : collect_module_subtree(packages)) {
+        const auto previous = before.find(name);
+        if (previous == before.end() || previous->second != module) {
+            update_owned_module(handle, name, module);
+        }
+    }
+}
+
+void evict_owned_modules(PythonImportHandle& handle, const std::string& module_id) {
     PyObject* sys_modules = PyImport_GetModuleDict();
     if (sys_modules == nullptr) {
         return;
     }
 
-    if (PyDict_DelItemString(sys_modules, name.c_str()) != 0) {
-        PyErr_Clear();
+    for (const OwnedPythonModule& owned : handle.owned_modules) {
+        PyObject* current = PyDict_GetItemString(sys_modules, owned.name.c_str());
+        if (current == owned.object) {
+            if (PyDict_DelItemString(sys_modules, owned.name.c_str()) != 0) {
+                PyErr_Clear();
+            }
+            continue;
+        }
+        if (current != nullptr) {
+            tc::Log::warn(
+                "PythonModuleBackend: preserving replaced sys.modules entry '%s' while unloading '%s'",
+                owned.name.c_str(),
+                module_id.c_str()
+            );
+        }
     }
 }
 
@@ -674,6 +804,9 @@ bool PythonModuleBackend::prepare_environment(
 ) {
     diagnostics.clear();
     error.clear();
+    if (!validate_package_namespace_claims(records, error)) {
+        return false;
+    }
     if (_environment_prepared) {
         return true;
     }
@@ -766,7 +899,7 @@ bool PythonModuleBackend::load(
 
     PyGILState_STATE gil = PyGILState_Ensure();
 
-    auto handle = std::make_shared<PythonModuleHandle>();
+    auto handle = std::make_shared<PythonImportHandle>();
 
     if (!ensure_requirements(*config, environment, record.diagnostics, error)) {
         PyGILState_Release(gil);
@@ -774,22 +907,24 @@ bool PythonModuleBackend::load(
         return false;
     }
 
+    PythonModuleSnapshot before = snapshot_module_subtree(config->packages);
     if (!call_module_context_function("begin_module_import", record.spec.id, error)) {
+        release_module_snapshot(before);
         PyGILState_Release(gil);
         record.error_message = error;
         return false;
     }
 
-    bool import_context_active = true;
     for (const std::string& package : config->packages) {
         PyObject* module = PyImport_ImportModule(package.c_str());
         if (module == nullptr) {
             record.error_message = "Failed to import package '" + package + "': " + fetch_python_error();
+            collect_import_transaction_delta(config->packages, before, *handle);
+            release_module_snapshot(before);
             std::string context_error;
             if (!call_module_context_function("end_module_import", record.spec.id, context_error)) {
                 record.error_message += "; " + context_error;
             }
-            import_context_active = false;
             PyGILState_Release(gil);
             record.handle = handle;
             unload(record, environment);
@@ -797,15 +932,12 @@ bool PythonModuleBackend::load(
         }
 
         Py_DECREF(module);
-        // Keep the handle authoritative after every successful import. A
-        // later package may fail, and the error path must still remove the
-        // complete subtree imported so far.
-        handle->imported_modules = collect_imported_module_subtree(config->packages);
     }
 
-    handle->imported_modules = collect_imported_module_subtree(config->packages);
+    collect_import_transaction_delta(config->packages, before, *handle);
+    release_module_snapshot(before);
 
-    if (import_context_active && !call_module_context_function("end_module_import", record.spec.id, error)) {
+    if (!call_module_context_function("end_module_import", record.spec.id, error)) {
         PyGILState_Release(gil);
         record.error_message = error;
         record.handle = handle;
@@ -824,7 +956,7 @@ bool PythonModuleBackend::unload(
 ) {
     (void)environment;
 
-    auto handle = std::dynamic_pointer_cast<PythonModuleHandle>(record.handle);
+    auto handle = std::dynamic_pointer_cast<PythonImportHandle>(record.handle);
     if (!handle) {
         return true;
     }
@@ -844,9 +976,7 @@ bool PythonModuleBackend::unload(
         return false;
     }
 
-    for (const std::string& name : handle->imported_modules) {
-        remove_sys_module(name);
-    }
+    evict_owned_modules(*handle, record.spec.id);
     PyGILState_Release(gil);
     return true;
 }
