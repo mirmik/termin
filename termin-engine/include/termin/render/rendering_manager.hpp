@@ -257,8 +257,20 @@ public:
     // Returns viewport handle (invalid if failed)
     tc_viewport_handle mount_scene(const SceneMountRequest& request);
 
+    // Register a host-created viewport in the engine-owned live topology.
+    bool register_viewport_attachment(
+        tc_display* display,
+        tc_viewport_handle viewport,
+        bool destroy_on_scene_detach = true
+    );
+    bool unregister_viewport_attachment(tc_viewport_handle viewport);
+
     // Unmount scene from display (removes all viewports showing this scene)
-    void unmount_scene(tc_scene_handle scene, tc_display* display);
+    void unmount_scene(
+        tc_scene_handle scene,
+        tc_display* display,
+        bool include_host_viewports = false
+    );
 
     // Attach scene using its viewport_configs
     // Creates displays via factory, mounts viewports, compiles scene pipelines
@@ -266,7 +278,7 @@ public:
     std::vector<tc_viewport_handle> attach_scene_full(tc_scene_handle scene);
 
     // Detach scene from all displays and cleanup
-    void detach_scene_full(tc_scene_handle scene);
+    void detach_scene_full(tc_scene_handle scene, bool include_host_viewports = false);
 
     // Get attached scenes list
     const std::vector<tc_scene_handle>& attached_scenes() const {
@@ -352,7 +364,8 @@ private:
     void render_scene_pipeline_offscreen(
         tc_scene_handle scene,
         const std::string& pipeline_name,
-        tc_pipeline_handle pipeline
+        tc_pipeline_handle pipeline,
+        tc_display* only_display = nullptr
     );
 
     bool build_render_target_contexts(
@@ -373,9 +386,6 @@ private:
         tc_scene_handle scene,
         const std::vector<tc_viewport_handle>& viewports
     );
-
-    // Collect all viewports from all displays by name
-    std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
 
 };
 

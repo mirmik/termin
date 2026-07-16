@@ -128,25 +128,6 @@ tc_display* RenderDisplayRegistry::get_or_create_display(
     return nullptr;
 }
 
-std::unordered_map<std::string, tc_viewport_handle> RenderDisplayRegistry::collect_all_viewports() const {
-    std::unordered_map<std::string, tc_viewport_handle> result;
-    auto collect_from = [&result](const std::vector<tc_display*>& disp_list) {
-        for (tc_display* display : disp_list) {
-            tc_viewport_handle vp = tc_display_get_first_viewport(display);
-            while (tc_viewport_handle_valid(vp)) {
-                const char* name = tc_viewport_get_name(vp);
-                if (name && name[0] != '\0') {
-                    result[name] = vp;
-                }
-                vp = tc_viewport_get_display_next(vp);
-            }
-        }
-    };
-    collect_from(displays_);
-    collect_from(editor_displays_);
-    return result;
-}
-
 void RenderDisplayRegistry::clear() {
     display_routers_.clear();
     displays_.clear();

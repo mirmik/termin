@@ -22,7 +22,7 @@ class ViewportInspectorTcgui(VStack):
     Viewport references a RenderTarget selected from the render target pool.
     """
 
-    def __init__(self, resource_manager) -> None:
+    def __init__(self, resource_manager, rendering_manager) -> None:
         super().__init__()
         self.spacing = 4
 
@@ -33,6 +33,7 @@ class ViewportInspectorTcgui(VStack):
         self._render_targets = []
         self._current_display = None
         self._updating = False
+        self._rendering_manager = rendering_manager
         self.on_changed: Optional[Callable[[], None]] = None
         self._scene_getter: Optional[Callable[[], list]] = None
 
@@ -257,12 +258,34 @@ class ViewportInspectorTcgui(VStack):
             return
 
         try:
+            self._rendering_manager.unregister_viewport_attachment(self._viewport)
             old_display.remove_viewport(self._viewport)
             target.add_viewport(self._viewport)
+            if not self._rendering_manager.register_viewport_attachment(target, self._viewport):
+                raise RuntimeError("failed to register moved viewport attachment")
             self._current_display = target
             self._emit_changed()
         except Exception as e:
             log.error(f"[ViewportInspectorTcgui] failed to move viewport between displays: {e}")
+            self._rendering_manager.unregister_viewport_attachment(self._viewport)
+            try:
+                target.remove_viewport(self._viewport)
+            except Exception as cleanup_error:
+                log.error(
+                    "[ViewportInspectorTcgui] failed to remove viewport from "
+                    f"rejected display: {cleanup_error}"
+                )
+            try:
+                old_display.add_viewport(self._viewport)
+                if not self._rendering_manager.register_viewport_attachment(
+                    old_display,
+                    self._viewport,
+                ):
+                    raise RuntimeError("failed to restore viewport topology")
+            except Exception as restore_error:
+                log.error(
+                    f"[ViewportInspectorTcgui] failed to restore viewport display: {restore_error}"
+                )
 
     def _refresh_scene_combo(self) -> None:
         old = self._scene_combo.on_changed
@@ -296,8 +319,23 @@ class ViewportInspectorTcgui(VStack):
         if self._updating or self._viewport is None:
             return
         if 0 <= index < len(self._scenes):
-            self._viewport.scene = self._scenes[index]
-            self._emit_changed()
+            old_scene = self._viewport.scene
+            new_scene = self._scenes[index]
+            self._rendering_manager.unregister_viewport_attachment(self._viewport)
+            self._viewport.scene = new_scene
+            if self._current_display is not None and self._rendering_manager.register_viewport_attachment(
+                self._current_display,
+                self._viewport,
+            ):
+                self._emit_changed()
+                return
+            self._viewport.scene = old_scene
+            if self._current_display is not None:
+                self._rendering_manager.register_viewport_attachment(
+                    self._current_display,
+                    self._viewport,
+                )
+            log.error("[ViewportInspectorTcgui] failed to move viewport between scenes")
 
     def _refresh_render_target_combo(self) -> None:
         old = self._render_target_combo.on_changed

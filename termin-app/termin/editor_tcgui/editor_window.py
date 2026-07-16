@@ -509,6 +509,7 @@ class EditorWindowTcgui:
             self._editor_attachment = EditorSceneAttachment(
                 display=self._editor_display,
                 rendering_controller=self._rendering_controller,
+                rendering_manager=self._rendering_controller._manager,
                 make_editor_pipeline=make_editor_pipeline,
             )
             self.attach_editor_to_scene(self._editor_scene_name, restore_state=False)

@@ -157,9 +157,17 @@ class _Entity:
 class _Attachment:
     instances = []
 
-    def __init__(self, *, display, rendering_controller, make_editor_pipeline) -> None:
+    def __init__(
+        self,
+        *,
+        display,
+        rendering_controller,
+        rendering_manager,
+        make_editor_pipeline,
+    ) -> None:
         self.display = display
         self.rendering_controller = rendering_controller
+        self.rendering_manager = rendering_manager
         self.make_editor_pipeline = make_editor_pipeline
         self.viewport = None
         self.camera = object()

@@ -10,23 +10,35 @@ extern "C" {
 #include "core/tc_scene.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_render_target.h"
+#include "render/tc_display.h"
+#include "render/tc_viewport.h"
 }
 
 namespace termin {
 
 class TERMIN_ENGINE_API RenderTopology {
+public:
+    struct ViewportAttachment {
+        tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
+        tc_viewport_handle viewport = TC_VIEWPORT_HANDLE_INVALID;
+        tc_display* display = nullptr;
+        bool destroy_on_scene_detach = true;
+    };
+
 private:
     struct SceneRecord {
         tc_scene_handle scene = TC_SCENE_HANDLE_INVALID;
         std::unordered_map<std::string, tc_pipeline_handle> pipelines;
         std::unordered_map<std::string, std::vector<std::string>> pipeline_targets;
         std::vector<tc_render_target_handle> render_targets;
+        std::vector<tc_viewport_handle> viewports;
         bool attached = false;
     };
 
     std::unordered_map<uint64_t, SceneRecord> scenes_;
     std::vector<tc_scene_handle> attached_scenes_;
     std::vector<tc_render_target_handle> managed_render_targets_;
+    std::vector<ViewportAttachment> viewport_attachments_;
 
 public:
     RenderTopology() = default;
@@ -66,6 +78,23 @@ public:
     const std::vector<tc_render_target_handle>& managed_render_targets() const {
         return managed_render_targets_;
     }
+
+    bool register_viewport(
+        tc_scene_handle scene,
+        tc_viewport_handle viewport,
+        tc_display* display,
+        bool destroy_on_scene_detach = true
+    );
+    bool unregister_viewport(tc_viewport_handle viewport);
+    const std::vector<tc_viewport_handle>& viewports(tc_scene_handle scene) const;
+    const std::vector<ViewportAttachment>& viewport_attachments() const {
+        return viewport_attachments_;
+    }
+    tc_viewport_handle find_viewport(
+        tc_scene_handle scene,
+        const std::string& name
+    ) const;
+    tc_display* display_for_viewport(tc_viewport_handle viewport) const;
 
     void clear_scene_pipelines(tc_scene_handle scene, bool notify_detach = true);
     void clear_all();

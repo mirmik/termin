@@ -50,8 +50,6 @@ public:
     tc_display* get_display_by_name(const std::string& name) const;
     tc_display* get_or_create_display(const std::string& name, const DisplayFactory& factory);
 
-    std::unordered_map<std::string, tc_viewport_handle> collect_all_viewports() const;
-
     void clear();
 
 private:

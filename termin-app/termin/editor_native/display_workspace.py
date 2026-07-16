@@ -249,15 +249,21 @@ class NativeDisplayWorkspace:
             return
 
         self.release_viewport_input(source, viewport)
+        self.rendering_manager.unregister_viewport_attachment(viewport)
         source.remove_viewport(viewport)
         try:
             target.add_viewport(viewport)
+            if not self.rendering_manager.register_viewport_attachment(target, viewport):
+                raise RuntimeError("failed to register moved viewport attachment")
             self.configure_viewport_input(target, viewport)
         except Exception:
             _logger.exception("Native display workspace failed to move viewport; restoring source")
             try:
+                self.rendering_manager.unregister_viewport_attachment(viewport)
                 target.remove_viewport(viewport)
                 source.add_viewport(viewport)
+                if not self.rendering_manager.register_viewport_attachment(source, viewport):
+                    raise RuntimeError("failed to restore viewport attachment")
                 self.configure_viewport_input(source, viewport)
             except Exception:
                 _logger.exception("Native display workspace failed to restore viewport after move")

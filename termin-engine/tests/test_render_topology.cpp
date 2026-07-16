@@ -53,6 +53,37 @@ int main()
     }
 
     topology.unregister_render_target(target_b);
+
+    tc_display* display_a = tc_display_new("DisplayA", nullptr);
+    tc_display* display_b = tc_display_new("DisplayB", nullptr);
+    tc_viewport_handle viewport_a = tc_viewport_new("SharedViewport", scene_a);
+    tc_viewport_handle viewport_b = tc_viewport_new("SharedViewport", scene_b);
+    tc_display_add_viewport(display_a, viewport_a);
+    tc_display_add_viewport(display_b, viewport_b);
+    if (!topology.register_viewport(scene_a, viewport_a, display_a)
+            || !topology.register_viewport(scene_b, viewport_b, display_b)) {
+        std::cerr << "failed to register scene viewport attachments\n";
+        return 1;
+    }
+    if (!tc_viewport_handle_eq(topology.find_viewport(scene_a, "SharedViewport"), viewport_a)
+            || !tc_viewport_handle_eq(topology.find_viewport(scene_b, "SharedViewport"), viewport_b)) {
+        std::cerr << "same-named viewports crossed scene ownership\n";
+        return 1;
+    }
+    if (topology.display_for_viewport(viewport_a) != display_a
+            || topology.display_for_viewport(viewport_b) != display_b) {
+        std::cerr << "viewport display association was not preserved\n";
+        return 1;
+    }
+    topology.unregister_viewport(viewport_a);
+    topology.unregister_viewport(viewport_b);
+    tc_display_remove_viewport(display_a, viewport_a);
+    tc_display_remove_viewport(display_b, viewport_b);
+    tc_viewport_free(viewport_a);
+    tc_viewport_free(viewport_b);
+    tc_display_free(display_a);
+    tc_display_free(display_b);
+
     topology.clear_all();
     tc_render_target_free(target_a);
     tc_render_target_free(target_b);

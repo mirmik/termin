@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include "termin/render/render_topology.hpp"
 
 extern "C" {
 #include "render/tc_display.h"
@@ -26,13 +27,19 @@ bool contains_render_target(
     tc_render_target_handle rt
 );
 
-void update_viewport_rects_for_displays(const std::vector<tc_display*>& displays);
+void update_viewport_rects(
+    const std::vector<RenderTopology::ViewportAttachment>& attachments,
+    tc_display* only_display = nullptr
+);
 
-void sync_viewport_render_target_resolutions(const std::vector<tc_display*>& displays);
+void sync_viewport_render_target_resolutions(
+    const std::vector<RenderTopology::ViewportAttachment>& attachments,
+    tc_display* only_display = nullptr
+);
 
 OffscreenRenderPlan build_offscreen_render_plan(
-    const std::vector<tc_display*>& scene_displays,
-    const std::vector<tc_display*>& editor_displays
+    const std::vector<RenderTopology::ViewportAttachment>& attachments,
+    tc_display* only_display = nullptr
 );
 
 } // namespace termin::rendering_manager_detail

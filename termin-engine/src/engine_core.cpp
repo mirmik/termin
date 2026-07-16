@@ -17,16 +17,18 @@ EngineCore::EngineCore()
     termin_scene_runtime_init();
     scene_manager.set_before_scene_destroy_guard([this](tc_scene_handle scene) {
         if (!render_topology.is_attached(scene)
-                && render_topology.render_targets(scene).empty()) {
+                && render_topology.render_targets(scene).empty()
+                && render_topology.viewports(scene).empty()) {
             return;
         }
         tc_log(
             TC_LOG_ERROR,
             "[EngineCore] Scene destruction requested with live render attachments; forcing detach"
         );
-        rendering_manager.detach_scene_full(scene);
+        rendering_manager.detach_scene_full(scene, true);
         if (render_topology.is_attached(scene)
-                || !render_topology.render_targets(scene).empty()) {
+                || !render_topology.render_targets(scene).empty()
+                || !render_topology.viewports(scene).empty()) {
             tc_log(
                 TC_LOG_ERROR,
                 "[EngineCore] Mandatory render detach left live scene topology"
@@ -45,10 +47,10 @@ EngineCore::~EngineCore() {
         render_topology.attached_scenes().end()
     );
     for (tc_scene_handle scene : attached_scenes) {
-        rendering_manager.detach_scene_full(scene);
+        rendering_manager.detach_scene_full(scene, true);
     }
-    rendering_manager.shutdown();
     scene_manager.close_all_scenes();
+    rendering_manager.shutdown();
     if (tc_engine_core_instance() == reinterpret_cast<tc_engine_core*>(this)) {
         tc_engine_core_set_instance(nullptr);
     }

@@ -115,7 +115,7 @@ class InspectorControllerTcgui:
 
         self._material_inspector = MaterialInspectorTcgui(resource_manager)
         self._display_inspector = DisplayInspectorTcgui()
-        self._viewport_inspector = ViewportInspectorTcgui(resource_manager)
+        self._viewport_inspector = ViewportInspectorTcgui(resource_manager, rendering_manager)
         self._pipeline_inspector = PipelineInspectorTcgui(resource_manager, dialog_service=dialog_service, on_edit_callback=on_edit_pipeline)
         self._texture_inspector = TextureInspectorTcgui(resource_manager)
         self._mesh_inspector = MeshInspectorTcgui(resource_manager)

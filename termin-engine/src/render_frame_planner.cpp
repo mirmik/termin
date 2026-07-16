@@ -40,8 +40,13 @@ bool contains_render_target(
     ) != targets.end();
 }
 
-void update_viewport_rects_for_displays(const std::vector<tc_display*>& displays) {
-    for (tc_display* display : displays) {
+void update_viewport_rects(
+    const std::vector<RenderTopology::ViewportAttachment>& attachments,
+    tc_display* only_display
+) {
+    for (const auto& attachment : attachments) {
+        tc_display* display = attachment.display;
+        if (!display || (only_display && display != only_display)) continue;
         if (!tc_display_get_enabled(display)) {
             continue;
         }
@@ -58,22 +63,25 @@ void update_viewport_rects_for_displays(const std::vector<tc_display*>& displays
             continue;
         }
 
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
-            tc_viewport_update_pixel_rect(vp, width, height);
-            vp = tc_viewport_get_display_next(vp);
+        if (tc_viewport_handle_valid(attachment.viewport)) {
+            tc_viewport_update_pixel_rect(attachment.viewport, width, height);
         }
     }
 }
 
-void sync_viewport_render_target_resolutions(const std::vector<tc_display*>& displays) {
-    for (tc_display* display : displays) {
+void sync_viewport_render_target_resolutions(
+    const std::vector<RenderTopology::ViewportAttachment>& attachments,
+    tc_display* only_display
+) {
+    for (const auto& attachment : attachments) {
+        tc_display* display = attachment.display;
+        if (!display || (only_display && display != only_display)) continue;
         if (!tc_display_get_enabled(display)) {
             continue;
         }
 
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
+        tc_viewport_handle vp = attachment.viewport;
+        if (tc_viewport_handle_valid(vp)) {
             tc_render_target_handle rt = tc_viewport_get_render_target(vp);
             if (tc_render_target_handle_valid(rt)
                     && tc_render_target_get_kind(rt) == TC_RENDER_TARGET_TEXTURE_2D
@@ -88,22 +96,24 @@ void sync_viewport_render_target_resolutions(const std::vector<tc_display*>& dis
                     tc_render_target_set_height(rt, ph);
                 }
             }
-            vp = tc_viewport_get_display_next(vp);
         }
     }
 }
 
-static void collect_viewport_render_targets(
-    OffscreenRenderPlan& plan,
-    const std::vector<tc_display*>& displays
+OffscreenRenderPlan build_offscreen_render_plan(
+    const std::vector<RenderTopology::ViewportAttachment>& attachments,
+    tc_display* only_display
 ) {
-    for (tc_display* display : displays) {
+    OffscreenRenderPlan plan;
+    for (const auto& attachment : attachments) {
+        tc_display* display = attachment.display;
+        if (!display || (only_display && display != only_display)) continue;
         if (!tc_display_get_enabled(display)) {
             continue;
         }
 
-        tc_viewport_handle vp = tc_display_get_first_viewport(display);
-        while (tc_viewport_handle_valid(vp)) {
+        tc_viewport_handle vp = attachment.viewport;
+        if (tc_viewport_handle_valid(vp)) {
             if (tc_viewport_get_enabled(vp)) {
                 tc_render_target_handle rt = tc_viewport_get_render_target(vp);
                 if (tc_render_target_handle_valid(rt)) {
@@ -116,18 +126,8 @@ static void collect_viewport_render_targets(
                     }
                 }
             }
-            vp = tc_viewport_get_display_next(vp);
         }
     }
-}
-
-OffscreenRenderPlan build_offscreen_render_plan(
-    const std::vector<tc_display*>& scene_displays,
-    const std::vector<tc_display*>& editor_displays
-) {
-    OffscreenRenderPlan plan;
-    collect_viewport_render_targets(plan, scene_displays);
-    collect_viewport_render_targets(plan, editor_displays);
     return plan;
 }
 

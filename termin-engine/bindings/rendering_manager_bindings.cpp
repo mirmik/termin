@@ -163,6 +163,13 @@ void bind_rendering_manager(nb::module_& m) {
         .def_prop_ro("managed_render_targets", [](const RenderTopology& self) {
             return self.managed_render_targets();
         })
+        .def("viewports", [](const RenderTopology& self, nb::object scene_py) {
+            std::vector<TcViewport> result;
+            for (tc_viewport_handle viewport : self.viewports(get_scene_handle(scene_py))) {
+                result.emplace_back(viewport);
+            }
+            return result;
+        }, nb::arg("scene"))
     ;
 
     // RenderingManager singleton
@@ -282,6 +289,23 @@ void bind_rendering_manager(nb::module_& m) {
             }
         }, nb::arg("display"),
            "Remove editor display from management")
+
+        .def("register_viewport_attachment", [](RenderingManager& self,
+                                                  TcDisplay& display,
+                                                  nb::object viewport_py,
+                                                  bool destroy_on_scene_detach) {
+            return self.register_viewport_attachment(
+                display.ptr(),
+                get_viewport_handle(viewport_py),
+                destroy_on_scene_detach
+            );
+        }, nb::arg("display"), nb::arg("viewport"),
+           nb::arg("destroy_on_scene_detach") = true)
+
+        .def("unregister_viewport_attachment", [](RenderingManager& self,
+                                                    nb::object viewport_py) {
+            return self.unregister_viewport_attachment(get_viewport_handle(viewport_py));
+        }, nb::arg("viewport"))
 
         .def_prop_ro("editor_displays", [](RenderingManager& self) -> std::vector<TcDisplay> {
             std::vector<TcDisplay> result;
