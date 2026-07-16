@@ -56,8 +56,6 @@
 **Где смотреть:**
 - `termin-engine/src/rendering_manager.cpp`
 - `termin-engine/include/termin/render/rendering_manager.hpp`
-- `termin-engine/include/termin/render/pull_rendering_manager.hpp`
-- `termin-engine/src/pull_rendering_manager.cpp`
 
 **Проблема:** `RenderingManager` управляет всем:
 - Display management (добавление/удаление дисплеев, фабрика) — ответственность termin-display
@@ -70,14 +68,9 @@
 - Render target resolution sync — синхронизация динамического разрешения
 - Scene pipeline compilation — компиляция ScenePipelineTemplate
 
-**Дублирование:** `PullRenderingManager` имеет практически идентичный набор полей и методов:
-- `render_engine_`, `owned_render_engine_`
-- `displays_`, `viewport_states_`
-- `add_display()`, `remove_display()`, `get_display_by_name()`
-- `get_viewport_state()`, `get_or_create_viewport_state()`, `remove_viewport_state()`
-- `render_viewport_offscreen()`, `collect_lights()`
-
-Нарушение DRY — общая часть должна быть вынесена в базовый класс или mixin.
+**Статус compatibility path:** `PullRenderingManager` удалён после миграции
+C# WPF consumers на общий `RenderingManager::render_display()` path. Второго
+manager с отдельным lifetime и singleton больше нет.
 
 ---
 
@@ -252,7 +245,6 @@ from termin.display import _input_manager_on_key
 **Где смотреть:**
 - `termin-engine/src/rendering_manager.cpp` (строки 14-29)
 - `termin-engine/src/engine_core.cpp` (строки 10-11)
-- `termin-engine/src/pull_rendering_manager.cpp` (строки 13-16)
 
 ```cpp
 #include "core/tc_light_capability.h"       // termin-render include/core/

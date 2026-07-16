@@ -68,7 +68,6 @@ set(TERMIN_ENGINE_SOURCES
     src/rendering_manager.cpp
     src/scene_pipeline_manager.cpp
     src/modules/term_modules_integration.cpp
-    src/pull_rendering_manager.cpp
     src/tc_scene_manager_instance.cpp
     src/tc_rendering_manager_instance.cpp
     src/tc_engine_core_instance.cpp
