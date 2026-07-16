@@ -37,6 +37,25 @@ def test_python_component_category_inherits_from_base() -> None:
         registry.unregister_python("MetadataProbeBaseComponent")
 
 
+def test_python_component_requirements_are_registered() -> None:
+    from termin.scene import ComponentRegistry, PythonComponent
+
+    class RequiredMetadataProbeComponent(PythonComponent):
+        pass
+
+    class DependentMetadataProbeComponent(PythonComponent):
+        required_components = ("RequiredMetadataProbeComponent",)
+
+    registry = ComponentRegistry.instance()
+    try:
+        assert registry.requirements_of("DependentMetadataProbeComponent") == [
+            "RequiredMetadataProbeComponent"
+        ]
+    finally:
+        registry.unregister_python("DependentMetadataProbeComponent")
+        registry.unregister_python("RequiredMetadataProbeComponent")
+
+
 def test_rejected_unowned_python_component_collision_preserves_existing_metadata() -> None:
     from termin.scene import ComponentRegistry, PythonComponent
 
