@@ -1115,13 +1115,26 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
             return physical_device;
         };
         render_device = std::make_unique<tgfx::VulkanRenderDevice>(device_info);
-        tgfx2_interop_set_device(render_device.get());
+        if (!tgfx2_interop_claim_device(render_device.get(), render_device.get())) {
+            throw std::runtime_error(
+                "another application graphics device is already installed");
+        }
     } catch (const std::exception &e) {
         log_error("tgfx2 Vulkan", e.what());
         xr.destroy_instance(instance);
         g_smoke.running.store(false);
         return;
     }
+
+    auto release_render_device = [&]() {
+        if (!render_device) {
+            return;
+        }
+        if (!tgfx2_interop_release_device(render_device.get(), render_device.get())) {
+            log_error("tgfx2 Vulkan", "failed to release application graphics device");
+        }
+        render_device.reset();
+    };
 
     XrGraphicsBindingVulkanKHR graphics_binding{};
     graphics_binding.type = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR;
@@ -1140,7 +1153,7 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     result = xr.create_session(instance, &session_create_info, &session);
     if (XR_FAILED(result) || session == XR_NULL_HANDLE) {
         __android_log_print(ANDROID_LOG_ERROR, kLogTag, "xrCreateSession failed: %d", result);
-        render_device.reset();
+        release_render_device();
         xr.destroy_instance(instance);
         g_smoke.running.store(false);
         return;
@@ -1181,7 +1194,7 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
             xr.destroy_space(app_space);
         }
         xr.destroy_session(session);
-        render_device.reset();
+        release_render_device();
         xr.destroy_instance(instance);
         g_smoke.running.store(false);
         return;
@@ -1209,7 +1222,7 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
             xr.destroy_space(app_space);
         }
         xr.destroy_session(session);
-        render_device.reset();
+        release_render_device();
         xr.destroy_instance(instance);
         g_smoke.running.store(false);
         return;
@@ -1258,7 +1271,7 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
                 xr.destroy_space(app_space);
             }
             xr.destroy_session(session);
-            render_device.reset();
+            release_render_device();
             xr.destroy_instance(instance);
             g_smoke.running.store(false);
             return;
@@ -1678,10 +1691,7 @@ void smoke_thread_main(void *java_vm, void *activity_or_context, std::string ass
     }
     controller_actions.destroy();
     xr.destroy_session(session);
-    if (tgfx2_interop_get_device() == render_device.get()) {
-        tgfx2_interop_set_device(nullptr);
-    }
-    render_device.reset();
+    release_render_device();
     xr.destroy_instance(instance);
     log_info("OpenXR color smoke thread stop");
 }
