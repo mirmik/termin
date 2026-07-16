@@ -262,6 +262,7 @@ class _RenderingControllerForAttachment:
         self.attach_calls = []
         self._viewport_list = _ViewportList()
         self.render_target_refresh_count = 0
+        self._manager = self
 
     def attach_scene(self, scene) -> None:
         self.attach_calls.append(scene.name)
@@ -271,6 +272,12 @@ class _RenderingControllerForAttachment:
 
     def get_viewport_state(self, viewport):
         return None
+
+    def register_viewport_attachment(self, display, viewport, destroy_on_scene_detach=True):
+        return True
+
+    def unregister_viewport_attachment(self, viewport):
+        return True
 
 
 class _Camera:
@@ -754,6 +761,7 @@ def test_editor_scene_attachment_reuses_editor_render_target(monkeypatch):
     attachment = EditorSceneAttachment(
         display=_Display(),
         rendering_controller=rendering,
+        rendering_manager=rendering._manager,
         make_editor_pipeline=lambda: pipeline,
     )
 

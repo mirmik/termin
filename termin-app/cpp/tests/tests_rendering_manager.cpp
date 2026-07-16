@@ -804,6 +804,36 @@ TEST_CASE("RenderingManager render lifecycle notifications are not duplicated")
     tc_scene_free(scene);
 }
 
+TEST_CASE("RenderingManager preserves host viewport until forced scene teardown")
+{
+    RenderTopology topology;
+    RenderingManager manager(topology);
+    tc_scene_handle scene = tc_scene_new();
+    REQUIRE(tc_scene_handle_valid(scene));
+
+    tc_display* editor_display = tc_display_new("HostDisplay", nullptr);
+    REQUIRE(editor_display != nullptr);
+    tc_viewport_handle editor_viewport = tc_viewport_new("HostViewport", scene);
+    REQUIRE(tc_viewport_handle_valid(editor_viewport));
+    tc_display_add_viewport(editor_display, editor_viewport);
+    manager.add_editor_display(editor_display);
+
+    manager.attach_scene(scene);
+    manager.detach_scene_full(scene);
+
+    CHECK_EQ(tc_display_get_viewport_count(editor_display), 1u);
+    CHECK_EQ(topology.viewports(scene).size(), 1u);
+    CHECK(!topology.is_attached(scene));
+
+    manager.detach_scene_full(scene, true);
+    CHECK_EQ(tc_display_get_viewport_count(editor_display), 0u);
+    CHECK(topology.viewports(scene).empty());
+
+    manager.remove_editor_display(editor_display);
+    tc_display_free(editor_display);
+    tc_scene_free(scene);
+}
+
 TEST_CASE("RenderingManager rolls back partial topology when pipeline attach fails")
 {
     RenderTopology topology;
@@ -1039,6 +1069,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     tc_viewport_set_render_target(editor_viewport, editor_rt);
     tc_display_add_viewport(editor_display, editor_viewport);
     manager.add_editor_display(editor_display);
+    REQUIRE_EQ(topology.viewport_attachments().size(), 1u);
 
     const size_t baseline_viewports = tc_viewport_pool_count();
     const size_t baseline_targets = tc_render_target_pool_count();
@@ -1080,6 +1111,7 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
 
     auto viewports = manager.attach_scene_full(scene);
     REQUIRE_EQ(viewports.size(), 1u);
+    CHECK_EQ(topology.viewport_attachments().size(), 2u);
     CHECK_EQ(tc_display_get_viewport_count(editor_display), 1u);
     CHECK_EQ(tc_viewport_pool_count(), baseline_viewports + 1);
     CHECK_EQ(tc_render_target_pool_count(), baseline_targets + 1);
@@ -1099,7 +1131,10 @@ TEST_CASE("RenderingManager attach detach restores editor render counts")
     CHECK_EQ(tc_viewport_pool_count(), baseline_viewports);
     CHECK_EQ(tc_render_target_pool_count(), baseline_targets);
     CHECK_EQ(tc_pipeline_pool_count(), baseline_pipelines);
+    CHECK_EQ(topology.viewport_attachments().size(), 1u);
 
+    manager.remove_editor_display(editor_display);
+    CHECK(topology.viewport_attachments().empty());
     tc_display_remove_viewport(editor_display, editor_viewport);
     tc_viewport_free(editor_viewport);
     tc_pipeline_destroy(editor_pipeline);

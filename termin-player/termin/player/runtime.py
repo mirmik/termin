@@ -484,6 +484,11 @@ class PlayerRuntime:
             name="Main",
         )
         self._viewport.render_target = self._fallback_render_target
+        if not manager.register_viewport_attachment(self._display, self._viewport):
+            log.error("[PlayerRuntime] Failed to register fallback viewport attachment")
+            self._display.remove_viewport(self._viewport)
+            self._viewport = None
+            return False
         self._viewports = [self._viewport]
         log.info("[PlayerRuntime] Created fallback viewport with render target 'Main'")
         return True

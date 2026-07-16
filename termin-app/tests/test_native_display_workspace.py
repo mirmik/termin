@@ -107,12 +107,21 @@ class _RenderingManager:
     def __init__(self) -> None:
         self.added = []
         self.removed = []
+        self.registered_viewports = []
+        self.unregistered_viewports = []
 
     def add_display(self, display, name: str) -> None:
         self.added.append((display, name))
 
     def remove_display(self, display) -> None:
         self.removed.append(display)
+
+    def register_viewport_attachment(self, display, viewport) -> bool:
+        self.registered_viewports.append((display, viewport))
+        return True
+
+    def unregister_viewport_attachment(self, viewport) -> None:
+        self.unregistered_viewports.append(viewport)
 
 
 def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatch):
@@ -181,6 +190,8 @@ def test_native_display_workspace_owns_tabs_input_and_display_cleanup(monkeypatc
     workspace.configure_viewport_input(display, viewport)
     assert workspace.can_move_viewport(viewport)
     workspace.move_viewport(viewport, display, second_display)
+    assert manager.unregistered_viewports == [viewport]
+    assert manager.registered_viewports == [(second_display, viewport)]
     assert viewport not in display.viewports
     assert viewport in second_display.viewports
     assert _InputManager.instances[0].added == [(7, 3)]

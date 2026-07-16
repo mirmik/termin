@@ -127,6 +127,7 @@ class NativeEditorViewport:
             attachment = EditorSceneAttachment(
                 display=display,
                 rendering_controller=None,
+                rendering_manager=rendering_manager,
                 make_editor_pipeline=make_editor_pipeline,
             )
             attachment.attach(scene, restore_state=False)

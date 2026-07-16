@@ -614,10 +614,15 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             camera=native_viewport.camera,
             rect=(0.0, 0.0, 1.0, 1.0),
         )
+        if not engine.rendering_manager.register_viewport_attachment(display, viewport):
+            display.remove_viewport(viewport)
+            dialog_service.show_error("Add Viewport", "Failed to register viewport attachment.")
+            return
         try:
             display_workspace.configure_viewport_input(display, viewport)
         except Exception:
             _logger.exception("Native workspace failed to configure viewport input")
+            engine.rendering_manager.unregister_viewport_attachment(viewport)
             display.remove_viewport(viewport)
             dialog_service.show_error("Add Viewport", "Failed to configure viewport input.")
             return
@@ -638,6 +643,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             return
         if display_workspace is not None:
             display_workspace.release_viewport_input(display, viewport)
+        engine.rendering_manager.unregister_viewport_attachment(viewport)
         display.remove_viewport(viewport)
         sync_viewport_list()
         request_editor_render()

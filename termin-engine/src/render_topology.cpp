@@ -18,6 +18,7 @@ namespace {
 
 const std::vector<std::string> empty_pipeline_targets;
 const std::vector<tc_render_target_handle> empty_render_targets;
+const std::vector<tc_viewport_handle> empty_viewports;
 
 bool same_scene(tc_scene_handle left, tc_scene_handle right) {
     return tc_scene_handle_eq(left, right);
@@ -25,6 +26,10 @@ bool same_scene(tc_scene_handle left, tc_scene_handle right) {
 
 bool same_render_target(tc_render_target_handle left, tc_render_target_handle right) {
     return tc_render_target_handle_eq(left, right);
+}
+
+bool same_viewport(tc_viewport_handle left, tc_viewport_handle right) {
+    return tc_viewport_handle_eq(left, right);
 }
 
 void destroy_pipeline_map(std::unordered_map<std::string, tc_pipeline_handle>& pipelines) {
@@ -317,6 +322,106 @@ const std::vector<tc_render_target_handle>& RenderTopology::render_targets(
     return record == nullptr ? empty_render_targets : record->render_targets;
 }
 
+bool RenderTopology::register_viewport(
+    tc_scene_handle scene,
+    tc_viewport_handle viewport,
+    tc_display* display,
+    bool destroy_on_scene_detach
+) {
+    if (!tc_scene_handle_valid(scene) || !tc_viewport_handle_valid(viewport) || !display) {
+        tc_log(TC_LOG_ERROR, "[RenderTopology] Cannot register incomplete viewport attachment");
+        return false;
+    }
+    if (!same_scene(tc_viewport_get_scene(viewport), scene)) {
+        tc_log(TC_LOG_ERROR, "[RenderTopology] Viewport scene does not match attachment scene");
+        return false;
+    }
+    auto existing = std::find_if(
+        viewport_attachments_.begin(),
+        viewport_attachments_.end(),
+        [viewport](const ViewportAttachment& attachment) {
+            return same_viewport(attachment.viewport, viewport);
+        }
+    );
+    if (existing != viewport_attachments_.end()) {
+        if (!same_scene(existing->scene, scene) || existing->display != display
+                || existing->destroy_on_scene_detach != destroy_on_scene_detach) {
+            tc_log(TC_LOG_ERROR, "[RenderTopology] Viewport is already attached elsewhere");
+            return false;
+        }
+        return true;
+    }
+
+    const char* name = tc_viewport_get_name(viewport);
+    if (name && name[0] != '\0' && tc_viewport_handle_valid(find_viewport(scene, name))) {
+        tc_log(TC_LOG_ERROR, "[RenderTopology] Scene already owns viewport named '%s'", name);
+        return false;
+    }
+
+    viewport_attachments_.push_back(
+        ViewportAttachment{scene, viewport, display, destroy_on_scene_detach}
+    );
+    ensure_record(scene).viewports.push_back(viewport);
+    return true;
+}
+
+bool RenderTopology::unregister_viewport(tc_viewport_handle viewport) {
+    auto existing = std::find_if(
+        viewport_attachments_.begin(),
+        viewport_attachments_.end(),
+        [viewport](const ViewportAttachment& attachment) {
+            return same_viewport(attachment.viewport, viewport);
+        }
+    );
+    if (existing == viewport_attachments_.end()) return false;
+    const tc_scene_handle scene = existing->scene;
+    viewport_attachments_.erase(existing);
+
+    SceneRecord* record = find_record(scene);
+    if (!record) {
+        tc_log(TC_LOG_ERROR, "[RenderTopology] Viewport attachment is missing its scene index");
+        return true;
+    }
+    record->viewports.erase(
+        std::remove_if(
+            record->viewports.begin(),
+            record->viewports.end(),
+            [viewport](tc_viewport_handle candidate) { return same_viewport(candidate, viewport); }
+        ),
+        record->viewports.end()
+    );
+    erase_record_if_empty(scene_key(scene));
+    return true;
+}
+
+const std::vector<tc_viewport_handle>& RenderTopology::viewports(tc_scene_handle scene) const {
+    const SceneRecord* record = find_record(scene);
+    return record == nullptr ? empty_viewports : record->viewports;
+}
+
+tc_viewport_handle RenderTopology::find_viewport(
+    tc_scene_handle scene,
+    const std::string& name
+) const {
+    for (tc_viewport_handle viewport : viewports(scene)) {
+        if (!tc_viewport_handle_valid(viewport)) continue;
+        const char* viewport_name = tc_viewport_get_name(viewport);
+        if (viewport_name && name == viewport_name) return viewport;
+    }
+    return TC_VIEWPORT_HANDLE_INVALID;
+}
+
+tc_display* RenderTopology::display_for_viewport(tc_viewport_handle viewport) const {
+    auto attachment = std::find_if(
+        viewport_attachments_.begin(),
+        viewport_attachments_.end(),
+        [viewport](const ViewportAttachment& candidate) {
+            return same_viewport(candidate.viewport, viewport);
+        }
+    );
+    return attachment == viewport_attachments_.end() ? nullptr : attachment->display;
+}
+
 void RenderTopology::clear_scene_pipelines(tc_scene_handle scene, bool notify_detach) {
     SceneRecord* record = find_record(scene);
     if (record == nullptr) return;
@@ -365,9 +470,17 @@ void RenderTopology::clear_all() {
             managed_render_targets_.size()
         );
     }
+    if (!viewport_attachments_.empty()) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[RenderTopology] Clearing topology with %zu viewport attachment(s)",
+            viewport_attachments_.size()
+        );
+    }
     scenes_.clear();
     attached_scenes_.clear();
     managed_render_targets_.clear();
+    viewport_attachments_.clear();
 }
 
 void RenderTopology::destroy_pipelines(SceneRecord& record) {
@@ -380,7 +493,7 @@ void RenderTopology::erase_record_if_empty(uint64_t key) {
     if (it == scenes_.end()) return;
     const SceneRecord& record = it->second;
     if (!record.attached && record.pipelines.empty() && record.pipeline_targets.empty()
-            && record.render_targets.empty()) {
+            && record.render_targets.empty() && record.viewports.empty()) {
         scenes_.erase(it);
     }
 }

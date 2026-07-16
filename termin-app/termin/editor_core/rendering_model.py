@@ -300,6 +300,7 @@ class RenderingModel:
                 if state is not None:
                     state.clear_all()
                 self._manager.remove_viewport_state(vp)
+                self._manager.unregister_viewport_attachment(vp)
                 display.remove_viewport(vp)
                 vp.destroy()
 

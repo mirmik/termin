@@ -44,6 +44,7 @@ class EditorSceneAttachment:
         self,
         display: "Display",
         rendering_controller: "RenderingController",
+        rendering_manager,
         make_editor_pipeline: Callable[[], "RenderPipeline"],
     ):
         """
@@ -56,6 +57,7 @@ class EditorSceneAttachment:
         """
         self._display = display
         self._rendering_controller = rendering_controller
+        self._rendering_manager = rendering_manager
         self._make_editor_pipeline = make_editor_pipeline
 
         # State (set when attached)
@@ -164,6 +166,15 @@ class EditorSceneAttachment:
         self._viewport.render_target = rt
         self._viewport.internal_entities = self._camera_manager.editor_entities
         self._camera_manager.camera.add_viewport(self._viewport)
+        if not self._rendering_manager.register_viewport_attachment(
+            self._display,
+            self._viewport,
+            False,
+        ):
+            self._camera_manager.camera.remove_viewport(self._viewport)
+            self._display.remove_viewport(self._viewport)
+            self._viewport = None
+            raise RuntimeError("Failed to register editor viewport attachment")
 
         # Start components in internal_entities hierarchy
         self._start_internal_entities()
@@ -216,6 +227,7 @@ class EditorSceneAttachment:
 
             # Keep the editor render target/pipeline alive across scene
             # switches. Only remove the viewport binding.
+            self._rendering_manager.unregister_viewport_attachment(self._viewport)
             self._display.remove_viewport(self._viewport)
             self._viewport = None
 
@@ -314,4 +326,5 @@ class EditorSceneAttachment:
                 if state is not None:
                     state.clear_all()
                     self._rendering_controller._manager.remove_viewport_state(vp)
+            self._rendering_manager.unregister_viewport_attachment(vp)
             self._display.remove_viewport(vp)

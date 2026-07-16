@@ -1,8 +1,9 @@
 # RenderingManager
 
 `EngineCore` владеет `RenderTopology` и `RenderingManager`. `RenderTopology`
-хранит scene-keyed live pipelines и render targets; `RenderingManager` исполняет
-рендер, управляет displays, GPU output state и presentation.
+хранит scene-keyed live pipelines, render targets и viewport attachments;
+`RenderingManager` исполняет рендер, управляет displays, GPU output state и
+presentation.
 
 Исходники:
 
@@ -13,7 +14,7 @@
 - `src/render_frame_planner.cpp` - обновление viewport rects и план render target на offscreen-кадр.
 - `src/render_state_store.cpp` - runtime GPU output state helpers.
 - `src/render_target_context_builder.cpp` - сбор `RenderTargetContext` для 2D и provider-backed render target.
-- `src/render_topology.cpp` - attached scenes, compiled pipelines и scene-owned render targets.
+- `src/render_topology.cpp` - attached scenes, compiled pipelines, scene-owned render targets и viewport attachments.
 - `src/display_presenter.cpp` - presentation/blit display surfaces.
 - `src/default_pipeline_factory.cpp` - builtin default pipeline.
 - `src/scene_light_collector.cpp` - сбор light data через capability system.
@@ -27,15 +28,21 @@
 
 - attached scenes;
 - managed render targets, индексированные по сцене;
-- compiled scene pipelines и их target names.
+- compiled scene pipelines и их target names;
+- связь каждого участвующего в рендере viewport с его scene и display.
 
 `RenderingManager` отслеживает и исполняет:
 
 - scene displays;
 - editor displays;
-- связи viewport-to-render-target;
 - render output state;
 - display/pipeline factories и host integration callbacks.
+
+Display и его surface остаются host-owned. `ViewportAttachment` хранит только
+non-owning ссылку на display и признак teardown policy. Scene-created viewport
+удаляется при обычном scene detach; host-created editor viewport остаётся жив,
+пока host явно не удалит его или не запросит forced teardown при закрытии
+сцены/движка.
 
 ## Managed Render Targets
 
@@ -82,6 +89,9 @@ Pipeline     = как рендерим
 создает per-eye `RenderCamera` из transform этого origin и позы OpenXR view.
 
 Viewport ссылается на render target; он не является доменным владельцем этого render target.
+Любой viewport, участвующий в кадре, должен быть явно зарегистрирован в
+`RenderTopology`. Display list больше не используется как второй неявный индекс
+для планирования кадра.
 
 ## Отключение сцены
 
@@ -89,7 +99,7 @@ Detach scene должен быть зеркалом attach:
 
 1. вызвать `on_render_detach(context)`, пока targets и pipelines ещё живы;
 2. уничтожить compiled scene pipelines;
-3. убрать scene viewports со scene displays;
+3. убрать scene-owned viewports с их displays согласно topology teardown policy;
 4. очистить GPU output state;
 5. освободить managed render targets, принадлежащие этой сцене.
 
@@ -138,6 +148,10 @@ render_all()
 4. выполнить scene pipelines для attached scenes;
 5. отрендерить unmanaged viewports;
 6. презентовать outputs на displays.
+
+Шаги 1-5 строятся по `RenderTopology::viewport_attachments()`. Вариант
+`render_display(display)` фильтрует тот же topology snapshot по конкретному
+display; отдельного сканирования display viewport lists для offscreen-плана нет.
 
 ## Планирование кадров
 

@@ -246,31 +246,56 @@ const std::vector<tc_display*>& RenderingManager::editor_displays() const {
 
 void RenderingManager::add_display(tc_display* display) {
     display_registry_->add_display(display);
+    if (!display) return;
+    tc_viewport_handle viewport = tc_display_get_first_viewport(display);
+    while (tc_viewport_handle_valid(viewport)) {
+        if (tc_scene_handle_valid(tc_viewport_get_scene(viewport))) {
+            register_viewport_attachment(display, viewport, true);
+        }
+        viewport = tc_viewport_get_display_next(viewport);
+    }
 }
 
 void RenderingManager::remove_display(tc_display* display) {
     display_registry_->remove_display(
         display,
-        [this](tc_viewport_handle viewport) { remove_viewport_state(viewport); },
+        [this](tc_viewport_handle viewport) {
+            unregister_viewport_attachment(viewport);
+            remove_viewport_state(viewport);
+        },
         display_removed_callback_
     );
 }
 
 void RenderingManager::add_editor_display(tc_display* display) {
     display_registry_->add_editor_display(display);
+    if (!display) return;
+    tc_viewport_handle viewport = tc_display_get_first_viewport(display);
+    while (tc_viewport_handle_valid(viewport)) {
+        if (tc_scene_handle_valid(tc_viewport_get_scene(viewport))) {
+            register_viewport_attachment(display, viewport, false);
+        }
+        viewport = tc_viewport_get_display_next(viewport);
+    }
 }
 
 void RenderingManager::remove_editor_display(tc_display* display) {
     display_registry_->remove_editor_display(
         display,
-        [this](tc_viewport_handle viewport) { remove_viewport_state(viewport); }
+        [this](tc_viewport_handle viewport) {
+            unregister_viewport_attachment(viewport);
+            remove_viewport_state(viewport);
+        }
     );
 }
 
 bool RenderingManager::try_auto_remove_display(tc_display* display) {
     return display_registry_->try_auto_remove_display(
         display,
-        [this](tc_viewport_handle viewport) { remove_viewport_state(viewport); },
+        [this](tc_viewport_handle viewport) {
+            unregister_viewport_attachment(viewport);
+            remove_viewport_state(viewport);
+        },
         display_removed_callback_
     );
 }
@@ -313,7 +338,11 @@ tc_viewport_handle RenderingManager::mount_scene(const SceneMountRequest& reques
     tc_render_target_set_camera(rt, camera);
     tc_render_target_set_pipeline(rt, request.pipeline);
     tc_render_target_set_dynamic_resolution(rt, true);
-    register_managed_render_target(rt);
+    if (!topology_.register_render_target(rt)) {
+        tc_render_target_free(rt);
+        tc_viewport_free(viewport);
+        return TC_VIEWPORT_HANDLE_INVALID;
+    }
     tc_viewport_set_render_target(viewport, rt);
     tc_viewport_set_scene(viewport, scene);
 
@@ -323,22 +352,54 @@ tc_viewport_handle RenderingManager::mount_scene(const SceneMountRequest& reques
 
     // Add to display
     tc_display_add_viewport(display, viewport);
+    if (!topology_.register_viewport(scene, viewport, display)) {
+        tc_display_remove_viewport(display, viewport);
+        unregister_managed_render_target(rt);
+        tc_render_target_free(rt);
+        tc_viewport_free(viewport);
+        return TC_VIEWPORT_HANDLE_INVALID;
+    }
 
     return viewport;
 }
 
-void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display) {
+bool RenderingManager::register_viewport_attachment(
+    tc_display* display,
+    tc_viewport_handle viewport,
+    bool destroy_on_scene_detach
+) {
+    if (!display || !tc_viewport_handle_valid(viewport)) return false;
+    tc_scene_handle scene = tc_viewport_get_scene(viewport);
+    if (!tc_scene_handle_valid(scene)) {
+        tc_log(TC_LOG_ERROR, "[RenderingManager] Cannot attach viewport without an owning scene");
+        return false;
+    }
+    return topology_.register_viewport(
+        scene,
+        viewport,
+        display,
+        destroy_on_scene_detach
+    );
+}
+
+bool RenderingManager::unregister_viewport_attachment(tc_viewport_handle viewport) {
+    return topology_.unregister_viewport(viewport);
+}
+
+void RenderingManager::unmount_scene(
+    tc_scene_handle scene,
+    tc_display* display,
+    bool include_host_viewports
+) {
     if (!display) return;
 
-    // Collect viewports showing this scene
+    // Collect from the canonical topology before mutating it.
     std::vector<tc_viewport_handle> to_remove;
-    tc_viewport_handle vp = tc_display_get_first_viewport(display);
-    while (tc_viewport_handle_valid(vp)) {
-        tc_scene_handle vp_scene = tc_viewport_get_scene(vp);
-        if (tc_scene_handle_eq(vp_scene, scene)) {
-            to_remove.push_back(vp);
+    for (const auto& attachment : topology_.viewport_attachments()) {
+        if (attachment.display == display && tc_scene_handle_eq(attachment.scene, scene)
+                && (include_host_viewports || attachment.destroy_on_scene_detach)) {
+            to_remove.push_back(attachment.viewport);
         }
-        vp = tc_viewport_get_display_next(vp);
     }
 
     // Remove them
@@ -347,6 +408,7 @@ void RenderingManager::unmount_scene(tc_scene_handle scene, tc_display* display)
 
         // Remove viewport state
         remove_viewport_state(viewport);
+        unregister_viewport_attachment(viewport);
 
         // Remove from display
         tc_display_remove_viewport(display, viewport);
@@ -582,6 +644,13 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
         }
 
         tc_display_add_viewport(display, viewport);
+        if (!topology_.register_viewport(scene, viewport, display)) {
+            tc_display_remove_viewport(display, viewport);
+            tc_viewport_free(viewport);
+            tc_log(TC_LOG_ERROR, "[RenderingManager] Failed to register viewport in scene topology");
+            detach_scene_full(scene);
+            return {};
+        }
         viewports.push_back(viewport);
     }
 
@@ -595,16 +664,26 @@ std::vector<tc_viewport_handle> RenderingManager::attach_scene_full(tc_scene_han
     return viewports;
 }
 
-void RenderingManager::detach_scene_full(tc_scene_handle scene) {
+void RenderingManager::detach_scene_full(tc_scene_handle scene, bool include_host_viewports) {
     // Lifecycle observers must see the complete live attachment. RenderTopology
     // notifies them before dropping pipelines; viewports and targets follow.
     if (topology_.is_attached(scene)) {
         detach_scene(scene);
     }
 
-    // Unmount from all displays
-    for (tc_display* display : display_registry_->displays()) {
-        unmount_scene(scene, display);
+    // Unmount every scene viewport (including editor displays) through the
+    // canonical topology exactly once.
+    std::vector<tc_display*> scene_displays;
+    for (const auto& attachment : topology_.viewport_attachments()) {
+        if (!tc_scene_handle_eq(attachment.scene, scene)) continue;
+        if (!include_host_viewports && !attachment.destroy_on_scene_detach) continue;
+        if (std::find(scene_displays.begin(), scene_displays.end(), attachment.display)
+                == scene_displays.end()) {
+            scene_displays.push_back(attachment.display);
+        }
+    }
+    for (tc_display* display : scene_displays) {
+        unmount_scene(scene, display, include_host_viewports);
     }
 
     // Free managed render targets belonging to this scene.
@@ -642,12 +721,10 @@ bool RenderingManager::apply_scene_pipelines(
             viewport_by_name[name] = vp;
         }
     }
-
-    // Also check all displays (scene + editor) for viewports.
-    for (const auto& [name, viewport] : display_registry_->collect_all_viewports()) {
-        if (tc_scene_handle_eq(tc_viewport_get_scene(viewport), scene)
-                && viewport_by_name.find(name) == viewport_by_name.end()) {
-            viewport_by_name[name] = viewport;
+    for (tc_viewport_handle vp : topology_.viewports(scene)) {
+        const char* name = tc_viewport_get_name(vp);
+        if (name && name[0] != '\0' && viewport_by_name.find(name) == viewport_by_name.end()) {
+            viewport_by_name[name] = vp;
         }
     }
 
@@ -692,10 +769,6 @@ bool RenderingManager::apply_scene_pipelines(
         );
     }
     return true;
-}
-
-std::unordered_map<std::string, tc_viewport_handle> RenderingManager::collect_all_viewports() const {
-    return display_registry_->collect_all_viewports();
 }
 
 // ============================================================================
@@ -766,17 +839,13 @@ void RenderingManager::render_all_offscreen() {
         return;
     }
 
-    rendering_manager_detail::update_viewport_rects_for_displays(display_registry_->displays());
-    rendering_manager_detail::update_viewport_rects_for_displays(display_registry_->editor_displays());
+    rendering_manager_detail::update_viewport_rects(topology_.viewport_attachments());
 
     // 0. Sync dynamic-resolution render targets from their attached viewport.
     sync_viewport_resolutions();
 
     rendering_manager_detail::OffscreenRenderPlan render_plan =
-        rendering_manager_detail::build_offscreen_render_plan(
-            display_registry_->displays(),
-            display_registry_->editor_displays()
-        );
+        rendering_manager_detail::build_offscreen_render_plan(topology_.viewport_attachments());
 
     // 1. Render standalone managed render targets first. RTs attached to
     // viewports are intentionally delayed because we do not yet have a
@@ -841,12 +910,17 @@ void RenderingManager::render_display(tc_display* display) {
         return;
     }
 
-    std::vector<tc_display*> displays{display};
-    rendering_manager_detail::update_viewport_rects_for_displays(displays);
-    rendering_manager_detail::sync_viewport_render_target_resolutions(displays);
+    rendering_manager_detail::update_viewport_rects(topology_.viewport_attachments(), display);
+    rendering_manager_detail::sync_viewport_render_target_resolutions(
+        topology_.viewport_attachments(),
+        display
+    );
 
     rendering_manager_detail::OffscreenRenderPlan render_plan =
-        rendering_manager_detail::build_offscreen_render_plan(displays, {});
+        rendering_manager_detail::build_offscreen_render_plan(
+            topology_.viewport_attachments(),
+            display
+        );
 
     for (tc_scene_handle scene : topology_.attached_scenes()) {
         if (!tc_scene_alive(scene)) continue;
@@ -855,7 +929,7 @@ void RenderingManager::render_display(tc_display* display) {
         for (const std::string& pipeline_name : pipeline_names) {
             tc_pipeline_handle pipeline = get_scene_pipeline(scene, pipeline_name);
             if (tc_pipeline_handle_valid(pipeline)) {
-                render_scene_pipeline_offscreen(scene, pipeline_name, pipeline);
+                render_scene_pipeline_offscreen(scene, pipeline_name, pipeline, display);
             }
         }
     }
@@ -876,7 +950,8 @@ void RenderingManager::render_display(tc_display* display) {
 void RenderingManager::render_scene_pipeline_offscreen(
     tc_scene_handle scene,
     const std::string& pipeline_name,
-    tc_pipeline_handle pipeline
+    tc_pipeline_handle pipeline,
+    tc_display* only_display
 ) {
     if (!tc_scene_handle_valid(scene) || !tc_pipeline_handle_valid(pipeline)) {
         return;
@@ -888,21 +963,21 @@ void RenderingManager::render_scene_pipeline_offscreen(
         return;
     }
 
-    auto all_viewports = collect_all_viewports();
-
     // Collect render target contexts.
     std::unordered_map<std::string, RenderTargetContext> contexts;
     std::string first_viewport_name;
 
     for (const std::string& vp_name : target_names) {
-        auto it = all_viewports.find(vp_name);
-        if (it == all_viewports.end()) {
+        tc_viewport_handle viewport = topology_.find_viewport(scene, vp_name);
+        if (!tc_viewport_handle_valid(viewport)) {
             tc_log(TC_LOG_ERROR, "[RenderingManager] Scene pipeline '%s' target viewport '%s' NOT FOUND",
                    pipeline_name.c_str(), vp_name.c_str());
             continue;
         }
+        if (only_display && topology_.display_for_viewport(viewport) != only_display) {
+            continue;
+        }
 
-        tc_viewport_handle viewport = it->second;
         if (!tc_viewport_get_enabled(viewport)) {
             tc_log(TC_LOG_WARN, "[RenderingManager] Viewport '%s' is disabled, skipping", vp_name.c_str());
             continue;
@@ -1054,8 +1129,9 @@ void RenderingManager::render_viewport_offscreen(tc_viewport_handle viewport) {
 }
 
 void RenderingManager::sync_viewport_resolutions() {
-    rendering_manager_detail::sync_viewport_render_target_resolutions(display_registry_->displays());
-    rendering_manager_detail::sync_viewport_render_target_resolutions(display_registry_->editor_displays());
+    rendering_manager_detail::sync_viewport_render_target_resolutions(
+        topology_.viewport_attachments()
+    );
 }
 
 void RenderingManager::render_render_target_offscreen(tc_render_target_handle rt) {

@@ -497,6 +497,10 @@ class RenderingControllerTcgui:
 
         camera = self._find_first_scene_camera(scene)
         viewport = display.create_viewport(scene=scene, camera=camera, rect=(0.0, 0.0, 1.0, 1.0))
+        if not self._manager.register_viewport_attachment(display, viewport):
+            log.error("[RenderingControllerTcgui] Failed to register viewport attachment")
+            display.remove_viewport(viewport)
+            return
         self._ensure_viewport_input_manager(viewport)
         self._viewport_list.refresh()
         self._request_update()
@@ -511,6 +515,7 @@ class RenderingControllerTcgui:
     def _on_remove_viewport_requested(self, viewport: "Viewport") -> None:
         display = self._manager.get_display_for_viewport(viewport)
         self._free_viewport_input_manager(viewport)
+        self._manager.unregister_viewport_attachment(viewport)
         if display is not None:
             display.remove_viewport(viewport)
         if self._selected_viewport is viewport:
