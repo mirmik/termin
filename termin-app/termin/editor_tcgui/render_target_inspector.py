@@ -43,11 +43,12 @@ _TARGET_KINDS = [
 class RenderTargetInspectorTcgui(VStack):
     """Inspector panel for RenderTarget properties."""
 
-    def __init__(self, resource_manager) -> None:
+    def __init__(self, resource_manager, rendering_manager) -> None:
         super().__init__()
         self.spacing = 4
 
         self._rm = resource_manager
+        self._rendering_manager = rendering_manager
         self._render_target = None
         self._scene = None
         self._scenes = []
@@ -487,8 +488,7 @@ class RenderTargetInspectorTcgui(VStack):
 
         if text == "(Default)":
             try:
-                from termin.engine import RenderingManager
-                self._render_target.pipeline = RenderingManager.instance().create_pipeline("Default")
+                self._render_target.pipeline = self._rendering_manager.create_pipeline("Default")
                 self._refresh_pipeline_params()
                 self._emit_changed()
             except Exception as e:

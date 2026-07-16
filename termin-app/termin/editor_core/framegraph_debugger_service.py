@@ -18,6 +18,7 @@ class EditorFramegraphDebuggerService:
         self,
         *,
         get_rendering_controller: Callable[[], object | None],
+        rendering_manager,
         on_request_update: Callable[[], None] | None = None,
         model: object | None = None,
         core: object | None = None,
@@ -25,6 +26,7 @@ class EditorFramegraphDebuggerService:
         if (model is None) != (core is None):
             raise ValueError("framegraph debugger model and core must be supplied together")
         self._get_rendering_controller = get_rendering_controller
+        self._rendering_manager = rendering_manager
         self._on_request_update = on_request_update
         self._model = model
         self._core = core
@@ -209,9 +211,7 @@ class EditorFramegraphDebuggerService:
                 "capture": _capture_summary_for(capture),
             }
 
-        from termin.engine import RenderingManager
-
-        render_engine = RenderingManager.instance().render_engine
+        render_engine = self._rendering_manager.render_engine
         if render_engine is None:
             raise RuntimeError("No render engine is available")
         render_engine.ensure_tgfx2()
@@ -297,6 +297,7 @@ class EditorFramegraphDebuggerService:
         self._model = FramegraphDebuggerModel(
             rendering_controller=rendering_controller,
             core=self._core,
+            rendering_manager=self._rendering_manager,
             on_request_update=self._on_request_update,
         )
         log.info("[FramegraphDebuggerService] headless debugger model created")

@@ -257,6 +257,12 @@ class PlayerRuntime:
     def viewport(self):
         return self._viewport
 
+    @property
+    def rendering_manager(self):
+        if self._engine is None:
+            raise RuntimeError("PlayerRuntime has no initialized EngineCore")
+        return self._engine.rendering_manager
+
     def initialize(self) -> bool:
         """Initialize player systems."""
         from tcbase import log

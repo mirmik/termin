@@ -1253,6 +1253,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
 
     framegraph_debugger_service = EditorFramegraphDebuggerService(
         get_rendering_controller=lambda: rendering_model,
+        rendering_manager=engine.rendering_manager,
         on_request_update=request_editor_render,
     )
     framegraph_debugger = build_native_framegraph_debugger(

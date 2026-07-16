@@ -80,6 +80,7 @@ class InspectorControllerTcgui:
         self,
         container: VStack,
         resource_manager,
+        rendering_manager,
         push_undo_command: Callable,
         on_transform_changed: Callable,
         on_component_changed: Callable,
@@ -119,7 +120,10 @@ class InspectorControllerTcgui:
         self._texture_inspector = TextureInspectorTcgui(resource_manager)
         self._mesh_inspector = MeshInspectorTcgui(resource_manager)
         self._glb_inspector = GLBInspectorTcgui(resource_manager)
-        self._render_target_inspector = RenderTargetInspectorTcgui(resource_manager)
+        self._render_target_inspector = RenderTargetInspectorTcgui(
+            resource_manager,
+            rendering_manager,
+        )
         self._tool_inspector = ToolInspectorHost()
         self._tool_panels: dict[str, Widget] = {}
 

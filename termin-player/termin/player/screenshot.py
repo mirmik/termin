@@ -19,9 +19,7 @@ def capture_player_screenshot(
     include_image: bool = False,
 ) -> dict[str, object]:
     """Read the player runtime render surface and save it as a PNG image."""
-    from termin.engine import RenderingManager
-
-    render_engine = RenderingManager.instance().render_engine
+    render_engine = runtime.rendering_manager.render_engine
     if render_engine is None:
         raise RuntimeError("No render engine is available")
     render_engine.ensure_tgfx2()

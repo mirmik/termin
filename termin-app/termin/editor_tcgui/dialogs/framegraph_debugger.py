@@ -323,7 +323,7 @@ class _FramegraphDebuggerHandle:
 
 
 def show_framegraph_debugger(
-    ui, rendering_controller, fbo_surface,
+    ui, rendering_controller, rendering_manager, fbo_surface,
     on_request_update=None,
 ) -> _FramegraphDebuggerHandle | None:
     """Create and show the Framegraph Debugger in a dedicated tcgui window."""
@@ -338,6 +338,7 @@ def show_framegraph_debugger(
     model = FramegraphDebuggerModel(
         rendering_controller=rendering_controller,
         core=core,
+        rendering_manager=rendering_manager,
         on_request_update=on_request_update,
     )
     handle = _FramegraphDebuggerHandle(model)
@@ -610,8 +611,7 @@ def show_framegraph_debugger(
         if not capture_tex:
             status_label.text = "No capture for depth"
             return
-        from termin.engine import RenderingManager
-        render_engine = RenderingManager.instance().render_engine
+        render_engine = model.rendering_manager.render_engine
         if render_engine is None:
             status_label.text = "No render engine"
             return
