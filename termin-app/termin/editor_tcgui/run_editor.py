@@ -253,6 +253,7 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
     def on_shutdown() -> None:
         if mcp_server is not None:
             mcp_server.stop()
+        win.shutdown()
         wm.destroy_all()
         quit_sdl()
 

@@ -79,7 +79,7 @@ def test_pipeline_graph_reload_compiles_new_pipeline_with_stable_uuid(tmp_path: 
         manager.clear_runtime_state()
 
 
-def test_pipeline_reload_keeps_live_state_on_failure_and_rebinds_after_commit(
+def test_pipeline_reload_keeps_live_state_on_failure_and_commits_atomically(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -106,15 +106,7 @@ def test_pipeline_reload_keeps_live_state_on_failure_and_rebinds_after_commit(
         "_prepare_candidate",
         lambda content: _PipelineCandidate(replacement_pipeline, {"nodes": []}),
     )
-    rebound_data: list[object] = []
-    monkeypatch.setattr(
-        asset,
-        "_notify_rendering_manager_reloaded",
-        lambda: rebound_data.append(asset.cached_data),
-    )
-
     assert asset.reload()
     assert asset.cached_data is replacement_pipeline
     assert asset.graph_data == {"nodes": []}
     assert asset.version == 1
-    assert rebound_data == [replacement_pipeline]
