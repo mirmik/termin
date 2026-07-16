@@ -20,11 +20,12 @@ class EditorGameModeConnector:
         scene = self._scene_manager.get_scene(name)
         if scene is None:
             raise ValueError(f"scene '{name}' does not exist")
-        return self._session.attach(
+        self._session.attach(
             scene,
             restore_state=restore_state,
             transfer_camera_state=transfer_camera_state,
         )
+        return True
 
     def detach_editor_from_scene(
         self,
@@ -33,7 +34,8 @@ class EditorGameModeConnector:
         clear_editor_scene_name: bool,
     ) -> bool:
         del clear_editor_scene_name
-        return self._session.detach(save_state=save_state)
+        self._session.detach(save_state=save_state)
+        return True
 
 
 class RenderGameModeConnector:
@@ -44,10 +46,12 @@ class RenderGameModeConnector:
         self._session.sync_scene_render_state(name)
 
     def attach_scene_to_render(self, name: str) -> bool:
-        return self._session.attach(name)
+        self._session.attach(name)
+        return True
 
     def detach_scene_from_render(self, name: str, *, save_state: bool) -> bool:
-        return self._session.detach(name, save_state=save_state)
+        self._session.detach(name, save_state=save_state)
+        return True
 
 
 __all__ = ["EditorGameModeConnector", "RenderGameModeConnector"]

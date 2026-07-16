@@ -65,6 +65,7 @@ from termin.editor_core.game_mode_session_connectors import (
     EditorGameModeConnector,
     RenderGameModeConnector,
 )
+from termin.editor_core.primary_render_scene_binding import PrimaryRenderSceneBinding
 from termin.editor_core.navigation_settings_model import NavigationSettingsController
 from termin.editor_core.spacemouse_controller import SpaceMouseController
 from termin.editor_core.spacemouse_settings_model import SpaceMouseSettingsController
@@ -1474,8 +1475,11 @@ def init_editor_native(debug_resource: str | None = None, no_scene: bool = False
             ),
             rendering_controller=display_workspace,
             get_editor_scene_name=active_scene_name,
+            render_binding_factory=lambda scene_name: PrimaryRenderSceneBinding(
+                RenderGameModeConnector(render_scene_session),
+                scene_name,
+            ),
             scene_tree_controller=scene_hierarchy_controller,
-            render_connector=RenderGameModeConnector(render_scene_session),
             prepare_code_for_play=prepare_code_for_play,
         )
         game_mode_controller = NativeGameModeController(
