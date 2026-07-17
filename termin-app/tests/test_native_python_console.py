@@ -30,6 +30,7 @@ def test_native_python_console_command_executes_clears_reopens_and_releases():
     snapshot = console.execute()
     assert "43" in snapshot.transcript
     assert "43" in console.output_model.text
+    assert console.output.word_wrap
     assert console.input.text == ""
 
     console.clear()
@@ -44,6 +45,26 @@ def test_native_python_console_command_executes_clears_reopens_and_releases():
     gc.collect()
     assert console_ref() is None
     assert renders
+
+
+def test_native_python_console_wraps_long_output_in_narrow_view():
+    document = Document()
+    controller = PythonConsoleController(EditorPythonExecutor(lambda: {}))
+    console = build_native_python_console(
+        document,
+        controller,
+        viewport=lambda: Rect(0.0, 0.0, 180.0, 180.0),
+        request_render=lambda: None,
+        embedded=True,
+        activate_embedded=lambda: None,
+    )
+    assert document.add_root(console.root.handle)
+    console.execute("'long console output ' * 20")
+    document.layout_roots(Rect(0.0, 0.0, 180.0, 180.0))
+
+    assert console.output.word_wrap
+    assert console.output.visual_line_count > len(console.output_model.lines)
+    console.close()
 
 
 def test_native_python_console_embeds_in_dedicated_bottom_tab():

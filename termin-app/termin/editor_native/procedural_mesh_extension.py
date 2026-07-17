@@ -114,6 +114,7 @@ def project_native_procedural_mesh_extension(
     param_host.set_layout_padding(EDITOR_UI_METRICS.embedded_panel_insets)
     param_host.visible = False
     param_scroll = document.create_scroll_area("native-procedural-param-scroll")
+    param_scroll.set_scroll_axes(False, True)
     param_scroll.set_content(param_host)
     # The parameter viewport is content-driven and intentionally remains panel-local.
     root.add_fixed_child(param_scroll.widget, 270.0)

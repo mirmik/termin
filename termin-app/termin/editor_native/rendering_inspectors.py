@@ -37,6 +37,7 @@ def _panel(document: Document, stable_id: str) -> tuple[WidgetRef, WidgetRef]:
     content.set_layout_padding(EDITOR_UI_METRICS.panel_insets)
     content.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     scroll = document.create_scroll_area(f"{stable_id}-scroll")
+    scroll.set_scroll_axes(False, True)
     scroll.set_content(content)
     root.add_stretch_child(scroll.widget)
     return root, content

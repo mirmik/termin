@@ -12,6 +12,7 @@ from termin.gui_native import Document, RichTextModel, WidgetRef
 class NativeEditorLog:
     root: WidgetRef
     output_model: RichTextModel
+    output: object
     controller: EditorLogModel
     changed_callback: object
 
@@ -25,7 +26,7 @@ def build_native_editor_log(document: Document, controller: EditorLogModel, requ
     output_model = RichTextModel()
     output_model.set_text(controller.text)
     output = document.create_rich_text_view(output_model)
-    output.word_wrap = False
+    output.word_wrap = True
     output.placeholder = "Editor and build messages"
     root.add_stretch_child(document.ref(output.handle))
     clear = document.create_button("Clear")
@@ -37,7 +38,7 @@ def build_native_editor_log(document: Document, controller: EditorLogModel, requ
 
     controller.changed.connect(changed)
     clear.connect_clicked(controller.clear)
-    return NativeEditorLog(root, output_model, controller, changed)
+    return NativeEditorLog(root, output_model, output, controller, changed)
 
 
 __all__ = ["NativeEditorLog", "build_native_editor_log"]

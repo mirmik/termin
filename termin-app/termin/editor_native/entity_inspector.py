@@ -243,6 +243,7 @@ def build_native_entity_inspector(
     content.set_layout_padding(EDITOR_UI_METRICS.panel_insets)
     content.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     scroll = document.create_scroll_area("native-entity-inspector-scroll")
+    scroll.set_scroll_axes(False, True)
     scroll.set_content(content)
     root.add_stretch_child(scroll.widget)
 

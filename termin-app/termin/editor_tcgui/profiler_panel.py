@@ -234,11 +234,10 @@ class ProfilerPanel(VStack):
 
         self._tree.clear()
 
-        node_map: dict[str, TreeNode] = {}
+        node_map: dict[tuple[str, ...], TreeNode] = {}
 
         for section in snapshot.rows:
             path = section.path
-            parts = path.split("/")
 
             row = _make_row_widget(
                 section.name,
@@ -251,11 +250,11 @@ class ProfilerPanel(VStack):
             node = TreeNode(content=row)
             node.data = path
 
-            if len(parts) == 1:
+            if len(path) == 1:
                 self._tree.add_root(node)
                 node_map[path] = node
             else:
-                parent_path = "/".join(parts[:-1])
+                parent_path = path[:-1]
                 parent = node_map.get(parent_path)
                 if parent:
                     parent.add_node(node)
@@ -269,7 +268,7 @@ class ProfilerPanel(VStack):
             if expanded:
                 node.expanded = path in expanded
             else:
-                node.expanded = "/" not in path
+                node.expanded = len(path) == 1
 
     def _get_expanded_paths(self) -> set:
         result = set()
