@@ -5,6 +5,7 @@
 #include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
+#include <termin/render/render_task.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
 
 #include <tgfx2/builtin_shader_sources.hpp>
@@ -152,6 +153,43 @@ void fill_depth_draw_model(DepthDrawStd140& draw, const tc_render_item& item)
     }
     Mat44f identity = Mat44f::identity();
     std::memcpy(draw.u_model, identity.data, sizeof(float) * 16);
+}
+
+RenderItemTaskPlanningContract depth_only_task_planning_contract(
+    const MaterialPipelinePassContract& shader_contract,
+    const char* debug_pass_name)
+{
+    RenderItemTaskPlanningContract contract{};
+    contract.pass_semantic = RenderItemPassSemantic::DepthOnly;
+    contract.material_phase_policy = RenderItemMaterialPhasePolicy::Optional;
+    contract.provided_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    contract.required_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    contract.accepted_vertex_transform_kind_mask =
+        render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh);
+    contract.shader_contract = &shader_contract;
+    contract.debug_pass_name = debug_pass_name;
+    return contract;
+}
+
+bool plan_depth_only_item_shader(
+    const tc_render_item& item,
+    tc_material_phase* phase,
+    tc_shader_handle candidate_shader,
+    const MaterialPipelinePassContract& shader_contract,
+    const char* debug_pass_name,
+    RenderTaskList& tasks)
+{
+    RenderItemTaskPlanningContract contract =
+        depth_only_task_planning_contract(shader_contract, debug_pass_name);
+    RenderItemTaskPlanningRequest request{};
+    request.item = &item;
+    request.material_phase = phase;
+    request.candidate_shader = candidate_shader;
+    request.contract = &contract;
+    return plan_render_item_task(request, tasks).accepted();
 }
 
 } // anonymous namespace
@@ -499,6 +537,8 @@ void DepthOnlyPass::collect_draw_calls(
         item_context.render_category_mask = collect_ctx->render_context
             ? collect_ctx->render_context->render_category_mask
             : UINT64_MAX;
+        item_context.pass_semantic =
+            static_cast<uint32_t>(RenderItemPassSemantic::DepthOnly);
         item_context.debug_pass_name = collect_ctx->pass_name.c_str();
         item_context.pass_contract = &collect_ctx->pass_contract;
         item_context.camera = collect_ctx->render_context
@@ -529,12 +569,17 @@ void DepthOnlyPass::collect_draw_calls(
             dc.entity = ent;
             dc.component = c;
             dc.item = item;
-            ShaderOverrideContext override_context;
-            override_context.phase_mark = collect_ctx->pass->pass_phase_mark;
-            override_context.geometry_id = item.geometry_id;
-            override_context.original_shader = TcShader(original_shader);
-            override_context.pass_contract = collect_ctx->pass_contract;
-            dc.final_shader = override_drawable_shader(c, override_context).handle;
+            RenderTaskList planned_shader;
+            if (!plan_depth_only_item_shader(
+                    item,
+                    selected_phase,
+                    original_shader,
+                    collect_ctx->pass_contract,
+                    "DepthOnlyPass/Collect",
+                    planned_shader)) {
+                continue;
+            }
+            dc.final_shader = planned_shader.at(0).final_shader;
             dc.geometry_id = item.geometry_id;
             if (selected_phase) {
                 dc.material_phase = selected_phase;
@@ -611,6 +656,8 @@ void DepthOnlyPass::collect_shader_usages(
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = UINT64_MAX;
         item_context.render_category_mask = UINT64_MAX;
+        item_context.pass_semantic =
+            static_cast<uint32_t>(RenderItemPassSemantic::DepthOnly);
         item_context.debug_pass_name = "DepthOnlyPass/ShaderUsage";
         item_context.pass_contract = &collect_ctx->pass_contract;
 
@@ -633,12 +680,20 @@ void DepthOnlyPass::collect_shader_usages(
                 original_shader = phase->shader;
             }
 
-            ShaderOverrideContext override_context;
-            override_context.phase_mark = collect_ctx->pass->pass_phase_mark;
-            override_context.geometry_id = item.geometry_id;
-            override_context.original_shader = TcShader(original_shader);
-            override_context.pass_contract = collect_ctx->pass_contract;
-            collect_drawable_shader_usages_with_context(c, override_context, *collect_ctx->emit);
+            RenderTaskList tasks;
+            if (!plan_depth_only_item_shader(
+                    item,
+                    phase,
+                    original_shader,
+                    collect_ctx->pass_contract,
+                    "DepthOnlyPass/ShaderUsage",
+                    tasks)) {
+                continue;
+            }
+            const RenderTask& task = tasks.at(0);
+            for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
+                (*collect_ctx->emit)(TcShader(task.shader_usages[i]));
+            }
         }
 
         return true;

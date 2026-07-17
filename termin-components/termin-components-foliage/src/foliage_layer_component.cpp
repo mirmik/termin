@@ -78,55 +78,6 @@ TcShader get_foliage_instanced_shader(
     return assemble_material_shader_override(request);
 }
 
-MaterialPipelinePassContract legacy_foliage_material_pass_contract()
-{
-    MaterialPipelinePassContract contract;
-    contract.debug_name = "legacy_foliage_material";
-    contract.required_material_fragment_input =
-        material_pipeline_standard_material_fragment_interface();
-    contract.uses_material_fragment = true;
-    contract.vertex_output_adapter =
-        material_pipeline_standard_material_vertex_output_adapter();
-    contract.static_vertex_transform =
-        material_pipeline_make_static_mesh_vertex_transform_provider(
-            "static",
-            MeshVertexTransformProfile::Material,
-            "draw_data.u_model");
-    contract.static_vertex_transform->resources.push_back(
-        material_pipeline_draw_resource_decl(
-            "draw_data", TC_SHADER_STAGE_VERTEX, 64u));
-    contract.foliage_vertex_transform =
-        material_pipeline_make_foliage_material_vertex_transform_provider(
-            "foliage");
-    return contract;
-}
-
-MaterialPipelinePassContract legacy_foliage_shadow_pass_contract()
-{
-    MaterialPipelinePassContract contract;
-    contract.debug_name = "legacy_foliage_shadow";
-    contract.required_material_fragment_input = MaterialFragmentInterface{};
-    contract.uses_material_fragment = true;
-
-    MaterialFragmentInterface fragment_input =
-        material_pipeline_standard_material_fragment_interface();
-    contract.static_vertex_transform =
-        material_pipeline_make_static_vertex_transform_contract(
-            "static_shadow",
-            material_pipeline_position_mesh_input(),
-            fragment_input,
-            material_pipeline_common_vertex_resources("shadow_draw"));
-    contract.foliage_vertex_transform =
-        material_pipeline_make_foliage_vertex_transform_contract(
-            VertexTransformKind::FoliageShadow,
-            "foliage_shadow",
-            "termin-engine-foliage-shadow",
-            material_pipeline_position_mesh_input(),
-            fragment_input,
-            material_pipeline_foliage_vertex_resources());
-    return contract;
-}
-
 bool shader_contract_requires_foliage_instances(TcShader shader)
 {
     tc_shader_contract_view contract{};
@@ -293,12 +244,23 @@ RenderItemTaskRejection foliage_render_item_task_shader_planner(
         out_detail = "foliage planner received an invalid request";
         return RenderItemTaskRejection::ShaderPlanningRejected;
     }
-    out_plan.final_shader = request.candidate_shader;
     out_plan.has_vertex_transform_kind = true;
     out_plan.vertex_transform_kind =
         request.contract->pass_semantic == RenderItemPassSemantic::Shadow
         ? VertexTransformKind::FoliageShadow
         : VertexTransformKind::Foliage;
+    if (!request.contract->shader_contract) {
+        out_detail = "foliage planning requires a pass shader contract";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
+    }
+    TcShader planned = get_foliage_instanced_shader(
+        TcShader(request.candidate_shader),
+        *request.contract->shader_contract);
+    if (!planned.is_valid()) {
+        out_detail = "failed to assemble the foliage shader";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
+    }
+    out_plan.final_shader = planned.handle;
     out_detail = nullptr;
     return RenderItemTaskRejection::None;
 }
@@ -490,70 +452,6 @@ std::set<std::string> FoliageLayerComponent::get_phase_marks() const {
         }
     }
     return marks;
-}
-
-TcShader FoliageLayerComponent::override_shader(
-    const std::string& phase_mark,
-    int geometry_id,
-    TcShader original_shader
-) {
-    ShaderOverrideContext context;
-    context.phase_mark = phase_mark;
-    context.geometry_id = geometry_id;
-    context.original_shader = original_shader;
-    if (phase_mark == "shadow") {
-        context.pass_contract = legacy_foliage_shadow_pass_contract();
-    } else {
-        context.pass_contract = legacy_foliage_material_pass_contract();
-    }
-    return override_shader_with_context(context);
-}
-
-TcShader FoliageLayerComponent::override_shader_with_context(
-    const ShaderOverrideContext& context
-) {
-    const std::string& phase_mark = context.phase_mark;
-    const int geometry_id = context.geometry_id;
-    TcShader original_shader = context.original_shader;
-
-    if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
-        return original_shader;
-    }
-    if (!context.pass_contract.foliage_vertex_transform.has_value()) {
-        return original_shader;
-    }
-
-    TcShader variant = get_foliage_instanced_shader(
-        original_shader,
-        context.pass_contract);
-    if (!variant.is_valid()) {
-        tc::Log::error(
-            "[FoliageLayerComponent] failed to create foliage shader variant for '%s'",
-            original_shader.name()
-        );
-        return TcShader();
-    }
-    return variant;
-}
-
-void FoliageLayerComponent::collect_shader_usages(
-    const std::string& phase_mark,
-    int geometry_id,
-    TcShader original_shader,
-    const std::function<void(TcShader)>& emit
-) {
-    emit(original_shader);
-    if (geometry_id != FOLIAGE_GEOMETRY_ID || !original_shader.is_valid()) {
-        return;
-    }
-    TcShader variant = get_foliage_instanced_shader(
-        original_shader,
-        phase_mark == "shadow"
-            ? legacy_foliage_shadow_pass_contract()
-            : legacy_foliage_material_pass_contract());
-    if (variant.is_valid()) {
-        emit(variant);
-    }
 }
 
 bool FoliageLayerComponent::collect_render_items(

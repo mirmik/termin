@@ -1,105 +1,14 @@
 #include <termin/render/skinned_mesh_renderer.hpp>
 #include <termin/render/skeleton_controller.hpp>
-#include <termin/render/shader_skinning.hpp>
-#include <termin/render/material_pipeline.hpp>
 #include <termin/entity/entity.hpp>
-#include <tgfx/tgfx_shader_handle.hpp>
-#include <tgfx2/render_context.hpp>
-#include <tgfx2/i_render_device.hpp>
-#include <tgfx2/descriptors.hpp>
-#include <tgfx2/enums.hpp>
-#include <tcbase/tc_log.hpp>
-#include <algorithm>
 #include <cstdint>
-#include <cstring>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
-extern "C" {
-#include "tgfx/resources/tc_shader.h"
-#include "tgfx/tgfx2_interop.h"
-}
 
 namespace termin {
-
-// Hash for TcShader (uses handle.index)
-struct TcShaderHash {
-    size_t operator()(const TcShader& s) const {
-        return std::hash<uint32_t>()(s.handle.index);
-    }
-};
-
-struct TcShaderEqual {
-    bool operator()(const TcShader& a, const TcShader& b) const {
-        return a.handle.index == b.handle.index && a.handle.generation == b.handle.generation;
-    }
-};
-
-struct SkinnedShaderCacheKey {
-    TcShader shader;
-    std::string intent_key;
-};
-
-struct SkinnedShaderCacheKeyHash {
-    size_t operator()(const SkinnedShaderCacheKey& key) const {
-        TcShaderHash shader_hash;
-        return shader_hash(key.shader)
-            ^ (std::hash<std::string>()(key.intent_key) << 1);
-    }
-};
-
-struct SkinnedShaderCacheKeyEqual {
-    bool operator()(const SkinnedShaderCacheKey& a, const SkinnedShaderCacheKey& b) const {
-        TcShaderEqual shader_equal;
-        return shader_equal(a.shader, b.shader)
-            && a.intent_key == b.intent_key;
-    }
-};
-
-// Static cache: (original shader, shader intent signature) -> skinned shader
-static std::unordered_map<
-    SkinnedShaderCacheKey,
-    TcShader,
-    SkinnedShaderCacheKeyHash,
-SkinnedShaderCacheKeyEqual> s_skinned_shader_cache;
 
 void SkinnedMeshRenderer::register_type() {
     register_component_type<SkinnedMeshRenderer>("SkinnedMeshRenderer", "MeshRenderer");
     ComponentRegistry::instance().set_category("SkinnedMeshRenderer", "Rendering");
     register_component_requirement("SkinnedMeshRenderer", "MeshComponent");
-}
-
-static bool shader_contract_uses_skinning(const tc_shader* shader) {
-    if (!shader) {
-        return false;
-    }
-    tc_shader_contract_view contract{};
-    if (!tc_shader_get_contract_view(shader, &contract)) {
-        return false;
-    }
-
-    bool has_joints = false;
-    bool has_weights = false;
-    for (uint32_t i = 0; i < contract.vertex_input_count; ++i) {
-        if (std::strncmp(
-                contract.vertex_inputs[i].semantic,
-                "joints",
-                TC_SHADER_RESOURCE_NAME_MAX) == 0) {
-            has_joints = true;
-        }
-        if (std::strncmp(
-                contract.vertex_inputs[i].semantic,
-                "weights",
-                TC_SHADER_RESOURCE_NAME_MAX) == 0) {
-            has_weights = true;
-        }
-    }
-    return has_joints && has_weights;
-}
-
-static bool shader_uses_skinning(TcShader shader) {
-    return shader_contract_uses_skinning(shader.get());
 }
 
 SkinnedMeshRenderer::SkinnedMeshRenderer()
@@ -192,88 +101,6 @@ void SkinnedMeshRenderer::update_bone_matrices() {
             _bone_matrices_flat[i * 16 + j] = static_cast<float>(m.data[j]);
         }
     }
-}
-
-TcShader SkinnedMeshRenderer::override_shader(
-    const std::string& phase_mark,
-    int geometry_id,
-    TcShader original_shader
-) {
-    ShaderOverrideContext context;
-    context.phase_mark = phase_mark;
-    context.geometry_id = geometry_id;
-    context.original_shader = original_shader;
-    context.pass_contract = legacy_full_material_pass_contract();
-    return override_shader_with_context(context);
-}
-
-TcShader SkinnedMeshRenderer::override_shader_with_context(
-    const ShaderOverrideContext& context
-) {
-    const std::string& phase_mark = context.phase_mark;
-    const int geometry_id = context.geometry_id;
-    TcShader original_shader = context.original_shader;
-
-    resolve_skeleton_controller();
-    if (!_skeleton_controller.valid() || !original_shader.is_valid()) {
-        return original_shader;
-    }
-    if (shader_uses_skinning(original_shader)) {
-        return original_shader;
-    }
-
-    // Check if shader already has skinning
-    const char* vert_source = original_shader.vertex_source();
-    if (vert_source && std::strstr(vert_source, "u_bone_matrices") != nullptr) {
-        return original_shader;
-    }
-
-    // Check C++ cache first
-    const tc_shader_variant_op variant_op = TC_SHADER_VARIANT_SKINNING;
-    const std::string intent_key =
-        context.pass_contract.skinned_vertex_transform.has_value()
-            ? material_pipeline_shader_intent_fingerprint(
-                original_shader,
-                variant_op,
-                *context.pass_contract.skinned_vertex_transform,
-                context.pass_contract)
-            : context.pass_contract.debug_name;
-    SkinnedShaderCacheKey cache_key{original_shader, intent_key};
-    auto it = s_skinned_shader_cache.find(cache_key);
-    if (it != s_skinned_shader_cache.end()) {
-        TcShader& cached = it->second;
-        // Check if variant is stale (original shader was modified)
-        if (!cached.variant_is_stale()) {
-            return cached;
-        }
-        // Stale - need to recreate
-        s_skinned_shader_cache.erase(it);
-    }
-
-    // Use C++ skinning injection
-    TcShader skinned = get_skinned_shader_for_pass(
-        context.pass_contract,
-        original_shader);
-    if (skinned.is_valid()) {
-        s_skinned_shader_cache[cache_key] = skinned;
-        return skinned;
-    }
-
-    return original_shader;
-}
-
-void SkinnedMeshRenderer::collect_shader_usages(
-    const std::string& phase_mark,
-    int geometry_id,
-    TcShader original_shader,
-    const std::function<void(TcShader)>& emit
-) {
-    ShaderOverrideContext context;
-    context.phase_mark = phase_mark;
-    context.geometry_id = geometry_id;
-    context.original_shader = original_shader;
-    context.pass_contract = legacy_full_material_pass_contract();
-    collect_shader_usages_with_context(context, emit);
 }
 
 void SkinnedMeshRenderer::populate_mesh_render_item(tc_render_item& item) {

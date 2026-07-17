@@ -8,6 +8,7 @@
 
 #include <termin/camera/camera_component.hpp>
 #include <termin/render/material_pipeline_shader_assembler.hpp>
+#include <termin/render/render_task.hpp>
 
 namespace termin {
 
@@ -22,6 +23,51 @@ tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item
         }
     }
     return item.material_phase;
+}
+
+RenderItemTaskPlanningContract geometry_task_planning_contract(
+    RenderItemPassSemantic semantic,
+    const MaterialPipelinePassContract& shader_contract,
+    const char* debug_pass_name)
+{
+    RenderItemTaskPlanningContract contract{};
+    contract.pass_semantic = semantic;
+    contract.material_phase_policy = RenderItemMaterialPhasePolicy::Optional;
+    contract.provided_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    if (semantic == RenderItemPassSemantic::Id) {
+        contract.provided_input_mask |=
+            render_item_task_input_bit(RenderItemTaskInput::OverrideColor);
+    }
+    contract.required_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    contract.accepted_vertex_transform_kind_mask =
+        render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh);
+    contract.shader_contract = &shader_contract;
+    contract.debug_pass_name = debug_pass_name;
+    return contract;
+}
+
+bool plan_geometry_item_shader(
+    const tc_render_item& item,
+    tc_material_phase* phase,
+    tc_shader_handle candidate_shader,
+    RenderItemPassSemantic semantic,
+    const MaterialPipelinePassContract& shader_contract,
+    const char* debug_pass_name,
+    RenderTaskList& tasks)
+{
+    RenderItemTaskPlanningContract contract = geometry_task_planning_contract(
+        semantic,
+        shader_contract,
+        debug_pass_name);
+    RenderItemTaskPlanningRequest request{};
+    request.item = &item;
+    request.material_phase = phase;
+    request.candidate_shader = candidate_shader;
+    request.contract = &contract;
+    return plan_render_item_task(request, tasks).accepted();
 }
 
 } // anonymous namespace
@@ -165,12 +211,23 @@ void GeometryPassBase::collect_shader_usages(
                 }
             }
 
-            ShaderOverrideContext override_context;
-            override_context.phase_mark = ctx->phase_mark;
-            override_context.geometry_id = item.geometry_id;
-            override_context.original_shader = TcShader(original_shader);
-            override_context.pass_contract = ctx->pass_contract;
-            collect_drawable_shader_usages_with_context(c, override_context, *ctx->emit);
+            RenderTaskList tasks;
+            if (!plan_geometry_item_shader(
+                    item,
+                    ctx->pass->uses_material_phase_shader_override()
+                        ? resolve_render_item_material_phase(item)
+                        : nullptr,
+                    original_shader,
+                    ctx->pass_semantic,
+                    ctx->pass_contract,
+                    ctx->pass_name.c_str(),
+                    tasks)) {
+                continue;
+            }
+            const RenderTask& task = tasks.at(0);
+            for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
+                (*ctx->emit)(TcShader(task.shader_usages[i]));
+            }
         }
         return true;
     };
@@ -277,18 +334,22 @@ void GeometryPassBase::collect_draw_calls(
                 }
             }
 
-            ShaderOverrideContext override_context;
-            override_context.phase_mark = ctx->phase_mark;
-            override_context.geometry_id = item.geometry_id;
-            override_context.original_shader = TcShader(original_shader);
-            override_context.pass_contract = ctx->pass_contract;
-            tc_shader_handle final_shader =
-                override_drawable_shader(c, override_context).handle;
+            RenderTaskList planned_shader;
+            if (!plan_geometry_item_shader(
+                    item,
+                    selected_phase,
+                    original_shader,
+                    ctx->pass_semantic,
+                    ctx->pass_contract,
+                    ctx->pass_name.c_str(),
+                    planned_shader)) {
+                continue;
+            }
 
             DrawCall dc;
             dc.entity = ent;
             dc.component = c;
-            dc.final_shader = final_shader;
+            dc.final_shader = planned_shader.at(0).final_shader;
             dc.item = item;
             dc.geometry_id = item.geometry_id;
             dc.pick_id = pick_id;
