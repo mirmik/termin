@@ -433,6 +433,17 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
     CHECK(termin::render_item_encoder_supports_pass(
         TC_RENDER_ITEM_KIND_LINE_BATCH,
         termin::RenderItemPassSemantic::Id));
+    termin::RenderItemEncoderCapabilities line_capabilities{};
+    REQUIRE(termin::get_render_item_encoder_capabilities(
+        TC_RENDER_ITEM_KIND_LINE_BATCH,
+        line_capabilities));
+    CHECK(line_capabilities.pass_semantic_mask != 0u);
+    CHECK(line_capabilities.supported_task_input_mask ==
+        (termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext)
+         | termin::render_item_task_input_bit(termin::RenderItemTaskInput::ModelMatrix)
+         | termin::render_item_task_input_bit(termin::RenderItemTaskInput::OverrideColor)));
+    CHECK(line_capabilities.required_task_input_mask ==
+        termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext));
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("line-renderer-render-items-pick");
     termin::Entity entity = scene.create_entity("line");
