@@ -53,27 +53,47 @@ struct IdPushStd140 {
 static_assert(sizeof(IdPushStd140) == 80,
               "IdPushStd140 must be mat4 + vec4");
 
+MaterialFragmentInterface id_world_position_interface()
+{
+    MaterialFragmentInterface interface;
+    interface.semantics.push_back(
+        {"world_pos", MaterialPipelineValueType::Float3});
+    return interface;
+}
+
+VertexOutputAdapter id_vertex_output_adapter()
+{
+    VertexOutputAdapter adapter;
+    adapter.debug_name = "id_clip_output";
+    adapter.source_module = {
+        "termin_id_vertex_output_adapter",
+        "builtin_shaders/termin_id_vertex_output_adapter.slang"};
+    adapter.output_type_name = "VertexOutput";
+    adapter.output_function = "termin_id_vertex_output";
+    adapter.consumed_world_semantics = id_world_position_interface();
+    adapter.produced_output_semantics.semantics.push_back(
+        {"clip_position", MaterialPipelineValueType::Float4});
+    adapter.resources = material_pipeline_pass_vertex_resources("id_draw", 80u);
+    return adapter;
+}
+
 MaterialPipelinePassContract id_material_pass_contract()
 {
     MaterialPipelinePassContract contract;
     contract.debug_name = "id";
     contract.required_material_fragment_input = MaterialFragmentInterface{};
     contract.uses_material_fragment = true;
-
-    MaterialFragmentInterface fragment_input =
-        material_pipeline_standard_material_fragment_interface();
+    contract.vertex_output_adapter = id_vertex_output_adapter();
     contract.static_vertex_transform =
-        material_pipeline_make_static_vertex_transform_contract(
+        material_pipeline_make_static_mesh_vertex_transform_provider(
             "static_id",
-            material_pipeline_position_mesh_input(),
-            fragment_input,
-            material_pipeline_common_vertex_resources("id_draw", 80u));
+            MeshVertexTransformProfile::Position,
+            "id_draw.model");
     contract.skinned_vertex_transform =
-        material_pipeline_make_skinned_vertex_transform_contract(
-            *contract.static_vertex_transform,
+        material_pipeline_make_skinned_mesh_vertex_transform_provider(
             "skinned_id",
-            "termin-engine-skinned-id",
-            material_pipeline_skinned_position_mesh_input());
+            MeshVertexTransformProfile::Position,
+            "id_draw.model");
     return contract;
 }
 

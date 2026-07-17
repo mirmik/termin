@@ -462,7 +462,7 @@ def test_native_editor_shell_has_stable_headless_root_and_chrome():
     )
     document.layout_roots(Rect(0.0, 0.0, 2048.0, 1152.0))
     assert shell.navigation_tabs.widget.bounds.width == pytest.approx(225.0, abs=3.0)
-    assert shell.inspector_host.bounds.width == pytest.approx(344.0, abs=4.0)
+    assert shell.inspector_host.bounds.width == pytest.approx(360.0, abs=1.0)
     assert shell.bottom_tabs.widget.bounds.height == pytest.approx(306.0, abs=4.0)
     initial_navigation_width = shell.navigation_tabs.widget.bounds.width
     initial_bottom_height = shell.bottom_tabs.widget.bounds.height

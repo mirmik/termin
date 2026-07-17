@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ProfilerSectionRow:
-    path: str
+    path: tuple[str, ...]
     name: str
     depth: int
     cpu_ms: float
@@ -35,11 +35,11 @@ class ProfilerSnapshot:
 
 def _flatten_sections(
     sections: dict[str, SectionTiming],
-    prefix: str = "",
-) -> dict[str, SectionStats]:
-    result: dict[str, SectionStats] = {}
+    prefix: tuple[str, ...] = (),
+) -> dict[tuple[str, ...], SectionStats]:
+    result: dict[tuple[str, ...], SectionStats] = {}
     for name, timing in sections.items():
-        path = f"{prefix}/{name}" if prefix else name
+        path = (*prefix, name)
         result[path] = SectionStats(
             cpu_ms=timing.cpu_ms,
             children_ms=timing.children_ms,
@@ -54,9 +54,9 @@ class ProfilerPresentationModel:
         if not 0.0 < ema_alpha <= 1.0:
             raise ValueError("ema_alpha must be within (0, 1]")
         self.ema_alpha = float(ema_alpha)
-        self._section_ms: dict[str, float] = {}
-        self._children_ms: dict[str, float] = {}
-        self._calls: dict[str, int] = {}
+        self._section_ms: dict[tuple[str, ...], float] = {}
+        self._children_ms: dict[tuple[str, ...], float] = {}
+        self._calls: dict[tuple[str, ...], int] = {}
         self._total_ms: float | None = None
         self._revision = 0
 
@@ -70,7 +70,7 @@ class ProfilerPresentationModel:
     def update(self, frame: FrameProfile) -> ProfilerSnapshot:
         sections = _flatten_sections(frame.sections)
         root_total = sum(
-            stats.cpu_ms for path, stats in sections.items() if "/" not in path
+            stats.cpu_ms for path, stats in sections.items() if len(path) == 1
         )
         total = root_total if root_total > 0.0 else max(float(frame.total_ms), 0.0)
         alpha = self.ema_alpha
@@ -93,36 +93,58 @@ class ProfilerPresentationModel:
                 )
             self._calls[path] = stats.call_count
 
+        expired: set[tuple[str, ...]] = set()
         for path in tuple(self._section_ms):
             if path in sections:
                 continue
             self._section_ms[path] *= 1.0 - alpha
             self._children_ms[path] = self._children_ms.get(path, 0.0) * (1.0 - alpha)
             if self._section_ms[path] < 0.01:
-                self._section_ms.pop(path)
+                expired.add(path)
+
+        # A tree-table cannot contain orphan rows. If a decayed parent expires,
+        # retire its descendants with it even if their individual EMA happens to
+        # remain just above the threshold.
+        for expired_path in sorted(expired, key=len):
+            for path in tuple(self._section_ms):
+                if path[: len(expired_path)] != expired_path:
+                    continue
+                self._section_ms.pop(path, None)
                 self._children_ms.pop(path, None)
                 self._calls.pop(path, None)
 
         frame_ms = self._total_ms
+        children: dict[tuple[str, ...], list[tuple[str, ...]]] = {}
+        for path in self._section_ms:
+            children.setdefault(path[:-1], []).append(path)
+        for siblings in children.values():
+            siblings.sort(key=lambda path: (-self._section_ms[path], path[-1]))
+
+        ordered_paths: list[tuple[str, ...]] = []
+
+        def append_subtree(parent: tuple[str, ...]) -> None:
+            for path in children.get(parent, ()):
+                ordered_paths.append(path)
+                append_subtree(path)
+
+        append_subtree(())
+
         rows = []
-        for path in sorted(
-            self._section_ms,
-            key=lambda item: (item.count("/"), -self._section_ms[item], item),
-        ):
+        for path in ordered_paths:
             cpu_ms = self._section_ms[path]
             children_ms = self._children_ms.get(path, 0.0)
             rows.append(
                 ProfilerSectionRow(
                     path=path,
-                    name=path.rsplit("/", 1)[-1],
-                    depth=path.count("/"),
+                    name=path[-1],
+                    depth=len(path) - 1,
                     cpu_ms=cpu_ms,
                     percent=cpu_ms / frame_ms * 100.0 if frame_ms > 0.0 else 0.0,
                     coverage_percent=(
                         children_ms / cpu_ms * 100.0 if cpu_ms > 0.0 else 0.0
                     ),
                     call_count=self._calls.get(path, 0),
-                    has_children=children_ms > 0.0,
+                    has_children=bool(children.get(path)),
                 )
             )
         self._revision += 1

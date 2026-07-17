@@ -21,6 +21,7 @@ class NativePythonConsole:
     dialog: object | None
     root: WidgetRef
     output_model: RichTextModel
+    output: object
     prompt: object
     input: object
     viewport: Callable[[], Rect]
@@ -89,7 +90,7 @@ def build_native_python_console(
     root.set_layout_spacing(5.0)
     output_model = RichTextModel()
     output = document.create_rich_text_view(output_model)
-    output.word_wrap = False
+    output.word_wrap = True
     output.placeholder = "Python console output"
     root.add_stretch_child(_ref(document, output))
     input_row = document.create_hstack("python-console-input")
@@ -118,6 +119,7 @@ def build_native_python_console(
         dialog=dialog,
         root=root,
         output_model=output_model,
+        output=output,
         prompt=prompt,
         input=text_input,
         viewport=viewport,

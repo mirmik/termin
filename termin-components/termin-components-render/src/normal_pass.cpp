@@ -46,27 +46,51 @@ struct NormalDrawStd140 {
 static_assert(sizeof(NormalDrawStd140) == 64,
               "NormalDrawStd140 must be exactly one mat4");
 
+MaterialFragmentInterface normal_world_interface()
+{
+    MaterialFragmentInterface interface;
+    interface.semantics = {
+        {"world_pos", MaterialPipelineValueType::Float3},
+        {"normal_world", MaterialPipelineValueType::Float3},
+    };
+    return interface;
+}
+
+VertexOutputAdapter normal_vertex_output_adapter()
+{
+    VertexOutputAdapter adapter;
+    adapter.debug_name = "normal_clip_output";
+    adapter.source_module = {
+        "termin_normal_vertex_output_adapter",
+        "builtin_shaders/termin_normal_vertex_output_adapter.slang"};
+    adapter.output_type_name = "VertexOutput";
+    adapter.output_function = "termin_normal_vertex_output";
+    adapter.consumed_world_semantics = normal_world_interface();
+    adapter.produced_output_semantics.semantics = {
+        {"clip_position", MaterialPipelineValueType::Float4},
+        {"normal_world", MaterialPipelineValueType::Float3},
+    };
+    adapter.resources = material_pipeline_pass_vertex_resources("normal_draw");
+    return adapter;
+}
+
 MaterialPipelinePassContract normal_material_pass_contract()
 {
     MaterialPipelinePassContract contract;
     contract.debug_name = "normal";
     contract.required_material_fragment_input = MaterialFragmentInterface{};
     contract.uses_material_fragment = true;
-
-    MaterialFragmentInterface fragment_input =
-        material_pipeline_standard_material_fragment_interface();
+    contract.vertex_output_adapter = normal_vertex_output_adapter();
     contract.static_vertex_transform =
-        material_pipeline_make_static_vertex_transform_contract(
+        material_pipeline_make_static_mesh_vertex_transform_provider(
             "static_normal",
-            material_pipeline_position_normal_mesh_input(),
-            fragment_input,
-            material_pipeline_common_vertex_resources("normal_draw"));
+            MeshVertexTransformProfile::PositionNormal,
+            "normal_draw.u_model");
     contract.skinned_vertex_transform =
-        material_pipeline_make_skinned_vertex_transform_contract(
-            *contract.static_vertex_transform,
+        material_pipeline_make_skinned_mesh_vertex_transform_provider(
             "skinned_normal",
-            "termin-engine-skinned-normal",
-            material_pipeline_skinned_position_normal_mesh_input());
+            MeshVertexTransformProfile::PositionNormal,
+            "normal_draw.u_model");
     return contract;
 }
 
