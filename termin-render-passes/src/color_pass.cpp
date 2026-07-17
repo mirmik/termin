@@ -140,6 +140,45 @@ struct ColorTaskExtension final : RenderTaskExtension {
     ColorDrawData draw_data{};
 };
 
+RenderItemTaskPlanningContract color_task_planning_contract(
+    const MaterialPipelinePassContract& shader_contract,
+    const char* debug_pass_name)
+{
+    RenderItemTaskPlanningContract contract{};
+    contract.pass_semantic = RenderItemPassSemantic::Color;
+    contract.material_phase_policy = RenderItemMaterialPhasePolicy::Required;
+    contract.provided_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    contract.required_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    contract.accepted_vertex_transform_kind_mask =
+        render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage);
+    contract.shader_contract = &shader_contract;
+    contract.debug_pass_name = debug_pass_name;
+    return contract;
+}
+
+bool plan_color_item_shader(
+    const tc_render_item& item,
+    tc_material_phase* phase,
+    const MaterialPipelinePassContract& shader_contract,
+    const char* debug_pass_name,
+    RenderTaskList& tasks)
+{
+    RenderItemTaskPlanningContract contract =
+        color_task_planning_contract(shader_contract, debug_pass_name);
+    RenderItemTaskPlanningRequest request{};
+    request.item = &item;
+    request.material_phase = phase;
+    request.candidate_shader = phase
+        ? phase->shader
+        : tc_shader_handle_invalid();
+    request.contract = &contract;
+    return plan_render_item_task(request, tasks).accepted();
+}
+
 } // anonymous namespace
 
 ColorPass::ColorPass(const ColorPassConfig& config)
@@ -265,12 +304,19 @@ bool collect_color_drawable_shader_usages(tc_component* tc, void* user_data) {
             continue;
         }
 
-        ShaderOverrideContext override_context;
-        override_context.phase_mark = data->phase_mark;
-        override_context.geometry_id = item.geometry_id;
-        override_context.original_shader = TcShader(phase->shader);
-        override_context.pass_contract = data->pass_contract;
-        collect_drawable_shader_usages_with_context(tc, override_context, *data->emit);
+        RenderTaskList tasks;
+        if (!plan_color_item_shader(
+                item,
+                phase,
+                data->pass_contract,
+                "ColorPass/ShaderUsage",
+                tasks)) {
+            continue;
+        }
+        const RenderTask& task = tasks.at(0);
+        for (uint32_t i = 0; i < task.shader_usage_count; ++i) {
+            (*data->emit)(TcShader(task.shader_usages[i]));
+        }
     }
 
     return true;
@@ -333,19 +379,21 @@ void ColorPass::collect_draw_calls(
             continue;
         }
 
-        ShaderOverrideContext override_context;
-        override_context.phase_mark = phase_mark;
-        override_context.geometry_id = item.geometry_id;
-        override_context.original_shader = TcShader(phase->shader);
-        override_context.pass_contract = pass_contract;
-        tc_shader_handle final_shader =
-            override_drawable_shader(tc, override_context).handle;
+        RenderTaskList planned_shader;
+        if (!plan_color_item_shader(
+                item,
+                phase,
+                pass_contract,
+                "ColorPass/Collect",
+                planned_shader)) {
+            continue;
+        }
 
         PhaseDrawCall dc;
         dc.entity = ent;
         dc.component = tc;
         dc.phase = phase;
-        dc.final_shader = final_shader;
+        dc.final_shader = planned_shader.at(0).final_shader;
         dc.priority = phase->priority;
         dc.geometry_id = item.geometry_id;
         dc.item_index = item_index;
@@ -671,20 +719,8 @@ void ColorPass::execute_with_data(
     render_tasks.reserve(cached_draw_calls_.size());
     const MaterialPipelinePassContract task_shader_contract =
         color_material_pass_contract();
-    RenderItemTaskPlanningContract task_planning_contract{};
-    task_planning_contract.pass_semantic = RenderItemPassSemantic::Color;
-    task_planning_contract.material_phase_policy =
-        RenderItemMaterialPhasePolicy::Required;
-    task_planning_contract.provided_input_mask =
-        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
-    task_planning_contract.required_input_mask =
-        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
-    task_planning_contract.accepted_vertex_transform_kind_mask =
-        render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
-        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh)
-        | render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage);
-    task_planning_contract.shader_contract = &task_shader_contract;
-    task_planning_contract.debug_pass_name = debug_pass_name_c;
+    RenderItemTaskPlanningContract task_planning_contract =
+        color_task_planning_contract(task_shader_contract, debug_pass_name_c);
 
     size_t draw_index = 0;
     for (const auto& dc : cached_draw_calls_) {
@@ -723,7 +759,6 @@ void ColorPass::execute_with_data(
         const char* ename = dc.entity.name();
         entity_names.push_back(ename ? ename : "");
 
-        tc_shader_handle final_shader = dc.final_shader;
         const tc_render_item* item = scene_items.item(dc.item_index);
         if (!item) {
             tc::Log::error(
@@ -746,7 +781,7 @@ void ColorPass::execute_with_data(
         planning_request.item_index = dc.item_index;
         planning_request.source_draw_index = draw_index;
         planning_request.material_phase = phase;
-        planning_request.candidate_shader = final_shader;
+        planning_request.candidate_shader = phase->shader;
         planning_request.contract = &task_planning_contract;
         RenderItemTaskPlanningResult planning_result =
             plan_render_item_task(planning_request, render_tasks);
@@ -782,7 +817,7 @@ void ColorPass::execute_with_data(
             sizeof(extension.draw_data.u_model));
         task.draw_context.phase = phase_mark;
         task.draw_context.pass_contract = task_shader_contract;
-        task.draw_context.current_tc_shader = TcShader(final_shader);
+        task.draw_context.current_tc_shader = TcShader(task.final_shader);
         task.draw_context.layer_mask = data.layer_mask;
         task.draw_context.render_category_mask = ctx.render_category_mask;
         task.draw_context.camera_position = data.camera_position;

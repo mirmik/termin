@@ -395,6 +395,12 @@ bool line_render_item_draw_encoder(
     return encode_line_batch_render_item_tgfx2(ctx, item, request, *state);
 }
 
+RenderItemTaskRejection line_render_item_task_shader_planner(
+    const RenderItemTaskPlanningRequest& request,
+    RenderItemTaskShaderPlan& out_plan,
+    const char*& out_detail,
+    void* user_data);
+
 void ensure_line_render_item_encoder_registered()
 {
     static bool registered = false;
@@ -405,7 +411,7 @@ void ensure_line_render_item_encoder_registered()
 
     RenderItemDrawEncoderDesc desc{};
     desc.encode = line_render_item_draw_encoder;
-    desc.plan_task_shader = plan_render_item_passthrough_shader;
+    desc.plan_task_shader = line_render_item_task_shader_planner;
     desc.user_data = &state;
     desc.debug_name = "LineRenderer";
     desc.capabilities.pass_semantic_mask =
@@ -436,39 +442,6 @@ std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_b
 std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual>& line_tube_cap_shader_cache() {
     static std::unordered_map<TcShader, TcShader, TcShaderHash, TcShaderEqual> cache;
     return cache;
-}
-
-MaterialPipelinePassContract legacy_line_material_pass_contract()
-{
-    MaterialPipelinePassContract contract;
-    contract.debug_name = "legacy_line_material";
-    contract.required_material_fragment_input =
-        material_pipeline_standard_material_fragment_interface();
-    contract.uses_material_fragment = true;
-    return contract;
-}
-
-MaterialPipelinePassContract legacy_line_auxiliary_pass_contract(const char* debug_name)
-{
-    MaterialPipelinePassContract contract;
-    contract.debug_name = debug_name ? debug_name : "legacy_line_auxiliary";
-    contract.required_material_fragment_input = MaterialFragmentInterface{};
-    contract.uses_material_fragment = true;
-    return contract;
-}
-
-MaterialPipelinePassContract legacy_line_pass_contract_for_phase(const std::string& phase_mark)
-{
-    // Compatibility adapter for old Drawable::override_shader callers. Pass-owned
-    // render code must provide ShaderOverrideContext::pass_contract explicitly so
-    // material-fragment variant intent does not depend on phase_mark strings.
-    if (phase_mark == "shadow") {
-        return legacy_line_auxiliary_pass_contract("shadow");
-    }
-    if (phase_mark == "pick") {
-        return legacy_line_auxiliary_pass_contract("pick");
-    }
-    return legacy_line_material_pass_contract();
 }
 
 TcShader get_line_material_fragment_shader(TcShader original_shader) {
@@ -764,63 +737,60 @@ bool emit_line_batch_render_items(
     return true;
 }
 
-TcShader override_line_batch_shader(
-    const ShaderOverrideContext& context,
-    LineRenderMode mode,
-    bool cast_shadow)
+namespace {
+
+RenderItemTaskRejection line_render_item_task_shader_planner(
+    const RenderItemTaskPlanningRequest& request,
+    RenderItemTaskShaderPlan& out_plan,
+    const char*& out_detail,
+    void* user_data)
 {
-    TcShader original_shader = context.original_shader;
-    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
-        || !accepts_phase(context.phase_mark, cast_shadow)) {
-        return original_shader;
+    (void)user_data;
+    if (!request.item || request.item->kind != TC_RENDER_ITEM_KIND_LINE_BATCH ||
+        !request.contract || !request.contract->shader_contract) {
+        out_detail = "line planner received an invalid request";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
     }
-
-    if (mode == LineRenderMode::WorldTube) {
-        TcShader variant = get_line_tube_material_shader(original_shader, false);
-        return variant.is_valid() ? variant : original_shader;
+    LineRenderMode mode = LineRenderMode::WorldBillboard;
+    if (!decode_line_render_mode(request.item->payload.line_batch.render_mode, mode)) {
+        out_detail = "line planner received an invalid render mode";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
     }
-
-    TcShader variant = get_line_material_fragment_shader(original_shader);
-    return variant.is_valid() ? variant : original_shader;
-}
-
-void collect_line_batch_shader_usages(
-    const ShaderOverrideContext& context,
-    LineRenderMode mode,
-    bool cast_shadow,
-    const std::function<void(TcShader)>& emit)
-{
-    if (!emit) {
-        return;
+    TcShader original_shader(request.candidate_shader);
+    out_plan.final_shader = request.candidate_shader;
+    if (!uses_material_fragment_variant_for_pass(
+            mode,
+            *request.contract->shader_contract)) {
+        out_detail = nullptr;
+        return RenderItemTaskRejection::None;
     }
-
-    TcShader original_shader = context.original_shader;
-    if (original_shader.is_valid()) {
-        emit(original_shader);
-    }
-
-    if (!uses_material_fragment_variant_for_pass(mode, context.pass_contract)
-        || !accepts_phase(context.phase_mark, cast_shadow)) {
-        return;
-    }
-
     if (mode == LineRenderMode::WorldTube) {
         TcShader body = get_line_tube_material_shader(original_shader, false);
-        if (body.is_valid()) {
-            emit(body);
-        }
         TcShader cap = get_line_tube_material_shader(original_shader, true);
-        if (cap.is_valid()) {
-            emit(cap);
+        if (!body.is_valid() || !cap.is_valid()) {
+            out_detail = "failed to create line tube material shader variants";
+            return RenderItemTaskRejection::ShaderPlanningRejected;
         }
-        return;
+        out_plan.final_shader = body.handle;
+        if (!out_plan.add_shader_usage(body.handle) ||
+            !out_plan.add_shader_usage(cap.handle)) {
+            out_detail = "line tube shader usage packet is full";
+            return RenderItemTaskRejection::ShaderPlanningRejected;
+        }
+        out_detail = nullptr;
+        return RenderItemTaskRejection::None;
     }
-
     TcShader variant = get_line_material_fragment_shader(original_shader);
-    if (variant.is_valid()) {
-        emit(variant);
+    if (!variant.is_valid()) {
+        out_detail = "failed to create line material fragment shader variant";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
     }
+    out_plan.final_shader = variant.handle;
+    out_detail = nullptr;
+    return RenderItemTaskRejection::None;
 }
+
+} // namespace
 
 LineRenderer::LineRenderer(const char* type_name)
     : Component(type_name)
@@ -1207,57 +1177,6 @@ std::set<std::string> LineRenderer::get_phase_marks() const {
         marks.insert("shadow");
     }
     return marks;
-}
-
-TcShader LineRenderer::override_shader(
-    const std::string& phase_mark,
-    int geometry_id,
-    TcShader original_shader
-) {
-    ShaderOverrideContext context;
-    context.phase_mark = phase_mark;
-    context.geometry_id = geometry_id;
-    context.original_shader = original_shader;
-    context.pass_contract = legacy_line_pass_contract_for_phase(phase_mark);
-    return override_shader_with_context(context);
-}
-
-TcShader LineRenderer::override_shader_with_context(
-    const ShaderOverrideContext& context
-) {
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        return context.original_shader;
-    }
-    return override_line_batch_shader(context, mode, cast_shadow);
-}
-
-void LineRenderer::collect_shader_usages(
-    const std::string& phase_mark,
-    int geometry_id,
-    TcShader original_shader,
-    const std::function<void(TcShader)>& emit
-) {
-    ShaderOverrideContext context;
-    context.phase_mark = phase_mark;
-    context.geometry_id = geometry_id;
-    context.original_shader = original_shader;
-    context.pass_contract = legacy_line_pass_contract_for_phase(phase_mark);
-    collect_shader_usages_with_context(context, emit);
-}
-
-void LineRenderer::collect_shader_usages_with_context(
-    const ShaderOverrideContext& context,
-    const std::function<void(TcShader)>& emit
-) {
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        if (emit && context.original_shader.is_valid()) {
-            emit(context.original_shader);
-        }
-        return;
-    }
-    collect_line_batch_shader_usages(context, mode, cast_shadow, emit);
 }
 
 bool LineRenderer::collect_render_items(

@@ -616,19 +616,6 @@ std::set<std::string> WorldTextComponent::get_phase_marks() const {
     return {sanitize_phase_mark(phase_mark)};
 }
 
-void WorldTextComponent::collect_shader_usages(
-    const std::string& draw_phase_mark,
-    int geometry_id,
-    TcShader original_shader,
-    const std::function<void(TcShader)>& emit
-) {
-    (void)draw_phase_mark;
-    (void)geometry_id;
-    if (original_shader.is_valid()) {
-        emit(original_shader);
-    }
-}
-
 bool WorldTextComponent::collect_render_items(
     const tc_render_item_collect_context& context,
     tc_render_item_sink& sink)

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <vector>
 
 #include <termin/render/mesh_renderer.hpp>
@@ -70,27 +69,6 @@ public:
      * Call this before drawing.
      */
     void update_bone_matrices();
-
-    /**
-     * Override shader to inject skinning if needed.
-     * Called by passes before applying uniforms.
-     */
-    TcShader override_shader(
-        const std::string& phase_mark,
-        int geometry_id,
-        TcShader original_shader
-    ) override;
-
-    TcShader override_shader_with_context(
-        const ShaderOverrideContext& context
-    ) override;
-
-    void collect_shader_usages(
-        const std::string& phase_mark,
-        int geometry_id,
-        TcShader original_shader,
-        const std::function<void(TcShader)>& emit
-    ) override;
 
     /**
      * Component lifecycle: find skeleton controller on start.
