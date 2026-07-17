@@ -54,6 +54,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 | `prefab_edit_controller.py` | `PrefabEditController` — UI-agnostic isolation mode for editing `.prefab` files. |
 | `project_session_controller.py` | Общий lifecycle проекта: stdlib sync, shader runtime, project modules, `InitScript.py`, resource scan и восстановление project root. UI frontend передаёт callbacks для ошибок и progress presentation. |
 | `spacemouse_controller.py` | `SpaceMouseController` — libspnav integration; polling from the tcgui render loop. |
+| `profiler_capture.py` | Общая bounded capture-сессия сырых кадров, статистика/hitch navigation и арбитраж process-global профайлера между несколькими frontend-потребителями. |
 | `gizmo/` | Unified gizmo exports and Python collider/constraint helpers used by runtime rendering code. |
 
 ### `termin/editor/` — legacy entrypoint
@@ -61,6 +62,15 @@ UI-agnostic слой. Модели состояния + сервисы.
 Содержит только совместимые entrypoint-файлы (`python -m termin.editor`,
 `termin.editor.run_editor`). Они запускают единственный production frontend —
 native UI. UI-код здесь добавлять нельзя.
+
+### `termin/editor_native/` — production native UI
+
+Native frontend композирует главное окно и modeless secondary OS windows через
+`NativeUiWindowManager`. `profiler_panel.py` остаётся лёгкой сглаженной сводкой
+в dock, а `frame_profiler.py` — отдельный raw-frame frontend: bounded timeline,
+пауза/follow, hitch navigation и несглаженное дерево выбранного кадра. Оба
+frontend используют общий `ProfilerCaptureCoordinator`, поэтому lifetime одного
+потребителя не выключает сбор у другого.
 
 ### `termin/editor_tcgui/` — tcgui view
 

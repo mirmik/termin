@@ -79,6 +79,7 @@ class NativeEditorShell:
     prefab_exit_command: int
     debug_menu_model: CommandModel
     profiler_command: int
+    frame_profiler_command: int
     modules_command: int
     inspect_registry_command: int
     core_registry_command: int
@@ -231,6 +232,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     run_build_command = commands[("Game", "Run Build...")]
     run_standalone_command = commands[("Game", "Run Standalone...")]
     profiler_command = commands[("Debug", "Profiler")]
+    frame_profiler_command = commands[("Debug", "Frame Profiler...")]
     modules_command = commands[("Debug", "Modules")]
     camera_frustums_command = commands[("Debug", "Camera Frustums")]
     scene_manager_command = commands[("Debug", "Scene Manager...")]
@@ -409,6 +411,7 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
         prefab_exit_command=prefab_exit_command,
         debug_menu_model=debug_menu,
         profiler_command=profiler_command,
+        frame_profiler_command=frame_profiler_command,
         modules_command=modules_command,
         inspect_registry_command=inspect_registry_command,
         core_registry_command=core_registry_command,

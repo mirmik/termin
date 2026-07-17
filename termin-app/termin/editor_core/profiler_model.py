@@ -7,6 +7,7 @@ import logging
 from typing import Callable
 
 from tcbase.profiler import FrameProfile, Profiler, SectionStats, SectionTiming
+from .profiler_capture import ProfilerCaptureCoordinator
 
 
 _logger = logging.getLogger(__name__)
@@ -165,6 +166,8 @@ class ProfilerController:
         presentation: ProfilerPresentationModel | None = None,
         get_include_ui: Callable[[], bool] | None = None,
         set_include_ui: Callable[[bool], None] | None = None,
+        capture_coordinator: ProfilerCaptureCoordinator | None = None,
+        consumer_id: str = "profiler-summary",
     ) -> None:
         self.profiler = profiler if profiler is not None else Profiler.instance()
         self.presentation = (
@@ -172,10 +175,14 @@ class ProfilerController:
         )
         self._get_include_ui = get_include_ui
         self._set_include_ui = set_include_ui
+        self._capture_coordinator = capture_coordinator
+        self._consumer_id = consumer_id
         self._last_frame_number: int | None = None
 
     @property
     def enabled(self) -> bool:
+        if self._capture_coordinator is not None:
+            return self._consumer_id in self._capture_coordinator.consumers
         return self.profiler.enabled
 
     @property
@@ -189,7 +196,13 @@ class ProfilerController:
         return bool(self._get_include_ui())
 
     def set_enabled(self, enabled: bool) -> None:
-        self.profiler.enabled = bool(enabled)
+        enabled = bool(enabled)
+        if self._capture_coordinator is None:
+            self.profiler.enabled = enabled
+        elif enabled:
+            self._capture_coordinator.acquire(self._consumer_id)
+        else:
+            self._capture_coordinator.release(self._consumer_id)
         if not enabled:
             self.presentation.reset()
             self._last_frame_number = None
@@ -204,12 +217,13 @@ class ProfilerController:
         self._set_include_ui(bool(include))
 
     def clear(self) -> None:
-        self.profiler.clear_history()
+        if self._capture_coordinator is None:
+            self.profiler.clear_history()
         self.presentation.reset()
         self._last_frame_number = None
 
     def poll(self) -> ProfilerSnapshot | None:
-        if not self.profiler.enabled:
+        if not self.enabled:
             return None
         frame = self.profiler.last_complete_frame()
         if frame is None or frame.frame_number == self._last_frame_number:
