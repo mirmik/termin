@@ -20,8 +20,6 @@ from termin.kinematic.kinematic import (
     Actuator3,
 )
 from termin.kinematic.kinchain import KinematicChain3
-# conditions submodule depends on termin.linalg (main termin). Users who need
-# it should import it explicitly: from termin.kinematic.conditions import ...
 from termin.kinematic.kinematic_components import (
     KinematicUnitComponent,
     ActuatorComponent,
