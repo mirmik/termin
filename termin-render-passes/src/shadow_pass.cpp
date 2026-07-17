@@ -37,8 +37,6 @@ extern "C" {
 namespace termin {
 
 constexpr const char* SHADOW_ENGINE_SHADER_UUID = "termin-engine-shadow";
-constexpr const char* SHADOW_STATIC_TRANSFORM_MODULE = "termin_shadow_static_transform";
-constexpr const char* SHADOW_SKINNED_TRANSFORM_MODULE = "termin_shadow_skinned_transform";
 constexpr const char* SHADOW_FOLIAGE_TRANSFORM_MODULE = "termin_shadow_foliage_transform";
 constexpr const char* SHADOW_OUTPUT_ADAPTER_MODULE = "termin_shadow_vertex_output_adapter";
 
@@ -98,41 +96,6 @@ VertexOutputAdapter shadow_vertex_output_adapter()
     return adapter;
 }
 
-void configure_shadow_static_provider(VertexTransformProvider& provider)
-{
-    provider.resources.push_back(material_pipeline_draw_resource_decl(
-        "shadow_draw",
-        TC_SHADER_STAGE_VERTEX,
-        64u));
-    provider.source_module = {
-        SHADOW_STATIC_TRANSFORM_MODULE,
-        "builtin_shaders/termin_shadow_static_transform.slang"};
-    provider.entry_input_declaration = R"(
-struct VertexInput {
-    float3 position : POSITION;
-};)";
-    provider.adapter_input_expression =
-        "termin_shadow_static_world_position(input.position, shadow_draw.u_model)";
-    provider.produced_world_semantics = shadow_world_position_interface();
-}
-
-void configure_shadow_skinned_provider(VertexTransformProvider& provider)
-{
-    provider.source_module = {
-        SHADOW_SKINNED_TRANSFORM_MODULE,
-        "builtin_shaders/termin_shadow_skinned_transform.slang"};
-    provider.entry_input_declaration = R"(
-struct VertexInput {
-    float3 position : POSITION;
-    float4 joints : TEXCOORD0;
-    float4 weights : TEXCOORD1;
-};)";
-    provider.adapter_input_expression =
-        "termin_shadow_skinned_world_position("
-        "input.position, input.joints, input.weights, shadow_draw.u_model, bone_block)";
-    provider.produced_world_semantics = shadow_world_position_interface();
-}
-
 void configure_shadow_foliage_provider(VertexTransformProvider& provider)
 {
     provider.template_uuid.reset();
@@ -162,29 +125,29 @@ MaterialPipelinePassContract shadow_material_pass_contract()
     contract.uses_material_fragment = true;
     contract.vertex_output_adapter = shadow_vertex_output_adapter();
 
-    MaterialFragmentInterface fragment_input =
-        material_pipeline_standard_material_fragment_interface();
     contract.static_vertex_transform =
-        material_pipeline_make_static_vertex_transform_contract(
+        material_pipeline_make_static_mesh_vertex_transform_provider(
             "static_shadow",
-            material_pipeline_position_mesh_input(),
-            fragment_input,
-            {});
-    configure_shadow_static_provider(*contract.static_vertex_transform);
+            MeshVertexTransformProfile::Position,
+            "shadow_draw.u_model");
+    contract.static_vertex_transform->resources.push_back(
+        material_pipeline_draw_resource_decl(
+            "shadow_draw", TC_SHADER_STAGE_VERTEX, 64u));
     contract.skinned_vertex_transform =
-        material_pipeline_make_skinned_vertex_transform_contract(
-            *contract.static_vertex_transform,
+        material_pipeline_make_skinned_mesh_vertex_transform_provider(
             "skinned_shadow",
-            std::nullopt,
-            material_pipeline_skinned_position_mesh_input());
-    configure_shadow_skinned_provider(*contract.skinned_vertex_transform);
+            MeshVertexTransformProfile::Position,
+            "shadow_draw.u_model");
+    contract.skinned_vertex_transform->resources.push_back(
+        material_pipeline_draw_resource_decl(
+            "shadow_draw", TC_SHADER_STAGE_VERTEX, 64u));
     contract.foliage_vertex_transform =
         material_pipeline_make_foliage_vertex_transform_contract(
             VertexTransformKind::FoliageShadow,
             "foliage_shadow",
             "termin-engine-foliage-shadow",
             material_pipeline_position_mesh_input(),
-            fragment_input,
+            material_pipeline_standard_material_fragment_interface(),
             material_pipeline_foliage_vertex_resources());
     configure_shadow_foliage_provider(*contract.foliage_vertex_transform);
     return contract;

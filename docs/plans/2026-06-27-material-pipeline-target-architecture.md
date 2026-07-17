@@ -275,9 +275,9 @@ The long-term form allows the pipeline to generate small adapter functions
 instead of relying on all templates to manually match every material fragment
 input shape.
 
-### Implemented first vertical slice (2026-07-12)
+### Implemented modular mesh vertex stages (2026-07-12 through 2026-07-17)
 
-The shadow pass now uses this boundary for static and skinned casters:
+The shadow pass introduced this boundary for static and skinned casters:
 
 ```text
 static/skinned transform provider
@@ -293,11 +293,18 @@ merges material, provider, adapter, and pass contracts, and includes both
 module identities in the shader intent fingerprint. Runtime Slang dependency
 tracking then includes transitive imports in the artifact fingerprint.
 
-For the shadow slice, `bone_block` is declared by the skinned provider while
-`per_frame` and `shadow_draw` are declared by the shared output adapter. The
-old `termin-engine-skinned-shadow` whole-stage template is not selected on the
-migrated path. Foliage and the remaining material/depth/id/normal paths retain
-their transitional templates until their dedicated migrations.
+The completed mesh migration uses one `termin_vertex_transform` module for
+static and skinned material, position-only, and position+normal profiles.
+`bone_block` is declared once by that transform module. Material, shadow,
+depth, id, and normal projection/output behavior lives in pass-owned output
+adapter modules, and their `per_frame` and draw resources remain pass-owned in
+the contract. Compact depth/id inputs and the position+normal normal-pass input
+remain explicit profiles rather than separate whole-stage shaders.
+
+The five `termin-engine-skinned-*` whole-stage templates and the shadow-only
+static/skinned provider wrappers were removed. Mesh assembly no longer falls
+back to a pass-specific `template_uuid`; foliage remains the only transitional
+whole-stage transform family and is tracked separately by #345/#346.
 
 ## Interface Contracts
 

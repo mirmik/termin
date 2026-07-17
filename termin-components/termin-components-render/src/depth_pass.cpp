@@ -85,27 +85,51 @@ bool depth_encoding_is_inverse(const std::string& encoding) {
            encoding == "logarithmic_inverse";
 }
 
+MaterialFragmentInterface depth_world_position_interface()
+{
+    MaterialFragmentInterface interface;
+    interface.semantics.push_back(
+        {"world_pos", MaterialPipelineValueType::Float3});
+    return interface;
+}
+
+VertexOutputAdapter depth_vertex_output_adapter()
+{
+    VertexOutputAdapter adapter;
+    adapter.debug_name = "depth_clip_output";
+    adapter.source_module = {
+        "termin_depth_vertex_output_adapter",
+        "builtin_shaders/termin_depth_vertex_output_adapter.slang"};
+    adapter.output_type_name = "VertexOutput";
+    adapter.output_function = "termin_depth_vertex_output";
+    adapter.consumed_world_semantics = depth_world_position_interface();
+    adapter.produced_output_semantics.semantics = {
+        {"clip_position", MaterialPipelineValueType::Float4},
+        {"linear_depth", MaterialPipelineValueType::Float},
+        {"perspective_depth", MaterialPipelineValueType::Float},
+        {"log_depth", MaterialPipelineValueType::Float},
+    };
+    adapter.resources = material_pipeline_pass_vertex_resources("depth_draw");
+    return adapter;
+}
+
 MaterialPipelinePassContract depth_material_pass_contract(const char* debug_name)
 {
     MaterialPipelinePassContract contract;
     contract.debug_name = debug_name ? debug_name : "depth";
     contract.required_material_fragment_input = MaterialFragmentInterface{};
     contract.uses_material_fragment = true;
-
-    MaterialFragmentInterface fragment_input =
-        material_pipeline_standard_material_fragment_interface();
+    contract.vertex_output_adapter = depth_vertex_output_adapter();
     contract.static_vertex_transform =
-        material_pipeline_make_static_vertex_transform_contract(
+        material_pipeline_make_static_mesh_vertex_transform_provider(
             "static_depth",
-            material_pipeline_position_mesh_input(),
-            fragment_input,
-            material_pipeline_common_vertex_resources("depth_draw"));
+            MeshVertexTransformProfile::Position,
+            "depth_draw.u_model");
     contract.skinned_vertex_transform =
-        material_pipeline_make_skinned_vertex_transform_contract(
-            *contract.static_vertex_transform,
+        material_pipeline_make_skinned_mesh_vertex_transform_provider(
             "skinned_depth",
-            "termin-engine-skinned-depth",
-            material_pipeline_skinned_position_mesh_input());
+            MeshVertexTransformProfile::Position,
+            "depth_draw.u_model");
     return contract;
 }
 
