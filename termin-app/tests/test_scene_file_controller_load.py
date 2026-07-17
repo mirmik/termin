@@ -29,6 +29,10 @@ class _Scene:
     def scene_handle(self):
         return self
 
+    def destroy(self) -> None:
+        self.calls.append(("destroy-stage", self))
+        self.alive = False
+
 
 class _SceneManager:
     def __init__(self, calls: list[object], old_scene: _Scene) -> None:
@@ -82,11 +86,6 @@ def _build_controller(
         ),
     )
 
-    def destroy(scene: _Scene) -> None:
-        calls.append(("destroy-stage", scene))
-        scene.alive = False
-
-    monkeypatch.setattr(scene_file_controller_module, "destroy_scene", destroy)
     monkeypatch.setattr(
         scene_file_controller_module,
         "default_scene_extensions",
