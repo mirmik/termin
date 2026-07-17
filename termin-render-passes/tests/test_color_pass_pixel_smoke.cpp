@@ -276,6 +276,7 @@ termin::TcMesh create_triangle_mesh() {
 termin::TcSceneRef create_scene(
     const termin::TcMesh& mesh,
     const termin::TcMaterial& material) {
+    termin::MeshComponent::register_type();
     termin::MeshRenderer::register_type();
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("color-pass-pixel-smoke");

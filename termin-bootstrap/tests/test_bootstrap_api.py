@@ -399,6 +399,22 @@ def test_component_registry_names_survive_repeated_player_rebootstrap():
     )
 
 
+def test_builtin_bootstrap_registers_each_component_once():
+    result = _run_python_without_nanobind_leaks(
+        """
+        from termin.bootstrap import bootstrap_player, shutdown_player
+
+        for _ in range(3):
+            bootstrap_player()
+            shutdown_player()
+        """
+    )
+
+    output = result.stdout + result.stderr
+    assert "Ignoring unowned component registration for existing type" not in output
+    assert "Ignoring unowned field registration for existing field" not in output
+
+
 def test_player_rebootstrap_restores_loaded_python_component_types():
     _run_python_without_nanobind_leaks(
         """

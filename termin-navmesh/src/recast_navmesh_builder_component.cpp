@@ -80,7 +80,6 @@ RecastNavMeshBuilderComponent::RecastNavMeshBuilderComponent()
 }
 
 void RecastNavMeshBuilderComponent::register_type() {
-    NavMeshKeeperComponent::register_type();
     register_component_type<RecastNavMeshBuilderComponent>(
         "RecastNavMeshBuilderComponent",
         "Component"
