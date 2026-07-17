@@ -61,6 +61,17 @@ if(TERMIN_PREFAB_BUILD_TESTS)
     )
     add_test(NAME termin_prefab_override_value_test COMMAND termin_prefab_override_value_test)
 
+    add_executable(termin_prefab_document_validation_test
+        tests/test_prefab_document_validation.cpp
+    )
+    target_link_libraries(termin_prefab_document_validation_test PRIVATE
+        termin_prefab
+    )
+    set_target_properties(termin_prefab_document_validation_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(NAME termin_prefab_document_validation_test COMMAND termin_prefab_document_validation_test)
+
     add_executable(termin_prefab_instantiator_test
         tests/test_prefab_instantiator.cpp
     )

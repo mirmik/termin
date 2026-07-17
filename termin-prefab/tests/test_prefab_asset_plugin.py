@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -26,6 +27,27 @@ class FakeResourceManager:
         self.by_uuid[asset.uuid] = asset
         if source_path is not None:
             asset.source_path = source_path
+
+
+def _empty_entity_data(uuid: str, name: str) -> dict[str, object]:
+    return {
+        "uuid": uuid,
+        "name": name,
+        "priority": 0,
+        "visible": True,
+        "enabled": True,
+        "pickable": True,
+        "selectable": True,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+            "position": [0.0, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [],
+        "children": [],
+    }
 
 
 def _run_python(code: str) -> None:
@@ -69,8 +91,9 @@ def test_prefab_import_plugin_extracts_uuid(tmp_path: Path) -> None:
 
 def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
     prefab_path = tmp_path / "Enemy.prefab"
+    root_data = _empty_entity_data("enemy-root", "Enemy")
     prefab_path.write_text(
-        '{"version": "3.0", "uuid": "prefab-uuid", "root": {"uuid": "enemy-root", "name": "Enemy", "components": [], "children": []}}',
+        json.dumps({"version": "3.0", "uuid": "prefab-uuid", "root": root_data}),
         encoding="utf-8",
     )
 
@@ -78,12 +101,7 @@ def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
 
     assert asset.name == "Enemy"
     assert asset.uuid == "prefab-uuid"
-    assert asset.root_data == {
-        "uuid": "enemy-root",
-        "name": "Enemy",
-        "components": [],
-        "children": [],
-    }
+    assert asset.root_data == root_data
     assert asset.get_entity_count() == 1
 
 
@@ -203,12 +221,14 @@ def test_prefab_hot_reload_reaches_only_live_native_instances() -> None:
         assert second.get_component(PrefabInstanceState).source_revision == expected_revision
 
         structural_data = copy.deepcopy(updated_data)
-        structural_data["root"]["children"].append({
+        added_child = copy.deepcopy(structural_data["root"])
+        added_child.update({
             "uuid": "hot-reload-added-child",
             "name": "AddedChild",
             "components": [],
             "children": [],
         })
+        structural_data["root"]["children"].append(added_child)
         structural = PrefabAsset(
             data=structural_data,
             name="HotReload",
@@ -285,6 +305,22 @@ def test_prefab_asset_reports_invalid_source_without_partial_scene_changes() -> 
         termin.bootstrap.bootstrap_player()
         scene = TcScene.create("prefab-invalid-source")
         initial_count = scene.entity_count()
+        base = {
+            "priority": 0,
+            "visible": True,
+            "enabled": True,
+            "pickable": True,
+            "selectable": True,
+            "layer": 0,
+            "flags": 0,
+            "pose": {
+                "position": [0.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+            },
+            "scale": [1.0, 1.0, 1.0],
+            "components": [],
+            "children": [],
+        }
         asset = PrefabAsset(
             name="Broken",
             uuid="broken-prefab",
@@ -292,14 +328,13 @@ def test_prefab_asset_reports_invalid_source_without_partial_scene_changes() -> 
                 "version": "3.0",
                 "uuid": "broken-prefab",
                 "root": {
+                    **base,
                     "uuid": "duplicate-source-id",
                     "name": "Root",
-                    "components": [],
                     "children": [{
+                        **base,
                         "uuid": "duplicate-source-id",
                         "name": "Child",
-                        "components": [],
-                        "children": [],
                     }],
                 },
             },

@@ -155,12 +155,30 @@ nos::trent source_hierarchy() {
     nos::trent child;
     child["uuid"] = "prefab-source-child";
     child["name"] = "Child";
+    child["priority"] = int64_t{0};
+    child["visible"] = true;
+    child["enabled"] = true;
+    child["pickable"] = true;
+    child["selectable"] = true;
+    child["layer"] = int64_t{0};
+    child["flags"] = int64_t{0};
+    child["pose"] = root["pose"];
+    child["scale"] = root["scale"];
     child["components"].init(nos::trent::type::list);
     child["children"].init(nos::trent::type::list);
 
     nos::trent grandchild;
     grandchild["uuid"] = "prefab-source-grandchild";
     grandchild["name"] = "Grandchild";
+    grandchild["priority"] = int64_t{0};
+    grandchild["visible"] = true;
+    grandchild["enabled"] = true;
+    grandchild["pickable"] = true;
+    grandchild["selectable"] = true;
+    grandchild["layer"] = int64_t{0};
+    grandchild["flags"] = int64_t{0};
+    grandchild["pose"] = root["pose"];
+    grandchild["scale"] = root["scale"];
     grandchild["components"].init(nos::trent::type::list);
     grandchild["children"].init(nos::trent::type::list);
     child["children"].push_back(std::move(grandchild));
@@ -504,11 +522,12 @@ int main() {
                 "partial reconcile should retain and reapply stored overrides");
 
     nos::trent structural_refresh_data = refreshed_data;
-    nos::trent added_source_child;
+    nos::trent added_source_child =
+        structural_refresh_data["root"]["children"].as_list()[0];
     added_source_child["uuid"] = "prefab-source-added-later";
     added_source_child["name"] = "AddedLater";
-    added_source_child["components"].init(nos::trent::type::list);
-    added_source_child["children"].init(nos::trent::type::list);
+    added_source_child["components"].as_list().clear();
+    added_source_child["children"].as_list().clear();
     structural_refresh_data["root"]["children"].push_back(
         std::move(added_source_child));
     termin::prefab::PrefabDocumentResult structural_refresh_document =
@@ -859,26 +878,10 @@ int main() {
     malformed_transform_data["root"]["pose"]["position"].as_list().pop_back();
     termin::prefab::PrefabDocumentResult malformed_transform_document =
         termin::prefab::PrefabDocument::parse_json(nos::json::dump(malformed_transform_data));
-    TEST_ASSERT(malformed_transform_document.ok(),
-                "field-level restore should defend against source shapes not rejected by v3 parsing");
-    double malformed_local_position[3] = {4.0, 5.0, 6.0};
-    document_instance.root.set_local_position(malformed_local_position);
-    TEST_ASSERT(record_override(*document_state, "prefab-source-root", "",
-                                "transform.position", "vec3"),
-                "malformed transform restore fixture should be accepted");
-    termin::prefab::PrefabOverrideRestoreResult malformed_transform_restore =
-        document_state->clear_property_override(
-            malformed_transform_document.document,
-            "prefab-source-root", "", "transform.position");
-    document_instance.root.get_local_position(restored_position);
-    TEST_ASSERT(!malformed_transform_restore.ok() &&
-                    malformed_transform_restore.failures[0].error ==
-                        termin::prefab::PrefabOverrideRestoreError::InvalidSourceValue &&
-                    restored_position[0] == 4.0 && restored_position[1] == 5.0 &&
-                    restored_position[2] == 6.0 &&
-                    document_state->property_override_count() == 1,
-                "malformed transform source should preserve live value and override metadata");
-    document_state->discard_all_property_overrides();
+    TEST_ASSERT(!malformed_transform_document.ok() &&
+                    malformed_transform_document.message.find("root.pose.position") !=
+                        std::string::npos,
+                "v3 parsing should reject malformed transforms at the document boundary");
 
     const size_t stable_count = scene.entity_count();
     nos::trent malformed = source;
