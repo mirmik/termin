@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
 #include <string>
 
 #include <termin/geom/mat44.hpp>
@@ -44,16 +43,5 @@ ENTITY_API bool emit_line_batch_render_items(
     const tc_render_item_collect_context& context,
     tc_render_item_sink& sink,
     const LineBatchRenderItemDesc& desc);
-
-ENTITY_API TcShader override_line_batch_shader(
-    const ShaderOverrideContext& context,
-    LineRenderMode mode,
-    bool cast_shadow);
-
-ENTITY_API void collect_line_batch_shader_usages(
-    const ShaderOverrideContext& context,
-    LineRenderMode mode,
-    bool cast_shadow,
-    const std::function<void(TcShader)>& emit);
 
 } // namespace termin
