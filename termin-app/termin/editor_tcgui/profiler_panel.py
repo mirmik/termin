@@ -117,13 +117,6 @@ class ProfilerPanel(VStack):
         self._enable_check.on_changed = self._on_enable_toggled
         toolbar.add_child(self._enable_check)
 
-        self._detailed_check = Checkbox()
-        self._detailed_check.text = "Detailed"
-        self._detailed_check.font_size = 12
-        self._detailed_check.checked = self._controller.detailed
-        self._detailed_check.on_changed = self._on_detailed_toggled
-        toolbar.add_child(self._detailed_check)
-
         self._include_ui_check = Checkbox()
         self._include_ui_check.text = "Include UI"
         self._include_ui_check.font_size = 12
@@ -196,9 +189,6 @@ class ProfilerPanel(VStack):
         self._controller.set_enabled(checked)
         if not checked:
             self._reset_state()
-
-    def _on_detailed_toggled(self, checked: bool) -> None:
-        self._controller.set_detailed(checked)
 
     def _on_include_ui_toggled(self, checked: bool) -> None:
         self._controller.set_include_ui(checked)

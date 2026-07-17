@@ -186,10 +186,6 @@ class ProfilerController:
         return self.profiler.enabled
 
     @property
-    def detailed(self) -> bool:
-        return self.profiler.detailed_rendering
-
-    @property
     def include_ui(self) -> bool:
         if self._get_include_ui is None:
             return False
@@ -206,9 +202,6 @@ class ProfilerController:
         if not enabled:
             self.presentation.reset()
             self._last_frame_number = None
-
-    def set_detailed(self, detailed: bool) -> None:
-        self.profiler.detailed_rendering = bool(detailed)
 
     def set_include_ui(self, include: bool) -> None:
         if self._set_include_ui is None:

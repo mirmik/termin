@@ -253,6 +253,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
         engine.profile_ui = enabled
 
     profiler_capture_coordinator = ProfilerCaptureCoordinator()
+    capture_profiler = profiler_capture_coordinator.profiler
     profiler_controller = ProfilerController(
         profiler_capture_coordinator.profiler,
         get_include_ui=lambda: bool(engine.profile_ui),
@@ -270,6 +271,8 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
         window_manager,
         profiler_capture_session,
         request_render=request_editor_render,
+        get_include_ui=lambda: bool(engine.profile_ui),
+        set_include_ui=set_profile_ui,
     )
     connect_frame_profiler_command(
         debug_menu,
@@ -1714,27 +1717,34 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             display_workspace,
             entity_inspector,
         )
-        keep_running, _routed = window_manager.poll_events()
+        with capture_profiler.section("Events"):
+            keep_running, _routed = window_manager.poll_events()
         if not keep_running:
             return
-        if executor.process_pending() > 0:
-            host.request_render_update()
-        window_manager.process_deferred()
-        if quest_openxr_build_dialog.poll() > 0:
-            host.request_render_update()
-        project_file_watcher.poll()
-        scene_structure_observer.poll()
-        spacemouse.poll()
-        framegraph_debugger.update()
-        frame_profiler.update()
-        if profiler_panel.root.visible and profiler_panel.update():
-            host.request_render_update()
-        if _game_mode_requires_continuous_render(game_mode_controller):
-            # The engine renders the playing scene after this UI callback. Compose
-            # every loop so the frame produced at the end of the previous loop is
-            # presented, and keep the scene render scheduler active for the next one.
-            request_editor_render()
-        window_manager.render_requested()
+        with capture_profiler.section("Queued Work"):
+            if executor.process_pending() > 0:
+                host.request_render_update()
+            window_manager.process_deferred()
+            if quest_openxr_build_dialog.poll() > 0:
+                host.request_render_update()
+        with capture_profiler.section("Project Watch"):
+            project_file_watcher.poll()
+        with capture_profiler.section("Observers & Input"):
+            scene_structure_observer.poll()
+            spacemouse.poll()
+        with capture_profiler.section("Debug Tools"):
+            framegraph_debugger.update()
+            frame_profiler.update()
+            if profiler_panel.root.visible and profiler_panel.update():
+                host.request_render_update()
+        with capture_profiler.section("UI Schedule"):
+            if _game_mode_requires_continuous_render(game_mode_controller):
+                # The engine renders the playing scene after this UI callback. Compose
+                # every loop so the frame produced at the end of the previous loop is
+                # presented, and keep the scene render scheduler active for the next one.
+                request_editor_render()
+        with capture_profiler.section("UI Compose"):
+            window_manager.render_requested()
         frame_count += 1
         if frame_limit > 0 and frame_count >= frame_limit:
             window.set_should_close(True)

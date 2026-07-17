@@ -33,7 +33,6 @@ def _frame(
 class FakeHistoryProfiler:
     def __init__(self, source_capacity: int = 120) -> None:
         self.enabled = False
-        self.detailed_rendering = False
         self.source_capacity = source_capacity
         self.frames: list[FrameProfile] = []
 

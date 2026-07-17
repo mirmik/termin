@@ -58,6 +58,18 @@ class FakeMenuRoute:
         self.callback = callback
 
 
+def _build_profiler(window_manager, session, *, request_render=lambda: None):
+    include_ui = {"value": False}
+    profiler = build_native_frame_profiler(
+        window_manager,
+        session,
+        request_render=request_render,
+        get_include_ui=lambda: include_ui["value"],
+        set_include_ui=lambda value: include_ui.__setitem__("value", value),
+    )
+    return profiler, include_ui
+
+
 def _frame(number: int, interval_ms: float) -> FrameProfile:
     return FrameProfile(
         frame_number=number,
@@ -85,7 +97,7 @@ def test_native_frame_profiler_projects_capture_and_timeline_selection():
     assert session.poll() == 2
     renders = []
 
-    profiler = build_native_frame_profiler(
+    profiler, include_ui = _build_profiler(
         object(),
         session,
         request_render=lambda: renders.append(True),
@@ -100,6 +112,11 @@ def test_native_frame_profiler_projects_capture_and_timeline_selection():
     assert profiler.command_model.command(profiler.commands["follow"]).data.checked is False
     assert renders
     assert profiler.command_model.command(profiler.commands["capture"]).data.label == "Pause"
+    assert not profiler.command_model.command(profiler.commands["include-ui"]).data.checked
+    profiler.set_include_ui(True)
+    profiler.refresh(force=True)
+    assert include_ui["value"]
+    assert profiler.command_model.command(profiler.commands["include-ui"]).data.checked
 
 
 def test_native_frame_profiler_clear_keeps_capture_enabled():
@@ -108,7 +125,7 @@ def test_native_frame_profiler_clear_keeps_capture_enabled():
     session.start_capture()
     source.frames.append(_frame(1, 16.0))
     session.poll()
-    profiler = build_native_frame_profiler(object(), session, request_render=lambda: None)
+    profiler, _include_ui = _build_profiler(object(), session)
 
     profiler.clear()
 
@@ -122,7 +139,8 @@ def test_native_frame_profiler_window_lifecycle_preserves_buffer_and_releases_ca
     source = FakeHistoryProfiler()
     session = ProfilerCaptureSession(ProfilerCaptureCoordinator(source), capacity=16)
     manager = FakeWindowManager()
-    profiler = build_native_frame_profiler(manager, session, request_render=lambda: None)
+    profiler, _include_ui = _build_profiler(manager, session)
+    profiler.refresh_interval_seconds = 0.0
     route = FakeMenuRoute()
     connect_frame_profiler_command(route, 42, profiler)
 
@@ -142,3 +160,40 @@ def test_native_frame_profiler_window_lifecycle_preserves_buffer_and_releases_ca
     assert [frame.frame_number for frame in session.frames] == [1, 3]
     assert len(manager.created) == 2
     profiler.close()
+
+
+def test_native_frame_profiler_throttles_projection_without_skipping_capture():
+    source = FakeHistoryProfiler()
+    session = ProfilerCaptureSession(ProfilerCaptureCoordinator(source), capacity=16)
+    session.start_capture()
+    profiler, _include_ui = _build_profiler(object(), session)
+    profiler.window = FakeWindow(lambda: None)
+    profiler.refresh_interval_seconds = 60.0
+    source.frames.append(_frame(1, 16.0))
+
+    assert not profiler.update()
+    assert [frame.frame_number for frame in session.frames] == [1]
+    assert profiler.timeline_model.samples == []
+
+    profiler.refresh_interval_seconds = 0.0
+    assert profiler.update()
+    assert [sample.stable_id for sample in profiler.timeline_model.samples] == [1]
+
+
+def test_native_frame_profiler_appends_timeline_samples_incrementally():
+    source = FakeHistoryProfiler()
+    session = ProfilerCaptureSession(ProfilerCaptureCoordinator(source), capacity=16)
+    session.start_capture()
+    profiler, _include_ui = _build_profiler(object(), session)
+    profiler.window = FakeWindow(lambda: None)
+    profiler.refresh_interval_seconds = 0.0
+
+    source.frames.append(_frame(1, 16.0))
+    assert profiler.update()
+    first_revision = profiler.timeline_model.revision
+    assert [sample.stable_id for sample in profiler.timeline_model.samples] == [1]
+
+    source.frames.append(_frame(2, 17.0))
+    assert profiler.update()
+    assert profiler.timeline_model.revision == first_revision + 1
+    assert [sample.stable_id for sample in profiler.timeline_model.samples] == [1, 2]

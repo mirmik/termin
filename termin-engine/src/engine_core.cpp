@@ -73,7 +73,9 @@ bool EngineCore::tick_and_render(double dt) {
     // sections are no-ops because current_frame is NULL.
     bool profile = tc_profiler_enabled();
 
+    if (profile) tc_profiler_begin_section("SceneManager Tick");
     bool should_render = scene_manager.tick(dt);
+    if (profile) tc_profiler_end_section();
 
     if (should_render) {
         if (profile) tc_profiler_begin_section("SceneManager Before Render");
