@@ -45,6 +45,7 @@ set(TERMIN_SCENE_SOURCES
     src/tc_component.c
     src/tc_component_capability.c
     src/tc_entity_pool.c
+    src/tc_entity_pool_soa.c
     src/tc_entity_pool_registry.c
     src/tc_hash_map.c
     src/tc_scene.c
