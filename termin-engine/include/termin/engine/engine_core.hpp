@@ -43,11 +43,9 @@ public:
     double target_fps() const { return _target_fps; }
 
     // When true, run() wraps the poll_events callback in a profiler "UI"
-    // section and extends the frame scope to cover both UI and
-    // tick_and_render. When false, tick_and_render owns its own frame scope
-    // and UI time stays outside the profile — same behaviour the profiler
-    // had historically, useful for apples-to-apples comparison with other
-    // hosts.
+    // section. When false, run() keeps the frame scope but records UI as a
+    // muted subtree, so cadence and active-frame timing still cover the whole
+    // loop while the section report stays comparable with non-UI hosts.
     void set_profile_ui(bool v) { _profile_ui = v; }
     bool profile_ui() const { return _profile_ui; }
 
