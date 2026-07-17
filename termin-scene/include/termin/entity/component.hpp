@@ -84,9 +84,9 @@ public:
         if (ref_vt) _c.ref_vtable = ref_vt;
     }
 
-    // Type identification (for serialization) - uses type_entry from registry
+    // Type identification for serialization.
     const char* type_name() const {
-        return _c.type_entry ? _c.type_entry->type_name : nullptr;
+        return tc_component_type_name(&_c);
     }
 
 public:

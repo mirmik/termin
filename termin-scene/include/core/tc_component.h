@@ -3,7 +3,6 @@
 #define TC_COMPONENT_H
 
 #include "tc_types.h"
-#include "tc_type_registry.h"
 #include "core/tc_component_capability.h"
 #include "core/tc_entity_pool.h"
 #include "core/tc_dlist.h"
@@ -107,8 +106,7 @@ struct tc_component {
     // For PythonComponent: PyObject* (the PythonComponent object)
     void* body;
 
-    // Declared type name used to lazily attach type_entry on add-to-entity paths.
-    // This is optional; registry-created components already have type_entry.
+    // Declared type name used to lazily attach the common runtime type link.
     const char* declared_type_name;
 
     // Stable authoring/serialization identity. This is deliberately separate
@@ -135,8 +133,6 @@ struct tc_component {
     tc_component* type_next;
 
     // Type registry link (for global instance tracking and hot reload)
-    tc_type_entry* type_entry;
-    uint32_t type_version;
     tc_runtime_type_instance_link runtime_type_link;
 
     // Generic component capabilities (slot-based fast path)
@@ -146,10 +142,6 @@ struct tc_component {
     tc_component* capability_prev[TC_COMPONENT_MAX_CAPABILITIES];
     tc_component* capability_next[TC_COMPONENT_MAX_CAPABILITIES];
 
-    // Intrusive list for global type registry instance tracking
-    // Uses tc_dlist_node for safe multiple-unlink
-    // TODO: remove after old tc_type_entry instance tracking is fully retired.
-    tc_dlist_node registry_node;
 };
 
 // ============================================================================
@@ -175,15 +167,12 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->factory_retained = false;
     c->type_prev = NULL;
     c->type_next = NULL;
-    c->type_entry = NULL;
-    c->type_version = 0;
     tc_runtime_type_instance_link_init(&c->runtime_type_link);
     c->capability_mask = 0;
     memset(c->capability_ptrs, 0, sizeof(c->capability_ptrs));
     memset(c->capability_priorities, 0, sizeof(c->capability_priorities));
     memset(c->capability_prev, 0, sizeof(c->capability_prev));
     memset(c->capability_next, 0, sizeof(c->capability_next));
-    tc_dlist_init_node(&c->registry_node);
 }
 
 // ============================================================================
@@ -300,8 +289,8 @@ static inline const char* tc_component_type_name(const tc_component* c) {
     if (c && c->runtime_type_link.type_name) {
         return c->runtime_type_link.type_name;
     }
-    if (c && c->type_entry && c->type_entry->type_name) {
-        return c->type_entry->type_name;
+    if (c && c->declared_type_name) {
+        return c->declared_type_name;
     }
     return "Component";
 }
@@ -421,7 +410,6 @@ TC_API size_t tc_component_registry_get_types_with_capability(
 );
 
 // Get type entry for a component type
-TC_API tc_type_entry* tc_component_registry_get_entry(const char* type_name);
 TC_API void tc_component_set_declared_type_name(tc_component* c, const char* type_name);
 TC_API void tc_component_try_link_declared_type(tc_component* c);
 
@@ -430,7 +418,7 @@ TC_API size_t tc_component_registry_instance_count(const char* type_name);
 
 // Check if component's type version is current (for hot reload detection)
 static inline bool tc_component_type_is_current(const tc_component* c) {
-    if (!c || (!c->type_entry && !c->runtime_type_link.type_name)) return true;
+    if (!c || !c->runtime_type_link.type_name) return true;
     return tc_runtime_type_registry_instance_is_current(&c->runtime_type_link);
 }
 

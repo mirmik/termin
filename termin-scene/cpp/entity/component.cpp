@@ -101,11 +101,6 @@ CxxComponent::CxxComponent(const char* type_name) {
     _c.has_fixed_update = false;
     _c.has_before_render = false;
     tc_component_set_declared_type_name(&_c, type_name);
-    tc_type_entry* entry = tc_component_registry_get_entry(type_name);
-    if (entry) {
-        _c.type_entry = entry;
-        _c.type_version = entry->version;
-    }
 }
 
 CxxComponent::~CxxComponent() {

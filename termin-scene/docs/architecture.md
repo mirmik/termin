@@ -16,7 +16,7 @@
 │  Хранение сущностей, иерархия, transform, флаги │
 ├──────────────┬───────────────────────────────────┤
 │  Component   │  SoA (tc_archetype)               │
-│  (tc_component + tc_type_registry)               │
+│  (tc_component + runtime type component facet)   │
 │  Lifecycle-хуки, фабрики  │  Плотные данные,     │
 │                           │  chunk-итерация      │
 └───────────────────────────┴──────────────────────┘
@@ -29,7 +29,7 @@
 | `src/tc_scene.c` | Scene pool, списки lifecycle-компонентов, update-проходы |
 | `src/tc_entity_pool.c` | Сущности (SoA/AoS поля), parent/child, component arrays, UUID/pick lookup |
 | `src/tc_component.c` | Реестр компонентных типов, фабрики, type flags, привязка к type entry |
-| `src/tc_type_registry.c` | Унифицированный type registry: регистрация, версионирование, иерархия типов |
+| `termin-inspect/src/tc_runtime_type_registry.c` | Общий runtime type registry: identity, owner, parent, facets и live instances |
 | `src/tc_archetype.c` | SoA-типы, архетипы, миграции строк, query chunks |
 | `src/tc_scene_extension.c` | Registry типов расширений и экземпляров на сценах |
 

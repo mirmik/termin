@@ -49,7 +49,6 @@ set(TERMIN_SCENE_SOURCES
     src/tc_hash_map.c
     src/tc_scene.c
     src/tc_scene_extension.c
-    src/tc_type_registry.c
     src/tc_component_python.c
 )
 
@@ -93,7 +92,6 @@ set(TERMIN_SCENE_HEADERS
     include/core/tc_scene_extension_ids.h
     include/core/tc_scene_pool.h
     include/tc_hash_map.h
-    include/tc_type_registry.h
     include/tc_types.h
     include/tc_value.h
     include/tc_component_python.h

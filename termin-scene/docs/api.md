@@ -21,7 +21,7 @@
 
 | Заголовок | Ответственность |
 |-----------|----------------|
-| `include/tc_type_registry.h` | Type registry и instance tracking |
+| `include/inspect/tc_runtime_type_registry.h` | Общий runtime type registry и instance tracking |
 | `include/tc_hash_map.h` | `str/u32/u64` hash maps |
 
 ## Как читать API
