@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from termin.prefab.asset import PrefabAsset
@@ -21,6 +22,27 @@ class FakeResourceManager:
         self.by_uuid[asset.uuid] = asset
         if source_path is not None:
             asset.source_path = source_path
+
+
+def _empty_entity_data(uuid: str, name: str) -> dict[str, object]:
+    return {
+        "uuid": uuid,
+        "name": name,
+        "priority": 0,
+        "visible": True,
+        "enabled": True,
+        "pickable": True,
+        "selectable": True,
+        "layer": 0,
+        "flags": 0,
+        "pose": {
+            "position": [0.0, 0.0, 0.0],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+        },
+        "scale": [1.0, 1.0, 1.0],
+        "components": [],
+        "children": [],
+    }
 
 
 def test_prefab_runtime_plugin_registers_lazy_asset() -> None:
@@ -60,8 +82,9 @@ def test_prefab_import_plugin_extracts_uuid(tmp_path: Path) -> None:
 
 def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
     prefab_path = tmp_path / "Enemy.prefab"
+    root_data = _empty_entity_data("enemy-root", "Enemy")
     prefab_path.write_text(
-        '{"version": "3.0", "uuid": "prefab-uuid", "root": {"uuid": "enemy-root", "name": "Enemy", "components": [], "children": []}}',
+        json.dumps({"version": "3.0", "uuid": "prefab-uuid", "root": root_data}),
         encoding="utf-8",
     )
 
@@ -69,12 +92,7 @@ def test_prefab_asset_file_helpers(tmp_path: Path) -> None:
 
     assert asset.name == "Enemy"
     assert asset.uuid == "prefab-uuid"
-    assert asset.root_data == {
-        "uuid": "enemy-root",
-        "name": "Enemy",
-        "components": [],
-        "children": [],
-    }
+    assert asset.root_data == root_data
     assert asset.get_entity_count() == 1
 
 

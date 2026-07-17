@@ -1,8 +1,10 @@
 #include <termin/prefab/prefab_document.hpp>
 
-#include <unordered_set>
+#include <cmath>
 #include <iomanip>
+#include <limits>
 #include <sstream>
+#include <unordered_set>
 
 #include <trent/json.h>
 #include <tcbase/tc_log.hpp>
@@ -17,6 +19,123 @@ PrefabDocumentResult failure(PrefabDocumentError error, std::string message) {
     result.error = error;
     result.message = std::move(message);
     return result;
+}
+
+bool require_string(const nos::trent& entity, const char* field, const std::string& path,
+                    std::string& message) {
+    if (!entity.contains(field) || !entity[field].is_string()) {
+        message = path + "." + field + " must be a string";
+        return false;
+    }
+    return true;
+}
+
+bool require_bool(const nos::trent& entity, const char* field, const std::string& path,
+                  std::string& message) {
+    if (!entity.contains(field) || !entity[field].is_bool()) {
+        message = path + "." + field + " must be a boolean";
+        return false;
+    }
+    return true;
+}
+
+bool require_integer(
+    const nos::trent& entity,
+    const char* field,
+    long double minimum,
+    long double maximum,
+    const char* expectation,
+    const std::string& path,
+    std::string& message
+) {
+    if (!entity.contains(field) || !entity[field].is_numer()) {
+        message = path + "." + field + " " + expectation;
+        return false;
+    }
+    const long double value = entity[field].as_numer();
+    if (!std::isfinite(value) || std::trunc(value) != value ||
+        value < minimum || value > maximum) {
+        message = path + "." + field + " " + expectation;
+        return false;
+    }
+    return true;
+}
+
+bool require_finite_vector(
+    const nos::trent& value,
+    size_t expected_size,
+    const std::string& path,
+    std::string& message
+) {
+    if (!value.is_list()) {
+        message = path + " must be a list of " + std::to_string(expected_size) +
+            " finite numbers";
+        return false;
+    }
+    const auto& items = value.as_list();
+    if (items.size() != expected_size) {
+        message = path + " must contain exactly " + std::to_string(expected_size) +
+            " finite numbers";
+        return false;
+    }
+    for (size_t index = 0; index < items.size(); ++index) {
+        if (!items[index].is_numer() || !std::isfinite(items[index].as_numer())) {
+            message = path + "[" + std::to_string(index) + "] must be a finite number";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool validate_entity_base(
+    const nos::trent& entity,
+    const std::string& path,
+    std::string& message
+) {
+    if (!require_string(entity, "name", path, message)) return false;
+    for (const char* field : {"visible", "enabled", "pickable", "selectable"}) {
+        if (!require_bool(entity, field, path, message)) return false;
+    }
+    if (!require_integer(
+            entity, "priority",
+            std::numeric_limits<int>::min(), std::numeric_limits<int>::max(),
+            "must be an integer in the native int range", path, message)) {
+        return false;
+    }
+    for (const char* field : {"layer", "flags"}) {
+        if (!require_integer(
+                entity, field, 0, std::numeric_limits<int64_t>::max(),
+                "must be a non-negative integer", path, message)) {
+            return false;
+        }
+    }
+    if (!entity.contains("pose") || !entity["pose"].is_dict()) {
+        message = path + ".pose must be an object";
+        return false;
+    }
+    const nos::trent& pose = entity["pose"];
+    if (!pose.contains("position") ||
+        !require_finite_vector(pose["position"], 3, path + ".pose.position", message)) {
+        if (!pose.contains("position")) {
+            message = path + ".pose.position must be a list of 3 finite numbers";
+        }
+        return false;
+    }
+    if (!pose.contains("rotation") ||
+        !require_finite_vector(pose["rotation"], 4, path + ".pose.rotation", message)) {
+        if (!pose.contains("rotation")) {
+            message = path + ".pose.rotation must be a list of 4 finite numbers";
+        }
+        return false;
+    }
+    if (!entity.contains("scale") ||
+        !require_finite_vector(entity["scale"], 3, path + ".scale", message)) {
+        if (!entity.contains("scale")) {
+            message = path + ".scale must be a list of 3 finite numbers";
+        }
+        return false;
+    }
+    return true;
 }
 
 bool validate_entity(
@@ -38,6 +157,10 @@ bool validate_entity(
     }
     if (!entity_ids.insert(entity_id).second) {
         message = path + ".uuid duplicates entity source identity '" + entity_id + "'";
+        return false;
+    }
+
+    if (!validate_entity_base(entity, path, message)) {
         return false;
     }
 
