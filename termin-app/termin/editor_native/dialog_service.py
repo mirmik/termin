@@ -243,6 +243,7 @@ class NativeDialogService(DialogService):
             checkboxes.append(checkbox)
         layer_list.preferred_size = Size(320.0, 64.0 * 30.0)
         scroll = self._document.create_scroll_area("native-layer-mask-scroll")
+        scroll.set_scroll_axes(False, True)
         scroll.set_content(layer_list)
         content.add_stretch_child(scroll.widget)
         content.preferred_size = Size(340.0, 430.0)

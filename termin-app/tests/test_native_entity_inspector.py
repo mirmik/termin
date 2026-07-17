@@ -83,6 +83,14 @@ def test_native_entity_inspector_selection_edit_undo_and_paint():
         inspector.set_target(entity)
         document.layout_roots(Rect(0.0, 0.0, 420.0, 640.0))
 
+        assert not inspector.scroll.horizontal_scroll_enabled
+        assert inspector.scroll.content_size.width == pytest.approx(inspector.scroll.widget.bounds.width)
+        transform_right = (
+            inspector.transform_boxes[0][-1].widget.bounds.x
+            + inspector.transform_boxes[0][-1].widget.bounds.width
+        )
+        scroll_right = inspector.scroll.widget.bounds.x + inspector.scroll.widget.bounds.width
+        assert transform_right <= scroll_right + 0.5
         assert inspector.name_input.text == "source"
         assert inspector.uuid_value.text == entity.uuid
         assert inspector.component_model.item_count == 1

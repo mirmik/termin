@@ -305,7 +305,9 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     # Match the legacy editor's initial 1476:346 workspace/inspector split
     # at the 2048 px reference window while retaining responsive fractions.
     right_splitter.set_split_fraction(0.81)
-    right_splitter.set_min_extents(360.0, 260.0)
+    # The inspector is authored around a 360 px preferred width. Keeping the
+    # same minimum prevents compact numeric controls from becoming unusable.
+    right_splitter.set_min_extents(360.0, 360.0)
 
     profiler_host = document.create_vstack("native-editor-profiler-host")
     profiler_host.stable_id = "editor.profiler-host"
@@ -327,7 +329,9 @@ def build_native_editor_shell(document: Document) -> NativeEditorShell:
     left_splitter.set_second(right_splitter.widget)
     # The legacy hierarchy column starts at roughly 225 px in a 2048 px window.
     left_splitter.set_split_fraction(0.11)
-    left_splitter.set_min_extents(180.0, 620.0)
+    # The second extent contains the right splitter and must cover both of its
+    # declared minima when the window is wide enough to satisfy them.
+    left_splitter.set_min_extents(180.0, 720.0)
 
     bottom_tabs = document.create_tab_view("native-editor-bottom-tabs")
     bottom_tabs.widget.stable_id = "editor.bottom-tabs"
