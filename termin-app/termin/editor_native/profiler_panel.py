@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import json
 
 from termin.editor_core.profiler_model import ProfilerController, ProfilerSnapshot
 from termin.editor_native.metrics import EDITOR_UI_METRICS
@@ -16,8 +17,9 @@ from termin.gui_native import (
     TableColumn,
     TableColumnModel,
     TableColumnPolicy,
-    TableModel,
-    TableRowData,
+    TreeExpansionModel,
+    TreeTableModel,
+    TreeTableRowData,
     WidgetRef,
 )
 
@@ -34,13 +36,15 @@ class NativeProfilerPanel:
     status_bar: object
     table_widget: object
     command_model: CommandModel
-    table_model: TableModel
+    table_model: TreeTableModel
     column_model: TableColumnModel
+    expansion_model: TreeExpansionModel
     frame_time_model: FrameTimeModel
     enable_command: int
     detailed_command: int
     include_ui_command: int
     clear_command: int
+    known_node_ids: set[str] = field(default_factory=set)
 
     def set_visible(self, visible: bool) -> None:
         visible = bool(visible)
@@ -53,6 +57,8 @@ class NativeProfilerPanel:
         self.controller.clear()
         self.frame_time_model.clear()
         self.table_model.clear()
+        self.expansion_model.clear()
+        self.known_node_ids.clear()
         self.status_bar.text = "Profiler | waiting for a complete frame"
 
     def update(self) -> bool:
@@ -68,12 +74,17 @@ class NativeProfilerPanel:
             f"Profiler | {snapshot.fps:.0f} FPS | {snapshot.frame_ms:.2f} ms | "
             f"frame {snapshot.frame_number}"
         )
+        stable_ids = {
+            row.path: json.dumps(row.path, ensure_ascii=False, separators=(",", ":"))
+            for row in snapshot.rows
+        }
         self.table_model.set_rows(
             [
-                TableRowData(
-                    row.path,
+                TreeTableRowData(
+                    stable_ids[row.path],
+                    stable_ids.get(row.path[:-1], ""),
                     [
-                        f"{'  ' * row.depth}{row.name}",
+                        row.name,
                         f"{row.cpu_ms:.2f}",
                         f"{row.percent:.1f}%",
                         f"{row.coverage_percent:.0f}%" if row.has_children else "",
@@ -83,6 +94,12 @@ class NativeProfilerPanel:
                 for row in snapshot.rows
             ]
         )
+        current_ids = set(stable_ids.values())
+        for root in self.table_model.roots:
+            stable_id = self.table_model.node(root).data.stable_id
+            if stable_id not in self.known_node_ids:
+                self.table_widget.set_expanded(root, True)
+        self.known_node_ids.update(current_ids)
 
 
 def build_native_profiler_panel(
@@ -118,7 +135,8 @@ def build_native_profiler_panel(
     graph = document.create_frame_time_graph(frame_model)
     root.add_fixed_child(_ref(document, graph), 96.0)
 
-    table_model = TableModel()
+    table_model = TreeTableModel()
+    expansion_model = TreeExpansionModel()
     column_model = TableColumnModel()
     column_model.set_columns(
         [
@@ -135,7 +153,11 @@ def build_native_profiler_panel(
             TableColumn("calls", "N", TableColumnPolicy.Fixed, width=42.0),
         ]
     )
-    table = document.create_table_widget(table_model, column_model)
+    table = document.create_tree_table_widget(
+        table_model,
+        column_model,
+        expansion_model,
+    )
     root.add_stretch_child(_ref(document, table))
 
     panel = NativeProfilerPanel(
@@ -147,6 +169,7 @@ def build_native_profiler_panel(
         command_model=commands,
         table_model=table_model,
         column_model=column_model,
+        expansion_model=expansion_model,
         frame_time_model=frame_model,
         enable_command=enable,
         detailed_command=detailed,
