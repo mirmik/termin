@@ -281,6 +281,28 @@ bool foliage_render_item_draw_encoder(
     return foliage->encode_render_item_tgfx2(ctx, item, request);
 }
 
+RenderItemTaskRejection foliage_render_item_task_shader_planner(
+    const RenderItemTaskPlanningRequest& request,
+    RenderItemTaskShaderPlan& out_plan,
+    const char*& out_detail,
+    void* user_data)
+{
+    (void)user_data;
+    if (!request.item || request.item->kind != TC_RENDER_ITEM_KIND_FOLIAGE_BATCH ||
+        !request.contract) {
+        out_detail = "foliage planner received an invalid request";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
+    }
+    out_plan.final_shader = request.candidate_shader;
+    out_plan.has_vertex_transform_kind = true;
+    out_plan.vertex_transform_kind =
+        request.contract->pass_semantic == RenderItemPassSemantic::Shadow
+        ? VertexTransformKind::FoliageShadow
+        : VertexTransformKind::Foliage;
+    out_detail = nullptr;
+    return RenderItemTaskRejection::None;
+}
+
 void ensure_foliage_render_item_encoder_registered()
 {
     static bool registered = false;
@@ -290,10 +312,19 @@ void ensure_foliage_render_item_encoder_registered()
 
     RenderItemDrawEncoderDesc desc{};
     desc.encode = foliage_render_item_draw_encoder;
+    desc.plan_task_shader = foliage_render_item_task_shader_planner;
     desc.debug_name = "FoliageLayerComponent";
     desc.capabilities.pass_semantic_mask =
         render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
         | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow);
+    desc.capabilities.vertex_transform_kind_mask =
+        render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::FoliageShadow);
+    desc.capabilities.supported_task_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext)
+        | render_item_task_input_bit(RenderItemTaskInput::ModelMatrix);
+    desc.capabilities.required_task_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
     desc.capabilities.requires_draw_context = true;
     desc.capabilities.consumes_common_resources = true;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_FOLIAGE_BATCH, desc);
