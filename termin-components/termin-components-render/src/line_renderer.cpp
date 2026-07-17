@@ -405,12 +405,19 @@ void ensure_line_render_item_encoder_registered()
 
     RenderItemDrawEncoderDesc desc{};
     desc.encode = line_render_item_draw_encoder;
+    desc.plan_task_shader = plan_render_item_passthrough_shader;
     desc.user_data = &state;
     desc.debug_name = "LineRenderer";
     desc.capabilities.pass_semantic_mask =
         render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
         | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow)
         | render_item_pass_semantic_bit(RenderItemPassSemantic::Id);
+    desc.capabilities.supported_task_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext)
+        | render_item_task_input_bit(RenderItemTaskInput::ModelMatrix)
+        | render_item_task_input_bit(RenderItemTaskInput::OverrideColor);
+    desc.capabilities.required_task_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
     desc.capabilities.requires_draw_context = true;
     desc.capabilities.consumes_common_resources = true;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_LINE_BATCH, desc);

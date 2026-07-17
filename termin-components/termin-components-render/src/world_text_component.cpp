@@ -205,10 +205,17 @@ void ensure_world_text_render_item_encoder_registered()
 
     RenderItemDrawEncoderDesc desc{};
     desc.encode = world_text_render_item_draw_encoder;
+    desc.plan_task_shader = plan_render_item_passthrough_shader;
     desc.debug_name = "WorldTextComponent";
     desc.capabilities.pass_semantic_mask =
         render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
         | render_item_pass_semantic_bit(RenderItemPassSemantic::Id);
+    desc.capabilities.supported_task_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext)
+        | render_item_task_input_bit(RenderItemTaskInput::ModelMatrix)
+        | render_item_task_input_bit(RenderItemTaskInput::OverrideColor);
+    desc.capabilities.required_task_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
     desc.capabilities.requires_draw_context = true;
     desc.capabilities.consumes_common_resources = false;
     registered = register_render_item_draw_encoder(TC_RENDER_ITEM_KIND_TEXT_BATCH, desc);

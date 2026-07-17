@@ -671,6 +671,22 @@ void ColorPass::execute_with_data(
 
     RenderTaskList render_tasks;
     render_tasks.reserve(cached_draw_calls_.size());
+    const MaterialPipelinePassContract task_shader_contract =
+        color_material_pass_contract();
+    RenderItemTaskPlanningContract task_planning_contract{};
+    task_planning_contract.pass_semantic = RenderItemPassSemantic::Color;
+    task_planning_contract.material_phase_policy =
+        RenderItemMaterialPhasePolicy::Required;
+    task_planning_contract.provided_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    task_planning_contract.required_input_mask =
+        render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+    task_planning_contract.accepted_vertex_transform_kind_mask =
+        render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage);
+    task_planning_contract.shader_contract = &task_shader_contract;
+    task_planning_contract.debug_pass_name = debug_pass_name_c;
 
     size_t draw_index = 0;
     for (const auto& dc : cached_draw_calls_) {
@@ -727,16 +743,25 @@ void ColorPass::execute_with_data(
             continue;
         }
 
+        RenderItemTaskPlanningRequest planning_request{};
+        planning_request.item = item;
+        planning_request.item_index = dc.item_index;
+        planning_request.source_draw_index = draw_index;
+        planning_request.material_phase = phase;
+        planning_request.candidate_shader = final_shader;
+        planning_request.contract = &task_planning_contract;
+        RenderItemTaskPlanningResult planning_result =
+            plan_render_item_task(planning_request, render_tasks);
+        if (!planning_result.accepted()) {
+            ++draw_index;
+            continue;
+        }
+
         ColorTaskExtension& extension = render_tasks.emplace_extension<ColorTaskExtension>();
-        RenderTask& task = render_tasks.append();
+        RenderTask& task = render_tasks.at(planning_result.task_index);
         task.extension = &extension;
-        task.source_draw_index = draw_index;
-        task.item_index = dc.item_index;
-        task.item = item;
         task.entity = dc.entity;
         task.component = dc.component;
-        task.material_phase = phase;
-        task.final_shader = final_shader;
         task.entity_name = ename ? ename : "";
         if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
             std::memcpy(
@@ -758,7 +783,7 @@ void ColorPass::execute_with_data(
             extension.draw_data.u_model,
             sizeof(extension.draw_data.u_model));
         task.draw_context.phase = phase_mark;
-        task.draw_context.pass_contract = color_material_pass_contract();
+        task.draw_context.pass_contract = task_shader_contract;
         task.draw_context.current_tc_shader = TcShader(final_shader);
         task.draw_context.layer_mask = data.layer_mask;
         task.draw_context.render_category_mask = ctx.render_category_mask;

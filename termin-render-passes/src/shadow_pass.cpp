@@ -834,6 +834,22 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             MaterialPipelineResourceView draw_material_resources{};
             RenderTaskList render_tasks;
             render_tasks.reserve(cached_draw_calls_.size());
+            const MaterialPipelinePassContract task_shader_contract =
+                shadow_material_pass_contract();
+            RenderItemTaskPlanningContract task_planning_contract{};
+            task_planning_contract.pass_semantic = RenderItemPassSemantic::Shadow;
+            task_planning_contract.material_phase_policy =
+                RenderItemMaterialPhasePolicy::Required;
+            task_planning_contract.provided_input_mask =
+                render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+            task_planning_contract.required_input_mask =
+                render_item_task_input_bit(RenderItemTaskInput::DrawContext);
+            task_planning_contract.accepted_vertex_transform_kind_mask =
+                render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
+                | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh)
+                | render_item_vertex_transform_kind_bit(VertexTransformKind::FoliageShadow);
+            task_planning_contract.shader_contract = &task_shader_contract;
+            task_planning_contract.debug_pass_name = "ShadowPass";
 
             for (const auto& dc : cached_draw_calls_) {
                 tc_material_phase* phase = dc.resolve_phase();
@@ -852,15 +868,24 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 }
                 tc_shader_handle final_shader = dc.final_shader;
 
-                ShadowTaskExtension& extension = render_tasks.emplace_extension<ShadowTaskExtension>();
-                RenderTask& task = render_tasks.append();
+                RenderItemTaskPlanningRequest planning_request{};
+                planning_request.item = item;
+                planning_request.item_index = dc.item_index;
+                planning_request.material_phase = phase;
+                planning_request.candidate_shader = final_shader;
+                planning_request.contract = &task_planning_contract;
+                RenderItemTaskPlanningResult planning_result =
+                    plan_render_item_task(planning_request, render_tasks);
+                if (!planning_result.accepted()) {
+                    continue;
+                }
+
+                ShadowTaskExtension& extension =
+                    render_tasks.emplace_extension<ShadowTaskExtension>();
+                RenderTask& task = render_tasks.at(planning_result.task_index);
                 task.extension = &extension;
-                task.item_index = dc.item_index;
-                task.item = item;
                 task.entity = dc.entity;
                 task.component = dc.component;
-                task.material_phase = phase;
-                task.final_shader = final_shader;
                 const char* entity_name = dc.entity.name();
                 task.entity_name = entity_name ? entity_name : "";
                 if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
@@ -883,7 +908,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     extension.draw_data.u_model,
                     sizeof(extension.draw_data.u_model));
                 task.draw_context.phase = "shadow";
-                task.draw_context.pass_contract = shadow_material_pass_contract();
+                task.draw_context.pass_contract = task_shader_contract;
                 task.draw_context.current_tc_shader = TcShader(final_shader);
                 task.draw_context.layer_mask = data.layer_mask;
                 task.draw_context.render_category_mask = ctx.render_category_mask;
