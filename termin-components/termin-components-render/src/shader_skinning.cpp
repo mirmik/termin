@@ -15,21 +15,24 @@ MaterialPipelinePassContract legacy_full_material_pass_contract()
     contract.required_material_fragment_input =
         material_pipeline_standard_material_fragment_interface();
     contract.uses_material_fragment = true;
-
-    MaterialFragmentInterface fragment_input =
-        material_pipeline_standard_material_fragment_interface();
+    contract.vertex_output_adapter =
+        material_pipeline_standard_material_vertex_output_adapter();
     contract.static_vertex_transform =
-        material_pipeline_make_static_vertex_transform_contract(
+        material_pipeline_make_static_mesh_vertex_transform_provider(
             "static",
-            material_pipeline_full_material_mesh_input(),
-            fragment_input,
-            material_pipeline_common_vertex_resources("draw_data"));
+            MeshVertexTransformProfile::Material,
+            "draw_data.u_model");
     contract.skinned_vertex_transform =
-        material_pipeline_make_skinned_vertex_transform_contract(
-            *contract.static_vertex_transform,
+        material_pipeline_make_skinned_mesh_vertex_transform_provider(
             "skinned",
-            "termin-engine-skinned-material",
-            material_pipeline_skinned_material_mesh_input());
+            MeshVertexTransformProfile::Material,
+            "draw_data.u_model");
+    contract.static_vertex_transform->resources.push_back(
+        material_pipeline_draw_resource_decl(
+            "draw_data", TC_SHADER_STAGE_VERTEX, 64u));
+    contract.skinned_vertex_transform->resources.push_back(
+        material_pipeline_draw_resource_decl(
+            "draw_data", TC_SHADER_STAGE_VERTEX, 64u));
     return contract;
 }
 
