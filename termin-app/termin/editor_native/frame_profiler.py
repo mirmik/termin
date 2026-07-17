@@ -6,10 +6,12 @@ from dataclasses import dataclass, field
 from html import escape
 import json
 import logging
+import time
 from typing import Callable
 import weakref
 
 from termin.editor_core.profiler_capture import (
+    CapturedFrame,
     ProfilerCaptureSession,
     project_captured_sections,
 )
@@ -64,11 +66,18 @@ class NativeFrameProfiler:
     status_bar: object
     commands: dict[str, int]
     request_scene_render: Callable[[], None]
+    get_include_ui: Callable[[], bool]
+    set_include_ui: Callable[[bool], None]
+    refresh_interval_seconds: float = 0.1
     window: NativeUiWindow | None = None
     known_section_ids: set[str] = field(default_factory=set)
     _updating: bool = False
     _closed: bool = False
     _rendered_revision: int = -1
+    _last_refresh_time: float = 0.0
+    _timeline_first_frame_number: int | None = None
+    _timeline_last_frame_number: int | None = None
+    _timeline_frame_count: int = 0
 
     def show(self) -> bool:
         if self._closed:
@@ -94,8 +103,12 @@ class NativeFrameProfiler:
     def update(self) -> bool:
         if self.window is None or self.window.closed:
             return False
-        changed = self.session.poll() > 0
-        if changed or self._rendered_revision != self.session.revision:
+        self.session.poll()
+        now = time.monotonic()
+        if (
+            self._rendered_revision != self.session.revision
+            and now - self._last_refresh_time >= self.refresh_interval_seconds
+        ):
             self.refresh()
             return True
         return False
@@ -111,34 +124,73 @@ class NativeFrameProfiler:
             capture_data.label = "Pause" if self.session.capturing else "Capture"
             self.command_model.update(self.commands["capture"], capture_data)
             self.command_model.set_checked(self.commands["follow"], self.session.follow_latest)
+            self.command_model.set_checked(self.commands["include-ui"], self.get_include_ui())
             self.timeline.follow_latest = self.session.follow_latest
-            self.timeline_model.set_samples(
-                [
-                    FrameTimelineSample(
-                        frame.frame_number,
-                        frame.interval_ms,
-                        frame.active_ms,
-                        frame.profile.deadline_lateness_ms,
-                        frame.profile.target_interval_ms,
-                        frame.hitch,
-                        frame.source_gap_before > 0,
-                    )
-                    for frame in frames
-                ]
-            )
+            self._sync_timeline(frames)
             selected = self.session.selected_frame_number
             if selected is not None and self.timeline.selected_id != selected:
                 self.timeline.select(selected)
             self._refresh_summary()
             self._refresh_selected_frame()
             self._rendered_revision = self.session.revision
+            self._last_refresh_time = time.monotonic()
         finally:
             self._updating = False
         self.request_render()
 
+    @staticmethod
+    def _timeline_sample(frame: CapturedFrame) -> FrameTimelineSample:
+        return FrameTimelineSample(
+            frame.frame_number,
+            frame.interval_ms,
+            frame.active_ms,
+            frame.profile.deadline_lateness_ms,
+            frame.profile.target_interval_ms,
+            frame.hitch,
+            frame.source_gap_before > 0,
+        )
+
+    def _sync_timeline(self, frames: tuple[CapturedFrame, ...]) -> None:
+        if not frames:
+            self.timeline_model.clear()
+            self._timeline_first_frame_number = None
+            self._timeline_last_frame_number = None
+            self._timeline_frame_count = 0
+            return
+
+        first_frame_number = frames[0].frame_number
+        last_frame_number = frames[-1].frame_number
+        if self._timeline_last_frame_number is not None:
+            appended = [
+                frame for frame in frames if frame.frame_number > self._timeline_last_frame_number
+            ]
+            if appended:
+                self.timeline_model.append_samples(
+                    [self._timeline_sample(frame) for frame in appended],
+                    self.session.capacity,
+                )
+                self._timeline_first_frame_number = first_frame_number
+                self._timeline_last_frame_number = last_frame_number
+                self._timeline_frame_count = len(frames)
+                return
+            if (
+                self._timeline_first_frame_number == first_frame_number
+                and self._timeline_last_frame_number == last_frame_number
+                and self._timeline_frame_count == len(frames)
+            ):
+                return
+
+        self.timeline_model.set_samples([self._timeline_sample(frame) for frame in frames])
+        self._timeline_first_frame_number = first_frame_number
+        self._timeline_last_frame_number = last_frame_number
+        self._timeline_frame_count = len(frames)
+
     def clear(self) -> None:
         self.session.clear()
         self.timeline_model.clear()
+        self._timeline_first_frame_number = None
+        self._timeline_last_frame_number = None
+        self._timeline_frame_count = 0
         self.section_model.clear()
         self.section_expansion.clear()
         self.known_section_ids.clear()
@@ -248,6 +300,8 @@ def build_native_frame_profiler(
     session: ProfilerCaptureSession,
     *,
     request_render: Callable[[], None],
+    get_include_ui: Callable[[], bool],
+    set_include_ui: Callable[[bool], None],
 ) -> NativeFrameProfiler:
     document = Document()
     root = document.create_vstack("native-frame-profiler")
@@ -267,6 +321,10 @@ def build_native_frame_profiler(
     commands["follow"] = command_model.append(
         CommandData("follow", "Follow", checkable=True, checked=True)
     )
+    commands["include-ui"] = command_model.append(
+        CommandData("include-ui", "Include UI", checkable=True, checked=get_include_ui())
+    )
+    command_model.append(CommandData("separator-2", kind=CommandKind.Separator))
     commands["previous-hitch"] = command_model.append(CommandData("previous-hitch", "Previous Hitch"))
     commands["next-hitch"] = command_model.append(CommandData("next-hitch", "Next Hitch"))
     toolbar = document.create_tool_bar(command_model)
@@ -329,6 +387,8 @@ def build_native_frame_profiler(
         status_bar=status,
         commands=commands,
         request_scene_render=request_render,
+        get_include_ui=get_include_ui,
+        set_include_ui=set_include_ui,
     )
     weak_profiler = weakref.ref(profiler)
 
@@ -343,6 +403,8 @@ def build_native_frame_profiler(
             return
         elif command_id == commands["follow"]:
             owner.session.set_follow_latest(command.checked)
+        elif command_id == commands["include-ui"]:
+            owner.set_include_ui(command.checked)
         elif command_id == commands["previous-hitch"]:
             owner.session.select_adjacent_hitch(-1)
         elif command_id == commands["next-hitch"]:

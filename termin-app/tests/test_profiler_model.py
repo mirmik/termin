@@ -84,7 +84,6 @@ def test_profiler_presentation_keeps_slashes_structural_and_sorts_siblings_only(
 class FakeProfiler:
     def __init__(self):
         self.enabled = False
-        self.detailed_rendering = False
         self.frames = []
         self.clear_count = 0
 
@@ -106,9 +105,8 @@ def test_profiler_controller_controls_source_and_deduplicates_frames():
     )
 
     controller.set_enabled(True)
-    controller.set_detailed(True)
     controller.set_include_ui(True)
-    assert profiler.enabled and profiler.detailed_rendering and controller.include_ui
+    assert profiler.enabled and controller.include_ui
     profiler.frames.append(_frame(7, 14.0))
     assert controller.poll().frame_number == 7
     assert controller.poll() is None

@@ -68,8 +68,12 @@ native UI. UI-код здесь добавлять нельзя.
 Native frontend композирует главное окно и modeless secondary OS windows через
 `NativeUiWindowManager`. `profiler_panel.py` остаётся лёгкой сглаженной сводкой
 в dock, а `frame_profiler.py` — отдельный raw-frame frontend: bounded timeline,
-пауза/follow, hitch navigation и несглаженное дерево выбранного кадра. Оба
-frontend используют общий `ProfilerCaptureCoordinator`, поэтому lifetime одного
+пауза/follow, hitch navigation, `Include UI` и несглаженное дерево выбранного
+кадра. Сырая capture-сессия опрашивается каждый кадр, а UI-проекция ограничена
+10 Гц. Timeline при этом дописывает только новые samples и сохраняет bounded
+capacity; полная перепроекция нужна лишь после clear или рассогласования модели.
+Это не даёт открытому профайлеру создавать собственные hitch по мере роста
+истории. Оба frontend используют общий `ProfilerCaptureCoordinator`, поэтому lifetime одного
 потребителя не выключает сбор у другого.
 
 ### `termin/editor_tcgui/` — tcgui view
