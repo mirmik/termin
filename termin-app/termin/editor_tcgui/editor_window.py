@@ -305,6 +305,7 @@ class EditorWindowTcgui:
             get_init_script_editor=lambda: self,
             resolve_termin_shaderc=resolve_termin_shaderc,
             resolve_slangc=resolve_slangc,
+            get_render_engine=lambda: self.engine.rendering_manager.render_engine,
         )
         from termin.editor_tcgui.tcgui_dialog_service import TcguiDialogService
 
@@ -1199,6 +1200,7 @@ class EditorWindowTcgui:
             project_root,
             resolve_termin_shaderc=resolve_termin_shaderc,
             resolve_slangc=resolve_slangc,
+            render_engine=self.engine.rendering_manager.render_engine,
         )
 
     @property

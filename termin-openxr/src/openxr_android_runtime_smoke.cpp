@@ -689,6 +689,12 @@ struct OpenXRRuntimeScene {
             engine.reset();
             return false;
         }
+        engine->rendering_manager.render_engine()->configure_shader_artifacts(
+            package.shader_runtime.artifact_root,
+            package.shader_runtime.cache_root,
+            package.shader_runtime.compiler_path,
+            package.shader_runtime.dev_compile_enabled
+        );
 
         const tc_render_target_config *xr_config = find_xr_render_target_config(package.scene);
         install_runtime_pipeline_factory(asset_root);

@@ -174,11 +174,13 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
 
     get_project_modules_runtime(engine.scene_manager)
 
-    configure_sdk_shader_runtime("editor")
+    render_engine = engine.rendering_manager.render_engine
+    configure_sdk_shader_runtime("editor", render_engine=render_engine)
 
     # BackendWindow inits SDL and creates its own window + tgfx2 device
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
     main_window = SDLBackendWindow("Termin Editor", 1280, 720)
+    render_engine.ensure_tgfx2()
     main_window.maximize()
 
     # Process-global tgfx2 context owned by the window. Every renderer

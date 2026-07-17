@@ -19,7 +19,6 @@
 #include <inspect/tc_inspect_init.h>
 #include <tc_inspect_cpp.hpp>
 #include <tcbase/tc_log.h>
-#include <tgfx2/tc_shader_bridge.hpp>
 #include <tgfx/tgfx2_interop.h>
 #include <tgfx/tgfx_material_handle.hpp>
 #include <tgfx/tgfx_mesh_handle.hpp>
@@ -56,6 +55,7 @@ extern "C" {
 #include <tgfx2/i_command_list.hpp>
 #include <tgfx2/render_context.hpp>
 #include <tgfx2/vulkan/vulkan_render_device.hpp>
+#include <tgfx2/shader_artifact_resolver.hpp>
 #include <tgfx2/vulkan/vulkan_swapchain.hpp>
 #endif
 
@@ -124,6 +124,8 @@ void UIWidgetPass::register_type() {
 struct AndroidBootstrapState {
     std::string app_data_dir;
     std::string asset_root;
+    std::string shader_artifact_root;
+    bool shader_artifact_root_explicit = false;
     std::string native_lib_dir;
     ANativeWindow* window = nullptr;
     int32_t surface_width = 0;
@@ -919,6 +921,18 @@ bool ensure_player_scene_locked() {
         g_state.player_package = termin::runtime::RuntimePackageLoadResult();
         return false;
     }
+    const std::string artifact_root = g_state.shader_artifact_root_explicit
+        ? g_state.shader_artifact_root
+        : g_state.player_package.shader_runtime.artifact_root;
+    const std::string cache_root = g_state.app_data_dir.empty()
+        ? g_state.player_package.shader_runtime.cache_root
+        : (std::filesystem::path(g_state.app_data_dir) / "shader-cache").string();
+    g_state.player_engine->rendering_manager.render_engine()->configure_shader_artifacts(
+        artifact_root,
+        cache_root,
+        g_state.player_package.shader_runtime.compiler_path,
+        g_state.player_package.shader_runtime.dev_compile_enabled
+    );
 
     termin::CameraComponent* camera = find_player_camera(g_state.player_package.scene);
     if (!camera) {
@@ -1181,6 +1195,16 @@ bool create_smoke_renderer_locked() {
         };
 
         g_state.smoke_device = std::make_unique<tgfx::VulkanRenderDevice>(info);
+        g_state.smoke_device->configure_shader_artifacts(
+            termin::ShaderArtifactResolver(
+                g_state.shader_artifact_root,
+                g_state.app_data_dir.empty()
+                    ? std::string()
+                    : (std::filesystem::path(g_state.app_data_dir) / "shader-cache").string(),
+                "",
+                false
+            )
+        );
         if (!tgfx2_interop_claim_device(g_state.smoke_device.get(), &g_state)) {
             g_state.smoke_device.reset();
             throw std::runtime_error(
@@ -1236,22 +1260,21 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
     g_state.native_lib_dir = config->native_lib_dir ? config->native_lib_dir : "";
     g_state.initialized = true;
 
-    std::string shader_artifact_root = infer_shader_artifact_root(g_state.asset_root);
-    termin::tgfx2_set_shader_artifact_root(
-        shader_artifact_root.empty() ? nullptr : shader_artifact_root.c_str());
+    g_state.shader_artifact_root = infer_shader_artifact_root(g_state.asset_root);
+    g_state.shader_artifact_root_explicit = false;
 
     android_log_info(
         "initialize: app_data_dir='%s', asset_root='%s', shader_artifact_root='%s', native_lib_dir='%s'",
         g_state.app_data_dir.c_str(),
         g_state.asset_root.c_str(),
-        shader_artifact_root.c_str(),
+        g_state.shader_artifact_root.c_str(),
         g_state.native_lib_dir.c_str()
     );
     tc_log_info(
         "termin_android_initialize: app_data_dir='%s', asset_root='%s', shader_artifact_root='%s', native_lib_dir='%s'",
         g_state.app_data_dir.c_str(),
         g_state.asset_root.c_str(),
-        shader_artifact_root.c_str(),
+        g_state.shader_artifact_root.c_str(),
         g_state.native_lib_dir.c_str()
     );
     return 1;
@@ -1262,9 +1285,10 @@ extern "C" void termin_android_shutdown(void) {
     release_window_locked();
     g_state.app_data_dir.clear();
     g_state.asset_root.clear();
+    g_state.shader_artifact_root.clear();
+    g_state.shader_artifact_root_explicit = false;
     g_state.native_lib_dir.clear();
     g_state.initialized = false;
-    termin::tgfx2_set_shader_artifact_root(nullptr);
 #ifdef __ANDROID__
     if (g_state.scene_extensions_registered) {
         termin_collision_runtime_shutdown();
@@ -1280,13 +1304,29 @@ extern "C" void termin_android_shutdown(void) {
 
 extern "C" void termin_android_set_shader_artifact_root(const char* root) {
     std::lock_guard<std::mutex> lock(g_state_mutex);
-    g_state.asset_root = root ? root : "";
-    termin::tgfx2_set_shader_artifact_root(g_state.asset_root.c_str());
-    tc_log_info("termin_android_set_shader_artifact_root: '%s'", g_state.asset_root.c_str());
+    g_state.shader_artifact_root = root ? root : "";
+    g_state.shader_artifact_root_explicit = true;
+#ifdef __ANDROID__
+    if (g_state.player_engine) {
+        const std::string cache_root = g_state.app_data_dir.empty()
+            ? std::string()
+            : (std::filesystem::path(g_state.app_data_dir) / "shader-cache").string();
+        g_state.player_engine->rendering_manager.render_engine()->configure_shader_artifacts(
+            g_state.shader_artifact_root,
+            cache_root,
+            "",
+            false
+        );
+    }
+#endif
+    tc_log_info(
+        "termin_android_set_shader_artifact_root: '%s'",
+        g_state.shader_artifact_root.c_str()
+    );
 }
 
 extern "C" const char* termin_android_get_shader_artifact_root(void) {
-    return termin::tgfx2_get_shader_artifact_root();
+    return g_state.shader_artifact_root.c_str();
 }
 
 extern "C" void termin_android_on_surface_created(ANativeWindow* window) {

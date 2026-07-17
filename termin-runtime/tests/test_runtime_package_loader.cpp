@@ -17,6 +17,7 @@ GUARD_TEST_MAIN();
 #include <termin/render/tc_scene_render_accessors.hpp>
 #include <termin/runtime/runtime_package.hpp>
 #include <tgfx/tgfx_material_handle.hpp>
+#include <tgfx2/tc_shader_bridge.hpp>
 
 extern "C" {
 #include <core/tc_light_capability.h>
@@ -341,10 +342,15 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     const std::filesystem::path root = make_package_root();
     write_test_package(root);
 
+    termin::tgfx2_set_shader_artifact_root("runtime-loader-sentinel");
     termin::runtime::RuntimePackageLoader loader;
     termin::runtime::RuntimePackageLoadResult result = loader.load(root.string());
     REQUIRE(result.ok);
     REQUIRE(result.scene.valid());
+    CHECK(result.shader_runtime.artifact_root == root.string());
+    CHECK(result.shader_runtime.cache_root == (root / ".shader-cache").string());
+    CHECK(std::string(termin::tgfx2_get_shader_artifact_root()) == "runtime-loader-sentinel");
+    termin::tgfx2_set_shader_artifact_root("");
 
     termin::TcMaterial material = termin::TcMaterial::from_uuid(kMaterialUuid);
     REQUIRE(material.is_valid());
@@ -458,6 +464,7 @@ TEST_CASE("RuntimePackageLoader loads packaged textures before dependent materia
 TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
     const std::filesystem::path root = make_package_root();
     write_test_package_with_texture(root);
+    termin::tgfx2_set_shader_artifact_root("runtime-loader-failure-sentinel");
 
     write_text(root / "textures" / "test.texture.json", texture_spec("textures/missing.png"));
     termin::runtime::RuntimePackageLoadResult missing = termin::runtime::load_runtime_package(root.string());
@@ -502,6 +509,11 @@ TEST_CASE("RuntimePackageLoader diagnoses invalid packaged texture resources") {
         termin::runtime::load_runtime_package(root.string());
     CHECK_FALSE(mismatched_uuid.ok);
     CHECK(mismatched_uuid.message.find("manifest uuid does not match") != std::string::npos);
+    CHECK(
+        std::string(termin::tgfx2_get_shader_artifact_root()) ==
+        "runtime-loader-failure-sentinel"
+    );
+    termin::tgfx2_set_shader_artifact_root("");
 }
 
 TEST_CASE("RuntimePackageLoader rejects manifest path traversal and platform separators") {

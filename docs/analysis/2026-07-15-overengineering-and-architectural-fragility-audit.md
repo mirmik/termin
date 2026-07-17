@@ -278,8 +278,12 @@ editor/render attachment:
 
 - `termin-app/termin/editor_core/game_mode_model.py:156`.
 
-Runtime package меняет global shader artifact root до проверки resources, а
-ошибка после начала загрузки не выполняет rollback:
+Статус 2026-07-17: shader artifact root вынесен в runtime-scoped
+`ShaderArtifactResolver`. Runtime package loader возвращает конфигурацию в
+staging result, а host применяет её к конкретному `RenderEngine` только после
+успешной загрузки. Указанный ниже process-global дефект устранён; частичная
+мутация global resource registries остаётся отдельной проблемой package
+transaction:
 
 - `termin-runtime/src/runtime_package.cpp:996`;
 - `termin-runtime/src/runtime_package.cpp:1015`.

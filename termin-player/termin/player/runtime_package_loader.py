@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
@@ -17,7 +16,7 @@ class _RuntimeShader:
     material_texture_resources: tuple[str, ...]
 
 
-def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
+def load_runtime_package_assets(package_dir: Path, manifest_path: Path, render_engine) -> None:
     """Load meshes/materials/shaders from a runtime package manifest."""
     from tcbase import log
 
@@ -42,7 +41,8 @@ def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
         log.error(f"[PlayerRuntime] Runtime package manifest root is not an object: {manifest_path}")
         return
 
-    if not _configure_shader_runtime(package_root, manifest):
+    shader_runtime = _shader_runtime_configuration(package_root, manifest)
+    if shader_runtime is None:
         return
 
     resources = manifest.get("resources")
@@ -59,10 +59,19 @@ def load_runtime_package_assets(package_dir: Path, manifest_path: Path) -> None:
             if _load_resource(package_root, entry, shaders):
                 loaded += 1
 
+    try:
+        render_engine.configure_shader_artifacts(**shader_runtime)
+    except Exception as exc:
+        log.error(f"[PlayerRuntime] Failed to configure render engine shader artifacts: {exc}")
+        return
+
     log.info(f"[PlayerRuntime] Loaded {loaded} runtime package resource(s)")
 
 
-def _configure_shader_runtime(package_dir: Path, manifest: dict[str, Any]) -> bool:
+def _shader_runtime_configuration(
+    package_dir: Path,
+    manifest: dict[str, Any],
+) -> dict[str, Any] | None:
     from tcbase import log
 
     artifact_root_value = manifest.get("shader_artifact_root")
@@ -73,33 +82,21 @@ def _configure_shader_runtime(package_dir: Path, manifest: dict[str, Any]) -> bo
             artifact_root = _package_path(package_dir, artifact_root_value)
     except ValueError as exc:
         log.error(f"[PlayerRuntime] Invalid runtime shader artifact root: {exc}")
-        return False
+        return None
     cache_root = package_dir / ".shader-cache"
     try:
         cache_root.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         log.error(f"[PlayerRuntime] Failed to create runtime shader cache: {exc}")
-        return False
-
-    os.environ["TERMIN_SHADER_ARTIFACT_ROOT"] = str(artifact_root)
-    os.environ["TERMIN_SHADER_CACHE_ROOT"] = str(cache_root)
-    os.environ["TERMIN_SHADER_DEV_COMPILE"] = "0"
-
-    try:
-        import tgfx
-
-        tgfx.configure_shader_runtime(
-            artifact_root=str(artifact_root),
-            cache_root=str(cache_root),
-            shader_compiler=os.environ.get("TERMIN_SHADERC", ""),
-            dev_compile=False,
-        )
-    except Exception as exc:
-        log.error(f"[PlayerRuntime] Failed to configure runtime package shader runtime: {exc}")
-        return False
+        return None
 
     log.info(f"[PlayerRuntime] Runtime package shader artifacts: {artifact_root}")
-    return True
+    return {
+        "artifact_root": str(artifact_root),
+        "cache_root": str(cache_root),
+        "compiler_path": "",
+        "dev_compile_enabled": False,
+    }
 
 
 def _load_resource(package_dir: Path, entry: dict[str, Any], shaders: dict[str, _RuntimeShader]) -> bool:
