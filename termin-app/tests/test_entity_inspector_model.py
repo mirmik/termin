@@ -55,7 +55,7 @@ def test_entity_inspector_properties_components_fields_and_undo(scene):
     assert snapshot.uuid == entity.uuid
     assert snapshot.layer == 0
     assert len(snapshot.layer_names) == 64
-    assert [component.type_name for component in snapshot.components] == ["Component"]
+    assert [component.type_name for component in snapshot.components] == ["PythonComponent"]
     assert snapshot.transform.enabled
     assert snapshot.transform.position == pytest.approx((0.0, 0.0, 0.0))
     assert snapshot.transform.rotation_degrees == pytest.approx((0.0, 0.0, 0.0))
