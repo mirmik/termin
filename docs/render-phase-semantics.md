@@ -53,9 +53,8 @@ Code must not use `phase_mark` to infer:
 
 Those decisions belong to the pass-owned shader contract, represented in C++ by
 `MaterialPipelinePassContract` and the vertex transform contracts it carries.
-`ShaderOverrideContext::phase_mark` may be passed to drawables for
-representation/material context, but `ShaderOverrideContext::pass_contract` is
-the authoritative shader ABI and material-pipeline variant intent.
+The `RenderItem -> RenderTask` planner receives that contract and is the
+authoritative shader ABI and material-pipeline variant boundary.
 
 ## Built-In Labels
 
@@ -103,19 +102,16 @@ collection.
 ### Shader Contracts
 
 Passes declare shader/layout intent through `MaterialPipelinePassContract`.
-Material pipeline assembly and context-aware drawable shader overrides should
-consume that contract rather than interpreting phase strings.
+Registered RenderItem encoder planners consume that contract when selecting the
+final shader and enumerating shader usages; drawables do not own shader
+selection.
 
-### Legacy Compatibility
+### Drawable ABI
 
-The old C drawable ABI still passes `(phase_mark, geometry_id,
-original_shader)` without a pass contract. C++ compatibility overloads such as
-`get_skinned_shader(phase_mark, original_shader)` and legacy line/foliage
-adapters therefore build conservative compatibility contracts. Pass-owned
-render paths should use `ShaderOverrideContext` instead.
-
-Remaining compatibility adapters are allowed only at these boundaries. They
-should not become new sources of phase-name-to-layout policy.
+The C drawable ABI exposes participation and typed RenderItem collection only.
+It has no shader override or shader-usage callbacks. C, C++, and Python
+components publish the same typed RenderItems and therefore reach the same
+pass-owned task shader planner.
 
 ### Debug And Editor
 
@@ -144,9 +140,9 @@ When adding a drawable:
 - submit renderable work through RenderItems from `collect_render_items()`;
 - submit actual draw work through RenderItems and registered encoders, not
   drawable-owned backend draw calls;
-- use `ShaderOverrideContext::pass_contract` for shader variants when the
-  context-aware hook is available;
-- keep legacy phase-only override behavior conservative and localized.
+- implement shader variants in the item kind's task-planning hook using the
+  pass-owned `MaterialPipelinePassContract`;
+- enumerate every runtime shader produced by that planner for build/export.
 
 If a behavior cannot be expressed without reading semantic shader meaning from
 a phase label, the missing concept should become an explicit contract field or

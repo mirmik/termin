@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <string>
 #include <set>
 #include <vector>
@@ -34,20 +33,6 @@ public:
     static void register_type();
 
     std::set<std::string> get_phase_marks() const override;
-    TcShader override_shader(
-        const std::string& phase_mark,
-        int geometry_id,
-        TcShader original_shader
-    ) override;
-    TcShader override_shader_with_context(
-        const ShaderOverrideContext& context
-    ) override;
-    void collect_shader_usages(
-        const std::string& phase_mark,
-        int geometry_id,
-        TcShader original_shader,
-        const std::function<void(TcShader)>& emit
-    ) override;
     bool collect_render_items(
         const tc_render_item_collect_context& context,
         tc_render_item_sink& sink
