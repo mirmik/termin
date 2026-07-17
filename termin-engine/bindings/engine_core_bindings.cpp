@@ -24,10 +24,6 @@ void bind_engine_core(nb::module_& m) {
              "Create EngineCore. Python player uses this when it is not "
              "started through a C++ entry point.")
 
-        // Singleton access
-        .def_static("instance", &EngineCore::instance, nb::rv_policy::reference,
-           "Get the EngineCore instance")
-
         // Access to managers
         .def_prop_ro("scene_manager", [](EngineCore& self) -> SceneManager& {
             return self.scene_manager;

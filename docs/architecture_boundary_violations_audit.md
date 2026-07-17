@@ -78,13 +78,13 @@ manager с отдельным lifetime и singleton больше нет.
 
 **Где смотреть:**
 - `termin-engine/CMakeLists.txt` — **Исправлено 2026-05-21:** больше не ссылается на `../termin-app/core_c/src`.
-- `termin-engine/src/tc_scene_manager_instance.cpp` — **перенесено из `termin-app/core_c/src`**
-- `termin-engine/src/tc_rendering_manager_instance.cpp` — **перенесено из `termin-app/core_c/src`**
-- `termin-engine/src/tc_engine_core_instance.cpp` — **перенесено из `termin-app/core_c/src`**
 
 **Было:** SDK-модуль `termin-engine` не мог быть собран без наличия `termin-app` в репозитории, потому что компилировал `.cpp` из `termin-app/core_c/src`.
 
-**Статус 2026-05-21:** engine-часть исправлена. Singleton storage принадлежит `termin-engine`, а `termin-engine` больше не добавляет include path на `termin-app/core_c/include`.
+**Статус 2026-07-17:** engine-часть исправлена. `termin-engine` больше не
+добавляет include path на `termin-app/core_c/include`; временно перенесённые
+сюда singleton storage translation units удалены вместе с process-global
+EngineCore/SceneManager/RenderingManager API.
 
 Остаток проблемы был закрыт 2026-06-26: `termin-app/cpp` больше не экспортирует `core_c/include`, а `termin-app/core_c` удалён.
 

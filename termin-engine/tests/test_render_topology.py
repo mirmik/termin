@@ -1,9 +1,26 @@
 from __future__ import annotations
 
-from termin.engine import EngineCore, RenderTopology
+from termin.engine import EngineCore, RenderingManager, RenderTopology, SceneManager
 from termin.render_framework import render_target_new
 from termin.render import scene_render_mount
 from termin.scene import PythonComponent
+
+
+def test_engine_services_are_explicit_and_multiple_engines_are_independent() -> None:
+    assert "instance" not in EngineCore.__dict__
+    assert "instance" not in SceneManager.__dict__
+    assert "instance" not in RenderingManager.__dict__
+    assert "instance_or_none" not in RenderingManager.__dict__
+
+    first = EngineCore()
+    second = EngineCore()
+    try:
+        assert first.scene_manager is not second.scene_manager
+        assert first.rendering_manager is not second.rendering_manager
+        assert first.render_topology is not second.render_topology
+    finally:
+        del second
+        del first
 
 
 def test_render_engine_shader_configuration_does_not_mutate_legacy_root(tmp_path) -> None:

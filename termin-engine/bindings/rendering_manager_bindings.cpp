@@ -172,15 +172,7 @@ void bind_rendering_manager(nb::module_& m) {
         }, nb::arg("scene"))
     ;
 
-    // RenderingManager singleton
     nb::class_<RenderingManager>(m, "RenderingManager")
-        .def_static("instance", &RenderingManager::instance, nb::rv_policy::reference)
-        .def_static(
-            "instance_or_none",
-            &RenderingManager::instance_or_null,
-            nb::rv_policy::reference,
-            "Return the active RenderingManager, or None when rendering is not attached")
-
         .def_prop_ro("topology", [](RenderingManager& self) -> RenderTopology& {
             return self.topology();
         }, nb::rv_policy::reference_internal)

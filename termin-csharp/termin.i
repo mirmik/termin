@@ -660,19 +660,11 @@ public:
 };
 
 // ============================================================================
-// RenderingManager - global rendering manager singleton
+// RenderingManager - owned by EngineCore
 // ============================================================================
 
 class RenderingManager {
 public:
-    // Construction (registers as global instance via set_instance)
-    RenderingManager();
-    ~RenderingManager();
-
-    // Singleton access
-    static RenderingManager& instance();
-    static void reset_for_testing();
-
     // Configuration
     void set_render_engine(RenderEngine* engine);
     RenderEngine* render_engine();

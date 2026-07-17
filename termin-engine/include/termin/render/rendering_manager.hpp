@@ -1,4 +1,4 @@
-// rendering_manager.hpp - Global rendering manager singleton
+// rendering_manager.hpp - Engine-owned rendering manager
 //
 // C++ port of Python's RenderingManager for unified rendering architecture.
 // Manages displays, viewports, and offscreen-first rendering model.
@@ -70,7 +70,7 @@ struct SceneMountRequest {
 
 // RenderingManager - manages displays and rendering
 //
-// Owned by EngineCore. Global instance() returns the one set by EngineCore.
+// Owned by EngineCore and passed explicitly to hosts and controllers.
 // Thread safety: NOT thread-safe. All calls must be from main/render thread.
 class TERMIN_ENGINE_API RenderingManager {
 private:
@@ -104,12 +104,6 @@ private:
     std::unordered_set<uint64_t> missing_render_target_provider_warnings_;
 
 public:
-    // Global instance access (set by EngineCore)
-    static RenderingManager& instance();
-    static RenderingManager* instance_or_null();
-    static void set_instance(RenderingManager* instance);
-    static void reset_for_testing();
-
     explicit RenderingManager(RenderTopology& topology);
     ~RenderingManager();
 

@@ -12,7 +12,6 @@ extern "C" {
 #include "core/tc_scene.h"
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene_pool.h"
-#include "scene/tc_scene_manager.h"
 }
 
 namespace termin {
@@ -40,14 +39,8 @@ protected:
     BeforeSceneDestroyGuard _before_scene_destroy_guard;
 
 public:
-public:
     SceneManager();
     virtual ~SceneManager();
-
-    // Singleton access (via C API for cross-DLL safety)
-    static SceneManager* instance() {
-        return reinterpret_cast<SceneManager*>(tc_scene_manager_instance());
-    }
 
     // Disable copy
     SceneManager(const SceneManager&) = delete;

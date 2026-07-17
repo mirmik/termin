@@ -4,7 +4,7 @@ bootstrap_player()
 
 import pytest
 
-from termin.engine import EngineCore, RenderingManager
+from termin.engine import EngineCore
 from termin.render_passes import ResolvePass, UIWidgetPass
 
 
@@ -12,13 +12,9 @@ from termin.render_passes import ResolvePass, UIWidgetPass
 def rendering_manager():
     engine = EngineCore()
     try:
-        yield RenderingManager.instance()
+        yield engine.rendering_manager
     finally:
         del engine
-
-
-def test_rendering_manager_instance_or_none_without_engine():
-    assert RenderingManager.instance_or_none() is None
 
 
 def test_builtin_default_pipeline_color_fbos_follow_output_render_target(rendering_manager):
