@@ -789,16 +789,19 @@ TEST_CASE("built-in slang shader catalog registers explicit stage entry points")
     tc_shader_shutdown();
 }
 
-TEST_CASE("modular skinned shadow transform imports scope attribute declaration") {
+TEST_CASE("shared modular skinned transform owns the bone resource") {
     const std::filesystem::path shader_root =
         repo_root_from_test_file() / "termin-graphics" / "resources" /
         "builtin_shaders";
     const std::string source =
-        read_text(shader_root / "termin_shadow_skinned_transform.slang");
+        read_text(shader_root / "termin_vertex_transform.slang");
 
     CHECK(source.find("import termin_prelude;") != std::string::npos);
     CHECK(source.find("[[TerminScope(\"draw\")]]") != std::string::npos);
     CHECK(source.find("ConstantBuffer<TerminBoneBlock> bone_block;") !=
+          std::string::npos);
+    CHECK(source.find("termin_skinned_world_vertex") != std::string::npos);
+    CHECK(source.find("termin_skinned_world_position_normal") !=
           std::string::npos);
 }
 
@@ -819,24 +822,24 @@ TEST_CASE("modular foliage shadow transform owns instance placement resources") 
     CHECK(source.find("per_frame") == std::string::npos);
 }
 
-TEST_CASE("built-in shader catalog resolves vertex-only variant templates") {
-    clear_builtin_root();
+TEST_CASE("modular foliage material transform owns instance placement resources") {
+    const std::filesystem::path shader_root =
+        repo_root_from_test_file() / "termin-graphics" / "resources" /
+        "builtin_shaders";
+    const std::string source =
+        read_text(shader_root / "termin_foliage_material_transform.slang");
 
-    std::string foliage_vertex =
-        tgfx::load_builtin_shader_stage_source_from_catalog(
-            "termin-engine-foliage-instanced", "vertex");
-    REQUIRE(!foliage_vertex.empty());
-    CHECK(foliage_vertex.find("import termin_prelude") != std::string::npos);
-    CHECK(foliage_vertex.find("[[TerminScope(\"frame\")]]") != std::string::npos);
-    CHECK(foliage_vertex.find("[[TerminScope(\"draw\")]]") != std::string::npos);
-    CHECK(foliage_vertex.find("ConstantBuffer<FoliagePushData> foliage_draw") != std::string::npos);
-    CHECK(foliage_vertex.find("StructuredBuffer<FoliageInstance> foliage_instances") != std::string::npos);
-    CHECK(foliage_vertex.find("SV_InstanceID") != std::string::npos);
-    CHECK(foliage_vertex.find("tangent_world : TEXCOORD3") != std::string::npos);
-    CHECK(foliage_vertex.find("bitangent_world : TEXCOORD4") != std::string::npos);
-    CHECK(foliage_vertex.find("tbn_valid : TEXCOORD5") != std::string::npos);
-    CHECK(foliage_vertex.find("out mat3 v_TBN") == std::string::npos);
-    CHECK(foliage_vertex.find("layout(") == std::string::npos);
+    CHECK(source.find("ConstantBuffer<FoliagePushData> foliage_draw;") !=
+          std::string::npos);
+    CHECK(source.find("StructuredBuffer<FoliageInstance> foliage_instances;") !=
+          std::string::npos);
+    CHECK(source.find("termin_foliage_material_world_vertex") !=
+          std::string::npos);
+    CHECK(source.find("per_frame") == std::string::npos);
+}
+
+TEST_CASE("built-in shader catalog resolves transitional foliage shadow template") {
+    clear_builtin_root();
 
     std::string foliage_shadow_vertex =
         tgfx::load_builtin_shader_stage_source_from_catalog(
