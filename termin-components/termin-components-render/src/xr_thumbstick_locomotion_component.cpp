@@ -36,7 +36,6 @@ XrThumbstickLocomotionComponent::XrThumbstickLocomotionComponent()
 }
 
 void XrThumbstickLocomotionComponent::register_type() {
-    XrOriginComponent::register_type();
     register_component_type<XrThumbstickLocomotionComponent>(
         "XrThumbstickLocomotionComponent",
         "CxxComponent"

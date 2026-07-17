@@ -189,7 +189,6 @@ MeshRenderer::MeshRenderer(const char* type_name)
 }
 
 void MeshRenderer::register_type() {
-    MeshComponent::register_type();
     register_component_type<MeshRenderer>("MeshRenderer", "Component");
     ComponentRegistry::instance().set_category("MeshRenderer", "Rendering");
     register_component_requirement("MeshRenderer", "MeshComponent");
