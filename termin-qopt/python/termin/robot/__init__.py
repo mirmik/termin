@@ -6,6 +6,7 @@ from .hqsolver import (
     InequalityConstraint,
 )
 from .robot import Robot
+from .conditions import ConditionCollection, SymCondition
 from .hqtasks import (
     JointTrackingTask,
     CartesianTrackingTask,
@@ -24,6 +25,8 @@ __all__ = [
     "EqualityConstraint",
     "InequalityConstraint",
     "Robot",
+    "SymCondition",
+    "ConditionCollection",
     "JointTrackingTask",
     "CartesianTrackingTask",
     "JointEqualityConstraint",

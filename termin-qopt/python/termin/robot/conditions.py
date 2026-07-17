@@ -1,5 +1,6 @@
 import numpy
-import termin.linalg.subspaces
+
+from termin.linalg.subspaces import nullspace_projector
 
 
 class SymCondition:
@@ -15,7 +16,7 @@ class SymCondition:
         return self.Ah.T.dot(self.bh) * self.weight
 
     def NullProj(self):
-        return termin.linalg.subspaces.nullspace_projector(self.Ah)
+        return nullspace_projector(self.Ah)
 
 
 class ConditionCollection:
