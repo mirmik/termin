@@ -149,7 +149,6 @@ resource names such as `material`, `draw_data`, or `u_params`.
 | `termin-engine-pick-material` | `PickShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-pick-material.slang` |
 | `termin-engine-shadow-material` | `ShadowShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-shadow-material.slang` |
 | `termin-engine-depth-material` | `DepthShader` | vertex + fragment | Slang | `builtin_shaders/termin-engine-depth-material.slang` |
-| `termin-engine-foliage-instanced` | `FoliageInstancedVariantVS` | vertex template | Slang | `builtin_shaders/termin-engine-foliage-instanced.vert.slang` |
 | `termin-engine-foliage-shadow` | `FoliageShadowVariantVS` | vertex template | Slang | `builtin_shaders/termin-engine-foliage-shadow.vert.slang` |
 | `termin-engine-id` | `IdEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-id.slang` |
 | `termin-engine-normal` | `NormalEngineVSFS` | vertex + fragment | Slang | `builtin_shaders/termin-engine-normal.slang` |
