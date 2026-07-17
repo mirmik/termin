@@ -76,9 +76,35 @@ def test_native_profiler_panel_is_toggled_by_shell_command_and_presents_frame():
     assert panel.update()
     assert not panel.update()
     assert panel.frame_time_model.samples == [20.0]
-    assert panel.table_model.row_count == 3
+    assert panel.table_model.node_count == 3
     assert "50 FPS" in panel.status_bar.text
-    assert panel.table_model.row_at(2).data.cells[0] == "  Compose"
+    render = panel.table_model.find('["Render"]')
+    compose = panel.table_model.find('["Render","Compose"]')
+    assert panel.table_model.node(render).children == [compose]
+    assert panel.table_model.node(compose).data.cells[0] == "Compose"
+    assert panel.table_widget.expanded(render)
+    assert panel.table_widget.visible_count == 3
+
+    panel.table_widget.set_expanded(render, False)
+    assert panel.table_widget.visible_count == 2
+    profiler.frames.append(
+        FrameProfile(
+            frame_number=13,
+            total_ms=18.0,
+            sections={
+                "Render": SectionTiming(
+                    "Render",
+                    cpu_ms=16.0,
+                    children_ms=7.0,
+                    children={"Compose": SectionTiming("Compose", cpu_ms=7.0)},
+                ),
+                "Events": SectionTiming("Events", cpu_ms=2.0),
+            },
+        )
+    )
+    assert panel.update()
+    assert panel.table_model.find('["Render"]') == render
+    assert not panel.table_widget.expanded(render)
 
     document.layout_roots(Rect(0.0, 0.0, 1280.0, 720.0))
     draw_list = DrawList()
@@ -108,5 +134,5 @@ def test_native_profiler_panel_controls_and_clear_boundary():
     panel.table_model.set_rows([])
     panel.clear()
     assert panel.frame_time_model.samples == []
-    assert panel.table_model.row_count == 0
+    assert panel.table_model.node_count == 0
     assert "waiting" in panel.status_bar.text
