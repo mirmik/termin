@@ -6,6 +6,23 @@ from termin.render import scene_render_mount
 from termin.scene import PythonComponent
 
 
+def test_render_engine_shader_configuration_does_not_mutate_legacy_root(tmp_path) -> None:
+    import tgfx
+
+    engine = EngineCore()
+    tgfx.set_shader_artifact_root("legacy-sentinel")
+    try:
+        engine.rendering_manager.render_engine.configure_shader_artifacts(
+            artifact_root=str(tmp_path / "artifacts"),
+            cache_root=str(tmp_path / "cache"),
+            compiler_path="",
+            dev_compile_enabled=False,
+        )
+        assert tgfx.get_shader_artifact_root() == "legacy-sentinel"
+    finally:
+        tgfx.set_shader_artifact_root("")
+
+
 def test_engine_owned_render_topology_isolates_same_named_scene_targets() -> None:
     engine = EngineCore()
     scene_a = engine.scene_manager.create_scene("topology-a")

@@ -177,6 +177,7 @@ def test_native_project_session_controller_configures_startup_operation(monkeypa
         get_init_script_editor=lambda: None,
         resolve_termin_shaderc=lambda: None,
         resolve_slangc=lambda: None,
+        get_render_engine=lambda: object(),
     )
     runtime = _Runtime()
     runtime.prepare_module_artifacts = lambda *, project_root: project_root == tmp_path

@@ -10,6 +10,13 @@ namespace termin::runtime {
 
 struct RuntimePackageResourceKeepalive;
 
+struct ShaderRuntimeConfiguration {
+    std::string artifact_root;
+    std::string cache_root;
+    std::string compiler_path;
+    bool dev_compile_enabled = false;
+};
+
 struct RuntimePackageLoadOptions {
     bool allow_fallback_scene = false;
 };
@@ -19,6 +26,7 @@ struct RuntimePackageLoadResult {
     std::string message;
     TcSceneRef scene;
     std::shared_ptr<RuntimePackageResourceKeepalive> resources;
+    ShaderRuntimeConfiguration shader_runtime;
 };
 
 class TERMIN_RUNTIME_API RuntimePackageLoader {

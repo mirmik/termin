@@ -22,17 +22,33 @@ def test_editor_project_load_configures_shader_runtime(monkeypatch, tmp_path: Pa
     monkeypatch.setattr(editor_window, "resolve_termin_shaderc", lambda: compiler)
     monkeypatch.setattr(editor_window, "resolve_slangc", lambda: slangc)
     monkeypatch.delenv("TERMIN_SLANGC", raising=False)
-    monkeypatch.setattr("tgfx.configure_shader_runtime", fake_configure_shader_runtime)
 
     win = EditorWindowTcgui.__new__(EditorWindowTcgui)
+    win.engine = type(
+        "Engine",
+        (),
+        {
+            "rendering_manager": type(
+                "RenderingManager",
+                (),
+                {
+                    "render_engine": type(
+                        "RenderEngine",
+                        (),
+                        {"configure_shader_artifacts": staticmethod(fake_configure_shader_runtime)},
+                    )()
+                },
+            )()
+        },
+    )()
     win._configure_shader_runtime_for_project(project_root)
 
     assert calls == [
         {
             "artifact_root": str(project_root / ".termin" / "shader-artifacts"),
             "cache_root": str(project_root / ".termin" / "shader-cache"),
-            "shader_compiler": str(compiler),
-            "dev_compile": True,
+            "compiler_path": str(compiler),
+            "dev_compile_enabled": True,
         }
     ]
     assert Path(os.environ["TERMIN_SLANGC"]) == slangc
@@ -51,10 +67,30 @@ def test_editor_shader_runtime_rejects_missing_configured_slangc(monkeypatch, tm
 
     monkeypatch.setattr(editor_window, "resolve_termin_shaderc", lambda: compiler)
     monkeypatch.setattr(editor_window, "resolve_slangc", lambda: None)
-    monkeypatch.setattr("tgfx.configure_shader_runtime", lambda **kwargs: calls.append(kwargs))
     monkeypatch.setattr(project_session_controller.log, "error", errors.append)
 
     win = EditorWindowTcgui.__new__(EditorWindowTcgui)
+    win.engine = type(
+        "Engine",
+        (),
+        {
+            "rendering_manager": type(
+                "RenderingManager",
+                (),
+                {
+                    "render_engine": type(
+                        "RenderEngine",
+                        (),
+                        {
+                            "configure_shader_artifacts": staticmethod(
+                                lambda **kwargs: calls.append(kwargs)
+                            )
+                        },
+                    )()
+                },
+            )()
+        },
+    )()
     win._configure_shader_runtime_for_project(project_root)
 
     assert calls == []

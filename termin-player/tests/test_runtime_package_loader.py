@@ -156,17 +156,33 @@ def test_runtime_package_loader_orders_textures_before_materials(tmp_path, monke
     )
     loaded_types: list[str] = []
 
-    monkeypatch.setattr(runtime_package_loader, "_configure_shader_runtime", lambda *_args: True)
-
     def load_resource(_package_dir, entry, _shaders) -> bool:
         loaded_types.append(entry["type"])
         return True
 
     monkeypatch.setattr(runtime_package_loader, "_load_resource", load_resource)
 
-    runtime_package_loader.load_runtime_package_assets(package_dir, manifest_path)
+    configured = []
+    render_engine = type(
+        "RenderEngine",
+        (),
+        {"configure_shader_artifacts": lambda _self, **kwargs: configured.append(kwargs)},
+    )()
+    runtime_package_loader.load_runtime_package_assets(
+        package_dir,
+        manifest_path,
+        render_engine,
+    )
 
     assert loaded_types == ["shader", "texture", "material"]
+    assert configured == [
+        {
+            "artifact_root": str(package_dir),
+            "cache_root": str(package_dir / ".shader-cache"),
+            "compiler_path": "",
+            "dev_compile_enabled": False,
+        }
+    ]
 
 
 def test_runtime_package_path_rejects_traversal_and_allows_internal_symlinks(tmp_path) -> None:

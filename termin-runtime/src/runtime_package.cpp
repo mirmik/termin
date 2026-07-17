@@ -21,7 +21,6 @@
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tgfx/tgfx_texture_handle.hpp>
-#include <tgfx2/tc_shader_bridge.hpp>
 #include <termin/bootstrap/bootstrap.hpp>
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/image/image_decode.hpp>
@@ -1132,7 +1131,9 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
             }
             shader_root = package_path(root, artifact_root_field->as_string());
         }
-        tgfx2_set_shader_artifact_root(shader_root.string().c_str());
+        result.shader_runtime.artifact_root = shader_root.string();
+        result.shader_runtime.cache_root = (root / ".shader-cache").string();
+        result.shader_runtime.dev_compile_enabled = false;
 
         const nos::trent* resources = dict_get(manifest, "resources");
         if (!resources || !resources->is_list()) {

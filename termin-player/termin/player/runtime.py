@@ -272,8 +272,6 @@ class PlayerRuntime:
 
         bootstrap_player()
         self._configure_backend_default()
-        if not self._configure_shader_runtime():
-            return False
 
         # Load the app render bindings before resource preloaders touch
         # materials/shaders. Importing tgfx-only helpers first leaves some
@@ -282,6 +280,8 @@ class PlayerRuntime:
         self._ensure_texture_registry()
 
         if not self._ensure_engine_core():
+            return False
+        if not self._configure_shader_runtime():
             return False
 
         from termin.default_assets.resource_manager import DefaultResourceManager
@@ -564,7 +564,11 @@ class PlayerRuntime:
 
         from termin.shader_runtime import configure_project_shader_runtime
 
-        return configure_project_shader_runtime(self.project_path, label="source player")
+        return configure_project_shader_runtime(
+            self.project_path,
+            label="source player",
+            render_engine=self._engine.rendering_manager.render_engine,
+        )
 
     def _ensure_texture_registry(self) -> None:
         """Load the tgfx texture registry before app-native modules."""
@@ -632,7 +636,11 @@ class PlayerRuntime:
 
         from termin.player.runtime_package_loader import load_runtime_package_assets
 
-        load_runtime_package_assets(manifest_path.parent, manifest_path)
+        load_runtime_package_assets(
+            manifest_path.parent,
+            manifest_path,
+            self._engine.rendering_manager.render_engine,
+        )
 
     def _setup_camera(self):
         """Find existing camera or create default one."""

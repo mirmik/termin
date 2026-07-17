@@ -878,6 +878,12 @@ struct PlayerRuntimeHost::Impl {
         if (!package.ok) {
             throw std::runtime_error("failed to load runtime package: " + package.message);
         }
+        engine->rendering_manager.render_engine()->configure_shader_artifacts(
+            package.shader_runtime.artifact_root,
+            package.shader_runtime.cache_root,
+            package.shader_runtime.compiler_path,
+            package.shader_runtime.dev_compile_enabled
+        );
         scene = package.scene;
         if (!scene.valid()) {
             throw std::runtime_error("runtime package returned invalid scene");

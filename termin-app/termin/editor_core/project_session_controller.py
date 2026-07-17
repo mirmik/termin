@@ -25,6 +25,7 @@ class ProjectSessionController:
         get_init_script_editor: Callable[[], object],
         resolve_termin_shaderc: Callable[[], Path | None],
         resolve_slangc: Callable[[], Path | None],
+        get_render_engine: Callable[[], object],
         show_error: Callable[[str, str], None] | None = None,
         run_module_operation: Callable[[object, Path, Callable[[bool], None]], None]
         | None = None,
@@ -36,6 +37,7 @@ class ProjectSessionController:
         self._get_init_script_editor = get_init_script_editor
         self._resolve_termin_shaderc = resolve_termin_shaderc
         self._resolve_slangc = resolve_slangc
+        self._get_render_engine = get_render_engine
         self._show_error = show_error
         self._run_module_operation = run_module_operation
         self._project_file: Path | None = None
@@ -127,6 +129,7 @@ class ProjectSessionController:
                 project_root,
                 resolve_termin_shaderc=self._resolve_termin_shaderc,
                 resolve_slangc=self._resolve_slangc,
+                render_engine=self._get_render_engine(),
             )
 
             from termin.project.settings import ProjectSettingsManager
@@ -223,6 +226,7 @@ class ProjectSessionController:
         *,
         resolve_termin_shaderc: Callable[[], Path | None],
         resolve_slangc: Callable[[], Path | None],
+        render_engine,
     ) -> None:
         artifact_root = project_root / ".termin" / "shader-artifacts"
         cache_root = project_root / ".termin" / "shader-cache"
@@ -248,13 +252,11 @@ class ProjectSessionController:
         os.environ["TERMIN_SLANGC"] = str(slangc)
 
         try:
-            import tgfx
-
-            tgfx.configure_shader_runtime(
+            render_engine.configure_shader_artifacts(
                 artifact_root=str(artifact_root),
                 cache_root=str(cache_root),
-                shader_compiler=str(compiler),
-                dev_compile=True,
+                compiler_path=str(compiler),
+                dev_compile_enabled=True,
             )
             log.info(
                 "[ShaderRuntime] configured: "
@@ -262,7 +264,7 @@ class ProjectSessionController:
                 f"compiler='{compiler}' slangc='{slangc}' dev_compile=True"
             )
         except Exception as e:
-            log.error(f"[ShaderRuntime] configure_shader_runtime failed: {e}")
+            log.error(f"[ShaderRuntime] render engine shader configuration failed: {e}")
 
     def load_project_modules(
         self,

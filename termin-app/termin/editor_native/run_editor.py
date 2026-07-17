@@ -202,8 +202,10 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     register_editor_builtin_resources(resource_manager)
     from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
 
-    configure_sdk_shader_runtime("native-editor")
+    render_engine = engine.rendering_manager.render_engine
+    configure_sdk_shader_runtime("native-editor", render_engine=render_engine)
     window = SDLBackendWindow("Termin Editor — Native UI", 1280, 720)
+    render_engine.ensure_tgfx2()
     window.maximize()
     host = NativeUiHost(window)
     window_manager = NativeUiWindowManager(host)
@@ -1330,6 +1332,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
         get_init_script_editor=lambda: project_editor_context,
         resolve_termin_shaderc=resolve_termin_shaderc,
         resolve_slangc=resolve_slangc,
+        get_render_engine=lambda: engine.rendering_manager.render_engine,
         show_error=dialog_service.show_error,
     )
 

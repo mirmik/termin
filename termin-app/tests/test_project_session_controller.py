@@ -46,6 +46,7 @@ def _controller(
         get_init_script_editor=lambda: None,
         resolve_termin_shaderc=lambda: None,
         resolve_slangc=lambda: None,
+        get_render_engine=lambda: object(),
         show_error=lambda title, message: errors.append((title, message)),
     )
 
