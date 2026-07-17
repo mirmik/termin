@@ -62,8 +62,17 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
     assert next(item.icon for item in browser.file_model.items if item.text == "Assets") == "folder"
     assert next(item.icon for item in browser.file_model.items if item.text == "asset-0000.scene") == "file"
     assert browser.file_grid.visible_range[1] < 100
-    assert browser.breadcrumb.text == tmp_path.name
+    assert [command.data.label for command in browser.breadcrumb_model.commands] == [tmp_path.name]
+    assert not browser.breadcrumb_model.commands[0].data.enabled
     assert "2000 files" in browser.status_bar.text
+    tree_bounds = browser.tree_widget.widget.bounds
+    breadcrumb_bounds = browser.breadcrumb.widget.bounds
+    grid_bounds = browser.file_grid.widget.bounds
+    assert tree_bounds.y == pytest.approx(browser.root.bounds.y + 4.0)
+    assert breadcrumb_bounds.x == pytest.approx(grid_bounds.x)
+    assert breadcrumb_bounds.width == pytest.approx(grid_bounds.width)
+    assert tree_bounds.y == pytest.approx(breadcrumb_bounds.y)
+    assert grid_bounds.y >= breadcrumb_bounds.y + breadcrumb_bounds.height
     initial_tree_width = browser.tree_widget.widget.bounds.width
     browser.content_splitter.split_fraction = 0.32
     document.layout_roots(Rect(0.0, 0.0, 900.0, 600.0))
@@ -80,8 +89,30 @@ def test_native_project_browser_tree_grid_navigation_context_and_virtualization(
     )
     browser.activate_file(assets)
     assert controller.selected_directory == tmp_path / "Assets"
-    assert browser.breadcrumb.text.endswith("Assets")
+    assert [command.data.label for command in browser.breadcrumb_model.commands] == [
+        tmp_path.name,
+        "›  Assets",
+    ]
+    assert browser.breadcrumb_model.commands[0].data.enabled
+    assert not browser.breadcrumb_model.commands[1].data.enabled
     assert browser.file_model.item_count == 2
+
+    nested = next(
+        index for index, item in enumerate(browser.file_model.items) if item.text == "Nested"
+    )
+    browser.activate_file(nested)
+    document.layout_roots(Rect(0.0, 0.0, 900.0, 600.0))
+    assert controller.selected_directory == tmp_path / "Assets" / "Nested"
+    assets_crumb = browser.breadcrumb.item_rects[1]
+    pointer = PointerEvent()
+    pointer.type = PointerEventType.Down
+    pointer.x = assets_crumb.x + 4.0
+    pointer.y = assets_crumb.y + 4.0
+    assert document.dispatch_pointer_event(pointer)
+    pointer.type = PointerEventType.Up
+    assert document.dispatch_pointer_event(pointer)
+    assert controller.selected_directory == tmp_path / "Assets"
+    assert browser.breadcrumb_model.command_count == 2
 
     mesh = next(
         index for index, item in enumerate(browser.file_model.items) if item.text == "mesh.stl"

@@ -41,8 +41,8 @@ class NativeProjectBrowser:
     tree_widget: object
     file_grid: object
     breadcrumb: object
+    breadcrumb_model: CommandModel
     status_bar: object
-    toolbar_model: CommandModel
     tree_model: TreeModel
     expansion_model: TreeExpansionModel
     file_model: CollectionModel
@@ -56,6 +56,7 @@ class NativeProjectBrowser:
     placeholder_nodes: set[int] = field(default_factory=set)
     context_index: int = -1
     context_directory: Path | None = None
+    breadcrumb_paths: dict[str, Path] = field(default_factory=dict)
 
     def set_root(self, path: str | Path) -> None:
         snapshot = self.controller.set_root(path)
@@ -153,7 +154,23 @@ class NativeProjectBrowser:
                 for entry in snapshot.entries
             ]
         )
-        self.breadcrumb.text = " > ".join(label for label, _path in snapshot.breadcrumb)
+        breadcrumb_commands: list[CommandData] = []
+        self.breadcrumb_paths.clear()
+        last_index = len(snapshot.breadcrumb) - 1
+        for index, (label, path) in enumerate(snapshot.breadcrumb):
+            stable_id = f"breadcrumb-{index}"
+            self.breadcrumb_paths[stable_id] = path
+            breadcrumb_commands.append(
+                CommandData(
+                    stable_id,
+                    label if index == 0 else f"›  {label}",
+                    tooltip=str(path),
+                    enabled=index != last_index,
+                )
+            )
+        if not breadcrumb_commands:
+            breadcrumb_commands.append(CommandData("breadcrumb-empty", "No project", enabled=False))
+        self.breadcrumb_model.set_commands(breadcrumb_commands)
         self.status_bar.text = snapshot.status
         self.request_render()
 
@@ -225,18 +242,11 @@ def build_native_project_browser(
     root.set_layout_padding(EDITOR_UI_METRICS.collection_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.spacing)
 
-    toolbar_model = CommandModel()
-    toolbar_model.set_commands(
-        [
-            CommandData("go-up", "Up"),
-            CommandData("go-root", "Root"),
-            CommandData("refresh", "Refresh", shortcut="F5"),
-        ]
-    )
-    toolbar = document.create_tool_bar(toolbar_model)
-    root.add_fixed_child(_ref(document, toolbar), EDITOR_UI_METRICS.toolbar)
-    breadcrumb = document.create_status_bar("No project")
-    root.add_fixed_child(_ref(document, breadcrumb), EDITOR_UI_METRICS.status_row)
+    breadcrumb_model = CommandModel()
+    breadcrumb_model.set_commands([CommandData("breadcrumb-empty", "No project", enabled=False)])
+    breadcrumb = document.create_tool_bar(breadcrumb_model)
+    breadcrumb.item_height = 20.0
+    breadcrumb.padding = 2.0
 
     main = document.create_splitter(True, "project-browser-content-splitter")
     main.widget.stable_id = "editor.project-browser.content-splitter"
@@ -249,7 +259,12 @@ def build_native_project_browser(
     main.set_first(_ref(document, tree))
     file_model = CollectionModel()
     grid = document.create_file_grid_widget(file_model)
-    main.set_second(_ref(document, grid))
+    file_column = document.create_vstack("project-browser-file-column")
+    file_column.stable_id = "editor.project-browser.file-column"
+    file_column.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    file_column.add_fixed_child(_ref(document, breadcrumb), EDITOR_UI_METRICS.status_row)
+    file_column.add_stretch_child(_ref(document, grid))
+    main.set_second(file_column)
     root.add_stretch_child(main.widget)
     status = document.create_status_bar("No project is open")
     root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
@@ -264,8 +279,8 @@ def build_native_project_browser(
         tree_widget=tree,
         file_grid=grid,
         breadcrumb=breadcrumb,
+        breadcrumb_model=breadcrumb_model,
         status_bar=status,
-        toolbar_model=toolbar_model,
         tree_model=tree_model,
         expansion_model=expansion_model,
         file_model=file_model,
@@ -293,26 +308,18 @@ def build_native_project_browser(
     controller.set_mutation_refresh(refresh_after_mutation)
     controller.set_mutation_navigation(navigate_after_mutation)
 
-    def on_toolbar(_index: int, _command_id: int, command) -> None:
-        owner = current()
-        if owner is None:
-            return
-        if command.stable_id == "go-up":
-            selected = owner.controller.selected_directory
-            root_path = owner.controller.root_path
-            if selected is not None and root_path is not None and selected != root_path:
-                owner.navigate(selected.parent)
-        elif command.stable_id == "go-root":
-            root_path = owner.controller.root_path
-            if root_path is not None:
-                owner.navigate(root_path)
-        elif command.stable_id == "refresh":
-            owner.refresh()
-
     def on_selection(selected: list[int]) -> None:
         owner = current()
         if owner is not None:
             owner.select_file(selected[-1] if selected else -1)
+
+    def on_breadcrumb(_index: int, _command_id: int, command) -> None:
+        owner = current()
+        if owner is None:
+            return
+        path = owner.breadcrumb_paths.get(command.stable_id)
+        if path is not None:
+            owner.navigate(path)
 
     def on_activation(index: int, _item) -> None:
         owner = current()
@@ -357,7 +364,7 @@ def build_native_project_browser(
         if owner is not None:
             owner.execute_context_action(command.stable_id)
 
-    toolbar.connect_activated(on_toolbar)
+    breadcrumb.connect_activated(on_breadcrumb)
     grid.connect_selection_changed(on_selection)
     grid.connect_activated(on_activation)
     grid.connect_context_menu_requested(on_context)
