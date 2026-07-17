@@ -174,11 +174,7 @@ tc_component* tc_component_new_python(void* py_self, const char* type_name) {
 
     // Link to type registry for type name and instance tracking
     if (type_name) {
-        tc_type_entry* entry = tc_component_registry_get_entry(type_name);
-        if (entry) {
-            c->type_entry = entry;
-            c->type_version = entry->version;
-        }
+        tc_component_set_declared_type_name(c, type_name);
     }
 
     return c;
