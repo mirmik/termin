@@ -101,13 +101,11 @@ interop device. Сырой global pointer также допускает use-afte
 
 - `termin-engine/include/termin/engine/engine_core.hpp:20`.
 
-Но `EngineCore`, `SceneManager` и `RenderingManager` дополнительно назначают
-себя process-global singleton. `RenderingManager` безусловно перезаписывает
-текущий singleton, а destructor лишь обнуляет его:
-
-- `termin-engine/src/rendering_manager.cpp:64`;
-- `termin-engine/src/scene_manager.cpp:16`;
-- `termin-engine/src/engine_core.cpp:15`.
+**Статус 2026-07-17:** process-global EngineCore/SceneManager/RenderingManager
+API и storage удалены. Хосты получают EngineCore явно, а scene-scoped render
+потребители используют RenderAttachmentContext. Остальная часть раздела про
+транзакционность project activation и размер editor composition root остаётся
+актуальной.
 
 Project activation публикует новый context до завершения fallible sync и module
 load:
@@ -128,18 +126,17 @@ Native editor composition root разросся до одного `init_editor_n
 
 #### Риск
 
-Временный manager B перезаписывает A, а при destruction оставляет `nullptr`
-вместо восстановления A. Project switch A → B сохраняет assets, module paths,
-registrations или shader roots проекта A и способен позднее unregister-нуть
-одноимённый объект проекта B. Ошибка посередине initialization публикует
-смешанный old/new state.
+Project switch A → B сохраняет assets, module paths или registrations проекта A
+и способен позднее unregister-нуть одноимённый объект проекта B. Ошибка
+посередине initialization публикует смешанный old/new state.
 
 #### Более простое направление
 
-Нужен небольшой owning `RuntimeDomain`/`ProjectSession`, который явно владеет
-manager, watcher, module runtime, asset registry, artifact store и settings.
-Session сначала полностью строится в staging state, затем одним commit заменяет
-предыдущую и целиком закрывается.
+EngineCore остаётся composition root engine runtime. Поверх него нужен небольшой
+owning `ProjectSession`, который явно владеет project-scoped watcher, module
+runtime, asset registry, artifact store и settings. Session сначала полностью
+строится в staging state, затем одним commit заменяет предыдущую и целиком
+закрывается.
 
 Это не должен быть новый service locator. Достаточно обычного агрегата с явным
 construction/destruction order и зависимостями по ссылкам. Если продукт

@@ -23,55 +23,23 @@ extern "C" {
 #include "tc_viewport_config.h"
 #include "render/tc_viewport_pool.h"
 #include "render/tc_viewport_input_manager.h"
-#include "render/tc_rendering_manager.h"
 #include "render/tc_pipeline.h"
 #include "render/tc_render_target.h"
 #include "render/tc_render_surface.h"
 }
 
 #include <algorithm>
-#include <stdexcept>
 
 namespace termin {
-
-// ============================================================================
-// Global instance - set by EngineCore, accessed via C API for cross-DLL safety
-// ============================================================================
-
-RenderingManager* RenderingManager::instance_or_null() {
-    return reinterpret_cast<RenderingManager*>(tc_rendering_manager_instance());
-}
-
-RenderingManager& RenderingManager::instance() {
-    if (RenderingManager* manager = instance_or_null()) {
-        return *manager;
-    }
-
-    const char* message = "[RenderingManager] instance() called but no instance set. Create EngineCore first.";
-    tc_log(TC_LOG_ERROR, "%s", message);
-    throw std::runtime_error(message);
-}
-
-void RenderingManager::set_instance(RenderingManager* instance) {
-    tc_rendering_manager_set_instance(reinterpret_cast<tc_rendering_manager*>(instance));
-}
-
-void RenderingManager::reset_for_testing() {
-    tc_rendering_manager_set_instance(nullptr);
-}
 
 RenderingManager::RenderingManager(RenderTopology& topology)
     : topology_(topology) {
     display_registry_ = std::make_unique<rendering_manager_detail::RenderDisplayRegistry>();
     render_states_ = std::make_unique<rendering_manager_detail::RenderStateStore>();
-    set_instance(this);
 }
 
 RenderingManager::~RenderingManager() {
     shutdown();
-    if (instance_or_null() == this) {
-        set_instance(nullptr);
-    }
 }
 
 // ============================================================================

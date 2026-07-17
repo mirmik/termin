@@ -329,13 +329,13 @@ print(NavMeshBuilderComponent.__name__)
 def test_default_pipeline_python_pass_factory_releases_owned_pass() -> None:
     script = """
 from termin.bootstrap import bootstrap_player
-from termin.engine import EngineCore, RenderingManager, register_default_scene_extensions
+from termin.engine import EngineCore, register_default_scene_extensions
 from termin.render_framework import tc_pipeline_destroy, tc_pipeline_registry_get_all_info
 
 bootstrap_player()
 register_default_scene_extensions()
 engine = EngineCore()
-pipeline = RenderingManager.instance().create_pipeline("Default")
+pipeline = engine.rendering_manager.create_pipeline("Default")
 print(pipeline.pass_count)
 for info in list(tc_pipeline_registry_get_all_info()):
     tc_pipeline_destroy(info["handle"])
@@ -359,11 +359,11 @@ def test_rendering_manager_stats_expose_pipeline_cache_counters() -> None:
     script = """
 import json
 from termin.bootstrap import bootstrap_player
-from termin.engine import EngineCore, RenderingManager
+from termin.engine import EngineCore
 
 bootstrap_player()
 engine = EngineCore()
-stats = RenderingManager.instance().get_render_stats()
+stats = engine.rendering_manager.get_render_stats()
 print(json.dumps({
     "pipeline_cache_hits": stats["pipeline_cache_hits"],
     "pipeline_cache_misses": stats["pipeline_cache_misses"],

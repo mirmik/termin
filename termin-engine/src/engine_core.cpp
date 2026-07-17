@@ -35,7 +35,6 @@ EngineCore::EngineCore()
             );
         }
     });
-    tc_engine_core_set_instance(reinterpret_cast<tc_engine_core*>(this));
     tc_log(TC_LOG_INFO, "[EngineCore] Created");
 }
 
@@ -51,9 +50,6 @@ EngineCore::~EngineCore() {
     }
     scene_manager.close_all_scenes();
     rendering_manager.shutdown();
-    if (tc_engine_core_instance() == reinterpret_cast<tc_engine_core*>(this)) {
-        tc_engine_core_set_instance(nullptr);
-    }
     termin_scene_runtime_shutdown();
     tc_log(TC_LOG_INFO, "[EngineCore] Destroyed");
 }

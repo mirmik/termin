@@ -69,9 +69,6 @@ set(TERMIN_ENGINE_SOURCES
     src/render_attachment_context.cpp
     src/render_topology.cpp
     src/modules/term_modules_integration.cpp
-    src/tc_scene_manager_instance.cpp
-    src/tc_rendering_manager_instance.cpp
-    src/tc_engine_core_instance.cpp
     src/viewport_render_state.cpp
 )
 
