@@ -136,8 +136,8 @@ void EngineCore::run() {
         last_time = frame_start;
         has_previous_frame = true;
 
-        bool profile = tc_profiler_enabled();
-        if (profile) {
+        const bool capture_frame = tc_profiler_frame_capture_enabled();
+        if (capture_frame) {
             const tc_profiler_frame_info frame_info{
                 cadence.start_time_ms,
                 cadence.interval_ms,
@@ -147,6 +147,7 @@ void EngineCore::run() {
             };
             tc_profiler_begin_frame_with_info(&frame_info);
         }
+        const bool profile = tc_profiler_enabled();
 
         // Always wrap the UI callback in a section so the sub-sections
         // the callback opens (Events, Render Compose, …) are nested
@@ -163,7 +164,7 @@ void EngineCore::run() {
 
         // Check if should continue
         if (_should_continue_callback && !_should_continue_callback()) {
-            if (profile) tc_profiler_end_frame();
+            if (capture_frame) tc_profiler_end_frame();
             _running = false;
             break;
         }
@@ -172,7 +173,7 @@ void EngineCore::run() {
         // scope owned by this function.
         tick_and_render(dt);
 
-        if (profile) tc_profiler_end_frame();
+        if (capture_frame) tc_profiler_end_frame();
 
         // Frame limiting with sleep_until for stable pacing
         // Keep the expected start until the next iteration observes it. A

@@ -8,6 +8,7 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/bindings/editor/gizmo_bindings.cpp
     termin/bindings/editor/editor_interaction_bindings.cpp
     termin/bindings/editor/frame_graph_debugger_bindings.cpp
+    termin/bindings/editor/frame_profiler_bindings.cpp
     termin/bindings/render/solid_primitive.cpp
     termin/editor/camera_frustum_debug_gizmo.cpp
     termin/editor/camera_frustum_math.cpp
@@ -18,6 +19,7 @@ set(TERMIN_APP_EDITOR_NATIVE_SOURCES
     termin/editor/transform_gizmo.cpp
     termin/editor/editor_viewport_input_manager.cpp
     termin/editor/editor_interaction_system.cpp
+    termin/editor/frame_profiler_controller.cpp
     termin/editor/selection_manager.cpp
     termin/render/solid_primitive_renderer.cpp
 )
@@ -41,6 +43,8 @@ target_link_libraries(_editor_native PRIVATE
     termin_components_render::termin_components_render
     termin_render::termin_render
     termin_display::termin_display
+    termin_engine::termin_engine
+    termin_gui_native::termin_gui_native
     termin_render_passes::termin_render_passes
     tgfx::termin_graphics
     tgfx::termin_graphics2
