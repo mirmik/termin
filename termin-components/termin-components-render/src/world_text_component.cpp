@@ -624,14 +624,16 @@ bool WorldTextComponent::collect_render_items(
         tc::Log::error("[WorldTextComponent] cannot emit render items: sink callback is null");
         return false;
     }
-    if (!context.phase_mark || text.empty()) {
+    if (text.empty()) {
         return true;
     }
 
     const bool is_id_pass =
         context.pass_semantic == static_cast<uint32_t>(RenderItemPassSemantic::Id);
     const std::string mark = sanitize_phase_mark(phase_mark);
-    if (!is_id_pass && context.phase_mark != mark) {
+    const bool collect_all_phases =
+        !context.phase_mark || context.phase_mark[0] == '\0';
+    if (!collect_all_phases && !is_id_pass && context.phase_mark != mark) {
         return true;
     }
 
@@ -646,9 +648,12 @@ bool WorldTextComponent::collect_render_items(
     item.component = tc_component_ptr();
     item.geometry_id = 0;
     item.material_phase = phase;
-    item.material = tc_material_handle_invalid();
-    item.material_phase_index = SIZE_MAX;
-    tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+    TcMaterial material = effective_material();
+    tc_material* raw_material = material.get();
+    item.material = material.handle;
+    item.material_phase_index = raw_material
+        ? static_cast<size_t>(phase - raw_material->phases)
+        : SIZE_MAX;
 
     Mat44f model = get_model_matrix(entity());
     std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);

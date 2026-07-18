@@ -268,7 +268,16 @@ void DepthPass::execute_with_data_tgfx2(
     // Use the UBO-based engine shader as the base shader key for RenderItem
     // shader overrides. The old source-based GeometryPassBase shader path has
     // been removed.
-    collect_draw_calls(data.scene, data.layer_mask, ctx.render_category_mask, depth_shader_handle_);
+    RenderSceneItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "DepthPass");
+    if (!snapshot) {
+        return;
+    }
+    collect_draw_calls(
+        data.scene,
+        data.layer_mask,
+        ctx.render_category_mask,
+        depth_shader_handle_,
+        *snapshot);
     sort_draw_calls_by_shader();
 
     entity_names.clear();
@@ -500,8 +509,11 @@ CameraComponent* DepthOnlyPass::find_camera_by_name(
 void DepthOnlyPass::collect_draw_calls(
     tc_scene_handle scene,
     uint64_t layer_mask,
-    uint64_t render_category_mask
+    uint64_t render_category_mask,
+    const RenderSceneItemSnapshot& snapshot
 ) const {
+    (void)layer_mask;
+    (void)render_category_mask;
     cached_draw_calls_.clear();
 
     if (!tc_scene_handle_valid(scene)) {
@@ -515,70 +527,58 @@ void DepthOnlyPass::collect_draw_calls(
         return;
     }
 
-    struct CollectContext {
-    public:
-        const DepthOnlyPass* pass = nullptr;
-        std::vector<DepthOnlyPass::DrawCall>* draw_calls = nullptr;
-        MaterialPipelinePassContract pass_contract;
-        RenderContext* render_context = nullptr;
-        std::string pass_name;
-    };
-
-    auto callback = [](tc_component* c, void* user_data) -> bool {
-        auto* collect_ctx = static_cast<CollectContext*>(user_data);
-        Entity ent(c->owner);
-
-        tc_render_item_collect_context item_context{};
-        item_context.phase_mark = collect_ctx->pass->pass_phase_mark.c_str();
-        item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
-        item_context.layer_mask = collect_ctx->render_context
-            ? collect_ctx->render_context->layer_mask
-            : UINT64_MAX;
-        item_context.render_category_mask = collect_ctx->render_context
-            ? collect_ctx->render_context->render_category_mask
-            : UINT64_MAX;
-        item_context.pass_semantic =
-            static_cast<uint32_t>(RenderItemPassSemantic::DepthOnly);
-        item_context.debug_pass_name = collect_ctx->pass_name.c_str();
-        item_context.pass_contract = &collect_ctx->pass_contract;
-        item_context.camera = collect_ctx->render_context
-            ? collect_ctx->render_context->camera
-            : nullptr;
-
-        RenderItemCollection items;
-        if (!collect_drawable_render_items(c, item_context, items)) {
-            return true;
+    const MaterialPipelinePassContract pass_contract =
+        depth_material_pass_contract("depth_only");
+    const auto& items = snapshot.items();
+    for (size_t group_begin = 0; group_begin < items.size();) {
+        const tc_render_item& representative = items[group_begin];
+        size_t group_end = group_begin + 1;
+        while (group_end < items.size() &&
+               items[group_end].component == representative.component &&
+               items[group_end].kind == representative.kind &&
+               items[group_end].geometry_id == representative.geometry_id) {
+            ++group_end;
         }
 
-        for (const tc_render_item& item : items.items) {
-            if (!render_item_encoder_supports_pass(
-                    item.kind,
-                    RenderItemPassSemantic::DepthOnly)) {
-                continue;
-            }
+        tc_component* component = representative.component;
+        Entity ent(component ? component->owner : TC_ENTITY_HANDLE_INVALID);
+        if (!component || !ent.valid() ||
+            !render_item_encoder_supports_pass(
+                representative.kind,
+                RenderItemPassSemantic::DepthOnly)) {
+            group_begin = group_end;
+            continue;
+        }
 
-            tc_shader_handle original_shader =
-                collect_ctx->pass->depth_shader_handle_;
-            tc_material_phase* selected_phase = resolve_render_item_material_phase(item);
-            if (selected_phase &&
-                !tc_shader_handle_is_invalid(selected_phase->shader)) {
-                original_shader = selected_phase->shader;
+        size_t selected_index = group_begin;
+        for (size_t i = group_begin; i < group_end; ++i) {
+            if (render_item_matches_phase(items[i], pass_phase_mark.c_str())) {
+                selected_index = i;
+                break;
             }
+        }
+        const tc_render_item& item = items[selected_index];
+        tc_material_phase* selected_phase =
+            render_item_matches_phase(item, pass_phase_mark.c_str())
+                ? resolve_render_item_material_phase(item)
+                : nullptr;
+        tc_shader_handle original_shader = depth_shader_handle_;
+        if (selected_phase && !tc_shader_handle_is_invalid(selected_phase->shader)) {
+            original_shader = selected_phase->shader;
+        }
 
+        RenderTaskList planned_shader;
+        if (plan_depth_only_item_shader(
+                item,
+                selected_phase,
+                original_shader,
+                pass_contract,
+                "DepthOnlyPass/Collect",
+                planned_shader)) {
             DrawCall dc;
             dc.entity = ent;
-            dc.component = c;
+            dc.component = component;
             dc.item = item;
-            RenderTaskList planned_shader;
-            if (!plan_depth_only_item_shader(
-                    item,
-                    selected_phase,
-                    original_shader,
-                    collect_ctx->pass_contract,
-                    "DepthOnlyPass/Collect",
-                    planned_shader)) {
-                continue;
-            }
             dc.final_shader = TcShader(planned_shader.at(0).final_shader);
             dc.geometry_id = item.geometry_id;
             if (selected_phase) {
@@ -586,29 +586,10 @@ void DepthOnlyPass::collect_draw_calls(
                 dc.material = item.material;
                 dc.phase_index = item.material_phase_index;
             }
-            collect_ctx->draw_calls->push_back(dc);
+            cached_draw_calls_.push_back(std::move(dc));
         }
-        return true;
-    };
-
-    RenderContext render_context;
-    render_context.phase = pass_phase_mark;
-    render_context.pass_contract = depth_material_pass_contract("depth_only");
-    render_context.layer_mask = layer_mask;
-    render_context.render_category_mask = render_category_mask;
-    render_context.scene = TcSceneRef(scene);
-
-    CollectContext collect_ctx{
-        this,
-        &cached_draw_calls_,
-        depth_material_pass_contract("depth_only"),
-        &render_context,
-        get_pass_name()};
-
-    int filter_flags = TC_SCENE_FILTER_ENABLED
-                     | TC_SCENE_FILTER_VISIBLE
-                     | TC_SCENE_FILTER_ENTITY_ENABLED;
-    tc_scene_foreach_drawable(scene, callback, &collect_ctx, filter_flags, layer_mask);
+        group_begin = group_end;
+    }
 }
 
 void DepthOnlyPass::collect_shader_usages(
@@ -784,7 +765,16 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
 
     auto& device = ctx.ctx2->device();
     ensure_tgfx2_resources(device);
-    collect_draw_calls(scene, ctx.layer_mask, ctx.render_category_mask);
+    RenderSceneItemSnapshot* snapshot =
+        ensure_render_item_snapshot(ctx, "DepthOnlyPass");
+    if (!snapshot) {
+        return;
+    }
+    collect_draw_calls(
+        scene,
+        ctx.layer_mask,
+        ctx.render_category_mask,
+        *snapshot);
     sort_draw_calls_by_shader();
 
     entity_names.clear();

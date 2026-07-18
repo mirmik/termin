@@ -19,6 +19,7 @@
 #include <termin/render/frame_graph_debugger_core.hpp>
 #include <termin/render/frame_pass.hpp>
 #include <termin/render/render_item_submission.hpp>
+#include <termin/render/render_scene_item_collector.hpp>
 #include <termin/render/resource_spec.hpp>
 
 extern "C" {
@@ -65,7 +66,6 @@ public:
 
 protected:
     mutable std::vector<DrawCall> cached_draw_calls_;
-    mutable RenderItemCollection cached_render_items_;
 
     INSPECT_FIELD(GeometryPassBase, input_res, "Input Resource", "string")
     INSPECT_FIELD(GeometryPassBase, output_res, "Output Resource", "string")
@@ -125,7 +125,8 @@ protected:
         tc_scene_handle scene,
         uint64_t layer_mask,
         uint64_t render_category_mask,
-        tc_shader_handle base_shader
+        tc_shader_handle base_shader,
+        const RenderSceneItemSnapshot& snapshot
     ) const;
     void sort_draw_calls_by_shader() const;
     std::vector<ResourceSpec> make_resource_specs() const;

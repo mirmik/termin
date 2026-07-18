@@ -198,7 +198,7 @@ private:
         tc_scene_handle scene,
         uint64_t layer_mask,
         uint64_t render_category_mask,
-        RenderSceneItemCollector& collector
+        const RenderSceneItemSnapshot& snapshot
     );
 
     // Build shadow camera params for a light

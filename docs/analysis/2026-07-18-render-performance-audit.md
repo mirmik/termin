@@ -859,6 +859,58 @@ Live screenshot сохранил материалы и каскадные тен
 ordering остаётся на прежнем коде сортировки. После ColorPass-среза штатная
 SDK-сборка и центральный test workflow повторены.
 
+## Общий RenderItem snapshot (#555)
+
+Geometry collection переведён с pass-owned collectors на один lazy immutable
+snapshot для каждой пары scene/render-target-view внутри
+`render_scene_pipeline_offscreen`. `RenderEngine` владеет переиспользуемым
+scratch pool, явно инвалидирует содержимое на границе execution и сохраняет
+capacity item/payload/route storage между кадрами. Разные viewport cameras,
+layer masks и category masks получают независимые snapshots.
+
+Новый producer contract использует пустой `phase_mark` как pass-neutral
+collection: drawable обязан за один вызов опубликовать все phase-варианты.
+Mesh, skinned mesh, direct/mesh lines, world text, foliage, navmesh C++ и
+существующие Python producers поддерживают этот режим. Snapshot заранее
+строит сохраняющие capacity buckets `phase_mark -> item indices`; Color и
+Shadow обходят только соответствующий bucket, а Id/Depth/DepthOnly/Normal
+выбирают один representation на primitive identity без повторного producer
+call.
+
+Owned line/text/foliage payload теперь переиспользует storage между кадрами и
+не копируется повторно для соседних material-phase вариантов. Material phases
+хранят canonical owner handle/index, поэтому `tc_material_find_phase_ref`
+проверяет ссылку за O(1), без прежнего reverse scan всего material pool.
+
+При `TERMIN_RENDER_ENGINE_TIMING=1` строка RenderEngine timing дополнена
+`avgRenderItems{sceneTraversals, producers, items}`. Контрактный C++ test
+проверяет один traversal/producer invocation, отдельный snapshot второй view,
+compact phase payload reuse и сохранение scratch capacity после invalidation.
+
+Live-smoke ChronoSquad потребовал синхронной миграции пяти project-side C++
+producer'ов (`ActionPreviewComponent`, `ShootEffectVisualController`,
+`BlinkEffectVisualController`, `LedgeComponent`, `CornerLeanZone`): они также
+публикуют все свои phase-варианты при пустом `phase_mark`. Legacy fallback в
+движок не добавлялся; несовместимый producer останавливает построение snapshot
+с диагностикой.
+
+После прогрева Play Mode устойчивый timing interval показал 458 render
+executions (примерно четыре viewport execution на frame):
+
+- `sceneTraversals=1.00` при среднем `producers=57.79`, `items=98.56`;
+- ни одного повторного producer traversal из Color/Shadow/Id/Depth/Normal;
+- средний `RenderEngine total=4.04` мс на execution, то есть примерно 16.2 мс
+  на четыре execution кадра;
+- Frame Profiler capture на 791 кадр: p50 19.82 мс, p95 22.72 мс,
+  p99 24.98 мс. Это контроль корректности и архитектурного invariant, а не
+  чистое A/B: число активных viewport и фоновые editor tasks в срезе не
+  зафиксированы так же строго, как в измерениях #564--#567.
+
+Скриншот живого Play Mode подтвердил сохранение основного изображения,
+материалов и теней. Smoke одновременно обнаружил отдельные дефекты, не
+включённые в #555: спам NormalPass для vertex layouts без normal attribute
+(#583) и подозрительный lifetime prototype mesh у foliage RenderItem (#584).
+
 ## Ограничения и состояние репозитория
 
 - Аудит не заменяет CPU/GPU profile конкретной сцены.

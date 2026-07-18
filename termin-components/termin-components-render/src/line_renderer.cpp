@@ -634,16 +634,14 @@ bool emit_line_batch_render_items(
         tc::Log::error("[LineBatchRenderItem] cannot emit with null sink");
         return false;
     }
-    if (!context.phase_mark || context.phase_mark[0] == '\0') {
-        tc::Log::error("[LineBatchRenderItem] cannot emit without phase mark");
-        return false;
-    }
     if (!desc.points || desc.point_count < 2) {
         return true;
     }
 
-    const std::string phase_mark = context.phase_mark;
-    if (!accepts_phase(phase_mark, desc.cast_shadow)) {
+    const bool collect_all_phases =
+        !context.phase_mark || context.phase_mark[0] == '\0';
+    const std::string phase_mark = collect_all_phases ? std::string() : context.phase_mark;
+    if (!collect_all_phases && !accepts_phase(phase_mark, desc.cast_shadow)) {
         return true;
     }
 
@@ -670,7 +668,7 @@ bool emit_line_batch_render_items(
         (context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u;
     bool emitted = false;
 
-    auto emit_phase = [&](tc_material_phase* phase) -> bool {
+    auto emit_phase = [&](tc_material_phase* phase, tc_material_handle material_handle) -> bool {
         if (!phase && !allow_missing_material_phase) {
             return true;
         }
@@ -681,7 +679,7 @@ bool emit_line_batch_render_items(
         item.component = component;
         item.geometry_id = desc.geometry_id;
         item.material_phase = phase;
-        item.material = tc_material_handle_invalid();
+        item.material = material_handle;
         item.material_phase_index = SIZE_MAX;
         item.payload.line_batch.points =
             reinterpret_cast<const tc_render_item_vec3*>(desc.points);
@@ -697,7 +695,10 @@ bool emit_line_batch_render_items(
 
         if (phase) {
             item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-            tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+            tc_material* owner = tc_material_get(material_handle);
+            item.material_phase_index = owner
+                ? static_cast<size_t>(phase - owner->phases)
+                : SIZE_MAX;
         }
         if (desc.has_override_color) {
             item.flags |= TC_RENDER_ITEM_FLAG_HAS_OVERRIDE_COLOR;
@@ -719,19 +720,24 @@ bool emit_line_batch_render_items(
         if (draw_phase_mark == "shadow") {
             found_shadow_phase = true;
         }
-        if (phase_mark == draw_phase_mark && !emit_phase(phase)) {
+        if ((collect_all_phases || phase_mark == draw_phase_mark) &&
+            !emit_phase(phase, desc.material.handle)) {
             return false;
         }
     }
 
-    if (desc.cast_shadow && phase_mark == "shadow" && !found_shadow_phase) {
-        if (!emit_phase(find_phase(desc.shadow_fallback_material.get(), "shadow"))) {
+    if (desc.cast_shadow &&
+        (collect_all_phases || phase_mark == "shadow") &&
+        !found_shadow_phase) {
+        if (!emit_phase(
+                find_phase(desc.shadow_fallback_material.get(), "shadow"),
+                desc.shadow_fallback_material.handle)) {
             return false;
         }
     }
 
     if (!emitted && allow_missing_material_phase) {
-        return emit_phase(nullptr);
+        return emit_phase(nullptr, desc.material.handle);
     }
 
     return true;
@@ -1183,12 +1189,14 @@ bool LineRenderer::collect_render_items(
     const tc_render_item_collect_context& context,
     tc_render_item_sink& sink)
 {
-    if (!context.phase_mark || points_.size() < 2) {
+    if (points_.size() < 2) {
         return true;
     }
 
-    const std::string phase_mark = context.phase_mark;
-    if (!accepts_phase(phase_mark, cast_shadow)) {
+    const bool collect_all_phases =
+        !context.phase_mark || context.phase_mark[0] == '\0';
+    const std::string phase_mark = collect_all_phases ? std::string() : context.phase_mark;
+    if (!collect_all_phases && !accepts_phase(phase_mark, cast_shadow)) {
         return true;
     }
 
@@ -1220,7 +1228,7 @@ bool LineRenderer::collect_render_items(
             return true;
         }
 
-        auto emit_mesh_phase = [&](tc_material_phase* phase) -> bool {
+        auto emit_mesh_phase = [&](tc_material_phase* phase, tc_material_handle material_handle) -> bool {
             if (!phase && !allow_missing_material_phase) {
                 return true;
             }
@@ -1231,11 +1239,14 @@ bool LineRenderer::collect_render_items(
             item.component = this->tc_component_ptr();
             item.geometry_id = 0;
             item.material_phase = phase;
-            item.material = tc_material_handle_invalid();
+            item.material = material_handle;
             item.material_phase_index = SIZE_MAX;
             if (phase) {
                 item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-                tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+                tc_material* owner = tc_material_get(material_handle);
+                item.material_phase_index = owner
+                    ? static_cast<size_t>(phase - owner->phases)
+                    : SIZE_MAX;
             }
             Mat44f model = get_model_matrix(entity());
             std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
@@ -1263,20 +1274,23 @@ bool LineRenderer::collect_render_items(
             if (draw_phase_mark == "shadow") {
                 found_shadow_phase = true;
             }
-            if (phase_mark == draw_phase_mark && !emit_mesh_phase(phase)) {
+            if ((collect_all_phases || phase_mark == draw_phase_mark) &&
+                !emit_mesh_phase(phase, mat.handle)) {
                 return false;
             }
         }
 
-        if (cast_shadow && phase_mark == "shadow" && !found_shadow_phase) {
+        if (cast_shadow &&
+            (collect_all_phases || phase_mark == "shadow") &&
+            !found_shadow_phase) {
             TcMaterial fallback = default_material();
-            if (!emit_mesh_phase(find_phase(fallback.get(), "shadow"))) {
+            if (!emit_mesh_phase(find_phase(fallback.get(), "shadow"), fallback.handle)) {
                 return false;
             }
         }
 
         if (!emitted && allow_missing_material_phase) {
-            return emit_mesh_phase(nullptr);
+            return emit_mesh_phase(nullptr, mat.handle);
         }
 
         return true;

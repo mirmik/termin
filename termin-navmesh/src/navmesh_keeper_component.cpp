@@ -104,7 +104,9 @@ bool NavMeshKeeperComponent::collect_render_items(
         tc_log_error("[NavMeshKeeperComponent] cannot emit render items: sink callback is null");
         return false;
     }
-    if (!context.phase_mark || std::string(context.phase_mark) != NAVMESH_DEBUG_PHASE) {
+    const bool collect_all_phases =
+        !context.phase_mark || context.phase_mark[0] == '\0';
+    if (!collect_all_phases && std::string(context.phase_mark) != NAVMESH_DEBUG_PHASE) {
         return true;
     }
     if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
@@ -124,7 +126,7 @@ bool NavMeshKeeperComponent::collect_render_items(
     tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
     const size_t count = tc_material_get_phases_for_mark(
         material,
-        context.phase_mark,
+        NAVMESH_DEBUG_PHASE,
         phases,
         TC_MATERIAL_MAX_PHASES);
     Mat44f model = get_model_matrix(entity());
@@ -136,9 +138,8 @@ bool NavMeshKeeperComponent::collect_render_items(
         item.component = tc_component_ptr();
         item.geometry_id = 0;
         item.material_phase = phase;
-        item.material = tc_material_handle_invalid();
-        item.material_phase_index = SIZE_MAX;
-        tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+        item.material = mat.handle;
+        item.material_phase_index = static_cast<size_t>(phase - material->phases);
         std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
         item.payload.mesh.mesh = mesh;
         item.payload.mesh.mesh_handle = _navmesh_debug_mesh.handle;
