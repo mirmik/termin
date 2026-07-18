@@ -29,7 +29,7 @@ std::vector<std::string> module_component_types(const termin_modules::ModuleReco
     return ComponentRegistry::instance().list_owned(record.spec.id);
 }
 
-std::vector<std::string> module_pass_types(const termin_modules::ModuleRecord& record) {
+std::vector<std::string> module_pass_types_for_owner(const std::string& module_id) {
     std::vector<std::string> result;
     const size_t count = tc_pass_registry_type_count();
     for (size_t i = 0; i < count; ++i) {
@@ -37,11 +37,15 @@ std::vector<std::string> module_pass_types(const termin_modules::ModuleRecord& r
         const char* owner = type_name
             ? tc_runtime_type_registry_get_owner(type_name)
             : nullptr;
-        if (owner && record.spec.id == owner) {
+        if (owner && module_id == owner) {
             result.emplace_back(type_name);
         }
     }
     return result;
+}
+
+std::vector<std::string> module_pass_types(const termin_modules::ModuleRecord& record) {
+    return module_pass_types_for_owner(record.spec.id);
 }
 
 std::vector<std::string> module_runtime_types(const termin_modules::ModuleRecord& record) {
@@ -63,6 +67,8 @@ struct RuntimeUnloadContext {
     const char* module_id = nullptr;
     bool component_batch_attempted = false;
     bool component_batch_ok = false;
+    bool pass_batch_attempted = false;
+    bool pass_batch_ok = false;
 };
 
 bool prepare_component_unload_for_runtime_type(
@@ -147,31 +153,37 @@ bool prepare_pass_unload_for_runtime_type(
         return false;
     }
 
-    const UnknownPassStats stats = degrade_passes_to_unknown({type_name});
-    if (stats.failed > 0) {
-        const UnknownPassStats restored = upgrade_unknown_passes({type_name});
-        tc::Log::error(
-            "TermModulesIntegration: failed to degrade %zu pass instance(s) of type '%s'; "
-            "rolled back %zu placeholder(s)",
-            stats.failed,
-            type_name,
-            restored.upgraded
-        );
-        return false;
+    if (!unload_context->pass_batch_attempted) {
+        unload_context->pass_batch_attempted = true;
+        const std::vector<std::string> type_names = module_pass_types_for_owner(
+            unload_context->module_id ? unload_context->module_id : "");
+        UnknownPassDegradationPlan plan;
+        std::string error;
+        unload_context->pass_batch_ok = prepare_passes_to_unknown(
+            type_names,
+            plan,
+            &error
+        ) && plan.commit(&error);
+        if (!unload_context->pass_batch_ok) {
+            tc::Log::error(
+                "TermModulesIntegration: failed to prepare pass batch for module '%s': %s",
+                unload_context->module_id ? unload_context->module_id : "<unknown>",
+                error.c_str()
+            );
+            return false;
+        }
     }
     const size_t remaining = tc_runtime_type_registry_instance_count(type_name);
     if (remaining > 0) {
-        const UnknownPassStats restored = upgrade_unknown_passes({type_name});
+        unload_context->pass_batch_ok = false;
         tc::Log::error(
-            "TermModulesIntegration: pass type '%s' still has %zu external live "
-            "reference(s) after pipeline degradation; rolled back %zu placeholder(s)",
+            "TermModulesIntegration: pass type '%s' still has %zu live "
+            "instance(s) after prepared pipeline degradation",
             type_name,
-            remaining,
-            restored.upgraded
+            remaining
         );
-        return false;
     }
-    return true;
+    return unload_context->pass_batch_ok;
 }
 
 void rollback_module_placeholders(
