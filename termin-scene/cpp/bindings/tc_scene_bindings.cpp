@@ -262,6 +262,7 @@ void bind_tc_scene_core(nb::module_& m) {
         .def_prop_ro("pending_start_count", &TcSceneRef::pending_start_count)
         .def_prop_ro("update_list_count", &TcSceneRef::update_list_count)
         .def_prop_ro("fixed_update_list_count", &TcSceneRef::fixed_update_list_count)
+        .def_prop_ro("before_render_list_count", &TcSceneRef::before_render_list_count)
 
         // Pool access
         .def("entity_pool_ptr", [](TcSceneRef& self) {

@@ -112,6 +112,7 @@ public:
     size_t pending_start_count() const;
     size_t update_list_count() const;
     size_t fixed_update_list_count() const;
+    size_t before_render_list_count() const;
 
     // Get entity pool owned by this scene
     tc_entity_pool* entity_pool() const;

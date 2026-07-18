@@ -131,6 +131,7 @@ TC_API size_t tc_scene_entity_count(tc_scene_handle h);
 TC_API size_t tc_scene_pending_start_count(tc_scene_handle h);
 TC_API size_t tc_scene_update_list_count(tc_scene_handle h);
 TC_API size_t tc_scene_fixed_update_list_count(tc_scene_handle h);
+TC_API size_t tc_scene_before_render_list_count(tc_scene_handle h);
 
 // ============================================================================
 // Entity Queries
