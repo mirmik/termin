@@ -61,6 +61,15 @@ static bool list_contains(ComponentList* list, tc_component* c) {
     return false;
 }
 
+static void list_set_membership(ComponentList* list, tc_component* c, bool present) {
+    bool contains = list_contains(list, c);
+    if (present && !contains) {
+        list_push(list, c);
+    } else if (!present && contains) {
+        list_remove(list, c);
+    }
+}
+
 // ============================================================================
 // Scene Pool - Global singleton
 // ============================================================================
@@ -497,7 +506,20 @@ tc_entity_pool* tc_scene_entity_pool(tc_scene_handle h) {
 void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
     if (!handle_alive(h) || !c) return;
 
+    if (handle_alive(c->lifecycle_scene) && !tc_scene_handle_eq(c->lifecycle_scene, h)) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[tc_scene_register_component] component is already registered with scene (%u,%u); requested (%u,%u)",
+            c->lifecycle_scene.index,
+            c->lifecycle_scene.generation,
+            h.index,
+            h.generation
+        );
+        return;
+    }
+
     uint32_t idx = h.index;
+    c->lifecycle_scene = h;
     scene_capability_sync_legacy_bridges(c);
 
     // Add to pending_start if not started
@@ -538,7 +560,20 @@ void tc_scene_register_component(tc_scene_handle h, tc_component* c) {
 void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     if (!handle_alive(h) || !c) return;
 
+    if (handle_alive(c->lifecycle_scene) && !tc_scene_handle_eq(c->lifecycle_scene, h)) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[tc_scene_unregister_component] component belongs to scene (%u,%u); requested (%u,%u)",
+            c->lifecycle_scene.index,
+            c->lifecycle_scene.generation,
+            h.index,
+            h.generation
+        );
+        return;
+    }
+
     uint32_t idx = h.index;
+    c->lifecycle_scene = TC_SCENE_HANDLE_INVALID;
 
     list_remove(&g_pool->slots[idx].pending_starts, c);
     list_remove(&g_pool->slots[idx].update_list, c);
@@ -568,6 +603,27 @@ void tc_scene_unregister_component(tc_scene_handle h, tc_component* c) {
     }
 
     tc_component_on_removed(c);
+}
+
+void tc_component_set_lifecycle_capabilities(
+    tc_component* c,
+    bool has_update,
+    bool has_fixed_update,
+    bool has_before_render
+) {
+    if (!c) return;
+
+    c->has_update = has_update;
+    c->has_fixed_update = has_fixed_update;
+    c->has_before_render = has_before_render;
+
+    tc_scene_handle scene = c->lifecycle_scene;
+    if (!handle_alive(scene)) return;
+
+    uint32_t idx = scene.index;
+    list_set_membership(&g_pool->slots[idx].update_list, c, has_update);
+    list_set_membership(&g_pool->slots[idx].fixed_update_list, c, has_fixed_update);
+    list_set_membership(&g_pool->slots[idx].before_render_list, c, has_before_render);
 }
 
 // ============================================================================
@@ -936,6 +992,11 @@ size_t tc_scene_update_list_count(tc_scene_handle h) {
 size_t tc_scene_fixed_update_list_count(tc_scene_handle h) {
     if (!handle_alive(h)) return 0;
     return g_pool->slots[h.index].fixed_update_list.count;
+}
+
+size_t tc_scene_before_render_list_count(tc_scene_handle h) {
+    if (!handle_alive(h)) return 0;
+    return g_pool->slots[h.index].before_render_list.count;
 }
 
 // ============================================================================

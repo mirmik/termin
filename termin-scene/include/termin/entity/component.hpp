@@ -106,13 +106,23 @@ public:
     void set_started(bool v) { _c._started = v; }
 
     bool has_update() const { return _c.has_update; }
-    void set_has_update(bool v) { _c.has_update = v; }
+    void set_has_update(bool v) {
+        set_lifecycle_capabilities(v, _c.has_fixed_update, _c.has_before_render);
+    }
 
     bool has_fixed_update() const { return _c.has_fixed_update; }
-    void set_has_fixed_update(bool v) { _c.has_fixed_update = v; }
+    void set_has_fixed_update(bool v) {
+        set_lifecycle_capabilities(_c.has_update, v, _c.has_before_render);
+    }
 
     bool has_before_render() const { return _c.has_before_render; }
-    void set_has_before_render(bool v) { _c.has_before_render = v; }
+    void set_has_before_render(bool v) {
+        set_lifecycle_capabilities(_c.has_update, _c.has_fixed_update, v);
+    }
+
+    void set_lifecycle_capabilities(bool update, bool fixed_update, bool before_render) {
+        tc_component_set_lifecycle_capabilities(&_c, update, fixed_update, before_render);
+    }
 
     // Lifecycle hooks (virtual - subclasses override these)
     virtual void start() {}
