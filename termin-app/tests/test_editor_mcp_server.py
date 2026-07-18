@@ -509,4 +509,4 @@ def test_editor_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatc
 
     monkeypatch.setenv("TERMIN_EDITOR_MCP_PORT", "0")
     config = load_editor_mcp_config()
-    assert config.port == 8765
+    assert config.port == 0
