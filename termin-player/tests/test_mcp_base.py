@@ -130,6 +130,10 @@ def test_player_mcp_config_uses_manifest_and_env(monkeypatch) -> None:
     assert config.port == 9200
     assert config.token == "env-token"
 
+    monkeypatch.setenv("TERMIN_PLAYER_MCP_PORT", "0")
+    config = load_player_mcp_config(manifest_options={"port": 9100, "token": "manifest-token"})
+    assert config.port == 0
+
 
 def test_player_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatch) -> None:
     monkeypatch.setenv("TERMIN_PLAYER_MCP_PORT", "-1")
