@@ -518,25 +518,11 @@ void ShadowPass::collect_shadow_casters(
             continue;
         }
 
-        RenderTaskList planned_shader;
-        if (!plan_shadow_item_shader(
-                item,
-                phase,
-                shadow_shader_handle_,
-                pass_contract,
-                "ShadowPass/Collect",
-                planned_shader)) {
-            continue;
-        }
-
         ShadowDrawCall dc;
         dc.entity = ent;
         dc.component = tc;
         dc.phase = phase;
-        dc.final_shader = TcShader(planned_shader.at(0).final_shader);
-        dc.geometry_id = item.geometry_id;
         dc.item_index = item_index;
-        dc.item = item;
         dc.material = item.material;
         dc.phase_index = item.material_phase_index;
         cached_draw_calls_.push_back(dc);
@@ -575,16 +561,6 @@ void ShadowPass::collect_shader_usages(
         TC_SCENE_FILTER_NONE,
         0);
 }
-
-void ShadowPass::sort_draw_calls_by_shader() {
-    if (cached_draw_calls_.size() <= 1) return;
-
-    std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
-        [](const ShadowDrawCall& a, const ShadowDrawCall& b) {
-            return a.final_shader.handle.index < b.final_shader.handle.index;
-        });
-}
-
 
 ShadowCameraParams ShadowPass::build_shadow_params(
     const Light& light,
@@ -653,15 +629,96 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         data.layer_mask,
         ctx.render_category_mask,
         scene_items);
-    sort_draw_calls_by_shader();
+
+    const MaterialPipelinePassContract task_shader_contract =
+        shadow_material_pass_contract();
+    RenderItemTaskPlanningContract task_planning_contract =
+        shadow_task_planning_contract(task_shader_contract, "ShadowPass");
+    RenderTaskList render_tasks;
+    render_tasks.reserve(cached_draw_calls_.size());
+
+    for (const auto& dc : cached_draw_calls_) {
+        tc_material_phase* phase = dc.resolve_phase();
+        if (!phase) {
+            continue;
+        }
+
+        const tc_render_item* item = scene_items.item(dc.item_index);
+        if (!item) {
+            tc::Log::error(
+                "[ShadowPass/tgfx2] skip planning: invalid item index %zu",
+                dc.item_index);
+            continue;
+        }
+        phase = resolve_render_item_material_phase(*item);
+        if (!phase) {
+            continue;
+        }
+
+        RenderItemTaskPlanningRequest planning_request{};
+        planning_request.item = item;
+        planning_request.item_index = dc.item_index;
+        planning_request.material_phase = phase;
+        planning_request.candidate_shader = shadow_shader_handle_;
+        planning_request.contract = &task_planning_contract;
+        RenderItemTaskPlanningResult planning_result =
+            plan_render_item_task(planning_request, render_tasks);
+        if (!planning_result.accepted()) {
+            continue;
+        }
+
+        ShadowTaskExtension& extension =
+            render_tasks.emplace_extension<ShadowTaskExtension>();
+        RenderTask& task = render_tasks.at(planning_result.task_index);
+        task.extension = &extension;
+        task.entity = dc.entity;
+        task.component = dc.component;
+        const char* entity_name = dc.entity.name();
+        task.entity_name = entity_name ? entity_name : "";
+        if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(
+                extension.draw_data.u_model,
+                item->model_matrix,
+                sizeof(extension.draw_data.u_model));
+        } else {
+            Mat44f identity = Mat44f::identity();
+            std::memcpy(
+                extension.draw_data.u_model,
+                identity.data,
+                sizeof(extension.draw_data.u_model));
+        }
+
+        std::memcpy(
+            task.draw_context.model.data,
+            extension.draw_data.u_model,
+            sizeof(extension.draw_data.u_model));
+        task.draw_context.phase = "shadow";
+        task.draw_context.pass_contract = task_shader_contract;
+        task.draw_context.current_tc_shader = TcShader(task.final_shader);
+        task.draw_context.layer_mask = data.layer_mask;
+        task.draw_context.render_category_mask = ctx.render_category_mask;
+    }
+
+    // Keep the owned task storage stable and sort only non-owning submission
+    // pointers. This preserves shader/resource RAII while still grouping draws
+    // by the fully planned shader variant.
+    std::vector<RenderTask*> sorted_render_tasks;
+    sorted_render_tasks.reserve(render_tasks.size());
+    for (RenderTask& task : render_tasks) {
+        sorted_render_tasks.push_back(&task);
+    }
+    std::sort(
+        sorted_render_tasks.begin(),
+        sorted_render_tasks.end(),
+        [](const RenderTask* a, const RenderTask* b) {
+            return a->final_shader.index < b->final_shader.index;
+        });
 
     entity_names.clear();
     std::set<std::string> seen;
-    for (const auto& dc : cached_draw_calls_) {
-        const char* name = dc.entity.name();
-        if (name && seen.find(name) == seen.end()) {
-            seen.insert(name);
-            entity_names.push_back(name);
+    for (const RenderTask* task : sorted_render_tasks) {
+        if (!task->entity_name.empty() && seen.insert(task->entity_name).second) {
+            entity_names.push_back(task->entity_name);
         }
     }
 
@@ -801,7 +858,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 nullptr,
                 shadow_resources);
 
-            if (cached_draw_calls_.empty()) {
+            if (render_tasks.empty()) {
                 end_shadow_pass();
                 results.emplace_back(depth_tex2, resolution, resolution,
                                      light_space_matrix, light_index,
@@ -844,78 +901,13 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                     shadow_resources);
             };
             MaterialPipelineResourceView draw_material_resources{};
-            RenderTaskList render_tasks;
-            render_tasks.reserve(cached_draw_calls_.size());
-            const MaterialPipelinePassContract task_shader_contract =
-                shadow_material_pass_contract();
-            RenderItemTaskPlanningContract task_planning_contract =
-                shadow_task_planning_contract(task_shader_contract, "ShadowPass");
-
-            for (const auto& dc : cached_draw_calls_) {
-                tc_material_phase* phase = dc.resolve_phase();
-                if (!phase) continue;
-
-                const tc_render_item* item = scene_items.item(dc.item_index);
-                if (!item) {
-                    tc::Log::error(
-                        "[ShadowPass/tgfx2] skip draw: invalid item index %zu",
-                        dc.item_index);
-                    continue;
-                }
-                phase = resolve_render_item_material_phase(*item);
-                if (!phase) {
-                    continue;
-                }
-                RenderItemTaskPlanningRequest planning_request{};
-                planning_request.item = item;
-                planning_request.item_index = dc.item_index;
-                planning_request.material_phase = phase;
-                planning_request.candidate_shader = shadow_shader_handle_;
-                planning_request.contract = &task_planning_contract;
-                RenderItemTaskPlanningResult planning_result =
-                    plan_render_item_task(planning_request, render_tasks);
-                if (!planning_result.accepted()) {
-                    continue;
-                }
-
-                ShadowTaskExtension& extension =
-                    render_tasks.emplace_extension<ShadowTaskExtension>();
-                RenderTask& task = render_tasks.at(planning_result.task_index);
-                task.extension = &extension;
-                task.entity = dc.entity;
-                task.component = dc.component;
-                const char* entity_name = dc.entity.name();
-                task.entity_name = entity_name ? entity_name : "";
-                if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-                    std::memcpy(
-                        extension.draw_data.u_model,
-                        item->model_matrix,
-                        sizeof(extension.draw_data.u_model));
-                } else {
-                    Mat44f identity = Mat44f::identity();
-                    std::memcpy(
-                        extension.draw_data.u_model,
-                        identity.data,
-                        sizeof(extension.draw_data.u_model));
-                }
-
+            for (RenderTask* task_ptr : sorted_render_tasks) {
+                RenderTask& task = *task_ptr;
                 task.draw_context.view = view_matrix;
                 task.draw_context.projection = proj_matrix;
-                std::memcpy(
-                    task.draw_context.model.data,
-                    extension.draw_data.u_model,
-                    sizeof(extension.draw_data.u_model));
-                task.draw_context.phase = "shadow";
-                task.draw_context.pass_contract = task_shader_contract;
-                task.draw_context.current_tc_shader = TcShader(task.final_shader);
-                task.draw_context.layer_mask = data.layer_mask;
-                task.draw_context.render_category_mask = ctx.render_category_mask;
                 task.draw_context.camera_position = shadow_camera_position(params);
                 task.draw_context.viewport_width = resolution;
                 task.draw_context.viewport_height = resolution;
-            }
-
-            for (RenderTask& task : render_tasks) {
                 auto& extension = *static_cast<ShadowTaskExtension*>(task.extension);
                 // Both paths share the same draw-scope model matrix + PerFrame
                 // UBO layout. Mesh encoder binds payload-specific resources
@@ -929,7 +921,8 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 task.set_resources(&draw_material_resources, uniforms);
             }
 
-            for (const RenderTask& task : render_tasks) {
+            for (const RenderTask* task_ptr : sorted_render_tasks) {
+                const RenderTask& task = *task_ptr;
                 RenderItemDrawSubmitRequest encode_request{};
                 encode_request.shader = tc_shader_get(task.final_shader);
                 encode_request.shader_handle = task.final_shader;

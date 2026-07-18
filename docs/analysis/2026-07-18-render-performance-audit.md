@@ -761,7 +761,13 @@ logical frame
 - #563 `[scene/python] Синхронизировать lifecycle capabilities с scene indexes`
   (`Ready`);
 - #564 `[graphics/profiling] Сделать выключенную backend-статистику
-  zero-overhead` (`Ready`).
+  zero-overhead` (`Closed`);
+- #565 `[editor/mcp] inspect_framegraph завершает редактор на ChronoSquad`
+  (`Backlog`);
+- #566 `[render/perf] Планировать ShadowPass draw-задачи один раз на execution`
+  (`Closed`);
+- #567 `[render/perf] Убрать двойное планирование ColorPass draw-задач`
+  (`Closed`).
 
 Существующие cards дополнены комментариями вместо создания дублей:
 
@@ -769,10 +775,93 @@ logical frame
 - #207 `[graphics/render] Define C-like runtime data contracts`;
 - #233 `[render/arch] Split RenderingManager responsibilities`.
 
+## Первый live-проход: ChronoSquad
+
+После статического аудита выполнен Linux/Vulkan probe на
+`~/project/chronosquad-termin/ChronoSquad.terminproj` в Play Mode. Frame
+Profiler на медианном кадре показал четыре исполнения framegraph и четыре
+`RenderContext2::submit` за logical frame. Из примерно 20 мс `SceneManager
+Render` основная CPU-стоимость пришлась на повторные geometry consumers:
+
+- `Shadow`: 7.4--7.8 мс, два вызова;
+- `Color`: 6.0--6.2 мс, три вызова;
+- `Depth`: около 1.5 мс, четыре вызова;
+- `Normal`, `ActorAttributePass`, `Id`: примерно по 1.0--1.1 мс.
+
+В рамках #564 выключенная Vulkan telemetry переведена на единый cached gate:
+disabled path не выполняет atomic RMW и `steady_clock` в draw/bind,
+pipeline-cache, submit и present instrumentation. Проверка gate выполняется
+двумя отдельными CTest-процессами:
+
+```bash
+ctest --test-dir build/Release-tests \
+  -R '^tgfx2_vulkan_stats_' --output-on-failure
+```
+
+Live probe выключенного path:
+
+```bash
+TERMIN_EDITOR_MCP=1 \
+./sdk/bin/termin_editor \
+  ~/project/chronosquad-termin/ChronoSquad.terminproj
+```
+
+Контроль включённого path использует тот же запуск с
+`TGFX2_VULKAN_STATS=1`. Submit telemetry теперь раздельно печатает
+`fence_wait_ms`, `readback_cleanup_ms`, `destroy_cleanup_ms` и
+`descriptor_cleanup_ms`; прежний общий `fence_wait_ms` включал все эти
+операции. На сравнимых, но не лабораторно идентичных capture медиана active
+frame изменилась с 22.10 до 21.45 мс. Это ориентировочные ~0.65 мс: первый
+capture одновременно печатал backend/render telemetry, поэтому результат не
+следует трактовать как строгий isolated A/B.
+
+В рамках #566 ShadowPass перестал планировать один и тот же caster сначала при
+collection, а затем заново для каждого каскада каждого directional light.
+Один lifetime-safe `RenderTaskList` теперь строится на execution, а
+каскадно-зависимые view/projection, camera, viewport и uniform resource packet
+обновляются непосредственно перед submit. Сортировка по окончательному shader
+variant сохранена через невладеющий список указателей, поэтому owned shader
+usages и pass-specific model payload не перемещаются из RAII-хранилища.
+
+На том же ChronoSquad Play Mode probe после прогрева, без backend telemetry и
+с выключенным UI profiling, 120 кадров дали:
+
+- active frame p50 20.08 мс, p95 21.63 мс, p99 23.39 мс;
+- `SceneManager Render` 17.91 мс;
+- `ShadowPass` 4.90 мс против предыдущих 7.40 мс (около -2.50 мс, -34%);
+- `ColorPass` 6.45 мс, поэтому общая frame delta меньше изолированной shadow
+  delta: active p50 улучшилась примерно с 21.46 до 20.08 мс.
+
+Скриншот live-кадра подтвердил сохранение каскадных теней. Штатные
+`./build-sdk.sh --no-wheels` и `./run-tests.sh` прошли полностью; центральный
+C/C++ набор содержит 80 тестов, включая Vulkan stats gate, а Python working
+set и lint также завершились без ошибок.
+
+В рамках #567 тот же invariant применён к ColorPass. Раньше pass планировал
+item при collection ради final shader sort key, а после сортировки создавал
+новую задачу повторным вызовом `plan_render_item_task`. Теперь rejected items
+отбрасываются до lighting batch, один owned `RenderTaskList` переживает
+priority/shader/distance sort, а submission order собирается по стабильному
+collected item index. Порядок draw calls меняется, но RAII-состояние задач и
+указатели на scene item не перемещаются.
+
+Повторный 120-frame capture на той же конфигурации показал:
+
+- active frame p50 18.99 мс, p95 21.00 мс, p99 21.76 мс;
+- `SceneManager Render` 16.77 мс;
+- `ColorPass` 4.58 мс против 6.45 мс после shadow-среза (около -1.87 мс,
+  -29%);
+- `ShadowPass` остался на 4.76 мс;
+- совокупная active p50 после #564--#567 снизилась примерно с 21.46 до
+  18.99 мс.
+
+Live screenshot сохранил материалы и каскадные тени; priority/shader/distance
+ordering остаётся на прежнем коде сортировки. После ColorPass-среза штатная
+SDK-сборка и центральный test workflow повторены.
+
 ## Ограничения и состояние репозитория
 
 - Аудит не заменяет CPU/GPU profile конкретной сцены.
-- Никакие runtime measurements в этот проход не выполнялись.
-- Код, build files и tests не изменялись.
-- Перед созданием этого документа `git status --short` и `git diff --check`
-  были чистыми.
+- Исходный статический проход не выполнял runtime measurements и не менял код;
+  live-проходы и реализации #564/#566/#567 добавлены позднее отдельным
+  разделом выше.
