@@ -833,6 +833,124 @@ int test_custom_upgrade_from_unregistered_source_type() {
     return 0;
 }
 
+int test_component_degradation_prepare_is_all_or_zero() {
+    std::cout << "Testing prepared UnknownComponent degradation failures...\n";
+
+    for (size_t failure_index = 0; failure_index < 3; ++failure_index) {
+        termin::TcSceneRef first = termin::TcSceneRef::create("prepare_first");
+        termin::TcSceneRef second = termin::TcSceneRef::create("prepare_second");
+        termin::Entity first_entity = first.create_entity("first");
+        termin::Entity second_entity = second.create_entity("second");
+
+        auto* first_component =
+            create_registered_component<ReloadableComponent>("ReloadableComponent");
+        auto* middle_component =
+            create_registered_component<ReloadableComponent>("ReloadableComponent");
+        auto* last_component =
+            create_registered_component<ReloadableComponent>("ReloadableComponent");
+        TEST_ASSERT(first_component && middle_component && last_component,
+                    "prepare test components created");
+        first_entity.add_component(first_component);
+        first_entity.add_component(middle_component);
+        second_entity.add_component(last_component);
+
+        size_t serialize_call = 0;
+        termin::UnknownComponentPreparationHooks hooks;
+        hooks.serialize = [&](void* object, const char* type_name) {
+            if (serialize_call++ == failure_index) return tc_value_nil();
+            return tc_inspect_serialize(object, type_name);
+        };
+
+        termin::UnknownComponentDegradationPlan plan;
+        std::string error;
+        TEST_ASSERT(!termin::prepare_components_to_unknown(
+                        {first, second},
+                        {"ReloadableComponent"},
+                        plan,
+                        &error,
+                        hooks),
+                    "serialization failure rejects complete prepared batch");
+        TEST_ASSERT(first_entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                    "serialization failure leaves first scene unchanged");
+        TEST_ASSERT(second_entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                    "serialization failure leaves second scene unchanged");
+        TEST_ASSERT(first_entity.component_at(0) == first_component->c_component() &&
+                        first_entity.component_at(1) == middle_component->c_component() &&
+                        second_entity.component_at(0) == last_component->c_component(),
+                    "serialization failure preserves every source identity");
+
+        first.destroy();
+        second.destroy();
+    }
+
+    for (size_t failure_index = 0; failure_index < 3; ++failure_index) {
+        termin::TcSceneRef scene = termin::TcSceneRef::create("prepare_allocation");
+        termin::Entity entity = scene.create_entity("entity");
+        for (int value = 0; value < 3; ++value) {
+            auto* component =
+                create_registered_component<ReloadableComponent>("ReloadableComponent");
+            TEST_ASSERT(component != nullptr, "allocation test component created");
+            component->value = value;
+            entity.add_component(component);
+        }
+
+        size_t factory_call = 0;
+        termin::UnknownComponentPreparationHooks hooks;
+        hooks.create_replacement = [&]() -> tc_component* {
+            if (factory_call++ == failure_index) return nullptr;
+            return tc_component_registry_create("UnknownComponent");
+        };
+
+        termin::UnknownComponentDegradationPlan plan;
+        std::string error;
+        TEST_ASSERT(!termin::prepare_components_to_unknown(
+                        {scene},
+                        {"ReloadableComponent"},
+                        plan,
+                        &error,
+                        hooks),
+                    "replacement allocation failure rejects complete batch");
+        TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                    "allocation failure leaves entity unchanged");
+        TEST_ASSERT(entity.component_count() == 3,
+                    "allocation failure preserves component count");
+        scene.destroy();
+    }
+
+    std::cout << "  Prepared failure atomicity: PASS\n";
+    return 0;
+}
+
+int test_component_degradation_rejects_stale_plan() {
+    std::cout << "Testing stale UnknownComponent degradation plan...\n";
+
+    termin::TcSceneRef scene = termin::TcSceneRef::create("prepare_stale");
+    termin::Entity entity = scene.create_entity("entity");
+    auto* first = create_registered_component<ReloadableComponent>("ReloadableComponent");
+    auto* second = create_registered_component<ReloadableComponent>("ReloadableComponent");
+    TEST_ASSERT(first && second, "stale plan components created");
+    entity.add_component(first);
+    entity.add_component(second);
+
+    termin::UnknownComponentDegradationPlan plan;
+    std::string error;
+    TEST_ASSERT(termin::prepare_components_to_unknown(
+                    {scene}, {"ReloadableComponent"}, plan, &error),
+                "component batch prepared");
+    TEST_ASSERT(plan.size() == 2, "prepared plan contains both sources");
+
+    entity.remove_component_ptr(second->c_component());
+    TEST_ASSERT(!plan.commit(&error), "stale source prevents commit");
+    TEST_ASSERT(entity.component_at(0) == first->c_component(),
+                "stale commit performs zero prepared replacements");
+    TEST_ASSERT(entity.get_component_by_type_name("UnknownComponent") == nullptr,
+                "stale commit publishes no placeholders");
+
+    scene.destroy();
+    std::cout << "  Stale plan rejection: PASS\n";
+    return 0;
+}
+
 } // namespace
 
 int main() {
@@ -856,6 +974,8 @@ int main() {
     result |= test_custom_upgrade_from_unregistered_source_type();
     result |= test_module_owner_registration_cleanup();
     result |= test_module_owner_cleanup_prepares_live_components();
+    result |= test_component_degradation_prepare_is_all_or_zero();
+    result |= test_component_degradation_rejects_stale_plan();
 
     if (result == 0) {
         std::cout << "\nAll UnknownComponent tests passed.\n";

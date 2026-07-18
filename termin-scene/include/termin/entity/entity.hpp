@@ -144,6 +144,14 @@ public:
     }
     void remove_component(Component* component);
     void remove_component_ptr(tc_component* c);
+    bool replace_component_at_checked(
+        size_t index,
+        tc_component* expected,
+        tc_component* replacement
+    ) {
+        return valid() && tc_entity_pool_replace_component_at_checked(
+            pool_ptr(), id(), index, expected, replacement);
+    }
 
     size_t component_count() const { return tc_entity_component_count(_h); }
     tc_component* component_at(size_t index) const { return tc_entity_component_at(_h, index); }

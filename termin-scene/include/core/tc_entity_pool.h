@@ -232,6 +232,16 @@ TC_POOL_API void tc_entity_pool_add_component(tc_entity_pool* pool, tc_entity_id
 TC_POOL_API bool tc_entity_pool_add_component_checked(tc_entity_pool* pool, tc_entity_id id,
                                                       tc_component* c);
 TC_POOL_API void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_component* c);
+// Replace an attached component in-place without growing or compacting the
+// entity component array. The expected index and pointer make prepared plans
+// fail closed when their source identity has gone stale.
+TC_POOL_API bool tc_entity_pool_replace_component_at_checked(
+    tc_entity_pool* pool,
+    tc_entity_id id,
+    size_t index,
+    tc_component* expected,
+    tc_component* replacement
+);
 TC_POOL_API size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc_entity_id id);
 TC_POOL_API tc_component* tc_entity_pool_component_at(const tc_entity_pool* pool, tc_entity_id id, size_t index);
 TC_POOL_API size_t tc_entity_pool_component_index(const tc_entity_pool* pool, tc_entity_id id,
