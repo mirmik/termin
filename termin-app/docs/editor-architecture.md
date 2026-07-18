@@ -54,7 +54,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 | `prefab_edit_controller.py` | `PrefabEditController` — UI-agnostic isolation mode for editing `.prefab` files. |
 | `project_session_controller.py` | Общий lifecycle проекта: stdlib sync, shader runtime, project modules, `InitScript.py`, resource scan и восстановление project root. UI frontend передаёт callbacks для ошибок и progress presentation. |
 | `spacemouse_controller.py` | `SpaceMouseController` — libspnav integration; polling from the tcgui render loop. |
-| `profiler_capture.py` | Общая bounded capture-сессия сырых кадров, статистика/hitch navigation и арбитраж process-global профайлера между несколькими frontend-потребителями. |
+| `profiler_capture.py` | Арбитраж process-global секционного профайлера для legacy summary-панели. Bounded capture нового Frame Profiler хранится в C, а его модели и анализ принадлежат C++ `FrameProfilerController`. |
 | `gizmo/` | Unified gizmo exports and Python collider/constraint helpers used by runtime rendering code. |
 
 ### `termin/editor/` — legacy entrypoint
@@ -69,14 +69,18 @@ Native frontend композирует главное окно и modeless secon
 `NativeUiWindowManager`. `profiler_panel.py` остаётся лёгкой сглаженной сводкой
 в dock, а `frame_profiler.py` — отдельный raw-frame frontend: bounded timeline,
 пауза/follow, hitch navigation, `Include UI` и несглаженное дерево выбранного
-кадра. Сырая capture-сессия опрашивается каждый кадр, а UI-проекция ограничена
-10 Гц. Timeline при этом дописывает только новые samples и сохраняет bounded
-capacity; полная перепроекция нужна лишь после clear или рассогласования модели.
-Это не даёт открытому профайлеру создавать собственные hitch по мере роста
-истории. Изменения standalone-окна инвалидируют только его собственный native
-host: они не запрашивают перерисовку main window или scene render. Оба frontend
-используют общий `ProfilerCaptureCoordinator`, поэтому lifetime одного
-потребителя не выключает сбор у другого.
+кадра. Кнопка `Capture` включает дешёвый сбор interval/active/cadence и может
+рисовать timeline без иерархических секций. Отдельная кнопка `Profiling`
+включает секционное профилирование; его состояние фиксируется на границе кадра,
+чтобы переключение из UI не разбалансировало begin/end стек.
+
+Bounded ring сырых кадров принадлежит C-профайлеру. Статистика, hitch navigation
+и native UI-модели принадлежат C++ `FrameProfilerController`; UI-проекция
+ограничена 10 Гц. Timeline дописывает только новые samples и сохраняет bounded
+capacity, поэтому открытое окно не создаёт собственные hitch по мере роста
+истории. `ProfilerCaptureCoordinator` обслуживает только legacy summary-панель,
+а его enable-request композиционно сосуществует с запросами нового capture:
+один frontend не выключает сбор или секции, нужные другому.
 
 ### `termin/editor_tcgui/` — tcgui view
 

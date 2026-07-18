@@ -33,7 +33,6 @@ from termin.editor_core.about_model import build_editor_about_info
 from termin.editor_core.profiler_model import ProfilerController
 from termin.editor_core.profiler_capture import (
     ProfilerCaptureCoordinator,
-    ProfilerCaptureSession,
 )
 from termin.editor_core.project_browser_model import ProjectBrowserController
 from termin.editor_core.project_file_action_controller import ProjectFileActionController
@@ -264,16 +263,12 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     )
     profiler_panel = build_native_profiler_panel(host.document, profiler_controller)
     shell.debug_tabs.add_page("Profiler", profiler_panel.root)
-    profiler_capture_session = ProfilerCaptureSession(
-        profiler_capture_coordinator,
-        consumer_id="frame-profiler-window",
-        capacity=3600,
-    )
+    from termin.editor._editor_native import FrameProfilerController
+
+    frame_profiler_controller = FrameProfilerController(engine, capacity=3600)
     frame_profiler = build_native_frame_profiler(
         window_manager,
-        profiler_capture_session,
-        get_include_ui=lambda: bool(engine.profile_ui),
-        set_include_ui=set_profile_ui,
+        frame_profiler_controller,
     )
     connect_frame_profiler_command(
         debug_menu,
@@ -1604,7 +1599,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             "profiler_controller": profiler_controller,
             "profiler_panel": profiler_panel,
             "profiler_capture_coordinator": profiler_capture_coordinator,
-            "profiler_capture_session": profiler_capture_session,
+            "frame_profiler_controller": frame_profiler_controller,
             "frame_profiler": frame_profiler,
             "modules_controller": modules_controller,
             "modules_panel": modules_panel,
