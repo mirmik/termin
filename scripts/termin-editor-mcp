@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -17,9 +16,10 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "termin-app"))
 
 from termin.editor_core.mcp_contract import editor_mcp_tool_schemas  # noqa: E402
+from termin.editor_core.mcp_session import default_editor_mcp_session_file  # noqa: E402
 
 
-DEFAULT_SESSION_FILE = Path(tempfile.gettempdir()) / "termin-editor-mcp.json"
+DEFAULT_SESSION_FILE = default_editor_mcp_session_file(sdk_root=REPOSITORY_ROOT / "sdk")
 SUPPORTED_PROTOCOL_VERSIONS = (
     "2025-11-25",
     "2025-06-18",
@@ -271,6 +271,7 @@ def main() -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    sub.add_parser("session-path", help="Print the checkout-scoped default session path")
     sub.add_parser("serve", help="Serve standard MCP over stdin/stdout")
     sub.add_parser("initialize")
     sub.add_parser("tools-list")
@@ -316,6 +317,10 @@ def main() -> int:
     framegraph_pass_capture_parser.add_argument("--timeout", type=float, default=30.0)
 
     args = parser.parse_args()
+
+    if args.command == "session-path":
+        print(args.session)
+        return 0
 
     if args.command == "serve":
         return _serve_stdio(args.session)

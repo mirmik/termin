@@ -27,21 +27,6 @@ if ($PythonCandidates.Count -eq 0) {
 }
 
 $ForwardArgs = @($args)
-$HasExplicitSession = $false
-for ($i = 0; $i -lt $ForwardArgs.Count; ++$i) {
-    $arg = [string]$ForwardArgs[$i]
-    if ($arg -eq "--session" -or $arg.StartsWith("--session=")) {
-        $HasExplicitSession = $true
-        break
-    }
-}
-
-if (-not $HasExplicitSession) {
-    $TempSession = Join-Path ([System.IO.Path]::GetTempPath()) "termin-editor-mcp.json"
-    if (Test-Path -LiteralPath $TempSession) {
-        $ForwardArgs = @("--session", $TempSession) + $ForwardArgs
-    }
-}
 
 $Python = $PythonCandidates[0]
 

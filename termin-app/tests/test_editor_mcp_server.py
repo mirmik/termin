@@ -6,6 +6,7 @@ import urllib.request
 
 import pytest
 
+import termin.editor_core.mcp_server as mcp_server_module
 from termin.editor_core.python_executor import EditorPythonExecutor
 from termin.editor_core.mcp_server import (
     EditorMcpConfig,
@@ -500,13 +501,27 @@ def test_editor_mcp_enabled_env_overrides_settings(monkeypatch):
 def test_editor_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatch):
     monkeypatch.setenv("TERMIN_EDITOR_MCP_PORT", "invalid")
     monkeypatch.setenv("TERMIN_EDITOR_MCP_TOKEN", " ")
+    monkeypatch.delenv("TERMIN_EDITOR_MCP_SESSION_FILE", raising=False)
+    expected_session = mcp_server_module.default_editor_mcp_session_file()
 
     config = load_editor_mcp_config()
 
-    assert config.port == 8765
+    assert config.port == 0
     assert config.token
     assert config.token.strip()
+    assert config.session_file == expected_session
 
     monkeypatch.setenv("TERMIN_EDITOR_MCP_PORT", "0")
     config = load_editor_mcp_config()
+    assert config.port == 0
+
+
+def test_editor_mcp_config_preserves_explicit_agent_session(monkeypatch, tmp_path):
+    session_file = tmp_path / "agent" / "editor-session.json"
+    monkeypatch.setenv("TERMIN_EDITOR_MCP_SESSION_FILE", str(session_file))
+    monkeypatch.setenv("TERMIN_EDITOR_MCP_PORT", "0")
+
+    config = load_editor_mcp_config()
+
+    assert config.session_file == session_file
     assert config.port == 0
