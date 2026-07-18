@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Termin editor holographic tesseract icon concept</title>
+  <desc id="desc">A mathematically exact 32-edge tesseract graph rendered as a cyan hologram.</desc>
+
+  <defs>
+    <radialGradient id="background" cx="50%" cy="50%" r="72%">
+      <stop offset="0" stop-color="#05283a"/>
+      <stop offset="0.42" stop-color="#021421"/>
+      <stop offset="1" stop-color="#01050b"/>
+    </radialGradient>
+    <radialGradient id="aura" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#00cffa" stop-opacity="0.19"/>
+      <stop offset="0.55" stop-color="#009fd0" stop-opacity="0.055"/>
+      <stop offset="1" stop-color="#009fd0" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="wide-glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="15"/>
+    </filter>
+    <filter id="close-glow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5af4ff"/>
+      <stop offset="0.5" stop-color="#00ccec"/>
+      <stop offset="1" stop-color="#30e9ff"/>
+    </linearGradient>
+
+    <!--
+      Exact tesseract graph: 12 outer-cube edges, 12 inner-cube edges,
+      and 8 connectors between corresponding vertices. Each edge below
+      occurs once. Rendering layers reuse these same centerlines only.
+    -->
+    <path id="outer-cube" pathLength="12" d="
+      M 162 337 L 687 337
+      M 687 337 L 687 862
+      M 687 862 L 162 862
+      M 162 862 L 162 337
+
+      M 337 162 L 862 162
+      M 862 162 L 862 687
+      M 862 687 L 337 687
+      M 337 687 L 337 162
+
+      M 162 337 L 337 162
+      M 687 337 L 862 162
+      M 687 862 L 862 687
+      M 162 862 L 337 687
+    "/>
+
+    <path id="inner-cube" pathLength="12" d="
+      M 372 442 L 582 442
+      M 582 442 L 582 652
+      M 582 652 L 372 652
+      M 372 652 L 372 442
+
+      M 442 372 L 652 372
+      M 652 372 L 652 582
+      M 652 582 L 442 582
+      M 442 582 L 442 372
+
+      M 372 442 L 442 372
+      M 582 442 L 652 372
+      M 582 652 L 652 582
+      M 372 652 L 442 582
+    "/>
+
+    <path id="dimension-connectors" pathLength="8" d="
+      M 162 337 L 372 442
+      M 687 337 L 582 442
+      M 687 862 L 582 652
+      M 162 862 L 372 652
+      M 337 162 L 442 372
+      M 862 162 L 652 372
+      M 862 687 L 652 582
+      M 337 687 L 442 582
+    "/>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#background)"/>
+  <ellipse cx="512" cy="512" rx="430" ry="430" fill="url(#aura)"/>
+
+  <g transform="translate(512 512) scale(1.12) translate(-512 -512)"
+     fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Dimensional links recede first, reducing the apparent line pile-up. -->
+    <use href="#dimension-connectors" stroke="#00afd3" stroke-width="13" stroke-opacity="0.2" filter="url(#wide-glow)"/>
+    <use href="#dimension-connectors" stroke="#00cdea" stroke-width="6" stroke-opacity="0.35" filter="url(#close-glow)"/>
+    <use href="#dimension-connectors" stroke="#00ccea" stroke-width="2.7" stroke-opacity="0.7"/>
+
+    <!-- The outer cube establishes the silhouette. -->
+    <use href="#outer-cube" stroke="#00bfe8" stroke-width="18" stroke-opacity="0.25" filter="url(#wide-glow)"/>
+    <use href="#outer-cube" stroke="#00dbff" stroke-width="10" stroke-opacity="0.52" filter="url(#close-glow)"/>
+    <use href="#outer-cube" stroke="url(#beam)" stroke-width="4.8" stroke-opacity="0.92"/>
+    <use href="#outer-cube" stroke="#c8faff" stroke-width="1.15" stroke-opacity="0.82"/>
+
+    <!-- The inner cube is the visual anchor and remains brightest at small sizes. -->
+    <use href="#inner-cube" stroke="#00c9ef" stroke-width="22" stroke-opacity="0.32" filter="url(#wide-glow)"/>
+    <use href="#inner-cube" stroke="#00e5ff" stroke-width="12" stroke-opacity="0.68" filter="url(#close-glow)"/>
+    <use href="#inner-cube" stroke="url(#beam)" stroke-width="6" stroke-opacity="1"/>
+    <use href="#inner-cube" stroke="#e8fdff" stroke-width="1.5" stroke-opacity="0.96"/>
+  </g>
+</svg>
