@@ -9,13 +9,11 @@ import time
 from tcbase import log
 
 from termin.editor_core.mcp_contract import editor_mcp_tool_schemas
+from termin.editor_core.mcp_session import default_editor_mcp_session_file
 from termin.editor_core.python_executor import (
     EditorPythonExecutor,
 )
 from termin.mcp.server import TerminMcpConfig, TerminMcpServer, create_secure_mcp_config
-
-
-_DEFAULT_SESSION_FILE = "/tmp/termin-editor-mcp.json"
 
 
 EditorMcpConfig = TerminMcpConfig
@@ -712,13 +710,16 @@ def editor_mcp_enabled() -> bool:
 
 
 def load_editor_mcp_config() -> EditorMcpConfig:
+    session_file = os.environ.get("TERMIN_EDITOR_MCP_SESSION_FILE")
+    if session_file is None:
+        session_file = default_editor_mcp_session_file()
     return create_secure_mcp_config(
         host=os.environ.get("TERMIN_EDITOR_MCP_HOST", "127.0.0.1"),
-        port=os.environ.get("TERMIN_EDITOR_MCP_PORT", "8765"),
+        port=os.environ.get("TERMIN_EDITOR_MCP_PORT", "0"),
         token=os.environ.get("TERMIN_EDITOR_MCP_TOKEN"),
-        session_file=os.environ.get("TERMIN_EDITOR_MCP_SESSION_FILE", _DEFAULT_SESSION_FILE),
+        session_file=session_file,
         default_host="127.0.0.1",
-        default_port=8765,
+        default_port=0,
         log_prefix="EditorMCP",
     )
 

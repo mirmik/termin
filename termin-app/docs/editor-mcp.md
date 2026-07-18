@@ -19,11 +19,14 @@ TERMIN_EDITOR_MCP=1 ./run-termin.sh
 Use `TERMIN_EDITOR_MCP=0` to force-disable the server even when the editor
 setting is enabled.
 
-By default the server listens on `127.0.0.1:8765`. On Linux it writes a
-session file to:
+By default the server listens on an OS-picked loopback port. It writes a
+checkout-scoped session file in the system temporary directory. The path is
+derived from the canonical SDK root, so editors built by different Termin
+checkouts do not overwrite each other's discovery state. Print the path for
+the current checkout with:
 
-```text
-/tmp/termin-editor-mcp.json
+```bash
+scripts/termin-editor-mcp session-path
 ```
 
 The session file contains the endpoint URL and a generated bearer token. It is
@@ -32,7 +35,7 @@ written with `0600` permissions.
 Optional settings:
 
 - `TERMIN_EDITOR_MCP_HOST`: bind host, default `127.0.0.1`.
-- `TERMIN_EDITOR_MCP_PORT`: bind port, default `8765`. Use `0` for an OS-picked port.
+- `TERMIN_EDITOR_MCP_PORT`: bind port, default `0` for an OS-picked port.
 - `TERMIN_EDITOR_MCP_TOKEN`: fixed bearer token. If omitted, a random token is generated.
 - `TERMIN_EDITOR_MCP_SESSION_FILE`: session file path.
 
@@ -66,21 +69,26 @@ child process. The broker performs the MCP lifecycle over stdin/stdout and
 serves the editor tool schemas locally. It forwards `tools/call` to the
 authenticated loopback endpoint inside the editor.
 
-On Windows the default is `termin-editor-mcp.json` in the system temporary
-directory.
+Without `--session`, the broker computes the same checkout-scoped session path
+as a user-opened editor from that checkout. This stable default is reserved for
+the user-owned editor. Agent-owned editor processes must use explicit unique
+session files.
 
 The MCP client may start before the editor. Tool discovery succeeds without a
 session file, while calls return a structured `Termin Editor is unavailable`
 error until the editor starts. The broker rereads the session file before every
 forwarded call, so stopping or restarting the editor on a new OS-picked port
-does not require restarting the broker or MCP client.
+does not require restarting the broker or MCP client. A clean editor shutdown
+removes the session file. If a crash leaves stale endpoint data behind, calls
+report the same unavailable error until the next editor atomically publishes
+its new endpoint and token.
 
 For Codex, add a project-scoped `.codex/config.toml` in a trusted checkout:
 
 ```toml
 [mcp_servers.termin_editor]
 command = "/absolute/path/to/termin/scripts/termin-editor-mcp"
-args = ["--session", "/tmp/termin-editor-mcp-project.json", "serve"]
+args = ["serve"]
 startup_timeout_sec = 10
 tool_timeout_sec = 60
 default_tools_approval_mode = "prompt"
@@ -94,8 +102,6 @@ command = "pwsh"
 args = [
   "-File",
   "C:\\absolute\\path\\to\\termin\\scripts\\termin-editor-mcp.ps1",
-  "--session",
-  "C:\\Temp\\termin-editor-mcp-project.json",
   "serve",
 ]
 startup_timeout_sec = 10
@@ -107,25 +113,35 @@ Restart the Codex host after changing its MCP configuration. In the Codex TUI,
 use `/mcp` to inspect the active server. The broker logs diagnostics only to
 stderr; stdout is reserved for newline-delimited MCP JSON-RPC messages.
 
-Use a dedicated session file when more than one editor can run:
+When an agent launches another editor, give it an explicit unique session file
+and keep using the default broker for the user-owned editor:
 
 ```bash
+agent_mcp_dir="$(mktemp -d /tmp/termin-editor-agent.XXXXXX)"
 TERMIN_EDITOR_MCP=1 \
 TERMIN_EDITOR_MCP_PORT=0 \
-TERMIN_EDITOR_MCP_SESSION_FILE=/tmp/termin-editor-mcp-project.json \
+TERMIN_EDITOR_MCP_SESSION_FILE="$agent_mcp_dir/session.json" \
 ./sdk/bin/termin_editor /absolute/path/to/Project.terminproj
+
+scripts/termin-editor-mcp \
+  --session "$agent_mcp_dir/session.json" \
+  exec 'print(project_path)'
 ```
 
 ```powershell
+$AgentMcpDir = Join-Path ([System.IO.Path]::GetTempPath()) `
+  ("termin-editor-agent-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $AgentMcpDir | Out-Null
 $env:TERMIN_EDITOR_MCP = "1"
 $env:TERMIN_EDITOR_MCP_PORT = "0"
-$env:TERMIN_EDITOR_MCP_SESSION_FILE = "C:\\Temp\\termin-editor-mcp-project.json"
+$env:TERMIN_EDITOR_MCP_SESSION_FILE = Join-Path $AgentMcpDir "session.json"
 ./sdk/bin/termin_editor.exe C:\\absolute\\path\\to\\Project.terminproj
 ```
 
-`TERMIN_EDITOR_MCP_PORT=0` asks the OS for a free loopback port. The generated
-bearer token and endpoint stay in the permission-restricted session file and
-are not exposed in MCP client configuration.
+The generated bearer token and endpoint stay in the permission-restricted
+session file and are not exposed in MCP client configuration. An agent must
+only stop and clean up editor processes and temporary session directories that
+it created itself.
 
 The Python namespace contains:
 
