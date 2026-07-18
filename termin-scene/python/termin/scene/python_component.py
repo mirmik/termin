@@ -250,10 +250,7 @@ class PythonComponent:
         self._tc.enabled = enabled
         self._tc.display_name = display_name
 
-        # Auto-detect if update/fixed_update are overridden
-        cls = type(self)
-        self._tc.has_update = cls.update is not PythonComponent.update
-        self._tc.has_fixed_update = cls.fixed_update is not PythonComponent.fixed_update
+        self.refresh_lifecycle_capabilities()
 
     def __init_subclass__(cls, **kwargs):
         """Called when a class inherits from PythonComponent."""
@@ -379,6 +376,23 @@ class PythonComponent:
         self._tc.has_fixed_update = value
 
     @property
+    def has_before_render(self) -> bool:
+        return self._tc.has_before_render
+
+    @has_before_render.setter
+    def has_before_render(self, value: bool) -> None:
+        self._tc.has_before_render = value
+
+    def refresh_lifecycle_capabilities(self) -> None:
+        """Recompute lifecycle scheduling after construction or class replacement."""
+        cls = type(self)
+        self._tc.set_lifecycle_capabilities(
+            cls.update is not PythonComponent.update,
+            cls.fixed_update is not PythonComponent.fixed_update,
+            cls.before_render is not PythonComponent.before_render,
+        )
+
+    @property
     def is_input_handler(self) -> bool:
         """Check if this component handles input events."""
         return self._tc.is_input_handler
@@ -436,6 +450,9 @@ class PythonComponent:
         pass
 
     def fixed_update(self, dt: float) -> None:
+        pass
+
+    def before_render(self) -> None:
         pass
 
     def on_destroy(self) -> None:

@@ -116,6 +116,10 @@ size_t TcSceneRef::fixed_update_list_count() const {
     return tc_scene_fixed_update_list_count(_h);
 }
 
+size_t TcSceneRef::before_render_list_count() const {
+    return tc_scene_before_render_list_count(_h);
+}
+
 tc_entity_pool* TcSceneRef::entity_pool() const {
     return tc_scene_entity_pool(_h);
 }
