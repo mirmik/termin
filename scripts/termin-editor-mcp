@@ -1,30 +1,81 @@
 #!/usr/bin/env python3
-"""Small client for the running Termin editor MCP endpoint."""
+"""CLI client and stdio MCP broker for a running Termin editor."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
 
 
-DEFAULT_SESSION_FILE = Path("/tmp/termin-editor-mcp.json")
+DEFAULT_SESSION_FILE = Path(tempfile.gettempdir()) / "termin-editor-mcp.json"
+SUPPORTED_PROTOCOL_VERSIONS = (
+    "2025-11-25",
+    "2025-06-18",
+    "2025-03-26",
+    "2024-11-05",
+)
+LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
+
+
+class EditorMcpClientError(RuntimeError):
+    """Failure while discovering or calling the private editor endpoint."""
 
 
 def _load_session(path: Path) -> dict[str, Any]:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        session = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise SystemExit(
+        raise EditorMcpClientError(
             f"Session file not found: {path}\n"
             "Start the editor with TERMIN_EDITOR_MCP=1."
-        )
+        ) from None
     except json.JSONDecodeError as exc:
-        raise SystemExit(f"Invalid session file '{path}': {exc}") from exc
+        raise EditorMcpClientError(f"Invalid session file '{path}': {exc}") from exc
+    except OSError as exc:
+        raise EditorMcpClientError(f"Cannot read session file '{path}': {exc}") from exc
+
+    if not isinstance(session, dict):
+        raise EditorMcpClientError(f"Invalid session file '{path}': root must be an object")
+    url = session.get("url")
+    token = session.get("token")
+    if not isinstance(url, str) or not url:
+        raise EditorMcpClientError(f"Invalid session file '{path}': missing endpoint URL")
+    if not isinstance(token, str) or not token:
+        raise EditorMcpClientError(f"Invalid session file '{path}': missing bearer token")
+    return session
+
+
+def _post_rpc(session: dict[str, Any], payload: object) -> object | None:
+    data = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        session["url"],
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {session['token']}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            body = response.read()
+            if response.status == 204 or not body:
+                return None
+            return json.loads(body.decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise EditorMcpClientError(f"Editor endpoint returned HTTP {exc.code}: {body}") from exc
+    except urllib.error.URLError as exc:
+        raise EditorMcpClientError(f"Cannot reach editor MCP endpoint: {exc}") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EditorMcpClientError(f"Editor endpoint returned invalid JSON: {exc}") from exc
 
 
 def _call(session: dict[str, Any], method: str, params: object | None = None) -> dict[str, Any]:
@@ -35,24 +86,147 @@ def _call(session: dict[str, Any], method: str, params: object | None = None) ->
     }
     if params is not None:
         payload["params"] = params
-    data = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        str(session["url"]),
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {session.get('token', '')}",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=35) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"HTTP {exc.code}: {body}") from exc
-    except urllib.error.URLError as exc:
-        raise SystemExit(f"Cannot reach editor MCP endpoint: {exc}") from exc
+    response = _post_rpc(session, payload)
+    if not isinstance(response, dict):
+        raise EditorMcpClientError("Editor endpoint returned no JSON-RPC response")
+    return response
+
+
+def _rpc_result(request_id: object, result: object) -> dict[str, object]:
+    return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+
+def _rpc_error(
+    request_id: object,
+    code: int,
+    message: str,
+    *,
+    data: object | None = None,
+) -> dict[str, object]:
+    error: dict[str, object] = {"code": code, "message": message}
+    if data is not None:
+        error["data"] = data
+    return {"jsonrpc": "2.0", "id": request_id, "error": error}
+
+
+class EditorMcpStdioBroker:
+    """Standard MCP lifecycle in front of the editor's private HTTP endpoint."""
+
+    def __init__(self, session_file: Path) -> None:
+        self._session_file = session_file
+        self._initialized = False
+        self._client_ready = False
+
+    def handle(self, request: object) -> dict[str, object] | None:
+        if not isinstance(request, dict) or request.get("jsonrpc") != "2.0":
+            return _rpc_error(None, -32600, "Invalid Request")
+        method = request.get("method")
+        if not isinstance(method, str) or not method:
+            return _rpc_error(None, -32600, "Invalid Request")
+
+        is_notification = "id" not in request
+        request_id = request.get("id")
+        if not is_notification and (
+            isinstance(request_id, bool)
+            or not isinstance(request_id, (str, int, float, type(None)))
+        ):
+            return _rpc_error(None, -32600, "Invalid Request")
+
+        if method == "initialize":
+            response = self._initialize(request_id, request.get("params"))
+        elif method == "notifications/initialized":
+            if self._initialized:
+                self._client_ready = True
+            response = None
+        elif method == "ping":
+            response = _rpc_result(request_id, {})
+        elif not self._initialized or not self._client_ready:
+            response = _rpc_error(request_id, -32002, "Server not initialized")
+        elif method in ("tools/list", "tools/call"):
+            response = self._proxy(request, request_id, is_notification=is_notification)
+        else:
+            response = _rpc_error(request_id, -32601, f"Method not found: {method}")
+
+        return None if is_notification else response
+
+    def _initialize(self, request_id: object, params: object) -> dict[str, object]:
+        if self._initialized:
+            return _rpc_error(request_id, -32600, "Server is already initialized")
+        if not isinstance(params, dict):
+            return _rpc_error(request_id, -32602, "Invalid initialize params")
+        requested_version = params.get("protocolVersion")
+        if not isinstance(requested_version, str) or not requested_version:
+            return _rpc_error(request_id, -32602, "Missing protocolVersion")
+
+        protocol_version = (
+            requested_version
+            if requested_version in SUPPORTED_PROTOCOL_VERSIONS
+            else LATEST_PROTOCOL_VERSION
+        )
+        self._initialized = True
+        return _rpc_result(
+            request_id,
+            {
+                "protocolVersion": protocol_version,
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {
+                    "name": "termin-editor",
+                    "version": "0.1.0",
+                },
+                "instructions": (
+                    "Tools control the Termin Editor identified by the configured "
+                    "session file. Start the editor with TERMIN_EDITOR_MCP=1."
+                ),
+            },
+        )
+
+    def _proxy(
+        self,
+        request: dict[str, object],
+        request_id: object,
+        *,
+        is_notification: bool,
+    ) -> dict[str, object] | None:
+        try:
+            session = _load_session(self._session_file)
+            response = _post_rpc(session, request)
+        except EditorMcpClientError as exc:
+            print(f"termin-editor-mcp: {exc}", file=sys.stderr, flush=True)
+            if is_notification:
+                return None
+            return _rpc_error(
+                request_id,
+                -32050,
+                "Termin Editor is unavailable",
+                data={
+                    "sessionFile": str(self._session_file),
+                    "detail": str(exc),
+                },
+            )
+
+        if response is None:
+            return None
+        if not isinstance(response, dict):
+            return _rpc_error(request_id, -32603, "Editor returned an invalid response")
+        return response
+
+
+def _serve_stdio(session_file: Path) -> int:
+    broker = EditorMcpStdioBroker(session_file)
+    for line in sys.stdin:
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError as exc:
+            print(f"termin-editor-mcp: invalid JSON input: {exc}", file=sys.stderr, flush=True)
+            response: object | None = _rpc_error(None, -32700, "Parse error")
+        else:
+            if isinstance(request, list):
+                response = _rpc_error(None, -32600, "JSON-RPC batches are not supported")
+            else:
+                response = broker.handle(request)
+        if response is not None:
+            print(json.dumps(response, ensure_ascii=False, separators=(",", ":")), flush=True)
+    return 0
 
 
 def _print_response(response: dict[str, Any]) -> int:
@@ -92,6 +266,7 @@ def main() -> int:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    sub.add_parser("serve", help="Serve standard MCP over stdin/stdout")
     sub.add_parser("initialize")
     sub.add_parser("tools-list")
 
@@ -136,7 +311,14 @@ def main() -> int:
     framegraph_pass_capture_parser.add_argument("--timeout", type=float, default=30.0)
 
     args = parser.parse_args()
-    session = _load_session(args.session)
+
+    if args.command == "serve":
+        return _serve_stdio(args.session)
+
+    try:
+        session = _load_session(args.session)
+    except EditorMcpClientError as exc:
+        parser.exit(1, f"termin-editor-mcp: {exc}\n")
 
     if args.command == "initialize":
         response = _call(
@@ -255,4 +437,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except EditorMcpClientError as exc:
+        print(f"termin-editor-mcp: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
