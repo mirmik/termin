@@ -18,6 +18,7 @@ SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
 DEFAULT_PLAYER_WINDOW_WIDTH = 1280
 DEFAULT_PLAYER_WINDOW_HEIGHT = 720
 DEFAULT_PLAYER_WINDOW_FULLSCREEN = True
+PROJECT_RENDER_PHASE_CAPACITY = 48
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,9 @@ class ProjectPlayerWindowSettings:
 class ProjectRuntimeSettings:
     build_output_dir: str = "dist"
     ignored_resource_paths: tuple[str, ...] = field(default_factory=tuple)
+    render_phase_names: tuple[str, ...] = field(
+        default_factory=lambda: ("",) * PROJECT_RENDER_PHASE_CAPACITY
+    )
     player_window: ProjectPlayerWindowSettings = field(default_factory=ProjectPlayerWindowSettings)
 
     @staticmethod
@@ -73,6 +77,7 @@ class ProjectRuntimeSettings:
                     warning=lambda message: _log_warning(f"[PlayerProjectSettings] {message}"),
                 )
             ),
+            render_phase_names=_render_phase_names(data.get("render_phase_names")),
             player_window=ProjectPlayerWindowSettings.from_dict(data.get("player_window")),
         )
 
@@ -93,6 +98,19 @@ def load_project_runtime_settings(project_path: str | Path) -> ProjectRuntimeSet
         return ProjectRuntimeSettings()
 
     return ProjectRuntimeSettings.from_dict(data)
+
+
+def _render_phase_names(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ("",) * PROJECT_RENDER_PHASE_CAPACITY
+    if not isinstance(value, list) or len(value) != PROJECT_RENDER_PHASE_CAPACITY:
+        raise ValueError(
+            "render_phase_names must contain exactly "
+            f"{PROJECT_RENDER_PHASE_CAPACITY} indexed entries"
+        )
+    if any(not isinstance(name, str) for name in value):
+        raise ValueError("render_phase_names entries must be strings")
+    return tuple(name.strip() for name in value)
 
 
 def _positive_int_field(value: object, *, default: int, field_name: str) -> int:

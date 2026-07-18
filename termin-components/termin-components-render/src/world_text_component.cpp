@@ -207,9 +207,7 @@ void ensure_world_text_render_item_encoder_registered()
     desc.encode = world_text_render_item_draw_encoder;
     desc.plan_task_shader = plan_render_item_passthrough_shader;
     desc.debug_name = "WorldTextComponent";
-    desc.capabilities.pass_semantic_mask =
-        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
-        | render_item_pass_semantic_bit(RenderItemPassSemantic::Id);
+    desc.capabilities.phase_mask = TC_PHASE_ALL & ~TC_PHASE_NORMAL;
     desc.capabilities.supported_task_input_mask =
         render_item_task_input_bit(RenderItemTaskInput::DrawContext)
         | render_item_task_input_bit(RenderItemTaskInput::ModelMatrix)
@@ -570,6 +568,14 @@ tc_material_phase* WorldTextComponent::sync_material_phase() const {
     }
 
     tc_material_phase* phase = &raw->phases[0];
+    const tc_phase_mask resolved_phase = tc_phase_find(mark.c_str());
+    if (resolved_phase == TC_PHASE_NONE) {
+        tc::Log::error(
+            "[WorldTextComponent] phase '%s' is not present in the project registry",
+            mark.c_str());
+        return nullptr;
+    }
+    phase->phase = resolved_phase;
     std::strncpy(phase->phase_mark, mark.c_str(), TC_PHASE_MARK_MAX - 1);
     phase->phase_mark[TC_PHASE_MARK_MAX - 1] = '\0';
     phase->priority = priority;
@@ -609,11 +615,11 @@ tgfx::FontAtlas* WorldTextComponent::ensure_font(const char* captured_font_path)
     return font_.get();
 }
 
-std::set<std::string> WorldTextComponent::get_phase_marks() const {
+tc_phase_mask WorldTextComponent::get_phase_mask() const {
     if (text.empty()) {
-        return {};
+        return TC_PHASE_NONE;
     }
-    return {sanitize_phase_mark(phase_mark)};
+    return tc_phase_find(sanitize_phase_mark(phase_mark).c_str()) | TC_PHASE_ID;
 }
 
 bool WorldTextComponent::collect_render_items(
@@ -628,12 +634,10 @@ bool WorldTextComponent::collect_render_items(
         return true;
     }
 
-    const bool is_id_pass =
-        context.pass_semantic == static_cast<uint32_t>(RenderItemPassSemantic::Id);
+    const bool is_id_pass = context.phase == TC_PHASE_ID;
     const std::string mark = sanitize_phase_mark(phase_mark);
-    const bool collect_all_phases =
-        !context.phase_mark || context.phase_mark[0] == '\0';
-    if (!collect_all_phases && !is_id_pass && context.phase_mark != mark) {
+    const bool collect_all_phases = context.phase == TC_PHASE_NONE;
+    if (!collect_all_phases && !is_id_pass && context.phase != tc_phase_find(mark.c_str())) {
         return true;
     }
 

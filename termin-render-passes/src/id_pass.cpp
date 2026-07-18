@@ -303,7 +303,7 @@ void IdPass::execute_with_data_tgfx2(
         draw_context.view = view;
         draw_context.projection = projection;
         std::memcpy(draw_context.model.data, push.u_model, sizeof(push.u_model));
-        draw_context.phase = "pick";
+        draw_context.phase = TC_PHASE_ID;
         draw_context.pass_contract = shader_pass_contract();
         draw_context.current_tc_shader = dc.final_shader;
         draw_context.layer_mask = layer_mask;

@@ -9,7 +9,7 @@ Uses ArtifactStore for generated navmesh storage and NavMeshRegistry for runtime
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, List, Set
+from typing import TYPE_CHECKING, Optional, List
 
 import numpy as np
 
@@ -300,25 +300,30 @@ class NavMeshBuilderComponent(DrawableComponent):
     GEOMETRY_WATERSHED = 5
 
     @property
-    def phase_marks(self) -> Set[str]:
-        """Render phases for debug visualization."""
-        marks: Set[str] = set()
+    def phase_mask(self) -> int:
+        """Render-phase mask for debug visualization."""
+        mask = 0
         if self.show_region_voxels:
             mat = self._get_or_create_debug_material()
-            marks.update(p.phase_mark for p in mat.phases)
+            for phase in mat.phases:
+                mask |= phase.phase
         if self.show_simplified_contours:
             mat = self._get_or_create_line_material()
-            marks.update(p.phase_mark for p in mat.phases)
+            for phase in mat.phases:
+                mask |= phase.phase
         if self.show_triangulated:
             mat = self._get_or_create_line_material()
-            marks.update(p.phase_mark for p in mat.phases)
+            for phase in mat.phases:
+                mask |= phase.phase
         if self.show_distance_field:
             mat = self._get_or_create_debug_material()
-            marks.update(p.phase_mark for p in mat.phases)
+            for phase in mat.phases:
+                mask |= phase.phase
         if self.show_watershed_regions:
             mat = self._get_or_create_debug_material()
-            marks.update(p.phase_mark for p in mat.phases)
-        return marks
+            for phase in mat.phases:
+                mask |= phase.phase
+        return mask
 
     def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
         """Return RenderItems for debug rendering."""
@@ -327,10 +332,10 @@ class NavMeshBuilderComponent(DrawableComponent):
         # Region voxels
         if self.show_region_voxels and self._debug_region_voxels_mesh is not None and self._debug_region_voxels_mesh.is_valid:
             mat = self._get_or_create_debug_material()
-            if context.phase_mark == "":
+            if context.phase == 0:
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
+                phases = [p for p in mat.phases if p.phase == context.phase]
 
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
             for phase in phases:
@@ -357,10 +362,10 @@ class NavMeshBuilderComponent(DrawableComponent):
         # Simplified contours
         if self.show_simplified_contours and self._debug_simplified_contours_mesh is not None and self._debug_simplified_contours_mesh.is_valid:
             mat = self._get_or_create_line_material()
-            if context.phase_mark == "":
+            if context.phase == 0:
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
+                phases = [p for p in mat.phases if p.phase == context.phase]
 
             phases.sort(key=lambda p: p.priority)
             result.extend(
@@ -375,10 +380,10 @@ class NavMeshBuilderComponent(DrawableComponent):
         # Triangulated mesh
         if self.show_triangulated and self._debug_triangulated_mesh is not None and self._debug_triangulated_mesh.is_valid:
             mat = self._get_or_create_line_material()
-            if context.phase_mark == "":
+            if context.phase == 0:
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
+                phases = [p for p in mat.phases if p.phase == context.phase]
 
             phases.sort(key=lambda p: p.priority)
             result.extend(
@@ -399,10 +404,10 @@ class NavMeshBuilderComponent(DrawableComponent):
 
         if self.show_distance_field and self._debug_distance_field_mesh is not None and self._debug_distance_field_mesh.is_valid:
             mat = self._get_or_create_debug_material()
-            if context.phase_mark == "":
+            if context.phase == 0:
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
+                phases = [p for p in mat.phases if p.phase == context.phase]
 
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
             for phase in phases:
@@ -429,10 +434,10 @@ class NavMeshBuilderComponent(DrawableComponent):
         # Watershed regions
         if self.show_watershed_regions and self._debug_watershed_mesh is not None and self._debug_watershed_mesh.is_valid:
             mat = self._get_or_create_debug_material()
-            if context.phase_mark == "":
+            if context.phase == 0:
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
+                phases = [p for p in mat.phases if p.phase == context.phase]
 
             white_color = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
             for phase in phases:

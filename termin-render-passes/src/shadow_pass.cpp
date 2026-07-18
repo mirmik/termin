@@ -69,7 +69,7 @@ RenderItemTaskPlanningContract shadow_task_planning_contract(
     const char* debug_pass_name)
 {
     RenderItemTaskPlanningContract contract{};
-    contract.pass_semantic = RenderItemPassSemantic::Shadow;
+    contract.phase = TC_PHASE_SHADOW;
     contract.material_phase_policy = RenderItemMaterialPhasePolicy::Required;
     contract.provided_input_mask =
         render_item_task_input_bit(RenderItemTaskInput::DrawContext);
@@ -414,15 +414,15 @@ bool collect_shadow_drawable_shader_usages(tc_component* tc, void* user_data) {
         return true;
     }
 
-    if (!tc_component_has_phase(tc, "shadow")) {
+    if (!tc_phase_mask_contains(tc_component_phase_mask(tc), TC_PHASE_SHADOW)) {
         return true;
     }
 
     RenderContext render_context;
-    render_context.phase = "shadow";
+    render_context.phase = TC_PHASE_SHADOW;
     render_context.pass_contract = data->pass_contract;
     tc_render_item_collect_context item_context{};
-    item_context.phase_mark = "shadow";
+    item_context.phase = TC_PHASE_SHADOW;
     item_context.layer_mask = UINT64_MAX;
     item_context.render_category_mask = UINT64_MAX;
     item_context.debug_pass_name = "ShadowPass/ShaderUsage";
@@ -473,7 +473,7 @@ void ShadowPass::collect_shadow_casters(
     }
 
     RenderContext render_context;
-    render_context.phase = "shadow";
+    render_context.phase = TC_PHASE_SHADOW;
     render_context.pass_contract = shadow_material_pass_contract();
     render_context.layer_mask = layer_mask;
     render_context.render_category_mask = render_category_mask;
@@ -481,7 +481,7 @@ void ShadowPass::collect_shadow_casters(
 
     const auto& items = snapshot.items();
     const std::span<const size_t> routed_items =
-        snapshot.phase_item_indices("shadow");
+        snapshot.phase_item_indices(TC_PHASE_SHADOW);
     cached_draw_calls_.reserve(routed_items.size());
     for (size_t item_index : routed_items) {
         const tc_render_item& item = items[item_index];
@@ -685,7 +685,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             task.draw_context.model.data,
             extension.draw_data.u_model,
             sizeof(extension.draw_data.u_model));
-        task.draw_context.phase = "shadow";
+        task.draw_context.phase = TC_PHASE_SHADOW;
         task.draw_context.pass_contract = task_shader_contract;
         task.draw_context.current_tc_shader = TcShader(task.final_shader);
         task.draw_context.layer_mask = data.layer_mask;
@@ -923,7 +923,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
                 encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
                 encode_request.draw_context = &task.draw_context;
                 encode_request.material_phase = task.material_phase;
-                encode_request.phase_mark = "shadow";
+                encode_request.phase = TC_PHASE_SHADOW;
                 encode_request.debug_pass_name = "ShadowPass";
                 encode_request.debug_entity_name = task.entity_name.c_str();
                 encode_request.resources = &task.resources;

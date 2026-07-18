@@ -8,7 +8,7 @@ NavMeshDisplayComponent — компонент для отображения н�
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 
@@ -266,17 +266,20 @@ class NavMeshDisplayComponent(DrawableComponent):
     # --- Drawable protocol ---
 
     @property
-    def phase_marks(self) -> Set[str]:
-        """Фазы рендеринга."""
+    def phase_mask(self) -> int:
+        """Битовая маска фаз рендеринга."""
         mat = self._get_or_create_material()
-        marks = {p.phase_mark for p in mat.phases}
+        mask = 0
+        for phase in mat.phases:
+            mask |= phase.phase
 
         # Добавляем фазы контуров если включены
         if self.show_contours:
             contour_mat = self._get_or_create_contour_material()
-            marks.update(p.phase_mark for p in contour_mat.phases)
+            for phase in contour_mat.phases:
+                mask |= phase.phase
 
-        return marks
+        return mask
 
     # Константы для geometry_id
     GEOMETRY_MESH = 1
@@ -298,10 +301,10 @@ class NavMeshDisplayComponent(DrawableComponent):
         # Основной меш
         mat = self._get_or_create_material()
 
-        if context.phase_mark == "":
+        if context.phase == 0:
             phases = list(mat.phases)
         else:
-            phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
+            phases = [p for p in mat.phases if p.phase == context.phase]
 
         # Обновляем цвет
         for phase in phases:
@@ -321,11 +324,11 @@ class NavMeshDisplayComponent(DrawableComponent):
         # Контуры (если включены и есть контурный mesh)
         if self.show_contours and self._contour_mesh is not None and self._contour_mesh.is_valid:
             contour_material = self._get_or_create_contour_material()
-            if context.phase_mark == "":
+            if context.phase == 0:
                 contour_phases = list(contour_material.phases)
             else:
                 contour_phases = [
-                    p for p in contour_material.phases if p.phase_mark == context.phase_mark
+                    p for p in contour_material.phases if p.phase == context.phase
                 ]
 
             contour_phases.sort(key=lambda p: p.priority)

@@ -543,8 +543,7 @@ namespace termin {
 %ignore termin::MeshRenderer::get_material_ptr;
 %ignore termin::MeshRenderer::get_base_material;
 %ignore termin::MeshRenderer::get_overridden_material;
-%ignore termin::MeshRenderer::get_phase_marks;
-%ignore termin::MeshRenderer::phase_marks;
+%ignore termin::MeshRenderer::get_phase_mask;
 %ignore termin::MeshRenderer::draw_geometry;
 %ignore termin::MeshRenderer::get_phases_for_mark;
 %ignore termin::MeshRenderer::get_geometry_draws;

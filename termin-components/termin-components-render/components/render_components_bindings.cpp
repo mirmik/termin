@@ -541,13 +541,7 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw("override_material", &MeshRenderer::override_material, &MeshRenderer::set_override_material)
         .def("set_override_material", &MeshRenderer::set_override_material)
         .def("get_overridden_material", &MeshRenderer::get_overridden_material)
-        .def_prop_ro("phase_marks", [](MeshRenderer& self) {
-            nb::set marks;
-            for (const auto& mark : self.phase_marks()) {
-                marks.add(nb::str(mark.c_str()));
-            }
-            return marks;
-        });
+        .def_prop_ro("phase_mask", &MeshRenderer::get_phase_mask);
 
     nb::class_<SkinnedMeshRenderer, MeshRenderer>(m, "SkinnedMeshRenderer")
         .def("__init__", [](nb::handle self) {
@@ -686,13 +680,7 @@ NB_MODULE(_components_render_native, m) {
         .def("get_material", [](LineRenderer& self) { return self.material; })
         .def("get_mesh", &LineRenderer::get_mesh)
         .def("_get_mesh", &LineRenderer::get_mesh)
-        .def_prop_ro("phase_marks", [](LineRenderer& self) {
-            nb::set marks;
-            for (const auto& mark : self.phase_marks()) {
-                marks.add(nb::str(mark.c_str()));
-            }
-            return marks;
-        });
+        .def_prop_ro("phase_mask", &LineRenderer::get_phase_mask);
 
     nb::enum_<WorldTextAnchor>(m, "WorldTextAnchor")
         .value("Left", WorldTextAnchor::Left)
@@ -782,13 +770,7 @@ NB_MODULE(_components_render_native, m) {
         .def_prop_rw("blend", [](WorldTextComponent& self) { return self.blend; }, &WorldTextComponent::set_blend)
         .def_prop_rw("cull", [](WorldTextComponent& self) { return self.cull; }, &WorldTextComponent::set_cull)
         .def_prop_ro("is_drawable", [](WorldTextComponent&) { return true; })
-        .def_prop_ro("phase_marks", [](WorldTextComponent& self) {
-            nb::set marks;
-            for (const auto& mark : self.phase_marks()) {
-                marks.add(nb::str(mark.c_str()));
-            }
-            return marks;
-        });
+        .def_prop_ro("phase_mask", &WorldTextComponent::get_phase_mask);
 
     nb::class_<LightComponent, CxxComponent>(m, "LightComponent")
         .def("__init__", [](nb::handle self) {

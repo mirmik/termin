@@ -92,8 +92,13 @@ TEST_CASE("FoliageLayerComponent emits foliage batch render items with owned ass
     layer->material = termin::TcMaterial(material_handle);
     entity.add_component(layer);
 
+    CHECK(layer->get_phase_mask() == TC_PHASE_OPAQUE);
+    CHECK_FALSE(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_DEPTH));
+    CHECK_FALSE(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_ID));
+    CHECK_FALSE(tc_phase_mask_contains(layer->get_phase_mask(), TC_PHASE_NORMAL));
+
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "opaque";
+    collect_context.phase = TC_PHASE_OPAQUE;
     collect_context.debug_pass_name = "ColorPass";
 
     termin::RenderItemCollection collection;

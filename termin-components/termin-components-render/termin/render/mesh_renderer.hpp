@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -66,8 +65,7 @@ public:
 
     TcMaterial get_overridden_material() const;
 
-    std::set<std::string> get_phase_marks() const override;
-    std::set<std::string> phase_marks() const { return get_phase_marks(); }
+    tc_phase_mask get_phase_mask() const override;
     void on_added() override;
     void start() override;
     void on_editor_start() override;

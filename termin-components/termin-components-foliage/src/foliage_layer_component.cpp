@@ -246,7 +246,7 @@ RenderItemTaskRejection foliage_render_item_task_shader_planner(
     }
     out_plan.has_vertex_transform_kind = true;
     out_plan.vertex_transform_kind =
-        request.contract->pass_semantic == RenderItemPassSemantic::Shadow
+        request.contract->phase == TC_PHASE_SHADOW
         ? VertexTransformKind::FoliageShadow
         : VertexTransformKind::Foliage;
     if (!request.contract->shader_contract) {
@@ -276,9 +276,8 @@ void ensure_foliage_render_item_encoder_registered()
     desc.encode = foliage_render_item_draw_encoder;
     desc.plan_task_shader = foliage_render_item_task_shader_planner;
     desc.debug_name = "FoliageLayerComponent";
-    desc.capabilities.pass_semantic_mask =
-        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
-        | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow);
+    desc.capabilities.phase_mask =
+        TC_PHASE_ALL & ~(TC_PHASE_DEPTH | TC_PHASE_ID | TC_PHASE_NORMAL);
     desc.capabilities.vertex_transform_kind_mask =
         render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage)
         | render_item_vertex_transform_kind_bit(VertexTransformKind::FoliageShadow);
@@ -439,19 +438,19 @@ void FoliageLayerComponent::register_type() {
     );
 }
 
-std::set<std::string> FoliageLayerComponent::get_phase_marks() const {
+tc_phase_mask FoliageLayerComponent::get_phase_mask() const {
     if (!enabled || foliage_uuid.empty() || !prototype_mesh.is_valid() || !material.is_valid()) {
-        return {};
+        return TC_PHASE_NONE;
     }
 
-    std::set<std::string> marks;
+    tc_phase_mask mask = TC_PHASE_NONE;
     tc_material* mat = material.get();
     if (mat) {
         for (size_t i = 0; i < mat->phase_count; i++) {
-            marks.insert(mat->phases[i].phase_mark);
+            mask |= mat->phases[i].phase;
         }
     }
-    return marks;
+    return mask;
 }
 
 bool FoliageLayerComponent::collect_render_items(
@@ -491,15 +490,15 @@ bool FoliageLayerComponent::collect_render_items(
 
     tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
     size_t count = 0;
-    if (!context.phase_mark || context.phase_mark[0] == '\0') {
+    if (context.phase == TC_PHASE_NONE) {
         count = std::min(mat->phase_count, static_cast<size_t>(TC_MATERIAL_MAX_PHASES));
         for (size_t i = 0; i < count; ++i) {
             phases[i] = &mat->phases[i];
         }
     } else {
-        count = tc_material_get_phases_for_mark(
+        count = tc_material_get_phases_for_phase(
             mat,
-            context.phase_mark,
+            context.phase,
             phases,
             TC_MATERIAL_MAX_PHASES);
     }

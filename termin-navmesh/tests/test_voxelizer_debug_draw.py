@@ -5,8 +5,9 @@ from termin_voxel_components.voxelizer_debug_draw import VoxelizerDebugDrawServi
 
 
 class _Phase:
-    def __init__(self, phase_mark: str, priority: int = 0):
+    def __init__(self, phase_mark: str, phase: int, priority: int = 0):
         self.phase_mark = phase_mark
+        self.phase = phase
         self.priority = priority
         self.params = {}
 
@@ -56,9 +57,9 @@ class _Component:
         self._debug_triangulated_mesh = None
         self._debug_bounds_min = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         self._debug_bounds_max = np.array([4.0, 5.0, 6.0], dtype=np.float32)
-        self.voxel_phase = _Phase("opaque", priority=10)
-        self.line_phase = _Phase("line", priority=5)
-        self.transparent_phase = _Phase("transparent", priority=20)
+        self.voxel_phase = _Phase("opaque", 1 << 0, priority=10)
+        self.line_phase = _Phase("line", 1 << 16, priority=5)
+        self.transparent_phase = _Phase("transparent", 1 << 1, priority=20)
 
     def _get_or_create_debug_material(self):
         return _Material(self.voxel_phase)
@@ -75,9 +76,9 @@ def test_voxelizer_debug_draw_service_collects_enabled_layers(monkeypatch):
     component = _Component()
     service = VoxelizerDebugDrawService()
 
-    assert service.phase_marks(component) == {"opaque", "line"}
+    assert service.phase_mask(component) == (1 << 0) | (1 << 16)
 
-    draws = service.collect_render_items(component, "")
+    draws = service.collect_render_items(component, 0)
     assert [draw.geometry_id for draw in draws] == [
         component.GEOMETRY_REGIONS,
         component.GEOMETRY_SIMPLIFIED_CONTOURS,
@@ -87,12 +88,12 @@ def test_voxelizer_debug_draw_service_collects_enabled_layers(monkeypatch):
     assert component.voxel_phase.params["u_bounds_max"].tolist() == [4.0, 5.0, 6.0, 0.0]
 
 
-def test_voxelizer_debug_draw_service_filters_phase_marks(monkeypatch):
+def test_voxelizer_debug_draw_service_filters_phase_mask(monkeypatch):
     monkeypatch.setattr(voxelizer_debug_draw, "RenderItem", _RenderItem)
     component = _Component()
     service = VoxelizerDebugDrawService()
 
-    draws = service.collect_render_items(component, "line")
+    draws = service.collect_render_items(component, 1 << 16)
 
     assert [draw.geometry_id for draw in draws] == [
         component.GEOMETRY_SIMPLIFIED_CONTOURS,

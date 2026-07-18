@@ -92,8 +92,8 @@ public:
         return local_to_world(end_local);
     }
 
-    std::set<std::string> get_phase_marks() const override {
-        return {OFF_MESH_LINK_DEBUG_PHASE, "pick"};
+    tc_phase_mask get_phase_mask() const override {
+        return TC_PHASE_EDITOR_DEBUG | TC_PHASE_ID;
     }
 
     bool collect_render_items(
@@ -103,24 +103,23 @@ public:
             tc_log(TC_LOG_ERROR, "[OffMeshLinkComponent] cannot emit render items: sink callback is null");
             return false;
         }
-        const bool collect_all_phases =
-            !context.phase_mark || context.phase_mark[0] == '\0';
-        const std::string phase_mark = collect_all_phases
-            ? std::string(OFF_MESH_LINK_DEBUG_PHASE)
-            : context.phase_mark;
-        const bool is_pick = phase_mark == "pick";
-        if (!collect_all_phases && !is_pick &&
+        const bool collect_all_phases = context.phase == TC_PHASE_NONE;
+        const tc_phase_mask requested_phase = collect_all_phases
+            ? TC_PHASE_EDITOR_DEBUG
+            : context.phase;
+        const bool is_id = requested_phase == TC_PHASE_ID;
+        if (!collect_all_phases && !is_id &&
             (context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
             return true;
         }
-        if (!collect_all_phases && !enabled && !is_pick) {
+        if (!collect_all_phases && !enabled && !is_id) {
             return true;
         }
-        if (is_pick) {
+        if (is_id) {
             if (!ensure_debug_mesh() || !_debug_mesh.is_valid()) {
                 return true;
             }
-        } else if (phase_mark == OFF_MESH_LINK_DEBUG_PHASE) {
+        } else if (requested_phase == TC_PHASE_EDITOR_DEBUG) {
             if (!ensure_debug_resources()) {
                 return true;
             }
@@ -161,7 +160,7 @@ public:
             return sink.emit(&item, sink.user_data);
         };
 
-        if (is_pick) {
+        if (is_id) {
             return emit_phase(nullptr);
         }
 
@@ -170,9 +169,9 @@ public:
             return true;
         }
         tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
-        const size_t count = tc_material_get_phases_for_mark(
+        const size_t count = tc_material_get_phases_for_phase(
             material,
-            OFF_MESH_LINK_DEBUG_PHASE,
+            TC_PHASE_EDITOR_DEBUG,
             phases,
             TC_MATERIAL_MAX_PHASES);
         for (size_t i = 0; i < count; ++i) {

@@ -123,16 +123,14 @@ static bool g_voxel_grid_python_kind_initialized = false;
 static bool g_navmesh_python_kind_initialized = false;
 static bool g_entity_python_kind_initialized = false;
 
-bool py_drawable_cb_has_phase(void* py_self, const char* phase_mark) {
+tc_phase_mask py_drawable_cb_phase_mask(void* py_self) {
     PyGILState_STATE gstate = PyGILState_Ensure();
-    bool result = false;
+    tc_phase_mask result = TC_PHASE_NONE;
     try {
         nb::handle self((PyObject*)py_self);
-        nb::object marks = self.attr("phase_marks")();
-        std::string pm = phase_mark ? phase_mark : "";
-        result = nb::cast<bool>(marks.attr("__contains__")(pm));
+        result = nb::cast<tc_phase_mask>(self.attr("phase_mask"));
     } catch (const std::exception& e) {
-        tc::Log::error(e, "Drawable::has_phase");
+        tc::Log::error(e, "Drawable::phase_mask");
         PyErr_Print();
     }
     PyGILState_Release(gstate);
@@ -168,7 +166,7 @@ bool py_drawable_cb_collect_render_items(
         nb::object context_type =
             nb::module_::import_("termin.render.drawable").attr("RenderItemCollectContext");
         nb::object py_context = context_type(
-            context->phase_mark ? context->phase_mark : "",
+            context->phase,
             context->flags,
             context->layer_mask,
             context->render_category_mask,
@@ -377,7 +375,7 @@ void init_python_component_callbacks() {
     }
 
     tc_python_drawable_callbacks drawable_callbacks = {
-        .has_phase = py_drawable_cb_has_phase,
+        .phase_mask = py_drawable_cb_phase_mask,
         .collect_render_items = py_drawable_cb_collect_render_items,
     };
     tc_component_set_python_drawable_callbacks(&drawable_callbacks);

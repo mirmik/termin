@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -90,8 +89,7 @@ public:
     tc_value serialize_data() const override;
     void deserialize_data(const tc_value* data, tc_scene_handle scene = TC_SCENE_HANDLE_INVALID) override;
 
-    std::set<std::string> get_phase_marks() const override;
-    std::set<std::string> phase_marks() const { return get_phase_marks(); }
+    tc_phase_mask get_phase_mask() const override;
     bool collect_render_items(
         const tc_render_item_collect_context& context,
         tc_render_item_sink& sink

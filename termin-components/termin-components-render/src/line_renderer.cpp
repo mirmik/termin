@@ -94,12 +94,12 @@ std::array<float, 4> phase_color(const tc_material_phase* phase) {
     return color;
 }
 
-tc_material_phase* find_phase(tc_material* material, const std::string& phase_mark) {
+tc_material_phase* find_phase(tc_material* material, tc_phase_mask requested_phase) {
     if (!material) {
         return nullptr;
     }
     for (size_t i = 0; i < material->phase_count; ++i) {
-        if (phase_mark == material->phases[i].phase_mark) {
+        if (requested_phase == material->phases[i].phase) {
             return &material->phases[i];
         }
     }
@@ -144,8 +144,8 @@ bool uses_material_fragment_variant_for_pass(
         || mode == LineRenderMode::WorldTube;
 }
 
-bool accepts_phase(const std::string& phase_mark, bool cast_shadow) {
-    if (phase_mark == "shadow") {
+bool accepts_phase(tc_phase_mask phase, bool cast_shadow) {
+    if (phase == TC_PHASE_SHADOW) {
         return cast_shadow;
     }
     return true;
@@ -197,13 +197,12 @@ bool encode_line_batch_render_item_tgfx2(
     }
 
     const RenderContext& context = *request.draw_context;
-    const char* phase_mark_c = request.phase_mark
-        ? request.phase_mark
-        : context.phase.c_str();
-    const std::string phase_mark = phase_mark_c ? phase_mark_c : "";
     tc_material_phase* phase = request.material_phase
         ? request.material_phase
         : item.material_phase;
+    const tc_phase_mask requested_phase = request.phase != TC_PHASE_NONE
+        ? request.phase
+        : (phase ? phase->phase : TC_PHASE_NONE);
 
     LineRenderMode mode = LineRenderMode::WorldBillboard;
     if (!decode_line_render_mode(item.payload.line_batch.render_mode, mode)) {
@@ -215,7 +214,7 @@ bool encode_line_batch_render_item_tgfx2(
     if (!is_direct_line_mode(mode)) {
         return false;
     }
-    if (!accepts_phase(phase_mark, true)) {
+    if (!accepts_phase(requested_phase, true)) {
         return false;
     }
     if (!item.payload.line_batch.points || item.payload.line_batch.point_count < 2) {
@@ -414,10 +413,7 @@ void ensure_line_render_item_encoder_registered()
     desc.plan_task_shader = line_render_item_task_shader_planner;
     desc.user_data = &state;
     desc.debug_name = "LineRenderer";
-    desc.capabilities.pass_semantic_mask =
-        render_item_pass_semantic_bit(RenderItemPassSemantic::Color)
-        | render_item_pass_semantic_bit(RenderItemPassSemantic::Shadow)
-        | render_item_pass_semantic_bit(RenderItemPassSemantic::Id);
+    desc.capabilities.phase_mask = TC_PHASE_ALL & ~TC_PHASE_NORMAL;
     desc.capabilities.supported_task_input_mask =
         render_item_task_input_bit(RenderItemTaskInput::DrawContext)
         | render_item_task_input_bit(RenderItemTaskInput::ModelMatrix)
@@ -638,10 +634,8 @@ bool emit_line_batch_render_items(
         return true;
     }
 
-    const bool collect_all_phases =
-        !context.phase_mark || context.phase_mark[0] == '\0';
-    const std::string phase_mark = collect_all_phases ? std::string() : context.phase_mark;
-    if (!collect_all_phases && !accepts_phase(phase_mark, desc.cast_shadow)) {
+    const bool collect_all_phases = context.phase == TC_PHASE_NONE;
+    if (!collect_all_phases && !accepts_phase(context.phase, desc.cast_shadow)) {
         return true;
     }
 
@@ -713,24 +707,23 @@ bool emit_line_batch_render_items(
     bool found_shadow_phase = false;
     for (size_t i = 0; i < raw->phase_count; ++i) {
         tc_material_phase* phase = &raw->phases[i];
-        const std::string draw_phase_mark = phase->phase_mark;
-        if (!accepts_phase(draw_phase_mark, desc.cast_shadow)) {
+        if (!accepts_phase(phase->phase, desc.cast_shadow)) {
             continue;
         }
-        if (draw_phase_mark == "shadow") {
+        if (phase->phase == TC_PHASE_SHADOW) {
             found_shadow_phase = true;
         }
-        if ((collect_all_phases || phase_mark == draw_phase_mark) &&
+        if ((collect_all_phases || context.phase == phase->phase) &&
             !emit_phase(phase, desc.material.handle)) {
             return false;
         }
     }
 
     if (desc.cast_shadow &&
-        (collect_all_phases || phase_mark == "shadow") &&
+        (collect_all_phases || context.phase == TC_PHASE_SHADOW) &&
         !found_shadow_phase) {
         if (!emit_phase(
-                find_phase(desc.shadow_fallback_material.get(), "shadow"),
+                find_phase(desc.shadow_fallback_material.get(), TC_PHASE_SHADOW),
                 desc.shadow_fallback_material.handle)) {
             return false;
         }
@@ -1161,28 +1154,19 @@ void LineRenderer::deserialize_data(const tc_value* data, tc_scene_handle scene)
     dirty_ = true;
 }
 
-std::set<std::string> LineRenderer::get_phase_marks() const {
-    std::set<std::string> marks;
+tc_phase_mask LineRenderer::get_phase_mask() const {
+    tc_phase_mask mask = TC_PHASE_NONE;
     TcMaterial mat = effective_material();
     tc_material* raw = mat.get();
-    if (!raw) {
-        return marks;
-    }
-    LineRenderMode mode = LineRenderMode::WorldBillboard;
-    if (!effective_render_mode(mode)) {
-        return marks;
-    }
+    if (!raw) return mask;
     for (size_t i = 0; i < raw->phase_count; ++i) {
-        const std::string phase_mark = raw->phases[i].phase_mark;
-        if (!accepts_phase(phase_mark, cast_shadow)) {
-            continue;
+        if (accepts_phase(raw->phases[i].phase, cast_shadow)) {
+            mask |= raw->phases[i].phase;
         }
-        marks.insert(phase_mark);
     }
-    if (cast_shadow) {
-        marks.insert("shadow");
-    }
-    return marks;
+    mask |= TC_PHASE_DEPTH | TC_PHASE_ID;
+    if (cast_shadow) mask |= TC_PHASE_SHADOW;
+    return mask;
 }
 
 bool LineRenderer::collect_render_items(
@@ -1193,10 +1177,8 @@ bool LineRenderer::collect_render_items(
         return true;
     }
 
-    const bool collect_all_phases =
-        !context.phase_mark || context.phase_mark[0] == '\0';
-    const std::string phase_mark = collect_all_phases ? std::string() : context.phase_mark;
-    if (!collect_all_phases && !accepts_phase(phase_mark, cast_shadow)) {
+    const bool collect_all_phases = context.phase == TC_PHASE_NONE;
+    if (!collect_all_phases && !accepts_phase(context.phase, cast_shadow)) {
         return true;
     }
 
@@ -1267,24 +1249,23 @@ bool LineRenderer::collect_render_items(
         bool found_shadow_phase = false;
         for (size_t i = 0; i < raw->phase_count; ++i) {
             tc_material_phase* phase = &raw->phases[i];
-            const std::string draw_phase_mark = phase->phase_mark;
-            if (!accepts_phase(draw_phase_mark, cast_shadow)) {
+            if (!accepts_phase(phase->phase, cast_shadow)) {
                 continue;
             }
-            if (draw_phase_mark == "shadow") {
+            if (phase->phase == TC_PHASE_SHADOW) {
                 found_shadow_phase = true;
             }
-            if ((collect_all_phases || phase_mark == draw_phase_mark) &&
+            if ((collect_all_phases || context.phase == phase->phase) &&
                 !emit_mesh_phase(phase, mat.handle)) {
                 return false;
             }
         }
 
         if (cast_shadow &&
-            (collect_all_phases || phase_mark == "shadow") &&
+            (collect_all_phases || context.phase == TC_PHASE_SHADOW) &&
             !found_shadow_phase) {
             TcMaterial fallback = default_material();
-            if (!emit_mesh_phase(find_phase(fallback.get(), "shadow"), fallback.handle)) {
+            if (!emit_mesh_phase(find_phase(fallback.get(), TC_PHASE_SHADOW), fallback.handle)) {
                 return false;
             }
         }

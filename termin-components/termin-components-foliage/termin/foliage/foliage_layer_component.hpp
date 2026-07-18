@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include <set>
 #include <vector>
 
 #include <termin/entity/component.hpp>
@@ -32,7 +31,7 @@ public:
 
     static void register_type();
 
-    std::set<std::string> get_phase_marks() const override;
+    tc_phase_mask get_phase_mask() const override;
     bool collect_render_items(
         const tc_render_item_collect_context& context,
         tc_render_item_sink& sink

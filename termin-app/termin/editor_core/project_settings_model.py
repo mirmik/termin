@@ -21,6 +21,7 @@ class ProjectSettingsSnapshot:
     player_height: int
     player_fullscreen: bool
     ignored_resource_paths: tuple[str, ...]
+    render_phase_names: tuple[str, ...]
 
 
 class ProjectSettingsController:
@@ -47,6 +48,7 @@ class ProjectSettingsController:
             player_height=int(settings.player_window.height),
             player_fullscreen=bool(settings.player_window.fullscreen),
             ignored_resource_paths=tuple(settings.ignored_resource_paths),
+            render_phase_names=tuple(settings.render_phase_names),
         )
 
     def set_render_sync_mode(self, mode: RenderSyncMode) -> ProjectSettingsSnapshot:
@@ -88,6 +90,11 @@ class ProjectSettingsController:
         )
         self._manager.set_build_output_dir(snapshot.build_output_dir)
         self._manager.set_ignored_resource_paths(list(snapshot.ignored_resource_paths))
+        phases_changed = before.render_phase_names != snapshot.render_phase_names
+        if phases_changed:
+            self._manager.set_render_phase_names(list(snapshot.render_phase_names))
+            if self._on_render_settings_changed is not None:
+                self._on_render_settings_changed()
         saved = self.load()
         resource_after = (saved.build_output_dir, saved.ignored_resource_paths)
         if resource_after != resource_before and self._on_resource_settings_changed is not None:

@@ -4,10 +4,35 @@ from termin.project.settings import ProjectPlayerWindowSettings, ProjectSettings
 from termin.player.project_settings import ProjectRuntimeSettings
 from termin.project_build.desktop_build import _load_project_settings
 from termin.render import (
+    PROJECT_RENDER_PHASE_CAPACITY,
     RenderSyncMode as CRenderSyncMode,
     get_render_sync_mode,
     set_render_sync_mode,
 )
+
+
+def test_project_render_phase_registry_is_indexed_and_explicit() -> None:
+    names = [""] * PROJECT_RENDER_PHASE_CAPACITY
+    names[3] = "gameplay_overlay"
+    settings = ProjectSettings.from_dict({"render_phase_names": names})
+
+    assert settings.render_phase_names[3] == "gameplay_overlay"
+    assert settings.to_dict()["render_phase_names"] == names
+
+
+def test_project_render_phase_registry_rejects_duplicates_and_builtins() -> None:
+    duplicate = [""] * PROJECT_RENDER_PHASE_CAPACITY
+    duplicate[0] = duplicate[1] = "overlay"
+    builtin = [""] * PROJECT_RENDER_PHASE_CAPACITY
+    builtin[0] = "normal"
+
+    for names in (duplicate, builtin):
+        try:
+            ProjectSettings.from_dict({"render_phase_names": names})
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("invalid render phase registry must be rejected")
 
 
 def test_project_settings_normalizes_ignored_resource_paths() -> None:
