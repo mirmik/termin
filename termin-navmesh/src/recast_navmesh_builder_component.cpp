@@ -538,16 +538,14 @@ bool RecastNavMeshBuilderComponent::save_detour_asset(const RecastBuildResult& r
 
 // --- Drawable interface ---
 
-std::set<std::string> RecastNavMeshBuilderComponent::get_phase_marks() const {
-    std::set<std::string> marks;
-
+tc_phase_mask RecastNavMeshBuilderComponent::get_phase_mask() const {
     // Only participate in rendering if we have something to show
     if (show_input_mesh || show_heightfield || show_regions || show_distance_field ||
         show_contours || show_poly_mesh || show_detail_mesh) {
-        marks.insert(NAVMESH_DEBUG_PHASE);
+        return TC_PHASE_EDITOR_DEBUG;
     }
 
-    return marks;
+    return TC_PHASE_NONE;
 }
 
 bool RecastNavMeshBuilderComponent::collect_render_items(
@@ -558,9 +556,7 @@ bool RecastNavMeshBuilderComponent::collect_render_items(
         tc_log_error("[RecastNavMeshBuilderComponent] cannot emit render items: sink callback is null");
         return false;
     }
-    const bool collect_all_phases =
-        !context.phase_mark || context.phase_mark[0] == '\0';
-    if (!collect_all_phases && std::string(context.phase_mark) != NAVMESH_DEBUG_PHASE) {
+    if (context.phase != TC_PHASE_NONE && context.phase != TC_PHASE_EDITOR_DEBUG) {
         return true;
     }
     if ((context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
@@ -574,9 +570,9 @@ bool RecastNavMeshBuilderComponent::collect_render_items(
     }
 
     tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
-    const size_t count = tc_material_get_phases_for_mark(
+    const size_t count = tc_material_get_phases_for_phase(
         material,
-        NAVMESH_DEBUG_PHASE,
+        TC_PHASE_EDITOR_DEBUG,
         phases,
         TC_MATERIAL_MAX_PHASES);
     if (count == 0) {

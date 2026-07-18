@@ -28,6 +28,15 @@ from termin.render_components import (
     get_texture_inputs_for_material,
 )
 from termin.render_framework import RenderContext
+from termin.render import (
+    RENDER_PHASE_DEPTH,
+    RENDER_PHASE_ID,
+    RENDER_PHASE_OPAQUE,
+    RENDER_PHASE_SHADOW,
+    RENDER_PHASE_TRANSPARENT,
+    configure_project_render_phases,
+    find_render_phase,
+)
 
 
 VERTEX = """
@@ -290,7 +299,7 @@ def test_line_renderer_defaults_to_world_billboard_mode():
 
     assert renderer.render_mode == LineRenderMode.WorldBillboard
     assert renderer.raw_lines is False
-    assert renderer.phase_marks == {"opaque"}
+    assert renderer.phase_mask == RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID
 
 
 def test_line_renderer_world_mesh_fallback_builds_cpu_mesh():
@@ -341,10 +350,10 @@ def test_line_renderer_direct_modes_skip_shadow_material_phase():
 
     renderer = LineRenderer(points=_line_points(), material=material)
 
-    assert renderer.phase_marks == {"opaque"}
+    assert renderer.phase_mask == RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID
 
 
-def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
+def test_line_renderer_includes_builtin_id_phase():
     material = create_line_test_material(extra_phase_marks=("id",))
 
     renderer = LineRenderer(
@@ -353,8 +362,7 @@ def test_line_renderer_id_phase_is_material_owned_not_pick_alias():
         render_mode=LineRenderMode.WorldTube,
     )
 
-    assert renderer.phase_marks == {"opaque", "id"}
-    assert "pick" not in renderer.phase_marks
+    assert renderer.phase_mask == RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID
 
 
 def test_line_renderer_cast_shadow_enables_shadow_material_phase():
@@ -365,7 +373,8 @@ def test_line_renderer_cast_shadow_enables_shadow_material_phase():
         material=material,
         cast_shadow=True,
     )
-    assert billboard.phase_marks == {"opaque", "shadow"}
+    expected = RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID | RENDER_PHASE_SHADOW
+    assert billboard.phase_mask == expected
 
     renderer = LineRenderer(
         points=_line_points(),
@@ -373,13 +382,15 @@ def test_line_renderer_cast_shadow_enables_shadow_material_phase():
         render_mode=LineRenderMode.WorldMesh,
         cast_shadow=True,
     )
-    assert renderer.phase_marks == {"opaque", "shadow"}
+    assert renderer.phase_mask == expected
 
 
 def test_line_renderer_cast_shadow_uses_default_shadow_phase_when_material_lacks_one():
     renderer = LineRenderer(points=_line_points(), cast_shadow=True)
 
-    assert renderer.phase_marks == {"opaque", "shadow"}
+    assert renderer.phase_mask == (
+        RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID | RENDER_PHASE_SHADOW
+    )
 
 
 def test_mesh_renderer_get_phases_for_mark_returns_non_owning_phase_refs():
@@ -545,7 +556,7 @@ def test_line_renderer_mesh_mode_skips_shadow_when_cast_shadow_is_disabled():
         render_mode=LineRenderMode.WorldMesh,
     )
 
-    assert renderer.phase_marks == {"opaque"}
+    assert renderer.phase_mask == RENDER_PHASE_OPAQUE | RENDER_PHASE_DEPTH | RENDER_PHASE_ID
 
 
 def test_line_renderer_world_tube_is_gpu_direct_mode():
@@ -616,17 +627,23 @@ def test_world_text_component_defaults_to_transparent_direct_draw():
     assert text.depth_test is True
     assert text.depth_write is False
     assert text.blend is True
-    assert text.phase_marks == {"transparent"}
+    assert text.phase_mask == RENDER_PHASE_TRANSPARENT | RENDER_PHASE_ID
 
 
 def test_world_text_component_hides_empty_text_from_draw_contract():
     text = WorldTextComponent()
 
-    assert text.phase_marks == set()
+    assert text.phase_mask == 0
 
-    text.text = "A"
-    text.phase_mark = "overlay"
-    assert text.phase_marks == {"overlay"}
+    names = [""] * 48
+    names[0] = "overlay"
+    configure_project_render_phases(names)
+    try:
+        text.text = "A"
+        text.phase_mark = "overlay"
+        assert text.phase_mask == find_render_phase("overlay") | RENDER_PHASE_ID
+    finally:
+        configure_project_render_phases([""] * 48)
 
 
 def test_world_text_component_is_inspectable():

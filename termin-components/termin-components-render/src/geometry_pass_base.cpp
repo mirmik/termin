@@ -26,16 +26,16 @@ tc_material_phase* resolve_render_item_material_phase(const tc_render_item& item
 }
 
 RenderItemTaskPlanningContract geometry_task_planning_contract(
-    RenderItemPassSemantic semantic,
+    tc_phase_mask phase,
     const MaterialPipelinePassContract& shader_contract,
     const char* debug_pass_name)
 {
     RenderItemTaskPlanningContract contract{};
-    contract.pass_semantic = semantic;
+    contract.phase = phase;
     contract.material_phase_policy = RenderItemMaterialPhasePolicy::Optional;
     contract.provided_input_mask =
         render_item_task_input_bit(RenderItemTaskInput::DrawContext);
-    if (semantic == RenderItemPassSemantic::Id) {
+    if (phase == TC_PHASE_ID) {
         contract.provided_input_mask |=
             render_item_task_input_bit(RenderItemTaskInput::OverrideColor);
     }
@@ -53,13 +53,13 @@ bool plan_geometry_item_shader(
     const tc_render_item& item,
     tc_material_phase* phase,
     tc_shader_handle candidate_shader,
-    RenderItemPassSemantic semantic,
+    tc_phase_mask requested_phase,
     const MaterialPipelinePassContract& shader_contract,
     const char* debug_pass_name,
     RenderTaskList& tasks)
 {
     RenderItemTaskPlanningContract contract = geometry_task_planning_contract(
-        semantic,
+        requested_phase,
         shader_contract,
         debug_pass_name);
     RenderItemTaskPlanningRequest request{};
@@ -153,6 +153,13 @@ void GeometryPassBase::collect_shader_usages(
             get_pass_name().c_str());
         return;
     }
+    const tc_phase_mask collect_phase = tc_phase_find(collect_phase_mark);
+    if (collect_phase == TC_PHASE_NONE) {
+        tc::Log::error(
+            "[GeometryPassBase] pass '%s' requests unregistered phase '%s'",
+            get_pass_name().c_str(), collect_phase_mark);
+        return;
+    }
 
     tc_shader_handle base_shader = shader_usage_base_shader();
     if (tc_shader_handle_is_invalid(base_shader)) {
@@ -168,8 +175,7 @@ void GeometryPassBase::collect_shader_usages(
         const std::function<void(TcShader)>* emit = nullptr;
         tc_shader_handle base_shader = tc_shader_handle_invalid();
         MaterialPipelinePassContract pass_contract;
-        RenderItemPassSemantic pass_semantic = RenderItemPassSemantic::Color;
-        const char* phase_mark = nullptr;
+        tc_phase_mask phase = TC_PHASE_NONE;
         std::string pass_name;
     };
 
@@ -185,11 +191,13 @@ void GeometryPassBase::collect_shader_usages(
         }
 
         tc_render_item_collect_context item_context{};
-        item_context.phase_mark = ctx->phase_mark;
+        if (!tc_phase_mask_contains(tc_component_phase_mask(c), ctx->phase)) {
+            return true;
+        }
+        item_context.phase = ctx->phase;
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = UINT64_MAX;
         item_context.render_category_mask = UINT64_MAX;
-        item_context.pass_semantic = static_cast<uint32_t>(ctx->pass_semantic);
         item_context.debug_pass_name = ctx->pass_name.c_str();
         item_context.pass_contract = &ctx->pass_contract;
 
@@ -199,7 +207,7 @@ void GeometryPassBase::collect_shader_usages(
         }
 
         for (const tc_render_item& item : items.items) {
-            if (!render_item_encoder_supports_pass(item.kind, ctx->pass_semantic)) {
+            if (!render_item_encoder_supports_phase(item.kind, ctx->phase)) {
                 continue;
             }
 
@@ -218,7 +226,7 @@ void GeometryPassBase::collect_shader_usages(
                         ? resolve_render_item_material_phase(item)
                         : nullptr,
                     original_shader,
-                    ctx->pass_semantic,
+                    ctx->phase,
                     ctx->pass_contract,
                     ctx->pass_name.c_str(),
                     tasks)) {
@@ -237,8 +245,7 @@ void GeometryPassBase::collect_shader_usages(
         &emit,
         base_shader,
         shader_pass_contract(),
-        render_item_pass_semantic(),
-        collect_phase_mark,
+        collect_phase,
         get_pass_name()};
 
     tc_scene_foreach_drawable(scene, callback, &context, TC_SCENE_FILTER_NONE, 0);
@@ -266,9 +273,15 @@ void GeometryPassBase::collect_draw_calls(
             get_pass_name().c_str());
         return;
     }
+    const tc_phase_mask collect_phase = tc_phase_find(collect_phase_mark);
+    if (collect_phase == TC_PHASE_NONE) {
+        tc::Log::error(
+            "[GeometryPassBase] pass '%s' requests unregistered phase '%s'",
+            get_pass_name().c_str(), collect_phase_mark);
+        return;
+    }
 
     const MaterialPipelinePassContract pass_contract = shader_pass_contract();
-    const RenderItemPassSemantic pass_semantic = render_item_pass_semantic();
     const std::string pass_name = get_pass_name();
     const auto& items = snapshot.items();
 
@@ -285,14 +298,15 @@ void GeometryPassBase::collect_draw_calls(
         tc_component* component = representative.component;
         Entity ent(component ? component->owner : TC_ENTITY_HANDLE_INVALID);
         if (!component || !ent.valid() || !entity_filter(ent) ||
-            !render_item_encoder_supports_pass(representative.kind, pass_semantic)) {
+            !tc_phase_mask_contains(tc_component_phase_mask(component), collect_phase) ||
+            !render_item_encoder_supports_phase(representative.kind, collect_phase)) {
             group_begin = group_end;
             continue;
         }
 
         size_t selected_index = group_begin;
         for (size_t i = group_begin; i < group_end; ++i) {
-            if (render_item_matches_phase(items[i], collect_phase_mark)) {
+            if (render_item_matches_phase(items[i], collect_phase)) {
                 selected_index = i;
                 break;
             }
@@ -301,7 +315,7 @@ void GeometryPassBase::collect_draw_calls(
         tc_material_phase* selected_phase = nullptr;
         tc_shader_handle original_shader = base_shader;
         if (uses_material_phase_shader_override() &&
-            render_item_matches_phase(item, collect_phase_mark)) {
+            render_item_matches_phase(item, collect_phase)) {
             selected_phase = resolve_render_item_material_phase(item);
             if (selected_phase && !tc_shader_handle_is_invalid(selected_phase->shader)) {
                 original_shader = selected_phase->shader;
@@ -313,7 +327,7 @@ void GeometryPassBase::collect_draw_calls(
                 item,
                 selected_phase,
                 original_shader,
-                pass_semantic,
+                collect_phase,
                 pass_contract,
                 pass_name.c_str(),
                 planned_shader)) {

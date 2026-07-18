@@ -11,6 +11,7 @@ This Python module handles persistence and synchronization.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -19,7 +20,9 @@ from typing import Optional
 
 from tcbase import log
 from termin.render import (
+    PROJECT_RENDER_PHASE_CAPACITY,
     RenderSyncMode as CRenderSyncMode,
+    configure_project_render_phases,
     set_render_sync_mode as c_set_render_sync_mode,
 )
 from termin.project.resource_paths import normalize_project_resource_paths
@@ -28,6 +31,11 @@ SERVICE_RESOURCE_IGNORE_PATHS: tuple[str, ...] = (".termin",)
 DEFAULT_PLAYER_WINDOW_WIDTH = 1280
 DEFAULT_PLAYER_WINDOW_HEIGHT = 720
 DEFAULT_PLAYER_WINDOW_FULLSCREEN = True
+_BUILTIN_RENDER_PHASE_NAMES = frozenset({
+    "opaque", "transparent", "normal", "depth", "id", "shadow", "ui",
+    "editor", "editor_debug", "editor_debug_transparent",
+})
+_RENDER_PHASE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 class RenderSyncMode(Enum):
@@ -113,6 +121,10 @@ class ProjectSettings:
     # Project-relative files/directories excluded from resource discovery,
     # live file watching, and project build manifests.
     ignored_resource_paths: list[str] = field(default_factory=list)
+    # Indexed project render-phase registry. Slot N maps to runtime bit 16+N.
+    render_phase_names: list[str] = field(
+        default_factory=lambda: [""] * PROJECT_RENDER_PHASE_CAPACITY
+    )
     player_window: ProjectPlayerWindowSettings = field(default_factory=ProjectPlayerWindowSettings)
 
     def to_dict(self) -> dict:
@@ -121,6 +133,7 @@ class ProjectSettings:
             "render_sync_mode": self.render_sync_mode.value,
             "build_output_dir": self.build_output_dir,
             "ignored_resource_paths": list(self.ignored_resource_paths),
+            "render_phase_names": list(self.render_phase_names),
             "player_window": self.player_window.to_dict(),
         }
 
@@ -143,12 +156,14 @@ class ProjectSettings:
             data.get("ignored_resource_paths", []),
             field_name="ignored_resource_paths",
         )
+        render_phase_names = _normalize_render_phase_names(data.get("render_phase_names"))
         player_window = ProjectPlayerWindowSettings.from_dict(data.get("player_window"))
 
         return ProjectSettings(
             render_sync_mode=sync_mode,
             build_output_dir=build_output_dir,
             ignored_resource_paths=ignored_resource_paths,
+            render_phase_names=render_phase_names,
             player_window=player_window,
         )
 
@@ -217,6 +232,7 @@ class ProjectSettingsManager:
     def _sync_to_c(self) -> None:
         """Sync Python settings to C global state."""
         c_set_render_sync_mode(self._settings.render_sync_mode.to_c())
+        configure_project_render_phases(self._settings.render_phase_names)
 
     def save(self) -> bool:
         """Save settings to file."""
@@ -257,6 +273,13 @@ class ProjectSettingsManager:
             values,
             field_name="ignored_resource_paths",
         )
+        self.save()
+
+    def set_render_phase_names(self, values: list[str]) -> None:
+        """Replace the indexed project render-phase registry and save it."""
+        normalized = _normalize_render_phase_names(values)
+        configure_project_render_phases(normalized)
+        self._settings.render_phase_names = normalized
         self.save()
 
     def set_player_window(self, width: int, height: int, fullscreen: bool) -> None:
@@ -334,6 +357,37 @@ def _normalize_project_relative_dir(value: object, *, fallback: str, field_name:
         return fallback
 
     return rel_path.as_posix()
+
+
+def _normalize_render_phase_names(value: object) -> list[str]:
+    if value is None:
+        return [""] * PROJECT_RENDER_PHASE_CAPACITY
+    if not isinstance(value, list) or len(value) != PROJECT_RENDER_PHASE_CAPACITY:
+        raise ValueError(
+            "render_phase_names must be a list with exactly "
+            f"{PROJECT_RENDER_PHASE_CAPACITY} entries"
+        )
+
+    result: list[str] = []
+    used: set[str] = set()
+    for index, raw_name in enumerate(value):
+        if not isinstance(raw_name, str):
+            raise ValueError(f"render_phase_names[{index}] must be a string")
+        name = raw_name.strip()
+        if not name:
+            result.append("")
+            continue
+        if name in _BUILTIN_RENDER_PHASE_NAMES:
+            raise ValueError(
+                f"render_phase_names[{index}] duplicates built-in phase '{name}'"
+            )
+        if not _RENDER_PHASE_NAME_PATTERN.fullmatch(name):
+            raise ValueError(f"render_phase_names[{index}] has invalid name '{name}'")
+        if name in used:
+            raise ValueError(f"render phase '{name}' is assigned more than once")
+        used.add(name)
+        result.append(name)
+    return result
 
 
 def _normalize_project_relative_paths(value: object, *, field_name: str) -> list[str]:

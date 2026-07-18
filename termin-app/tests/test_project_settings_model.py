@@ -32,6 +32,7 @@ def test_project_settings_controller_persists_normalizes_and_notifies(tmp_path):
             player_height=1080,
             player_fullscreen=False,
             ignored_resource_paths=(" cache ", "cache", "generated/assets"),
+            render_phase_names=initial.render_phase_names,
         )
     )
 

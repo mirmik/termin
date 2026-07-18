@@ -203,6 +203,7 @@ class PlayerRuntime:
         mcp_enabled: bool = False,
         mcp_options: dict | None = None,
         player_window: "ProjectPlayerWindowSettings | None" = None,
+        render_phase_names: tuple[str, ...] | None = None,
         engine=None,
     ):
         self.project_path = Path(project_path)
@@ -218,6 +219,11 @@ class PlayerRuntime:
         self.height = window_settings.height
         self.title = title
         self.fullscreen = window_settings.fullscreen
+        self.render_phase_names = (
+            render_phase_names
+            if render_phase_names is not None
+            else load_project_runtime_settings(self.project_path).render_phase_names
+        )
         self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
         self.app_manifest_path = Path(app_manifest_path) if app_manifest_path is not None else None
         self.mcp_enabled = bool(mcp_enabled)
@@ -271,6 +277,8 @@ class PlayerRuntime:
         from termin.bootstrap import bootstrap_player
 
         bootstrap_player()
+        from termin.render import configure_project_render_phases
+        configure_project_render_phases(self.render_phase_names)
         self._configure_backend_default()
 
         # Load the app render bindings before resource preloaders touch
@@ -1053,6 +1061,11 @@ def run_bundle(
         asset_manifest_path=manifest_path,
         app_manifest_path=app_path,
         player_window=_player_window_from_manifest(app_data, app_path),
+        render_phase_names=tuple(
+            runtime_manifest.get("render_phase_names", [])
+            if isinstance(runtime_manifest, dict)
+            else []
+        ) or None,
         mcp_enabled=mcp_enabled,
         mcp_options=manifest_mcp_options,
     )

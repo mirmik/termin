@@ -6,7 +6,7 @@ VoxelizerComponent — компонент для вокселизации меш
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, List, Set
+from typing import TYPE_CHECKING, Optional, List
 
 import numpy as np
 
@@ -192,13 +192,13 @@ class VoxelizerComponent(DrawableComponent):
     GEOMETRY_TRIANGULATED = 6
 
     @property
-    def phase_marks(self) -> Set[str]:
-        """Фазы рендеринга для отладочной визуализации."""
-        return self._debug_draw.phase_marks(self)
+    def phase_mask(self) -> int:
+        """Битовая маска фаз отладочной визуализации."""
+        return self._debug_draw.phase_mask(self)
 
     def collect_render_items(self, context: RenderItemCollectContext) -> list[RenderItem]:
         """Возвращает RenderItems для отладочного рендеринга."""
-        return self._debug_draw.collect_render_items(self, context.phase_mark)
+        return self._debug_draw.collect_render_items(self, context.phase)
 
     def _get_or_create_debug_material(self) -> Material:
         """Создаёт материал для отладочной визуализации."""

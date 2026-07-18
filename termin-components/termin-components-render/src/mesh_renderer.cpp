@@ -517,28 +517,28 @@ void MeshRenderer::apply_pending_override_data() {
     _pending_override_data = tc_value_nil();
 }
 
-std::set<std::string> MeshRenderer::get_phase_marks() const {
-    std::set<std::string> marks;
-
-    tc_material* mat = get_material_ptr();
-    if (mat) {
-        for (size_t i = 0; i < mat->phase_count; i++) {
-            marks.insert(mat->phases[i].phase_mark);
+tc_phase_mask MeshRenderer::get_phase_mask() const {
+    tc_phase_mask mask = TC_PHASE_NONE;
+    auto add_material = [&mask](const tc_material* material) {
+        if (!material) return;
+        for (size_t i = 0; i < material->phase_count; ++i) {
+            mask |= material->phases[i].phase;
         }
-    }
+    };
+    add_material(get_material_ptr());
     for (size_t slot = 0; slot < materials.size(); ++slot) {
-        tc_material* slot_mat = get_material_ptr_for_slot(slot);
-        if (!slot_mat) continue;
-        for (size_t i = 0; i < slot_mat->phase_count; i++) {
-            marks.insert(slot_mat->phases[i].phase_mark);
+        add_material(get_material_ptr_for_slot(slot));
+    }
+    if (current_mesh_ptr()) {
+        mask |= TC_PHASE_DEPTH | TC_PHASE_ID;
+        if (tc_vertex_layout_find(&current_mesh_ptr()->layout, "normal")) {
+            mask |= TC_PHASE_NORMAL;
         }
     }
-
     if (cast_shadow) {
-        marks.insert("shadow");
+        mask |= TC_PHASE_SHADOW;
     }
-
-    return marks;
+    return mask;
 }
 
 Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
@@ -554,7 +554,7 @@ Mat44f MeshRenderer::get_model_matrix(const Entity& entity) const {
 
 static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
     tc_material* mat,
-    const std::string* phase_mark
+    const tc_phase_mask* requested_phase
 );
 
 void MeshRenderer::populate_mesh_render_item(tc_render_item& item) {
@@ -609,11 +609,9 @@ bool MeshRenderer::collect_render_items(
             continue;
         }
 
-        const bool collect_all_phases =
-            !context.phase_mark || context.phase_mark[0] == '\0';
-        std::string phase_mark = collect_all_phases ? std::string() : context.phase_mark;
+        const bool collect_all_phases = context.phase == TC_PHASE_NONE;
         std::vector<tc_material_phase*> phases =
-            mesh_renderer_phases_for_mark(mat, collect_all_phases ? nullptr : &phase_mark);
+            mesh_renderer_phases_for_mark(mat, collect_all_phases ? nullptr : &context.phase);
         const bool emit_without_material_phase =
             phases.empty() &&
             ((context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u);
@@ -663,16 +661,16 @@ std::vector<tc_material_phase*> MeshRenderer::get_phases_for_mark(const std::str
 
 static std::vector<tc_material_phase*> mesh_renderer_phases_for_mark(
     tc_material* mat,
-    const std::string* phase_mark
+    const tc_phase_mask* requested_phase
 ) {
     std::vector<tc_material_phase*> phases;
     if (!mat) return phases;
 
-    if (phase_mark) {
+    if (requested_phase) {
         tc_material_phase* matched[TC_MATERIAL_MAX_PHASES];
-        size_t count = tc_material_get_phases_for_mark(
+        size_t count = tc_material_get_phases_for_phase(
             mat,
-            phase_mark->c_str(),
+            *requested_phase,
             matched,
             TC_MATERIAL_MAX_PHASES);
         phases.reserve(count);

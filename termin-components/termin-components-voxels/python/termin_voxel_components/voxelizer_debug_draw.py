@@ -123,18 +123,19 @@ VOXELIZER_DEBUG_LAYERS = (
 
 
 class VoxelizerDebugDrawService:
-    def phase_marks(self, component) -> set[str]:
-        marks: set[str] = set()
+    def phase_mask(self, component) -> int:
+        mask = 0
         for layer in VOXELIZER_DEBUG_LAYERS:
             if layer.enabled(component):
                 mat = layer.material(component)
-                marks.update(p.phase_mark for p in mat.phases)
-        return marks
+                for phase in mat.phases:
+                    mask |= phase.phase
+        return mask
 
     def collect_render_items(
         self,
         component,
-        phase_mark: str,
+        phase: int,
     ) -> list[RenderItem]:
         result: list[RenderItem] = []
         for layer in VOXELIZER_DEBUG_LAYERS:
@@ -145,10 +146,10 @@ class VoxelizerDebugDrawService:
                 continue
 
             mat = layer.material(component)
-            if phase_mark == "":
+            if phase == 0:
                 phases = list(mat.phases)
             else:
-                phases = [p for p in mat.phases if p.phase_mark == phase_mark]
+                phases = [p for p in mat.phases if p.phase == phase]
             if layer.configure_phases is not None:
                 layer.configure_phases(component, phases)
 

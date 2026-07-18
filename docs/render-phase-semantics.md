@@ -135,8 +135,8 @@ When adding a render pass:
 
 When adding a drawable:
 
-- return only the labels the drawable actually supports from
-  `get_phase_marks()`;
+- return only the registered phase bits the drawable actually supports from
+  `get_phase_mask()`/`phase_mask`;
 - submit renderable work through RenderItems from `collect_render_items()`;
 - submit actual draw work through RenderItems and registered encoders, not
   drawable-owned backend draw calls;

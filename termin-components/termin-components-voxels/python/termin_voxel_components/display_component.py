@@ -9,7 +9,7 @@ VoxelDisplayComponent — компонент для отображения во�
 
 from __future__ import annotations
 
-from typing import Optional, Set, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
@@ -228,10 +228,13 @@ class VoxelDisplayComponent(DrawableComponent):
     # --- Drawable protocol ---
 
     @property
-    def phase_marks(self) -> Set[str]:
-        """Фазы рендеринга."""
+    def phase_mask(self) -> int:
+        """Битовая маска фаз рендеринга."""
         mat = self._get_or_create_material()
-        return {p.phase_mark for p in mat.phases}
+        mask = 0
+        for phase in mat.phases:
+            mask |= phase.phase
+        return mask
 
     def _check_hot_reload(self) -> None:
         """Проверяет, изменился ли grid в keeper (hot-reload)."""
@@ -249,10 +252,10 @@ class VoxelDisplayComponent(DrawableComponent):
 
         mat = self._get_or_create_material()
 
-        if context.phase_mark == "":
+        if context.phase == 0:
             phases = list(mat.phases)
         else:
-            phases = [p for p in mat.phases if p.phase_mark == context.phase_mark]
+            phases = [p for p in mat.phases if p.phase == context.phase]
 
         # Обновляем uniforms перед возвратом фаз
         # (ColorPass вызовет phase.apply() который загрузит их в GPU)

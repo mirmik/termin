@@ -117,7 +117,7 @@ std::vector<termin::TcShader> plan_line_shader_usages(
         static_cast<uint32_t>(termin::LineRenderMode::WorldTube);
 
     termin::RenderItemTaskPlanningContract contract{};
-    contract.pass_semantic = termin::RenderItemPassSemantic::Color;
+    contract.phase = TC_PHASE_OPAQUE;
     contract.material_phase_policy = termin::RenderItemMaterialPhasePolicy::Optional;
     contract.provided_input_mask = termin::render_item_task_input_bit(
         termin::RenderItemTaskInput::DrawContext);
@@ -248,7 +248,8 @@ TEST_CASE("MeshRenderer render items are permissive for pass phase labels") {
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "custom_depth";
+    REQUIRE(tc_phase_set_project_name(0, "custom_depth"));
+    collect_context.phase = tc_phase_find("custom_depth");
     collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
     collect_context.debug_pass_name = "test";
 
@@ -301,7 +302,7 @@ TEST_CASE("MeshRenderer emits mesh render items through drawable protocol") {
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "opaque";
+    collect_context.phase = TC_PHASE_OPAQUE;
     collect_context.debug_pass_name = "test";
 
     termin::RenderItemCollection collection;
@@ -363,7 +364,7 @@ TEST_CASE("MeshRenderer can emit material-phaseless mesh render items for pick p
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "pick";
+    collect_context.phase = TC_PHASE_ID;
     collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
     collect_context.debug_pass_name = "IdPass";
 
@@ -400,7 +401,7 @@ TEST_CASE("LineRenderer emits direct modes as line batch render items") {
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "opaque";
+    collect_context.phase = TC_PHASE_OPAQUE;
     collect_context.debug_pass_name = "test";
 
     termin::RenderItemCollection collection;
@@ -437,14 +438,14 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
     tc_shader_init();
 
     termin::LineRenderer::register_type();
-    CHECK(termin::render_item_encoder_supports_pass(
+    CHECK(termin::render_item_encoder_supports_phase(
         TC_RENDER_ITEM_KIND_LINE_BATCH,
-        termin::RenderItemPassSemantic::Id));
+        TC_PHASE_ID));
     termin::RenderItemEncoderCapabilities line_capabilities{};
     REQUIRE(termin::get_render_item_encoder_capabilities(
         TC_RENDER_ITEM_KIND_LINE_BATCH,
         line_capabilities));
-    CHECK(line_capabilities.pass_semantic_mask != 0u);
+    CHECK(line_capabilities.phase_mask != TC_PHASE_NONE);
     CHECK(line_capabilities.supported_task_input_mask ==
         (termin::render_item_task_input_bit(termin::RenderItemTaskInput::DrawContext)
          | termin::render_item_task_input_bit(termin::RenderItemTaskInput::ModelMatrix)
@@ -473,7 +474,7 @@ TEST_CASE("LineRenderer can emit material-phaseless line render items for pick p
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "pick";
+    collect_context.phase = TC_PHASE_ID;
     collect_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
     collect_context.debug_pass_name = "IdPass";
 
@@ -520,7 +521,7 @@ TEST_CASE("LineRenderer keeps mesh modes on mesh render item path") {
     entity.add_component(renderer);
 
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "opaque";
+    collect_context.phase = TC_PHASE_OPAQUE;
     collect_context.debug_pass_name = "test";
 
     termin::RenderItemCollection collection;
@@ -558,7 +559,7 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     entity.add_component(text);
 
     tc_render_item_collect_context collect_context{};
-    collect_context.phase_mark = "transparent";
+    collect_context.phase = TC_PHASE_TRANSPARENT;
     collect_context.debug_pass_name = "ColorPass";
 
     termin::RenderItemCollection collection;
@@ -587,9 +588,7 @@ TEST_CASE("WorldTextComponent emits text batch render items with owned text payl
     CHECK(item.payload.text_batch.local_offset.z == 3.0);
 
     tc_render_item_collect_context id_collect_context{};
-    id_collect_context.phase_mark = "id";
-    id_collect_context.pass_semantic =
-        static_cast<uint32_t>(termin::RenderItemPassSemantic::Id);
+    id_collect_context.phase = TC_PHASE_ID;
     id_collect_context.debug_pass_name = "IdPass";
     termin::RenderItemCollection id_collection;
     REQUIRE(termin::collect_drawable_render_items(

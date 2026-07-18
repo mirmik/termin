@@ -7,7 +7,7 @@ Implements Drawable protocol for integration with ColorPass.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Set
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
@@ -86,17 +86,17 @@ class NavMeshMaterialComponent(DrawableComponent):
     # --- Drawable protocol ---
 
     @property
-    def phase_marks(self) -> Set[str]:
-        """Get phase marks from material."""
+    def phase_mask(self) -> int:
+        """Get the material render-phase mask."""
         mat = self._material
         if mat is None:
-            return set()
-        marks: Set[str] = set()
+            return 0
+        mask = 0
         for i in range(mat.phase_count):
             phase = mat.get_phase(i)
             if phase is not None:
-                marks.add(phase.phase_mark)
-        return marks
+                mask |= phase.phase
+        return mask
 
     def _check_hot_reload(self) -> None:
         """Check if navmesh changed (hot-reload)."""
@@ -122,7 +122,7 @@ class NavMeshMaterialComponent(DrawableComponent):
             phase = mat.get_phase(i)
             if phase is None:
                 continue
-            if context.phase_mark == "" or phase.phase_mark == context.phase_mark:
+            if context.phase == 0 or phase.phase == context.phase:
                 phases.append(phase)
 
         phases.sort(key=lambda p: p.priority)

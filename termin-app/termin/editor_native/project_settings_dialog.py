@@ -45,6 +45,7 @@ class NativeProjectSettingsDialog:
     player_height: object
     player_fullscreen: object
     ignored_paths: object
+    render_phases: object
     status: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
@@ -79,6 +80,7 @@ class NativeProjectSettingsDialog:
             ignored_resource_paths=tuple(
                 line.strip() for line in self.ignored_paths.text.splitlines() if line.strip()
             ),
+            render_phase_names=tuple(self.render_phases.text.split("\n")),
         )
 
     def apply_snapshot(self, snapshot: ProjectSettingsSnapshot) -> None:
@@ -90,6 +92,7 @@ class NativeProjectSettingsDialog:
             self.player_height.value = snapshot.player_height
             self.player_fullscreen.checked = snapshot.player_fullscreen
             self.ignored_paths.text = "\n".join(snapshot.ignored_resource_paths)
+            self.render_phases.text = "\n".join(snapshot.render_phase_names)
             self.status.text = "Project settings are stored in project_settings/project.json"
         finally:
             self._updating = False
@@ -165,7 +168,13 @@ def build_native_project_settings_dialog(
     root.add_fixed_child(fullscreen_row, EDITOR_UI_METRICS.field_row)
     root.add_fixed_child(document.create_label("Ignored Resource Paths"), EDITOR_UI_METRICS.section_row)
     ignored = document.create_text_area()
-    root.add_stretch_child(_ref(document, ignored))
+    root.add_fixed_child(_ref(document, ignored), 120.0)
+    root.add_fixed_child(
+        document.create_label("Project Render Phases (bits 16-63; one indexed slot per line)"),
+        EDITOR_UI_METRICS.section_row,
+    )
+    render_phases = document.create_text_area()
+    root.add_stretch_child(_ref(document, render_phases))
     status = document.create_status_bar("Project settings")
     root.add_fixed_child(_ref(document, status), EDITOR_UI_METRICS.status_row)
     dialog = document.create_dialog("Project Settings")
@@ -182,6 +191,7 @@ def build_native_project_settings_dialog(
         height,
         fullscreen,
         ignored,
+        render_phases,
         status,
         viewport,
         request_render,

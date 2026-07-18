@@ -52,11 +52,8 @@ protected:
     std::array<float, 4> clear_color() const override { return {0.0f, 0.0f, 0.0f, 0.0f}; }
     // Public picking representation label. Object-id shader resources and
     // vertex layout are declared by shader_pass_contract(), not by this string.
-    const char* phase_mark() const override { return "pick"; }
+    const char* phase_mark() const override { return "id"; }
     MaterialPipelinePassContract shader_pass_contract() const override;
-    RenderItemPassSemantic render_item_pass_semantic() const override {
-        return RenderItemPassSemantic::Id;
-    }
     tc_shader_handle shader_usage_base_shader() const override;
 
     bool entity_filter(const Entity& ent) const override {

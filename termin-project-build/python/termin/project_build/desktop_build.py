@@ -169,6 +169,7 @@ def _package_desktop_target(
                 },
                 "native_library_dirs": _runtime_native_library_dirs(context.dist_dir, runtime_result),
                 "window": project_settings.player_window.to_dict(),
+                "render_phase_names": list(project_settings.render_phase_names),
                 "mcp": {
                     "enabled": False,
                     "host": "127.0.0.1",

@@ -156,11 +156,12 @@ void fill_depth_draw_model(DepthDrawStd140& draw, const tc_render_item& item)
 }
 
 RenderItemTaskPlanningContract depth_only_task_planning_contract(
+    tc_phase_mask phase,
     const MaterialPipelinePassContract& shader_contract,
     const char* debug_pass_name)
 {
     RenderItemTaskPlanningContract contract{};
-    contract.pass_semantic = RenderItemPassSemantic::DepthOnly;
+    contract.phase = phase;
     contract.material_phase_policy = RenderItemMaterialPhasePolicy::Optional;
     contract.provided_input_mask =
         render_item_task_input_bit(RenderItemTaskInput::DrawContext);
@@ -178,12 +179,13 @@ bool plan_depth_only_item_shader(
     const tc_render_item& item,
     tc_material_phase* phase,
     tc_shader_handle candidate_shader,
+    tc_phase_mask requested_phase,
     const MaterialPipelinePassContract& shader_contract,
     const char* debug_pass_name,
     RenderTaskList& tasks)
 {
     RenderItemTaskPlanningContract contract =
-        depth_only_task_planning_contract(shader_contract, debug_pass_name);
+        depth_only_task_planning_contract(requested_phase, shader_contract, debug_pass_name);
     RenderItemTaskPlanningRequest request{};
     request.item = &item;
     request.material_phase = phase;
@@ -529,6 +531,13 @@ void DepthOnlyPass::collect_draw_calls(
 
     const MaterialPipelinePassContract pass_contract =
         depth_material_pass_contract("depth_only");
+    const tc_phase_mask requested_phase = tc_phase_find(pass_phase_mark.c_str());
+    if (requested_phase == TC_PHASE_NONE) {
+        tc::Log::error(
+            "[DepthOnlyPass] pass '%s' requests unregistered phase '%s'",
+            get_pass_name().c_str(), pass_phase_mark.c_str());
+        return;
+    }
     const auto& items = snapshot.items();
     for (size_t group_begin = 0; group_begin < items.size();) {
         const tc_render_item& representative = items[group_begin];
@@ -543,23 +552,22 @@ void DepthOnlyPass::collect_draw_calls(
         tc_component* component = representative.component;
         Entity ent(component ? component->owner : TC_ENTITY_HANDLE_INVALID);
         if (!component || !ent.valid() ||
-            !render_item_encoder_supports_pass(
-                representative.kind,
-                RenderItemPassSemantic::DepthOnly)) {
+            !tc_phase_mask_contains(tc_component_phase_mask(component), requested_phase) ||
+            !render_item_encoder_supports_phase(representative.kind, requested_phase)) {
             group_begin = group_end;
             continue;
         }
 
         size_t selected_index = group_begin;
         for (size_t i = group_begin; i < group_end; ++i) {
-            if (render_item_matches_phase(items[i], pass_phase_mark.c_str())) {
+            if (render_item_matches_phase(items[i], requested_phase)) {
                 selected_index = i;
                 break;
             }
         }
         const tc_render_item& item = items[selected_index];
         tc_material_phase* selected_phase =
-            render_item_matches_phase(item, pass_phase_mark.c_str())
+            render_item_matches_phase(item, requested_phase)
                 ? resolve_render_item_material_phase(item)
                 : nullptr;
         tc_shader_handle original_shader = depth_shader_handle_;
@@ -572,6 +580,7 @@ void DepthOnlyPass::collect_draw_calls(
                 item,
                 selected_phase,
                 original_shader,
+                requested_phase,
                 pass_contract,
                 "DepthOnlyPass/Collect",
                 planned_shader)) {
@@ -633,12 +642,14 @@ void DepthOnlyPass::collect_shader_usages(
         }
 
         tc_render_item_collect_context item_context{};
-        item_context.phase_mark = collect_ctx->pass->pass_phase_mark.c_str();
+        const tc_phase_mask phase = tc_phase_find(collect_ctx->pass->pass_phase_mark.c_str());
+        if (!tc_phase_mask_contains(tc_component_phase_mask(c), phase)) {
+            return true;
+        }
+        item_context.phase = phase;
         item_context.flags = TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE;
         item_context.layer_mask = UINT64_MAX;
         item_context.render_category_mask = UINT64_MAX;
-        item_context.pass_semantic =
-            static_cast<uint32_t>(RenderItemPassSemantic::DepthOnly);
         item_context.debug_pass_name = "DepthOnlyPass/ShaderUsage";
         item_context.pass_contract = &collect_ctx->pass_contract;
 
@@ -648,9 +659,7 @@ void DepthOnlyPass::collect_shader_usages(
         }
 
         for (const tc_render_item& item : items.items) {
-            if (!render_item_encoder_supports_pass(
-                    item.kind,
-                    RenderItemPassSemantic::DepthOnly)) {
+            if (!render_item_encoder_supports_phase(item.kind, phase)) {
                 continue;
             }
 
@@ -666,6 +675,7 @@ void DepthOnlyPass::collect_shader_usages(
                     item,
                     phase,
                     original_shader,
+                    item_context.phase,
                     collect_ctx->pass_contract,
                     "DepthOnlyPass/ShaderUsage",
                     tasks)) {

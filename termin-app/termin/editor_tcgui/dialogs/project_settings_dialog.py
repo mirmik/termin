@@ -150,6 +150,18 @@ def show_project_settings_dialog(
     ignored_paths_input.word_wrap = False
     content.add_child(ignored_paths_input)
 
+    phases_label = Label()
+    phases_label.text = "Project Render Phases (bits 16-63):"
+    phases_label.tooltip = "Exactly 48 indexed entries; blank lines reserve unused phase bits."
+    content.add_child(phases_label)
+
+    phases_input = TextArea()
+    phases_input.text = "\n".join(snapshot.render_phase_names)
+    phases_input.preferred_width = px(320)
+    phases_input.preferred_height = px(160)
+    phases_input.word_wrap = False
+    content.add_child(phases_input)
+
     def _ignored_paths_from_text(text: str) -> list[str]:
         return [line.strip() for line in text.splitlines() if line.strip()]
 
@@ -161,6 +173,7 @@ def show_project_settings_dialog(
             player_height=int(height_spin.value),
             player_fullscreen=fullscreen_check.checked,
             ignored_resource_paths=tuple(_ignored_paths_from_text(ignored_paths_input.text)),
+            render_phase_names=tuple(phases_input.text.split("\n")),
         )
 
     def _apply_settings(_button: str) -> None:
