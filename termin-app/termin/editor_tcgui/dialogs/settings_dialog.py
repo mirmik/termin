@@ -122,6 +122,11 @@ def show_settings_dialog(ui) -> None:
     mcp_check.checked = snapshot.mcp_server_enabled
     content.add_child(mcp_check)
 
+    vsync_check = Checkbox()
+    vsync_check.text = "Enable VSync (applies after editor restart)"
+    vsync_check.checked = snapshot.vsync_enabled
+    content.add_child(vsync_check)
+
     # Apply button — applies font changes without closing the dialog
     apply_row = HStack()
     apply_row.spacing = 8
@@ -158,6 +163,7 @@ def show_settings_dialog(ui) -> None:
                     font_size=font_spin.value,
                     font_size_small=font_small_spin.value,
                     mcp_server_enabled=mcp_check.checked,
+                    vsync_enabled=vsync_check.checked,
                 )
             )
 

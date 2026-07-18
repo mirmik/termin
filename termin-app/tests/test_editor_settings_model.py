@@ -10,6 +10,7 @@ class _Settings:
         self.font_size = 14.0
         self.font_size_small = 11.0
         self.mcp_enabled = False
+        self.vsync_enabled = True
         self.sync_count = 0
 
     def get_text_editor(self):
@@ -42,6 +43,12 @@ class _Settings:
     def set_mcp_server_enabled(self, value):
         self.mcp_enabled = value
 
+    def get_vsync_enabled(self):
+        return self.vsync_enabled
+
+    def set_vsync_enabled(self, value):
+        self.vsync_enabled = value
+
     def sync(self):
         self.sync_count += 1
 
@@ -58,6 +65,7 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
             font_size=18.0,
             font_size_small=12.0,
             mcp_server_enabled=True,
+            vsync_enabled=False,
         )
     )
 
@@ -67,10 +75,11 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
     assert settings.font_size == 18.0
     assert settings.font_size_small == 12.0
     assert settings.mcp_enabled is True
+    assert settings.vsync_enabled is False
     assert settings.sync_count == 1
 
     with pytest.raises(ValueError, match="8..32"):
         controller.save(
-            EditorSettingsSnapshot("", "", 40.0, 11.0, False)
+            EditorSettingsSnapshot("", "", 40.0, 11.0, False, True)
         )
     assert settings.sync_count == 1

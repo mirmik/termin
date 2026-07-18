@@ -420,9 +420,14 @@ void bind_sdl(nb::module_& m) {
     //       win.poll_events()
     //       # render into my_color_tex via dev
     //       win.present(my_color_tex)
+    nb::enum_<tgfx::PresentationMode>(m, "PresentationMode")
+        .value("VSYNC", tgfx::PresentationMode::VSync)
+        .value("IMMEDIATE", tgfx::PresentationMode::Immediate);
+
     nb::class_<SDLBackendWindow, BackendWindow>(m, "SDLBackendWindow")
-        .def(nb::init<const std::string&, int, int>(),
-             nb::arg("title"), nb::arg("width"), nb::arg("height"))
+        .def(nb::init<const std::string&, int, int, tgfx::PresentationMode>(),
+             nb::arg("title"), nb::arg("width"), nb::arg("height"),
+             nb::arg("presentation_mode") = tgfx::PresentationMode::VSync)
         .def(nb::init<const std::string&, int, int, SDLBackendWindow&>(),
              nb::arg("title"), nb::arg("width"), nb::arg("height"),
              nb::arg("share_with"),
@@ -437,6 +442,10 @@ void bind_sdl(nb::module_& m) {
                 return std::string(tgfx::backend_name(self.backend_type()));
             },
             "Name of the backend actually created for this window.")
+        .def_prop_ro("presentation_mode", &SDLBackendWindow::presentation_mode,
+            "Presentation mode actually applied to this window group.")
+        .def_prop_ro("requested_presentation_mode", &SDLBackendWindow::requested_presentation_mode,
+            "Presentation mode requested when the primary window was created.")
         // Opaque pointers for cross-module (nanobind) handshakes. Python
         // code in tgfx._tgfx_native calls `Tgfx2Context.borrow(dev_ptr,
         // ctx_ptr)` with these to produce a non-owning holder — we cannot

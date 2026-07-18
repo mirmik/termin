@@ -30,10 +30,12 @@ class EditorSettings:
     KEY_FONT_SIZE_SMALL = "Editor/fontSizeSmall"
     KEY_SLANG_COMPILER = "Shader/slangCompiler"
     KEY_MCP_SERVER_ENABLED = "Editor/mcpServerEnabled"
+    KEY_VSYNC_ENABLED = "Editor/vsyncEnabled"
 
     # Значения по умолчанию
     DEFAULT_FONT_SIZE: float = 14.0
     DEFAULT_FONT_SIZE_SMALL: float = 11.0
+    DEFAULT_VSYNC_ENABLED: bool = True
 
     def __init__(self):
         self._settings = Settings("TerminEditor")
@@ -153,6 +155,14 @@ class EditorSettings:
     def set_mcp_server_enabled(self, enabled: bool) -> None:
         """Persist editor MCP server startup preference."""
         self.set(self.KEY_MCP_SERVER_ENABLED, bool(enabled))
+
+    def get_vsync_enabled(self) -> bool:
+        """Whether editor windows should use synchronized presentation."""
+        return bool(self.get(self.KEY_VSYNC_ENABLED, self.DEFAULT_VSYNC_ENABLED))
+
+    def set_vsync_enabled(self, enabled: bool) -> None:
+        """Persist the presentation preference applied on editor startup."""
+        self.set(self.KEY_VSYNC_ENABLED, bool(enabled))
 
     def get_font_size(self) -> float:
         """Получить базовый размер шрифта."""

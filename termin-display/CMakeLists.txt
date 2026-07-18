@@ -333,6 +333,38 @@ if(TERMIN_DISPLAY_BUILD_TESTS)
             SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL")
         termin_add_test_labels(backend_window_triangle
             "termin:capability:window")
+
+        add_test(NAME backend_window_triangle_immediate COMMAND backend_window_triangle)
+        set_tests_properties(backend_window_triangle_immediate PROPERTIES
+            TIMEOUT 10
+            ENVIRONMENT "TERMIN_BACKEND=opengl;TERMIN_TEST_PRESENTATION_MODE=immediate"
+            SKIP_RETURN_CODE 77
+            SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device")
+        termin_add_test_labels(backend_window_triangle_immediate
+            "termin:capability:window"
+            "termin:capability:opengl")
+
+        if(TGFX2_ENABLE_VULKAN)
+            add_test(NAME backend_window_triangle_vulkan_vsync COMMAND backend_window_triangle)
+            set_tests_properties(backend_window_triangle_vulkan_vsync PROPERTIES
+                TIMEOUT 10
+                ENVIRONMENT "TERMIN_BACKEND=vulkan;TERMIN_TEST_PRESENTATION_MODE=vsync"
+                SKIP_RETURN_CODE 77
+                SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL|No Vulkan physical devices found")
+            termin_add_test_labels(backend_window_triangle_vulkan_vsync
+                "termin:capability:window"
+                "termin:capability:vulkan")
+
+            add_test(NAME backend_window_triangle_vulkan_immediate COMMAND backend_window_triangle)
+            set_tests_properties(backend_window_triangle_vulkan_immediate PROPERTIES
+                TIMEOUT 10
+                ENVIRONMENT "TERMIN_BACKEND=vulkan;TERMIN_TEST_PRESENTATION_MODE=immediate"
+                SKIP_RETURN_CODE 77
+                SKIP_REGULAR_EXPRESSION "SDL_InitSubSystem failed|No available video device|Vulkan support is either not configured in SDL|No Vulkan physical devices found")
+            termin_add_test_labels(backend_window_triangle_vulkan_immediate
+                "termin:capability:window"
+                "termin:capability:vulkan")
+        endif()
     endif()
 
     if(TERMIN_DISPLAY_HAS_SDL AND TGFX2_ENABLE_D3D11 AND TERMIN_DISPLAY_BUILD_D3D11_WINDOW_TEST)

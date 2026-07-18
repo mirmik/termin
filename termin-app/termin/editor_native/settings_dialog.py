@@ -34,6 +34,7 @@ class NativeSettingsDialog:
     font_size: object
     font_size_small: object
     mcp_enabled: object
+    vsync_enabled: object
     status: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
@@ -58,6 +59,7 @@ class NativeSettingsDialog:
             font_size=self.font_size.value,
             font_size_small=self.font_size_small.value,
             mcp_server_enabled=self.mcp_enabled.checked,
+            vsync_enabled=self.vsync_enabled.checked,
         )
 
     def apply_snapshot(self, snapshot: EditorSettingsSnapshot) -> None:
@@ -66,7 +68,8 @@ class NativeSettingsDialog:
         self.font_size.value = snapshot.font_size
         self.font_size_small.value = snapshot.font_size_small
         self.mcp_enabled.checked = snapshot.mcp_server_enabled
-        self.status.text = "MCP setting takes effect on the next editor start"
+        self.vsync_enabled.checked = snapshot.vsync_enabled
+        self.status.text = "VSync and MCP startup changes take effect after editor restart"
 
     def apply_live(self) -> None:
         snapshot = self.controller.validate(self.snapshot())
@@ -148,7 +151,7 @@ def build_native_settings_dialog(
 ) -> NativeSettingsDialog:
     root = document.create_vstack("native-settings-dialog")
     root.stable_id = "editor.settings"
-    root.preferred_size = Size(560.0, 430.0)
+    root.preferred_size = Size(560.0, 470.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     editor_row, text_editor, editor_browse = _path_row(document, "External Text Editor")
@@ -164,6 +167,14 @@ def build_native_settings_dialog(
     root.add_fixed_child(font_row, EDITOR_UI_METRICS.field_row)
     small_row, font_size_small = _spin_row(document, "Font Size (small)", 8.0, 24.0)
     root.add_fixed_child(small_row, EDITOR_UI_METRICS.field_row)
+    vsync_row = document.create_hstack("settings-vsync-row")
+    vsync_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    vsync_row.add_stretch_child(
+        document.create_label("Enable VSync (applies after editor restart)")
+    )
+    vsync_enabled = document.create_checkbox(True)
+    vsync_row.add_fixed_child(_ref(document, vsync_enabled), 28.0)
+    root.add_fixed_child(vsync_row, EDITOR_UI_METRICS.field_row)
     mcp_row = document.create_hstack("settings-mcp-row")
     mcp_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     mcp_row.add_stretch_child(
@@ -193,6 +204,7 @@ def build_native_settings_dialog(
         font_size=font_size,
         font_size_small=font_size_small,
         mcp_enabled=mcp_enabled,
+        vsync_enabled=vsync_enabled,
         status=status,
         viewport=viewport,
         request_render=request_render,

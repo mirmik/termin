@@ -38,7 +38,28 @@ try {
     }
     printf("TERMIN_TEST_MAX_SECONDS=%.2f\n", max_seconds);
 
-    termin::SDLBackendWindow win("BackendWindow triangle smoke", 800, 600);
+    tgfx::PresentationMode presentation_mode = tgfx::PresentationMode::VSync;
+    if (const char* mode_env = std::getenv("TERMIN_TEST_PRESENTATION_MODE")) {
+        if (std::strcmp(mode_env, "immediate") == 0) {
+            presentation_mode = tgfx::PresentationMode::Immediate;
+        } else if (std::strcmp(mode_env, "vsync") != 0) {
+            fprintf(stderr, "Unknown TERMIN_TEST_PRESENTATION_MODE=%s\n", mode_env);
+            return 1;
+        }
+    }
+    printf(
+        "TERMIN_TEST_PRESENTATION_MODE=%s\n",
+        presentation_mode == tgfx::PresentationMode::VSync ? "vsync" : "immediate");
+
+    termin::SDLBackendWindow win(
+        "BackendWindow triangle smoke", 800, 600, presentation_mode);
+    if (win.requested_presentation_mode() != presentation_mode) {
+        fprintf(stderr, "BackendWindow requested presentation mode mismatch\n");
+        return 1;
+    }
+    printf(
+        "APPLIED_PRESENTATION_MODE=%s\n",
+        win.presentation_mode() == tgfx::PresentationMode::VSync ? "vsync" : "immediate");
     tgfx::IRenderDevice* dev = win.device();
     if (!dev) {
         fprintf(stderr, "BackendWindow has no device\n");
