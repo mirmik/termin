@@ -11,6 +11,7 @@ from tcgui.widgets.tree import TreeWidget, TreeNode
 from tcgui.widgets.units import px
 
 from termin.project_modules.runtime import get_project_modules_runtime
+from termin.editor_core.modules_panel_model import format_cleanup_phase
 from termin.editor_tcgui.dialogs.module_operation_dialog import show_module_operation_dialog
 from termin_modules import ModuleEvent, ModuleState
 
@@ -28,7 +29,7 @@ _TAG = "[ModulesPanel]"
 def _status_color(status: str) -> tuple:
     if status == "loaded":
         return _GREEN
-    if status == "failed":
+    if status in ("failed", "cleanup-failed"):
         return _RED
     if status == "ignored":
         return _GRAY
@@ -377,13 +378,17 @@ class ModulesPanel(VStack):
         for record in records:
             if record.state == ModuleState.Loaded:
                 loaded_count += 1
-            elif record.state == ModuleState.Failed:
+            elif record.state in (ModuleState.Failed, ModuleState.CleanupFailed):
                 failed_count += 1
             if record.id in dirty or record.id in stale:
                 dirty_count += 1
 
             details = record.kind.name.lower()
             flags = []
+            if record.state == ModuleState.CleanupFailed:
+                flags.append(
+                    f"retry cleanup: {format_cleanup_phase(record.cleanup_phase.name)}"
+                )
             if record.id in dirty:
                 flags.append("dirty")
             if record.id in stale:
@@ -392,7 +397,9 @@ class ModulesPanel(VStack):
                 details = f"{details} ({', '.join(flags)})"
             row = self._make_module_row(
                 record.id,
-                record.state.name.lower(),
+                "cleanup-failed"
+                if record.state == ModuleState.CleanupFailed
+                else record.state.name.lower(),
                 details,
             )
             node = TreeNode(content=row)

@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from termin.editor_core import modules_panel_model as model_module
 from termin.editor_core.modules_panel_model import ModulesPanelController
-from termin_modules import ModuleKind, ModuleState
+from termin_modules import ModuleCleanupPhase, ModuleKind, ModuleState
 
 
 class _Runtime:
@@ -89,4 +89,24 @@ def test_modules_panel_rejects_selection_operation_without_selection() -> None:
     assert not controller.build_selected()
     assert runtime.calls == []
 
+    controller.close()
+
+
+def test_modules_panel_exposes_retryable_cleanup_phase() -> None:
+    runtime = _Runtime()
+    runtime.records = lambda: [
+        SimpleNamespace(
+            id="core",
+            kind=ModuleKind.Cpp,
+            state=ModuleState.CleanupFailed,
+            cleanup_phase=ModuleCleanupPhase.RevokeContributions,
+        )
+    ]
+    controller = ModulesPanelController(runtime, defer=lambda callback: callback())
+
+    snapshot = controller.snapshot()
+
+    assert snapshot.status == "1 failed, 1 changed"
+    assert snapshot.rows[0].status == "cleanup-failed"
+    assert snapshot.rows[0].details == "cpp (retry cleanup: revoke-contributions, dirty)"
     controller.close()

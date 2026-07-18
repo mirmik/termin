@@ -78,6 +78,8 @@ public:
 class FakeStagedCppBackend final : public IModuleBackend {
 public:
     std::vector<std::string> order;
+    bool fail_begin = false;
+    bool fail_finish = false;
 
     ModuleKind kind() const override {
         return ModuleKind::Cpp;
@@ -101,11 +103,19 @@ public:
 
     bool begin_unload(ModuleRecord& record, const ModuleEnvironment&) override {
         order.push_back("begin:" + record.spec.id);
+        if (fail_begin) {
+            record.error_message = "injected begin failure";
+            return false;
+        }
         return true;
     }
 
     bool finish_unload(ModuleRecord& record, const ModuleEnvironment&) override {
         order.push_back("finish:" + record.spec.id);
+        if (fail_finish) {
+            record.error_message = "injected finish failure";
+            return false;
+        }
         record.handle.reset();
         return true;
     }
@@ -604,11 +614,19 @@ void test_python_unload_prepare_failure_preserves_loaded_handle() {
         tmp.path / "sample.pymodule",
         "name: sample\nroot: Scripts\npackages: [sample]\n"
     );
+    write_text_file(
+        tmp.path / "consumer.pymodule",
+        "name: consumer\nroot: Scripts\npackages: [consumer]\ndependencies: [sample]\n"
+    );
 
     ModuleRuntime runtime;
     runtime.set_environment(ModuleEnvironment{});
     auto backend = std::make_shared<FakePythonBackend>();
     runtime.register_backend(backend);
+    std::vector<ModuleEvent> events;
+    runtime.set_event_callback([&events](const ModuleEvent& event) {
+        events.push_back(event);
+    });
     PythonModuleCallbacks callbacks;
     callbacks.before_module_remove = [](const ModuleRecord&, std::string& error) {
         error = "injected Python unload prepare failure";
@@ -626,20 +644,81 @@ void test_python_unload_prepare_failure_preserves_loaded_handle() {
     expect(backend->unload_calls == 0, "backend must not remove sys.modules after prepare failure");
     expect(runtime.find("sample")->state == ModuleState::Loaded, "module must remain loaded");
     expect(runtime.find("sample")->handle == loaded_handle, "retryable backend handle must be retained");
+    expect(events.back().kind == ModuleEventKind::Failed,
+           "preparation failure must not publish a cleanup transition");
 
+    int successful_prepare_calls = 0;
     PythonModuleCallbacks retry_callbacks;
-    retry_callbacks.before_module_remove = [](const ModuleRecord&, std::string&) { return true; };
+    retry_callbacks.before_module_remove = [&successful_prepare_calls](const ModuleRecord&, std::string&) {
+        ++successful_prepare_calls;
+        return true;
+    };
     runtime.set_python_callbacks(std::move(retry_callbacks));
     backend->fail_unload = true;
     expect(!runtime.unload_module("sample"), "backend commit failure must abort Python unload");
-    expect(runtime.find("sample")->state == ModuleState::Loaded,
-           "Python backend commit failure must preserve coherent loaded state");
+    expect(runtime.find("sample")->state == ModuleState::CleanupFailed,
+           "Python backend commit failure must enter the non-active cleanup state");
+    expect(runtime.find("sample")->cleanup_phase == ModuleCleanupPhase::BackendUnload,
+           "Python retry must retain the backend unload phase");
     expect(runtime.find("sample")->handle == loaded_handle,
            "Python backend commit failure must retain the handle");
+    expect(events.back().kind == ModuleEventKind::CleanupFailed,
+           "post-boundary failure must publish CleanupFailed");
+    expect(!runtime.load_module("sample"), "load must be blocked while Python cleanup is incomplete");
+    expect(!runtime.reload_module("sample"), "reload must be blocked while Python cleanup is incomplete");
+    expect(!runtime.load_module("consumer"),
+           "dependent activation must be blocked while dependency cleanup is incomplete");
 
     backend->fail_unload = false;
     expect(runtime.unload_module("sample"), "retry should unload after prepare succeeds");
     expect(backend->unload_calls == 2, "failed backend commit and retry must each run once");
+    expect(successful_prepare_calls == 1, "cleanup retry must not repeat completed preparation");
+    expect(runtime.find("sample")->cleanup_phase == ModuleCleanupPhase::None,
+           "successful retry must clear the cleanup phase");
+    expect(events.back().kind == ModuleEventKind::Unloaded,
+           "successful cleanup retry must publish Unloaded");
+    size_t unloading_events = 0;
+    for (const ModuleEvent& event : events) {
+        if (event.module_id == "sample" && event.kind == ModuleEventKind::Unloading) {
+            ++unloading_events;
+        }
+    }
+    expect(unloading_events == 2, "initial cleanup and retry must each publish Unloading");
+}
+
+void test_cpp_unload_prepare_failure_stays_loaded() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "native.module",
+        "name: native\nbuild:\n  output: build/libnative.so\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakeStagedCppBackend>();
+    runtime.register_backend(backend);
+    CppModuleCallbacks callbacks;
+    callbacks.before_unload = [](const ModuleRecord&, std::string& error) {
+        error = "injected C++ unload prepare failure";
+        return false;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+
+    expect(runtime.discover(tmp.path), "native discovery before prepare failure");
+    expect(runtime.load_module("native"), "native load before prepare failure");
+    const auto handle = runtime.find("native")->handle;
+    expect(!runtime.unload_module("native"), "C++ preparation failure must abort unload");
+    expect(runtime.find("native")->state == ModuleState::Loaded,
+           "C++ preparation failure must stay Loaded before the revoke boundary");
+    expect(runtime.find("native")->cleanup_phase == ModuleCleanupPhase::None,
+           "C++ preparation failure must not publish a retry phase");
+    expect(runtime.find("native")->handle == handle, "preparation failure must retain the handle");
+    expect(backend->order.size() == 1, "preparation failure must not call begin_unload");
+
+    CppModuleCallbacks retry_callbacks;
+    retry_callbacks.before_unload = [](const ModuleRecord&, std::string&) { return true; };
+    runtime.set_cpp_callbacks(std::move(retry_callbacks));
+    expect(runtime.unload_module("native"), "C++ preparation can be retried from Loaded");
 }
 
 void test_python_environment_lifecycle_wraps_module_handles() {
@@ -951,7 +1030,10 @@ void test_staged_cpp_unload_keeps_handle_when_cleanup_fails() {
     expect(backend->order[2] == "cleanup:native", "failed cleanup before skipped finish");
 
     const ModuleRecord* record = runtime.find("native");
-    expect(record != nullptr && record->state == ModuleState::Failed, "native marked failed after cleanup failure");
+    expect(record != nullptr && record->state == ModuleState::CleanupFailed,
+           "native enters the non-active cleanup state after revoke failure");
+    expect(record != nullptr && record->cleanup_phase == ModuleCleanupPhase::RevokeContributions,
+           "native retry must resume contribution revocation");
     expect(record != nullptr && record->handle, "native handle retained when cleanup fails");
     expect(runtime.last_error() == "cleanup failed", "cleanup failure propagated to last_error");
 
@@ -960,11 +1042,48 @@ void test_staged_cpp_unload_keeps_handle_when_cleanup_fails() {
     expect(backend->order.size() == order_after_failed_unload, "blocked load must not call backend load");
 
     CppModuleCallbacks retry_callbacks;
-    retry_callbacks.before_native_close = [](const ModuleRecord&, std::string&) {
+    retry_callbacks.before_native_close = [backend](const ModuleRecord& record, std::string&) {
+        backend->order.push_back("cleanup:" + record.spec.id);
         return true;
     };
     runtime.set_cpp_callbacks(std::move(retry_callbacks));
-    expect(runtime.shutdown(), "retained staged handle should be releasable on retry");
+    expect(runtime.unload_module("native"), "retained staged handle should be releasable on retry");
+    expect(backend->order.size() == 5, "retry must only repeat the incomplete phases");
+    expect(backend->order[3] == "cleanup:native", "retry resumes contribution cleanup");
+    expect(backend->order[4] == "finish:native", "retry closes only after cleanup succeeds");
+}
+
+void test_staged_cpp_finish_retry_does_not_repeat_completed_phases() {
+    TempDir tmp;
+    write_text_file(
+        tmp.path / "native.module",
+        "name: native\nbuild:\n  output: build/libnative.so\n"
+    );
+
+    ModuleRuntime runtime;
+    runtime.set_environment(ModuleEnvironment{});
+    auto backend = std::make_shared<FakeStagedCppBackend>();
+    backend->fail_finish = true;
+    runtime.register_backend(backend);
+    CppModuleCallbacks callbacks;
+    callbacks.before_native_close = [backend](const ModuleRecord& record, std::string&) {
+        backend->order.push_back("cleanup:" + record.spec.id);
+        return true;
+    };
+    runtime.set_cpp_callbacks(std::move(callbacks));
+
+    expect(runtime.discover(tmp.path), "native discovery before finish retry");
+    expect(runtime.load_module("native"), "native load before finish retry");
+    expect(!runtime.unload_module("native"), "finish failure must retain retry state");
+    expect(runtime.find("native")->state == ModuleState::CleanupFailed,
+           "finish failure must be non-active");
+    expect(runtime.find("native")->cleanup_phase == ModuleCleanupPhase::BackendFinish,
+           "finish failure must retain the exact backend phase");
+
+    backend->fail_finish = false;
+    expect(runtime.unload_module("native"), "finish retry must complete unload");
+    expect(backend->order.size() == 5, "finish retry must add exactly one backend call");
+    expect(backend->order[4] == "finish:native", "finish retry must not repeat begin or cleanup");
 }
 
 void test_discovery_rejects_active_handles_without_losing_records() {
@@ -1006,7 +1125,8 @@ void test_shutdown_unloads_reverse_dependencies_and_retries_failed_handles() {
     expect(!runtime.shutdown(), "shutdown must report retained failed handle");
     expect(backend->unload_calls.size() == 1, "dependency guard must keep core backend untouched");
     expect(backend->unload_calls[0] == "game", "shutdown must unload dependent first");
-    expect(runtime.find("game")->state == ModuleState::Failed, "failed shutdown record should be retryable");
+    expect(runtime.find("game")->state == ModuleState::CleanupFailed,
+           "failed shutdown record should enter retryable cleanup state");
     expect(runtime.find("game")->handle != nullptr, "failed shutdown must retain backend handle");
     expect(runtime.find("core")->handle != nullptr, "dependency stays active while dependent handle remains");
 
@@ -1320,6 +1440,10 @@ TEST_CASE("module runtime keeps Python module loaded when unload preparation fai
     test_python_unload_prepare_failure_preserves_loaded_handle();
 }
 
+TEST_CASE("module runtime keeps C++ module loaded when unload preparation fails") {
+    test_cpp_unload_prepare_failure_stays_loaded();
+}
+
 TEST_CASE("module runtime owns Python environment around module handles") {
     test_python_environment_lifecycle_wraps_module_handles();
 }
@@ -1358,6 +1482,10 @@ TEST_CASE("module runtime stages C++ unload cleanup before native close") {
 
 TEST_CASE("module runtime keeps native handle loaded when C++ cleanup fails") {
     test_staged_cpp_unload_keeps_handle_when_cleanup_fails();
+}
+
+TEST_CASE("module runtime retries only the incomplete native finish phase") {
+    test_staged_cpp_finish_retry_does_not_repeat_completed_phases();
 }
 
 TEST_CASE("module runtime rejects discovery over active backend handles") {

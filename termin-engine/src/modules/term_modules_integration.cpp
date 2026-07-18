@@ -435,7 +435,16 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         nullptr
     );
 
-    auto cpp_before_unload = [](const termin_modules::ModuleRecord&) {};
+    auto cpp_before_unload = [sync_live_scenes, scene_provider](
+                                 const termin_modules::ModuleRecord& record,
+                                 std::string& error) {
+        return prepare_module_registration_unload(
+            record,
+            error,
+            sync_live_scenes,
+            scene_provider
+        );
+    };
     auto after_load = [sync_live_scenes, scene_provider](
                           const termin_modules::ModuleRecord& record) {
         if (sync_live_scenes) {

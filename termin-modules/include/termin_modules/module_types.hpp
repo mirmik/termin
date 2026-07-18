@@ -17,10 +17,22 @@ enum class ModuleKind {
 
 enum class ModuleState {
     Discovered,
+    Loading,
     Loaded,
+    Unloading,
+    CleanupFailed,
     Failed,
     Unloaded,
     Ignored,
+};
+
+enum class ModuleCleanupPhase {
+    None,
+    Prepare,
+    BackendBegin,
+    RevokeContributions,
+    BackendFinish,
+    BackendUnload,
 };
 
 struct IModuleConfig {
@@ -68,6 +80,7 @@ struct PythonModuleHandle : IModuleHandle {};
 struct ModuleRecord {
     ModuleSpec spec;
     ModuleState state = ModuleState::Discovered;
+    ModuleCleanupPhase cleanup_phase = ModuleCleanupPhase::None;
     std::string error_message;
     std::string diagnostics;
     std::shared_ptr<IModuleHandle> handle;
@@ -97,6 +110,7 @@ enum class ModuleEventKind {
     Unloading,
     Unloaded,
     Reloading,
+    CleanupFailed,
     Failed,
 };
 
