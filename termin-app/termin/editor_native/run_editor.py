@@ -31,6 +31,9 @@ from termin.editor_core.scene_edit_service import EditorSceneEditService
 from termin.editor_core.settings_model import EditorSettingsController
 from termin.editor_core.about_model import build_editor_about_info
 from termin.editor_core.profiler_model import ProfilerController
+from termin.editor_core.profiler_capture import (
+    ProfilerCaptureCoordinator,
+)
 from termin.editor_core.project_browser_model import ProjectBrowserController
 from termin.editor_core.project_file_action_controller import ProjectFileActionController
 from termin.editor_core.project_operations import ProjectOperations
@@ -101,6 +104,10 @@ from termin.editor_native.rendering_inspectors import build_native_rendering_ins
 from termin.editor_native.profiler_panel import (
     build_native_profiler_panel,
     connect_profiler_menu_toggle,
+)
+from termin.editor_native.frame_profiler import (
+    build_native_frame_profiler,
+    connect_frame_profiler_command,
 )
 from termin.editor_native.pipeline_editor import (
     build_native_pipeline_editor,
@@ -246,12 +253,28 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     def set_profile_ui(enabled: bool) -> None:
         engine.profile_ui = enabled
 
+    profiler_capture_coordinator = ProfilerCaptureCoordinator()
+    capture_profiler = profiler_capture_coordinator.profiler
     profiler_controller = ProfilerController(
+        profiler_capture_coordinator.profiler,
         get_include_ui=lambda: bool(engine.profile_ui),
         set_include_ui=set_profile_ui,
+        capture_coordinator=profiler_capture_coordinator,
     )
     profiler_panel = build_native_profiler_panel(host.document, profiler_controller)
     shell.debug_tabs.add_page("Profiler", profiler_panel.root)
+    from termin.editor._editor_native import FrameProfilerController
+
+    frame_profiler_controller = FrameProfilerController(engine, capacity=3600)
+    frame_profiler = build_native_frame_profiler(
+        window_manager,
+        frame_profiler_controller,
+    )
+    connect_frame_profiler_command(
+        debug_menu,
+        shell.frame_profiler_command,
+        frame_profiler,
+    )
 
     from termin.project_modules.runtime import get_project_modules_runtime
 
@@ -1575,6 +1598,9 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             "request_render_update": request_editor_render,
             "profiler_controller": profiler_controller,
             "profiler_panel": profiler_panel,
+            "profiler_capture_coordinator": profiler_capture_coordinator,
+            "frame_profiler_controller": frame_profiler_controller,
+            "frame_profiler": frame_profiler,
             "modules_controller": modules_controller,
             "modules_panel": modules_panel,
             "registry_controller": registry_controller,
@@ -1660,6 +1686,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             shell,
             initial_scene,
             profiler_panel,
+            frame_profiler,
             modules_panel,
             registry_viewer,
             core_registry_viewer,
@@ -1686,26 +1713,34 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             display_workspace,
             entity_inspector,
         )
-        keep_running, _routed = window_manager.poll_events()
+        with capture_profiler.section("Events"):
+            keep_running, _routed = window_manager.poll_events()
         if not keep_running:
             return
-        if executor.process_pending() > 0:
-            host.request_render_update()
-        window_manager.process_deferred()
-        if quest_openxr_build_dialog.poll() > 0:
-            host.request_render_update()
-        project_file_watcher.poll()
-        scene_structure_observer.poll()
-        spacemouse.poll()
-        framegraph_debugger.update()
-        if profiler_panel.root.visible and profiler_panel.update():
-            host.request_render_update()
-        if _game_mode_requires_continuous_render(game_mode_controller):
-            # The engine renders the playing scene after this UI callback. Compose
-            # every loop so the frame produced at the end of the previous loop is
-            # presented, and keep the scene render scheduler active for the next one.
-            request_editor_render()
-        window_manager.render_requested()
+        with capture_profiler.section("Queued Work"):
+            if executor.process_pending() > 0:
+                host.request_render_update()
+            window_manager.process_deferred()
+            if quest_openxr_build_dialog.poll() > 0:
+                host.request_render_update()
+        with capture_profiler.section("Project Watch"):
+            project_file_watcher.poll()
+        with capture_profiler.section("Observers & Input"):
+            scene_structure_observer.poll()
+            spacemouse.poll()
+        with capture_profiler.section("Debug Tools"):
+            framegraph_debugger.update()
+            frame_profiler.update()
+            if profiler_panel.root.visible and profiler_panel.update():
+                host.request_render_update()
+        with capture_profiler.section("UI Schedule"):
+            if _game_mode_requires_continuous_render(game_mode_controller):
+                # The engine renders the playing scene after this UI callback. Compose
+                # every loop so the frame produced at the end of the previous loop is
+                # presented, and keep the scene render scheduler active for the next one.
+                request_editor_render()
+        with capture_profiler.section("UI Compose"):
+            window_manager.render_requested()
         frame_count += 1
         if frame_limit > 0 and frame_count >= frame_limit:
             window.set_should_close(True)
@@ -1804,6 +1839,10 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             python_console.close()
         except Exception:
             _logger.exception("Native Python console shutdown cleanup failed")
+        try:
+            frame_profiler.close()
+        except Exception:
+            _logger.exception("Native frame profiler shutdown cleanup failed")
         try:
             framegraph_debugger.close()
         except Exception:

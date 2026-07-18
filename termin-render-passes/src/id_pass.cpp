@@ -296,7 +296,7 @@ void IdPass::execute_with_data_tgfx2(
         std::memcpy(draw_context.model.data, push.u_model, sizeof(push.u_model));
         draw_context.phase = "pick";
         draw_context.pass_contract = shader_pass_contract();
-        draw_context.current_tc_shader = TcShader(dc.final_shader);
+        draw_context.current_tc_shader = dc.final_shader;
         draw_context.layer_mask = layer_mask;
         draw_context.render_category_mask = ctx.render_category_mask;
         draw_context.camera_position = camera_position;
@@ -306,7 +306,7 @@ void IdPass::execute_with_data_tgfx2(
         draw_context.override_color = Vec4{pick_r, pick_g, pick_b, 1.0};
 
         RenderItemDrawSubmitRequest encode_request{};
-        encode_request.shader_handle = dc.final_shader;
+        encode_request.shader_handle = dc.final_shader.handle;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.draw_context = &draw_context;

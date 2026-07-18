@@ -12,7 +12,6 @@ from termin.gui_native import Document, DrawList, PaintContext, Rect
 class FakeProfiler:
     def __init__(self) -> None:
         self.enabled = False
-        self.detailed_rendering = False
         self.frames = []
 
     def clear_history(self) -> None:
@@ -123,11 +122,8 @@ def test_native_profiler_panel_controls_and_clear_boundary():
     )
     panel = build_native_profiler_panel(document, controller)
 
-    controller.set_detailed(True)
     controller.set_include_ui(True)
-    panel.command_model.set_checked(panel.detailed_command, controller.detailed)
     panel.command_model.set_checked(panel.include_ui_command, controller.include_ui)
-    assert profiler.detailed_rendering
     assert include_ui["value"]
 
     panel.frame_time_model.add_sample(9.0)

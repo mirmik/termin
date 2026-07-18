@@ -45,6 +45,39 @@ static void lifecycle_probe_on_removed_from_entity(tc_component* component) {
     probe->last_event = 2;
 }
 
+typedef struct {
+    tc_component component;
+    int update_count;
+    int fixed_update_count;
+    int before_render_count;
+} scheduler_probe_component;
+
+static void scheduler_probe_update(tc_component* component, float dt) {
+    (void)dt;
+    ((scheduler_probe_component*)component)->update_count++;
+}
+
+static void scheduler_probe_fixed_update(tc_component* component, float dt) {
+    (void)dt;
+    ((scheduler_probe_component*)component)->fixed_update_count++;
+}
+
+static void scheduler_probe_before_render(tc_component* component) {
+    ((scheduler_probe_component*)component)->before_render_count++;
+}
+
+static const tc_component_vtable scheduler_probe_vtable = {
+    .update = scheduler_probe_update,
+    .fixed_update = scheduler_probe_fixed_update,
+    .before_render = scheduler_probe_before_render,
+};
+
+static void scheduler_probe_init(scheduler_probe_component* probe) {
+    memset(probe, 0, sizeof(*probe));
+    tc_component_init(&probe->component, &scheduler_probe_vtable);
+    tc_component_set_lifecycle_capabilities(&probe->component, false, false, false);
+}
+
 static const tc_component_vtable lifecycle_probe_vtable = {
     .on_removed_from_entity = lifecycle_probe_on_removed_from_entity,
     .on_removed = lifecycle_probe_on_removed,
@@ -202,6 +235,62 @@ GUARD_C_TEST(test_component_removal_lifecycle_runs_once_in_order) {
     return 0;
 }
 
+GUARD_C_TEST(test_attached_lifecycle_capabilities_reindex_scene_scheduler) {
+    tc_scene_handle scene = tc_scene_new_named("lifecycle-reindex");
+    GUARD_C_REQUIRE(tc_scene_alive(scene));
+    tc_scene_set_fixed_timestep(scene, 1.0);
+
+    tc_entity_pool* pool = tc_scene_entity_pool(scene);
+    GUARD_C_REQUIRE(pool != NULL);
+    tc_entity_id entity = tc_entity_pool_alloc(pool, "entity");
+    GUARD_C_REQUIRE(tc_entity_id_valid(entity));
+
+    scheduler_probe_component probe;
+    scheduler_probe_init(&probe);
+    tc_entity_pool_add_component(pool, entity, &probe.component);
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_fixed_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_before_render_list_count(scene));
+
+    tc_component_set_lifecycle_capabilities(&probe.component, true, true, true);
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_fixed_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_before_render_list_count(scene));
+
+    tc_scene_update(scene, 1.0);
+    tc_scene_before_render(scene);
+    GUARD_C_CHECK_EQ_INT(1, probe.update_count);
+    GUARD_C_CHECK_EQ_INT(1, probe.fixed_update_count);
+    GUARD_C_CHECK_EQ_INT(1, probe.before_render_count);
+
+    tc_component_set_lifecycle_capabilities(&probe.component, false, false, false);
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_fixed_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_before_render_list_count(scene));
+
+    tc_scene_update(scene, 1.0);
+    tc_scene_before_render(scene);
+    GUARD_C_CHECK_EQ_INT(1, probe.update_count);
+    GUARD_C_CHECK_EQ_INT(1, probe.fixed_update_count);
+    GUARD_C_CHECK_EQ_INT(1, probe.before_render_count);
+
+    scheduler_probe_component direct_probe;
+    scheduler_probe_init(&direct_probe);
+    tc_scene_register_component(scene, &direct_probe.component);
+    tc_component_set_lifecycle_capabilities(
+        &direct_probe.component, true, false, true
+    );
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_fixed_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(1, tc_scene_before_render_list_count(scene));
+    tc_scene_unregister_component(scene, &direct_probe.component);
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_update_list_count(scene));
+    GUARD_C_CHECK_EQ_INT(0, tc_scene_before_render_list_count(scene));
+
+    tc_scene_free(scene);
+    return 0;
+}
+
 GUARD_C_TEST(test_component_reorder_preserves_attachment_and_lifecycle) {
     tc_scene_handle scene = tc_scene_new_named("component-reorder");
     GUARD_C_REQUIRE(tc_scene_alive(scene));
@@ -271,6 +360,7 @@ int main(int argc, char** argv) {
     GUARD_C_RUN(test_scene_capability_iteration);
     GUARD_C_RUN(test_scene_capability_priority_iteration);
     GUARD_C_RUN(test_component_removal_lifecycle_runs_once_in_order);
+    GUARD_C_RUN(test_attached_lifecycle_capabilities_reindex_scene_scheduler);
     GUARD_C_RUN(test_component_reorder_preserves_attachment_and_lifecycle);
     GUARD_C_RUN(test_checked_parent_rejects_cycle);
     return GUARD_C_END();

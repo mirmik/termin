@@ -83,6 +83,7 @@ class DebugMenuActions:
     show_scene_manager_viewer: VoidCallback
     show_python_console: VoidCallback
     toggle_surface_edge_debug_tool: VoidCallback | None = None
+    show_frame_profiler: VoidCallback | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +166,13 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
             state_getter=states.profiler_visible,
             handle_getter=handles.profiler,
         ),
+    ]
+    if actions.debug.show_frame_profiler is not None:
+        debug_items.append(
+            MenuItemSpec("Frame Profiler...", actions.debug.show_frame_profiler)
+        )
+    debug_items.extend(
+        [
         MenuItemSpec(
             "Modules",
             actions.debug.toggle_modules,
@@ -187,7 +195,8 @@ def build_editor_menu_spec(config: EditorMenuSpecConfig) -> list[MenuSpec]:
         MenuItemSpec("Scene Manager...", actions.debug.show_scene_manager_viewer),
         None,
         MenuItemSpec("Python Console...", actions.debug.show_python_console),
-    ]
+        ]
+    )
     if actions.debug.toggle_surface_edge_debug_tool is not None:
         debug_items.extend(
             [
@@ -326,7 +335,7 @@ def build_editor_menu_inventory() -> list[MenuSpec]:
                 scene=SceneMenuActions(*([noop] * 4)),
                 navigation=NavigationMenuActions(noop, noop),
                 game=GameMenuActions(*([noop] * 6)),
-                debug=DebugMenuActions(*([noop] * 8)),
+                debug=DebugMenuActions(*([noop] * 8), show_frame_profiler=noop),
                 help=HelpMenuActions(noop),
             ),
             states=EditorMenuStateGetters(false, false, false, false),

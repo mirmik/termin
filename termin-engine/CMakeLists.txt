@@ -262,6 +262,17 @@ if(TERMIN_ENGINE_BUILD_TESTS)
         COMMAND termin_engine_render_frame_planner_test
     )
 
+    add_executable(termin_engine_frame_cadence_test
+        tests/test_frame_cadence.cpp
+    )
+    target_include_directories(termin_engine_frame_cadence_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    add_test(
+        NAME termin_engine_frame_cadence_test
+        COMMAND termin_engine_frame_cadence_test
+    )
+
     add_executable(termin_engine_viewport_render_state_test
         tests/test_viewport_render_state.cpp
     )
