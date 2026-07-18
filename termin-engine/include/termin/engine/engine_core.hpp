@@ -22,7 +22,7 @@ public:
 
 private:
     std::atomic<bool> _running{false};
-    double _target_fps = 60.0;
+    std::atomic<double> _target_fps{60.0};
     bool _profile_ui = false;
 
     // Callbacks for external integration (set from Python)
@@ -39,8 +39,10 @@ public:
     EngineCore& operator=(const EngineCore&) = delete;
 
     // --- Configuration ---
-    void set_target_fps(double fps) { _target_fps = fps; }
-    double target_fps() const { return _target_fps; }
+    // Zero disables the software frame limiter. Positive values cap the
+    // main-loop cadence independently from the presentation mode (VSync).
+    void set_target_fps(double fps);
+    double target_fps() const { return _target_fps.load(); }
 
     // When true, run() wraps the poll_events callback in a profiler "UI"
     // section. When false, run() keeps the frame scope but records UI as a
@@ -64,7 +66,8 @@ public:
     // Returns true if rendering happened.
     bool tick_and_render(double dt);
 
-    // Run blocking main loop. Calls poll_events, tick_and_render at target_fps.
+    // Run blocking main loop. Calls poll_events and tick_and_render, applying
+    // target_fps as a software limit when it is greater than zero.
     // Returns when should_continue returns false or stop() is called.
     void run();
 

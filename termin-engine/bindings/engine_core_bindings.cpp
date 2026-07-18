@@ -44,7 +44,7 @@ void bind_engine_core(nb::module_& m) {
         .def_prop_rw("target_fps",
             &EngineCore::target_fps,
             &EngineCore::set_target_fps,
-            "Target frames per second for main loop")
+            "Software frame-rate limit for the main loop; zero means unlimited")
 
         .def_prop_rw("profile_ui",
             &EngineCore::profile_ui,

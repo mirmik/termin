@@ -37,5 +37,14 @@ int main() {
         std::cerr << "late cadence observation did not preserve pre-resync lateness\n";
         return 1;
     }
+
+    const auto unlimited = observe_frame_start(151.5, 151.0, 151.5, 0.0, true);
+    if (!close_to(unlimited.interval_ms, 0.5) ||
+        !close_to(unlimited.target_interval_ms, 0.0) ||
+        unlimited.missed_intervals != 0 ||
+        !close_to(unlimited.next_scheduled_start_ms, 151.5)) {
+        std::cerr << "unlimited cadence should not invent a frame deadline\n";
+        return 1;
+    }
     return 0;
 }

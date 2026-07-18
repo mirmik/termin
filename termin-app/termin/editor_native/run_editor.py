@@ -214,6 +214,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     configure_sdk_shader_runtime("native-editor", render_engine=render_engine)
     settings_controller = EditorSettingsController()
     settings_snapshot = settings_controller.load()
+    engine.target_fps = settings_snapshot.fps_limit
     presentation_mode = (
         PresentationMode.VSYNC
         if settings_snapshot.vsync_enabled

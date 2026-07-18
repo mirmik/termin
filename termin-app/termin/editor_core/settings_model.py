@@ -15,6 +15,7 @@ class EditorSettingsSnapshot:
     font_size_small: float
     mcp_server_enabled: bool
     vsync_enabled: bool
+    fps_limit: int
 
 
 class EditorSettingsController:
@@ -29,6 +30,7 @@ class EditorSettingsController:
             font_size_small=float(self._settings.get_font_size_small()),
             mcp_server_enabled=self._settings.get_mcp_server_enabled(),
             vsync_enabled=self._settings.get_vsync_enabled(),
+            fps_limit=self._settings.get_fps_limit(),
         )
 
     def save(self, snapshot: EditorSettingsSnapshot) -> EditorSettingsSnapshot:
@@ -39,6 +41,7 @@ class EditorSettingsController:
         self._settings.set_font_size_small(validated.font_size_small)
         self._settings.set_mcp_server_enabled(validated.mcp_server_enabled)
         self._settings.set_vsync_enabled(validated.vsync_enabled)
+        self._settings.set_fps_limit(validated.fps_limit)
         self._settings.sync()
         return validated
 
@@ -50,6 +53,10 @@ class EditorSettingsController:
             raise ValueError("font size must be in range 8..32")
         if not 8.0 <= small <= 24.0:
             raise ValueError("small font size must be in range 8..24")
+        fps_limit_value = float(snapshot.fps_limit)
+        if not fps_limit_value.is_integer() or not 0.0 <= fps_limit_value <= 1000.0:
+            raise ValueError("FPS limit must be zero (Unlimited) or an integer in range 1..1000")
+        fps_limit = int(fps_limit_value)
         return EditorSettingsSnapshot(
             text_editor=snapshot.text_editor.strip(),
             slang_compiler=snapshot.slang_compiler.strip(),
@@ -57,6 +64,7 @@ class EditorSettingsController:
             font_size_small=small,
             mcp_server_enabled=bool(snapshot.mcp_server_enabled),
             vsync_enabled=bool(snapshot.vsync_enabled),
+            fps_limit=fps_limit,
         )
 
 

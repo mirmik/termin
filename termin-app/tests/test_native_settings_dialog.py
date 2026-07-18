@@ -41,12 +41,14 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     assert dialog.root.children[-2].bounds.height == EDITOR_UI_METRICS.field_row
     assert dialog.text_editor.text == "/usr/bin/editor"
     assert dialog.vsync_enabled.checked is True
+    assert dialog.fps_limit.value == 60
     dialog.text_editor.text = " /opt/code "
     dialog.slang_compiler.text = " /opt/slangc "
     dialog.font_size.value = 18.0
     dialog.font_size_small.value = 12.0
     dialog.mcp_enabled.checked = True
     dialog.vsync_enabled.checked = False
+    dialog.fps_limit.value = 120
     dialog.apply_live()
     assert applied == [18.0]
     assert settings.sync_count == 0
@@ -56,6 +58,7 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     assert settings.slang_compiler == "/opt/slangc"
     assert settings.mcp_enabled is True
     assert settings.vsync_enabled is False
+    assert settings.fps_limit == 120
     assert settings.sync_count == 1
     assert applied == [18.0, 18.0]
 

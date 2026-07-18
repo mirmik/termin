@@ -11,6 +11,7 @@ class _Settings:
         self.font_size_small = 11.0
         self.mcp_enabled = False
         self.vsync_enabled = True
+        self.fps_limit = 60
         self.sync_count = 0
 
     def get_text_editor(self):
@@ -49,6 +50,12 @@ class _Settings:
     def set_vsync_enabled(self, value):
         self.vsync_enabled = value
 
+    def get_fps_limit(self):
+        return self.fps_limit
+
+    def set_fps_limit(self, value):
+        self.fps_limit = value
+
     def sync(self):
         self.sync_count += 1
 
@@ -66,6 +73,7 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
             font_size_small=12.0,
             mcp_server_enabled=True,
             vsync_enabled=False,
+            fps_limit=144,
         )
     )
 
@@ -76,10 +84,17 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
     assert settings.font_size_small == 12.0
     assert settings.mcp_enabled is True
     assert settings.vsync_enabled is False
+    assert settings.fps_limit == 144
     assert settings.sync_count == 1
 
     with pytest.raises(ValueError, match="8..32"):
         controller.save(
-            EditorSettingsSnapshot("", "", 40.0, 11.0, False, True)
+            EditorSettingsSnapshot("", "", 40.0, 11.0, False, True, 0)
+        )
+    assert settings.sync_count == 1
+
+    with pytest.raises(ValueError, match="FPS limit"):
+        controller.save(
+            EditorSettingsSnapshot("", "", 14.0, 11.0, False, True, 60.5)
         )
     assert settings.sync_count == 1
