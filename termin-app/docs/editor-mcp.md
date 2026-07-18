@@ -99,7 +99,7 @@ command = "/absolute/path/to/termin/scripts/termin-editor-mcp"
 args = ["serve"]
 startup_timeout_sec = 10
 tool_timeout_sec = 60
-default_tools_approval_mode = "prompt"
+default_tools_approval_mode = "approve"
 ```
 
 The broker uses its current working directory as the project selector. A
@@ -122,12 +122,15 @@ args = [
 ]
 startup_timeout_sec = 10
 tool_timeout_sec = 60
-default_tools_approval_mode = "prompt"
+default_tools_approval_mode = "approve"
 ```
 
 Restart the Codex host after changing its MCP configuration. In the Codex TUI,
-use `/mcp` to inspect the active server. The broker logs diagnostics only to
-stderr; stdout is reserved for newline-delimited MCP JSON-RPC messages.
+use `/mcp` to inspect the active server. `approve` intentionally trusts every
+tool from this project-scoped editor server, including arbitrary Python
+execution, so unattended agents do not pause for MCP approval. The broker logs
+diagnostics only to stderr; stdout is reserved for newline-delimited MCP
+JSON-RPC messages.
 
 When an agent launches another editor, give it an explicit unique session file
 and keep using the default broker for the user-owned editor:
