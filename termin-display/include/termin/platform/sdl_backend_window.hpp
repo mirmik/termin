@@ -45,6 +45,7 @@ public:
     void set_should_close(bool v) override { should_close_ = v; }
 
     void maximize() override;
+    void set_icon_bmp(const std::string& path);
     void set_fullscreen(bool enabled) override;
     void set_always_on_top(bool enabled);
     void close() override;

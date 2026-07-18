@@ -24,6 +24,7 @@ from termin.display._platform_native import (
     start_text_input,
 )
 from termin.editor_tcgui.backend_window_manager import BackendWindowManager
+from termin.editor_core.application_icon import apply_editor_window_icon
 from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
 
 
@@ -180,6 +181,7 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
     # BackendWindow inits SDL and creates its own window + tgfx2 device
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
     main_window = SDLBackendWindow("Termin Editor", 1280, 720)
+    apply_editor_window_icon(main_window)
     render_engine.ensure_tgfx2()
     main_window.maximize()
 

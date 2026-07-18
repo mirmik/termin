@@ -367,6 +367,17 @@ install(DIRECTORY ${TERMIN_ROOT}/termin/
     PATTERN "include" EXCLUDE
 )
 
+# Desktop/application icon. Keep this outside the versioned Python layout so
+# launchers and .desktop files have a stable path across Python upgrades.
+install(FILES
+    ${TERMIN_ROOT}/termin/resources/icons/termin-editor-icon.png
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps
+)
+install(FILES
+    ${TERMIN_ROOT}/termin/resources/icons/termin-editor-icon.ico
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/termin/icons
+)
+
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/termin
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cpp
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
