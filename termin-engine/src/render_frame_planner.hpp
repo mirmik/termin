@@ -12,6 +12,11 @@ extern "C" {
 namespace termin::rendering_manager_detail {
 
 struct OffscreenRenderPlan {
+    // Every target owned by an attached viewport, including viewports hidden
+    // by transient display policy. Used to keep hidden targets out of the
+    // standalone managed-target pass.
+    std::vector<tc_render_target_handle> attached_viewport_render_targets;
+    // Render-eligible viewport targets after display/viewport gates.
     std::vector<tc_render_target_handle> viewport_render_targets;
     std::vector<tc_render_target_handle> scene_pipeline_render_targets;
     std::vector<tc_viewport_handle> viewport_render_target_viewports;

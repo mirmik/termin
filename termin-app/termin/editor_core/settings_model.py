@@ -16,6 +16,7 @@ class EditorSettingsSnapshot:
     mcp_server_enabled: bool
     vsync_enabled: bool
     fps_limit: int
+    render_only_active_display: bool
 
 
 class EditorSettingsController:
@@ -31,6 +32,7 @@ class EditorSettingsController:
             mcp_server_enabled=self._settings.get_mcp_server_enabled(),
             vsync_enabled=self._settings.get_vsync_enabled(),
             fps_limit=self._settings.get_fps_limit(),
+            render_only_active_display=self._settings.get_render_only_active_display(),
         )
 
     def save(self, snapshot: EditorSettingsSnapshot) -> EditorSettingsSnapshot:
@@ -42,6 +44,9 @@ class EditorSettingsController:
         self._settings.set_mcp_server_enabled(validated.mcp_server_enabled)
         self._settings.set_vsync_enabled(validated.vsync_enabled)
         self._settings.set_fps_limit(validated.fps_limit)
+        self._settings.set_render_only_active_display(
+            validated.render_only_active_display
+        )
         self._settings.sync()
         return validated
 
@@ -65,6 +70,7 @@ class EditorSettingsController:
             mcp_server_enabled=bool(snapshot.mcp_server_enabled),
             vsync_enabled=bool(snapshot.vsync_enabled),
             fps_limit=fps_limit,
+            render_only_active_display=bool(snapshot.render_only_active_display),
         )
 
 

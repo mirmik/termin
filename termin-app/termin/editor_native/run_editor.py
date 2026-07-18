@@ -433,6 +433,11 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
         audio_debugger_dialog,
     )
     host.apply_font_size(settings_snapshot.font_size)
+
+    def apply_render_only_active_display(enabled: bool) -> None:
+        if display_workspace is not None:
+            display_workspace.set_render_only_active_display(enabled)
+
     settings_dialog = build_native_settings_dialog(
         host.document,
         settings_controller,
@@ -440,6 +445,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
         viewport=editor_viewport,
         request_render=request_editor_render,
         apply_font_size=host.apply_font_size,
+        apply_render_only_active_display=apply_render_only_active_display,
     )
     connect_settings_command(
         edit_menu,
@@ -757,6 +763,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
             rendering_manager=engine.rendering_manager,
             scene=initial_scene,
             request_render=request_editor_render,
+            render_only_active_display=settings_snapshot.render_only_active_display,
         )
         native_viewport = display_workspace.editor_viewport
         native_viewport.geometry.set_scene_tree_controller_getter(

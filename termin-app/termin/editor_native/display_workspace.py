@@ -40,6 +40,7 @@ class NativeDisplayWorkspace:
         device,
         rendering_manager,
         request_render: Callable[[], None],
+        render_only_active_display: bool = True,
     ) -> None:
         self.document = document
         self.tabs = tabs
@@ -49,6 +50,7 @@ class NativeDisplayWorkspace:
         self.device = device
         self.rendering_manager = rendering_manager
         self.request_render = request_render
+        self._render_only_active_display = bool(render_only_active_display)
         self.on_display_selected: Callable[[object], None] | None = None
         self._pages: list[NativeDisplayPage] = []
         self._closed = False
@@ -60,6 +62,7 @@ class NativeDisplayWorkspace:
                 owner._on_tab_selected(index)
 
         self._selection_connection = tabs.connect_selection_changed(selection_changed)
+        self._sync_display_rendering()
 
     @classmethod
     def create(
@@ -71,6 +74,7 @@ class NativeDisplayWorkspace:
         rendering_manager,
         scene,
         request_render: Callable[[], None],
+        render_only_active_display: bool = True,
     ) -> "NativeDisplayWorkspace":
         tabs = document.create_tab_view("native-display-workspace")
         root = tabs.widget
@@ -102,6 +106,7 @@ class NativeDisplayWorkspace:
             device=device,
             rendering_manager=rendering_manager,
             request_render=request_render,
+            render_only_active_display=render_only_active_display,
         )
 
     @property
@@ -154,6 +159,7 @@ class NativeDisplayWorkspace:
                 input_manager=input_manager,
             )
             self._pages.append(page)
+            self._sync_display_rendering()
             # Displays are also created by RenderingManager while a scene is
             # restored or a game-scene is attached. Factory side effects must
             # not steal the user's active tab in either case. Explicit editor
@@ -192,6 +198,7 @@ class NativeDisplayWorkspace:
         if not self.tabs.remove_page(tab_index):
             raise RuntimeError("native display workspace failed to remove its display tab")
         self._pages.pop(page_index)
+        self._sync_display_rendering()
         self._close_page(page)
         self.request_render()
         return True
@@ -206,6 +213,20 @@ class NativeDisplayWorkspace:
             return False
         self.tabs.selected_index = page_index + 1
         return True
+
+    @property
+    def render_only_active_display(self) -> bool:
+        return self._render_only_active_display
+
+    def set_render_only_active_display(self, enabled: bool) -> None:
+        """Apply the transient editor rendering policy to every display tab."""
+
+        enabled = bool(enabled)
+        if self._render_only_active_display == enabled:
+            return
+        self._render_only_active_display = enabled
+        self._sync_display_rendering()
+        self.request_render()
 
     def configure_viewport_input(self, display: object, viewport: object) -> None:
         """Attach simple scene input routing for a runtime viewport."""
@@ -334,6 +355,7 @@ class NativeDisplayWorkspace:
     def _on_tab_selected(self, index: int) -> None:
         if self._closed:
             return
+        self._sync_display_rendering()
         if index == 0:
             display = self.editor_viewport.display
         elif index - 1 < len(self._pages):
@@ -344,6 +366,13 @@ class NativeDisplayWorkspace:
         if self.on_display_selected is not None:
             self.on_display_selected(display)
         self.request_render()
+
+    def _sync_display_rendering(self) -> None:
+        """Project tab visibility into the display's transient enable flag."""
+
+        selected = self.tabs.selected_index
+        for index, display in enumerate(self.displays):
+            display.enabled = not self._render_only_active_display or index == selected
 
     def _next_display_name(self) -> str:
         existing = {display.name for display in self.displays}

@@ -820,7 +820,8 @@ void RenderingManager::render_all_offscreen() {
     // dependency graph between render targets.
     for (tc_render_target_handle rt : topology_.managed_render_targets()) {
         if (tc_render_target_handle_valid(rt)
-                && !rendering_manager_detail::contains_render_target(render_plan.viewport_render_targets, rt)) {
+                && !rendering_manager_detail::contains_render_target(
+                    render_plan.attached_viewport_render_targets, rt)) {
             render_render_target_offscreen(rt);
         }
     }
@@ -942,7 +943,11 @@ void RenderingManager::render_scene_pipeline_offscreen(
                    pipeline_name.c_str(), vp_name.c_str());
             continue;
         }
-        if (only_display && topology_.display_for_viewport(viewport) != only_display) {
+        tc_display* viewport_display = topology_.display_for_viewport(viewport);
+        if (only_display && viewport_display != only_display) {
+            continue;
+        }
+        if (viewport_display && !tc_display_get_enabled(viewport_display)) {
             continue;
         }
 

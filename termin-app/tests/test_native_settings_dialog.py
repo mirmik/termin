@@ -13,6 +13,7 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     document = Document()
     renders = []
     applied = []
+    applied_display_policy = []
     viewport = lambda: Rect(0.0, 0.0, 900.0, 600.0)
     dialog_service = NativeDialogService(
         document,
@@ -26,6 +27,7 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
         viewport=viewport,
         request_render=lambda: renders.append(True),
         apply_font_size=applied.append,
+        apply_render_only_active_display=applied_display_policy.append,
     )
 
     assert dialog.show()
@@ -42,6 +44,7 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     assert dialog.text_editor.text == "/usr/bin/editor"
     assert dialog.vsync_enabled.checked is True
     assert dialog.fps_limit.value == 60
+    assert dialog.render_only_active_display.checked is True
     dialog.text_editor.text = " /opt/code "
     dialog.slang_compiler.text = " /opt/slangc "
     dialog.font_size.value = 18.0
@@ -49,6 +52,7 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     dialog.mcp_enabled.checked = True
     dialog.vsync_enabled.checked = False
     dialog.fps_limit.value = 120
+    dialog.render_only_active_display.checked = False
     dialog.apply_live()
     assert applied == [18.0]
     assert settings.sync_count == 0
@@ -59,8 +63,10 @@ def test_native_settings_dialog_loads_applies_saves_reopens_and_releases():
     assert settings.mcp_enabled is True
     assert settings.vsync_enabled is False
     assert settings.fps_limit == 120
+    assert settings.render_only_active_display is False
     assert settings.sync_count == 1
     assert applied == [18.0, 18.0]
+    assert applied_display_policy == [False]
 
     assert dialog.show()
     dialog.close()
