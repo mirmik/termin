@@ -19,7 +19,8 @@ TERMIN_EDITOR_MCP=1 ./run-termin.sh
 Use `TERMIN_EDITOR_MCP=0` to force-disable the server even when the editor
 setting is enabled.
 
-By default the server listens on `127.0.0.1:8765` and writes a session file to:
+By default the server listens on `127.0.0.1:8765`. On Linux it writes a
+session file to:
 
 ```text
 /tmp/termin-editor-mcp.json
@@ -56,6 +57,77 @@ On Windows PowerShell use the wrapper:
 ./scripts/termin-editor-mcp.ps1 screenshot --path C:\tmp\editor.png
 ./scripts/termin-editor-mcp.ps1 framegraph
 ```
+
+## Standard MCP broker
+
+`scripts/termin-editor-mcp serve` is a standard stdio MCP server for Codex,
+MCP Inspector, and other local MCP clients. The client launches the broker as a
+child process. The broker performs the MCP lifecycle over stdin/stdout and
+forwards `tools/list` and `tools/call` to the authenticated loopback endpoint
+inside the editor.
+
+On Windows the default is `termin-editor-mcp.json` in the system temporary
+directory.
+
+Start the editor with MCP enabled before starting or restarting the MCP client,
+so the client's initial `tools/list` discovery succeeds. If the editor later
+becomes unavailable, tool calls return a structured `Termin Editor is
+unavailable` error instead of terminating the broker. The broker rereads the
+session file before every forwarded call, so restarting the editor on a new
+OS-picked port does not require restarting the broker; whether a particular
+MCP host retries tools after an initial discovery failure is client-specific.
+
+For Codex, add a project-scoped `.codex/config.toml` in a trusted checkout:
+
+```toml
+[mcp_servers.termin_editor]
+command = "/absolute/path/to/termin/scripts/termin-editor-mcp"
+args = ["--session", "/tmp/termin-editor-mcp-project.json", "serve"]
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+default_tools_approval_mode = "prompt"
+```
+
+On Windows, point `command` at PowerShell and pass the repository wrapper:
+
+```toml
+[mcp_servers.termin_editor]
+command = "pwsh"
+args = [
+  "-File",
+  "C:\\absolute\\path\\to\\termin\\scripts\\termin-editor-mcp.ps1",
+  "--session",
+  "C:\\Temp\\termin-editor-mcp-project.json",
+  "serve",
+]
+startup_timeout_sec = 10
+tool_timeout_sec = 60
+default_tools_approval_mode = "prompt"
+```
+
+Restart the Codex host after changing its MCP configuration. In the Codex TUI,
+use `/mcp` to inspect the active server. The broker logs diagnostics only to
+stderr; stdout is reserved for newline-delimited MCP JSON-RPC messages.
+
+Use a dedicated session file when more than one editor can run:
+
+```bash
+TERMIN_EDITOR_MCP=1 \
+TERMIN_EDITOR_MCP_PORT=0 \
+TERMIN_EDITOR_MCP_SESSION_FILE=/tmp/termin-editor-mcp-project.json \
+./sdk/bin/termin_editor /absolute/path/to/Project.terminproj
+```
+
+```powershell
+$env:TERMIN_EDITOR_MCP = "1"
+$env:TERMIN_EDITOR_MCP_PORT = "0"
+$env:TERMIN_EDITOR_MCP_SESSION_FILE = "C:\\Temp\\termin-editor-mcp-project.json"
+./sdk/bin/termin_editor.exe C:\\absolute\\path\\to\\Project.terminproj
+```
+
+`TERMIN_EDITOR_MCP_PORT=0` asks the OS for a free loopback port. The generated
+bearer token and endpoint stay in the permission-restricted session file and
+are not exposed in MCP client configuration.
 
 The Python namespace contains:
 
