@@ -39,10 +39,22 @@ int main()
 
     const OffscreenRenderPlan all = build_offscreen_render_plan(attachments);
     if (all.viewport_render_targets.size() != 2
+            || all.attached_viewport_render_targets.size() != 2
             || all.viewport_render_target_viewports.size() != 2) {
         std::cerr << "multi-display plan did not include both viewport targets\n";
         return 1;
     }
+
+    tc_display_set_enabled(display_b, false);
+    const OffscreenRenderPlan active_display_only = build_offscreen_render_plan(attachments);
+    if (active_display_only.viewport_render_targets.size() != 1
+            || active_display_only.attached_viewport_render_targets.size() != 2
+            || active_display_only.viewport_render_target_viewports.size() != 1
+            || !same_target(active_display_only.viewport_render_targets.front(), target_a)) {
+        std::cerr << "disabled display leaked into the render plan\n";
+        return 1;
+    }
+    tc_display_set_enabled(display_b, true);
 
     const OffscreenRenderPlan only_a = build_offscreen_render_plan(attachments, display_a);
     if (only_a.viewport_render_targets.size() != 1

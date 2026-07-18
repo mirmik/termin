@@ -22,6 +22,8 @@ typedef struct tc_display {
     char* name;
     char* uuid;
     bool editor_only;
+    // Transient scheduling/presentation gate. This is runtime host policy and
+    // is intentionally independent from serialized viewport enabled state.
     bool enabled;
     bool auto_remove_when_empty;
 

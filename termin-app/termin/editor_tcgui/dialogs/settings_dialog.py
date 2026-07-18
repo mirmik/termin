@@ -175,6 +175,7 @@ def show_settings_dialog(ui) -> None:
                     mcp_server_enabled=mcp_check.checked,
                     vsync_enabled=vsync_check.checked,
                     fps_limit=fps_limit_spin.value,
+                    render_only_active_display=snapshot.render_only_active_display,
                 )
             )
 

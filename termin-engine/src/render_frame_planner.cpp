@@ -108,11 +108,18 @@ OffscreenRenderPlan build_offscreen_render_plan(
     for (const auto& attachment : attachments) {
         tc_display* display = attachment.display;
         if (!display || (only_display && display != only_display)) continue;
+
+        tc_viewport_handle vp = attachment.viewport;
+        if (tc_viewport_handle_valid(vp)) {
+            append_unique_render_target(
+                plan.attached_viewport_render_targets,
+                tc_viewport_get_render_target(vp)
+            );
+        }
         if (!tc_display_get_enabled(display)) {
             continue;
         }
 
-        tc_viewport_handle vp = attachment.viewport;
         if (tc_viewport_handle_valid(vp)) {
             if (tc_viewport_get_enabled(vp)) {
                 tc_render_target_handle rt = tc_viewport_get_render_target(vp);

@@ -67,16 +67,23 @@ class NativeFrameProfiler:
             return False
         changed = self.controller.update()
         if changed:
-            self.timeline.follow_latest = self.controller.follow_latest
-            selected = self.controller.selected_frame_number
-            if selected >= 0 and self.timeline.selected_id != selected:
-                self._syncing_selection = True
-                try:
-                    self.timeline.select(selected)
-                finally:
-                    self._syncing_selection = False
+            self._sync_timeline_from_controller()
             self.request_render()
         return changed
+
+    def _sync_timeline_from_controller(self) -> None:
+        """Project controller state without treating it as user input."""
+        self._syncing_selection = True
+        try:
+            selected = self.controller.selected_frame_number
+            if selected >= 0 and self.timeline.selected_id != selected:
+                self.timeline.select(selected)
+            # Enabling follow selects the newest sample and emits a selection
+            # event.  Project the controller's selection first so that this
+            # setter cannot echo a programmatic selection back as user input.
+            self.timeline.follow_latest = self.controller.follow_latest
+        finally:
+            self._syncing_selection = False
 
     def clear(self) -> None:
         self.controller.clear()
@@ -171,14 +178,17 @@ def build_native_frame_profiler(
     def activated(_index: int, command_id: int, _command) -> None:
         owner = weak_profiler()
         if owner is not None and owner.controller.activate(command_id):
-            owner.timeline.follow_latest = owner.controller.follow_latest
+            owner._sync_timeline_from_controller()
             owner.request_render()
 
     def selected(frame_number: int) -> None:
         owner = weak_profiler()
-        if owner is not None and not owner._syncing_selection and frame_number >= 0:
-            owner.controller.select_frame(frame_number)
-            owner.request_render()
+        if owner is None or frame_number < 0:
+            return
+        if owner._syncing_selection or frame_number == owner.controller.selected_frame_number:
+            return
+        owner.controller.select_frame(frame_number)
+        owner.request_render()
 
     def section_selected(node: int) -> None:
         owner = weak_profiler()

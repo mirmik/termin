@@ -12,6 +12,7 @@ class _Settings:
         self.mcp_enabled = False
         self.vsync_enabled = True
         self.fps_limit = 60
+        self.render_only_active_display = True
         self.sync_count = 0
 
     def get_text_editor(self):
@@ -56,6 +57,12 @@ class _Settings:
     def set_fps_limit(self, value):
         self.fps_limit = value
 
+    def get_render_only_active_display(self):
+        return self.render_only_active_display
+
+    def set_render_only_active_display(self, value):
+        self.render_only_active_display = value
+
     def sync(self):
         self.sync_count += 1
 
@@ -74,6 +81,7 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
             mcp_server_enabled=True,
             vsync_enabled=False,
             fps_limit=144,
+            render_only_active_display=False,
         )
     )
 
@@ -85,16 +93,17 @@ def test_editor_settings_controller_validates_normalizes_and_persists():
     assert settings.mcp_enabled is True
     assert settings.vsync_enabled is False
     assert settings.fps_limit == 144
+    assert settings.render_only_active_display is False
     assert settings.sync_count == 1
 
     with pytest.raises(ValueError, match="8..32"):
         controller.save(
-            EditorSettingsSnapshot("", "", 40.0, 11.0, False, True, 0)
+            EditorSettingsSnapshot("", "", 40.0, 11.0, False, True, 0, True)
         )
     assert settings.sync_count == 1
 
     with pytest.raises(ValueError, match="FPS limit"):
         controller.save(
-            EditorSettingsSnapshot("", "", 14.0, 11.0, False, True, 60.5)
+            EditorSettingsSnapshot("", "", 14.0, 11.0, False, True, 60.5, True)
         )
     assert settings.sync_count == 1

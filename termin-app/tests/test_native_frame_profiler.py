@@ -5,8 +5,12 @@ from termin.editor_native.frame_profiler import (
 from termin.gui_native import (
     CommandData,
     CommandModel,
+    EventResult,
     FrameTimelineModel,
     FrameTimelineSample,
+    PointerEvent,
+    PointerEventType,
+    Rect,
     RichTextModel,
     TreeTableModel,
 )
@@ -29,6 +33,7 @@ class FakeNativeController:
         self.update_result = False
         self.closed = False
         self.activations = []
+        self.frame_selections = []
         self.section_selections = []
 
     def start_capture(self) -> None:
@@ -52,10 +57,17 @@ class FakeNativeController:
 
     def activate(self, command_id: int) -> bool:
         self.activations.append(command_id)
-        return command_id == self.action
+        if command_id != self.action:
+            return False
+        self.follow_latest = True
+        if self.timeline_model.samples:
+            self.selected_frame_number = self.timeline_model.samples[-1].stable_id
+        return True
 
     def select_frame(self, frame_number: int) -> bool:
+        self.frame_selections.append(frame_number)
         self.selected_frame_number = frame_number
+        self.follow_latest = False
         return True
 
     def show_section_details(self, node: int) -> None:
@@ -135,3 +147,32 @@ def test_native_frame_profiler_clear_only_delegates_to_native_controller():
     profiler = build_native_frame_profiler(object(), controller)
     profiler.clear()
     assert controller.timeline_model.samples == []
+
+
+def test_enabling_follow_does_not_feed_programmatic_selection_back_to_controller():
+    controller = FakeNativeController()
+    controller.follow_latest = False
+    controller.timeline_model.set_samples(
+        [FrameTimelineSample(1, 16.0, 8.0), FrameTimelineSample(2, 17.0, 9.0)]
+    )
+    profiler = build_native_frame_profiler(object(), controller)
+    profiler.timeline.follow_latest = False
+    profiler.timeline.select(1)
+    controller.selected_frame_number = 1
+    controller.frame_selections.clear()
+
+    profiler.document.layout_roots(Rect(0.0, 0.0, 1180.0, 760.0))
+    action_rect = profiler.toolbar.item_rects[0]
+    pointer = PointerEvent()
+    pointer.x = action_rect.x + action_rect.width / 2.0
+    pointer.y = action_rect.y + action_rect.height / 2.0
+    pointer.type = PointerEventType.Down
+    assert profiler.document.dispatch_pointer_event(pointer) == EventResult.Handled
+    pointer.type = PointerEventType.Up
+    assert profiler.document.dispatch_pointer_event(pointer) == EventResult.Handled
+
+    assert controller.frame_selections == []
+    assert controller.follow_latest
+    assert controller.selected_frame_number == 2
+    assert profiler.timeline.follow_latest
+    assert profiler.timeline.selected_id == 2

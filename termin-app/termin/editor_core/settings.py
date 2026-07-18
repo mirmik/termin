@@ -32,12 +32,14 @@ class EditorSettings:
     KEY_MCP_SERVER_ENABLED = "Editor/mcpServerEnabled"
     KEY_VSYNC_ENABLED = "Editor/vsyncEnabled"
     KEY_FPS_LIMIT = "Editor/fpsLimit"
+    KEY_RENDER_ONLY_ACTIVE_DISPLAY = "Editor/renderOnlyActiveDisplay"
 
     # Значения по умолчанию
     DEFAULT_FONT_SIZE: float = 14.0
     DEFAULT_FONT_SIZE_SMALL: float = 11.0
     DEFAULT_VSYNC_ENABLED: bool = True
     DEFAULT_FPS_LIMIT: int = 60
+    DEFAULT_RENDER_ONLY_ACTIVE_DISPLAY: bool = True
 
     def __init__(self):
         self._settings = Settings("TerminEditor")
@@ -173,6 +175,19 @@ class EditorSettings:
     def set_fps_limit(self, fps_limit: int) -> None:
         """Persist the editor software FPS limit; zero means unlimited."""
         self.set(self.KEY_FPS_LIMIT, int(fps_limit))
+
+    def get_render_only_active_display(self) -> bool:
+        """Whether inactive display tabs should be excluded from rendering."""
+        return bool(
+            self.get(
+                self.KEY_RENDER_ONLY_ACTIVE_DISPLAY,
+                self.DEFAULT_RENDER_ONLY_ACTIVE_DISPLAY,
+            )
+        )
+
+    def set_render_only_active_display(self, enabled: bool) -> None:
+        """Persist the editor display-tab rendering policy."""
+        self.set(self.KEY_RENDER_ONLY_ACTIVE_DISPLAY, bool(enabled))
 
     def get_font_size(self) -> float:
         """Получить базовый размер шрифта."""

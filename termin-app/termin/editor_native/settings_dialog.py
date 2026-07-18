@@ -36,10 +36,12 @@ class NativeSettingsDialog:
     mcp_enabled: object
     vsync_enabled: object
     fps_limit: object
+    render_only_active_display: object
     status: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
     apply_font_size: Callable[[float], None]
+    apply_render_only_active_display: Callable[[bool], None]
     _closed: bool = False
 
     def show(self) -> bool:
@@ -62,6 +64,7 @@ class NativeSettingsDialog:
             mcp_server_enabled=self.mcp_enabled.checked,
             vsync_enabled=self.vsync_enabled.checked,
             fps_limit=self.fps_limit.value,
+            render_only_active_display=self.render_only_active_display.checked,
         )
 
     def apply_snapshot(self, snapshot: EditorSettingsSnapshot) -> None:
@@ -72,6 +75,7 @@ class NativeSettingsDialog:
         self.mcp_enabled.checked = snapshot.mcp_server_enabled
         self.vsync_enabled.checked = snapshot.vsync_enabled
         self.fps_limit.value = snapshot.fps_limit
+        self.render_only_active_display.checked = snapshot.render_only_active_display
         self.status.text = "VSync, FPS limit, and MCP startup changes apply after restart"
 
     def apply_live(self) -> None:
@@ -83,6 +87,7 @@ class NativeSettingsDialog:
     def save(self) -> EditorSettingsSnapshot:
         snapshot = self.controller.save(self.snapshot())
         self.apply_font_size(snapshot.font_size)
+        self.apply_render_only_active_display(snapshot.render_only_active_display)
         self.request_render()
         return snapshot
 
@@ -151,10 +156,11 @@ def build_native_settings_dialog(
     viewport: Callable[[], Rect],
     request_render: Callable[[], None],
     apply_font_size: Callable[[float], None],
+    apply_render_only_active_display: Callable[[bool], None],
 ) -> NativeSettingsDialog:
     root = document.create_vstack("native-settings-dialog")
     root.stable_id = "editor.settings"
-    root.preferred_size = Size(560.0, 510.0)
+    root.preferred_size = Size(560.0, 550.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     editor_row, text_editor, editor_browse = _path_row(document, "External Text Editor")
@@ -185,6 +191,14 @@ def build_native_settings_dialog(
         1000.0,
     )
     root.add_fixed_child(fps_limit_row, EDITOR_UI_METRICS.field_row)
+    active_display_row = document.create_hstack("settings-active-display-rendering-row")
+    active_display_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
+    active_display_row.add_stretch_child(
+        document.create_label("Render only selected display tab")
+    )
+    render_only_active_display = document.create_checkbox(True)
+    active_display_row.add_fixed_child(_ref(document, render_only_active_display), 28.0)
+    root.add_fixed_child(active_display_row, EDITOR_UI_METRICS.field_row)
     mcp_row = document.create_hstack("settings-mcp-row")
     mcp_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     mcp_row.add_stretch_child(
@@ -216,10 +230,12 @@ def build_native_settings_dialog(
         mcp_enabled=mcp_enabled,
         vsync_enabled=vsync_enabled,
         fps_limit=fps_limit,
+        render_only_active_display=render_only_active_display,
         status=status,
         viewport=viewport,
         request_render=request_render,
         apply_font_size=apply_font_size,
+        apply_render_only_active_display=apply_render_only_active_display,
     )
     weak_result = weakref.ref(result)
 
