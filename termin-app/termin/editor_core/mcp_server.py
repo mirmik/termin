@@ -8,6 +8,7 @@ import time
 
 from tcbase import log
 
+from termin.editor_core.mcp_contract import editor_mcp_tool_schemas
 from termin.editor_core.python_executor import (
     EditorPythonExecutor,
 )
@@ -160,10 +161,7 @@ class EditorMcpServer(TerminMcpServer):
         content: list[dict[str, object]] = [
             {
                 "type": "text",
-                "text": (
-                    f"Captured framegraph resource '{resource}': "
-                    f"{path} ({width}x{height})"
-                ),
+                "text": (f"Captured framegraph resource '{resource}': {path} ({width}x{height})"),
             }
         ]
         image_data = result.get("base64")
@@ -262,10 +260,7 @@ class EditorMcpServer(TerminMcpServer):
         content: list[dict[str, object]] = [
             {
                 "type": "text",
-                "text": (
-                    f"Captured framegraph pass symbol "
-                    f"'{pass_label}/{symbol_label}': {path} ({width}x{height})"
-                ),
+                "text": (f"Captured framegraph pass symbol '{pass_label}/{symbol_label}': {path} ({width}x{height})"),
             }
         ]
         image_data = result.get("base64")
@@ -378,7 +373,7 @@ class EditorMcpServer(TerminMcpServer):
             if not line.startswith(marker):
                 continue
             try:
-                payload = json.loads(line[len(marker):])
+                payload = json.loads(line[len(marker) :])
             except json.JSONDecodeError as exc:
                 return {
                     "ok": False,
@@ -622,7 +617,7 @@ class EditorMcpServer(TerminMcpServer):
             if not line.startswith(marker):
                 continue
             try:
-                payload = json.loads(line[len(marker):])
+                payload = json.loads(line[len(marker) :])
             except json.JSONDecodeError as exc:
                 return {
                     "ok": False,
@@ -674,7 +669,7 @@ class EditorMcpServer(TerminMcpServer):
             if not line.startswith(marker):
                 continue
             try:
-                payload = json.loads(line[len(marker):])
+                payload = json.loads(line[len(marker) :])
             except json.JSONDecodeError as exc:
                 return {
                     "ok": False,
@@ -697,198 +692,8 @@ class EditorMcpServer(TerminMcpServer):
         }
 
     def _tool_schemas(self) -> list[dict[str, object]]:
-        return [
-            self._execute_python_tool_schema(),
-            self._screenshot_tool_schema(),
-            self._framegraph_tool_schema(),
-            self._framegraph_capture_tool_schema(),
-            self._framegraph_pass_symbol_capture_tool_schema(),
-        ]
+        return editor_mcp_tool_schemas()
 
-    def _execute_python_tool_schema(self) -> dict[str, object]:
-        return {
-            "name": "execute_python_script",
-            "description": "Execute a Python script inside the running Termin editor.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "script": {
-                        "type": "string",
-                        "description": "Python source code to execute in the editor namespace.",
-                    },
-                    "timeout": {
-                        "type": "number",
-                        "description": "Seconds to wait for the editor thread to run the script.",
-                        "default": 30,
-                    },
-                },
-                "required": ["script"],
-                "additionalProperties": False,
-            },
-        }
-
-    def _screenshot_tool_schema(self) -> dict[str, object]:
-        return {
-            "name": "capture_editor_screenshot",
-            "description": "Capture the running editor UI or viewport as a PNG screenshot.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "Optional output PNG path. Defaults to /tmp/termin-editor-screenshots/.",
-                    },
-                    "include_image": {
-                        "type": "boolean",
-                        "description": "Return base64 PNG data as MCP image content.",
-                        "default": False,
-                    },
-                    "timeout": {
-                        "type": "number",
-                        "description": "Seconds to wait for the editor thread to capture the screenshot.",
-                        "default": 30,
-                    },
-                },
-                "additionalProperties": False,
-            },
-        }
-
-    def _framegraph_tool_schema(self) -> dict[str, object]:
-        return {
-            "name": "inspect_framegraph",
-            "description": "Inspect the running editor framegraph debugger model without opening its dialog.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "target_index": {
-                        "type": "integer",
-                        "description": "Optional framegraph target index from the previous snapshot.",
-                    },
-                    "include_pass_json": {
-                        "type": "boolean",
-                        "description": "Include serialized pass data when available.",
-                        "default": False,
-                    },
-                    "include_debugger_pass": {
-                        "type": "boolean",
-                        "description": "Include the FrameDebugger pass in pass and schedule lists.",
-                        "default": False,
-                    },
-                    "timeout": {
-                        "type": "number",
-                        "description": "Seconds to wait for the editor thread to inspect the framegraph.",
-                        "default": 30,
-                    },
-                },
-                "additionalProperties": False,
-            },
-        }
-
-    def _framegraph_capture_tool_schema(self) -> dict[str, object]:
-        return {
-            "name": "capture_framegraph_resource",
-            "description": (
-                "Capture a framegraph resource through the running editor "
-                "FrameDebugger pass and write it as a PNG image."
-            ),
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "target_index": {
-                        "type": "integer",
-                        "description": "Optional framegraph target index from inspect_framegraph.",
-                    },
-                    "resource": {
-                        "type": "string",
-                        "description": "Optional resource name. Defaults to the first capturable resource.",
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Optional output PNG path. Defaults to /tmp/termin-framegraph-captures/.",
-                    },
-                    "include_image": {
-                        "type": "boolean",
-                        "description": "Return base64 PNG data as MCP image content.",
-                        "default": False,
-                    },
-                    "capture_kind": {
-                        "type": "string",
-                        "description": "'main' for selected resource capture, or 'depth' for associated depth capture.",
-                        "default": "main",
-                    },
-                    "channel_mode": {
-                        "type": "integer",
-                        "description": "Color preview channel: 0=RGBA, 1=R, 2=G, 3=B, 4=A.",
-                        "default": 0,
-                    },
-                    "highlight_hdr": {
-                        "type": "boolean",
-                        "description": "Apply the framegraph debugger HDR highlight preview to color captures.",
-                        "default": False,
-                    },
-                    "timeout": {
-                        "type": "number",
-                        "description": "Seconds to wait for a render frame to produce the capture.",
-                        "default": 30,
-                    },
-                },
-                "additionalProperties": False,
-            },
-        }
-
-    def _framegraph_pass_symbol_capture_tool_schema(self) -> dict[str, object]:
-        return {
-            "name": "capture_framegraph_pass_symbol",
-            "description": (
-                "Capture the framebuffer state immediately after an internal "
-                "symbol draw inside a framegraph pass and write it as PNG."
-            ),
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "target_index": {
-                        "type": "integer",
-                        "description": "Optional framegraph target index from inspect_framegraph.",
-                    },
-                    "pass_index": {
-                        "type": "integer",
-                        "description": "Stable pass index from inspect_framegraph. Preferred over pass_name.",
-                    },
-                    "pass_name": {
-                        "type": "string",
-                        "description": "Pass name from inspect_framegraph. Must be unique unless pass_index is provided.",
-                    },
-                    "symbol": {
-                        "type": "string",
-                        "description": "Internal symbol/entity name. Defaults to the last symbol in the pass.",
-                    },
-                    "symbol_index": {
-                        "type": "integer",
-                        "description": "Internal symbol index. Use when symbol names are duplicated.",
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "Optional output PNG path. Defaults to /tmp/termin-framegraph-captures/.",
-                    },
-                    "include_image": {
-                        "type": "boolean",
-                        "description": "Return base64 PNG data as MCP image content.",
-                        "default": False,
-                    },
-                    "capture_kind": {
-                        "type": "string",
-                        "description": "'main' for selected symbol capture, or 'depth' for associated depth capture.",
-                        "default": "main",
-                    },
-                    "timeout": {
-                        "type": "number",
-                        "description": "Seconds to wait for a render frame to produce the capture.",
-                        "default": 30,
-                    },
-                },
-                "additionalProperties": False,
-            },
-        }
 
 def editor_mcp_enabled() -> bool:
     value = os.environ.get("TERMIN_EDITOR_MCP")
@@ -898,10 +703,7 @@ def editor_mcp_enabled() -> bool:
             return True
         if normalized in {"0", "false", "no", "off", ""}:
             return False
-        log.warn(
-            "[EditorMCP] invalid TERMIN_EDITOR_MCP value "
-            f"'{value}', treating it as disabled"
-        )
+        log.warn(f"[EditorMCP] invalid TERMIN_EDITOR_MCP value '{value}', treating it as disabled")
         return False
 
     from termin.editor_core.settings import EditorSettings

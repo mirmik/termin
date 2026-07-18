@@ -63,19 +63,17 @@ On Windows PowerShell use the wrapper:
 `scripts/termin-editor-mcp serve` is a standard stdio MCP server for Codex,
 MCP Inspector, and other local MCP clients. The client launches the broker as a
 child process. The broker performs the MCP lifecycle over stdin/stdout and
-forwards `tools/list` and `tools/call` to the authenticated loopback endpoint
-inside the editor.
+serves the editor tool schemas locally. It forwards `tools/call` to the
+authenticated loopback endpoint inside the editor.
 
 On Windows the default is `termin-editor-mcp.json` in the system temporary
 directory.
 
-Start the editor with MCP enabled before starting or restarting the MCP client,
-so the client's initial `tools/list` discovery succeeds. If the editor later
-becomes unavailable, tool calls return a structured `Termin Editor is
-unavailable` error instead of terminating the broker. The broker rereads the
-session file before every forwarded call, so restarting the editor on a new
-OS-picked port does not require restarting the broker; whether a particular
-MCP host retries tools after an initial discovery failure is client-specific.
+The MCP client may start before the editor. Tool discovery succeeds without a
+session file, while calls return a structured `Termin Editor is unavailable`
+error until the editor starts. The broker rereads the session file before every
+forwarded call, so stopping or restarting the editor on a new OS-picked port
+does not require restarting the broker or MCP client.
 
 For Codex, add a project-scoped `.codex/config.toml` in a trusted checkout:
 
@@ -159,8 +157,17 @@ the main editor thread.
 
 ## Tools
 
-`execute_python_script` executes Python inside the editor namespace. It is meant
-for diagnostics and automation while the editor is running.
+- `execute_python_script` executes Python inside the editor namespace for
+  diagnostics and automation.
+- `capture_editor_screenshot` captures the editor UI or viewport.
+- `inspect_framegraph` returns the headless framegraph debugger snapshot.
+- `capture_framegraph_resource` exports a selected framegraph resource.
+- `capture_framegraph_pass_symbol` captures framebuffer state after an internal
+  symbol draw; prefer stable pass and symbol indexes when names are duplicated.
+
+The stdio broker advertises this contract even while the editor is offline.
+Each call still requires a running editor registered through the configured
+session file.
 
 ## Smoke Tests
 

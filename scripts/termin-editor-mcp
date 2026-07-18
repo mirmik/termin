@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI client and stdio MCP broker for a running Termin editor."""
+"""CLI client and resilient stdio MCP broker for the Termin editor."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPOSITORY_ROOT / "termin-app"))
+
+from termin.editor_core.mcp_contract import editor_mcp_tool_schemas  # noqa: E402
 
 
 DEFAULT_SESSION_FILE = Path(tempfile.gettempdir()) / "termin-editor-mcp.json"
@@ -32,8 +38,7 @@ def _load_session(path: Path) -> dict[str, Any]:
         session = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         raise EditorMcpClientError(
-            f"Session file not found: {path}\n"
-            "Start the editor with TERMIN_EDITOR_MCP=1."
+            f"Session file not found: {path}\nStart the editor with TERMIN_EDITOR_MCP=1."
         ) from None
     except json.JSONDecodeError as exc:
         raise EditorMcpClientError(f"Invalid session file '{path}': {exc}") from exc
@@ -127,8 +132,7 @@ class EditorMcpStdioBroker:
         is_notification = "id" not in request
         request_id = request.get("id")
         if not is_notification and (
-            isinstance(request_id, bool)
-            or not isinstance(request_id, (str, int, float, type(None)))
+            isinstance(request_id, bool) or not isinstance(request_id, (str, int, float, type(None)))
         ):
             return _rpc_error(None, -32600, "Invalid Request")
 
@@ -142,7 +146,9 @@ class EditorMcpStdioBroker:
             response = _rpc_result(request_id, {})
         elif not self._initialized or not self._client_ready:
             response = _rpc_error(request_id, -32002, "Server not initialized")
-        elif method in ("tools/list", "tools/call"):
+        elif method == "tools/list":
+            response = _rpc_result(request_id, {"tools": editor_mcp_tool_schemas()})
+        elif method == "tools/call":
             response = self._proxy(request, request_id, is_notification=is_notification)
         else:
             response = _rpc_error(request_id, -32601, f"Method not found: {method}")
@@ -159,9 +165,7 @@ class EditorMcpStdioBroker:
             return _rpc_error(request_id, -32602, "Missing protocolVersion")
 
         protocol_version = (
-            requested_version
-            if requested_version in SUPPORTED_PROTOCOL_VERSIONS
-            else LATEST_PROTOCOL_VERSION
+            requested_version if requested_version in SUPPORTED_PROTOCOL_VERSIONS else LATEST_PROTOCOL_VERSION
         )
         self._initialized = True
         return _rpc_result(
@@ -171,11 +175,12 @@ class EditorMcpStdioBroker:
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {
                     "name": "termin-editor",
-                    "version": "0.1.0",
+                    "version": "0.2.0",
                 },
                 "instructions": (
                     "Tools control the Termin Editor identified by the configured "
-                    "session file. Start the editor with TERMIN_EDITOR_MCP=1."
+                    "session file. Tools remain discoverable while the editor is "
+                    "offline; calls require TERMIN_EDITOR_MCP=1."
                 ),
             },
         )
