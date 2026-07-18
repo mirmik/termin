@@ -35,6 +35,7 @@ class NativeSettingsDialog:
     font_size_small: object
     mcp_enabled: object
     vsync_enabled: object
+    fps_limit: object
     status: object
     viewport: Callable[[], Rect]
     request_render: Callable[[], None]
@@ -60,6 +61,7 @@ class NativeSettingsDialog:
             font_size_small=self.font_size_small.value,
             mcp_server_enabled=self.mcp_enabled.checked,
             vsync_enabled=self.vsync_enabled.checked,
+            fps_limit=self.fps_limit.value,
         )
 
     def apply_snapshot(self, snapshot: EditorSettingsSnapshot) -> None:
@@ -69,7 +71,8 @@ class NativeSettingsDialog:
         self.font_size_small.value = snapshot.font_size_small
         self.mcp_enabled.checked = snapshot.mcp_server_enabled
         self.vsync_enabled.checked = snapshot.vsync_enabled
-        self.status.text = "VSync and MCP startup changes take effect after editor restart"
+        self.fps_limit.value = snapshot.fps_limit
+        self.status.text = "VSync, FPS limit, and MCP startup changes apply after restart"
 
     def apply_live(self) -> None:
         snapshot = self.controller.validate(self.snapshot())
@@ -151,7 +154,7 @@ def build_native_settings_dialog(
 ) -> NativeSettingsDialog:
     root = document.create_vstack("native-settings-dialog")
     root.stable_id = "editor.settings"
-    root.preferred_size = Size(560.0, 470.0)
+    root.preferred_size = Size(560.0, 510.0)
     root.set_layout_padding(EDITOR_UI_METRICS.dialog_insets)
     root.set_layout_spacing(EDITOR_UI_METRICS.dialog_spacing)
     editor_row, text_editor, editor_browse = _path_row(document, "External Text Editor")
@@ -175,6 +178,13 @@ def build_native_settings_dialog(
     vsync_enabled = document.create_checkbox(True)
     vsync_row.add_fixed_child(_ref(document, vsync_enabled), 28.0)
     root.add_fixed_child(vsync_row, EDITOR_UI_METRICS.field_row)
+    fps_limit_row, fps_limit = _spin_row(
+        document,
+        "FPS Limit (0 = Unlimited, applies after restart)",
+        0.0,
+        1000.0,
+    )
+    root.add_fixed_child(fps_limit_row, EDITOR_UI_METRICS.field_row)
     mcp_row = document.create_hstack("settings-mcp-row")
     mcp_row.set_layout_spacing(EDITOR_UI_METRICS.spacing)
     mcp_row.add_stretch_child(
@@ -205,6 +215,7 @@ def build_native_settings_dialog(
         font_size_small=font_size_small,
         mcp_enabled=mcp_enabled,
         vsync_enabled=vsync_enabled,
+        fps_limit=fps_limit,
         status=status,
         viewport=viewport,
         request_render=request_render,

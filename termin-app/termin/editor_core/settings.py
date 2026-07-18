@@ -31,11 +31,13 @@ class EditorSettings:
     KEY_SLANG_COMPILER = "Shader/slangCompiler"
     KEY_MCP_SERVER_ENABLED = "Editor/mcpServerEnabled"
     KEY_VSYNC_ENABLED = "Editor/vsyncEnabled"
+    KEY_FPS_LIMIT = "Editor/fpsLimit"
 
     # Значения по умолчанию
     DEFAULT_FONT_SIZE: float = 14.0
     DEFAULT_FONT_SIZE_SMALL: float = 11.0
     DEFAULT_VSYNC_ENABLED: bool = True
+    DEFAULT_FPS_LIMIT: int = 60
 
     def __init__(self):
         self._settings = Settings("TerminEditor")
@@ -163,6 +165,14 @@ class EditorSettings:
     def set_vsync_enabled(self, enabled: bool) -> None:
         """Persist the presentation preference applied on editor startup."""
         self.set(self.KEY_VSYNC_ENABLED, bool(enabled))
+
+    def get_fps_limit(self) -> int:
+        """Return the editor software FPS limit; zero means unlimited."""
+        return int(self.get(self.KEY_FPS_LIMIT, self.DEFAULT_FPS_LIMIT))
+
+    def set_fps_limit(self, fps_limit: int) -> None:
+        """Persist the editor software FPS limit; zero means unlimited."""
+        self.set(self.KEY_FPS_LIMIT, int(fps_limit))
 
     def get_font_size(self) -> float:
         """Получить базовый размер шрифта."""

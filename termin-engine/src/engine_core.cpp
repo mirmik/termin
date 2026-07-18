@@ -3,6 +3,8 @@
 #include "frame_cadence.hpp"
 
 #include <chrono>
+#include <cmath>
+#include <stdexcept>
 #include <thread>
 
 extern "C" {
@@ -67,6 +69,20 @@ void EngineCore::set_on_shutdown_callback(std::function<void()> cb) {
     _on_shutdown_callback = std::move(cb);
 }
 
+void EngineCore::set_target_fps(double fps) {
+    if (!std::isfinite(fps) || fps < 0.0) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineCore] Invalid target FPS %.3f; expected zero (unlimited) or a positive value",
+            fps
+        );
+        throw std::invalid_argument(
+            "target FPS must be zero (unlimited) or a positive finite value"
+        );
+    }
+    _target_fps.store(fps);
+}
+
 bool EngineCore::tick_and_render(double dt) {
     // Frame scope is owned by run() — tick_and_render only opens sections
     // inside the already-open frame. When called standalone (outside run),
@@ -100,18 +116,32 @@ void EngineCore::run() {
     using clock = std::chrono::steady_clock;
     using duration = clock::duration;
 
-    const auto frame_duration = std::chrono::duration_cast<duration>(
-        std::chrono::duration<double>(1.0 / _target_fps)
-    );
     auto scheduled_frame_time = clock::now();
     auto last_time = scheduled_frame_time;
     bool has_previous_frame = false;
-    const double target_interval_ms = 1000.0 / _target_fps;
+    double active_target_fps = _target_fps.load();
 
-    tc_log(TC_LOG_INFO, "[EngineCore] Starting main loop at %.1f FPS", _target_fps);
+    if (active_target_fps > 0.0) {
+        tc_log(TC_LOG_INFO, "[EngineCore] Starting main loop with %.1f FPS limit", active_target_fps);
+    } else {
+        tc_log(TC_LOG_INFO, "[EngineCore] Starting main loop without FPS limit");
+    }
 
     while (_running) {
         auto frame_start = clock::now();
+        const double configured_target_fps = _target_fps.load();
+        if (configured_target_fps != active_target_fps) {
+            active_target_fps = configured_target_fps;
+            scheduled_frame_time = frame_start;
+            if (active_target_fps > 0.0) {
+                tc_log(TC_LOG_INFO, "[EngineCore] FPS limit changed to %.1f", active_target_fps);
+            } else {
+                tc_log(TC_LOG_INFO, "[EngineCore] FPS limit disabled");
+            }
+        }
+        const double target_interval_ms = active_target_fps > 0.0
+            ? 1000.0 / active_target_fps
+            : 0.0;
         double dt = std::chrono::duration<double>(frame_start - last_time).count();
         const double start_time_ms = std::chrono::duration<double, std::milli>(
             frame_start.time_since_epoch()
@@ -175,12 +205,22 @@ void EngineCore::run() {
 
         if (capture_frame) tc_profiler_end_frame();
 
-        // Frame limiting with sleep_until for stable pacing
-        // Keep the expected start until the next iteration observes it. A
-        // late frame is resynchronized above only after its lateness has been
-        // recorded, so scheduler catch-up cannot erase hitch evidence.
-        scheduled_frame_time += frame_duration;
-        std::this_thread::sleep_until(scheduled_frame_time);
+        if (active_target_fps > 0.0) {
+            // Frame limiting with sleep_until for stable pacing. Keep the
+            // expected start until the next iteration observes it. A late
+            // frame is resynchronized above only after its lateness has been
+            // recorded, so scheduler catch-up cannot erase hitch evidence.
+            const auto frame_duration = std::chrono::duration_cast<duration>(
+                std::chrono::duration<double>(1.0 / active_target_fps)
+            );
+            scheduled_frame_time += frame_duration;
+            std::this_thread::sleep_until(scheduled_frame_time);
+        } else {
+            // With no software limit, presentation (if synchronized) or the
+            // actual workload determines cadence. Keep profiler deadlines
+            // neutral instead of accumulating artificial lateness.
+            scheduled_frame_time = clock::now();
+        }
     }
 
     tc_log(TC_LOG_INFO, "[EngineCore] Main loop stopped");

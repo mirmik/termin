@@ -182,6 +182,7 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
     from termin.editor_core.settings import EditorSettings
 
     settings = EditorSettings.instance()
+    engine.target_fps = settings.get_fps_limit()
     presentation_mode = (
         PresentationMode.VSYNC
         if settings.get_vsync_enabled()

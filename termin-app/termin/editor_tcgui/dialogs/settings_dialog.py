@@ -127,6 +127,16 @@ def show_settings_dialog(ui) -> None:
     vsync_check.checked = snapshot.vsync_enabled
     content.add_child(vsync_check)
 
+    fps_limit_row, fps_limit_spin = _make_spin_row(
+        "FPS Limit (0 = Unlimited):",
+        snapshot.fps_limit,
+        0.0,
+        1000.0,
+        1.0,
+        0,
+    )
+    content.add_child(fps_limit_row)
+
     # Apply button — applies font changes without closing the dialog
     apply_row = HStack()
     apply_row.spacing = 8
@@ -164,6 +174,7 @@ def show_settings_dialog(ui) -> None:
                     font_size_small=font_small_spin.value,
                     mcp_server_enabled=mcp_check.checked,
                     vsync_enabled=vsync_check.checked,
+                    fps_limit=fps_limit_spin.value,
                 )
             )
 
