@@ -35,10 +35,7 @@ struct TERMIN_RENDER_PASSES_API ShadowDrawCall {
     Entity entity;
     tc_component* component = nullptr;
     tc_material_phase* phase = nullptr;
-    TcShader final_shader;  // Shader after task planning (skinning, alpha-test, etc.)
-    int geometry_id = 0;
     size_t item_index = SIZE_MAX;
-    tc_render_item item{};
     tc_material_handle material = tc_material_handle_invalid();
     size_t phase_index = SIZE_MAX;
 
@@ -203,9 +200,6 @@ private:
         uint64_t render_category_mask,
         RenderSceneItemCollector& collector
     );
-
-    // Sort draw calls by shader
-    void sort_draw_calls_by_shader();
 
     // Build shadow camera params for a light
     ShadowCameraParams build_shadow_params(

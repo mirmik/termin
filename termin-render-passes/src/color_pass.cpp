@@ -379,21 +379,10 @@ void ColorPass::collect_draw_calls(
             continue;
         }
 
-        RenderTaskList planned_shader;
-        if (!plan_color_item_shader(
-                item,
-                phase,
-                pass_contract,
-                "ColorPass/Collect",
-                planned_shader)) {
-            continue;
-        }
-
         PhaseDrawCall dc;
         dc.entity = ent;
         dc.component = tc;
         dc.phase = phase;
-        dc.final_shader = TcShader(planned_shader.at(0).final_shader);
         dc.priority = phase->priority;
         dc.geometry_id = item.geometry_id;
         dc.item_index = item_index;
@@ -623,6 +612,99 @@ void ColorPass::execute_with_data(
         data.layer_mask,
         scene_items);
 
+    const std::string debug_pass_name = get_pass_name();
+    const char* debug_pass_name_c = debug_pass_name.c_str();
+    const MaterialPipelinePassContract task_shader_contract =
+        color_material_pass_contract();
+    RenderItemTaskPlanningContract task_planning_contract =
+        color_task_planning_contract(task_shader_contract, debug_pass_name_c);
+    RenderTaskList render_tasks;
+    render_tasks.reserve(cached_draw_calls_.size());
+    std::vector<RenderTask*> tasks_by_item_index(scene_items.item_count(), nullptr);
+
+    // Retain only accepted draw calls in the pass scratch buffer. Each
+    // accepted call points back to one owned task by its stable collected item
+    // index, so sorting draw calls never moves task RAII state.
+    sorted_draw_calls_.clear();
+    sorted_draw_calls_.reserve(cached_draw_calls_.size());
+    size_t source_draw_index = 0;
+    for (PhaseDrawCall& dc : cached_draw_calls_) {
+        tc_material_phase* phase = dc.resolve_phase();
+        const tc_render_item* item = scene_items.item(dc.item_index);
+        if (!phase || !item) {
+            if (!item) {
+                tc::Log::error(
+                    "[ColorPass/tgfx2] skip planning: pass='%s' phase='%s' has invalid item index %zu",
+                    debug_pass_name_c,
+                    phase_mark.c_str(),
+                    dc.item_index);
+            }
+            ++source_draw_index;
+            continue;
+        }
+        phase = resolve_render_item_material_phase(*item);
+        if (!phase) {
+            ++source_draw_index;
+            continue;
+        }
+
+        RenderItemTaskPlanningRequest planning_request{};
+        planning_request.item = item;
+        planning_request.item_index = dc.item_index;
+        planning_request.source_draw_index = source_draw_index;
+        planning_request.material_phase = phase;
+        planning_request.candidate_shader = phase->shader;
+        planning_request.contract = &task_planning_contract;
+        RenderItemTaskPlanningResult planning_result =
+            plan_render_item_task(planning_request, render_tasks);
+        ++source_draw_index;
+        if (!planning_result.accepted()) {
+            continue;
+        }
+
+        ColorTaskExtension& extension =
+            render_tasks.emplace_extension<ColorTaskExtension>();
+        RenderTask& task = render_tasks.at(planning_result.task_index);
+        task.extension = &extension;
+        task.entity = dc.entity;
+        task.component = dc.component;
+        const char* entity_name = dc.entity.name();
+        task.entity_name = entity_name ? entity_name : "";
+        if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
+            std::memcpy(
+                extension.draw_data.u_model,
+                item->model_matrix,
+                sizeof(extension.draw_data.u_model));
+        } else {
+            Mat44f identity = Mat44f::identity();
+            std::memcpy(
+                extension.draw_data.u_model,
+                identity.data,
+                sizeof(extension.draw_data.u_model));
+        }
+
+        std::memcpy(
+            task.draw_context.model.data,
+            extension.draw_data.u_model,
+            sizeof(extension.draw_data.u_model));
+        task.draw_context.view = data.view;
+        task.draw_context.projection = data.projection;
+        task.draw_context.phase = phase_mark;
+        task.draw_context.pass_contract = task_shader_contract;
+        task.draw_context.current_tc_shader = TcShader(task.final_shader);
+        task.draw_context.layer_mask = data.layer_mask;
+        task.draw_context.render_category_mask = ctx.render_category_mask;
+        task.draw_context.camera_position = data.camera_position;
+        task.draw_context.viewport_width = data.rect.width;
+        task.draw_context.viewport_height = data.rect.height;
+        task.draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
+
+        dc.final_shader = TcShader(task.final_shader);
+        tasks_by_item_index[dc.item_index] = &task;
+        sorted_draw_calls_.push_back(std::move(dc));
+    }
+    std::swap(cached_draw_calls_, sorted_draw_calls_);
+
     if (sort_mode != "none" && !cached_draw_calls_.empty()) {
         compute_sort_keys(data.camera_position);
         sort_draw_calls();
@@ -631,6 +713,20 @@ void ColorPass::execute_with_data(
             [](const PhaseDrawCall& a, const PhaseDrawCall& b) {
                 return a.priority < b.priority;
             });
+    }
+
+    std::vector<RenderTask*> sorted_render_tasks;
+    sorted_render_tasks.reserve(cached_draw_calls_.size());
+    for (const PhaseDrawCall& dc : cached_draw_calls_) {
+        RenderTask* task = tasks_by_item_index[dc.item_index];
+        if (!task) {
+            tc::Log::error(
+                "[ColorPass/tgfx2] accepted draw has no planned task: pass='%s' item=%zu",
+                debug_pass_name_c,
+                dc.item_index);
+            continue;
+        }
+        sorted_render_tasks.push_back(task);
     }
 
     // Allocate lighting UBO directly on the tgfx2 device and upload this
@@ -712,119 +808,8 @@ void ColorPass::execute_with_data(
             tgfx::SamplerHandle{}});
     }
 
-    const std::string debug_pass_name = get_pass_name();
-    const char* debug_pass_name_c = debug_pass_name.c_str();
-
-    RenderTaskList render_tasks;
-    render_tasks.reserve(cached_draw_calls_.size());
-    const MaterialPipelinePassContract task_shader_contract =
-        color_material_pass_contract();
-    RenderItemTaskPlanningContract task_planning_contract =
-        color_task_planning_contract(task_shader_contract, debug_pass_name_c);
-
-    size_t draw_index = 0;
-    for (const auto& dc : cached_draw_calls_) {
-        if (!dc.component) {
-            tc::Log::error(
-                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu has null component",
-                get_pass_name().c_str(),
-                phase_mark.c_str(),
-                draw_index);
-            ++draw_index;
-            continue;
-        }
-        if (!dc.entity.valid()) {
-            tc::Log::error(
-                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu component='%s' has invalid entity",
-                get_pass_name().c_str(),
-                phase_mark.c_str(),
-                draw_index,
-                safe_component_type(dc.component));
-            ++draw_index;
-            continue;
-        }
-        tc_material_phase* phase = dc.resolve_phase();
-        if (!phase) {
-            tc::Log::error(
-                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu entity='%s' component='%s' has null material phase",
-                get_pass_name().c_str(),
-                phase_mark.c_str(),
-                draw_index,
-                dc.entity.name() ? dc.entity.name() : "<unnamed>",
-                safe_component_type(dc.component));
-            ++draw_index;
-            continue;
-        }
-
-        const char* ename = dc.entity.name();
-        entity_names.push_back(ename ? ename : "");
-
-        const tc_render_item* item = scene_items.item(dc.item_index);
-        if (!item) {
-            tc::Log::error(
-                "[ColorPass/tgfx2] skip draw: pass='%s' phase='%s' index=%zu has invalid item index %zu",
-                get_pass_name().c_str(),
-                phase_mark.c_str(),
-                draw_index,
-                dc.item_index);
-            ++draw_index;
-            continue;
-        }
-        phase = resolve_render_item_material_phase(*item);
-        if (!phase) {
-            ++draw_index;
-            continue;
-        }
-
-        RenderItemTaskPlanningRequest planning_request{};
-        planning_request.item = item;
-        planning_request.item_index = dc.item_index;
-        planning_request.source_draw_index = draw_index;
-        planning_request.material_phase = phase;
-        planning_request.candidate_shader = phase->shader;
-        planning_request.contract = &task_planning_contract;
-        RenderItemTaskPlanningResult planning_result =
-            plan_render_item_task(planning_request, render_tasks);
-        if (!planning_result.accepted()) {
-            ++draw_index;
-            continue;
-        }
-
-        ColorTaskExtension& extension = render_tasks.emplace_extension<ColorTaskExtension>();
-        RenderTask& task = render_tasks.at(planning_result.task_index);
-        task.extension = &extension;
-        task.entity = dc.entity;
-        task.component = dc.component;
-        task.entity_name = ename ? ename : "";
-        if (item->flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-            std::memcpy(
-                extension.draw_data.u_model,
-                item->model_matrix,
-                sizeof(extension.draw_data.u_model));
-        } else {
-            Mat44f identity = Mat44f::identity();
-            std::memcpy(
-                extension.draw_data.u_model,
-                identity.data,
-                sizeof(extension.draw_data.u_model));
-        }
-
-        task.draw_context.view = data.view;
-        task.draw_context.projection = data.projection;
-        std::memcpy(
-            task.draw_context.model.data,
-            extension.draw_data.u_model,
-            sizeof(extension.draw_data.u_model));
-        task.draw_context.phase = phase_mark;
-        task.draw_context.pass_contract = task_shader_contract;
-        task.draw_context.current_tc_shader = TcShader(task.final_shader);
-        task.draw_context.layer_mask = data.layer_mask;
-        task.draw_context.render_category_mask = ctx.render_category_mask;
-        task.draw_context.camera_position = data.camera_position;
-        task.draw_context.viewport_width = data.rect.width;
-        task.draw_context.viewport_height = data.rect.height;
-        task.draw_context.camera = const_cast<RenderCamera*>(ctx.camera);
-        ++draw_index;
+    for (const RenderTask* task : sorted_render_tasks) {
+        entity_names.push_back(task->entity_name);
     }
 
     if (!render_tasks.empty() && !shadow_sampler_) {
@@ -854,7 +839,8 @@ void ColorPass::execute_with_data(
         task.set_resources(&material_resources, uniforms, extra_texture_bindings);
     }
 
-    for (const RenderTask& task : render_tasks) {
+    for (const RenderTask* task_ptr : sorted_render_tasks) {
+        const RenderTask& task = *task_ptr;
         // Every material draw owns its descriptor set. Material textures are
         // optional at runtime; if one is missing, the Vulkan backend fills
         // that slot with its default texture. Without this reset, a missing
