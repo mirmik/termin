@@ -365,7 +365,7 @@ void DepthPass::execute_with_data_tgfx2(
         }
 
         tc_material_phase* material_phase =
-            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_)
+            tc_shader_handle_eq(dc.final_shader.handle, depth_shader_handle_)
                 ? nullptr
                 : dc.resolve_material_phase();
 
@@ -384,7 +384,7 @@ void DepthPass::execute_with_data_tgfx2(
         resource_binding.named_uniforms = draw_uniforms.data();
         resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
-        encode_request.shader_handle = dc.final_shader;
+        encode_request.shader_handle = dc.final_shader.handle;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.material_phase = material_phase;
@@ -579,7 +579,7 @@ void DepthOnlyPass::collect_draw_calls(
                     planned_shader)) {
                 continue;
             }
-            dc.final_shader = planned_shader.at(0).final_shader;
+            dc.final_shader = TcShader(planned_shader.at(0).final_shader);
             dc.geometry_id = item.geometry_id;
             if (selected_phase) {
                 dc.material_phase = selected_phase;
@@ -714,7 +714,7 @@ void DepthOnlyPass::sort_draw_calls_by_shader() const {
 
     std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
         [](const DrawCall& a, const DrawCall& b) {
-            return a.final_shader.index < b.final_shader.index;
+            return a.final_shader.handle.index < b.final_shader.handle.index;
         });
 }
 
@@ -869,7 +869,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         }
 
         tc_material_phase* material_phase =
-            tc_shader_handle_eq(dc.final_shader, depth_shader_handle_)
+            tc_shader_handle_eq(dc.final_shader.handle, depth_shader_handle_)
                 ? nullptr
                 : dc.resolve_material_phase();
 
@@ -885,7 +885,7 @@ void DepthOnlyPass::execute(ExecuteContext& ctx) {
         resource_binding.named_uniforms = draw_uniforms.data();
         resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
-        encode_request.shader_handle = dc.final_shader;
+        encode_request.shader_handle = dc.final_shader.handle;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::Position;
         encode_request.material_phase = material_phase;

@@ -270,7 +270,6 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     frame_profiler = build_native_frame_profiler(
         window_manager,
         profiler_capture_session,
-        request_render=request_editor_render,
         get_include_ui=lambda: bool(engine.profile_ui),
         set_include_ui=set_profile_ui,
     )

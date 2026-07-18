@@ -73,7 +73,9 @@ Native frontend композирует главное окно и modeless secon
 10 Гц. Timeline при этом дописывает только новые samples и сохраняет bounded
 capacity; полная перепроекция нужна лишь после clear или рассогласования модели.
 Это не даёт открытому профайлеру создавать собственные hitch по мере роста
-истории. Оба frontend используют общий `ProfilerCaptureCoordinator`, поэтому lifetime одного
+истории. Изменения standalone-окна инвалидируют только его собственный native
+host: они не запрашивают перерисовку main window или scene render. Оба frontend
+используют общий `ProfilerCaptureCoordinator`, поэтому lifetime одного
 потребителя не выключает сбор у другого.
 
 ### `termin/editor_tcgui/` — tcgui view

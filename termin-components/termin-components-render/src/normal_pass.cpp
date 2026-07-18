@@ -212,7 +212,7 @@ void NormalPass::execute_with_data_tgfx2(
         }
 
         tc_material_phase* material_phase =
-            tc_shader_handle_eq(dc.final_shader, normal_shader_handle_)
+            tc_shader_handle_eq(dc.final_shader.handle, normal_shader_handle_)
                 ? nullptr
                 : dc.resolve_material_phase();
 
@@ -233,7 +233,7 @@ void NormalPass::execute_with_data_tgfx2(
         resource_binding.named_uniforms = draw_uniforms.data();
         resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
-        encode_request.shader_handle = dc.final_shader;
+        encode_request.shader_handle = dc.final_shader.handle;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::PositionNormal;
         encode_request.material_phase = material_phase;

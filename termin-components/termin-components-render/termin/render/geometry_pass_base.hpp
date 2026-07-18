@@ -38,7 +38,7 @@ public:
     public:
         Entity entity;
         tc_component* component = nullptr;
-        tc_shader_handle final_shader = tc_shader_handle_invalid();
+        TcShader final_shader;
         tc_material_phase* material_phase = nullptr;
         tc_material_handle material = tc_material_handle_invalid();
         tc_render_item item{};

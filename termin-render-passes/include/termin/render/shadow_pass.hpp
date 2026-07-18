@@ -35,7 +35,7 @@ struct TERMIN_RENDER_PASSES_API ShadowDrawCall {
     Entity entity;
     tc_component* component = nullptr;
     tc_material_phase* phase = nullptr;
-    tc_shader_handle final_shader;  // Shader after override (skinning, alpha-test, etc.)
+    TcShader final_shader;  // Shader after task planning (skinning, alpha-test, etc.)
     int geometry_id = 0;
     size_t item_index = SIZE_MAX;
     tc_render_item item{};

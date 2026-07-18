@@ -393,7 +393,7 @@ void ColorPass::collect_draw_calls(
         dc.entity = ent;
         dc.component = tc;
         dc.phase = phase;
-        dc.final_shader = planned_shader.at(0).final_shader;
+        dc.final_shader = TcShader(planned_shader.at(0).final_shader);
         dc.priority = phase->priority;
         dc.geometry_id = item.geometry_id;
         dc.item_index = item_index;
@@ -455,8 +455,8 @@ void ColorPass::compute_sort_keys(const Vec3& camera_position) {
 
         // Shader ID in next 16 bits (from final shader after overrides)
         uint64_t shader_bits = 0;
-        if (!tc_shader_handle_is_invalid(dc.final_shader)) {
-            shader_bits = dc.final_shader.index & 0xFFFF;
+        if (dc.final_shader.is_valid()) {
+            shader_bits = dc.final_shader.handle.index & 0xFFFF;
         }
 
         // Distance in lower 32 bits
