@@ -12,6 +12,12 @@
 4. Вызывается `on_added_to_entity`.
 5. Вызывается `on_added`.
 
+Набор scheduler-фаз изменяется через
+`tc_component_set_lifecycle_capabilities`. Для уже добавленного компонента
+операция синхронно обновляет все три scene index (`update`, `fixed_update`,
+`before_render`). Прямое изменение флагов после регистрации не является частью
+публичного контракта.
+
 ## Основной update-цикл
 
 `tc_scene_update(scene, dt)`:
@@ -36,6 +42,11 @@
 
 1. `before_render` у зарегистрированных компонентов.
 2. `tc_scene_ext_on_scene_before_render` у extensions.
+
+`PythonComponent` участвует только в тех scheduler-фазах, методы которых
+переопределены. После замены Python-класса вызывается
+`refresh_lifecycle_capabilities()`, чтобы повторно вычислить override-набор и
+переиндексировать attached-компонент.
 
 ## Удаление компонента
 
