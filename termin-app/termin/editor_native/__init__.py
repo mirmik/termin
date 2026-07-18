@@ -14,6 +14,11 @@ from .profiler_panel import (
     build_native_profiler_panel,
     connect_profiler_menu_toggle,
 )
+from .frame_profiler import (
+    NativeFrameProfiler,
+    build_native_frame_profiler,
+    connect_frame_profiler_command,
+)
 from .registry_viewer import (
     NativeRegistryViewer,
     build_native_registry_catalog_viewer,
@@ -96,6 +101,7 @@ __all__ = [
     "NativeUiWindowManager",
     "NativeEditorShell",
     "NativeProfilerPanel",
+    "NativeFrameProfiler",
     "NativeRegistryViewer",
     "NativeProjectBrowser",
     "NativeInspectorFields",
@@ -126,6 +132,8 @@ __all__ = [
     "build_native_editor_shell",
     "build_native_profiler_panel",
     "connect_profiler_menu_toggle",
+    "build_native_frame_profiler",
+    "connect_frame_profiler_command",
     "build_native_registry_viewer",
     "build_native_registry_catalog_viewer",
     "connect_registry_viewer_command",

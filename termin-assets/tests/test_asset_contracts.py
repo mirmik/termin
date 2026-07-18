@@ -4,6 +4,7 @@ import pytest
 
 from termin_assets import (
     Asset,
+    AssetRecord,
     AssetRegistry,
     AssetStore,
     AssetRuntimeManager,
@@ -457,6 +458,40 @@ def test_asset_reload_events_are_manager_local_versioned_and_unsubscribable() ->
     subscription.close()
     assert manager.reload_file(result)
     assert len(events) == 1
+
+
+def test_external_runtime_plugin_can_reload_without_generic_asset_registry() -> None:
+    manager = AssetRuntimeManager()
+
+    class ExternalRuntimePlugin:
+        type_id = "external"
+
+        def register(self, context, result: PreLoadResult) -> None:
+            context.resource_manager.external_assets.upsert(
+                AssetRecord(
+                    type_id=self.type_id,
+                    name=context.name,
+                    path=result.path,
+                    uuid=result.uuid,
+                )
+            )
+
+        def reload(self, context, result: PreLoadResult) -> None:
+            self.register(context, result)
+
+    manager.asset_type_plugins.register_runtime(ExternalRuntimePlugin())
+    result = PreLoadResult(
+        resource_type="external",
+        path="/tmp/probe.external",
+        uuid="external-uuid",
+    )
+
+    manager.register_file(result)
+    assert manager.reload_file(result)
+
+    record = manager.external_assets.get_by_uuid("external", "external-uuid")
+    assert record is not None
+    assert record.path == "/tmp/probe.external"
 
 
 def test_spec_file_helpers_use_meta_only_and_leave_unrelated_spec_files(tmp_path) -> None:

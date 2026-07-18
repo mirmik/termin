@@ -349,7 +349,7 @@ void GeometryPassBase::collect_draw_calls(
             DrawCall dc;
             dc.entity = ent;
             dc.component = c;
-            dc.final_shader = planned_shader.at(0).final_shader;
+            dc.final_shader = TcShader(planned_shader.at(0).final_shader);
             dc.item = item;
             dc.geometry_id = item.geometry_id;
             dc.pick_id = pick_id;
@@ -394,7 +394,7 @@ void GeometryPassBase::sort_draw_calls_by_shader() const {
 
     std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
         [](const DrawCall& a, const DrawCall& b) {
-            return a.final_shader.index < b.final_shader.index;
+            return a.final_shader.handle.index < b.final_shader.handle.index;
         });
 }
 

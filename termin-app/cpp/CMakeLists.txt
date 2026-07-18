@@ -141,6 +141,11 @@ else()
     find_package(termin_display REQUIRED)
 endif()
 if(COMMAND termin_require_package)
+    termin_require_package(termin_gui_native termin_gui_native::termin_gui_native)
+else()
+    find_package(termin_gui_native REQUIRED)
+endif()
+if(COMMAND termin_require_package)
     termin_require_package(termin_engine termin_engine::termin_engine)
 else()
     find_package(termin_engine REQUIRED)
@@ -299,6 +304,7 @@ if(BUILD_TESTS)
         termin/editor/component_editor_visual.cpp
         termin/editor/camera_frustum_debug_gizmo.cpp
         termin/editor/editor_interaction_system.cpp
+        termin/editor/frame_profiler_controller.cpp
         termin/editor/selection_manager.cpp
         termin/editor/editor_snap.cpp
         termin/editor/gizmo_manager.cpp
@@ -313,6 +319,7 @@ if(BUILD_TESTS)
         tests/tests_orbit_camera_controller.cpp
         tests/tests_camera_frustum_debug_gizmo.cpp
         tests/tests_rendering_manager.cpp
+        tests/tests_frame_profiler_controller.cpp
         tests/tests_shader_parser_std140.cpp
     )
     target_include_directories(termin_tests PRIVATE
@@ -326,6 +333,7 @@ if(BUILD_TESTS)
         termin_scene::termin_scene
         termin_input::termin_input
         termin_engine::termin_engine
+        termin_gui_native::termin_gui_native
         termin_components_render::termin_components_render
         termin_components_collision::termin_components_collision
         termin_components_kinematic::termin_components_kinematic

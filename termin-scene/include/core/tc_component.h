@@ -121,6 +121,7 @@ struct tc_component {
     bool has_update;
     bool has_fixed_update;
     bool has_before_render;
+    tc_scene_handle lifecycle_scene;
 
     // If true, factory already did retain - entity should NOT retain again on add_component.
     // Factory sets this to true after doing its own retain.
@@ -164,6 +165,7 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     c->has_update = (vtable && vtable->update != NULL);
     c->has_fixed_update = (vtable && vtable->fixed_update != NULL);
     c->has_before_render = (vtable && vtable->before_render != NULL);
+    c->lifecycle_scene = TC_SCENE_HANDLE_INVALID;
     c->factory_retained = false;
     c->type_prev = NULL;
     c->type_next = NULL;
@@ -174,6 +176,16 @@ static inline void tc_component_init(tc_component* c, const tc_component_vtable*
     memset(c->capability_prev, 0, sizeof(c->capability_prev));
     memset(c->capability_next, 0, sizeof(c->capability_next));
 }
+
+// Change the complete lifecycle scheduling contract in one operation. If the
+// component is registered with a scene, its scheduler indexes are updated
+// before this function returns. Detached components only store the flags.
+TC_API void tc_component_set_lifecycle_capabilities(
+    tc_component* c,
+    bool has_update,
+    bool has_fixed_update,
+    bool has_before_render
+);
 
 // ============================================================================
 // Component lifecycle calls (null-safe vtable dispatch)

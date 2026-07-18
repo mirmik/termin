@@ -54,6 +54,7 @@ UI-agnostic слой. Модели состояния + сервисы.
 | `prefab_edit_controller.py` | `PrefabEditController` — UI-agnostic isolation mode for editing `.prefab` files. |
 | `project_session_controller.py` | Общий lifecycle проекта: stdlib sync, shader runtime, project modules, `InitScript.py`, resource scan и восстановление project root. UI frontend передаёт callbacks для ошибок и progress presentation. |
 | `spacemouse_controller.py` | `SpaceMouseController` — libspnav integration; polling from the tcgui render loop. |
+| `profiler_capture.py` | Арбитраж process-global секционного профайлера для legacy summary-панели. Bounded capture нового Frame Profiler хранится в C, а его модели и анализ принадлежат C++ `FrameProfilerController`. |
 | `gizmo/` | Unified gizmo exports and Python collider/constraint helpers used by runtime rendering code. |
 
 ### `termin/editor/` — legacy entrypoint
@@ -61,6 +62,25 @@ UI-agnostic слой. Модели состояния + сервисы.
 Содержит только совместимые entrypoint-файлы (`python -m termin.editor`,
 `termin.editor.run_editor`). Они запускают единственный production frontend —
 native UI. UI-код здесь добавлять нельзя.
+
+### `termin/editor_native/` — production native UI
+
+Native frontend композирует главное окно и modeless secondary OS windows через
+`NativeUiWindowManager`. `profiler_panel.py` остаётся лёгкой сглаженной сводкой
+в dock, а `frame_profiler.py` — отдельный raw-frame frontend: bounded timeline,
+пауза/follow, hitch navigation, `Include UI` и несглаженное дерево выбранного
+кадра. Кнопка `Capture` включает дешёвый сбор interval/active/cadence и может
+рисовать timeline без иерархических секций. Отдельная кнопка `Profiling`
+включает секционное профилирование; его состояние фиксируется на границе кадра,
+чтобы переключение из UI не разбалансировало begin/end стек.
+
+Bounded ring сырых кадров принадлежит C-профайлеру. Статистика, hitch navigation
+и native UI-модели принадлежат C++ `FrameProfilerController`; UI-проекция
+ограничена 10 Гц. Timeline дописывает только новые samples и сохраняет bounded
+capacity, поэтому открытое окно не создаёт собственные hitch по мере роста
+истории. `ProfilerCaptureCoordinator` обслуживает только legacy summary-панель,
+а его enable-request композиционно сосуществует с запросами нового capture:
+один frontend не выключает сбор или секции, нужные другому.
 
 ### `termin/editor_tcgui/` — tcgui view
 

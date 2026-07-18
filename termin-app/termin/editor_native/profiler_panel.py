@@ -41,7 +41,6 @@ class NativeProfilerPanel:
     expansion_model: TreeExpansionModel
     frame_time_model: FrameTimeModel
     enable_command: int
-    detailed_command: int
     include_ui_command: int
     clear_command: int
     known_node_ids: set[str] = field(default_factory=set)
@@ -116,9 +115,6 @@ def build_native_profiler_panel(
     enable = commands.append(
         CommandData("enable", "Enable", checkable=True, checked=controller.enabled)
     )
-    detailed = commands.append(
-        CommandData("detailed", "Detailed", checkable=True, checked=controller.detailed)
-    )
     include_ui = commands.append(
         CommandData("include-ui", "Include UI", checkable=True, checked=controller.include_ui)
     )
@@ -172,7 +168,6 @@ def build_native_profiler_panel(
         expansion_model=expansion_model,
         frame_time_model=frame_model,
         enable_command=enable,
-        detailed_command=detailed,
         include_ui_command=include_ui,
         clear_command=clear,
     )
@@ -182,8 +177,6 @@ def build_native_profiler_panel(
             controller.set_enabled(command.checked)
             if not command.checked:
                 panel.clear()
-        elif command_id == detailed:
-            controller.set_detailed(command.checked)
         elif command_id == include_ui:
             controller.set_include_ui(command.checked)
         elif command_id == clear:

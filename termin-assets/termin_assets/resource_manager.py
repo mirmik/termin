@@ -269,9 +269,16 @@ class AssetRuntimeManager:
         return AssetReloadSubscription(self, subscription_id)
 
     def _find_reloaded_asset(self, type_id: str, name: str, uuid: str | None) -> Asset | None:
+        registry = self._runtime_asset_registries.get(type_id)
+        if registry is None:
+            # Runtime plugins may intentionally own their storage outside the
+            # generic AssetStore (for example, native handle registries plus
+            # external_assets). Such plugins can reload successfully, but do
+            # not participate in AssetReloadEvent version tracking.
+            return None
         if uuid:
-            return self.get_runtime_asset_by_uuid(type_id, uuid)
-        return self.get_runtime_asset(type_id, name)
+            return registry.get_asset_by_uuid(uuid)
+        return registry.get_asset(name)
 
     def _publish_asset_reloaded(self, event: AssetReloadEvent) -> None:
         for callback in tuple(self._asset_reload_subscribers.values()):
