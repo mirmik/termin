@@ -470,6 +470,9 @@ void bind_sdl(nb::module_& m) {
             "Set the OS window title.")
         .def("maximize", &SDLBackendWindow::maximize,
              "Maximize the OS window via SDL_MaximizeWindow.")
+        .def("set_icon_bmp", &SDLBackendWindow::set_icon_bmp,
+             nb::arg("path"),
+             "Load a BMP file and use it as the OS window icon. Raises on load failure.")
         .def("set_fullscreen", &SDLBackendWindow::set_fullscreen,
              nb::arg("enabled"),
              "Toggle borderless desktop fullscreen via SDL_SetWindowFullscreen.")
