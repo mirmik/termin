@@ -14,6 +14,7 @@ class EditorSettingsSnapshot:
     font_size: float
     font_size_small: float
     mcp_server_enabled: bool
+    vsync_enabled: bool
 
 
 class EditorSettingsController:
@@ -27,6 +28,7 @@ class EditorSettingsController:
             font_size=float(self._settings.get_font_size()),
             font_size_small=float(self._settings.get_font_size_small()),
             mcp_server_enabled=self._settings.get_mcp_server_enabled(),
+            vsync_enabled=self._settings.get_vsync_enabled(),
         )
 
     def save(self, snapshot: EditorSettingsSnapshot) -> EditorSettingsSnapshot:
@@ -36,6 +38,7 @@ class EditorSettingsController:
         self._settings.set_font_size(validated.font_size)
         self._settings.set_font_size_small(validated.font_size_small)
         self._settings.set_mcp_server_enabled(validated.mcp_server_enabled)
+        self._settings.set_vsync_enabled(validated.vsync_enabled)
         self._settings.sync()
         return validated
 
@@ -53,6 +56,7 @@ class EditorSettingsController:
             font_size=font_size,
             font_size_small=small,
             mcp_server_enabled=bool(snapshot.mcp_server_enabled),
+            vsync_enabled=bool(snapshot.vsync_enabled),
         )
 
 

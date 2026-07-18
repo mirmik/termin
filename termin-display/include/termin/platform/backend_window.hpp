@@ -29,6 +29,8 @@ public:
     virtual tgfx::IRenderDevice* device() = 0;
     virtual tgfx::RenderContext2* context() = 0;
     virtual tgfx::BackendType backend_type() const = 0;
+    virtual tgfx::PresentationMode requested_presentation_mode() const = 0;
+    virtual tgfx::PresentationMode presentation_mode() const = 0;
 
     virtual bool should_close() const = 0;
     virtual void set_should_close(bool v) = 0;

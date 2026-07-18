@@ -18,6 +18,7 @@ from tcgui.widgets.ui import UI
 
 from tgfx import Tgfx2Context
 from termin.display._platform_native import (
+    PresentationMode,
     SDLBackendWindow,
     poll_sdl_events,
     quit_sdl,
@@ -178,9 +179,23 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
     render_engine = engine.rendering_manager.render_engine
     configure_sdk_shader_runtime("editor", render_engine=render_engine)
 
+    from termin.editor_core.settings import EditorSettings
+
+    settings = EditorSettings.instance()
+    presentation_mode = (
+        PresentationMode.VSYNC
+        if settings.get_vsync_enabled()
+        else PresentationMode.IMMEDIATE
+    )
+
     # BackendWindow inits SDL and creates its own window + tgfx2 device
     # based on TERMIN_BACKEND. No manual SDL_Init / SDL_GL_CreateContext.
-    main_window = SDLBackendWindow("Termin Editor", 1280, 720)
+    main_window = SDLBackendWindow(
+        "Termin Editor",
+        1280,
+        720,
+        presentation_mode=presentation_mode,
+    )
     apply_editor_window_icon(main_window)
     render_engine.ensure_tgfx2()
     main_window.maximize()
@@ -206,9 +221,7 @@ def init_editor_tcgui(engine, debug_resource: str | None = None, no_scene: bool 
 
     # Apply font size settings before widget tree is built.
     # Widgets read from current_theme in __init__, so this must happen before build().
-    from termin.editor_core.settings import EditorSettings
     from tcgui.widgets.theme import current_theme
-    settings = EditorSettings.instance()
     current_theme.font_size = settings.get_font_size()
     current_theme.font_size_small = settings.get_font_size_small()
 

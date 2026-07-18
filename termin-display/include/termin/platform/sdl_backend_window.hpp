@@ -23,7 +23,11 @@ private:
 public:
     // Create a window + backend device. Throws std::runtime_error on
     // SDL / device failure. The selected render backend is TERMIN_BACKEND.
-    SDLBackendWindow(const std::string& title, int width, int height);
+    SDLBackendWindow(
+        const std::string& title,
+        int width,
+        int height,
+        tgfx::PresentationMode presentation_mode = tgfx::PresentationMode::VSync);
 
     // Secondary-window constructor. Uses the IRenderDevice owned by
     // `share_with`; no new device is created.
@@ -38,6 +42,8 @@ public:
     tgfx::IRenderDevice* device() override;
     tgfx::RenderContext2* context() override;
     tgfx::BackendType backend_type() const override;
+    tgfx::PresentationMode requested_presentation_mode() const override;
+    tgfx::PresentationMode presentation_mode() const override;
 
     SDL_Window* sdl_window() const { return window_; }
 

@@ -90,6 +90,8 @@ HWND get_sdl_hwnd(SDL_Window* window) {
 
 struct SDLBackendWindow::Impl {
     tgfx::BackendType backend = tgfx::BackendType::OpenGL;
+    tgfx::PresentationMode requested_presentation_mode = tgfx::PresentationMode::VSync;
+    tgfx::PresentationMode presentation_mode = tgfx::PresentationMode::VSync;
     // Owned GPU runtime for primary windows; left empty on secondary
     // windows (they point `device_ref` at the primary's device instead).
     std::unique_ptr<tgfx::RenderRuntime> runtime;
@@ -125,9 +127,15 @@ struct SDLBackendWindow::Impl {
 // Ctor / dtor
 // ---------------------------------------------------------------------------
 
-SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int height)
+SDLBackendWindow::SDLBackendWindow(
+    const std::string& title,
+    int width,
+    int height,
+    tgfx::PresentationMode presentation_mode)
     : impl_(std::make_unique<Impl>())
 {
+    impl_->requested_presentation_mode = presentation_mode;
+    impl_->presentation_mode = presentation_mode;
     if (tgfx2_interop_get_device() != nullptr) {
         throw std::runtime_error(
             "BackendWindow(primary): an application graphics device is already installed; "
@@ -170,7 +178,26 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
             throw std::runtime_error(std::string("SDL_GL_CreateContext failed: ") + SDL_GetError());
         }
         SDL_GL_MakeCurrent(window_, impl_->gl_context);
-        SDL_GL_SetSwapInterval(1);
+        const int swap_interval = presentation_mode == tgfx::PresentationMode::VSync ? 1 : 0;
+        if (SDL_GL_SetSwapInterval(swap_interval) != 0) {
+            tc_log_warn(
+                "BackendWindow: SDL_GL_SetSwapInterval(%d) is unsupported: %s; "
+                "continuing with the driver's active interval",
+                swap_interval,
+                SDL_GetError());
+        }
+        const int applied_swap_interval = SDL_GL_GetSwapInterval();
+        impl_->presentation_mode = applied_swap_interval == 0
+            ? tgfx::PresentationMode::Immediate
+            : tgfx::PresentationMode::VSync;
+        if (impl_->presentation_mode != presentation_mode) {
+            tc_log_warn(
+                "BackendWindow: requested OpenGL presentation mode '%s', but the "
+                "driver applied '%s' (swap interval %d)",
+                presentation_mode == tgfx::PresentationMode::VSync ? "vsync" : "immediate",
+                impl_->presentation_mode == tgfx::PresentationMode::VSync ? "vsync" : "immediate",
+                applied_swap_interval);
+        }
 
         // OpenGLRenderDevice ctor loads GLAD and validates the live
         // context — it expects MakeCurrent to already have happened.
@@ -205,6 +232,7 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         info.instance_extensions = extensions;
         info.swapchain_width = static_cast<uint32_t>(fb_w);
         info.swapchain_height = static_cast<uint32_t>(fb_h);
+        info.presentation_mode = presentation_mode;
         SDL_Window* win = window_;
         info.surface_factory = [win](VkInstance inst) -> VkSurfaceKHR {
             VkSurfaceKHR surf = VK_NULL_HANDLE;
@@ -221,6 +249,12 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
 #endif
 #ifdef TGFX2_HAS_D3D11
     else if (impl_->backend == tgfx::BackendType::D3D11) {
+        if (presentation_mode != tgfx::PresentationMode::VSync) {
+            tc_log_warn(
+                "BackendWindow: D3D11 Immediate presentation is unsupported until "
+                "the flip-model tearing path is implemented; continuing with VSync");
+            impl_->presentation_mode = tgfx::PresentationMode::VSync;
+        }
         Uint32 flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN;
         window_ = SDL_CreateWindow(title.c_str(),
                                     SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -271,6 +305,8 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
             "BackendWindow(secondary): primary window has no device");
     }
     impl_->backend = share_with.impl_->backend;
+    impl_->requested_presentation_mode = share_with.impl_->requested_presentation_mode;
+    impl_->presentation_mode = share_with.impl_->presentation_mode;
     impl_->device_ref = share_with.impl_->device_ref;
     impl_->shared_ctx_owner = &share_with;
     configure_sdl_window_hints();
@@ -329,7 +365,8 @@ SDLBackendWindow::SDLBackendWindow(const std::string& title, int width, int heig
         impl_->secondary_swapchain = std::make_unique<tgfx::VulkanSwapchain>(
             *vk_dev, surf,
             static_cast<uint32_t>(fb_w),
-            static_cast<uint32_t>(fb_h));
+            static_cast<uint32_t>(fb_h),
+            impl_->presentation_mode);
     }
 #endif
 #ifdef TGFX2_HAS_D3D11
@@ -476,6 +513,14 @@ tgfx::IRenderDevice* SDLBackendWindow::device() {
 
 tgfx::BackendType SDLBackendWindow::backend_type() const {
     return impl_->backend;
+}
+
+tgfx::PresentationMode SDLBackendWindow::requested_presentation_mode() const {
+    return impl_->requested_presentation_mode;
+}
+
+tgfx::PresentationMode SDLBackendWindow::presentation_mode() const {
+    return impl_->presentation_mode;
 }
 
 tgfx::RenderContext2* SDLBackendWindow::context() {

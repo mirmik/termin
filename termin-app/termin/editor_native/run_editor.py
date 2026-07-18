@@ -7,7 +7,7 @@ import os
 from collections.abc import Callable
 from pathlib import Path
 
-from termin.display import SDLBackendWindow, quit_sdl
+from termin.display import PresentationMode, SDLBackendWindow, quit_sdl
 from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,
     ComponentExtensionPresentation,
@@ -212,7 +212,19 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
 
     render_engine = engine.rendering_manager.render_engine
     configure_sdk_shader_runtime("native-editor", render_engine=render_engine)
-    window = SDLBackendWindow("Termin Editor — Native UI", 1280, 720)
+    settings_controller = EditorSettingsController()
+    settings_snapshot = settings_controller.load()
+    presentation_mode = (
+        PresentationMode.VSYNC
+        if settings_snapshot.vsync_enabled
+        else PresentationMode.IMMEDIATE
+    )
+    window = SDLBackendWindow(
+        "Termin Editor — Native UI",
+        1280,
+        720,
+        presentation_mode=presentation_mode,
+    )
     apply_editor_window_icon(window)
     render_engine.ensure_tgfx2()
     window.maximize()
@@ -419,8 +431,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
         shell.audio_debugger_command,
         audio_debugger_dialog,
     )
-    settings_controller = EditorSettingsController()
-    host.apply_font_size(settings_controller.load().font_size)
+    host.apply_font_size(settings_snapshot.font_size)
     settings_dialog = build_native_settings_dialog(
         host.document,
         settings_controller,
