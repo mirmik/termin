@@ -6,6 +6,7 @@
 #include <tcbase/tc_resource_map.h>
 #include <tcbase/tc_string.h>
 #include <tcbase/tc_log.h>
+#include <tc_profiler.h>
 #include "core/tc_entity_pool_registry.h"
 #include <stdlib.h>
 #include <string.h>
@@ -630,7 +631,46 @@ void tc_component_set_lifecycle_capabilities(
 // Update Loop
 // ============================================================================
 
-static void process_pending_start(uint32_t idx, bool editor_mode) {
+static void component_profile_name(
+    const tc_component* component,
+    char out_name[TC_PROFILER_MAX_NAME_LEN]
+) {
+    const char* type_name = tc_component_type_name(component);
+    const char* entity_name = tc_entity_handle_valid(component->owner)
+        ? tc_entity_name(component->owner)
+        : "detached";
+
+    if (component->source_id && component->source_id[0] != '\0') {
+        snprintf(
+            out_name,
+            TC_PROFILER_MAX_NAME_LEN,
+            "%.24s @ %.20s [%.8s]",
+            type_name,
+            entity_name,
+            component->source_id
+        );
+        return;
+    }
+
+    // Directly registered components are allowed to have neither an owner nor
+    // an authoring source id. Keep those instances distinct in a live capture.
+    snprintf(
+        out_name,
+        TC_PROFILER_MAX_NAME_LEN,
+        "%.24s @ %.16s [%p]",
+        type_name,
+        entity_name,
+        (const void*)component
+    );
+}
+
+static void profile_component_begin(const tc_component* component) {
+    char name[TC_PROFILER_MAX_NAME_LEN];
+    component_profile_name(component, name);
+    tc_profiler_begin_section(name);
+}
+
+static void process_pending_start(uint32_t idx, bool editor_mode, bool profile) {
     ComponentList* pending = &g_pool->slots[idx].pending_starts;
     size_t count = pending->count;
     if (count == 0) return;
@@ -643,7 +683,9 @@ static void process_pending_start(uint32_t idx, bool editor_mode) {
         if (!c->enabled) continue;
         if (editor_mode && !c->active_in_editor) continue;
 
+        if (profile) profile_component_begin(c);
         tc_component_start(c);
+        if (profile) tc_profiler_end_section();
         list_remove(pending, c);
     }
 
@@ -739,11 +781,15 @@ void tc_scene_update(tc_scene_handle h, double dt) {
     if (!handle_alive(h)) return;
 
     uint32_t idx = h.index;
+    const bool profile = tc_profiler_enabled();
 
     // 1. Process pending start
-    process_pending_start(idx, false);
+    if (profile) tc_profiler_begin_section("Start");
+    process_pending_start(idx, false, profile);
+    if (profile) tc_profiler_end_section();
 
     // 2. Fixed update loop
+    if (profile) tc_profiler_begin_section("Fixed Update");
     g_pool->slots[idx].accumulated_time += dt;
     double fixed_dt = g_pool->slots[idx].fixed_timestep;
     ComponentList* fixed_list = &g_pool->slots[idx].fixed_update_list;
@@ -752,33 +798,46 @@ void tc_scene_update(tc_scene_handle h, double dt) {
         for (size_t i = 0; i < fixed_list->count; i++) {
             tc_component* c = fixed_list->items[i];
             if (c->enabled && component_entity_enabled(c)) {
+                if (profile) profile_component_begin(c);
                 tc_component_fixed_update(c, (float)fixed_dt);
+                if (profile) tc_profiler_end_section();
             }
         }
         g_pool->slots[idx].accumulated_time -= fixed_dt;
     }
+    if (profile) tc_profiler_end_section();
 
     // 3. Regular update
+    if (profile) tc_profiler_begin_section("Update");
     ComponentList* update_list = &g_pool->slots[idx].update_list;
     for (size_t i = 0; i < update_list->count; i++) {
         tc_component* c = update_list->items[i];
         if (c->enabled && component_entity_enabled(c)) {
+            if (profile) profile_component_begin(c);
             tc_component_update(c, (float)dt);
+            if (profile) tc_profiler_end_section();
         }
     }
+    if (profile) tc_profiler_end_section();
 
     // Extension update hooks
+    if (profile) tc_profiler_begin_section("Extensions");
     tc_scene_ext_on_scene_update(h, dt);
+    if (profile) tc_profiler_end_section();
 }
 
 void tc_scene_editor_update(tc_scene_handle h, double dt) {
     if (!handle_alive(h)) return;
 
     uint32_t idx = h.index;
+    const bool profile = tc_profiler_enabled();
 
-    process_pending_start(idx, true);
+    if (profile) tc_profiler_begin_section("Start");
+    process_pending_start(idx, true, profile);
+    if (profile) tc_profiler_end_section();
 
     // Fixed update - only active_in_editor
+    if (profile) tc_profiler_begin_section("Fixed Update");
     g_pool->slots[idx].accumulated_time += dt;
     double fixed_dt = g_pool->slots[idx].fixed_timestep;
     ComponentList* fixed_list = &g_pool->slots[idx].fixed_update_list;
@@ -787,23 +846,32 @@ void tc_scene_editor_update(tc_scene_handle h, double dt) {
         for (size_t i = 0; i < fixed_list->count; i++) {
             tc_component* c = fixed_list->items[i];
             if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
+                if (profile) profile_component_begin(c);
                 tc_component_fixed_update(c, (float)fixed_dt);
+                if (profile) tc_profiler_end_section();
             }
         }
         g_pool->slots[idx].accumulated_time -= fixed_dt;
     }
+    if (profile) tc_profiler_end_section();
 
     // Regular update - only active_in_editor
+    if (profile) tc_profiler_begin_section("Update");
     ComponentList* update_list = &g_pool->slots[idx].update_list;
     for (size_t i = 0; i < update_list->count; i++) {
         tc_component* c = update_list->items[i];
         if (c->enabled && c->active_in_editor && component_entity_enabled(c)) {
+            if (profile) profile_component_begin(c);
             tc_component_update(c, (float)dt);
+            if (profile) tc_profiler_end_section();
         }
     }
+    if (profile) tc_profiler_end_section();
 
     // Extension update hooks (editor mode uses same dt callback contract)
+    if (profile) tc_profiler_begin_section("Extensions");
     tc_scene_ext_on_scene_update(h, dt);
+    if (profile) tc_profiler_end_section();
 }
 
 void tc_scene_before_render(tc_scene_handle h) {

@@ -32,6 +32,16 @@
 - `component.enabled == true`
 - владеющая сущность либо невалидна, либо `entity.enabled == true`
 
+При включённом hierarchical profiling scheduler создаёт устойчивое дерево
+`Start / Fixed Update / Update / Extensions`. В первых трёх фазах каждый
+вызванный экземпляр компонента получает дочернюю секцию вида
+`TypeName @ EntityName [source]`. Повторные вызовы того же экземпляра в
+`fixed_update` объединяются профайлером и отражаются в `call_count`.
+
+Имена и число секций ограничены native-профайлером
+(`TC_PROFILER_MAX_NAME_LEN`, `TC_PROFILER_MAX_SECTIONS`). При выключенном
+profiling scheduler не строит имена секций и не выделяет для них память.
+
 ## Editor update-цикл
 
 `tc_scene_editor_update(scene, dt)` работает как обычный update, но добавляет фильтр `active_in_editor == true` для `start`, `fixed_update`, `update`.
