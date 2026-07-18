@@ -1575,6 +1575,73 @@ void tc_entity_pool_remove_component(tc_entity_pool* pool, tc_entity_id id, tc_c
     tc_component_release(c);
 }
 
+bool tc_entity_pool_replace_component_at_checked(
+    tc_entity_pool* pool,
+    tc_entity_id id,
+    size_t index,
+    tc_component* expected,
+    tc_component* replacement
+) {
+    if (!pool || !tc_entity_pool_alive(pool, id) || !expected || !replacement) {
+        return false;
+    }
+
+    ComponentArray* components = &pool->components[id.index];
+    const tc_entity_handle owner = tc_entity_handle_make(
+        tc_entity_pool_registry_find(pool), id);
+    if (index >= components->count || components->items[index] != expected ||
+        !tc_entity_handle_eq(expected->owner, owner) ||
+        tc_entity_handle_valid(replacement->owner)) {
+        return false;
+    }
+
+    tc_component_try_link_declared_type(replacement);
+    tc_component_ensure_source_id(replacement);
+
+    const char* expected_type = tc_component_type_name(expected);
+    const char* replacement_type = tc_component_type_name(replacement);
+    const tc_scene_handle scene = tc_entity_pool_get_scene(pool);
+
+    if (tc_scene_handle_valid(scene)) {
+        tc_scene_unregister_component(scene, expected);
+    } else {
+        tc_component_on_removed(expected);
+    }
+    tc_component_on_removed_from_entity(expected);
+    expected->owner = TC_ENTITY_HANDLE_INVALID;
+
+    replacement->owner = owner;
+    if (!replacement->factory_retained) {
+        tc_component_retain(replacement);
+    }
+    replacement->factory_retained = false;
+    components->items[index] = replacement;
+
+    if (tc_scene_handle_valid(scene)) {
+        tc_scene_register_component(scene, replacement);
+    }
+    tc_component_on_added_to_entity(replacement);
+    tc_component_on_added(replacement);
+
+    publish_structure_changed(
+        pool,
+        TC_SCENE_STRUCTURE_COMPONENT_REMOVED,
+        id,
+        pool->parent_ids[id.index],
+        expected_type
+    );
+    publish_structure_changed(
+        pool,
+        TC_SCENE_STRUCTURE_COMPONENT_ADDED,
+        id,
+        pool->parent_ids[id.index],
+        replacement_type
+    );
+
+    tc_component_release(expected);
+    return true;
+}
+
 size_t tc_entity_pool_component_count(const tc_entity_pool* pool, tc_entity_id id) {
     if (!tc_entity_pool_alive(pool, id)) { WARN_DEAD_ENTITY("component_count", id); return 0; }
     return pool->components[id.index].count;

@@ -61,6 +61,8 @@ struct RuntimeUnloadContext {
     bool sync_live_scenes = false;
     const std::vector<TcSceneRef>* scenes = nullptr;
     const char* module_id = nullptr;
+    bool component_batch_attempted = false;
+    bool component_batch_ok = false;
 };
 
 bool prepare_component_unload_for_runtime_type(
@@ -88,25 +90,32 @@ bool prepare_component_unload_for_runtime_type(
         return false;
     }
 
-    const std::vector<std::string> type_names{type_name};
-    bool ok = true;
-    for (const TcSceneRef& scene : *unload_context->scenes) {
-        const UnknownComponentStats stats = degrade_components_to_unknown(scene, type_names);
-        if (stats.failed > 0) {
-            ok = false;
+    if (!unload_context->component_batch_attempted) {
+        unload_context->component_batch_attempted = true;
+        const std::vector<std::string> type_names =
+            ComponentRegistry::instance().list_owned(
+                unload_context->module_id ? unload_context->module_id : "");
+        UnknownComponentDegradationPlan plan;
+        std::string error;
+        unload_context->component_batch_ok = prepare_components_to_unknown(
+            *unload_context->scenes,
+            type_names,
+            plan,
+            &error
+        ) && plan.commit(&error);
+        if (!unload_context->component_batch_ok) {
             tc::Log::error(
-                "TermModulesIntegration: failed to prepare %zu component instance(s) of type '%s' for module '%s' in scene '%s'",
-                stats.failed,
-                type_name,
+                "TermModulesIntegration: failed to prepare component batch for module '%s': %s",
                 unload_context->module_id ? unload_context->module_id : "<unknown>",
-                scene.name().c_str()
+                error.c_str()
             );
+            return false;
         }
     }
 
     const size_t remaining = tc_runtime_type_registry_instance_count(type_name);
     if (remaining > 0) {
-        ok = false;
+        unload_context->component_batch_ok = false;
         tc::Log::error(
             "TermModulesIntegration: component type '%s' still has %zu live instance(s) after prepare-unload for module '%s'",
             type_name,
@@ -115,7 +124,7 @@ bool prepare_component_unload_for_runtime_type(
         );
     }
 
-    return ok;
+    return unload_context->component_batch_ok;
 }
 
 bool prepare_pass_unload_for_runtime_type(
