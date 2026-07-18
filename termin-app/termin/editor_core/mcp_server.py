@@ -9,7 +9,8 @@ import time
 from tcbase import log
 
 from termin.editor_core.mcp_contract import editor_mcp_tool_schemas
-from termin.editor_core.mcp_session import default_editor_mcp_session_file
+from termin.editor_core.mcp_session import canonical_sdk_root, new_editor_mcp_session_file
+from termin.editor_core.project_context import current_project_path
 from termin.editor_core.python_executor import (
     EditorPythonExecutor,
 )
@@ -29,6 +30,13 @@ class EditorMcpServer(TerminMcpServer):
             server_version="TerminEditorMCP/0.1",
             thread_name="termin-editor-mcp",
         )
+
+    def _session_payload(self) -> dict[str, object]:
+        payload = super()._session_payload()
+        project_path = current_project_path()
+        payload["project_path"] = str(project_path) if project_path is not None else None
+        payload["sdk_root"] = str(canonical_sdk_root())
+        return payload
 
     def _handle_tool_call(
         self,
@@ -712,7 +720,7 @@ def editor_mcp_enabled() -> bool:
 def load_editor_mcp_config() -> EditorMcpConfig:
     session_file = os.environ.get("TERMIN_EDITOR_MCP_SESSION_FILE")
     if session_file is None:
-        session_file = default_editor_mcp_session_file()
+        session_file = new_editor_mcp_session_file()
     return create_secure_mcp_config(
         host=os.environ.get("TERMIN_EDITOR_MCP_HOST", "127.0.0.1"),
         port=os.environ.get("TERMIN_EDITOR_MCP_PORT", "0"),

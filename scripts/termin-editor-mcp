@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +18,10 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "termin-app"))
 
 from termin.editor_core.mcp_contract import editor_mcp_tool_schemas  # noqa: E402
-from termin.editor_core.mcp_session import default_editor_mcp_session_file  # noqa: E402
+from termin.editor_core.mcp_session import default_editor_mcp_registry_dir  # noqa: E402
 
 
-DEFAULT_SESSION_FILE = default_editor_mcp_session_file(sdk_root=REPOSITORY_ROOT / "sdk")
+DEFAULT_REGISTRY_DIR = default_editor_mcp_registry_dir(sdk_root=REPOSITORY_ROOT / "sdk")
 SUPPORTED_PROTOCOL_VERSIONS = (
     "2025-11-25",
     "2025-06-18",
@@ -31,6 +33,10 @@ LATEST_PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 class EditorMcpClientError(RuntimeError):
     """Failure while discovering or calling the private editor endpoint."""
+
+
+def _canonical_path(path: str | Path) -> Path:
+    return Path(os.path.normcase(str(Path(path).expanduser().resolve(strict=False))))
 
 
 def _load_session(path: Path) -> dict[str, Any]:
@@ -53,6 +59,7 @@ def _load_session(path: Path) -> dict[str, Any]:
         raise EditorMcpClientError(f"Invalid session file '{path}': missing endpoint URL")
     if not isinstance(token, str) or not token:
         raise EditorMcpClientError(f"Invalid session file '{path}': missing bearer token")
+    session["session_file"] = str(path)
     return session
 
 
@@ -97,6 +104,119 @@ def _call(session: dict[str, Any], method: str, params: object | None = None) ->
     return response
 
 
+def _session_summary(session: dict[str, Any], *, reachable: bool | None = None) -> dict[str, object]:
+    summary: dict[str, object] = {
+        "instanceId": session.get("instance_id"),
+        "pid": session.get("pid"),
+        "projectPath": session.get("project_path"),
+        "startedAt": session.get("started_at"),
+        "sessionFile": session.get("session_file"),
+    }
+    if reachable is not None:
+        summary["reachable"] = reachable
+    return summary
+
+
+def _session_is_reachable(session: dict[str, Any]) -> bool:
+    try:
+        response = _call(session, "ping")
+    except EditorMcpClientError:
+        return False
+    return response.get("result") == {}
+
+
+def _project_matches(selector: Path, project_value: object) -> bool:
+    if not isinstance(project_value, str) or not project_value:
+        return False
+    project = _canonical_path(project_value)
+    return selector == project or project in selector.parents
+
+
+@dataclass(frozen=True)
+class EditorSessionResolver:
+    explicit_session: Path | None
+    registry_dir: Path
+    project_selector: Path | None
+    instance_id: str | None
+
+    def describe(self) -> dict[str, object]:
+        if self.explicit_session is not None:
+            return {"sessionFile": str(self.explicit_session)}
+        return {
+            "registryDir": str(self.registry_dir),
+            "projectSelector": (str(self.project_selector) if self.project_selector is not None else None),
+            "instanceId": self.instance_id,
+        }
+
+    def discover(self) -> list[dict[str, Any]]:
+        if self.explicit_session is not None:
+            return [_load_session(self.explicit_session)]
+        try:
+            paths = sorted(self.registry_dir.glob("*.json"))
+        except OSError as exc:
+            raise EditorMcpClientError(f"Cannot inspect editor session registry '{self.registry_dir}': {exc}") from exc
+
+        sessions: list[dict[str, Any]] = []
+        invalid: list[str] = []
+        for path in paths:
+            try:
+                sessions.append(_load_session(path))
+            except EditorMcpClientError as exc:
+                invalid.append(str(exc))
+                print(
+                    f"termin-editor-mcp: ignoring invalid registry entry: {exc}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        if not sessions and invalid:
+            raise EditorMcpClientError("; ".join(invalid))
+        return sessions
+
+    def resolve(self) -> dict[str, Any]:
+        sessions = self.discover()
+        if self.explicit_session is not None:
+            return sessions[0]
+        if self.instance_id is not None:
+            sessions = [session for session in sessions if session.get("instance_id") == self.instance_id]
+            if not sessions:
+                raise EditorMcpClientError(
+                    f"Editor instance '{self.instance_id}' is not registered in {self.registry_dir}"
+                )
+        elif self.project_selector is not None:
+            project_sessions = [
+                session for session in sessions if _project_matches(self.project_selector, session.get("project_path"))
+            ]
+            if project_sessions:
+                sessions = project_sessions
+            elif len(sessions) > 1:
+                projects = sorted(
+                    {str(session.get("project_path")) for session in sessions if session.get("project_path")}
+                )
+                raise EditorMcpClientError(
+                    f"No editor matches project '{self.project_selector}'. "
+                    f"Registered projects: {', '.join(projects) or '(unknown)'}"
+                )
+
+        if not sessions:
+            raise EditorMcpClientError(f"No editor sessions are registered in {self.registry_dir}")
+        if len(sessions) == 1:
+            return sessions[0]
+
+        reachable = [session for session in sessions if _session_is_reachable(session)]
+        if len(reachable) == 1:
+            return reachable[0]
+        candidates = reachable or sessions
+        summaries = json.dumps(
+            [_session_summary(session, reachable=session in reachable) for session in candidates],
+            ensure_ascii=False,
+        )
+        if not reachable:
+            raise EditorMcpClientError(f"No matching editor endpoint is reachable. Candidates: {summaries}")
+        raise EditorMcpClientError(
+            f"Multiple editor instances match the current project. Select one with --instance. Candidates: {summaries}"
+        )
+
+
 def _rpc_result(request_id: object, result: object) -> dict[str, object]:
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
@@ -117,8 +237,8 @@ def _rpc_error(
 class EditorMcpStdioBroker:
     """Standard MCP lifecycle in front of the editor's private HTTP endpoint."""
 
-    def __init__(self, session_file: Path) -> None:
-        self._session_file = session_file
+    def __init__(self, resolver: EditorSessionResolver) -> None:
+        self._resolver = resolver
         self._initialized = False
         self._client_ready = False
 
@@ -178,9 +298,10 @@ class EditorMcpStdioBroker:
                     "version": "0.2.0",
                 },
                 "instructions": (
-                    "Tools control the Termin Editor identified by the configured "
-                    "session file. Tools remain discoverable while the editor is "
-                    "offline; calls require TERMIN_EDITOR_MCP=1."
+                    "Tools control the Termin Editor selected from the SDK registry "
+                    "by project, or from an explicit session file. Tools remain "
+                    "discoverable while editors are offline; calls require "
+                    "TERMIN_EDITOR_MCP=1."
                 ),
             },
         )
@@ -193,7 +314,7 @@ class EditorMcpStdioBroker:
         is_notification: bool,
     ) -> dict[str, object] | None:
         try:
-            session = _load_session(self._session_file)
+            session = self._resolver.resolve()
             response = _post_rpc(session, request)
         except EditorMcpClientError as exc:
             print(f"termin-editor-mcp: {exc}", file=sys.stderr, flush=True)
@@ -204,7 +325,7 @@ class EditorMcpStdioBroker:
                 -32050,
                 "Termin Editor is unavailable",
                 data={
-                    "sessionFile": str(self._session_file),
+                    **self._resolver.describe(),
                     "detail": str(exc),
                 },
             )
@@ -216,8 +337,8 @@ class EditorMcpStdioBroker:
         return response
 
 
-def _serve_stdio(session_file: Path) -> int:
-    broker = EditorMcpStdioBroker(session_file)
+def _serve_stdio(resolver: EditorSessionResolver) -> int:
+    broker = EditorMcpStdioBroker(resolver)
     for line in sys.stdin:
         try:
             request = json.loads(line)
@@ -266,12 +387,30 @@ def main() -> int:
     parser.add_argument(
         "--session",
         type=Path,
-        default=DEFAULT_SESSION_FILE,
-        help=f"Editor MCP session file. Default: {DEFAULT_SESSION_FILE}",
+        default=None,
+        help="Explicit editor MCP session file (agent-owned editor or manual selection)",
+    )
+    parser.add_argument(
+        "--registry",
+        type=Path,
+        default=DEFAULT_REGISTRY_DIR,
+        help=f"User editor session registry. Default: {DEFAULT_REGISTRY_DIR}",
+    )
+    parser.add_argument(
+        "--project",
+        type=Path,
+        default=Path.cwd(),
+        help="Project path used to select a user editor. Default: current directory",
+    )
+    parser.add_argument(
+        "--instance",
+        default=None,
+        help="Explicit user editor instance id within the registry",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("session-path", help="Print the checkout-scoped default session path")
+    sub.add_parser("registry-path", help="Print the SDK-scoped user session registry path")
+    sub.add_parser("sessions", help="List registered user editor instances without bearer tokens")
     sub.add_parser("serve", help="Serve standard MCP over stdin/stdout")
     sub.add_parser("initialize")
     sub.add_parser("tools-list")
@@ -317,16 +456,36 @@ def main() -> int:
     framegraph_pass_capture_parser.add_argument("--timeout", type=float, default=30.0)
 
     args = parser.parse_args()
+    resolver = EditorSessionResolver(
+        explicit_session=args.session,
+        registry_dir=args.registry,
+        project_selector=_canonical_path(args.project) if args.project is not None else None,
+        instance_id=args.instance,
+    )
 
-    if args.command == "session-path":
-        print(args.session)
+    if args.command == "registry-path":
+        print(args.registry)
+        return 0
+
+    if args.command == "sessions":
+        try:
+            sessions = resolver.discover()
+        except EditorMcpClientError as exc:
+            parser.exit(1, f"termin-editor-mcp: {exc}\n")
+        print(
+            json.dumps(
+                [_session_summary(session, reachable=_session_is_reachable(session)) for session in sessions],
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
         return 0
 
     if args.command == "serve":
-        return _serve_stdio(args.session)
+        return _serve_stdio(resolver)
 
     try:
-        session = _load_session(args.session)
+        session = resolver.resolve()
     except EditorMcpClientError as exc:
         parser.exit(1, f"termin-editor-mcp: {exc}\n")
 

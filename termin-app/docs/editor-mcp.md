@@ -19,18 +19,21 @@ TERMIN_EDITOR_MCP=1 ./run-termin.sh
 Use `TERMIN_EDITOR_MCP=0` to force-disable the server even when the editor
 setting is enabled.
 
-By default the server listens on an OS-picked loopback port. It writes a
-checkout-scoped session file in the system temporary directory. The path is
-derived from the canonical SDK root, so editors built by different Termin
-checkouts do not overwrite each other's discovery state. Print the path for
-the current checkout with:
+By default the server listens on an OS-picked loopback port. Every editor writes
+its own descriptor into an SDK-scoped registry in the system temporary
+directory. The registry path is derived from the canonical SDK root, so editors
+built by different Termin checkouts do not mix discovery state while multiple
+editors from one SDK remain independently addressable. Print the registry path
+and inspect its instances with:
 
 ```bash
-scripts/termin-editor-mcp session-path
+scripts/termin-editor-mcp registry-path
+scripts/termin-editor-mcp sessions
 ```
 
-The session file contains the endpoint URL and a generated bearer token. It is
-written with `0600` permissions.
+Each descriptor contains an instance id, process and project metadata, endpoint
+URL, and a generated bearer token. It is written with `0600` permissions. The
+`sessions` command deliberately omits bearer tokens.
 
 Optional settings:
 
@@ -51,6 +54,12 @@ scripts/termin-editor-mcp screenshot --path /tmp/editor.png
 scripts/termin-editor-mcp framegraph
 ```
 
+The helper selects a registered user editor whose canonical `project_path`
+contains the current working directory. Use `--project /path/to/project` when
+calling it from elsewhere. If several live editors match the same project, the
+helper reports their instance ids instead of choosing one arbitrarily; rerun it
+with `--instance INSTANCE_ID` to select one.
+
 On Windows PowerShell use the wrapper:
 
 ```powershell
@@ -69,19 +78,18 @@ child process. The broker performs the MCP lifecycle over stdin/stdout and
 serves the editor tool schemas locally. It forwards `tools/call` to the
 authenticated loopback endpoint inside the editor.
 
-Without `--session`, the broker computes the same checkout-scoped session path
-as a user-opened editor from that checkout. This stable default is reserved for
-the user-owned editor. Agent-owned editor processes must use explicit unique
-session files.
+Without `--session`, the broker discovers user-opened editors in the matching
+SDK registry and selects by canonical project path. A sole registered editor is
+also accepted as an unambiguous fallback. Agent-owned editor processes must use
+explicit unique session files and are not published in the user registry.
 
 The MCP client may start before the editor. Tool discovery succeeds without a
 session file, while calls return a structured `Termin Editor is unavailable`
-error until the editor starts. The broker rereads the session file before every
-forwarded call, so stopping or restarting the editor on a new OS-picked port
+error until an applicable editor starts. The broker rescans descriptors before
+every forwarded call, so stopping or restarting editors on new OS-picked ports
 does not require restarting the broker or MCP client. A clean editor shutdown
-removes the session file. If a crash leaves stale endpoint data behind, calls
-report the same unavailable error until the next editor atomically publishes
-its new endpoint and token.
+removes only its owned descriptor. Stale descriptors left by crashed processes
+are probed and ignored when one live match remains.
 
 For Codex, add a project-scoped `.codex/config.toml` in a trusted checkout:
 
@@ -92,6 +100,14 @@ args = ["serve"]
 startup_timeout_sec = 10
 tool_timeout_sec = 60
 default_tools_approval_mode = "prompt"
+```
+
+The broker uses its current working directory as the project selector. A
+project config may make this explicit, which is useful when the MCP host does
+not preserve the workspace working directory:
+
+```toml
+args = ["--project", "/absolute/path/to/project", "serve"]
 ```
 
 On Windows, point `command` at PowerShell and pass the repository wrapper:
@@ -183,7 +199,7 @@ the main editor thread.
 
 The stdio broker advertises this contract even while the editor is offline.
 Each call still requires a running editor registered through the configured
-session file.
+registry or explicit session file.
 
 ## Smoke Tests
 

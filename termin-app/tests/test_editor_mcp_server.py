@@ -57,7 +57,9 @@ def _post(session, method, params=None):
 
 
 @requires_loopback_listener
-def test_editor_mcp_server_exposes_editor_tools(tmp_path):
+def test_editor_mcp_server_exposes_editor_tools(tmp_path, monkeypatch):
+    project_path = tmp_path / "project"
+    monkeypatch.setattr(mcp_server_module, "current_project_path", lambda: project_path)
     executor = EditorPythonExecutor(lambda: {"value": 41})
     config = EditorMcpConfig(
         host="127.0.0.1",
@@ -87,6 +89,9 @@ def test_editor_mcp_server_exposes_editor_tools(tmp_path):
             "capture_framegraph_resource",
             "capture_framegraph_pass_symbol",
         ]
+        assert session["instance_id"] == server.instance_id
+        assert session["project_path"] == str(project_path)
+        assert session["sdk_root"]
 
         result_holder = {}
 
@@ -128,9 +133,7 @@ def test_editor_mcp_server_captures_screenshot_tool(tmp_path):
             "base64": "ZmFrZQ==",
         }
 
-    executor = EditorPythonExecutor(
-        lambda: {"capture_editor_screenshot": fake_capture}
-    )
+    executor = EditorPythonExecutor(lambda: {"capture_editor_screenshot": fake_capture})
     config = EditorMcpConfig(
         host="127.0.0.1",
         port=0,
@@ -168,9 +171,7 @@ def test_editor_mcp_server_captures_screenshot_tool(tmp_path):
         response = result_holder["response"]
         result = response["result"]
         assert result["isError"] is False
-        assert result["content"][0]["text"] == (
-            "Captured editor screenshot: /tmp/editor-shot.png (320x200)"
-        )
+        assert result["content"][0]["text"] == ("Captured editor screenshot: /tmp/editor-shot.png (320x200)")
         assert result["content"][1] == {
             "type": "image",
             "data": "ZmFrZQ==",
@@ -273,8 +274,7 @@ def test_editor_mcp_server_captures_framegraph_resource_tool(tmp_path):
         result = response["result"]
         assert result["isError"] is False
         assert result["content"][0]["text"] == (
-            "Captured framegraph resource 'ColorPass_3_output_res': "
-            "/tmp/framegraph-color.png (128x64)"
+            "Captured framegraph resource 'ColorPass_3_output_res': /tmp/framegraph-color.png (128x64)"
         )
         assert result["content"][1] == {
             "type": "image",
@@ -387,8 +387,7 @@ def test_editor_mcp_server_captures_framegraph_pass_symbol_tool(tmp_path):
         result = response["result"]
         assert result["isError"] is False
         assert result["content"][0]["text"] == (
-            "Captured framegraph pass symbol 'Color/Cube': "
-            "/tmp/framegraph-pass-color-cube.png (128x64)"
+            "Captured framegraph pass symbol 'Color/Cube': /tmp/framegraph-pass-color-cube.png (128x64)"
         )
         assert result["content"][1] == {
             "type": "image",
@@ -423,9 +422,7 @@ def test_editor_mcp_server_inspects_framegraph_tool(tmp_path):
                 "passes": [{"name": "Color", "internal_symbols": ["after_color"]}],
             }
 
-    executor = EditorPythonExecutor(
-        lambda: {"framegraph_debugger": FakeFramegraphDebugger()}
-    )
+    executor = EditorPythonExecutor(lambda: {"framegraph_debugger": FakeFramegraphDebugger()})
     config = EditorMcpConfig(
         host="127.0.0.1",
         port=0,
@@ -465,9 +462,7 @@ def test_editor_mcp_server_inspects_framegraph_tool(tmp_path):
         assert result["isError"] is False
         assert result["structuredContent"]["ok"] is True
         assert result["structuredContent"]["resources"] == ["hdr", "ldr"]
-        assert result["structuredContent"]["passes"] == [
-            {"name": "Color", "internal_symbols": ["after_color"]}
-        ]
+        assert result["structuredContent"]["passes"] == [{"name": "Color", "internal_symbols": ["after_color"]}]
     finally:
         server.stop()
 
@@ -498,11 +493,16 @@ def test_editor_mcp_enabled_env_overrides_settings(monkeypatch):
     assert editor_mcp_enabled() is False
 
 
-def test_editor_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatch):
+def test_editor_mcp_config_recovers_from_invalid_port_and_blank_token(monkeypatch, tmp_path):
     monkeypatch.setenv("TERMIN_EDITOR_MCP_PORT", "invalid")
     monkeypatch.setenv("TERMIN_EDITOR_MCP_TOKEN", " ")
     monkeypatch.delenv("TERMIN_EDITOR_MCP_SESSION_FILE", raising=False)
-    expected_session = mcp_server_module.default_editor_mcp_session_file()
+    expected_session = tmp_path / "registry" / "instance.json"
+    monkeypatch.setattr(
+        mcp_server_module,
+        "new_editor_mcp_session_file",
+        lambda: expected_session,
+    )
 
     config = load_editor_mcp_config()
 
