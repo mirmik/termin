@@ -533,7 +533,7 @@ void ShadowPass::collect_shadow_casters(
         dc.entity = ent;
         dc.component = tc;
         dc.phase = phase;
-        dc.final_shader = planned_shader.at(0).final_shader;
+        dc.final_shader = TcShader(planned_shader.at(0).final_shader);
         dc.geometry_id = item.geometry_id;
         dc.item_index = item_index;
         dc.item = item;
@@ -581,7 +581,7 @@ void ShadowPass::sort_draw_calls_by_shader() {
 
     std::sort(cached_draw_calls_.begin(), cached_draw_calls_.end(),
         [](const ShadowDrawCall& a, const ShadowDrawCall& b) {
-            return a.final_shader.index < b.final_shader.index;
+            return a.final_shader.handle.index < b.final_shader.handle.index;
         });
 }
 

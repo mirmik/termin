@@ -58,12 +58,11 @@ class FakeMenuRoute:
         self.callback = callback
 
 
-def _build_profiler(window_manager, session, *, request_render=lambda: None):
+def _build_profiler(window_manager, session):
     include_ui = {"value": False}
     profiler = build_native_frame_profiler(
         window_manager,
         session,
-        request_render=request_render,
         get_include_ui=lambda: include_ui["value"],
         set_include_ui=lambda value: include_ui.__setitem__("value", value),
     )
@@ -95,13 +94,7 @@ def test_native_frame_profiler_projects_capture_and_timeline_selection():
     session.start_capture()
     source.frames.extend([_frame(1, 16.0), _frame(2, 28.0)])
     assert session.poll() == 2
-    renders = []
-
-    profiler, include_ui = _build_profiler(
-        object(),
-        session,
-        request_render=lambda: renders.append(True),
-    )
+    profiler, include_ui = _build_profiler(object(), session)
 
     assert len(profiler.timeline_model.samples) == 2
     assert profiler.timeline.selected_id == 2
@@ -110,7 +103,6 @@ def test_native_frame_profiler_projects_capture_and_timeline_selection():
     assert session.selected_frame_number == 1
     assert not session.follow_latest
     assert profiler.command_model.command(profiler.commands["follow"]).data.checked is False
-    assert renders
     assert profiler.command_model.command(profiler.commands["capture"]).data.label == "Pause"
     assert not profiler.command_model.command(profiler.commands["include-ui"]).data.checked
     profiler.set_include_ui(True)
@@ -147,8 +139,12 @@ def test_native_frame_profiler_window_lifecycle_preserves_buffer_and_releases_ca
     route.callback(0, 42, None)
     assert session.capturing
     assert len(manager.created) == 1
+    profiler_window = manager.created[0][-1]
+    initial_render_requests = profiler_window.render_requests
+    assert initial_render_requests > 0
     source.frames.append(_frame(1, 16.0))
     assert profiler.update()
+    assert profiler_window.render_requests > initial_render_requests
     profiler.dismiss()
     assert not session.capturing
     assert len(session.frames) == 1

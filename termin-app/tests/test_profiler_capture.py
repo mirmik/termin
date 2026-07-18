@@ -149,6 +149,39 @@ def test_capture_statistics_and_hitch_navigation_use_raw_intervals():
     assert session.selected_frame_number == 3
 
 
+def test_capture_statistics_index_tracks_bounded_eviction_ranges_and_clear():
+    profiler = FakeHistoryProfiler()
+    session = ProfilerCaptureSession(ProfilerCaptureCoordinator(profiler), capacity=3)
+    session.start_capture()
+    for number, interval in enumerate((10.0, 20.0, 30.0, 40.0), start=1):
+        profiler.append(
+            _frame(
+                number,
+                interval,
+                active=float(number * 2),
+                lateness=float(number),
+            )
+        )
+    assert session.poll() == 4
+
+    stats = session.statistics()
+    assert stats.frame_count == 3
+    assert stats.interval_p50_ms == 30.0
+    assert stats.max_interval_ms == 40.0
+    assert stats.max_active_ms == 8.0
+    assert stats.max_lateness_ms == 4.0
+    assert stats.hitch_count == 2
+
+    range_stats = session.statistics(2, 3)
+    assert range_stats.frame_count == 2
+    assert range_stats.interval_p50_ms == 25.0
+    assert range_stats.max_active_ms == 6.0
+
+    session.clear()
+    assert session.statistics().frame_count == 0
+    assert session.statistics().max_interval_ms == 0.0
+
+
 def test_raw_frame_section_projection_preserves_hierarchy_and_self_time():
     frame = _frame(7, 18.0, active=10.0)
     frame.sections = {

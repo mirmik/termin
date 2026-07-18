@@ -65,7 +65,6 @@ class NativeFrameProfiler:
     detail_model: RichTextModel
     status_bar: object
     commands: dict[str, int]
-    request_scene_render: Callable[[], None]
     get_include_ui: Callable[[], bool]
     set_include_ui: Callable[[bool], None]
     refresh_interval_seconds: float = 0.1
@@ -161,9 +160,19 @@ class NativeFrameProfiler:
         first_frame_number = frames[0].frame_number
         last_frame_number = frames[-1].frame_number
         if self._timeline_last_frame_number is not None:
-            appended = [
-                frame for frame in frames if frame.frame_number > self._timeline_last_frame_number
-            ]
+            if (
+                self._timeline_first_frame_number == first_frame_number
+                and self._timeline_last_frame_number == last_frame_number
+                and self._timeline_frame_count == len(frames)
+            ):
+                return
+            append_start = len(frames)
+            while (
+                append_start > 0
+                and frames[append_start - 1].frame_number > self._timeline_last_frame_number
+            ):
+                append_start -= 1
+            appended = frames[append_start:]
             if appended:
                 self.timeline_model.append_samples(
                     [self._timeline_sample(frame) for frame in appended],
@@ -172,12 +181,6 @@ class NativeFrameProfiler:
                 self._timeline_first_frame_number = first_frame_number
                 self._timeline_last_frame_number = last_frame_number
                 self._timeline_frame_count = len(frames)
-                return
-            if (
-                self._timeline_first_frame_number == first_frame_number
-                and self._timeline_last_frame_number == last_frame_number
-                and self._timeline_frame_count == len(frames)
-            ):
                 return
 
         self.timeline_model.set_samples([self._timeline_sample(frame) for frame in frames])
@@ -210,7 +213,6 @@ class NativeFrameProfiler:
             self.document.destroy_widget_recursive(self.root.handle)
 
     def request_render(self) -> None:
-        self.request_scene_render()
         if self.window is not None and not self.window.closed:
             self.window.request_render_update()
 
@@ -299,7 +301,6 @@ def build_native_frame_profiler(
     window_manager: NativeUiWindowManager,
     session: ProfilerCaptureSession,
     *,
-    request_render: Callable[[], None],
     get_include_ui: Callable[[], bool],
     set_include_ui: Callable[[bool], None],
 ) -> NativeFrameProfiler:
@@ -386,7 +387,6 @@ def build_native_frame_profiler(
         detail_model=detail_model,
         status_bar=status,
         commands=commands,
-        request_scene_render=request_render,
         get_include_ui=get_include_ui,
         set_include_ui=set_include_ui,
     )

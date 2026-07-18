@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from bisect import bisect_left, insort
 from dataclasses import dataclass
+import logging
 
 from tcbase.profiler import FrameProfile, Profiler, SectionTiming
+
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -123,6 +128,24 @@ def _percentile(values: list[float], quantile: float) -> float:
     return ordered[lower] * (1.0 - fraction) + ordered[upper] * fraction
 
 
+def _percentile_sorted(values: list[float], quantile: float) -> float:
+    if not values:
+        return 0.0
+    position = (len(values) - 1) * quantile
+    lower = int(position)
+    upper = min(lower + 1, len(values) - 1)
+    fraction = position - lower
+    return values[lower] * (1.0 - fraction) + values[upper] * fraction
+
+
+def _remove_sorted(values: list[float], value: float) -> None:
+    index = bisect_left(values, value)
+    if index >= len(values) or values[index] != value:
+        _logger.error("profiler statistics index lost value %.6f", value)
+        raise RuntimeError("profiler statistics index is inconsistent with captured frames")
+    values.pop(index)
+
+
 class ProfilerCaptureSession:
     """Bounded raw-frame analysis session consumed by profiler frontends."""
 
@@ -151,6 +174,11 @@ class ProfilerCaptureSession:
         self._follow_latest = True
         self._selected_frame_number: int | None = None
         self._source_dropped_count = 0
+        self._sorted_intervals: list[float] = []
+        self._sorted_active: list[float] = []
+        self._sorted_lateness: list[float] = []
+        self._buffer_hitch_count = 0
+        self._buffer_source_gap_count = 0
         self._revision = 1
 
     @property
@@ -208,6 +236,11 @@ class ProfilerCaptureSession:
 
     def clear(self) -> None:
         self._frames.clear()
+        self._sorted_intervals.clear()
+        self._sorted_active.clear()
+        self._sorted_lateness.clear()
+        self._buffer_hitch_count = 0
+        self._buffer_source_gap_count = 0
         self._selected_frame_number = None
         self._source_dropped_count = 0
         self._skip_source_to_latest()
@@ -250,10 +283,23 @@ class ProfilerCaptureSession:
                 hitch=hitch,
             )
             self._frames.append(captured)
+            if captured.interval_ms > 0.0:
+                insort(self._sorted_intervals, captured.interval_ms)
+            insort(self._sorted_active, captured.active_ms)
+            insort(self._sorted_lateness, captured.profile.deadline_lateness_ms)
+            self._buffer_hitch_count += int(captured.hitch)
+            self._buffer_source_gap_count += captured.source_gap_before
             previous = captured
 
         overflow = max(0, len(self._frames) - self.capacity)
         if overflow:
+            for evicted in self._frames[:overflow]:
+                if evicted.interval_ms > 0.0:
+                    _remove_sorted(self._sorted_intervals, evicted.interval_ms)
+                _remove_sorted(self._sorted_active, evicted.active_ms)
+                _remove_sorted(self._sorted_lateness, evicted.profile.deadline_lateness_ms)
+                self._buffer_hitch_count -= int(evicted.hitch)
+                self._buffer_source_gap_count -= evicted.source_gap_before
             del self._frames[:overflow]
         if self._follow_latest and self._frames:
             self._selected_frame_number = self._frames[-1].frame_number
@@ -301,6 +347,18 @@ class ProfilerCaptureSession:
         start_frame_number: int | None = None,
         end_frame_number: int | None = None,
     ) -> FrameRangeStatistics:
+        if start_frame_number is None and end_frame_number is None:
+            return FrameRangeStatistics(
+                frame_count=len(self._frames),
+                interval_p50_ms=_percentile_sorted(self._sorted_intervals, 0.50),
+                interval_p95_ms=_percentile_sorted(self._sorted_intervals, 0.95),
+                interval_p99_ms=_percentile_sorted(self._sorted_intervals, 0.99),
+                max_interval_ms=self._sorted_intervals[-1] if self._sorted_intervals else 0.0,
+                max_active_ms=self._sorted_active[-1] if self._sorted_active else 0.0,
+                max_lateness_ms=self._sorted_lateness[-1] if self._sorted_lateness else 0.0,
+                hitch_count=self._buffer_hitch_count,
+                source_dropped_count=self._buffer_source_gap_count,
+            )
         frames = [
             frame
             for frame in self._frames
