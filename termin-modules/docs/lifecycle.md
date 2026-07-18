@@ -134,15 +134,26 @@ entries. Ошибка prepare откатывает добавленные entrie
 `ModuleRuntime::unload_module(name)`:
 
 1. проверяет, что модуль находится в состоянии `Loaded` или всё ещё держит backend handle
-2. вызывает integration hook `before_unload`
+2. в состоянии `Loaded` выполняет fallible preparation hooks без изменения live state
 3. для Python вызывает fallible `before_module_remove`, который подготавливает
    все owner registrations, не удаляя их
-4. для staged native backend-ов вызывает `begin_unload(...)`
-5. вызывает integration hook, который должен очистить регистрации до закрытия native handle
-6. вызывает backend commit (`finish_unload` либо Python registry/module removal)
-7. очищает `handle`
-8. переводит модуль в `Unloaded`
-9. публикует событие
+4. публикует `Unloading` и фиксирует первую незавершённую cleanup phase
+5. для staged native backend-ов вызывает `begin_unload(...)`
+6. вызывает integration hook, который должен очистить регистрации до закрытия native handle
+7. вызывает backend commit (`finish_unload` либо Python registry/module removal)
+8. очищает `handle`
+9. переводит модуль в `Unloaded`
+10. публикует событие
+
+До перехода в `Unloading` ошибка подготовки оставляет модуль `Loaded`, очищает
+cleanup phase и допускает обычную повторную попытку. После этого перехода модуль
+никогда не возвращается в `Loaded`: ошибка переводит его в неактивное состояние
+`CleanupFailed`, сохраняет handle и точную фазу (`BackendBegin`,
+`RevokeContributions`, `BackendFinish` или `BackendUnload`). Следующий
+`unload_module` продолжает именно эту фазу, не повторяя уже завершённые шаги.
+Load, reload, build/clean и активация зависимых модулей блокируются, пока cleanup
+не завершён. В диагностике ошибки указываются module id, backend, phase, наличие
+удержанного handle и факт пересечения необратимой границы.
 
 Для C++:
 
@@ -153,8 +164,8 @@ entries. Ошибка prepare откатывает добавленные entrie
   registrations по `module_id`
 - затем shared library выгружается
 - если owner cleanup падает, native handle остаётся загруженным, модуль получает
-  `Failed`, а следующий unload может повторить cleanup без повторного закрытия
-  уже выгруженной библиотеки
+  `CleanupFailed`, а следующий unload повторяет cleanup без повторного
+  `descriptor.shutdown`
 
 Для Python:
 
@@ -164,7 +175,8 @@ entries. Ошибка prepare откатывает добавленные entrie
   registrations и `sys.modules` остаются на месте, state остаётся `Loaded`;
   session-owned `sys.path` при module unload не меняется
 - после успешного prepare `module_context` commit-ит Python-side registries и
-  runtime types; исключение не проглатывается и сохраняет retryable handle/state
+  runtime types; исключение не проглатывается и сохраняет retryable handle в
+  `CleanupFailed` с фазой `BackendUnload`
 - entries import-транзакции удаляются из `sys.modules` только пока mapping всё
   ещё указывает на записанный exact object; заменённая чужим кодом mapping
   сохраняется с диагностикой

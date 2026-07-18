@@ -23,6 +23,8 @@ const char* event_kind_to_string(ModuleEventKind kind) {
             return "unloaded";
         case ModuleEventKind::Reloading:
             return "reloading";
+        case ModuleEventKind::CleanupFailed:
+            return "cleanup-failed";
         case ModuleEventKind::Failed:
             return "failed";
     }
@@ -43,8 +45,14 @@ const char* state_to_string(ModuleState state) {
     switch (state) {
         case ModuleState::Discovered:
             return "discovered";
+        case ModuleState::Loading:
+            return "loading";
         case ModuleState::Loaded:
             return "loaded";
+        case ModuleState::Unloading:
+            return "unloading";
+        case ModuleState::CleanupFailed:
+            return "cleanup-failed";
         case ModuleState::Failed:
             return "failed";
         case ModuleState::Unloaded:

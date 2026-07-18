@@ -426,7 +426,7 @@ def test_module_registration_commit_failure_is_propagated_and_retryable() -> Non
     assert module_context.registrations_for_owner(module_id).components == set()
 
 
-def test_python_backend_commit_failure_keeps_sys_modules_and_loaded_handle(
+def test_python_backend_commit_failure_enters_retryable_cleanup_state(
     tmp_path: Path,
 ) -> None:
     _write_python_module(tmp_path)
@@ -447,7 +447,8 @@ def test_python_backend_commit_failure_keeps_sys_modules_and_loaded_handle(
         assert "sample_module" in sys.modules
         record = runtime.find("sample")
         assert record is not None
-        assert record.state.name == "Loaded"
+        assert record.state.name == "CleanupFailed"
+        assert record.cleanup_phase.name == "BackendUnload"
     finally:
         module_context._unregister_python_component_classes = original_cleanup
 

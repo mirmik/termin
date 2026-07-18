@@ -302,19 +302,19 @@ class ProjectSessionController:
                 if record.state == ModuleState.Loaded:
                     cpp_loaded += 1
                     self._log_to_console(f"Loaded C++ module: {record.id}")
-                elif record.state == ModuleState.Failed:
+                elif record.state in (ModuleState.Failed, ModuleState.CleanupFailed):
                     cpp_failed += 1
                     self._log_to_console(
-                        f"Failed to load C++ module {record.id}: {record.error_message}"
+                        f"C++ module {record.id} is not active: {record.error_message}"
                     )
             else:
                 if record.state == ModuleState.Loaded:
                     py_loaded += 1
                     self._log_to_console(f"Loaded Python module: {record.id}")
-                elif record.state == ModuleState.Failed:
+                elif record.state in (ModuleState.Failed, ModuleState.CleanupFailed):
                     py_failed += 1
                     self._log_to_console(
-                        f"Failed to load Python module {record.id}: {record.error_message}"
+                        f"Python module {record.id} is not active: {record.error_message}"
                     )
 
         if cpp_loaded > 0:

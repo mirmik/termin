@@ -13,6 +13,16 @@ from termin_modules import ModuleEvent, ModuleState
 _logger = logging.getLogger(__name__)
 
 
+def format_cleanup_phase(name: str) -> str:
+    """Convert a binding enum name such as BackendFinish to backend-finish."""
+    pieces: list[str] = []
+    for character in name:
+        if character.isupper() and pieces:
+            pieces.append("-")
+        pieces.append(character.lower())
+    return "".join(pieces)
+
+
 @dataclass(frozen=True, slots=True)
 class ModuleRow:
     module_id: str
@@ -72,9 +82,13 @@ class ModulesPanelController:
         for record in records:
             if record.state == ModuleState.Loaded:
                 loaded += 1
-            elif record.state == ModuleState.Failed:
+            elif record.state in (ModuleState.Failed, ModuleState.CleanupFailed):
                 failed += 1
             flags: list[str] = []
+            if record.state == ModuleState.CleanupFailed:
+                flags.append(
+                    f"retry cleanup: {format_cleanup_phase(record.cleanup_phase.name)}"
+                )
             if record.id in dirty:
                 flags.append("dirty")
             if record.id in stale:
@@ -84,7 +98,12 @@ class ModulesPanelController:
             details = record.kind.name.lower()
             if flags:
                 details += f" ({', '.join(flags)})"
-            rows.append(ModuleRow(record.id, record.state.name.lower(), details))
+            status = (
+                "cleanup-failed"
+                if record.state == ModuleState.CleanupFailed
+                else record.state.name.lower()
+            )
+            rows.append(ModuleRow(record.id, status, details))
         parts = []
         if loaded:
             parts.append(f"{loaded} loaded")

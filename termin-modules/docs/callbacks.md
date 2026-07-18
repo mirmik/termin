@@ -52,9 +52,9 @@
     уже успел начаться
 
 - `before_unload`
-  - выполнить cleanup перед выгрузкой
-  - снять связи со сценой и runtime-объектами, если они завязаны на код модуля
-  - в `termin-engine` деградирует live scene components в `UnknownComponent`
+  - fallible подготовка до необратимой границы unload
+  - проверить и заранее подготовить замену связей со сценой и runtime-объектами
+  - ошибка оставляет модуль в `Loaded` и не запускает native shutdown
 
 - `before_native_close`
   - вызывается только для staged C++ unload после успешного `descriptor.shutdown`, но до
@@ -62,7 +62,8 @@
   - должен удалить все module-owned `InspectRegistry`/`ComponentRegistry`
     registrations, чтобы не осталось callbacks/factory pointers в выгружаемый код
   - если возвращает ошибку, backend handle не закрывается, а модуль остаётся в
-    fail-safe состоянии для повторной попытки cleanup
+    `CleanupFailed` на фазе `RevokeContributions`; повтор не вызывает уже
+    завершённый native shutdown
 
 - `after_unload`
   - завершить cleanup после фактической выгрузки shared library

@@ -42,6 +42,7 @@ if not runtime.shutdown():
 - `PythonModuleBackend`
 - `ModuleKind`
 - `ModuleState`
+- `ModuleCleanupPhase`
 - `ModuleEvent`
 - `ModuleEventKind`
 - `ModuleRecord`

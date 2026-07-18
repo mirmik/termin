@@ -81,6 +81,26 @@ bool is_loaded_or_holding_handle(const ModuleRecord& record) {
     return record.state == ModuleState::Loaded || record.handle != nullptr;
 }
 
+const char* module_kind_name(ModuleKind kind) {
+    switch (kind) {
+        case ModuleKind::Cpp: return "cpp";
+        case ModuleKind::Python: return "python";
+    }
+    return "unknown";
+}
+
+const char* cleanup_phase_name(ModuleCleanupPhase phase) {
+    switch (phase) {
+        case ModuleCleanupPhase::None: return "none";
+        case ModuleCleanupPhase::Prepare: return "prepare";
+        case ModuleCleanupPhase::BackendBegin: return "backend-begin";
+        case ModuleCleanupPhase::RevokeContributions: return "revoke-contributions";
+        case ModuleCleanupPhase::BackendFinish: return "backend-finish";
+        case ModuleCleanupPhase::BackendUnload: return "backend-unload";
+    }
+    return "unknown";
+}
+
 std::vector<std::string> build_shutdown_order(const std::vector<ModuleRecord>& records) {
     std::unordered_set<std::string> remaining;
     for (const ModuleRecord& record : records) {
@@ -484,6 +504,25 @@ bool ModuleRuntime::load_module_impl(
         return true;
     }
 
+    if (target->state == ModuleState::Unloading ||
+        target->state == ModuleState::CleanupFailed ||
+        target->cleanup_phase != ModuleCleanupPhase::None) {
+        target->error_message =
+            "Module cleanup is incomplete at phase '" +
+            std::string(cleanup_phase_name(target->cleanup_phase)) +
+            "'; call unload_module to resume cleanup: " + module_id;
+        _last_error = target->error_message;
+        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        return false;
+    }
+
+    if (target->state == ModuleState::Loading) {
+        target->error_message = "Module is already loading: " + module_id;
+        _last_error = target->error_message;
+        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        return false;
+    }
+
     if (target->handle) {
         target->state = ModuleState::Failed;
         target->error_message = "Module still has an active backend handle: " + module_id;
@@ -526,6 +565,7 @@ bool ModuleRuntime::load_module_impl(
         return false;
     }
 
+    target->state = ModuleState::Loading;
     emit(ModuleEventKind::Loading, module_id);
     if (target->spec.kind == ModuleKind::Cpp) {
         if (_cpp_callbacks.before_load) {
@@ -574,6 +614,7 @@ bool ModuleRuntime::load_module_impl(
     }
 
     target->state = ModuleState::Loaded;
+    target->cleanup_phase = ModuleCleanupPhase::None;
     target->error_message.clear();
     if (target->spec.kind == ModuleKind::Cpp) {
         if (_cpp_callbacks.after_load) {
@@ -615,84 +656,154 @@ bool ModuleRuntime::unload_module_impl(
         }
     }
 
-    if (target->state != ModuleState::Loaded && !target->handle) {
+    const ModuleState original_state = target->state;
+    const bool retrying_cleanup = target->state == ModuleState::CleanupFailed;
+    if (target->state == ModuleState::Loading) {
+        target->error_message = "Cannot unload module while it is loading: " + module_id;
+        _last_error = target->error_message;
+        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        return false;
+    }
+    if (target->state == ModuleState::Unloading) {
+        target->error_message = "Module unload is already in progress: " + module_id;
+        _last_error = target->error_message;
+        emit(ModuleEventKind::Failed, module_id, target->error_message);
+        return false;
+    }
+    if (!retrying_cleanup && target->state != ModuleState::Loaded && !target->handle) {
         target->state = ModuleState::Unloaded;
+        target->cleanup_phase = ModuleCleanupPhase::None;
+        target->error_message.clear();
         return true;
     }
 
-    const std::vector<std::string> dependents = collect_active_dependents(_records, module_id);
-    if (!dependents.empty()) {
-        target->error_message = "Active dependents prevent unload: ";
-        for (size_t i = 0; i < dependents.size(); ++i) {
-            if (i > 0) {
-                target->error_message += ", ";
-            }
-            target->error_message += dependents[i];
-        }
+    auto log_failure = [&](ModuleCleanupPhase phase, bool after_boundary) {
+        tc::Log::error(
+            "ModuleRuntime: unload failure module='%s' backend='%s' phase='%s' "
+            "retained_handle=%s boundary=%s error='%s'",
+            module_id.c_str(),
+            module_kind_name(target->spec.kind),
+            cleanup_phase_name(phase),
+            target->handle ? "yes" : "no",
+            after_boundary ? "crossed" : "not-crossed",
+            target->error_message.c_str()
+        );
+    };
+    auto fail_after_boundary = [&](const std::string& fallback) {
+        if (target->error_message.empty()) target->error_message = fallback;
+        target->state = ModuleState::CleanupFailed;
         _last_error = target->error_message;
+        log_failure(target->cleanup_phase, true);
+        emit(ModuleEventKind::CleanupFailed, module_id, target->error_message);
+        return false;
+    };
+    auto fail_before_boundary = [&](const std::string& message) {
+        target->state = original_state;
+        target->cleanup_phase = ModuleCleanupPhase::None;
+        target->error_message = message;
+        _last_error = target->error_message;
+        log_failure(ModuleCleanupPhase::Prepare, false);
         emit(ModuleEventKind::Failed, module_id, target->error_message);
         return false;
-    }
+    };
 
     IModuleBackend* backend = get_backend(target->spec.kind);
     if (backend == nullptr) {
-        target->error_message = "Backend is not registered";
-        _last_error = target->error_message;
-        return false;
+        if (retrying_cleanup) {
+            return fail_after_boundary("Backend is not registered");
+        }
+        return fail_before_boundary("Backend is not registered");
     }
 
-    emit(ModuleEventKind::Unloading, module_id);
-    if (target->spec.kind == ModuleKind::Cpp) {
-        if (_cpp_callbacks.before_unload) {
-            _cpp_callbacks.before_unload(*target);
+    if (!retrying_cleanup) {
+        const std::vector<std::string> dependents =
+            collect_active_dependents(_records, module_id);
+        if (!dependents.empty()) {
+            std::string message = "Active dependents prevent unload: ";
+            for (size_t i = 0; i < dependents.size(); ++i) {
+                if (i > 0) message += ", ";
+                message += dependents[i];
+            }
+            return fail_before_boundary(message);
         }
-    } else {
-        if (_python_callbacks.before_unload) {
-            _python_callbacks.before_unload(*target);
-        }
-        if (_python_callbacks.before_module_remove) {
-            std::string error;
-            if (!_python_callbacks.before_module_remove(*target, error)) {
-                target->error_message = error.empty()
-                    ? "Python module unload preparation failed"
-                    : error;
-                _last_error = target->error_message;
-                emit(ModuleEventKind::Failed, module_id, target->error_message);
-                return false;
+
+        target->cleanup_phase = ModuleCleanupPhase::Prepare;
+        if (target->spec.kind == ModuleKind::Cpp) {
+            if (_cpp_callbacks.before_unload) {
+                std::string error;
+                if (!_cpp_callbacks.before_unload(*target, error)) {
+                    return fail_before_boundary(
+                        error.empty() ? "C++ module unload preparation failed" : error
+                    );
+                }
+            }
+        } else {
+            if (_python_callbacks.before_unload) {
+                _python_callbacks.before_unload(*target);
+            }
+            if (_python_callbacks.before_module_remove) {
+                std::string error;
+                if (!_python_callbacks.before_module_remove(*target, error)) {
+                    return fail_before_boundary(
+                        error.empty() ? "Python module unload preparation failed" : error
+                    );
+                }
             }
         }
+
+        target->state = ModuleState::Unloading;
+        target->cleanup_phase =
+            target->spec.kind == ModuleKind::Cpp && backend->supports_staged_unload()
+                ? ModuleCleanupPhase::BackendBegin
+                : ModuleCleanupPhase::BackendUnload;
+        target->error_message.clear();
+        emit(ModuleEventKind::Unloading, module_id);
+    } else {
+        target->state = ModuleState::Unloading;
+        target->error_message.clear();
+        emit(
+            ModuleEventKind::Unloading,
+            module_id,
+            "Retrying cleanup phase: " +
+                std::string(cleanup_phase_name(target->cleanup_phase))
+        );
     }
 
-    bool unload_ok = true;
-    if (target->spec.kind == ModuleKind::Cpp && backend->supports_staged_unload()) {
-        unload_ok = backend->begin_unload(*target, _environment);
-        if (unload_ok && _cpp_callbacks.before_native_close) {
+    if (target->cleanup_phase == ModuleCleanupPhase::BackendBegin) {
+        if (!backend->begin_unload(*target, _environment)) {
+            return fail_after_boundary("Backend begin_unload failed");
+        }
+        target->cleanup_phase = ModuleCleanupPhase::RevokeContributions;
+    }
+
+    if (target->cleanup_phase == ModuleCleanupPhase::RevokeContributions) {
+        if (_cpp_callbacks.before_native_close) {
             std::string error;
-            unload_ok = _cpp_callbacks.before_native_close(*target, error);
-            if (!unload_ok && !error.empty()) {
-                target->error_message = error;
+            if (!_cpp_callbacks.before_native_close(*target, error)) {
+                if (!error.empty()) target->error_message = error;
+                return fail_after_boundary("Contribution revoke failed");
             }
         }
-        if (unload_ok) {
-            unload_ok = backend->finish_unload(*target, _environment);
-        }
-    } else {
-        unload_ok = backend->unload(*target, _environment);
+        target->cleanup_phase = ModuleCleanupPhase::BackendFinish;
     }
 
-    if (!unload_ok) {
-        if (target->error_message.empty()) {
-            target->error_message = "Backend unload failed";
+    if (target->cleanup_phase == ModuleCleanupPhase::BackendFinish) {
+        if (!backend->finish_unload(*target, _environment)) {
+            return fail_after_boundary("Backend finish_unload failed");
         }
-        target->state = target->spec.kind == ModuleKind::Python && target->handle
-            ? ModuleState::Loaded
-            : ModuleState::Failed;
-        _last_error = target->error_message;
-        emit(ModuleEventKind::Failed, module_id, target->error_message);
-        return false;
+    } else if (target->cleanup_phase == ModuleCleanupPhase::BackendUnload) {
+        if (!backend->unload(*target, _environment)) {
+            return fail_after_boundary("Backend unload failed");
+        }
+    } else {
+        return fail_after_boundary(
+            "Invalid cleanup phase: " +
+            std::string(cleanup_phase_name(target->cleanup_phase))
+        );
     }
 
     target->state = ModuleState::Unloaded;
+    target->cleanup_phase = ModuleCleanupPhase::None;
     target->handle.reset();
     target->error_message.clear();
     if (target->spec.kind == ModuleKind::Cpp) {
@@ -716,13 +827,22 @@ bool ModuleRuntime::reload_module(const std::string& module_id) {
         return false;
     }
 
-    emit(ModuleEventKind::Reloading, module_id);
-
     const ModuleRecord* current = find(module_id);
     if (current == nullptr) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
+    if (current->state == ModuleState::CleanupFailed ||
+        current->state == ModuleState::Unloading ||
+        current->cleanup_phase != ModuleCleanupPhase::None) {
+        _last_error = "Cannot reload module while cleanup is incomplete at phase '" +
+            std::string(cleanup_phase_name(current->cleanup_phase)) +
+            "'; call unload_module first: " + module_id;
+        emit(ModuleEventKind::Failed, module_id, _last_error);
+        return false;
+    }
+
+    emit(ModuleEventKind::Reloading, module_id);
 
     std::shared_ptr<IModuleReloadState> reload_state = capture_reload_state(*current);
 
@@ -751,6 +871,20 @@ bool ModuleRuntime::reload_module_with_dependents(const std::string& module_id) 
         _last_error = error;
         emit(ModuleEventKind::Failed, module_id, error);
         return false;
+    }
+
+    for (const std::string& affected_id : ordered) {
+        const ModuleRecord* record = find(affected_id);
+        if (record && (
+                record->state == ModuleState::CleanupFailed ||
+                record->state == ModuleState::Unloading ||
+                record->cleanup_phase != ModuleCleanupPhase::None)) {
+            _last_error = "Cannot cascade reload while module cleanup is incomplete at phase '" +
+                std::string(cleanup_phase_name(record->cleanup_phase)) +
+                "': " + affected_id;
+            emit(ModuleEventKind::Failed, affected_id, _last_error);
+            return false;
+        }
     }
 
     std::unordered_map<std::string, std::shared_ptr<IModuleReloadState>> reload_states;
@@ -813,6 +947,12 @@ bool ModuleRuntime::build_module(const std::string& module_id) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
+    if (target->state == ModuleState::Unloading ||
+        target->state == ModuleState::CleanupFailed ||
+        target->cleanup_phase != ModuleCleanupPhase::None) {
+        _last_error = "Cannot build module while cleanup is incomplete: " + module_id;
+        return false;
+    }
     IModuleBackend* backend = get_backend(target->spec.kind);
     if (backend == nullptr) {
         _last_error = "Backend is not registered";
@@ -845,8 +985,13 @@ bool ModuleRuntime::clean_module(const std::string& module_id) {
         _last_error = "Module not found: " + module_id;
         return false;
     }
-    if (target->state == ModuleState::Loaded) {
-        _last_error = "Cannot clean loaded module, unload first: " + module_id;
+    if (target->state == ModuleState::Loaded ||
+        target->state == ModuleState::Loading ||
+        target->state == ModuleState::Unloading ||
+        target->state == ModuleState::CleanupFailed ||
+        target->cleanup_phase != ModuleCleanupPhase::None) {
+        _last_error = "Cannot clean active module or module with incomplete cleanup; "
+            "finish unload first: " + module_id;
         return false;
     }
 
@@ -877,6 +1022,12 @@ bool ModuleRuntime::rebuild_module(const std::string& module_id) {
     ModuleRecord* target = find_mutable_record(_records, module_id);
     if (target == nullptr) {
         _last_error = "Module not found: " + module_id;
+        return false;
+    }
+    if (target->state == ModuleState::Unloading ||
+        target->state == ModuleState::CleanupFailed ||
+        target->cleanup_phase != ModuleCleanupPhase::None) {
+        _last_error = "Cannot rebuild module while cleanup is incomplete: " + module_id;
         return false;
     }
     const bool was_loaded = target->state == ModuleState::Loaded;

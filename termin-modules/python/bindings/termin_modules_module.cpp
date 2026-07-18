@@ -19,10 +19,21 @@ NB_MODULE(_termin_modules_native, m) {
 
     nb::enum_<ModuleState>(m, "ModuleState")
         .value("Discovered", ModuleState::Discovered)
+        .value("Loading", ModuleState::Loading)
         .value("Loaded", ModuleState::Loaded)
+        .value("Unloading", ModuleState::Unloading)
+        .value("CleanupFailed", ModuleState::CleanupFailed)
         .value("Failed", ModuleState::Failed)
         .value("Unloaded", ModuleState::Unloaded)
         .value("Ignored", ModuleState::Ignored);
+
+    nb::enum_<ModuleCleanupPhase>(m, "ModuleCleanupPhase")
+        .value("None_", ModuleCleanupPhase::None)
+        .value("Prepare", ModuleCleanupPhase::Prepare)
+        .value("BackendBegin", ModuleCleanupPhase::BackendBegin)
+        .value("RevokeContributions", ModuleCleanupPhase::RevokeContributions)
+        .value("BackendFinish", ModuleCleanupPhase::BackendFinish)
+        .value("BackendUnload", ModuleCleanupPhase::BackendUnload);
 
     nb::enum_<ModuleEventKind>(m, "ModuleEventKind")
         .value("Discovered", ModuleEventKind::Discovered)
@@ -31,6 +42,7 @@ NB_MODULE(_termin_modules_native, m) {
         .value("Unloading", ModuleEventKind::Unloading)
         .value("Unloaded", ModuleEventKind::Unloaded)
         .value("Reloading", ModuleEventKind::Reloading)
+        .value("CleanupFailed", ModuleEventKind::CleanupFailed)
         .value("Failed", ModuleEventKind::Failed);
 
     nb::class_<ModuleEvent>(m, "ModuleEvent")
@@ -97,6 +109,7 @@ NB_MODULE(_termin_modules_native, m) {
             return config ? config->packages : std::vector<std::string>{};
         })
         .def_ro("state", &ModuleRecord::state)
+        .def_ro("cleanup_phase", &ModuleRecord::cleanup_phase)
         .def_prop_ro("error_message", [](const ModuleRecord& self) {
             return sanitize_external_text(self.error_message);
         })
