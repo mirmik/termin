@@ -170,7 +170,16 @@ void IdPass::execute_with_data_tgfx2(
 
     ensure_tgfx2_resources(device);
 
-    collect_draw_calls(scene, layer_mask, ctx.render_category_mask, id_shader_handle_);
+    RenderSceneItemSnapshot* snapshot = ensure_render_item_snapshot(ctx, "IdPass");
+    if (!snapshot) {
+        return;
+    }
+    collect_draw_calls(
+        scene,
+        layer_mask,
+        ctx.render_category_mask,
+        id_shader_handle_,
+        *snapshot);
     sort_draw_calls_by_shader();
 
     entity_names.clear();

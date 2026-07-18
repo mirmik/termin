@@ -569,11 +569,6 @@ bool MeshRenderer::collect_render_items(
         tc::Log::error("[MeshRenderer] cannot emit render items: sink callback is null");
         return false;
     }
-    if (!context.phase_mark || context.phase_mark[0] == '\0') {
-        tc::Log::error("[MeshRenderer] cannot emit render items: phase_mark is empty");
-        return false;
-    }
-
     tc_mesh* mesh = current_mesh_ptr();
     if (!mesh) {
         return true;
@@ -608,14 +603,17 @@ bool MeshRenderer::collect_render_items(
             continue;
         }
         uint32_t material_slot = submesh->material_slot;
-        tc_material* mat = get_material_ptr_for_slot(material_slot);
+        TcMaterial material_ref = get_material_for_slot(material_slot);
+        tc_material* mat = material_ref.get();
         if (!mat) {
             continue;
         }
 
-        std::string phase_mark = context.phase_mark;
+        const bool collect_all_phases =
+            !context.phase_mark || context.phase_mark[0] == '\0';
+        std::string phase_mark = collect_all_phases ? std::string() : context.phase_mark;
         std::vector<tc_material_phase*> phases =
-            mesh_renderer_phases_for_mark(mat, &phase_mark);
+            mesh_renderer_phases_for_mark(mat, collect_all_phases ? nullptr : &phase_mark);
         const bool emit_without_material_phase =
             phases.empty() &&
             ((context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u);
@@ -628,11 +626,11 @@ bool MeshRenderer::collect_render_items(
             item.component = tc_component_ptr();
             item.geometry_id = static_cast<int>(submesh_index);
             item.material_phase = phase;
-            item.material = tc_material_handle_invalid();
+            item.material = material_ref.handle;
             item.material_phase_index = SIZE_MAX;
             if (phase) {
                 item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-                tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+                item.material_phase_index = static_cast<size_t>(phase - mat->phases);
             }
             std::copy(model.data, model.data + 16, item.model_matrix);
             item.payload.mesh.mesh = mesh;

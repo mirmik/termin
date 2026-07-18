@@ -367,7 +367,9 @@ int run_smoke(const char* argv0) {
     pass_config.camera_name = "ColorPassNamedCamera";
     termin::ColorPass pass(pass_config);
 
+    termin::RenderSceneItemSnapshot render_item_snapshot;
     termin::ExecuteContext exec_ctx;
+    exec_ctx.render_item_snapshot = &render_item_snapshot;
     exec_ctx.ctx2 = &render_ctx;
     exec_ctx.tex2_writes.emplace("color", target);
     exec_ctx.render_rect = {0, 0, static_cast<int>(kWidth), static_cast<int>(kHeight)};

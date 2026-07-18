@@ -329,8 +329,10 @@ void ColorPass::collect_draw_calls(
     const std::string& phase_mark,
     const RenderContext& render_context,
     uint64_t layer_mask,
-    RenderSceneItemCollector& collector
+    const RenderSceneItemSnapshot& snapshot
 ) {
+    (void)render_context;
+    (void)layer_mask;
     // Clear but keep capacity
     cached_draw_calls_.clear();
 
@@ -339,24 +341,11 @@ void ColorPass::collect_draw_calls(
         return;
     }
 
-    MaterialPipelinePassContract pass_contract = color_material_pass_contract();
-    RenderSceneItemCollectRequest request{};
-    request.scene = scene;
-    request.phase_mark = phase_mark.c_str();
-    request.layer_mask = layer_mask;
-    request.render_category_mask = render_context.render_category_mask;
-    request.debug_pass_name = "ColorPass";
-    request.pass_contract = &pass_contract;
-    request.camera = render_context.camera;
-    if (!collector.collect(request)) {
-        tc::Log::error(
-            "[ColorPass] collect_draw_calls: item collection failed for phase '%s'",
-            phase_mark.c_str());
-    }
-
-    const auto& items = collector.items();
-    cached_draw_calls_.reserve(items.size());
-    for (size_t item_index = 0; item_index < items.size(); ++item_index) {
+    const auto& items = snapshot.items();
+    const std::span<const size_t> routed_items =
+        snapshot.phase_item_indices(phase_mark.c_str());
+    cached_draw_calls_.reserve(routed_items.size());
+    for (size_t item_index : routed_items) {
         const tc_render_item& item = items[item_index];
         tc_component* tc = item.component;
         if (!tc) {
@@ -532,6 +521,12 @@ void ColorPass::execute_with_data(
     tgfx::TextureHandle depth_tex2 =
         (depth_it != ctx.tex2_depth_writes.end()) ? depth_it->second : tgfx::TextureHandle{};
 
+    RenderSceneItemSnapshot* scene_items =
+        ensure_render_item_snapshot(ctx, "ColorPass");
+    if (!scene_items) {
+        return;
+    }
+
     EnginePerFrameStd140 pf = make_engine_per_frame_uniforms(
         data.view,
         data.projection,
@@ -604,13 +599,12 @@ void ColorPass::execute_with_data(
     collect_context.scene = TcSceneRef(data.scene);
     collect_context.camera = const_cast<RenderCamera*>(ctx.camera);
 
-    RenderSceneItemCollector scene_items;
     collect_draw_calls(
         data.scene,
         phase_mark,
         collect_context,
         data.layer_mask,
-        scene_items);
+        *scene_items);
 
     const std::string debug_pass_name = get_pass_name();
     const char* debug_pass_name_c = debug_pass_name.c_str();
@@ -620,7 +614,7 @@ void ColorPass::execute_with_data(
         color_task_planning_contract(task_shader_contract, debug_pass_name_c);
     RenderTaskList render_tasks;
     render_tasks.reserve(cached_draw_calls_.size());
-    std::vector<RenderTask*> tasks_by_item_index(scene_items.item_count(), nullptr);
+    std::vector<RenderTask*> tasks_by_item_index(scene_items->item_count(), nullptr);
 
     // Retain only accepted draw calls in the pass scratch buffer. Each
     // accepted call points back to one owned task by its stable collected item
@@ -630,7 +624,7 @@ void ColorPass::execute_with_data(
     size_t source_draw_index = 0;
     for (PhaseDrawCall& dc : cached_draw_calls_) {
         tc_material_phase* phase = dc.resolve_phase();
-        const tc_render_item* item = scene_items.item(dc.item_index);
+        const tc_render_item* item = scene_items->item(dc.item_index);
         if (!phase || !item) {
             if (!item) {
                 tc::Log::error(

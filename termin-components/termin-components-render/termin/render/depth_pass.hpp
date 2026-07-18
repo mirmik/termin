@@ -204,7 +204,8 @@ private:
     void collect_draw_calls(
         tc_scene_handle scene,
         uint64_t layer_mask,
-        uint64_t render_category_mask
+        uint64_t render_category_mask,
+        const RenderSceneItemSnapshot& snapshot
     ) const;
     void sort_draw_calls_by_shader() const;
 };

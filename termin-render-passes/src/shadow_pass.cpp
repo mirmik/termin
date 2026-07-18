@@ -464,7 +464,7 @@ void ShadowPass::collect_shadow_casters(
     tc_scene_handle scene,
     uint64_t layer_mask,
     uint64_t render_category_mask,
-    RenderSceneItemCollector& collector
+    const RenderSceneItemSnapshot& snapshot
 ) {
     cached_draw_calls_.clear();
 
@@ -479,22 +479,11 @@ void ShadowPass::collect_shadow_casters(
     render_context.render_category_mask = render_category_mask;
     render_context.scene = TcSceneRef(scene);
 
-    MaterialPipelinePassContract pass_contract = shadow_material_pass_contract();
-    RenderSceneItemCollectRequest request{};
-    request.scene = scene;
-    request.phase_mark = "shadow";
-    request.layer_mask = layer_mask;
-    request.render_category_mask = render_category_mask;
-    request.debug_pass_name = "ShadowPass";
-    request.pass_contract = &pass_contract;
-    request.camera = render_context.camera;
-    if (!collector.collect(request)) {
-        tc::Log::error("[ShadowPass] collect_shadow_casters: item collection failed");
-    }
-
-    const auto& items = collector.items();
-    cached_draw_calls_.reserve(items.size());
-    for (size_t item_index = 0; item_index < items.size(); ++item_index) {
+    const auto& items = snapshot.items();
+    const std::span<const size_t> routed_items =
+        snapshot.phase_item_indices("shadow");
+    cached_draw_calls_.reserve(routed_items.size());
+    for (size_t item_index : routed_items) {
         const tc_render_item& item = items[item_index];
         tc_component* tc = item.component;
         if (!tc) {
@@ -623,12 +612,16 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
         return results;
     }
 
-    RenderSceneItemCollector scene_items;
+    RenderSceneItemSnapshot* scene_items =
+        ensure_render_item_snapshot(ctx, "ShadowPass");
+    if (!scene_items) {
+        return results;
+    }
     collect_shadow_casters(
         data.scene,
         data.layer_mask,
         ctx.render_category_mask,
-        scene_items);
+        *scene_items);
 
     const MaterialPipelinePassContract task_shader_contract =
         shadow_material_pass_contract();
@@ -643,7 +636,7 @@ std::vector<ShadowMapResult> ShadowPass::execute_shadow_pass_tgfx2(
             continue;
         }
 
-        const tc_render_item* item = scene_items.item(dc.item_index);
+        const tc_render_item* item = scene_items->item(dc.item_index);
         if (!item) {
             tc::Log::error(
                 "[ShadowPass/tgfx2] skip planning: invalid item index %zu",

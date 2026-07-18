@@ -103,15 +103,17 @@ public:
             tc_log(TC_LOG_ERROR, "[OffMeshLinkComponent] cannot emit render items: sink callback is null");
             return false;
         }
-        if (!context.phase_mark) {
-            return true;
-        }
-        const std::string phase_mark = context.phase_mark;
+        const bool collect_all_phases =
+            !context.phase_mark || context.phase_mark[0] == '\0';
+        const std::string phase_mark = collect_all_phases
+            ? std::string(OFF_MESH_LINK_DEBUG_PHASE)
+            : context.phase_mark;
         const bool is_pick = phase_mark == "pick";
-        if (!is_pick && (context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
+        if (!collect_all_phases && !is_pick &&
+            (context.render_category_mask & TC_RENDER_CATEGORY_NAVMESH) == 0) {
             return true;
         }
-        if (!enabled && !is_pick) {
+        if (!collect_all_phases && !enabled && !is_pick) {
             return true;
         }
         if (is_pick) {
@@ -142,11 +144,14 @@ public:
             item.component = tc_component_ptr();
             item.geometry_id = 0;
             item.material_phase = phase;
-            item.material = tc_material_handle_invalid();
+            item.material = _debug_material.handle;
             item.material_phase_index = SIZE_MAX;
             if (phase) {
                 item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
-                tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+                tc_material* owner = _debug_material.get();
+                item.material_phase_index = owner
+                    ? static_cast<size_t>(phase - owner->phases)
+                    : SIZE_MAX;
             }
             Mat44f model = get_model_matrix(entity());
             std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
@@ -167,7 +172,7 @@ public:
         tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
         const size_t count = tc_material_get_phases_for_mark(
             material,
-            context.phase_mark,
+            OFF_MESH_LINK_DEBUG_PHASE,
             phases,
             TC_MATERIAL_MAX_PHASES);
         for (size_t i = 0; i < count; ++i) {

@@ -462,9 +462,6 @@ bool FoliageLayerComponent::collect_render_items(
         tc::Log::error("[FoliageLayerComponent] cannot emit render items: sink callback is null");
         return false;
     }
-    if (!context.phase_mark || context.phase_mark[0] == '\0') {
-        return true;
-    }
     if (!enabled || foliage_uuid.empty() || !prototype_mesh.is_valid() || !material.is_valid()) {
         return true;
     }
@@ -493,11 +490,19 @@ bool FoliageLayerComponent::collect_render_items(
     }
 
     tc_material_phase* phases[TC_MATERIAL_MAX_PHASES];
-    size_t count = tc_material_get_phases_for_mark(
-        mat,
-        context.phase_mark,
-        phases,
-        TC_MATERIAL_MAX_PHASES);
+    size_t count = 0;
+    if (!context.phase_mark || context.phase_mark[0] == '\0') {
+        count = std::min(mat->phase_count, static_cast<size_t>(TC_MATERIAL_MAX_PHASES));
+        for (size_t i = 0; i < count; ++i) {
+            phases[i] = &mat->phases[i];
+        }
+    } else {
+        count = tc_material_get_phases_for_mark(
+            mat,
+            context.phase_mark,
+            phases,
+            TC_MATERIAL_MAX_PHASES);
+    }
     for (size_t i = 0; i < count; ++i) {
         tc_material_phase* phase = phases[i];
         if (!phase) {
@@ -510,9 +515,8 @@ bool FoliageLayerComponent::collect_render_items(
         item.component = tc_component_ptr();
         item.geometry_id = FOLIAGE_GEOMETRY_ID;
         item.material_phase = phase;
-        item.material = tc_material_handle_invalid();
-        item.material_phase_index = SIZE_MAX;
-        tc_material_find_phase_ref(phase, &item.material, &item.material_phase_index);
+        item.material = material.handle;
+        item.material_phase_index = static_cast<size_t>(phase - mat->phases);
 
         Mat44f model = get_model_matrix(entity());
         std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);

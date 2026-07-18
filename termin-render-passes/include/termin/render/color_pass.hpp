@@ -224,7 +224,7 @@ private:
         const std::string& phase_mark,
         const RenderContext& render_context,
         uint64_t layer_mask,
-        RenderSceneItemCollector& collector
+        const RenderSceneItemSnapshot& snapshot
     );
 
     // Compute sort keys for all draw calls (priority + distance)
