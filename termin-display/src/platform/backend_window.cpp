@@ -369,6 +369,24 @@ void SDLBackendWindow::maximize() {
     }
 }
 
+void SDLBackendWindow::set_icon_bmp(const std::string& path) {
+    if (!window_) {
+        tc_log_error("[SDLBackendWindow] cannot set icon on a closed window");
+        throw std::runtime_error("SDLBackendWindow::set_icon_bmp: window is closed");
+    }
+
+    std::unique_ptr<SDL_Surface, decltype(&SDL_FreeSurface)> icon(
+        SDL_LoadBMP(path.c_str()), SDL_FreeSurface);
+    if (!icon) {
+        const std::string message =
+            "SDLBackendWindow::set_icon_bmp failed for '" + path + "': " + SDL_GetError();
+        tc_log_error("[SDLBackendWindow] %s", message.c_str());
+        throw std::runtime_error(message);
+    }
+
+    SDL_SetWindowIcon(window_, icon.get());
+}
+
 void SDLBackendWindow::set_fullscreen(bool enabled) {
     if (!window_) {
         return;

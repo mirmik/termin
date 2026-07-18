@@ -643,8 +643,10 @@ def run():
         wait_sdl_events_timeout,
     )
     from tgfx import Tgfx2Context
+    from termin.editor_core.application_icon import apply_editor_window_icon
 
     window = SDLBackendWindow("Termin Launcher", 1024, 640)
+    apply_editor_window_icon(window)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
     app = LauncherApp(graphics=graphics, controller=_create_launcher_controller())

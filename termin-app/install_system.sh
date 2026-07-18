@@ -69,6 +69,7 @@ Terminal=false
 Type=Application
 Categories=Development;Graphics;3DGraphics;
 Keywords=3d;editor;engine;cad;
+Icon=/opt/termin/share/icons/hicolor/256x256/apps/termin-editor-icon.png
 DESKTOP
     echo "  Desktop file: $DESKTOP_FILE"
 

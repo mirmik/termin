@@ -12,6 +12,7 @@ from termin.editor_core.component_editor_extension import (
     ComponentEditorExtensionSession,
     ComponentExtensionPresentation,
 )
+from termin.editor_core.application_icon import apply_editor_window_icon
 from termin.editor_core.entity_inspector_model import EntityInspectorController
 from termin.editor_core.inspector_model import InspectorKind, InspectorModel
 from termin.editor_core.inspector_resources import InspectorResourceCatalog
@@ -213,6 +214,7 @@ def init_editor_native(engine, debug_resource: str | None = None, no_scene: bool
     render_engine = engine.rendering_manager.render_engine
     configure_sdk_shader_runtime("native-editor", render_engine=render_engine)
     window = SDLBackendWindow("Termin Editor — Native UI", 1280, 720)
+    apply_editor_window_icon(window)
     render_engine.ensure_tgfx2()
     window.maximize()
     host = NativeUiHost(window)
