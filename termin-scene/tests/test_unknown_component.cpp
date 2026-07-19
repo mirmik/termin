@@ -951,6 +951,30 @@ int test_component_degradation_rejects_stale_plan() {
     return 0;
 }
 
+int test_component_is_a_after_rejected_parent_cycle() {
+    std::cout << "Testing component inheritance after rejected runtime type cycle...\n";
+    const char* root_name = "ComponentCycleGuardRoot";
+    const char* child_name = "ComponentCycleGuardChild";
+    tc_runtime_type_registry_unregister_type(child_name);
+    tc_runtime_type_registry_unregister_type(root_name);
+
+    TEST_ASSERT(tc_runtime_type_registry_set_parent(root_name, nullptr),
+                "cycle guard root registered");
+    TEST_ASSERT(tc_runtime_type_registry_set_parent(child_name, root_name),
+                "cycle guard child registered");
+    TEST_ASSERT(!tc_runtime_type_registry_set_parent(root_name, child_name),
+                "transitive parent cycle rejected");
+    TEST_ASSERT(tc_component_registry_is_a(child_name, root_name),
+                "valid inheritance remains queryable after rejection");
+    TEST_ASSERT(!tc_component_registry_is_a(root_name, child_name),
+                "rejected mutation does not change inheritance");
+
+    tc_runtime_type_registry_unregister_type(child_name);
+    tc_runtime_type_registry_unregister_type(root_name);
+    std::cout << "  Component inheritance cycle guard: PASS\n";
+    return 0;
+}
+
 } // namespace
 
 int main() {
@@ -976,6 +1000,7 @@ int main() {
     result |= test_module_owner_cleanup_prepares_live_components();
     result |= test_component_degradation_prepare_is_all_or_zero();
     result |= test_component_degradation_rejects_stale_plan();
+    result |= test_component_is_a_after_rejected_parent_cycle();
 
     if (result == 0) {
         std::cout << "\nAll UnknownComponent tests passed.\n";
