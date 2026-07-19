@@ -5,6 +5,7 @@
 #include "physics/tc_collision_world.h"
 #include "tc_inspect_cpp.hpp"
 #include <algorithm>
+#include <cstring>
 #include <vector>
 
 namespace termin {
@@ -142,15 +143,25 @@ void ColliderComponent::register_type() {
 }
 
 ColliderComponent::~ColliderComponent() {
+    _unsubscribe_from_scene_events();
     _remove_from_collision_world();
+}
+
+void ColliderComponent::start() {
+    if (_build_state != BuildState::Ready) {
+        _rebuild_collider(true);
+    }
 }
 
 void ColliderComponent::on_added() {
     CxxComponent::on_added();
 
+    _lifecycle_attached = true;
+
     Entity ent = entity();
     if (!ent.valid()) {
         tc::Log::error("ColliderComponent::on_added: entity is invalid");
+        _lifecycle_attached = false;
         return;
     }
 
@@ -166,27 +177,59 @@ void ColliderComponent::on_added() {
         }
     }
 
-    rebuild_collider();
+    _subscribe_to_scene_events();
+    _rebuild_collider(false);
 }
 
 void ColliderComponent::on_removed() {
+    _unsubscribe_from_scene_events();
     _remove_from_collision_world();
     _attached.reset();
     _collider.reset();
     _scene_handle = TC_SCENE_HANDLE_INVALID;
+    _lifecycle_attached = false;
+    _build_state = BuildState::Detached;
+    _last_reported_build_error.clear();
 
     CxxComponent::on_removed();
 }
 
 void ColliderComponent::rebuild_collider() {
+    _rebuild_collider(true);
+}
+
+void ColliderComponent::_rebuild_collider(bool report_failure) {
+    const bool detached = !_lifecycle_attached;
+    if (detached && collider_type == "ConvexHull") {
+        _attached.reset();
+        _collider.reset();
+        _build_state = BuildState::Detached;
+        return;
+    }
+
     // Remove old collider from collision world
     _remove_from_collision_world();
     _attached.reset();
 
     // Create new collider
-    _collider = _create_collider();
+    std::string failure_reason;
+    bool source_pending = false;
+    _collider = _create_collider(failure_reason, source_pending);
     if (!_collider) {
-        tc::Log::error("ColliderComponent::rebuild_collider: failed to create collider");
+        _build_state = source_pending
+            ? BuildState::PendingSource
+            : BuildState::InvalidSource;
+        if (report_failure) {
+            _report_build_failure_once(failure_reason);
+        }
+        return;
+    }
+
+    _build_state = BuildState::Ready;
+    ++_collider_revision;
+    _last_reported_build_error.clear();
+
+    if (detached) {
         return;
     }
 
@@ -223,35 +266,48 @@ void ColliderComponent::rebuild_collider() {
     }
 }
 
+void ColliderComponent::_report_build_failure_once(const std::string& message) {
+    if (message.empty() || message == _last_reported_build_error) {
+        return;
+    }
+    _last_reported_build_error = message;
+    tc::Log::error("ColliderComponent: %s", message.c_str());
+}
+
 void ColliderComponent::set_collider_type(const std::string& type) {
     if (type != collider_type) {
         collider_type = type;
-        rebuild_collider();
+        _rebuild_collider(true);
     }
 }
 
 void ColliderComponent::set_box_size(const tc_vec3& size) {
     box_size = size;
-    rebuild_collider();
+    _rebuild_collider(true);
 }
 
 void ColliderComponent::set_convex_hull_mesh_source(const std::string& source) {
     if (source != convex_hull_mesh_source) {
         convex_hull_mesh_source = source;
-        rebuild_collider();
+        _rebuild_collider(true);
     }
 }
 
 void ColliderComponent::set_convex_hull_mesh(const TcMesh& mesh) {
     convex_hull_mesh = mesh;
-    rebuild_collider();
+    _rebuild_collider(true);
 }
 
 bool ColliderComponent::_uses_mesh_component_mesh() const {
     return collider_type == "ConvexHull" && convex_hull_mesh_source == "MeshComponent";
 }
 
-std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collider() const {
+std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collider(
+    std::string& failure_reason,
+    bool& source_pending) const {
+    failure_reason.clear();
+    source_pending = false;
+
     if (collider_type == "Box") {
         // Box uses box_size as local size (entity scale applied via transform)
         Vec3 half_size{box_size.x / 2.0, box_size.y / 2.0, box_size.z / 2.0};
@@ -277,14 +333,16 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
         if (convex_hull_mesh_source == "MeshComponent") {
             Entity ent = entity();
             if (!ent.valid()) {
-                tc::Log::error("ColliderComponent: ConvexHull MeshComponent source requires a valid entity");
-                return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+                failure_reason = "ConvexHull MeshComponent source requires a valid entity";
+                return nullptr;
             }
 
             MeshComponent* mesh_component = ent.get_component<MeshComponent>();
             if (!mesh_component) {
-                tc::Log::error("ColliderComponent: ConvexHull MeshComponent source requires MeshComponent on the same entity");
-                return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+                failure_reason =
+                    "ConvexHull MeshComponent source requires MeshComponent on the same entity";
+                source_pending = true;
+                return nullptr;
             }
 
             m = mesh_component->mesh.get();
@@ -296,15 +354,16 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
         }
 
         if (!m || !m->vertices || m->vertex_count == 0) {
-            tc::Log::error("ColliderComponent: ConvexHull requires source mesh with loaded vertex data");
-            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+            failure_reason = "ConvexHull requires source mesh with loaded vertex data";
+            source_pending = true;
+            return nullptr;
         }
 
         // Find "position" attribute in vertex layout
         const tc_vertex_attrib* pos_attrib = tc_vertex_layout_find(&m->layout, "position");
         if (!pos_attrib || pos_attrib->size < 3) {
-            tc::Log::error("ColliderComponent: mesh has no position attribute (or size < 3)");
-            return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+            failure_reason = "ConvexHull mesh has no position attribute (or size < 3)";
+            return nullptr;
         }
 
         // Extract position data from interleaved vertex buffer
@@ -335,6 +394,111 @@ std::unique_ptr<colliders::ColliderPrimitive> ColliderComponent::_create_collide
     else {
         tc::Log::warn("ColliderComponent: unknown collider type '%s', defaulting to Box", collider_type.c_str());
         return std::make_unique<colliders::BoxCollider>(Vec3{0.5, 0.5, 0.5});
+    }
+}
+
+void ColliderComponent::_subscribe_to_scene_events() {
+    _unsubscribe_from_scene_events();
+    if (!tc_scene_alive(_scene_handle)) {
+        return;
+    }
+
+    tc_event_bus* bus = tc_scene_event_bus(_scene_handle);
+    if (!bus) {
+        tc::Log::error("ColliderComponent: scene event bus is unavailable");
+        return;
+    }
+
+    _mesh_changed_subscription = tc_event_bus_subscribe(
+        bus,
+        TC_EVENT_MESH_COMPONENT_CHANGED,
+        &_mesh_component_changed_callback,
+        this
+    );
+    if (!tc_event_subscription_valid(_mesh_changed_subscription)) {
+        tc::Log::error("ColliderComponent: failed to subscribe to MeshComponent changes");
+    }
+
+    _structure_changed_subscription = tc_event_bus_subscribe(
+        bus,
+        TC_EVENT_SCENE_STRUCTURE_CHANGED,
+        &_scene_structure_changed_callback,
+        this
+    );
+    if (!tc_event_subscription_valid(_structure_changed_subscription)) {
+        tc::Log::error("ColliderComponent: failed to subscribe to scene structure changes");
+    }
+}
+
+void ColliderComponent::_unsubscribe_from_scene_events() {
+    if (!tc_scene_alive(_scene_handle)) {
+        _mesh_changed_subscription = {0};
+        _structure_changed_subscription = {0};
+        return;
+    }
+
+    tc_event_bus* bus = tc_scene_event_bus(_scene_handle);
+    if (bus) {
+        if (tc_event_subscription_valid(_mesh_changed_subscription)) {
+            tc_event_bus_unsubscribe(bus, _mesh_changed_subscription);
+        }
+        if (tc_event_subscription_valid(_structure_changed_subscription)) {
+            tc_event_bus_unsubscribe(bus, _structure_changed_subscription);
+        }
+    }
+    _mesh_changed_subscription = {0};
+    _structure_changed_subscription = {0};
+}
+
+void ColliderComponent::_mesh_component_changed_callback(
+    const tc_event* event,
+    void* user_data) {
+    auto* self = static_cast<ColliderComponent*>(user_data);
+    if (self) {
+        self->_handle_mesh_component_changed(event);
+    }
+}
+
+void ColliderComponent::_scene_structure_changed_callback(
+    const tc_event* event,
+    void* user_data) {
+    auto* self = static_cast<ColliderComponent*>(user_data);
+    if (self) {
+        self->_handle_scene_structure_changed(event);
+    }
+}
+
+void ColliderComponent::_handle_mesh_component_changed(const tc_event* event) {
+    if (!_lifecycle_attached || !_uses_mesh_component_mesh() || !event ||
+        event->payload_size != sizeof(MeshComponentChangedEvent)) {
+        return;
+    }
+
+    const auto* payload = static_cast<const MeshComponentChangedEvent*>(event->payload);
+    if (!payload || !tc_entity_handle_eq(payload->entity, _c.owner)) {
+        return;
+    }
+
+    _rebuild_collider(started());
+}
+
+void ColliderComponent::_handle_scene_structure_changed(const tc_event* event) {
+    if (!_lifecycle_attached || !_uses_mesh_component_mesh() || !event ||
+        event->payload_size != sizeof(tc_scene_structure_changed_event)) {
+        return;
+    }
+
+    const auto* payload = static_cast<const tc_scene_structure_changed_event*>(event->payload);
+    if (!payload || payload->entity.index != _c.owner.id.index ||
+        payload->entity.generation != _c.owner.id.generation ||
+        !payload->component_type ||
+        std::strcmp(payload->component_type, "MeshComponent") != 0) {
+        return;
+    }
+
+    if (payload->kind == TC_SCENE_STRUCTURE_COMPONENT_ADDED ||
+        payload->kind == TC_SCENE_STRUCTURE_COMPONENT_REMOVED) {
+        _rebuild_collider(started());
     }
 }
 
