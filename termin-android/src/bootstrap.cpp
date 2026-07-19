@@ -24,6 +24,7 @@
 #include <tgfx/tgfx_mesh_handle.hpp>
 #include <termin/camera/camera_component.hpp>
 #include <termin/camera/render_camera_utils.hpp>
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/engine/engine_core.hpp>
 #include <termin/entity/component_registry.hpp>
 #include <termin/lighting/light_component.hpp>
@@ -1255,6 +1256,8 @@ extern "C" int termin_android_initialize(const termin_android_config* config) {
         return 0;
     }
 
+    termin::bootstrap::bootstrap_runtime();
+
     g_state.app_data_dir = config->app_data_dir ? config->app_data_dir : "";
     g_state.asset_root = config->asset_root ? config->asset_root : "";
     g_state.native_lib_dir = config->native_lib_dir ? config->native_lib_dir : "";
@@ -1295,6 +1298,7 @@ extern "C" void termin_android_shutdown(void) {
         g_state.scene_extensions_registered = false;
     }
 #endif
+    termin::bootstrap::shutdown_runtime();
     android_log_info("shutdown");
     tc_log_info("termin_android_shutdown");
 #ifdef __ANDROID__

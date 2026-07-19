@@ -61,7 +61,6 @@ extern "C" tc_pathfinding_world* tc_pathfinding_world_ensure_scene(tc_scene_hand
         return nullptr;
     }
 
-    tc_pathfinding_world_extension_init();
     if (!tc_scene_ext_has(scene, TC_SCENE_EXT_TYPE_PATHFINDING_WORLD)) {
         if (!tc_scene_ext_attach(scene, TC_SCENE_EXT_TYPE_PATHFINDING_WORLD)) {
             tc_log_error("[tc_pathfinding_world] failed to attach pathfinding_world extension");

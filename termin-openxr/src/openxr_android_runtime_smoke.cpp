@@ -97,7 +97,6 @@ struct ScenePrimitiveSmoke {
             return true;
         }
 
-        termin_scene_runtime_init();
         termin::MeshComponent::register_type();
 
         scene = termin::TcSceneRef::create("OpenXR tc_scene smoke", "openxr-tc-scene-smoke");
@@ -487,7 +486,6 @@ void register_openxr_scene_runtime() {
     }
     registered = true;
 
-    termin_scene_runtime_init();
     tc_inspect_kind_core_init();
     tc_scene_render_mount_extension_init();
     tc_scene_render_state_extension_init();
