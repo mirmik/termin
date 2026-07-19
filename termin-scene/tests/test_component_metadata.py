@@ -1,3 +1,15 @@
+import pytest
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _component_runtime():
+    import termin.bootstrap
+
+    termin.bootstrap.bootstrap_player()
+    yield
+    termin.bootstrap.shutdown_player()
+
+
 def test_python_component_metadata_is_registered() -> None:
     from termin.scene import ComponentRegistry, PythonComponent
 

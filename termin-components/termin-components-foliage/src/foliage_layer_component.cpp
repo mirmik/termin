@@ -347,18 +347,10 @@ void FoliageLayerComponent::register_type() {
     ensure_foliage_render_item_encoder_registered();
     register_foliage_data_handle_kind();
 
-    auto& component_registry = ComponentRegistry::instance();
-    if (!component_registry.has("FoliageLayerComponent")) {
-        component_registry.register_native(
-            "FoliageLayerComponent",
-            &CxxComponentFactoryData<FoliageLayerComponent>::create,
-            nullptr,
-            "Component"
-        );
-    }
-
-    auto& inspect = tc::InspectRegistry::instance();
-    inspect.set_type_parent("FoliageLayerComponent", "Component");
+    auto descriptor = ComponentTypeDescriptorBuilder::native<FoliageLayerComponent>(
+        "FoliageLayerComponent", "termin-components-foliage", "Component");
+    descriptor.category("Rendering");
+    auto& inspect = descriptor.inspect();
     if (!inspect.find_field("FoliageLayerComponent", "enabled")) {
         inspect.add<FoliageLayerComponent, bool>(
             "FoliageLayerComponent",
@@ -440,7 +432,7 @@ void FoliageLayerComponent::register_type() {
             "double"
         );
     }
-    tc::InspectAccessorFieldRegistrar<FoliageLayerComponent, std::string>(
+    inspect.add_with_accessors<FoliageLayerComponent, std::string>(
         "FoliageLayerComponent",
         "foliage",
         "Foliage Data",
@@ -448,6 +440,7 @@ void FoliageLayerComponent::register_type() {
         [](FoliageLayerComponent* self) { return self->foliage_uuid; },
         [](FoliageLayerComponent* self, std::string value) { self->foliage_uuid = std::move(value); }
     );
+    (void)descriptor.commit();
 }
 
 tc_phase_mask FoliageLayerComponent::get_phase_mask() const {

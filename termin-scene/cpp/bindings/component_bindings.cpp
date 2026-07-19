@@ -82,14 +82,31 @@ void bind_cxx_component(nb::module_& m) {
 void bind_component_registry(nb::module_& m) {
     nb::class_<ComponentRegistry>(m, "ComponentRegistry")
         .def_static("instance", &ComponentRegistry::instance, nb::rv_policy::reference)
-        .def("register_python", [](ComponentRegistry&, const std::string& name, nb::object cls, nb::object parent) {
-            if (parent.is_none()) {
-                return ComponentRegistryPython::register_python(name, cls, nullptr);
-            } else {
-                std::string parent_str = nb::cast<std::string>(parent);
-                return ComponentRegistryPython::register_python(name, cls, parent_str.c_str());
+        .def("register_python", [](
+            ComponentRegistry&,
+            const std::string& name,
+            nb::object cls,
+            nb::object parent,
+            nb::dict fields,
+            nb::dict metadata,
+            const std::string& category,
+            const std::string& display_name,
+            nb::list requirements,
+            nb::list capabilities) {
+            std::string parent_storage;
+            const char* parent_name = nullptr;
+            if (!parent.is_none()) {
+                parent_storage = nb::cast<std::string>(parent);
+                parent_name = parent_storage.c_str();
             }
-        }, nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none())
+            return ComponentRegistryPython::register_python(
+                name, std::move(cls), parent_name, std::move(fields), std::move(metadata),
+                category, display_name, std::move(requirements), std::move(capabilities));
+        },
+        nb::arg("name"), nb::arg("cls"), nb::arg("parent") = nb::none(),
+        nb::arg("fields") = nb::dict(), nb::arg("metadata") = nb::dict(),
+        nb::arg("category") = "", nb::arg("display_name") = "",
+        nb::arg("requirements") = nb::list(), nb::arg("capabilities") = nb::list())
         .def("unregister_python", [](ComponentRegistry&, const std::string& name) {
             ComponentRegistryPython::unregister_python(name);
         }, nb::arg("name"))

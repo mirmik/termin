@@ -12,7 +12,16 @@ namespace termin {
 class ComponentRegistryPython {
 public:
     // Register a Python component class
-    static bool register_python(const std::string& name, nb::object cls, const char* parent = nullptr);
+    static bool register_python(
+        const std::string& name,
+        nb::object cls,
+        const char* parent,
+        nb::dict fields,
+        nb::dict metadata,
+        const std::string& category,
+        const std::string& display_name,
+        nb::list requirements,
+        nb::list capabilities);
 
     // Unregister a Python component class and release the stored Python class object
     static void unregister_python(const std::string& name);

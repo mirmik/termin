@@ -31,13 +31,10 @@ static bool tc_value_to_quat(const tc_value& v, tc_quat& out) {
 }
 
 void KinematicUnitComponent::register_type() {
-    auto& component_registry = ComponentRegistry::instance();
-    if (!component_registry.has("KinematicUnitComponent")) {
-        component_registry.register_abstract("KinematicUnitComponent", "Component");
-    }
-
-    auto& inspect = tc::InspectRegistry::instance();
-    inspect.set_type_parent("KinematicUnitComponent", "Component");
+    auto descriptor = ComponentTypeDescriptorBuilder::abstract_native(
+        "KinematicUnitComponent", "termin-components-kinematic", "Component");
+    descriptor.category("Kinematic");
+    auto& inspect = descriptor.inspect();
 
     if (!inspect.find_field("KinematicUnitComponent", "axis")) {
         tc::InspectFieldInfo info;
@@ -65,7 +62,7 @@ void KinematicUnitComponent::register_type() {
             }
             return false;
         };
-        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+        (void)inspect.add_field(std::move(info));
     }
 
     if (!inspect.find_field("KinematicUnitComponent", "coordinate")) {
@@ -99,7 +96,7 @@ void KinematicUnitComponent::register_type() {
             }
             return true;
         };
-        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+        (void)inspect.add_field(std::move(info));
     }
 
     if (!inspect.find_field("KinematicUnitComponent", "base_position")) {
@@ -129,7 +126,7 @@ void KinematicUnitComponent::register_type() {
             }
             return false;
         };
-        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+        (void)inspect.add_field(std::move(info));
     }
 
     if (!inspect.find_field("KinematicUnitComponent", "base_rotation")) {
@@ -163,7 +160,7 @@ void KinematicUnitComponent::register_type() {
             }
             return false;
         };
-        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+        (void)inspect.add_field(std::move(info));
     }
 
     if (!inspect.find_field("KinematicUnitComponent", "base_scale")) {
@@ -193,7 +190,7 @@ void KinematicUnitComponent::register_type() {
             }
             return false;
         };
-        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+        (void)inspect.add_field(std::move(info));
     }
 
     if (!inspect.find_field("KinematicUnitComponent", "capture_base")) {
@@ -212,8 +209,9 @@ void KinematicUnitComponent::register_type() {
             }
             return value.type == TC_VALUE_BOOL;
         };
-        inspect.add_field_with_choices("KinematicUnitComponent", std::move(info));
+        (void)inspect.add_field(std::move(info));
     }
+    (void)descriptor.commit();
 }
 
 // KinematicUnitComponent implementation

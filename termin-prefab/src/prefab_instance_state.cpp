@@ -15,6 +15,7 @@ namespace {
 
 template<typename T>
 void register_hidden_serialized_field(
+    tc::InspectFacetBuilder& builder,
     T PrefabInstanceState::* member,
     const char* path,
     const char* kind
@@ -27,7 +28,7 @@ void register_hidden_serialized_field(
         true,
         false
     );
-    tc::register_inspect_field(member, spec);
+    tc::stage_inspect_field(builder, member, spec);
 }
 
 struct InstanceSnapshotContext {
@@ -273,45 +274,49 @@ PrefabInstanceState::PrefabInstanceState(std::string prefab_asset_uuid)
 {}
 
 void PrefabInstanceState::register_type() {
-    ComponentRegistry& registry = ComponentRegistry::instance();
-    if (!registry.has(TypeName)) {
-        register_component_type<PrefabInstanceState>(TypeName, "CxxComponent");
-        registry.set_category(TypeName, "Prefab");
-    }
-
-    tc::InspectRegistry& inspect = tc::InspectRegistry::instance();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<PrefabInstanceState>(
+        TypeName, "termin-prefab", "CxxComponent");
+    descriptor.category("Prefab");
+    auto& inspect = descriptor.inspect();
     if (inspect.find_field(TypeName, "prefab_asset_uuid") == nullptr) {
         register_hidden_serialized_field(
+            inspect,
             &PrefabInstanceState::_prefab_asset_uuid,
             "prefab_asset_uuid",
             "string"
         );
         register_hidden_serialized_field(
+            inspect,
             &PrefabInstanceState::_source_revision,
             "source_revision",
             "string"
         );
         register_hidden_serialized_field(
+            inspect,
             &PrefabInstanceState::_source_entity_ids,
             "source_entity_ids",
             "list[string]"
         );
         register_hidden_serialized_field(
+            inspect,
             &PrefabInstanceState::_runtime_entities,
             "runtime_entities",
             "list[entity]"
         );
         register_hidden_serialized_field(
+            inspect,
             &PrefabInstanceState::_source_component_ids,
             "source_component_ids",
             "list[string]"
         );
         register_hidden_serialized_field(
+            inspect,
             &PrefabInstanceState::_component_owners,
             "component_owners",
             "list[entity]"
         );
     }
+    (void)descriptor.commit();
 }
 
 void PrefabInstanceState::set_entity_mapping(

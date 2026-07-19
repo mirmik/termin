@@ -33,9 +33,10 @@ NavMeshKeeperComponent::NavMeshKeeperComponent()
 }
 
 void NavMeshKeeperComponent::register_type() {
-    register_component_type<NavMeshKeeperComponent>("NavMeshKeeperComponent", "Component");
-    ComponentRegistry::instance().set_category("NavMeshKeeperComponent", "Navigation");
-    tc::InspectAccessorFieldRegistrar<NavMeshKeeperComponent, TcNavMesh>(
+    auto descriptor = ComponentTypeDescriptorBuilder::native<NavMeshKeeperComponent>(
+        "NavMeshKeeperComponent", "termin-navmesh", "Component");
+    descriptor.category("Navigation");
+    descriptor.inspect().add_with_accessors<NavMeshKeeperComponent, TcNavMesh>(
         "NavMeshKeeperComponent",
         "navmesh",
         "NavMesh",
@@ -48,6 +49,7 @@ void NavMeshKeeperComponent::register_type() {
             self->navmesh_uuid = uuid ? uuid : "";
         }
     );
+    (void)descriptor.commit();
 }
 
 void NavMeshKeeperComponent::invalidate_debug_mesh() const {

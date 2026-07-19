@@ -15,36 +15,38 @@ AnimationPlayer::AnimationPlayer()
 }
 
 void AnimationPlayer::register_type() {
-    register_component_type<AnimationPlayer>("AnimationPlayer", "Component");
-    ComponentRegistry::instance().set_category("AnimationPlayer", "Animation");
-    tc::register_inspect_field(
+    auto descriptor = ComponentTypeDescriptorBuilder::native<AnimationPlayer>(
+        "AnimationPlayer", "termin-components-animation", "Component");
+    descriptor.category("Animation");
+    tc::stage_inspect_field(descriptor.inspect(),
         &AnimationPlayer::clips,
         "AnimationPlayer",
         "clips",
         "Animation Clips",
         "list[tc_animation_clip]"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &AnimationPlayer::node_targets,
         "AnimationPlayer",
         "node_targets",
         "Node Targets",
         "list[entity]"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &AnimationPlayer::_current_clip_name,
         "AnimationPlayer",
         "_current_clip_name",
         "Current Clip",
         "clip_selector"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(descriptor.inspect(),
         &AnimationPlayer::playing,
         "AnimationPlayer",
         "playing",
         "Playing",
         "bool"
     );
+    (void)descriptor.commit();
 }
 
 void AnimationPlayer::start() {

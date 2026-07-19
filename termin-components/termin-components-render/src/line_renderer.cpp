@@ -799,9 +799,11 @@ LineRenderer::LineRenderer(const char* type_name)
 
 void LineRenderer::register_type() {
     ensure_line_render_item_encoder_registered();
-    register_component_type<LineRenderer>("LineRenderer", "Component");
-    ComponentRegistry::instance().set_category("LineRenderer", "Rendering");
-    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, TcMaterial>(
+    auto descriptor = ComponentTypeDescriptorBuilder::native<LineRenderer>(
+        "LineRenderer", "termin-components-render", "Component");
+    descriptor.category("Rendering");
+    auto& inspect = descriptor.inspect();
+    inspect.add_with_callbacks<LineRenderer, TcMaterial>(
         "LineRenderer",
         "material",
         "Material",
@@ -809,7 +811,7 @@ void LineRenderer::register_type() {
         [](LineRenderer* self) -> TcMaterial& { return self->material; },
         [](LineRenderer* self, const TcMaterial& value) { self->set_material(value); }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, float>(
+    inspect.add_with_callbacks<LineRenderer, float>(
         "LineRenderer",
         "width",
         "Width",
@@ -820,7 +822,7 @@ void LineRenderer::register_type() {
         10.0,
         0.01
     );
-    tc::InspectAccessorFieldChoicesRegistrar<LineRenderer, int>(
+    inspect.add_with_accessor_choices<LineRenderer, int>(
         "LineRenderer",
         "render_mode",
         "Render Mode",
@@ -835,7 +837,7 @@ void LineRenderer::register_type() {
             {"4", "World Tube"},
         }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, bool>(
+    inspect.add_with_callbacks<LineRenderer, bool>(
         "LineRenderer",
         "raw_lines",
         "Raw Lines",
@@ -843,7 +845,7 @@ void LineRenderer::register_type() {
         [](LineRenderer* self) -> bool& { return self->raw_lines; },
         [](LineRenderer* self, const bool& value) { self->set_raw_lines(value); }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, bool>(
+    inspect.add_with_callbacks<LineRenderer, bool>(
         "LineRenderer",
         "cast_shadow",
         "Cast Shadow",
@@ -851,7 +853,7 @@ void LineRenderer::register_type() {
         [](LineRenderer* self) -> bool& { return self->cast_shadow; },
         [](LineRenderer* self, const bool& value) { self->set_cast_shadow(value); }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, tc_vec3>(
+    inspect.add_with_callbacks<LineRenderer, tc_vec3>(
         "LineRenderer",
         "up_hint",
         "Up Hint",
@@ -859,7 +861,7 @@ void LineRenderer::register_type() {
         [](LineRenderer* self) -> tc_vec3& { return self->up_hint; },
         [](LineRenderer* self, const tc_vec3& value) { self->set_up_hint(value); }
     );
-    tc::InspectRegistry::instance().add_with_callbacks<LineRenderer, int>(
+    inspect.add_with_callbacks<LineRenderer, int>(
         "LineRenderer",
         "tube_sides",
         "Tube Sides",
@@ -870,7 +872,7 @@ void LineRenderer::register_type() {
         32,
         1
     );
-    tc::InspectAccessorFieldRegistrar<LineRenderer, std::vector<tc_vec3>>(
+    inspect.add_with_accessors<LineRenderer, std::vector<tc_vec3>>(
         "LineRenderer",
         "points",
         "Positions",
@@ -878,6 +880,7 @@ void LineRenderer::register_type() {
         [](LineRenderer* self) { return self->points(); },
         [](LineRenderer* self, std::vector<tc_vec3> value) { self->set_points(std::move(value)); }
     );
+    (void)descriptor.commit();
 }
 
 LineRenderer::~LineRenderer() = default;
