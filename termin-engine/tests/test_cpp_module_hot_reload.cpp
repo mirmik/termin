@@ -12,6 +12,7 @@
 #include <termin/entity/unknown_component.hpp>
 #include <termin/tc_scene.hpp>
 #include <termin/render/frame_pass.hpp>
+#include <termin/render/builtin_passes.hpp>
 #include <termin/render/unknown_pass.hpp>
 
 #include <inspect/tc_inspect.h>
@@ -249,6 +250,7 @@ bool engine_owned_component_probe_intact(const char* step, std::string& error) {
 int run_cpp_module_hot_reload_smoke() {
     tc::init_cpp_inspect_vtable();
     tc::register_builtin_cpp_kinds();
+    termin::register_builtin_render_pass_types();
     register_engine_owned_inspect_probe();
     create_unowned_module_inspect_shell();
     register_engine_owned_component_probe();

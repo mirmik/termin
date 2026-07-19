@@ -358,10 +358,14 @@ std::vector<ResourceSpec> GeometryPassBase::make_resource_specs() const {
 }
 
 void GeometryPassBase::register_type() {
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_camera_name();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::abstract_native(
+        "GeometryPassBase", "termin-components-render", "CxxFramePass");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_camera_name(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

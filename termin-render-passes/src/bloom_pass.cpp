@@ -386,18 +386,19 @@ void BloomPass::destroy() {
     last_tgfx2_mip_levels_ = 0;
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY(BloomPass);
-
 void BloomPass::register_type() {
-    register_frame_pass_BloomPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_output_res_target();
-    _register_inspect_threshold();
-    _register_inspect_soft_threshold();
-    _register_inspect_intensity();
-    _register_inspect_mip_levels();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<BloomPass>(
+        "BloomPass", "termin-render-passes");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_output_res_target(inspect);
+    _register_inspect_threshold(inspect);
+    _register_inspect_soft_threshold(inspect);
+    _register_inspect_intensity(inspect);
+    _register_inspect_mip_levels(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin
