@@ -23,16 +23,15 @@ Run it from any working directory:
 ./build/examples/termin-gui-native-tally/termin_tally
 ```
 
-The configure step records the selected SDK and `slangc` locations as development hints.
-`TERMIN_SDK`, `TERMIN_SHADERC`, `TERMIN_SLANGC`, and `TERMIN_UI_FONT` override those hints.
-Use `--frames N` for a bounded window/render smoke run; CTest uses this mode automatically.
+The application host resolves its font and shader tools relative to the loaded SDK.
+`TERMIN_SDK`, `TERMIN_SHADERC`, `TERMIN_SLANGC`, and `TERMIN_UI_FONT` provide explicit
+runtime overrides. Use `--frames N` for a bounded window/render smoke run; CTest uses this
+mode automatically.
 
 ## What the experiment exposes
 
-The actual UI is small. The example now gets its native window and graphics presentation
-surface from the lightweight installed `termin-window` package, without linking the engine's
-scene/render/input integration from `termin-display`. It consumes the backend-neutral
-`WindowEvent` API and `termin_gui_native::window_input`; no SDL types or event translation live
-in the application. Most remaining plumbing is render-target/frame-loop lifecycle, font
-discovery, and runtime shader compiler setup. A public gui-native application host is the next
-layer needed to remove that complexity.
+The actual UI is small, and the surrounding application is now small as well. The installed
+`termin_gui_native::application_host` owns the lightweight native window, portable input,
+resizable render target, draw-list rendering, presentation, font/shader runtime defaults and
+GPU teardown. Tally contains no SDL types, graphics-device setup, asset lookup or render-loop
+plumbing and still avoids the engine scene/render/input integration from `termin-display`.
