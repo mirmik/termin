@@ -11,6 +11,7 @@
 #   - wireframe_btn: Toggle wireframe rendering
 #   - gizmo_orientation_btn: Toggle transform gizmo local/global orientation
 
+uiscript: 1
 root:
   type: Panel
   name: editor_camera_root
