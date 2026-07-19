@@ -117,6 +117,20 @@ def test_build_quest_openxr_project_exports_package_and_copies_apk(tmp_path: Pat
     )
     sdk_config.parent.mkdir(parents=True)
     sdk_config.write_text("# fake OpenXR CMake package\n", encoding="utf-8")
+    sdk_capabilities = (
+        termin_root
+        / "sdk/android/arm64-v8a/share/termin/android-capabilities.json"
+    )
+    _write_json(
+        sdk_capabilities,
+        {
+            "version": 1,
+            "abi": "arm64-v8a",
+            "openxr_headers": True,
+            "openxr_loader": True,
+            "vulkan": True,
+        },
+    )
 
     build_script = termin_root / ("build-quest-openxr-apk.cmd" if os.name == "nt" else "build-quest-openxr-apk.sh")
     if os.name == "nt":

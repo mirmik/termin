@@ -96,6 +96,8 @@ if(TERMIN_OPENXR_INCLUDE_DIR)
 else()
     message(STATUS "termin-openxr: OpenXR headers not found; building placeholder without OpenXR headers")
 endif()
+set(TERMIN_OPENXR_HAS_HEADERS "${TERMIN_OPENXR_HAS_HEADERS}" CACHE INTERNAL
+    "Whether termin-openxr was compiled with OpenXR headers" FORCE)
 
 set(TERMIN_OPENXR_SOURCES
     src/openxr_android_runtime.cpp
