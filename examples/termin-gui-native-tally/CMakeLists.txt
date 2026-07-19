@@ -5,10 +5,6 @@ project(termin_gui_native_tally VERSION 0.1.0 LANGUAGES CXX)
 find_package(termin_gui_native CONFIG REQUIRED)
 find_package(termin_window CONFIG REQUIRED)
 
-if(NOT termin_window_HAS_SDL)
-    message(FATAL_ERROR "termin-gui-native tally requires an SDK built with SDL support")
-endif()
-
 get_filename_component(TERMIN_TALLY_SDK_HINT
     "${termin_gui_native_DIR}/../../.."
     ABSOLUTE
@@ -21,8 +17,7 @@ add_executable(termin_tally
 target_compile_features(termin_tally PRIVATE cxx_std_20)
 target_link_libraries(termin_tally
     PRIVATE
-        termin_gui_native::termin_gui_native
-        termin_window::termin_window
+        termin_gui_native::window_input
 )
 target_compile_definitions(termin_tally
     PRIVATE

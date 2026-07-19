@@ -12,12 +12,11 @@
 #include <system_error>
 #include <vector>
 
-#include <SDL2/SDL.h>
-
 #include <termin/gui_native/document_builder.hpp>
 #include <termin/gui_native/draw_list_renderer.hpp>
+#include <termin/gui_native/window_input.hpp>
 #include <termin/gui_native/widgets.hpp>
-#include <termin/platform/sdl_backend_window.hpp>
+#include <termin/platform/backend_window.hpp>
 
 #include <tgfx2/descriptors.hpp>
 #include <tgfx2/i_render_device.hpp>
@@ -175,74 +174,6 @@ fs::path resolve_font() {
       "UI font was not found; set TERMIN_SDK or TERMIN_UI_FONT");
 }
 
-uint32_t translate_modifiers(SDL_Keymod modifiers) {
-  uint32_t result = 0;
-  if ((modifiers & KMOD_SHIFT) != 0) {
-    result |= TC_UI_MOD_SHIFT;
-  }
-  if ((modifiers & KMOD_CTRL) != 0) {
-    result |= TC_UI_MOD_CTRL;
-  }
-  if ((modifiers & KMOD_ALT) != 0) {
-    result |= TC_UI_MOD_ALT;
-  }
-  if ((modifiers & KMOD_GUI) != 0) {
-    result |= TC_UI_MOD_SUPER;
-  }
-  return result;
-}
-
-int32_t translate_pointer_button(uint8_t button) {
-  switch (button) {
-  case SDL_BUTTON_LEFT:
-    return ui::pointer_button_value(ui::PointerButton::Left);
-  case SDL_BUTTON_RIGHT:
-    return ui::pointer_button_value(ui::PointerButton::Right);
-  case SDL_BUTTON_MIDDLE:
-    return ui::pointer_button_value(ui::PointerButton::Middle);
-  default:
-    return -1;
-  }
-}
-
-int32_t translate_key(SDL_Keycode key) {
-  if (key >= SDLK_a && key <= SDLK_z) {
-    return TC_UI_KEY_A + static_cast<int32_t>(key - SDLK_a);
-  }
-  if (key >= SDLK_0 && key <= SDLK_9) {
-    return TC_UI_KEY_0 + static_cast<int32_t>(key - SDLK_0);
-  }
-  switch (key) {
-  case SDLK_TAB:
-    return TC_UI_KEY_TAB;
-  case SDLK_RETURN:
-  case SDLK_KP_ENTER:
-    return TC_UI_KEY_ENTER;
-  case SDLK_SPACE:
-    return TC_UI_KEY_SPACE;
-  case SDLK_ESCAPE:
-    return TC_UI_KEY_ESCAPE;
-  case SDLK_BACKSPACE:
-    return TC_UI_KEY_BACKSPACE;
-  case SDLK_DELETE:
-    return TC_UI_KEY_DELETE;
-  case SDLK_RIGHT:
-    return TC_UI_KEY_RIGHT;
-  case SDLK_LEFT:
-    return TC_UI_KEY_LEFT;
-  case SDLK_DOWN:
-    return TC_UI_KEY_DOWN_ARROW;
-  case SDLK_UP:
-    return TC_UI_KEY_UP_ARROW;
-  case SDLK_HOME:
-    return TC_UI_KEY_HOME;
-  case SDLK_END:
-    return TC_UI_KEY_END;
-  default:
-    return TC_UI_KEY_UNKNOWN;
-  }
-}
-
 std::optional<size_t> parse_frame_limit(int argc, char **argv) {
   if (argc == 1) {
     return std::nullopt;
@@ -292,7 +223,8 @@ using PaintContextPtr =
 class TallyApplication {
 public:
   TallyApplication()
-      : window_(std::string(kApplicationName), 420, 260),
+      : window_(termin::create_native_window(
+            termin::WindowConfig{std::string(kApplicationName), 420, 260})),
         device_(checked_device()), context_(checked_context()),
         draw_list_(tc_ui_draw_list_create()),
         paint_context_(tc_ui_paint_context_create(draw_list_.get())) {
@@ -304,11 +236,11 @@ public:
     }
     renderer_.bind_text_measurer(document_.get());
     build_interface();
-    SDL_StartTextInput();
+    window_->set_text_input_enabled(true);
   }
 
   ~TallyApplication() {
-    SDL_StopTextInput();
+    window_->set_text_input_enabled(false);
     renderer_.release_gpu();
     if (color_target_) {
       device_.destroy(color_target_);
@@ -320,10 +252,10 @@ public:
 
   int run(std::optional<size_t> frame_limit) {
     size_t rendered_frames = 0;
-    while (!window_.should_close() &&
+    while (!window_->should_close() &&
            (!frame_limit.has_value() || rendered_frames < *frame_limit)) {
       dispatch_events();
-      const auto [width, height] = window_.framebuffer_size();
+      const auto [width, height] = window_->framebuffer_size();
       if (width <= 0 || height <= 0) {
         continue;
       }
@@ -341,7 +273,7 @@ public:
       renderer_.render(context_, draw_list_.get(), width, height);
       context_.end_pass();
       context_.end_frame();
-      window_.present(color_target_);
+      window_->present(color_target_);
       ++rendered_frames;
     }
     device_.wait_idle();
@@ -350,7 +282,7 @@ public:
 
 private:
   tgfx::IRenderDevice &checked_device() {
-    tgfx::IRenderDevice *device = window_.device();
+    tgfx::IRenderDevice *device = window_->device();
     if (!device) {
       throw std::runtime_error("window did not provide a render device");
     }
@@ -358,7 +290,7 @@ private:
   }
 
   tgfx::RenderContext2 &checked_context() {
-    tgfx::RenderContext2 *context = window_.context();
+    tgfx::RenderContext2 *context = window_->context();
     if (!context) {
       throw std::runtime_error("window did not provide a render context");
     }
@@ -401,8 +333,7 @@ private:
   void refresh_count() {
     const std::string value = std::to_string(count_);
     count_label_->set_text(value);
-    SDL_SetWindowTitle(window_.sdl_window(),
-                       (std::string(kApplicationName) + " - " + value).c_str());
+    window_->set_title(std::string(kApplicationName) + " - " + value);
   }
 
   void ensure_color_target(int width, int height) {
@@ -420,112 +351,14 @@ private:
     target_height_ = height;
   }
 
-  std::pair<float, float> to_framebuffer(float x, float y) const {
-    int window_width = 0;
-    int window_height = 0;
-    SDL_GetWindowSize(window_.sdl_window(), &window_width, &window_height);
-    const auto [framebuffer_width, framebuffer_height] =
-        window_.framebuffer_size();
-    if (window_width <= 0 || window_height <= 0) {
-      return {x, y};
-    }
-    return {x * static_cast<float>(framebuffer_width) /
-                static_cast<float>(window_width),
-            y * static_cast<float>(framebuffer_height) /
-                static_cast<float>(window_height)};
-  }
-
-  bool event_belongs_to_window(uint32_t event_window_id) const {
-    return event_window_id == 0 ||
-           event_window_id == SDL_GetWindowID(window_.sdl_window());
-  }
-
-  void dispatch_pointer(tc_ui_pointer_event_type type, float x, float y,
-                        int32_t button, uint32_t clicks, float wheel_x = 0.0f,
-                        float wheel_y = 0.0f) {
-    const auto [framebuffer_x, framebuffer_y] = to_framebuffer(x, y);
-    const tc_ui_pointer_event event{
-        type,
-        framebuffer_x,
-        framebuffer_y,
-        button,
-        clicks,
-        static_cast<int32_t>(translate_modifiers(SDL_GetModState())),
-        wheel_x,
-        wheel_y};
-    document_.dispatch_pointer_event(event);
-  }
-
   void dispatch_events() {
-    SDL_Event event;
-    while (window_.poll_event(event)) {
-      if (event.type == SDL_QUIT) {
-        window_.set_should_close(true);
-        continue;
-      }
-      if (event.type == SDL_WINDOWEVENT &&
-          event.window.event == SDL_WINDOWEVENT_CLOSE &&
-          event_belongs_to_window(event.window.windowID)) {
-        window_.set_should_close(true);
-        continue;
-      }
-
-      switch (event.type) {
-      case SDL_MOUSEMOTION:
-        if (event_belongs_to_window(event.motion.windowID)) {
-          dispatch_pointer(TC_UI_POINTER_MOVE,
-                           static_cast<float>(event.motion.x),
-                           static_cast<float>(event.motion.y), -1, 0);
-        }
-        break;
-      case SDL_MOUSEBUTTONDOWN:
-      case SDL_MOUSEBUTTONUP:
-        if (event_belongs_to_window(event.button.windowID)) {
-          dispatch_pointer(event.type == SDL_MOUSEBUTTONDOWN
-                               ? TC_UI_POINTER_DOWN
-                               : TC_UI_POINTER_UP,
-                           static_cast<float>(event.button.x),
-                           static_cast<float>(event.button.y),
-                           translate_pointer_button(event.button.button),
-                           event.button.clicks);
-        }
-        break;
-      case SDL_MOUSEWHEEL:
-        if (event_belongs_to_window(event.wheel.windowID)) {
-          int x = 0;
-          int y = 0;
-          SDL_GetMouseState(&x, &y);
-          dispatch_pointer(TC_UI_POINTER_WHEEL, static_cast<float>(x),
-                           static_cast<float>(y), -1, 0,
-                           static_cast<float>(event.wheel.x),
-                           static_cast<float>(event.wheel.y));
-        }
-        break;
-      case SDL_KEYDOWN:
-      case SDL_KEYUP:
-        if (event_belongs_to_window(event.key.windowID)) {
-          const tc_ui_key_event key_event{
-              event.type == SDL_KEYDOWN ? TC_UI_KEY_DOWN : TC_UI_KEY_UP,
-              translate_key(event.key.keysym.sym),
-              static_cast<int32_t>(event.key.keysym.scancode),
-              static_cast<int32_t>(translate_modifiers(
-                  static_cast<SDL_Keymod>(event.key.keysym.mod))),
-              event.key.repeat != 0};
-          document_.dispatch_key_event(key_event);
-        }
-        break;
-      case SDL_TEXTINPUT:
-        if (event_belongs_to_window(event.text.windowID)) {
-          document_.dispatch_text_event(tc_ui_text_event{event.text.text});
-        }
-        break;
-      default:
-        break;
-      }
+    termin::WindowEvent event;
+    while (window_->poll_event(event)) {
+      ui::dispatch_window_event(document_, event);
     }
   }
 
-  termin::SDLBackendWindow window_;
+  termin::BackendWindowPtr window_;
   tgfx::IRenderDevice &device_;
   tgfx::RenderContext2 &context_;
   ui::Document document_;

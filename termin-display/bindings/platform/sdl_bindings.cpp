@@ -17,7 +17,7 @@
 #include "termin/platform/sdl_window.hpp"
 #include "termin/platform/sdl_render_surface.hpp"
 #include "termin/platform/sdl_backend_window.hpp"
-#include "termin/input/sdl_input_bridge.hpp"
+#include "termin/input/window_input_bridge.hpp"
 
 #include "tgfx2/handles.hpp"
 #include "tgfx2/i_render_device.hpp"
@@ -567,18 +567,13 @@ void bind_sdl(nb::module_& m) {
         .def("should_close", &SDLBackendWindow::should_close)
         .def("set_should_close", &SDLBackendWindow::set_should_close, nb::arg("value"))
         .def("set_input_manager", [](SDLBackendWindow& self, uintptr_t input_manager_ptr) {
-                attach_sdl_input_manager(
+                attach_window_input_manager(
                     self,
                     reinterpret_cast<tc_input_manager*>(input_manager_ptr));
             },
             nb::arg("input_manager_ptr"),
             "Route SDL input events from this window to a tc_input_manager.")
-        .def("set_title", [](SDLBackendWindow& self, const std::string& title) {
-                SDL_Window* w = self.sdl_window();
-                if (w) {
-                    SDL_SetWindowTitle(w, title.c_str());
-                }
-            },
+        .def("set_title", &SDLBackendWindow::set_title,
             nb::arg("title"),
             "Set the OS window title.")
         .def("maximize", &SDLBackendWindow::maximize,

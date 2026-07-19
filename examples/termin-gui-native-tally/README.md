@@ -31,7 +31,8 @@ Use `--frames N` for a bounded window/render smoke run; CTest uses this mode aut
 
 The actual UI is small. The example now gets its native window and graphics presentation
 surface from the lightweight installed `termin-window` package, without linking the engine's
-scene/render/input integration from `termin-display`. Most of `src/main.cpp` is still
-application plumbing: SDL event translation, the render target and frame loop, font discovery,
-and runtime shader compiler setup. A public gui-native application host is the next layer needed
-to remove that remaining complexity.
+scene/render/input integration from `termin-display`. It consumes the backend-neutral
+`WindowEvent` API and `termin_gui_native::window_input`; no SDL types or event translation live
+in the application. Most remaining plumbing is render-target/frame-loop lifecycle, font
+discovery, and runtime shader compiler setup. A public gui-native application host is the next
+layer needed to remove that complexity.

@@ -29,7 +29,7 @@
 #include <termin/modules/term_modules_integration.hpp>
 #include <termin/platform/offscreen_render_surface.hpp>
 #include <termin/platform/sdl_backend_window.hpp>
-#include <termin/input/sdl_input_bridge.hpp>
+#include <termin/input/window_input_bridge.hpp>
 #include <termin/render/rendering_manager.hpp>
 #include <termin/render/tc_display_handle.hpp>
 #include <termin/runtime/runtime_package.hpp>
@@ -1065,7 +1065,7 @@ struct PlayerRuntimeHost::Impl {
         }
 
         if (window) {
-            attach_sdl_input_manager(*window, router);
+            attach_window_input_manager(*window, router);
         }
         if (surface != nullptr) {
             surface->set_input_manager(router);
@@ -1114,7 +1114,7 @@ struct PlayerRuntimeHost::Impl {
 
     void clear_input() {
         if (window) {
-            attach_sdl_input_manager(*window, nullptr);
+            attach_window_input_manager(*window, nullptr);
         }
         if (surface != nullptr) {
             surface->set_input_manager(nullptr);
