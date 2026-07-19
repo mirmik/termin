@@ -128,8 +128,8 @@ API-контракт выглядел одинаково с Vulkan, `OpenGLRende
    строк перед `glTexSubImage2D`. Пользователь подаёт row 0 = top,
    в GL-памяти строка-верх оказывается на row `h-1`. Для region upload
    вдобавок пересчитывается `y` top-left → bottom-left.
-2. **Sampling** — `OpenGLRenderDevice::create_shader` после общего
-   preprocess инжектит GLSL overlay: перегрузки `_tgfx_gl_tex(...)` для
+2. **Sampling** — `OpenGLRenderDevice::create_shader` непосредственно
+   инжектит backend GLSL overlay: перегрузки `_tgfx_gl_tex(...)` для
    sampler2D / sampler2DShadow и `#define texture _tgfx_gl_tex` /
    `#define texelFetch _tgfx_gl_texel`. В итоге любой `texture(s, uv)`
    превращается в `texture(s, vec2(uv.x, 1.0 - uv.y))`. Для прочих
@@ -141,7 +141,7 @@ API-контракт выглядел одинаково с Vulkan, `OpenGLRende
 
 Как следствие: никакой `backend == "opengl"` проверки в юзер-коде. Если
 где-то появляется такой branch — это регрессия, её место — внутри
-`OpenGLRenderDevice` / `shader_preprocess` (или расширение overlay).
+`OpenGLRenderDevice` (или расширение backend overlay).
 
 ## 4a. Triangle winding / front-face
 
@@ -232,7 +232,7 @@ dy_data = +dy_pixel / pa_h * span_y       # mouse down  = data y increases (y go
   одинаковый, backend сам разбирается.
 - `flip_v=True` где-либо снаружи backend'а — баг.
 - `uv.y = 1 - v` в пользовательских шейдерах как подхват OpenGL — баг.
-  Это делает shader_preprocess внутри OpenGLRenderDevice.
+  Это делает backend overlay внутри `OpenGLRenderDevice::create_shader`.
 - OpenGL `begin_render_pass` без `glDisable(GL_SCISSOR_TEST)` —
   утечка scissor state между pass'ами.
 - NDC cube corner с `z = -1` (см. `compute_frustum_corners`) — баг;

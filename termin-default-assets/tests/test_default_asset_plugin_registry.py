@@ -11,7 +11,6 @@ DEFAULT_ASSET_PLUGIN_SETUP_FILES = (
 EXPECTED_PLUGIN_TYPES = {
     "audio_clip",
     "glb",
-    "glsl",
     "material",
     "mesh",
     "navmesh",
@@ -26,7 +25,6 @@ EXPECTED_PLUGIN_TYPES = {
 EXPECTED_IMPORT_EXTENSIONS = {
     ".glb": "glb",
     ".gltf": "glb",
-    ".glsl": "glsl",
     ".jpeg": "texture",
     ".jpg": "texture",
     ".material": "material",
@@ -149,6 +147,8 @@ def test_default_asset_plugin_entry_points_declare_expected_types() -> None:
 
     assert set(groups["termin.asset_runtime_plugins"]) >= EXPECTED_PLUGIN_TYPES
     assert set(groups["termin.asset_import_plugins"]) >= EXPECTED_PLUGIN_TYPES
+    assert "glsl" not in groups["termin.asset_import_plugins"]
+    assert "glsl" not in groups["termin.asset_runtime_plugins"]
 
 
 def test_default_import_plugin_sources_declare_expected_extensions() -> None:
@@ -166,3 +166,4 @@ def test_default_import_plugin_sources_declare_expected_extensions() -> None:
         extension: actual_extensions[extension]
         for extension in EXPECTED_IMPORT_EXTENSIONS
     } == EXPECTED_IMPORT_EXTENSIONS
+    assert ".glsl" not in actual_extensions

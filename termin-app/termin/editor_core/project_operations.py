@@ -107,7 +107,7 @@ _PIPELINE_TEMPLATE = '''{
 # ======================================================================
 
 def sync_stdlib(project_root: Path) -> None:
-    """Sync the built-in stdlib (materials, shaders, glsl) into
+    """Sync the built-in stdlib (materials and shaders) into
     ``project_root / stdlib``. Called on project open by both editors."""
     created = not (project_root / "stdlib").exists()
     result = _sync_stdlib(project_root)

@@ -286,32 +286,6 @@ class DefaultAssetRegistryFactoryMixin:
             data_to_asset=data_to_asset,
         )
 
-    def _create_glsl_registry(self):
-        """Create AssetRegistry for GLSL include files."""
-        from termin_assets import AssetRegistry
-
-        def data_from_asset(asset):
-            if asset.source is None:
-                asset.ensure_loaded()
-            return asset.source
-
-        def data_to_asset(data):
-            for asset in self._glsl_registry.iter_assets():
-                if asset.source is data:
-                    return asset
-            return None
-
-        def get_asset_class():
-            from termin.default_assets.render.glsl_asset import GlslAsset
-            return GlslAsset
-
-        return AssetRegistry(
-            asset_class=get_asset_class,
-            asset_store=self._asset_store,
-            data_from_asset=data_from_asset,
-            data_to_asset=data_to_asset,
-        )
-
     def _create_audio_clip_registry(self):
         """Create AssetRegistry for audio clips."""
         from termin_assets import AssetRegistry

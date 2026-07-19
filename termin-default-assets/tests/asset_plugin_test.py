@@ -150,23 +150,6 @@ def test_resource_manager_runtime_asset_api_registers_mesh(tmp_path) -> None:
     assert rm.get_mesh_asset("runtime_api_probe") is asset
 
 
-def test_resource_manager_runtime_asset_api_get_or_create_glsl(tmp_path) -> None:
-    glsl_path = tmp_path / "runtime_api_probe.glsl"
-    glsl_path.write_text("// probe\n", encoding="utf-8")
-    rm = DefaultResourceManager()
-
-    asset = rm.get_or_create_runtime_asset(
-        "glsl",
-        "runtime_api_probe.glsl",
-        source_path=str(glsl_path),
-        uuid="runtime-api-glsl-uuid",
-    )
-
-    assert rm.get_runtime_asset("glsl", "runtime_api_probe.glsl") is asset
-    assert rm.get_runtime_asset_by_uuid("glsl", "runtime-api-glsl-uuid") is asset
-    assert rm.glsl.get_asset("runtime_api_probe.glsl") is asset
-
-
 def test_audio_clip_register_file_uses_asset_plugin() -> None:
     rm = DefaultResourceManager()
     result = PreLoadResult(
@@ -308,7 +291,6 @@ def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
     preloaders = create_default_preloaders(rm)
 
     migrated = {
-        "glsl",
         "shader",
         "material",
         "pipeline",
@@ -327,3 +309,9 @@ def test_default_preloaders_use_plugin_adapter_for_migrated_assets() -> None:
     assert set(by_resource_type.keys()) == migrated
     for resource_type in migrated:
         assert isinstance(by_resource_type[resource_type], PluginPreLoader)
+
+
+def test_glsl_is_not_a_default_authored_asset_type() -> None:
+    rm = DefaultResourceManager()
+    assert rm.asset_type_plugins.get_for_extension(".glsl") == []
+    assert "glsl" not in dir(rm)

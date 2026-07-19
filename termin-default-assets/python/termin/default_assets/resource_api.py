@@ -162,11 +162,6 @@ class DefaultAssetResourceMixin:
         """List all registered GLB asset names."""
         return self._glb_registry.list_names()
 
-    # --------- GLSL ---------
-    def get_glsl(self, name: str) -> Optional[str]:
-        """Get GLSL source by include name."""
-        return self._glsl_registry.get(name)
-
     # --------- Materials ---------
     def get_material_asset(self, name: str) -> Optional["MaterialAsset"]:
         """Get MaterialAsset by name."""

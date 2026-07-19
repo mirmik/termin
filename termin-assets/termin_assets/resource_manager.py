@@ -426,8 +426,6 @@ class AssetRuntimeManager:
         return None if registry is None else registry.get_asset_by_uuid(uuid)
 
     def _resource_name_from_preload_result(self, result: "PreLoadResult") -> str:
-        if result.resource_type == "glsl":
-            return os.path.basename(result.path)
         return os.path.splitext(os.path.basename(result.path))[0]
 
     @classmethod
