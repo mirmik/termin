@@ -8,10 +8,53 @@
 #include "termin/scene/scene_manager.hpp"
 #include "termin/render/rendering_manager.hpp"
 
-#include <functional>
 #include <atomic>
+#include <cstdint>
+#include <functional>
+#include <memory>
 
 namespace termin {
+
+namespace engine_detail {
+struct EngineLoopState;
+}
+
+// Complete external integration required by EngineCore::run(). Keeping these
+// callbacks in one value prevents frontends from exposing a partially attached
+// loop client.
+struct TERMIN_ENGINE_API EngineLoopClient {
+    std::function<void()> poll_events;
+    std::function<bool()> should_continue;
+    std::function<void()> on_shutdown;
+};
+
+// Move-only lifetime handle for an attached EngineLoopClient. Destruction or
+// detach() removes the whole client. The weak state reference makes a handle
+// harmless when it outlives its EngineCore.
+class TERMIN_ENGINE_API EngineLoopClientConnection {
+public:
+    EngineLoopClientConnection() = default;
+    ~EngineLoopClientConnection();
+
+    EngineLoopClientConnection(const EngineLoopClientConnection&) = delete;
+    EngineLoopClientConnection& operator=(const EngineLoopClientConnection&) = delete;
+    EngineLoopClientConnection(EngineLoopClientConnection&& other) noexcept;
+    EngineLoopClientConnection& operator=(EngineLoopClientConnection&& other) noexcept;
+
+    void detach() noexcept;
+    bool connected() const noexcept;
+    explicit operator bool() const noexcept { return connected(); }
+
+private:
+    friend class EngineCore;
+    EngineLoopClientConnection(
+        std::weak_ptr<engine_detail::EngineLoopState> state,
+        std::uint64_t generation
+    );
+
+    std::weak_ptr<engine_detail::EngineLoopState> _state;
+    std::uint64_t _generation = 0;
+};
 
 // EngineCore - owns SceneManager and RenderingManager
 class TERMIN_ENGINE_API EngineCore {
@@ -21,7 +64,7 @@ public:
     RenderingManager rendering_manager;
 
 private:
-    std::atomic<bool> _running{false};
+    std::shared_ptr<engine_detail::EngineLoopState> _loop_state;
     std::atomic<double> _target_fps{60.0};
     bool _profile_ui = false;
 
@@ -51,6 +94,11 @@ public:
     void set_profile_ui(bool v) { _profile_ui = v; }
     bool profile_ui() const { return _profile_ui; }
 
+    // Attach the complete external loop integration as one atomic operation.
+    // Throws std::invalid_argument for an incomplete client and
+    // std::logic_error while another client is attached or the loop is active.
+    [[nodiscard]] EngineLoopClientConnection attach_loop_client(EngineLoopClient client);
+
     // --- Callbacks ---
     // Called each frame to process UI/input events (Qt, SDL)
     void set_poll_events_callback(std::function<void()> cb);
@@ -72,10 +120,10 @@ public:
     void run();
 
     // Stop the run() loop
-    void stop() { _running = false; }
+    void stop();
 
     // Check if running
-    bool is_running() const { return _running; }
+    bool is_running() const;
 };
 
 } // namespace termin
