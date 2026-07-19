@@ -31,8 +31,6 @@ extern "C" {
 
 namespace termin {
 
-class CameraComponent;
-
 class ENTITY_API GeometryPassBase : public CxxFramePass {
 public:
     struct DrawCall {
@@ -94,8 +92,6 @@ public:
     std::set<const char*> compute_writes() const override;
     std::vector<std::pair<std::string, std::string>> get_inplace_aliases() const override;
     void destroy() override;
-    CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name) const;
-
 protected:
     virtual std::array<float, 4> clear_color() const = 0;
 

@@ -1,7 +1,6 @@
 #include <termin/render/normal_pass.hpp>
 
-#include <termin/camera/camera_component.hpp>
-#include <termin/camera/render_camera_utils.hpp>
+#include <termin/render/camera_capability.hpp>
 #include <termin/render/material_pipeline.hpp>
 #include <termin/render/render_item_submission.hpp>
 #include <termin/render/tgfx2_bridge.hpp>
@@ -19,7 +18,6 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
-#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -91,6 +89,9 @@ MaterialPipelinePassContract normal_material_pass_contract()
             "skinned_normal",
             MeshVertexTransformProfile::PositionNormal,
             "normal_draw.u_model");
+    contract.foliage_vertex_transform =
+        material_pipeline_make_foliage_vertex_transform_provider(
+            "foliage_normal", MeshVertexTransformProfile::PositionNormal);
     return contract;
 }
 
@@ -133,7 +134,8 @@ void NormalPass::execute_with_data_tgfx2(
     tc_scene_handle scene,
     const Mat44f& view,
     const Mat44f& projection,
-    uint64_t layer_mask
+    uint64_t layer_mask,
+    uint64_t render_category_mask
 ) {
     if (!ctx.ctx2) {
         tc::Log::error("NormalPass/tgfx2: ctx2 is null");
@@ -164,7 +166,7 @@ void NormalPass::execute_with_data_tgfx2(
     collect_draw_calls(
         scene,
         layer_mask,
-        ctx.render_category_mask,
+        render_category_mask,
         normal_shader_handle_,
         *snapshot);
     sort_draw_calls_by_shader();
@@ -234,7 +236,7 @@ void NormalPass::execute_with_data_tgfx2(
         }
         std::array<RenderItemNamedUniformBinding, 2> draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
-            {"normal_draw", &draw, static_cast<uint32_t>(sizeof(draw))},
+            {"normal_draw", &draw, static_cast<uint32_t>(sizeof(draw)), "normal_draw"},
         }};
         MaterialPipelineResourceView draw_material_resources{};
         RenderItemResourceBinding resource_binding{};
@@ -242,10 +244,22 @@ void NormalPass::execute_with_data_tgfx2(
         resource_binding.named_uniforms = draw_uniforms.data();
         resource_binding.named_uniform_count = static_cast<uint32_t>(draw_uniforms.size());
         RenderItemDrawSubmitRequest encode_request{};
+        RenderContext draw_context;
+        draw_context.view = view;
+        draw_context.projection = projection;
+        std::memcpy(draw_context.model.data, draw.u_model, sizeof(draw.u_model));
+        draw_context.phase = tc_phase_find(pass_phase_mark.c_str());
+        draw_context.pass_contract = shader_pass_contract();
+        draw_context.current_tc_shader = dc.final_shader;
+        draw_context.layer_mask = layer_mask;
+        draw_context.render_category_mask = render_category_mask;
+        draw_context.viewport_width = rect.width;
+        draw_context.viewport_height = rect.height;
         encode_request.shader_handle = dc.final_shader.handle;
         encode_request.device = &device;
         encode_request.mesh_vertex_input = MaterialMeshVertexInput::PositionNormal;
         encode_request.material_phase = material_phase;
+        encode_request.draw_context = &draw_context;
         encode_request.resources = &resource_binding;
         encode_request.debug_pass_name = "NormalPass";
         encode_request.debug_entity_name = name;
@@ -265,15 +279,18 @@ void NormalPass::execute(ExecuteContext& ctx) {
     tc_scene_handle scene = ctx.scene.handle();
     const RenderCamera* camera = ctx.camera;
     Rect2i rect = ctx.render_rect;
-    std::optional<RenderCamera> named_camera_snapshot;
+    RenderCameraSnapshot named_camera_snapshot;
+    uint64_t camera_layer_mask = ctx.layer_mask;
+    uint64_t camera_render_category_mask = ctx.render_category_mask;
 
     if (!camera_name.empty()) {
-        CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-        if (!named_camera) {
+        if (!resolve_named_render_camera_for_pass(
+                scene, camera_name.c_str(), 0.0, "NormalPass", named_camera_snapshot)) {
             return;
         }
-        named_camera_snapshot = make_render_camera(*named_camera);
-        camera = &*named_camera_snapshot;
+        camera = &named_camera_snapshot.camera;
+        camera_layer_mask = named_camera_snapshot.layer_mask;
+        camera_render_category_mask = named_camera_snapshot.render_category_mask;
     }
 
     if (!camera) {
@@ -289,12 +306,17 @@ void NormalPass::execute(ExecuteContext& ctx) {
             if (w > 0 && h > 0) {
                 rect = Rect2i(0, 0, w, h);
                 if (!camera_name.empty()) {
-                    CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-                    if (named_camera) {
-                        named_camera_snapshot = make_render_camera(
-                            *named_camera, static_cast<double>(w) / std::max(1, h));
-                        camera = &*named_camera_snapshot;
+                    if (!resolve_named_render_camera_for_pass(
+                            scene,
+                            camera_name.c_str(),
+                            static_cast<double>(w) / std::max(1, h),
+                            "NormalPass",
+                            named_camera_snapshot)) {
+                        return;
                     }
+                    camera = &named_camera_snapshot.camera;
+                    camera_layer_mask = named_camera_snapshot.layer_mask;
+                    camera_render_category_mask = named_camera_snapshot.render_category_mask;
                 }
             }
         }
@@ -316,7 +338,8 @@ void NormalPass::execute(ExecuteContext& ctx) {
         scene,
         view,
         projection,
-        ctx.layer_mask
+        camera_layer_mask,
+        camera_render_category_mask
     );
 }
 

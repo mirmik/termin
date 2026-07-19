@@ -19,6 +19,7 @@ struct DepthPassExecuteData {
     float near_plane = 0.1f;
     float far_plane = 1000.0f;
     uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL;
+    uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
 };
 
 class ENTITY_API DepthPass : public GeometryPassBase {
@@ -197,7 +198,6 @@ public:
 private:
     void ensure_tgfx2_resources(tgfx::IRenderDevice& device);
     void release_tgfx2_resources();
-    CameraComponent* find_camera_by_name(tc_scene_handle scene, const std::string& name) const;
     void collect_draw_calls(
         tc_scene_handle scene,
         uint64_t layer_mask,

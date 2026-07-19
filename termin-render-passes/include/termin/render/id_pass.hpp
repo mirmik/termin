@@ -39,7 +39,8 @@ public:
         const Mat44f& view,
         const Mat44f& projection,
         const Vec3& camera_position,
-        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL
+        uint64_t layer_mask = 0xFFFFFFFFFFFFFFFFULL,
+        uint64_t render_category_mask = 0xFFFFFFFFFFFFFFFFULL
     );
 
     void execute(ExecuteContext& ctx) override;

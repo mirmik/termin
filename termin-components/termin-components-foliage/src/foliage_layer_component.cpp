@@ -69,7 +69,15 @@ TcShader get_foliage_instanced_shader(
     MaterialShaderOverrideRequest request{};
     request.original_shader = original_shader;
     request.vertex_transform_kind = foliage_transform.kind;
-    request.pass_contract = pass_contract;
+    MaterialPipelinePassContract foliage_pass_contract = pass_contract;
+    if (foliage_pass_contract.vertex_output_adapter.has_value()) {
+        std::erase_if(
+            foliage_pass_contract.vertex_output_adapter->resources,
+            [](const MaterialPipelineResourceDecl& resource) {
+                return resource.requirement.scope == TC_SHADER_RESOURCE_SCOPE_DRAW;
+            });
+    }
+    request.pass_contract = std::move(foliage_pass_contract);
     request.vertex_transform_contract = foliage_transform;
     request.shader_variant_op = shadow_variant
         ? TC_SHADER_VARIANT_FOLIAGE_SHADOW
@@ -78,66 +86,49 @@ TcShader get_foliage_instanced_shader(
     return assemble_material_shader_override(request);
 }
 
-bool shader_contract_requires_foliage_instances(TcShader shader)
-{
-    tc_shader_contract_view contract{};
-    if (!tc_shader_get_contract_view(shader.get(), &contract)) {
-        return false;
-    }
-    for (uint32_t i = 0; i < contract.resource_count; ++i) {
-        const tc_shader_resource_requirement& resource = contract.resources[i];
-        if (std::strncmp(
-                resource.name,
-                "foliage_instances",
-                TC_SHADER_RESOURCE_NAME_MAX) == 0 &&
-            resource.kind == TC_SHADER_RESOURCE_STORAGE_BUFFER) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool validate_foliage_vertex_layout(
-    const tgfx::VertexLayoutDesc& layout,
-    std::initializer_list<std::string_view> required_semantics,
-    const char* variant_name)
-{
-    bool ok = true;
-    for (std::string_view semantic : required_semantics) {
-        if (!tgfx::vertex_layout_has_semantic(layout, semantic)) {
-            tc::Log::error(
-                "[FoliageLayerComponent] prototype mesh is incompatible with %s foliage shader: "
-                "missing '%.*s' vertex attribute semantic",
-                variant_name,
-                static_cast<int>(semantic.size()),
-                semantic.data());
-            ok = false;
-        }
-    }
-    return ok;
-}
-
 bool build_foliage_vertex_layout(
     const termin::Tgfx2MeshBinding& binding,
-    bool shadow_variant,
+    const VertexTransformContract& transform,
     tgfx::VertexLayoutDesc& out)
 {
-    if (shadow_variant) {
-        const std::initializer_list<std::string_view> required = {"position"};
-        if (!validate_foliage_vertex_layout(binding.layout_desc, required, "shadow")) {
+    bool requires_normal = false;
+    bool requires_uv = false;
+    for (const MaterialPipelineSemantic& attribute :
+         transform.vertex_inputs.mesh_attributes) {
+        if (attribute.name == "normal") {
+            requires_normal = true;
+        } else if (attribute.name == "uv") {
+            requires_uv = true;
+        }
+        if (!tgfx::vertex_layout_has_semantic(
+                binding.layout_desc, attribute.name)) {
+            tc::Log::error(
+                "[FoliageLayerComponent] prototype mesh is incompatible with %s: "
+                "missing '%s' vertex attribute semantic",
+                transform.debug_name.c_str(),
+                attribute.name.c_str());
             return false;
         }
+    }
+    if (!requires_normal && !requires_uv) {
+        const std::initializer_list<std::string_view> required = {"position"};
         out = tgfx::filter_vertex_layout_to_semantics(
             binding.layout_desc,
             required,
             true);
         return true;
     }
-
-    const std::initializer_list<std::string_view> required = {"position", "normal", "uv"};
-    if (!validate_foliage_vertex_layout(binding.layout_desc, required, "material")) {
-        return false;
+    if (requires_normal && !requires_uv) {
+        const std::initializer_list<std::string_view> required = {
+            "position", "normal"};
+        out = tgfx::filter_vertex_layout_to_semantics(
+            binding.layout_desc,
+            required,
+            true);
+        return true;
     }
+    const std::initializer_list<std::string_view> required = {
+        "position", "normal", "uv"};
     out = tgfx::filter_vertex_layout_to_semantics(
         binding.layout_desc,
         required,
@@ -253,6 +244,25 @@ RenderItemTaskRejection foliage_render_item_task_shader_planner(
         out_detail = "foliage planning requires a pass shader contract";
         return RenderItemTaskRejection::ShaderPlanningRejected;
     }
+    const std::optional<VertexTransformContract>& foliage_transform =
+        request.contract->shader_contract->foliage_vertex_transform;
+    if (!foliage_transform.has_value()) {
+        out_detail = "pass shader contract does not define a foliage transform";
+        return RenderItemTaskRejection::PassVertexTransformUnsupported;
+    }
+    const tc_mesh* prototype_mesh =
+        request.item->payload.foliage_batch.prototype_mesh;
+    if (!prototype_mesh) {
+        out_detail = "foliage item has no prototype mesh";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
+    }
+    for (const MaterialPipelineSemantic& attribute :
+         foliage_transform->vertex_inputs.mesh_attributes) {
+        if (!tc_vertex_layout_find(&prototype_mesh->layout, attribute.name.c_str())) {
+            out_detail = "prototype mesh does not satisfy the foliage vertex input ABI";
+            return RenderItemTaskRejection::ShaderPlanningRejected;
+        }
+    }
     TcShader planned = get_foliage_instanced_shader(
         TcShader(request.candidate_shader),
         *request.contract->shader_contract);
@@ -260,7 +270,10 @@ RenderItemTaskRejection foliage_render_item_task_shader_planner(
         out_detail = "failed to assemble the foliage shader";
         return RenderItemTaskRejection::ShaderPlanningRejected;
     }
-    out_plan.final_shader = planned.handle;
+    if (!out_plan.set_final_shader(std::move(planned))) {
+        out_detail = "shader usage packet is full after planning the foliage shader";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
+    }
     out_detail = nullptr;
     return RenderItemTaskRejection::None;
 }
@@ -276,8 +289,7 @@ void ensure_foliage_render_item_encoder_registered()
     desc.encode = foliage_render_item_draw_encoder;
     desc.plan_task_shader = foliage_render_item_task_shader_planner;
     desc.debug_name = "FoliageLayerComponent";
-    desc.capabilities.phase_mask =
-        TC_PHASE_ALL & ~(TC_PHASE_DEPTH | TC_PHASE_ID | TC_PHASE_NORMAL);
+    desc.capabilities.phase_mask = TC_PHASE_ALL;
     desc.capabilities.vertex_transform_kind_mask =
         render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage)
         | render_item_vertex_transform_kind_bit(VertexTransformKind::FoliageShadow);
@@ -450,6 +462,13 @@ tc_phase_mask FoliageLayerComponent::get_phase_mask() const {
             mask |= mat->phases[i].phase;
         }
     }
+    tc_mesh* mesh = prototype_mesh.get();
+    if (mesh && tc_vertex_layout_find(&mesh->layout, "position")) {
+        mask |= TC_PHASE_DEPTH | TC_PHASE_ID;
+        if (tc_vertex_layout_find(&mesh->layout, "normal")) {
+            mask |= TC_PHASE_NORMAL;
+        }
+    }
     return mask;
 }
 
@@ -502,20 +521,25 @@ bool FoliageLayerComponent::collect_render_items(
             phases,
             TC_MATERIAL_MAX_PHASES);
     }
-    for (size_t i = 0; i < count; ++i) {
-        tc_material_phase* phase = phases[i];
-        if (!phase) {
-            continue;
-        }
+    const bool emit_without_material_phase =
+        count == 0 &&
+        ((context.flags & TC_RENDER_ITEM_COLLECT_FLAG_ALLOW_MISSING_MATERIAL_PHASE) != 0u);
+    const size_t item_count = emit_without_material_phase ? 1u : count;
+    for (size_t i = 0; i < item_count; ++i) {
+        tc_material_phase* phase = emit_without_material_phase ? nullptr : phases[i];
 
         tc_render_item item{};
         item.kind = TC_RENDER_ITEM_KIND_FOLIAGE_BATCH;
-        item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX | TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+        item.flags = TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX;
         item.component = tc_component_ptr();
         item.geometry_id = FOLIAGE_GEOMETRY_ID;
         item.material_phase = phase;
         item.material = material.handle;
-        item.material_phase_index = static_cast<size_t>(phase - mat->phases);
+        item.material_phase_index = SIZE_MAX;
+        if (phase) {
+            item.flags |= TC_RENDER_ITEM_FLAG_HAS_MATERIAL_PHASE;
+            item.material_phase_index = static_cast<size_t>(phase - mat->phases);
+        }
 
         Mat44f model = get_model_matrix(entity());
         std::memcpy(item.model_matrix, model.data, sizeof(float) * 16);
@@ -618,10 +642,11 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
     if (!pass_contract.foliage_vertex_transform.has_value()) {
         return false;
     }
-    const bool shadow_variant =
-        pass_contract.foliage_vertex_transform->kind == VertexTransformKind::FoliageShadow;
     tgfx::VertexLayoutDesc vertex_layout;
-    if (!build_foliage_vertex_layout(mesh_binding, shadow_variant, vertex_layout)) {
+    if (!build_foliage_vertex_layout(
+            mesh_binding,
+            *pass_contract.foliage_vertex_transform,
+            vertex_layout)) {
         return false;
     }
 
@@ -644,8 +669,6 @@ bool FoliageLayerComponent::encode_render_item_tgfx2(
     TcShader shader = context.current_tc_shader;
     if (!shader.is_valid()) {
         shader = get_foliage_instanced_shader(TcShader(phase->shader), pass_contract);
-    } else if (!shader_contract_requires_foliage_instances(shader)) {
-        shader = get_foliage_instanced_shader(shader, pass_contract);
     }
     if (!shader.is_valid()) {
         // Shader assembly reports and caches the actionable failure.  This
