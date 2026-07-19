@@ -112,13 +112,14 @@ public:
     }
 };
 
-TC_DEFINE_FRAME_PASS_FACTORY(UIWidgetPass);
-
 void UIWidgetPass::register_type() {
-    register_frame_pass_UIWidgetPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_metadata_graph();
+    auto descriptor = termin::FramePassTypeDescriptorBuilder::native<UIWidgetPass>(
+        "UIWidgetPass", "termin-android");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 struct AndroidBootstrapState {

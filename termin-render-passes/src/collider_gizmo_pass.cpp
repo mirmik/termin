@@ -364,14 +364,15 @@ void ColliderGizmoPass::_draw_convex_hull_internal(
 }
 
 // Register ColliderGizmoPass in tc_pass_registry
-TC_DEFINE_FRAME_PASS_FACTORY(ColliderGizmoPass);
-
 void ColliderGizmoPass::register_type() {
-    register_frame_pass_ColliderGizmoPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_depth_test();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<ColliderGizmoPass>(
+        "ColliderGizmoPass", "termin-render-passes");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_depth_test(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

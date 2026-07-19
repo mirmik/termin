@@ -172,16 +172,17 @@ void TonemapPass::destroy() {
     uploaded_method_ = -1;
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY(TonemapPass);
-
 void TonemapPass::register_type() {
-    register_frame_pass_TonemapPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_output_res_target();
-    _register_inspect_exposure();
-    _register_inspect_method();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<TonemapPass>(
+        "TonemapPass", "termin-render-passes");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_output_res_target(inspect);
+    _register_inspect_exposure(inspect);
+    _register_inspect_method(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

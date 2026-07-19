@@ -996,18 +996,19 @@ void ColorPass::execute(ExecuteContext& ctx) {
 }
 
 // Register ColorPass in tc_pass_registry for C#/standalone C++ usage
-TC_DEFINE_FRAME_PASS_FACTORY(ColorPass);
-
 void ColorPass::register_type() {
-    register_frame_pass_ColorPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_shadow_res();
-    _register_inspect_phase_mark();
-    _register_inspect_sort_mode();
-    _register_inspect_clear_depth();
-    _register_inspect_camera_name();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<ColorPass>(
+        "ColorPass", "termin-render-passes");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_shadow_res(inspect);
+    _register_inspect_phase_mark(inspect);
+    _register_inspect_sort_mode(inspect);
+    _register_inspect_clear_depth(inspect);
+    _register_inspect_camera_name(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

@@ -5,9 +5,13 @@
 Production component, frame-pass и inspect registration больше не выполняется
 из static constructors. Built-in тип владеет `register_type()`, deterministic
 bootstrap вызывает только эти методы, project module вызывает их из ABI `init`.
-Публичные `INSPECT_*` macros определяют явные helpers без dynamic initialization;
-`TC_DEFINE_FRAME_PASS_FACTORY[_DERIVED]` определяет factory и явную registration
-function, которую вызывает `Pass::register_type()`.
+Публичные `INSPECT_*` macros определяют явные helpers без dynamic initialization.
+Frame-pass типы собирают runtime descriptor через
+`FramePassTypeDescriptorBuilder`: parent, pass factory и inspect fields
+публикуются одним commit. `Pass::register_type()` только формирует descriptor;
+composition root заранее регистрирует абстрактный `CxxFramePass` и затем
+вызывает регистрации concrete types. Старые
+`TC_DEFINE_FRAME_PASS_FACTORY[_DERIVED]` удалены.
 
 Legacy `ComponentRegistrar`, `AbstractComponentRegistrar`,
 `ComponentRequirementRegistrar` и macros `REGISTER_*` остаются временным

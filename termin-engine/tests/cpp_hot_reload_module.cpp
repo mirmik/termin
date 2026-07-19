@@ -32,16 +32,15 @@ public:
     }
 };
 
-TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(HotReloadNativeProbePass, CxxFramePass);
-
 void HotReloadNativeProbePass::register_type() {
-    register_frame_pass_HotReloadNativeProbePass();
-    TC_MODULE_INSPECT_FIELD(
-        HotReloadNativeProbePass,
-        exposure,
-        "Exposure",
-        "int"
-    );
+    const char* owner = tc_runtime_type_registry_get_registration_owner();
+    auto descriptor = termin::FramePassTypeDescriptorBuilder::native<HotReloadNativeProbePass>(
+        "HotReloadNativeProbePass", owner, "CxxFramePass");
+    (void)descriptor.inspect().add<HotReloadNativeProbePass, int>(
+        &HotReloadNativeProbePass::exposure,
+        tc::InspectFieldSpec{
+            "HotReloadNativeProbePass", "exposure", "Exposure", "int"});
+    (void)descriptor.commit();
 }
 
 } // namespace
