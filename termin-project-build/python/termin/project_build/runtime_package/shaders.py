@@ -333,7 +333,7 @@ def write_shader(
 class EngineShaderArtifact:
     uuid: str
     name: str
-    language: str = "glsl"
+    language: str
     vertex_source: str = ""
     fragment_source: str = ""
     vertex_entry: str = "main"
@@ -379,7 +379,10 @@ def default_pipeline_engine_shaders() -> list[EngineShaderArtifact]:
 
 def builtin_engine_shader_artifact(uuid_value: str) -> EngineShaderArtifact:
     entry = builtin_shader_catalog_entry(uuid_value)
-    language = str(entry.get("language", "glsl"))
+    language_value = entry.get("language")
+    if not isinstance(language_value, str) or not language_value.strip():
+        raise ValueError(f"Built-in shader '{uuid_value}' has no explicit language")
+    language = language_value.strip().lower()
     if language == "shader":
         program_language, vertex_source, fragment_source = builtin_engine_shader_program_stages(
             uuid_value,

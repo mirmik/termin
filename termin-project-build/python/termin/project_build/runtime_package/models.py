@@ -43,8 +43,8 @@ class ShaderSpec:
     source_path: str
     vertex_source: str
     fragment_source: str
+    language: str
     geometry_source: str = ""
-    language: str = "glsl"
     vertex_entry: str = "main"
     fragment_entry: str = "main"
     geometry_entry: str = "main"

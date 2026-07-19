@@ -67,6 +67,7 @@ std::string shader_spec() {
         << "{\n"
         << "  \"uuid\": \"" << kShaderUuid << "\",\n"
         << "  \"name\": \"RuntimeLoaderTestShader\",\n"
+        << "  \"language\": \"glsl\",\n"
         << "  \"fragment_source_path\": \"shaders/test.frag\",\n"
         << "  \"features\": 1\n"
         << "}\n";
@@ -408,6 +409,27 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     CHECK(std::fabs(lighting->ambient_color[1] - 0.8f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_color[2] - 0.9f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_intensity - 0.33f) < 0.0001f);
+}
+
+TEST_CASE("RuntimePackageLoader requires an explicit supported shader language") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    write_text(
+        root / "shaders" / "test.shader.json",
+        replace_once(shader_spec(), "  \"language\": \"glsl\",\n", ""));
+    termin::runtime::RuntimePackageLoadResult missing =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing.ok);
+    CHECK(missing.message.find("has no explicit language") != std::string::npos);
+
+    write_text(
+        root / "shaders" / "test.shader.json",
+        replace_once(shader_spec(), "\"language\": \"glsl\"", "\"language\": \"spirv\""));
+    termin::runtime::RuntimePackageLoadResult unsupported =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(unsupported.ok);
+    CHECK(unsupported.message.find("unsupported language 'spirv'") != std::string::npos);
 }
 
 TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or invalid") {

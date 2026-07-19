@@ -115,12 +115,30 @@ std::string lowercase_copy(std::string s) {
     return s;
 }
 
-tc_shader_language shader_language_from_spec(const nos::trent& spec) {
-    const std::string language = lowercase_copy(string_field(spec, "language", "glsl"));
-    if (language == "slang") {
-        return TC_SHADER_LANGUAGE_SLANG;
+bool shader_language_from_spec(
+    const nos::trent& spec,
+    tc_shader_language& out,
+    std::string& error
+) {
+    const std::string language = lowercase_copy(string_field(spec, "language"));
+    if (language.empty()) {
+        error = "shader resource has no explicit language";
+        return false;
     }
-    return TC_SHADER_LANGUAGE_GLSL;
+    if (language == "glsl") {
+        out = TC_SHADER_LANGUAGE_GLSL;
+        return true;
+    }
+    if (language == "slang") {
+        out = TC_SHADER_LANGUAGE_SLANG;
+        return true;
+    }
+    if (language == "hlsl") {
+        out = TC_SHADER_LANGUAGE_HLSL;
+        return true;
+    }
+    error = "shader resource has unsupported language '" + language + "'";
+    return false;
 }
 
 struct RuntimeMaterialUboEntry {
@@ -628,6 +646,13 @@ bool load_shader_resource(
         return false;
     }
 
+    tc_shader_language language = TC_SHADER_LANGUAGE_UNSPECIFIED;
+    if (!shader_language_from_spec(spec, language, error)) {
+        error = "shader '" + uuid + "': " + error;
+        tc_log_error("RuntimePackageLoader: %s", error.c_str());
+        return false;
+    }
+
     const std::string vertex_rel = string_field(spec, "vertex_source_path");
     const std::string fragment_rel = string_field(spec, "fragment_source_path");
     if (fragment_rel.empty()) {
@@ -657,7 +682,6 @@ bool load_shader_resource(
     const std::string vertex_entry = string_field(spec, "vertex_entry");
     const std::string fragment_entry = string_field(spec, "fragment_entry");
     const std::string geometry_entry = string_field(spec, "geometry_entry");
-    const tc_shader_language language = shader_language_from_spec(spec);
     shader.set_language(language);
     shader.set_artifact_policy(
         language == TC_SHADER_LANGUAGE_SLANG

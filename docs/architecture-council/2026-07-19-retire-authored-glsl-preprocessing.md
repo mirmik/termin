@@ -89,10 +89,22 @@ product contract.
 - удаление default GLSL выявит call sites, которые случайно полагались на
   legacy overloads.
 
-Такой call site уже найден в `LineRenderer`: material-fragment variant создаётся
-через `tc_shader_from_sources()`, который принудительно задаёт GLSL и теряет
-language, entry points и artifact policy исходного shader. Исправление ведётся
-в #640 вместе с lifetime contract тех же variants.
+Такой call site был найден и исправлен в #640: variants `LineRenderer` теперь
+сохраняют language, entry points и artifact policy исходного shader вместе с
+явным lifetime contract.
+
+## Реализованный contract enforcement
+
+В #674 удалены C overloads `tc_shader_from_sources`,
+`tc_shader_register_static` и `tc_shader_register_static_uuid`, которые
+неявно выбирали GLSL. Их descriptor/ex replacements требуют language явно.
+Новый `TcShaderCreateInfo` начинается с `TC_SHADER_LANGUAGE_UNSPECIFIED`, а
+registry отклоняет source registration до выбора поддерживаемого языка.
+
+Python factories требуют явный language и диагностируют его отсутствие.
+`termin_shaderc compile` требует `--language`. Runtime package loader требует
+непустой поддерживаемый `language`, а project build models и builtin catalog
+больше не подставляют GLSL при отсутствии поля.
 
 ## Последующая работа
 

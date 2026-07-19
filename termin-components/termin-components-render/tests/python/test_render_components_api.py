@@ -2,6 +2,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from tgfx import ShaderLanguage
 
 from termin.bootstrap import bootstrap_player
 
@@ -71,6 +72,7 @@ def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMate
         "LineRendererShadowPhaseTestShader",
         "opaque",
         0,
+        language=ShaderLanguage.GLSL.value,
     ) is not None
     assert material.add_phase_from_sources(
         VERTEX,
@@ -79,6 +81,7 @@ def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMate
         "LineRendererShadowPhaseTestShadowShader",
         "shadow",
         0,
+        language=ShaderLanguage.GLSL.value,
     ) is not None
     for phase_mark in extra_phase_marks:
         assert material.add_phase_from_sources(
@@ -88,6 +91,7 @@ def create_line_test_material(extra_phase_marks: tuple[str, ...] = ()) -> TcMate
             f"LineRendererShadowPhaseTest{phase_mark.title()}Shader",
             phase_mark,
             0,
+            language=ShaderLanguage.GLSL.value,
         ) is not None
     return material
 
