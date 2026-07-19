@@ -316,6 +316,35 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
     )
     termin_add_test_labels(termin_render_passes_id_pass_line_pixel_smoke
         "termin:capability:vulkan")
+
+    add_executable(termin_render_passes_foliage_auxiliary_pass_pixel_smoke
+        tests/test_foliage_auxiliary_pass_pixel_smoke.cpp
+    )
+    target_include_directories(termin_render_passes_foliage_auxiliary_pass_pixel_smoke PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_render_passes_foliage_auxiliary_pass_pixel_smoke PRIVATE
+        termin_render_passes
+        termin_components_render
+        termin_components_foliage
+    )
+    if(TARGET termin_shaderc)
+        add_dependencies(termin_render_passes_foliage_auxiliary_pass_pixel_smoke termin_shaderc)
+    endif()
+    set_target_properties(termin_render_passes_foliage_auxiliary_pass_pixel_smoke PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    add_test(
+        NAME termin_render_passes_foliage_auxiliary_pass_pixel_smoke
+        COMMAND termin_render_passes_foliage_auxiliary_pass_pixel_smoke
+    )
+    set_tests_properties(termin_render_passes_foliage_auxiliary_pass_pixel_smoke PROPERTIES
+        TIMEOUT 30
+        SKIP_REGULAR_EXPRESSION
+            "Vulkan backend not compiled|Failed to create Vulkan device: Failed to create Vulkan instance|Failed to create Vulkan device: No Vulkan-capable GPU found"
+    )
+    termin_add_test_labels(termin_render_passes_foliage_auxiliary_pass_pixel_smoke
+        "termin:capability:vulkan")
 endif()
 
 install(TARGETS termin_render_passes

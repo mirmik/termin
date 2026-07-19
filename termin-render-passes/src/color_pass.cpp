@@ -1,5 +1,5 @@
 #include "termin/render/color_pass.hpp"
-#include "termin/camera/render_camera_utils.hpp"
+#include "termin/render/camera_capability.hpp"
 #include "termin/render/frame_uniforms.hpp"
 #include "termin/render/material_pipeline.hpp"
 #include "termin/render/material_ubo_apply.hpp"
@@ -7,7 +7,6 @@
 #include "termin/render/render_task.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
-#include <optional>
 #include <tgfx/tgfx_shader_handle.hpp>
 #include <tcbase/tc_log.hpp>
 #include "termin/lighting/lighting_upload.hpp"
@@ -226,27 +225,6 @@ void ColorPass::add_extra_texture(const std::string& uniform_name, const std::st
         name = "u_" + name;
     }
     extra_textures[name] = resource_name;
-}
-
-CameraComponent* ColorPass::find_camera_by_name(tc_scene_handle scene, const std::string& name) {
-    if (name.empty() || !tc_scene_handle_valid(scene)) {
-        return nullptr;
-    }
-
-    tc_entity_id entity_id = tc_scene_find_entity_by_name(scene, name.c_str());
-    if (!tc_entity_id_valid(entity_id)) {
-        tc::Log::error("[ColorPass] named camera entity '%s' was not found", name.c_str());
-        return nullptr;
-    }
-
-    Entity entity(tc_scene_entity_pool(scene), entity_id);
-    CameraComponent* camera = entity.get_component<CameraComponent>();
-    if (!camera) {
-        tc::Log::error(
-            "[ColorPass] entity '%s' does not contain a CameraComponent",
-            name.c_str());
-    }
-    return camera;
 }
 
 std::vector<ResourceSpec> ColorPass::get_resource_specs() const {
@@ -602,7 +580,7 @@ void ColorPass::execute_with_data(
     collect_context.phase = tc_phase_find(phase_mark.c_str());
     collect_context.pass_contract = color_material_pass_contract();
     collect_context.layer_mask = data.layer_mask;
-    collect_context.render_category_mask = ctx.render_category_mask;
+    collect_context.render_category_mask = data.render_category_mask;
     collect_context.camera_position = data.camera_position;
     collect_context.viewport_width = data.rect.width;
     collect_context.viewport_height = data.rect.height;
@@ -698,7 +676,7 @@ void ColorPass::execute_with_data(
         task.draw_context.pass_contract = task_shader_contract;
         task.draw_context.current_tc_shader = TcShader(task.final_shader);
         task.draw_context.layer_mask = data.layer_mask;
-        task.draw_context.render_category_mask = ctx.render_category_mask;
+        task.draw_context.render_category_mask = data.render_category_mask;
         task.draw_context.camera_position = data.camera_position;
         task.draw_context.viewport_width = data.rect.width;
         task.draw_context.viewport_height = data.rect.height;
@@ -902,17 +880,22 @@ void ColorPass::execute(ExecuteContext& ctx) {
         if (profile) tc_profiler_end_section();
         return;
     }
-    std::optional<RenderCamera> named_camera_snapshot;
+    RenderCameraSnapshot named_camera_snapshot;
+    uint64_t camera_layer_mask = ctx.layer_mask;
+    uint64_t camera_render_category_mask = ctx.render_category_mask;
     if (!camera_name.empty()) {
-        CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-        if (named_camera) {
-            named_camera_snapshot = make_render_camera(*named_camera);
-            camera = &*named_camera_snapshot;
-        } else {
-            // Camera not found, skip pass
+        if (!resolve_named_render_camera_for_pass(
+                scene,
+                camera_name.c_str(),
+                0.0,
+                "ColorPass",
+                named_camera_snapshot)) {
             if (profile) tc_profiler_end_section();
             return;
         }
+        camera = &named_camera_snapshot.camera;
+        camera_layer_mask = named_camera_snapshot.layer_mask;
+        camera_render_category_mask = named_camera_snapshot.render_category_mask;
     }
 
     if (!camera) {
@@ -934,12 +917,18 @@ void ColorPass::execute(ExecuteContext& ctx) {
             if (w > 0 && h > 0) {
                 rect = Rect2i{0, 0, w, h};
                 if (!camera_name.empty()) {
-                    CameraComponent* named_camera = find_camera_by_name(scene, camera_name);
-                    if (named_camera) {
-                        named_camera_snapshot = make_render_camera(
-                            *named_camera, static_cast<double>(w) / std::max(1, h));
-                        camera = &*named_camera_snapshot;
+                    if (!resolve_named_render_camera_for_pass(
+                            scene,
+                            camera_name.c_str(),
+                            static_cast<double>(w) / std::max(1, h),
+                            "ColorPass",
+                            named_camera_snapshot)) {
+                        if (profile) tc_profiler_end_section();
+                        return;
                     }
+                    camera = &named_camera_snapshot.camera;
+                    camera_layer_mask = named_camera_snapshot.layer_mask;
+                    camera_render_category_mask = named_camera_snapshot.render_category_mask;
                 }
             }
         }
@@ -999,7 +988,8 @@ void ColorPass::execute(ExecuteContext& ctx) {
     data.ambient_intensity = ambient_intensity;
     data.shadow_maps = shadow_maps;
     data.shadow_settings = shadow_settings;
-    data.layer_mask = ctx.layer_mask;
+    data.layer_mask = camera_layer_mask;
+    data.render_category_mask = camera_render_category_mask;
     execute_with_data(ctx, data);
 
     if (profile) tc_profiler_end_section();

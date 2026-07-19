@@ -1,17 +1,16 @@
 #include "render_target_context_builder.hpp"
 
 #include "rendering_manager_utils.hpp"
+#include "termin/render/camera_capability.hpp"
 #include "termin/render/render_camera.hpp"
 #include "termin/render/tgfx2_bridge.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 #include <tgfx2/i_render_device.hpp>
 
 extern "C" {
 #include <tcbase/tc_log.h>
-#include "core/tc_camera_capability.h"
 #include "core/tc_scene.h"
 #include "render/tc_render_target.h"
 #include "tgfx/resources/tc_texture_registry.h"
@@ -21,16 +20,6 @@ namespace termin::rendering_manager_detail {
 
 static uint64_t render_target_key(tc_render_target_handle h) {
     return (static_cast<uint64_t>(h.index) << 32) | h.generation;
-}
-
-static RenderCamera render_camera_from_cap(const tc_camera_data& cd) {
-    RenderCamera rc;
-    std::memcpy(rc.view.data, cd.view, sizeof(cd.view));
-    std::memcpy(rc.projection.data, cd.projection, sizeof(cd.projection));
-    rc.position = Vec3(cd.position[0], cd.position[1], cd.position[2]);
-    rc.near_clip = cd.near_clip;
-    rc.far_clip = cd.far_clip;
-    return rc;
 }
 
 static uint64_t effective_layer_mask(uint64_t camera_mask, tc_render_target_handle rt) {
@@ -174,27 +163,6 @@ static void fill_external_textures_from_render_target(
     }
 }
 
-static bool get_render_camera(
-    tc_component* cam_comp,
-    double aspect,
-    RenderCamera* out,
-    uint64_t* layer_mask,
-    uint64_t* render_category_mask
-) {
-    const tc_camera_capability* cap = tc_camera_capability_get(cam_comp);
-    if (!cap || !cap->vtable || !cap->vtable->get_camera_data) return false;
-    tc_camera_data cd{};
-    if (!cap->vtable->get_camera_data(cam_comp, aspect, &cd)) return false;
-    *out = render_camera_from_cap(cd);
-    if (layer_mask) {
-        *layer_mask = cd.layer_mask;
-    }
-    if (render_category_mask) {
-        *render_category_mask = cd.render_category_mask;
-    }
-    return true;
-}
-
 bool build_render_target_contexts(const RenderTargetContextBuildRequest& request) {
     tc_render_target_handle rt = request.rt;
     if (!tc_render_target_handle_valid(rt)) {
@@ -253,15 +221,8 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
 
     double aspect =
         static_cast<double>(request.render_width) / std::max(1, request.render_height);
-    RenderCamera render_camera;
-    uint64_t camera_layer_mask = 0xFFFFFFFFFFFFFFFFULL;
-    uint64_t camera_render_category_mask = 0xFFFFFFFFFFFFFFFFULL;
-    if (!get_render_camera(
-            camera_comp,
-            aspect,
-            &render_camera,
-            &camera_layer_mask,
-            &camera_render_category_mask)) {
+    RenderCameraSnapshot camera_snapshot;
+    if (!resolve_render_camera(camera_comp, aspect, camera_snapshot)) {
         tc_log(
             TC_LOG_WARN,
             "[RenderingManager] render target '%s': no camera capability",
@@ -269,6 +230,10 @@ bool build_render_target_contexts(const RenderTargetContextBuildRequest& request
         );
         return false;
     }
+    RenderCamera& render_camera = camera_snapshot.camera;
+    const uint64_t camera_layer_mask = camera_snapshot.layer_mask;
+    const uint64_t camera_render_category_mask =
+        camera_snapshot.render_category_mask;
 
     if (request.engine) request.engine->ensure_tgfx2();
     tgfx::IRenderDevice* device =
