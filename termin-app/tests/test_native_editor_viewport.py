@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from termin.editor_native.editor_viewport import NativeEditorViewport
-from termin.gui_native import Document
+from termin.gui_native import Document, UiScriptLoader
 
 
 class _Surface:
@@ -271,6 +273,29 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     assert runtime.widget.has_surface
     assert _Interaction.instance() is runtime.interaction
 
+    loaded_overlay = UiScriptLoader().load_string(
+        """
+uiscript: 1
+root:
+  type: Overlay
+  name: test_overlay
+  children:
+    - type: IconButton
+      name: test_button
+      icon: T
+      size: 26
+""",
+        document=document,
+    )
+    overlay_root = loaded_overlay.root.widget
+    runtime.install_overlay("test", loaded_overlay)
+    assert runtime.overlay_names == ("test",)
+    assert document.root_count == 0
+    with pytest.raises(ValueError, match="already installed"):
+        runtime.install_overlay("test", loaded_overlay)
+    assert renders == [True]
+    renders.clear()
+
     runtime.attachment.viewport = SimpleNamespace(_viewport_handle=lambda: (7, 11))
     runtime.rebind_input_manager()
     assert runtime.input_manager.rebinds == [(7, 11, 41)]
@@ -297,7 +322,6 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
 
     runtime.close()
     runtime.close()
-    assert not runtime.widget.has_surface
     assert runtime.surface.input_manager == 0
     assert runtime.input_manager.detached
     assert runtime.attachment.closed
@@ -305,6 +329,9 @@ def test_native_editor_viewport_owns_render_input_and_shutdown_chain(monkeypatch
     assert runtime.display.destroyed
     assert runtime.surface.closed
     assert _Interaction.instance() is None
+    assert not overlay_root.alive
+    assert not runtime.root.alive
+    assert document.live_widget_count == 1
 
 
 def test_editor_interaction_callbacks_can_be_cleared_for_owner_shutdown():
