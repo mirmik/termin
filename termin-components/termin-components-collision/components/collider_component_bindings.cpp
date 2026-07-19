@@ -79,5 +79,6 @@ NB_MODULE(_components_collision_native, m) {
         .def_prop_ro("attached", [](ColliderComponent& c) {
             return c.attached_collider();
         }, nb::rv_policy::reference)
+        .def_prop_ro("collider_revision", &ColliderComponent::collider_revision)
         .def("rebuild_collider", &ColliderComponent::rebuild_collider);
 }
