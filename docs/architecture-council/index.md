@@ -8,6 +8,9 @@
 
 ## Протоколы
 
+- [Display Render Surface Boundary](2026-07-19-display-render-surface-boundary.md)
+  — `tc_render_surface` как узкий texture output для `tc_display`, display-owned
+  input routing и независимый `BackendWindow` presenter.
 - [Retire Authored GLSL Preprocessing](2026-07-19-retire-authored-glsl-preprocessing.md)
   — Slang как единственный authored shader contract и удаление глобального
   GLSL preprocessing pipeline.

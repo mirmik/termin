@@ -123,7 +123,20 @@ Source of truth: [termin-render-passes docs](https://github.com/mirmik/termin-mo
 
 Source of truth: [termin-display docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-display/docs/index.md)
 
-Отвечает за platform/native windows и display integration. Concrete window implementations, например `SDLBackendWindow`, живут здесь.
+Отвечает за logical displays, viewport layout, display-level input routing и
+backend-neutral offscreen output surfaces. Целевой `tc_render_surface` является
+узким C ABI для texture output одного `tc_display`; window, event polling,
+presentation и OpenGL context operations в этот контракт не входят. Миграция
+описана в [Display render surface contract](architecture/2026-07-19-display-render-surface-contract.md).
+
+### termin-window
+
+Source of truth: [termin-window docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-window/docs/index.md)
+
+Lightweight boundary для native windows, portable window events и физической
+презентации tgfx texture. Concrete implementation `SDLBackendWindow` живёт
+здесь. Модуль не зависит от scene, engine display/input routing, render или
+materials; полный runtime явно соединяет `BackendWindow` с `termin-display`.
 
 ## UI And Tools
 
