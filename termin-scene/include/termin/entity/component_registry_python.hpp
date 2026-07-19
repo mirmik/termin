@@ -15,6 +15,7 @@ public:
     static bool register_python(
         const std::string& name,
         nb::object cls,
+        const std::string& owner,
         const char* parent,
         nb::dict fields,
         nb::dict metadata,

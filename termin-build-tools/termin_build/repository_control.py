@@ -26,6 +26,7 @@ from .execution_manifest import (
 )
 from .package_manifest import load_manifest as load_package_manifest
 from .package_manifest import repo_root_from
+from .process_smoke import ProcessSmokeRun, execute_process_smoke_suites
 from .source_size_policy import (
     SourceSizePolicyError,
     find_long_files,
@@ -806,6 +807,26 @@ def validate_catalog(repo_root: Path, catalog: RepositoryCatalog) -> list[str]:
                 continue
             if not (repo_root / root).exists():
                 errors.append(f"{suite.id}: test root does not exist: {root}")
+            if suite.executor == "process-smoke":
+                suffix = Path(root).suffix.lower()
+                if "windows" in suite.platforms and suffix not in {
+                    ".bat",
+                    ".cmd",
+                    ".exe",
+                    ".ps1",
+                    ".py",
+                }:
+                    errors.append(
+                        f"{suite.id}: Windows process-smoke root has no supported "
+                        f"runner: {root}"
+                    )
+                if suffix in {".bat", ".cmd", ".ps1"} and any(
+                    platform != "windows" for platform in suite.platforms
+                ):
+                    errors.append(
+                        f"{suite.id}: Windows process-smoke root is declared for "
+                        f"a non-Windows platform: {root}"
+                    )
 
     documentation = catalog.documentation
     public_roots = [site.root for site in documentation.sites]
@@ -1092,42 +1113,28 @@ def run_process_smoke_plan(
     catalog: RepositoryCatalog,
     profile_id: str,
     platform: str,
-) -> tuple[int, list[str]]:
+    capabilities: Iterable[str] = (),
+    configuration: str | None = None,
+    timeout_seconds: float = 900.0,
+    log_dir: Path | None = None,
+) -> ProcessSmokeRun:
+    if timeout_seconds <= 0:
+        raise ManifestError("process-smoke timeout must be greater than zero")
     plan = build_plan(catalog, profile_id, platform)
     suites = [
         suite for suite in plan["suites"] if suite["executor"] == "process-smoke"
     ]
-    failures = []
-    print(f"Process-smoke execution plan: {profile_id} / {platform}")
-    print(f"Process-smoke suites: {len(suites)}")
-    for suite in suites:
-        print("")
-        print("----------------------------------------")
-        print(f"  {suite['id']}")
-        print("----------------------------------------")
-        for root in suite["roots"]:
-            command = repo_root / root
-            command_line = [str(command)]
-            if platform == "windows" and command.suffix.lower() == ".ps1":
-                command_line = ["pwsh", "-NoProfile", "-File", str(command)]
-            elif not os.access(command, os.X_OK):
-                print(
-                    f"ERROR: process-smoke command is not executable: {command}",
-                    file=sys.stderr,
-                )
-                failures.append(suite["id"])
-                break
-            result = subprocess.run(command_line, cwd=repo_root, check=False)
-            if result.returncode != 0:
-                failures.append(suite["id"])
-                break
-    if failures:
-        print("", file=sys.stderr)
-        print("Process-smoke suite failures:", file=sys.stderr)
-        for suite_id in failures:
-            print(f"  - {suite_id}", file=sys.stderr)
-        return 1, failures
-    return 0, []
+    output_dir = log_dir or repo_root / "build" / "process-smoke" / profile_id
+    return execute_process_smoke_suites(
+        repo_root,
+        suites,
+        profile_id,
+        platform,
+        capabilities,
+        configuration,
+        timeout_seconds,
+        output_dir,
+    )
 
 
 def _load_valid_catalog(repo_root: Path) -> RepositoryCatalog:
@@ -1210,15 +1217,69 @@ def _cmd_plan(
     return 0
 
 
+def _ctest_discovery_command(build_dir: Path, config: str | None) -> list[str]:
+    command = ["ctest", "--test-dir", str(build_dir)]
+    if config:
+        command.extend(("-C", config))
+    command.append("--show-only=json-v1")
+    return command
+
+
+def _load_configured_native_sources(build_dir: Path) -> list[dict[str, str]]:
+    compile_commands_path = build_dir / "compile_commands.json"
+    if compile_commands_path.exists():
+        try:
+            value = json.loads(compile_commands_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ManifestError(
+                f"invalid compile commands in {compile_commands_path}: {exc}"
+            ) from exc
+        if not isinstance(value, list):
+            raise ManifestError(f"compile commands root must be an array: {compile_commands_path}")
+        return value
+
+    reply_dir = build_dir / ".cmake" / "api" / "v1" / "reply"
+    indexes = sorted(reply_dir.glob("index-*.json"))
+    if not indexes:
+        raise ManifestError(
+            "configured native source inventory is missing; enable "
+            "CMAKE_EXPORT_COMPILE_COMMANDS or request CMake file-api codemodel-v2 "
+            f"before configuring {build_dir}"
+        )
+    try:
+        index = json.loads(indexes[-1].read_text(encoding="utf-8"))
+        codemodel_ref = index["reply"]["codemodel-v2"]
+        codemodel = json.loads(
+            (reply_dir / codemodel_ref["jsonFile"]).read_text(encoding="utf-8")
+        )
+        source_root = Path(codemodel["paths"]["source"])
+        sources: set[str] = set()
+        for configuration in codemodel["configurations"]:
+            for target_ref in configuration.get("targets", []):
+                target = json.loads(
+                    (reply_dir / target_ref["jsonFile"]).read_text(encoding="utf-8")
+                )
+                for source_entry in target.get("sources", []):
+                    source_path = source_entry.get("path")
+                    if not isinstance(source_path, str):
+                        continue
+                    path = Path(source_path)
+                    sources.add(str(path if path.is_absolute() else source_root / path))
+    except (KeyError, OSError, TypeError, json.JSONDecodeError) as exc:
+        raise ManifestError(f"invalid CMake file-api codemodel in {reply_dir}: {exc}") from exc
+    return [{"file": source} for source in sorted(sources)]
+
+
 def _cmd_check_ctest(
     repo_root: Path,
     build_dir: Path,
     profile: str,
     capabilities: tuple[str, ...],
+    config: str | None = None,
 ) -> int:
     catalog = _load_valid_catalog(repo_root)
     result = subprocess.run(
-        ["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"],
+        _ctest_discovery_command(build_dir, config),
         check=False,
         capture_output=True,
         text=True,
@@ -1232,16 +1293,7 @@ def _cmd_check_ctest(
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise ManifestError(f"invalid CTest JSON from {build_dir}: {exc}") from exc
-    compile_commands_path = build_dir / "compile_commands.json"
-    try:
-        compile_commands = json.loads(compile_commands_path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise ManifestError(
-            f"compile commands are missing: {compile_commands_path}; configure with "
-            "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
-        ) from exc
-    except json.JSONDecodeError as exc:
-        raise ManifestError(f"invalid compile commands in {compile_commands_path}: {exc}") from exc
+    compile_commands = _load_configured_native_sources(build_dir)
     errors = validate_ctest_inventory(catalog, payload)
     errors.extend(
         validate_native_compile_inventory(
@@ -1263,10 +1315,11 @@ def _cmd_ctest_plan(
     json_output: bool,
     regex_output: bool,
     plan_file: Path | None,
+    config: str | None = None,
 ) -> int:
     catalog = _load_valid_catalog(repo_root)
     result = subprocess.run(
-        ["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"],
+        _ctest_discovery_command(build_dir, config),
         check=False,
         capture_output=True,
         text=True,
@@ -1288,6 +1341,8 @@ def _cmd_ctest_plan(
     plan = build_ctest_execution_plan(
         catalog, payload, profile, platform, capabilities, suite_ids
     )
+    if config:
+        plan["configuration"] = config
     if regex_output:
         names = [entry["name"] for entry in plan["selected"]]
         print("^(" + "|".join(re.escape(name) for name in names) + ")$")
@@ -1344,6 +1399,7 @@ def _cmd_report_ctest(selection_path: Path, junit_path: Path, output_path: Path)
         "profile": selection.get("profile"),
         "platform": selection.get("platform"),
         "capabilities": selection.get("capabilities", []),
+        "configuration": selection.get("configuration"),
         "selected": selection["selected"],
         "executed": executed,
         "skipped": [*selection.get("skipped", []), *runtime_skipped],
@@ -1611,6 +1667,10 @@ def _cmd_run(
     executor_filter: tuple[str, ...],
     plan_file: Path | None,
     report_output: Path | None,
+    capabilities: tuple[str, ...],
+    configuration: str | None,
+    process_timeout: float,
+    process_log_dir: Path | None,
 ) -> int:
     resolved_platform = platform or _host_platform()
     catalog = _load_valid_catalog(repo_root)
@@ -1637,6 +1697,7 @@ def _cmd_run(
         )
     exit_code = 0
     failures = []
+    process_run: ProcessSmokeRun | None = None
     if "pytest" in executors:
         pytest_exit_code, pytest_failures = run_pytest_plan(
             repo_root,
@@ -1649,11 +1710,18 @@ def _cmd_run(
         exit_code |= pytest_exit_code
         failures.extend(pytest_failures)
     if "process-smoke" in executors:
-        process_exit_code, process_failures = run_process_smoke_plan(
-            repo_root, catalog, profile, resolved_platform
+        process_run = run_process_smoke_plan(
+            repo_root,
+            catalog,
+            profile,
+            resolved_platform,
+            capabilities,
+            configuration,
+            process_timeout,
+            process_log_dir,
         )
-        exit_code |= process_exit_code
-        failures.extend(process_failures)
+        exit_code |= process_run.exit_code
+        failures.extend(process_run.failed)
     if report_output is not None:
         report_executors = set(executor_filter) if executor_filter else executors
         if len(report_executors) != 1:
@@ -1661,20 +1729,38 @@ def _cmd_run(
                 "execution report requires exactly one executor; pass --executor"
             )
         executor = next(iter(report_executors))
-        selected = [suite["id"] for suite in plan["suites"]]
-        failure_ids = set(failures)
-        manifest = build_execution_manifest(
-            expected,
-            executor,
-            selected=selected,
-            executed=[suite_id for suite_id in selected if suite_id not in failure_ids],
-            skipped={},
-            failed={
-                suite_id: "executor returned a failing result"
-                for suite_id in selected
-                if suite_id in failure_ids
-            },
-        )
+        if executor == "process-smoke" and process_run is not None:
+            manifest = build_execution_manifest(
+                expected,
+                executor,
+                selected=process_run.selected,
+                executed=process_run.executed,
+                skipped=process_run.skipped,
+                failed=process_run.failed,
+                details={
+                    "capabilities": sorted(set(capabilities)),
+                    "configuration": configuration,
+                    "timeout_seconds": process_timeout,
+                    "logs": process_run.logs,
+                },
+            )
+        else:
+            selected = [suite["id"] for suite in plan["suites"]]
+            failure_ids = set(failures)
+            manifest = build_execution_manifest(
+                expected,
+                executor,
+                selected=selected,
+                executed=[
+                    suite_id for suite_id in selected if suite_id not in failure_ids
+                ],
+                skipped={},
+                failed={
+                    suite_id: "executor returned a failing result"
+                    for suite_id in selected
+                    if suite_id in failure_ids
+                },
+            )
         report_output.parent.mkdir(parents=True, exist_ok=True)
         report_output.write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -1711,6 +1797,9 @@ def main(argv: list[str] | None = None) -> int:
     ctest_parser.add_argument("--build-dir", type=Path, required=True)
     ctest_parser.add_argument("--profile", required=True)
     ctest_parser.add_argument("--capability", action="append", default=[])
+    ctest_parser.add_argument(
+        "--config", help="CTest multi-config configuration, for example Release."
+    )
 
     ctest_plan_parser = subparsers.add_parser(
         "ctest-plan", help="Select configured CTest registrations from the planner."
@@ -1723,6 +1812,9 @@ def main(argv: list[str] | None = None) -> int:
     ctest_plan_parser.add_argument("--json", action="store_true", dest="json_output")
     ctest_plan_parser.add_argument("--regex", action="store_true", dest="regex_output")
     ctest_plan_parser.add_argument("--plan-file", type=Path)
+    ctest_plan_parser.add_argument(
+        "--config", help="CTest multi-config configuration, for example Release."
+    )
 
     ctest_report_parser = subparsers.add_parser(
         "report-ctest", help="Write an execution manifest from CTest JUnit output."
@@ -1770,6 +1862,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     run_parser.add_argument("--plan-file", type=Path)
     run_parser.add_argument("--report-output", type=Path)
+    run_parser.add_argument("--capability", action="append", default=[])
+    run_parser.add_argument("--configuration")
+    run_parser.add_argument("--process-timeout", type=float, default=900.0)
+    run_parser.add_argument("--process-log-dir", type=Path)
 
     args = parser.parse_args(argv)
     repo_root = args.repo_root.resolve() if args.repo_root else repo_root_from(Path.cwd())
@@ -1793,6 +1889,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.build_dir.resolve(),
                 args.profile,
                 tuple(args.capability),
+                args.config,
             )
         if args.command == "ctest-plan":
             return _cmd_ctest_plan(
@@ -1804,6 +1901,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.json_output,
                 args.regex_output,
                 args.plan_file.resolve() if args.plan_file else None,
+                args.config,
             )
         if args.command == "report-ctest":
             return _cmd_report_ctest(
@@ -1832,6 +1930,10 @@ def main(argv: list[str] | None = None) -> int:
                 tuple(args.executor),
                 args.plan_file.resolve() if args.plan_file else None,
                 args.report_output.resolve() if args.report_output else None,
+                tuple(args.capability),
+                args.configuration,
+                args.process_timeout,
+                args.process_log_dir.resolve() if args.process_log_dir else None,
             )
     except (ManifestError, TestExecutionContractError, OSError) as exc:
         for line in str(exc).splitlines():

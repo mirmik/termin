@@ -186,6 +186,50 @@ bool call_module_context_function(
     return true;
 }
 
+bool register_module_packages(
+    const std::string& module_id,
+    const std::vector<std::string>& packages,
+    std::string& error
+) {
+    PyObject* context_module = PyImport_ImportModule("termin_modules.module_context");
+    if (context_module == nullptr) {
+        error = "Failed to import termin_modules.module_context: " + fetch_python_error_string();
+        return false;
+    }
+    PyObject* package_list = PyList_New(static_cast<Py_ssize_t>(packages.size()));
+    if (package_list == nullptr) {
+        Py_DECREF(context_module);
+        error = "Failed to allocate Python module package claims: " + fetch_python_error_string();
+        return false;
+    }
+    for (size_t i = 0; i < packages.size(); ++i) {
+        PyObject* package = PyUnicode_FromString(packages[i].c_str());
+        if (package == nullptr) {
+            Py_DECREF(package_list);
+            Py_DECREF(context_module);
+            error = "Failed to encode Python module package claim: " + fetch_python_error_string();
+            return false;
+        }
+        PyList_SET_ITEM(package_list, static_cast<Py_ssize_t>(i), package);
+    }
+    PyObject* result = PyObject_CallMethod(
+        context_module,
+        "register_module_packages",
+        "sO",
+        module_id.c_str(),
+        package_list
+    );
+    Py_DECREF(package_list);
+    Py_DECREF(context_module);
+    if (result == nullptr) {
+        error = "termin_modules.module_context.register_module_packages failed: " +
+            fetch_python_error_string();
+        return false;
+    }
+    Py_DECREF(result);
+    return true;
+}
+
 bool module_name_matches_package(const std::string& module_name, const std::string& package) {
     if (module_name == package) {
         return true;
@@ -907,13 +951,12 @@ bool PythonModuleBackend::load(
         return false;
     }
 
-    PythonModuleSnapshot before = snapshot_module_subtree(config->packages);
-    if (!call_module_context_function("begin_module_import", record.spec.id, error)) {
-        release_module_snapshot(before);
+    if (!register_module_packages(record.spec.id, config->packages, error)) {
         PyGILState_Release(gil);
         record.error_message = error;
         return false;
     }
+    PythonModuleSnapshot before = snapshot_module_subtree(config->packages);
 
     for (const std::string& package : config->packages) {
         PyObject* module = PyImport_ImportModule(package.c_str());
@@ -921,10 +964,6 @@ bool PythonModuleBackend::load(
             record.error_message = "Failed to import package '" + package + "': " + fetch_python_error();
             collect_import_transaction_delta(config->packages, before, *handle);
             release_module_snapshot(before);
-            std::string context_error;
-            if (!call_module_context_function("end_module_import", record.spec.id, context_error)) {
-                record.error_message += "; " + context_error;
-            }
             PyGILState_Release(gil);
             record.handle = handle;
             unload(record, environment);
@@ -936,14 +975,6 @@ bool PythonModuleBackend::load(
 
     collect_import_transaction_delta(config->packages, before, *handle);
     release_module_snapshot(before);
-
-    if (!call_module_context_function("end_module_import", record.spec.id, error)) {
-        PyGILState_Release(gil);
-        record.error_message = error;
-        record.handle = handle;
-        unload(record, environment);
-        return false;
-    }
 
     PyGILState_Release(gil);
     record.handle = handle;

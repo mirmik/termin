@@ -360,8 +360,6 @@ TC_API bool tc_component_registry_has(const char* type_name);
 TC_API tc_component* tc_component_registry_create(const char* type_name);
 TC_API void tc_component_registry_cleanup(void);
 
-TC_API void tc_component_registry_set_registration_owner(const char* owner);
-TC_API const char* tc_component_registry_get_registration_owner(void);
 TC_API const char* tc_component_registry_get_owner(const char* type_name);
 TC_API size_t tc_component_registry_unregister_owner(const char* owner);
 TC_API void tc_component_registry_set_prepare_unload_callback(

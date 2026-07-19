@@ -91,29 +91,35 @@ def shutdown_python_components() -> None:
     _registered_python_component_types.clear()
 
 
+def unregister_python_component_owner(owner: str) -> None:
+    """Forget loaded class definitions owned by an unloaded project module."""
+    for type_name, registration in tuple(_python_component_registrations.items()):
+        if registration.owner != owner:
+            continue
+        del _python_component_registrations[type_name]
+        if type_name in _registered_python_component_types:
+            _registered_python_component_types.remove(type_name)
+
+
 atexit.register(shutdown_python_components)
 
 
 def _ensure_python_component_type(component_registry) -> None:
     if component_registry.has("PythonComponent"):
         return
-    previous_owner = component_registry.registration_owner()
-    try:
-        component_registry.set_registration_owner("termin-scene-python")
-        if not component_registry.register_python(
-            "PythonComponent",
-            PythonComponent,
-            "Component",
-            PythonComponent.inspect_fields,
-            {},
-            PythonComponent.component_category,
-            "Python Component",
-            [],
-            [],
-        ):
-            raise RuntimeError("failed to register PythonComponent root descriptor")
-    finally:
-        component_registry.set_registration_owner(previous_owner)
+    if not component_registry.register_python(
+        "PythonComponent",
+        PythonComponent,
+        "termin-scene-python",
+        "Component",
+        PythonComponent.inspect_fields,
+        {},
+        PythonComponent.component_category,
+        "Python Component",
+        [],
+        [],
+    ):
+        raise RuntimeError("failed to register PythonComponent root descriptor")
     _remember_registered_type(_registered_python_component_types, "PythonComponent")
 
 
@@ -130,9 +136,8 @@ def _register_python_component_metadata(
     cls: type["PythonComponent"],
     *,
     component_registry,
+    owner: str,
     parent_name: str | None,
-    record_component,
-    record_inspect_type,
 ) -> None:
     _ensure_python_component_type(component_registry)
     own_fields = cls.__dict__.get("inspect_fields", {})
@@ -146,6 +151,7 @@ def _register_python_component_metadata(
     if not component_registry.register_python(
         cls.__name__,
         cls,
+        owner,
         parent_name,
         own_fields,
         {},
@@ -155,14 +161,7 @@ def _register_python_component_metadata(
         capabilities,
     ):
         raise RuntimeError(f"component descriptor rejected for {cls.__name__}")
-    if record_inspect_type is not None:
-        record_inspect_type(cls.__name__)
-
     _remember_registered_type(_registered_python_component_types, cls.__name__)
-    if record_component is not None:
-        record_component(cls.__name__)
-    if record_inspect_type is not None:
-        record_inspect_type(cls.__name__)
 
 
 def restore_python_components() -> None:
@@ -170,17 +169,10 @@ def restore_python_components() -> None:
     if not _python_component_registrations:
         return
 
-    from termin.inspect import InspectRegistry
-
     component_registry = ComponentRegistry.instance()
-    inspect_registry = InspectRegistry.instance()
-    previous_component_owner = component_registry.registration_owner()
-    previous_inspect_owner = inspect_registry.registration_owner()
     try:
         for registration in _python_component_registrations.values():
             cls = registration.cls
-            component_registry.set_registration_owner(registration.owner)
-            inspect_registry.set_registration_owner(registration.owner)
             parent_name = _find_python_component_parent(cls)
 
             # Native bootstrap imports some Python component modules while the
@@ -198,16 +190,12 @@ def restore_python_components() -> None:
             _register_python_component_metadata(
                 cls,
                 component_registry=component_registry,
+                owner=registration.owner,
                 parent_name=parent_name,
-                record_component=None,
-                record_inspect_type=None,
             )
     except Exception:
         log.error("[PythonComponent] failed to restore loaded component registrations", exc_info=True)
         raise
-    finally:
-        component_registry.set_registration_owner(previous_component_owner)
-        inspect_registry.set_registration_owner(previous_inspect_owner)
 
 
 class PythonComponent:
@@ -252,24 +240,20 @@ class PythonComponent:
             return
 
         try:
-            from termin_modules.module_context import (
-                record_component,
-                record_inspect_type,
-            )
+            from termin_modules.module_context import owner_for_python_module
         except ModuleNotFoundError as exc:
             if exc.name not in ("termin_modules", "termin_modules.module_context"):
                 log.error("Failed to load module ownership context", exc_info=True)
-            record_component = None
-            record_inspect_type = None
+            owner = "termin-scene-python"
         except Exception:
             log.error("Failed to load module ownership context", exc_info=True)
-            record_component = None
-            record_inspect_type = None
+            owner = "termin-scene-python"
+        else:
+            owner = owner_for_python_module(cls.__module__) or "termin-scene-python"
 
         parent_name = _find_python_component_parent(cls)
 
         component_registry = ComponentRegistry.instance()
-        owner = component_registry.registration_owner()
         if parent_name and not component_registry.has(parent_name):
             existing = _python_component_registrations.get(cls.__name__)
             if existing is None or (owner and existing.owner == owner):
@@ -277,18 +261,13 @@ class PythonComponent:
                     cls=cls,
                     owner=owner,
                 )
-            if record_component is not None:
-                record_component(cls.__name__)
-            if record_inspect_type is not None:
-                record_inspect_type(cls.__name__)
             return
         try:
             _register_python_component_metadata(
                 cls,
                 component_registry=component_registry,
+                owner=owner,
                 parent_name=parent_name,
-                record_component=record_component,
-                record_inspect_type=record_inspect_type,
             )
         except Exception:
             log.error(
