@@ -73,10 +73,6 @@ std::pair<int, int> OffscreenRenderSurface::size() const {
     return {width_, height_};
 }
 
-void OffscreenRenderSurface::set_input_manager(tc_input_manager* manager) {
-    tc_render_surface_set_input_manager(&surface_, manager);
-}
-
 void OffscreenRenderSurface::allocate_textures() {
     if (!device_) {
         tc::Log::error("OffscreenRenderSurface::allocate_textures: device is null");

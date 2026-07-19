@@ -641,9 +641,7 @@ class PlayerRuntime:
                 log.error(f"[PlayerRuntime] Failed to create input manager for viewport '{viewport.name}'")
 
         if self.window is not None:
-            self.window.set_input_manager(input_manager.tc_input_manager_ptr)
-        if self.surface is not None:
-            self.surface.set_input_manager(input_manager.tc_input_manager_ptr)
+            self.window.set_input_display(self._display.tc_display_ptr)
 
         self._input_manager = input_manager
         log.info(f"[PlayerRuntime] Input configured for {active_viewports} viewport(s)")
@@ -762,6 +760,12 @@ class PlayerRuntime:
 
             if self._display is not None:
                 manager.remove_display(self._display)
+
+        if self.window is not None:
+            self.window.set_input_display(0)
+        if self._input_manager is not None:
+            self._input_manager.close()
+            self._input_manager = None
 
         if self._display is not None:
             self._display.destroy()

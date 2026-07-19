@@ -4,7 +4,7 @@
 
 #include <tcbase/tc_log.hpp>
 #include "render/tc_input_manager.h"
-#include "render/tc_display_input_router.h"
+#include "render/tc_display.h"
 #include "render/tc_viewport_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_display.h"
@@ -196,13 +196,6 @@ void bind_tc_input_manager(nb::module_& m) {
         tc_input_manager_on_char(m, codepoint);
     });
 
-    // Set input manager on render surface
-    m.def("_render_surface_set_input_manager", [](uintptr_t surface_ptr, uintptr_t manager_ptr) {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(surface_ptr);
-        tc_input_manager* manager = reinterpret_cast<tc_input_manager*>(manager_ptr);
-        tc_render_surface_set_input_manager(surface, manager);
-    });
-
     // Input constants
     m.attr("TC_INPUT_RELEASE") = TC_INPUT_RELEASE;
     m.attr("TC_INPUT_PRESS") = TC_INPUT_PRESS;
@@ -215,27 +208,10 @@ void bind_tc_input_manager(nb::module_& m) {
     m.attr("TC_MOD_ALT") = TC_MOD_ALT;
     m.attr("TC_MOD_SUPER") = TC_MOD_SUPER;
 
-    // ========================================================================
-    // tc_display_input_router - routes events from display to viewports
-    // ========================================================================
-
-    m.def("_display_input_router_new", [](uintptr_t display_ptr) -> uintptr_t {
+    m.def("_display_get_input_manager", [](uintptr_t display_ptr) -> uintptr_t {
         tc_display* display = reinterpret_cast<tc_display*>(display_ptr);
-        tc_display_input_router* r = tc_display_input_router_new(display);
-        return reinterpret_cast<uintptr_t>(r);
-    }, nb::arg("display_ptr"),
-       "Create display input router.\n"
-       "Auto-attaches to display's surface.");
-
-    m.def("_display_input_router_free", [](uintptr_t ptr) {
-        tc_display_input_router* r = reinterpret_cast<tc_display_input_router*>(ptr);
-        tc_display_input_router_free(r);
-    });
-
-    m.def("_display_input_router_base", [](uintptr_t ptr) -> uintptr_t {
-        tc_display_input_router* r = reinterpret_cast<tc_display_input_router*>(ptr);
-        return reinterpret_cast<uintptr_t>(tc_display_input_router_base(r));
-    });
+        return reinterpret_cast<uintptr_t>(tc_display_get_input_manager(display));
+    }, nb::arg("display_ptr"), "Return the stable display-owned input endpoint.");
 
     // ========================================================================
     // tc_viewport_input_manager - per-viewport scene dispatch
@@ -259,12 +235,6 @@ void bind_tc_input_manager(nb::module_& m) {
     // ========================================================================
     // Debug: query input manager state
     // ========================================================================
-
-    // Get input_manager pointer from render surface
-    m.def("_render_surface_get_input_manager", [](uintptr_t surface_ptr) -> uintptr_t {
-        tc_render_surface* s = reinterpret_cast<tc_render_surface*>(surface_ptr);
-        return reinterpret_cast<uintptr_t>(tc_render_surface_get_input_manager(s));
-    });
 
     // Get input_manager pointer from viewport
     m.def("_viewport_get_input_manager", [](uint32_t vp_index, uint32_t vp_generation) -> uintptr_t {

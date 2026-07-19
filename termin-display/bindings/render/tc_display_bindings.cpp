@@ -5,13 +5,11 @@
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/vector.h>
 
-#include <memory>
 #include <vector>
 
 #include "termin/render/tc_display_handle.hpp"
 #include "termin/platform/offscreen_render_surface.hpp"
 #include "../platform/offscreen_render_surface_bindings.hpp"
-#include "termin/input/display_input_router.hpp"
 #include "termin/viewport/tc_viewport_handle.hpp"
 
 extern "C" {
@@ -30,7 +28,6 @@ namespace {
 struct NativeDisplayRegistryEntry {
     tc_display* display = nullptr;
     OffscreenRenderSurfaceHandle offscreen_surface{};
-    std::unique_ptr<DisplayInputRouter> input_router;
 };
 
 std::vector<NativeDisplayRegistryEntry>& native_display_registry() {
@@ -64,7 +61,6 @@ bool destroy_native_display(tc_display* display) {
             if (offscreen_render_surface_handle_valid(entry.offscreen_surface)) {
                 offscreen_render_surface_release(entry.offscreen_surface);
             }
-            entry.input_router.reset();
             tc_display_free(entry.display);
             entry.display = nullptr;
             entry.offscreen_surface = {};
@@ -74,20 +70,6 @@ bool destroy_native_display(tc_display* display) {
 
     tc_display_free(display);
     return true;
-}
-
-void connect_native_display_input(tc_display* display) {
-    if (!display) {
-        return;
-    }
-
-    auto& registry = native_display_registry();
-    for (auto& entry : registry) {
-        if (entry.display == display) {
-            entry.input_router = std::make_unique<DisplayInputRouter>(display);
-            return;
-        }
-    }
 }
 
 } // namespace
@@ -142,13 +124,38 @@ void bind_tc_display(nb::module_& m) {
             }
         }, "Explicitly destroy the native display. Python GC does not call this.")
 
-        .def("connect_input", [](TcDisplay& self) {
-            connect_native_display_input(self.ptr());
-        }, "Create and retain a native DisplayInputRouter for this display")
-
         .def_prop_ro("tc_display_ptr", [](TcDisplay& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self.ptr());
         }, "Raw pointer to tc_display (for C interop)")
+
+        .def_prop_ro("tc_input_manager_ptr", [](TcDisplay& self) -> uintptr_t {
+            return reinterpret_cast<uintptr_t>(tc_display_get_input_manager(self.ptr()));
+        }, "Stable display-owned tc_input_manager endpoint")
+
+        .def("dispatch_pointer_move", [](TcDisplay& self, double x, double y) {
+            return tc_display_dispatch_pointer_move(self.ptr(), x, y);
+        }, nb::arg("x"), nb::arg("y"))
+        .def("dispatch_pointer_button",
+             [](TcDisplay& self, double x, double y, int button, int action,
+                int modifiers, uint32_t click_count) {
+                 return tc_display_dispatch_pointer_button(
+                     self.ptr(), x, y, button, action, modifiers, click_count);
+             }, nb::arg("x"), nb::arg("y"), nb::arg("button"), nb::arg("action"),
+             nb::arg("modifiers"), nb::arg("click_count") = 1)
+        .def("dispatch_wheel",
+             [](TcDisplay& self, double x, double y, double wheel_x,
+                double wheel_y, int modifiers) {
+                 return tc_display_dispatch_wheel(
+                     self.ptr(), x, y, wheel_x, wheel_y, modifiers);
+             }, nb::arg("x"), nb::arg("y"), nb::arg("wheel_x"),
+             nb::arg("wheel_y"), nb::arg("modifiers"))
+        .def("dispatch_key", [](TcDisplay& self, int key, int scancode,
+                                int action, int modifiers) {
+            return tc_display_dispatch_key(self.ptr(), key, scancode, action, modifiers);
+        }, nb::arg("key"), nb::arg("scancode"), nb::arg("action"), nb::arg("modifiers"))
+        .def("dispatch_text", [](TcDisplay& self, uint32_t codepoint) {
+            return tc_display_dispatch_text(self.ptr(), codepoint);
+        }, nb::arg("codepoint"))
 
         // Properties
         .def_prop_rw("name",

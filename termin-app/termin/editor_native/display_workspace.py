@@ -128,7 +128,7 @@ class NativeDisplayWorkspace:
         """Create, register and project one runtime display into a native tab."""
 
         self._require_open()
-        from termin.display import BasicDisplayInputManager, Display, FBOSurface
+        from termin.display import BasicDisplayInputManager, Display, DisplayViewportHost, FBOSurface
 
         display_name = name or self._next_display_name()
         surface = FBOSurface(self.device, 800, 600)
@@ -142,11 +142,10 @@ class NativeDisplayWorkspace:
                 raise RuntimeError("native display FBO surface is invalid")
             display = Display(surface=surface, name=display_name)
             input_manager = BasicDisplayInputManager(display.tc_display_ptr)
-            surface.set_input_manager(input_manager.tc_input_manager_ptr)
             widget = self.document.create_viewport3d()
             widget.widget.stable_id = f"editor.display-workspace.display-{display.tc_display_ptr}"
             widget.widget.preferred_size = Size(800.0, 600.0)
-            widget.set_surface_host(surface)
+            widget.set_surface_host(DisplayViewportHost(surface, display))
             self.rendering_manager.add_display(display, display_name)
             registered = True
             self.tabs.add_page(display_name, widget.widget)
@@ -179,7 +178,6 @@ class NativeDisplayWorkspace:
                 input_manager.close()
             if display is not None:
                 display.destroy()
-            surface.set_input_manager(0)
             surface.close()
             raise
 
@@ -343,7 +341,6 @@ class NativeDisplayWorkspace:
                     first_error = error
 
         cleanup("surface detach", page.widget.detach_surface)
-        cleanup("input detach", lambda: page.surface.set_input_manager(0))
         cleanup("input manager close", page.input_manager.close)
         cleanup("rendering manager removal", lambda: self.rendering_manager.remove_display(page.display))
         cleanup("display destroy", page.display.destroy)

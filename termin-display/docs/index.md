@@ -35,8 +35,8 @@ from termin.display import SDLBackendWindow
 архитектура не должна возвращать их в `termin-display`.
 
 Текущий `FBOSurface` является typed Python boundary для embedding offscreen
-display в `termin.gui_native.Viewport3D`, но его имя и input ownership устарели.
+display в `termin.gui_native.Viewport3D`, но его имя устарело.
 Принятый целевой контракт переименовывает его в `OffscreenRenderSurface` и
 оставляет на surface только texture, pixel extent, resize и lifecycle. Typed
-pointer/wheel/key/text dispatch переходит к `tc_display`; временное хранение
-`tc_input_manager` внутри surface не следует использовать в новом коде.
+pointer/wheel/key/text dispatch принадлежит `tc_display`; surface больше не
+хранит и не экспортирует `tc_input_manager`.

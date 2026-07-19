@@ -29,7 +29,6 @@ void RenderDisplayRegistry::remove_display(
     }
 
     cleanup_viewport_states(display, cleanup_viewport);
-    display_routers_.erase(display);
 
     if (is_editor) {
         editor_displays_.erase(it);
@@ -61,7 +60,6 @@ void RenderDisplayRegistry::remove_editor_display(
     if (it == editor_displays_.end()) return;
 
     cleanup_viewport_states(display, cleanup_viewport);
-    display_routers_.erase(display);
     editor_displays_.erase(it);
 }
 
@@ -78,18 +76,8 @@ bool RenderDisplayRegistry::try_auto_remove_display(
     return true;
 }
 
-tc_input_manager* RenderDisplayRegistry::ensure_display_router(tc_display* display) {
-    if (!display) return nullptr;
-
-    auto it = display_routers_.find(display);
-    if (it != display_routers_.end()) {
-        return it->second->input_manager_ptr();
-    }
-
-    auto router = std::make_unique<DisplayInputRouter>(display);
-    tc_input_manager* im = router->input_manager_ptr();
-    display_routers_[display] = std::move(router);
-    return im;
+tc_input_manager* RenderDisplayRegistry::display_input_endpoint(tc_display* display) {
+    return tc_display_get_input_manager(display);
 }
 
 tc_display* RenderDisplayRegistry::get_display_by_name(const std::string& name) const {
@@ -129,7 +117,6 @@ tc_display* RenderDisplayRegistry::get_or_create_display(
 }
 
 void RenderDisplayRegistry::clear() {
-    display_routers_.clear();
     displays_.clear();
     editor_displays_.clear();
 }

@@ -487,10 +487,6 @@ void bind_sdl(nb::module_& m) {
         .def("tc_surface_ptr", [](SDLWindowRenderSurface& self) -> uintptr_t {
             return reinterpret_cast<uintptr_t>(self.tc_surface());
         })
-        .def("set_input_manager", &SDLWindowRenderSurface::set_input_manager,
-            nb::arg("manager"), nb::keep_alive<1, 2>())
-        .def("input_manager", &SDLWindowRenderSurface::input_manager,
-            nb::rv_policy::reference)
         .def("window", [](SDLWindowRenderSurface& self) {
             return self.window();
         }, nb::rv_policy::reference)
@@ -566,13 +562,13 @@ void bind_sdl(nb::module_& m) {
             "call). Pass to tgfx._tgfx_native.Tgfx2Context.borrow.")
         .def("should_close", &SDLBackendWindow::should_close)
         .def("set_should_close", &SDLBackendWindow::set_should_close, nb::arg("value"))
-        .def("set_input_manager", [](SDLBackendWindow& self, uintptr_t input_manager_ptr) {
-                attach_window_input_manager(
+        .def("set_input_display", [](SDLBackendWindow& self, uintptr_t display_ptr) {
+                attach_window_input_display(
                     self,
-                    reinterpret_cast<tc_input_manager*>(input_manager_ptr));
+                    reinterpret_cast<tc_display*>(display_ptr));
             },
-            nb::arg("input_manager_ptr"),
-            "Route SDL input events from this window to a tc_input_manager.")
+            nb::arg("display_ptr"),
+            "Route SDL input events from this window to a tc_display endpoint.")
         .def("set_title", &SDLBackendWindow::set_title,
             nb::arg("title"),
             "Set the OS window title.")

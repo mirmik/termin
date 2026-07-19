@@ -1,6 +1,8 @@
 // tc_display.c - Display implementation
 #include "render/tc_display.h"
+#include "tc_display_input_router_internal.h"
 #include <tcbase/tc_log.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +41,13 @@ tc_display* tc_display_new(const char* name, tc_render_surface* surface) {
     display->enabled = true;
     display->auto_remove_when_empty = false;
     display->surface = surface;
+    display->input_endpoint = tc_display_input_router_create(display);
+    if (!display->input_endpoint) {
+        tc_log(TC_LOG_ERROR, "[tc_display_new] input endpoint allocation failed");
+        free(display->name);
+        free(display);
+        return NULL;
+    }
     display->first_viewport = TC_VIEWPORT_HANDLE_INVALID;
     display->last_viewport = TC_VIEWPORT_HANDLE_INVALID;
     display->viewport_count = 0;
@@ -58,6 +67,9 @@ void tc_display_free(tc_display* display) {
     if (display->surface) {
         tc_render_surface_set_on_resize(display->surface, NULL, NULL);
     }
+
+    tc_display_input_router_destroy(display->input_endpoint);
+    display->input_endpoint = NULL;
 
     // Free all viewports in the linked list
     tc_viewport_handle vp = display->first_viewport;
@@ -138,6 +150,76 @@ void tc_display_set_surface(tc_display* display, tc_render_surface* surface) {
 
 tc_render_surface* tc_display_get_surface(const tc_display* display) {
     return display ? display->surface : NULL;
+}
+
+static bool tc_display_validate_pointer_event(tc_display* display, double x, double y,
+                                              const char* operation) {
+    if (!display || !display->input_endpoint) {
+        tc_log(TC_LOG_ERROR, "[%s] display input endpoint is unavailable", operation);
+        return false;
+    }
+    if (!isfinite(x) || !isfinite(y)) {
+        tc_log(TC_LOG_ERROR, "[%s] non-finite display pixel coordinates", operation);
+        return false;
+    }
+    return true;
+}
+
+tc_input_manager* tc_display_get_input_manager(tc_display* display) {
+    if (!display) {
+        tc_log(TC_LOG_ERROR, "[tc_display_get_input_manager] display is NULL");
+        return NULL;
+    }
+    return display->input_endpoint;
+}
+
+bool tc_display_dispatch_pointer_move(tc_display* display, double x, double y) {
+    if (!tc_display_validate_pointer_event(display, x, y,
+                                           "tc_display_dispatch_pointer_move")) return false;
+    tc_input_manager_on_mouse_move(display->input_endpoint, x, y);
+    return true;
+}
+
+bool tc_display_dispatch_pointer_button(tc_display* display, double x, double y,
+                                        int button, int action, int mods,
+                                        uint32_t click_count) {
+    if (!tc_display_validate_pointer_event(display, x, y,
+                                           "tc_display_dispatch_pointer_button")) return false;
+    tc_input_manager_on_mouse_move(display->input_endpoint, x, y);
+    tc_input_manager_on_mouse_button(display->input_endpoint, button, action, mods, click_count);
+    return true;
+}
+
+bool tc_display_dispatch_wheel(tc_display* display, double x, double y,
+                               double wheel_x, double wheel_y, int mods) {
+    if (!tc_display_validate_pointer_event(display, x, y,
+                                           "tc_display_dispatch_wheel")) return false;
+    if (!isfinite(wheel_x) || !isfinite(wheel_y)) {
+        tc_log(TC_LOG_ERROR, "[tc_display_dispatch_wheel] non-finite wheel delta");
+        return false;
+    }
+    tc_input_manager_on_mouse_move(display->input_endpoint, x, y);
+    tc_input_manager_on_scroll(display->input_endpoint, wheel_x, wheel_y, mods);
+    return true;
+}
+
+bool tc_display_dispatch_key(tc_display* display, int key, int scancode,
+                             int action, int mods) {
+    if (!display || !display->input_endpoint) {
+        tc_log(TC_LOG_ERROR, "[tc_display_dispatch_key] display input endpoint is unavailable");
+        return false;
+    }
+    tc_input_manager_on_key(display->input_endpoint, key, scancode, action, mods);
+    return true;
+}
+
+bool tc_display_dispatch_text(tc_display* display, uint32_t codepoint) {
+    if (!display || !display->input_endpoint) {
+        tc_log(TC_LOG_ERROR, "[tc_display_dispatch_text] display input endpoint is unavailable");
+        return false;
+    }
+    tc_input_manager_on_char(display->input_endpoint, codepoint);
+    return true;
 }
 
 // ============================================================================

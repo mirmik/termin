@@ -223,13 +223,6 @@ void bind_tc_render_surface(nb::module_& m) {
         return ptr;
     });
 
-    // Set input manager for render surface
-    m.def("_render_surface_set_input_manager", [](uintptr_t surface_ptr, uintptr_t input_manager_ptr) {
-        tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(surface_ptr);
-        tc_input_manager* input_manager = reinterpret_cast<tc_input_manager*>(input_manager_ptr);
-        tc_render_surface_set_input_manager(surface, input_manager);
-    });
-
     // Set resize callback
     m.def("_render_surface_set_on_resize", [](uintptr_t ptr, nb::object callback) {
         tc_render_surface* surface = reinterpret_cast<tc_render_surface*>(ptr);

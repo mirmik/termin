@@ -3,7 +3,6 @@
 #include "termin/platform/sdl_window.hpp"
 #include "render/termin_display_api.h"
 #include "render/tc_render_surface.h"
-#include "render/tc_input_manager.h"
 
 namespace termin {
 
@@ -38,10 +37,6 @@ public:
     // tc_render_surface pointer (для передачи в C код)
     tc_render_surface* tc_surface() { return &surface_; }
     const tc_render_surface* tc_surface() const { return &surface_; }
-
-    // Input manager
-    void set_input_manager(tc_input_manager* manager);
-    tc_input_manager* input_manager() const { return surface_.input_manager; }
 
     // Window access
     SDLWindow* window() { return window_; }

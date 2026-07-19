@@ -4,6 +4,7 @@
 
 #include "tc_types.h"
 #include "render/termin_display_api.h"
+#include "render/tc_input_manager.h"
 #include "render/tc_render_surface.h"
 #include "render/tc_viewport.h"
 #include "render/tc_viewport_pool.h"
@@ -29,6 +30,10 @@ typedef struct tc_display {
 
     // Underlying render surface
     tc_render_surface* surface;
+
+    // Stable display-owned input endpoint. Its lifetime is identical to the
+    // display lifetime and is independent from surface attachment.
+    tc_input_manager* input_endpoint;
 
     // Linked list of viewports (using handles)
     tc_viewport_handle first_viewport;
@@ -64,6 +69,21 @@ TERMIN_DISPLAY_API bool tc_display_get_auto_remove_when_empty(const tc_display* 
 
 TERMIN_DISPLAY_API void tc_display_set_surface(tc_display* display, tc_render_surface* surface);
 TERMIN_DISPLAY_API tc_render_surface* tc_display_get_surface(const tc_display* display);
+
+// ============================================================================
+// Display Input Endpoint (pixel coordinates, origin top-left)
+// ============================================================================
+
+TERMIN_DISPLAY_API tc_input_manager* tc_display_get_input_manager(tc_display* display);
+TERMIN_DISPLAY_API bool tc_display_dispatch_pointer_move(tc_display* display, double x, double y);
+TERMIN_DISPLAY_API bool tc_display_dispatch_pointer_button(
+    tc_display* display, double x, double y, int button, int action, int mods,
+    uint32_t click_count);
+TERMIN_DISPLAY_API bool tc_display_dispatch_wheel(
+    tc_display* display, double x, double y, double wheel_x, double wheel_y, int mods);
+TERMIN_DISPLAY_API bool tc_display_dispatch_key(
+    tc_display* display, int key, int scancode, int action, int mods);
+TERMIN_DISPLAY_API bool tc_display_dispatch_text(tc_display* display, uint32_t codepoint);
 
 // ============================================================================
 // Surface Delegation

@@ -1058,17 +1058,14 @@ struct PlayerRuntimeHost::Impl {
             return;
         }
 
-        tc_input_manager* router = manager.ensure_display_router(display->ptr());
+        tc_input_manager* router = manager.display_input_endpoint(display->ptr());
         if (router == nullptr) {
             tc_log_error("termin_player: failed to create display input router");
             return;
         }
 
         if (window) {
-            attach_window_input_manager(*window, router);
-        }
-        if (surface != nullptr) {
-            surface->set_input_manager(router);
+            attach_window_input_display(*window, display->ptr());
         }
 
         int active_viewports = 0;
@@ -1114,10 +1111,7 @@ struct PlayerRuntimeHost::Impl {
 
     void clear_input() {
         if (window) {
-            attach_window_input_manager(*window, nullptr);
-        }
-        if (surface != nullptr) {
-            surface->set_input_manager(nullptr);
+            attach_window_input_display(*window, nullptr);
         }
         for (tc_viewport_input_manager* input : viewport_input_managers) {
             tc_viewport_input_manager_free(input);

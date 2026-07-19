@@ -1,11 +1,7 @@
 #pragma once
 
-#include "termin/input/display_input_router.hpp"
-
 #include <functional>
-#include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 extern "C" {
@@ -19,7 +15,6 @@ class RenderDisplayRegistry {
 private:
     std::vector<tc_display*> displays_;
     std::vector<tc_display*> editor_displays_;
-    std::unordered_map<tc_display*, std::unique_ptr<DisplayInputRouter>> display_routers_;
 
 public:
     using DisplayFactory = std::function<tc_display*(const std::string& name)>;
@@ -45,7 +40,7 @@ public:
         const DisplayRemovedCallback& removed_callback
     );
 
-    tc_input_manager* ensure_display_router(tc_display* display);
+    tc_input_manager* display_input_endpoint(tc_display* display);
 
     tc_display* get_display_by_name(const std::string& name) const;
     tc_display* get_or_create_display(const std::string& name, const DisplayFactory& factory);

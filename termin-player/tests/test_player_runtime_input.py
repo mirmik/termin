@@ -7,10 +7,10 @@ class _FakeDisplay:
 
 class _InputSink:
     def __init__(self):
-        self.input_manager_ptr = 0
+        self.display_ptr = 0
 
-    def set_input_manager(self, ptr):
-        self.input_manager_ptr = ptr
+    def set_input_display(self, ptr):
+        self.display_ptr = ptr
 
 
 class _Viewport:
@@ -38,6 +38,9 @@ class _BasicDisplayInputManager:
         self.viewports.append((index, generation))
         return True
 
+    def close(self):
+        pass
+
 
 def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monkeypatch):
     import termin.display
@@ -63,8 +66,8 @@ def test_player_runtime_sets_up_display_router_and_viewport_input_managers(monke
     assert input_manager.display_ptr == 101
     assert input_manager.viewports == [(1, 10), (2, 20)]
     assert runtime._input_manager is input_manager
-    assert runtime.window.input_manager_ptr == 4242
-    assert runtime.surface.input_manager_ptr == 4242
+    assert runtime.window.display_ptr == 101
+    assert runtime.surface.display_ptr == 0
 
 
 def test_player_runtime_tracks_attached_viewports():

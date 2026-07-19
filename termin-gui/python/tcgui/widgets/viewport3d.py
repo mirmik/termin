@@ -8,8 +8,6 @@ Usage::
 
     surface = FBOSurface(width=800, height=600)
     display = Display(surface=surface, name="Editor")
-    display.connect_input()
-
     viewport = Viewport3D()
     viewport.set_surface(surface, display)
 """
@@ -40,7 +38,9 @@ class Viewport3D(Widget):
         self.focusable = True
 
         self._surface: FBOSurface | None = None
-        self._input_manager_ptr: int = 0
+        self._display = None
+        self._pointer_x = 0.0
+        self._pointer_y = 0.0
 
         # Коллбек вызывается при изменении размера (до того как FBO пересоздан)
         self.on_before_resize: Callable[[int, int], None] | None = None
@@ -80,22 +80,8 @@ class Viewport3D(Widget):
         self._surface.resize(new_w, new_h)
 
     def _connect_input(self, display) -> None:
-        """Получить input_manager_ptr от Display."""
-        try:
-            from termin.display import (
-                _display_get_surface_ptr,
-                _render_surface_get_input_manager,
-            )
-            surface_ptr = _display_get_surface_ptr(display.tc_display_ptr)
-            if surface_ptr:
-                ptr = _render_surface_get_input_manager(surface_ptr)
-                self._input_manager_ptr = ptr if ptr else 0
-            else:
-                self._input_manager_ptr = 0
-        except Exception as e:
-            from tcbase import log
-            log.error(f"Viewport3D._connect_input failed: {e}")
-            self._input_manager_ptr = 0
+        """Use the stable display-owned input endpoint."""
+        self._display = display
 
     # ------------------------------------------------------------------
     # Layout
@@ -154,13 +140,13 @@ class Viewport3D(Widget):
     # ------------------------------------------------------------------
 
     def on_mouse_down(self, event: MouseEvent) -> bool:
-        if self._input_manager_ptr:
+        if self._display is not None:
             self._sync_mouse_position(event)
             self._dispatch_mouse_button(event.button, 1, event.mods)
         return True
 
     def on_mouse_up(self, event: MouseEvent) -> None:
-        if self._input_manager_ptr:
+        if self._display is not None:
             self._sync_mouse_position(event)
             self._dispatch_mouse_button(event.button, 0, event.mods)
 
@@ -169,25 +155,26 @@ class Viewport3D(Widget):
 
     def _sync_mouse_position(self, event: MouseEvent | MouseWheelEvent) -> None:
         from tcbase import log
-        if self._input_manager_ptr:
+        if self._display is not None and self._surface is not None:
             try:
-                from termin.display import _input_manager_on_mouse_move
-                _input_manager_on_mouse_move(
-                    self._input_manager_ptr,
-                    float(event.x - self.x), float(event.y - self.y),
-                )
+                pixel_width, pixel_height = self._surface.framebuffer_size()
+                self._pointer_x = float(event.x - self.x) * pixel_width / max(self.width, 1.0)
+                self._pointer_y = float(event.y - self.y) * pixel_height / max(self.height, 1.0)
+                self._display.dispatch_pointer_move(self._pointer_x, self._pointer_y)
             except Exception as e:
                 log.error(f"Viewport3D._sync_mouse_position: {e}")
 
     def on_mouse_wheel(self, event: MouseWheelEvent) -> bool:
         from tcbase import log
-        if self._input_manager_ptr:
+        if self._display is not None:
             self._sync_mouse_position(event)
             try:
-                from termin.display import _input_manager_on_scroll
-                _input_manager_on_scroll(
-                    self._input_manager_ptr,
-                    float(event.dx), float(event.dy), event.mods,
+                self._display.dispatch_wheel(
+                    self._pointer_x,
+                    self._pointer_y,
+                    float(event.dx),
+                    float(event.dy),
+                    event.mods,
                 )
             except Exception as e:
                 log.error(f"Viewport3D.on_mouse_wheel: {e}")
@@ -212,8 +199,9 @@ class Viewport3D(Widget):
         }
         btn_id = btn_map.get(button, 0)
         try:
-            from termin.display import _input_manager_on_mouse_button
-            _input_manager_on_mouse_button(self._input_manager_ptr, btn_id, action, mods)
+            self._display.dispatch_pointer_button(
+                self._pointer_x, self._pointer_y, btn_id, action, mods, 1
+            )
         except Exception as e:
             log.error(f"Viewport3D._dispatch_mouse_button: {e}")
 
@@ -222,22 +210,18 @@ class Viewport3D(Widget):
     # ------------------------------------------------------------------
 
     def on_key_down(self, event: KeyEvent) -> bool:
-        if self._input_manager_ptr:
+        if self._display is not None:
             self._dispatch_key(event, 1)
         return True
 
     def on_key_up(self, event: KeyEvent) -> bool:
-        if self._input_manager_ptr:
+        if self._display is not None:
             self._dispatch_key(event, 0)
         return True
 
     def _dispatch_key(self, event: KeyEvent, action: int) -> None:
         from tcbase import log
         try:
-            from termin.display import _input_manager_on_key
-            _input_manager_on_key(
-                self._input_manager_ptr,
-                event.key.value, 0, action, event.mods,
-            )
+            self._display.dispatch_key(event.key.value, 0, action, event.mods)
         except Exception as e:
             log.error(f"Viewport3D._dispatch_key: {e}")

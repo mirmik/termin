@@ -154,12 +154,7 @@ class EditorWindowTcgui:
         self._rendering_controller = None
         self._framegraph_debugger_service = None
         self._editor_viewport_input_managers: list = []
-        # Owns DisplayInputRouter instances that route surface events to the
-        # per-viewport EditorViewportInputManagers. Populated by
-        # _attach_editor_input_router() after the editor display's input
-        # managers are created. Without this the surface's input_manager_ptr
-        # stays on the default (scene-pipeline) router and Viewport3D never
-        # hits the editor picking / hover / gizmo paths.
+        # Tracks displays whose display-owned endpoint is used by the editor.
         self._display_routers: dict[int, object] = {}
         self._current_project_path: str | None = None
         self._project_name: str | None = None
@@ -590,7 +585,7 @@ class EditorWindowTcgui:
             self._editor_viewport_input_managers.append(editor_im)
 
     def _attach_editor_input_router(self, display) -> None:
-        """Wire a DisplayInputRouter onto the editor display's surface.
+        """Connect the editor Viewport3D to the display-owned input endpoint.
 
         This is the critical link for picking / hover / gizmo: the router
         dispatches mouse events to the EditorViewportInputManagers that
@@ -599,18 +594,9 @@ class EditorWindowTcgui:
         surface stays on the default scene-pipeline input_manager and
         Viewport3D never sees editor-aware input.
         """
-        from termin.display import DisplayInputRouter
-
         display_id = display.tc_display_ptr
-        router = DisplayInputRouter(display_id)
-        self._display_routers[display_id] = router
+        self._display_routers[display_id] = display
 
-        surface = display.surface
-        if surface is not None:
-            surface.set_input_manager(router.tc_input_manager_ptr)
-
-        # Viewport3D cached the old input_manager_ptr during set_surface();
-        # refresh it now so the widget dispatches into the new router.
         if self._viewport_widget is not None:
             self._viewport_widget._connect_input(display)
 
@@ -743,7 +729,6 @@ class EditorWindowTcgui:
             from termin.display import Display
 
             display = Display(surface=self._fbo_surface, name="Editor")
-            display.connect_input()
             self._editor_display = display
 
             if self._viewport_widget is not None:

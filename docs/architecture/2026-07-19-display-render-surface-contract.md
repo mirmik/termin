@@ -1,6 +1,7 @@
 # Display Render Surface Contract
 
-Статус реализации: принято 2026-07-19, миграция ещё не завершена.
+Статус реализации: принято 2026-07-19; input ownership реализован в #677,
+остальные этапы миграции ещё не завершены.
 
 Обоснование и рассмотренные альтернативы зафиксированы в
 [протоколе архитектурного совета](../architecture-council/2026-07-19-display-render-surface-boundary.md).
@@ -48,6 +49,11 @@ context/share-group, polling, cursor, close state и swap buffers.
 
 Display-level router принадлежит `tc_display` и живёт независимо от замены
 surface. Host отправляет pointer, wheel, key и text events в display endpoint.
+
+`tc_display` создаёт endpoint вместе с собой и уничтожает его в своём
+lifecycle. C API `tc_display_dispatch_*`, C++ window bridge и Python `Display`
+bindings предоставляют typed dispatch; внешний код не создаёт и не освобождает
+router отдельно.
 
 Pointer positions передаются в pixel coordinates display с origin top-left.
 Перевод из logical window coordinates, WPF device-independent pixels или
