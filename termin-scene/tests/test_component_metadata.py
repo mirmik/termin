@@ -1,6 +1,29 @@
 import pytest
 
 
+def _owned_component_type(type_name, owner, category, display_name):
+    from termin.scene import PythonComponent
+    from termin_modules.module_context import (
+        register_module_packages,
+        unregister_module_packages,
+    )
+
+    package = f"tests.component_owner.{owner}"
+    register_module_packages(owner, [package])
+    try:
+        return type(
+            type_name,
+            (PythonComponent,),
+            {
+                "__module__": package,
+                "component_category": category,
+                "component_display_name": display_name,
+            },
+        )
+    finally:
+        unregister_module_packages(owner)
+
+
 @pytest.fixture(scope="module", autouse=True)
 def _component_runtime():
     import termin.bootstrap
@@ -68,62 +91,37 @@ def test_python_component_requirements_are_registered() -> None:
         registry.unregister_python("RequiredMetadataProbeComponent")
 
 
-def test_rejected_unowned_python_component_collision_preserves_existing_metadata() -> None:
-    from termin.scene import ComponentRegistry, PythonComponent
+def test_ownerless_python_component_descriptor_is_rejected() -> None:
+    from termin.scene import ComponentRegistry
 
     registry = ComponentRegistry.instance()
-    type_name = "DuplicateUnownedPythonComponent"
-    registry.set_registration_owner("")
-    first = type(
-        type_name,
-        (PythonComponent,),
-        {
-            "component_category": "First Category",
-            "component_display_name": "First Display Name",
-        },
+    assert not registry.register_python(
+        "OwnerlessPythonComponent",
+        object,
+        "",
+        "PythonComponent",
+        {},
+        {},
+        "Project",
+        "Ownerless",
+        [],
+        [],
     )
-    try:
-        second = type(
-            type_name,
-            (PythonComponent,),
-            {
-                "component_category": "Second Category",
-                "component_display_name": "Second Display Name",
-            },
-        )
-
-        assert registry.get_class(type_name) is first
-        assert registry.get_class(type_name) is not second
-        info = registry.get_info(type_name)
-        assert info["category"] == "First Category"
-        assert info["display_name"] == "First Display Name"
-    finally:
-        registry.unregister_python(type_name)
+    assert not registry.has("OwnerlessPythonComponent")
 
 
 def test_same_owner_python_component_reload_replaces_factory_and_metadata() -> None:
-    from termin.scene import ComponentRegistry, PythonComponent
+    from termin.scene import ComponentRegistry
 
     registry = ComponentRegistry.instance()
     type_name = "DuplicateOwnedPythonComponent"
     owner = "component-registration-reload-test"
-    registry.set_registration_owner(owner)
-    first = type(
-        type_name,
-        (PythonComponent,),
-        {
-            "component_category": "First Category",
-            "component_display_name": "First Display Name",
-        },
+    first = _owned_component_type(
+        type_name, owner, "First Category", "First Display Name"
     )
     try:
-        second = type(
-            type_name,
-            (PythonComponent,),
-            {
-                "component_category": "Second Category",
-                "component_display_name": "Second Display Name",
-            },
+        second = _owned_component_type(
+            type_name, owner, "Second Category", "Second Display Name"
         )
 
         assert registry.get_class(type_name) is second
@@ -133,32 +131,25 @@ def test_same_owner_python_component_reload_replaces_factory_and_metadata() -> N
         assert info["display_name"] == "Second Display Name"
     finally:
         registry.unregister_python(type_name)
-        registry.set_registration_owner("")
 
 
 def test_cross_owner_python_component_collision_preserves_existing_registration() -> None:
-    from termin.scene import ComponentRegistry, PythonComponent
+    from termin.scene import ComponentRegistry
 
     registry = ComponentRegistry.instance()
     type_name = "DuplicateCrossOwnerPythonComponent"
-    registry.set_registration_owner("component-registration-first-owner")
-    first = type(
+    first = _owned_component_type(
         type_name,
-        (PythonComponent,),
-        {
-            "component_category": "First Category",
-            "component_display_name": "First Display Name",
-        },
+        "component-registration-first-owner",
+        "First Category",
+        "First Display Name",
     )
     try:
-        registry.set_registration_owner("component-registration-second-owner")
-        second = type(
+        second = _owned_component_type(
             type_name,
-            (PythonComponent,),
-            {
-                "component_category": "Second Category",
-                "component_display_name": "Second Display Name",
-            },
+            "component-registration-second-owner",
+            "Second Category",
+            "Second Display Name",
         )
 
         assert registry.get_class(type_name) is first
@@ -168,4 +159,3 @@ def test_cross_owner_python_component_collision_preserves_existing_registration(
         assert info["display_name"] == "First Display Name"
     finally:
         registry.unregister_python(type_name)
-        registry.set_registration_owner("")

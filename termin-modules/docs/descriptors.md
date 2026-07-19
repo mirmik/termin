@@ -64,8 +64,27 @@
 - `ignore`: необязательный флаг, позволяющий пропустить модуль
 
 Поле `components` в дескрипторах запрещено. Владение component type names
-выводится из фактических регистраций, выполненных во время load модуля:
-runtime выставляет registration owner, Python import context прокидывает его в
-native `ComponentRegistry`, а registry запоминает владельца каждого
-зарегистрированного типа. Scene migration, hot reload и cleanup должны
-использовать этот runtime ownership, а не ручной список в descriptor.
+берётся из фактических runtime-type descriptors, опубликованных модулем.
+
+Нативный lifecycle получает единственный канонический owner через host API и
+передаёт его каждому builder явно:
+
+```cpp
+int32_t module_init(
+    const termin_native_module_host_v1* host,
+    termin_native_module_error*
+) {
+    if (!host || !host->module_id || !host->module_id[0]) return -1;
+    auto component = termin::ComponentTypeDescriptorBuilder::native<MyComponent>(
+        "MyComponent", host->module_id, "CxxComponent");
+    return component.commit() ? 0 : -1;
+}
+```
+
+Для Python backend до импорта регистрирует явные claims
+`packages namespace -> module id`. `PythonComponent` и `PythonFramePass`
+разрешают owner по `cls.__module__` и передают его в native descriptor API.
+Здесь нет mutable current-owner scope: вложенный или упавший import не может
+изменить владельца чужой регистрации. Scene migration, hot reload и cleanup
+читают owner из опубликованной runtime-type записи, а не из ручного списка в
+descriptor.

@@ -406,28 +406,39 @@ def test_invalid_descriptor_reload_keeps_module_loaded_and_dirty(tmp_path: Path)
 
 def test_module_registration_commit_failure_is_propagated_and_retryable() -> None:
     module_id = "registration_commit_failure_probe"
-    module_context.begin_module_import(module_id)
-    module_context.record_component("RegistrationCommitFailureProbe")
-    module_context.end_module_import(module_id)
+    package = "registration_commit_failure_probe_package"
+    module_context.register_module_packages(module_id, [package])
 
     original_cleanup = module_context._unregister_python_component_classes
 
-    def fail_cleanup(registrations: module_context.ModuleOwnedRegistrations) -> None:
-        del registrations
+    def fail_cleanup(owner: str) -> None:
+        assert owner == module_id
         raise RuntimeError("injected registration cleanup failure")
 
     module_context._unregister_python_component_classes = fail_cleanup
     try:
         with pytest.raises(RuntimeError, match="injected registration cleanup failure"):
             module_context.unregister_module_owner(module_id)
-        assert module_context.registrations_for_owner(module_id).components == {
-            "RegistrationCommitFailureProbe"
-        }
+        assert module_context.owner_for_python_module(package) == module_id
     finally:
         module_context._unregister_python_component_classes = original_cleanup
 
     module_context.unregister_module_owner(module_id)
-    assert module_context.registrations_for_owner(module_id).components == set()
+    assert module_context.owner_for_python_module(package) is None
+
+
+def test_package_owner_claims_are_explicit_and_cannot_be_overwritten() -> None:
+    module_context.register_module_packages("outer", ["gameplay"])
+    module_context.register_module_packages("inner", ["gameplay.tools"])
+    try:
+        assert module_context.owner_for_python_module("gameplay.player") == "outer"
+        assert module_context.owner_for_python_module("gameplay.tools.editor") == "inner"
+        with pytest.raises(RuntimeError, match="already owned by module 'outer'"):
+            module_context.register_module_packages("intruder", ["gameplay"])
+        assert module_context.owner_for_python_module("gameplay.player") == "outer"
+    finally:
+        module_context.unregister_module_packages("inner")
+        module_context.unregister_module_packages("outer")
 
 
 def test_python_backend_commit_failure_enters_retryable_cleanup_state(
@@ -440,8 +451,8 @@ def test_python_backend_commit_failure_enters_retryable_cleanup_state(
 
     original_cleanup = module_context._unregister_python_component_classes
 
-    def fail_cleanup(registrations: module_context.ModuleOwnedRegistrations) -> None:
-        del registrations
+    def fail_cleanup(owner: str) -> None:
+        assert owner == "sample"
         raise RuntimeError("injected backend registration commit failure")
 
     module_context._unregister_python_component_classes = fail_cleanup

@@ -168,14 +168,12 @@ void register_engine_owned_inspect_probe() {
 void create_unowned_module_inspect_shell() {
     auto& inspect = tc::InspectRegistry::instance();
     inspect.unregister_type(kComponentType);
-    inspect.set_registration_owner("");
     inspect.set_type_parent(kComponentType, "Component");
 }
 
 void register_engine_owned_component_probe() {
     auto& components = termin::ComponentRegistry::instance();
     components.unregister(kEngineOwnedProbeComponent);
-    components.set_registration_owner("");
     components.register_native(
         kEngineOwnedProbeComponent,
         &termin::CxxComponentFactoryData<EngineOwnedProbeComponent>::create,

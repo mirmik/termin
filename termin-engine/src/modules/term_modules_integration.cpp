@@ -216,34 +216,6 @@ void rollback_module_placeholders(
     }
 }
 
-void begin_module_registration_scope(const termin_modules::ModuleRecord& record) {
-    ComponentRegistry::instance().set_registration_owner(record.spec.id);
-    tc::InspectRegistry::instance().set_registration_owner(record.spec.id);
-}
-
-void end_module_registration_scope(const termin_modules::ModuleRecord& record) {
-    auto& components = ComponentRegistry::instance();
-    auto& inspect = tc::InspectRegistry::instance();
-
-    if (!components.registration_owner().empty() &&
-        components.registration_owner() != record.spec.id) {
-        tc::Log::warn(
-            "TermModulesIntegration: component registration owner scope mismatch while ending module '%s'",
-            record.spec.id.c_str()
-        );
-    }
-    if (!inspect.registration_owner().empty() &&
-        inspect.registration_owner() != record.spec.id) {
-        tc::Log::warn(
-            "TermModulesIntegration: inspect registration owner scope mismatch while ending module '%s'",
-            record.spec.id.c_str()
-        );
-    }
-
-    components.set_registration_owner("");
-    inspect.set_registration_owner("");
-}
-
 bool cleanup_module_registrations(
     const termin_modules::ModuleRecord& record,
     std::string& error,
@@ -474,14 +446,10 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
     };
 
     termin_modules::CppModuleCallbacks cpp_callbacks;
-    cpp_callbacks.before_native_init = [](const termin_modules::ModuleRecord& record) {
-        begin_module_registration_scope(record);
-    };
     cpp_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
                                          const std::string&) {
         std::string error;
         cleanup_module_registrations(record, error, false, {});
-        end_module_registration_scope(record);
     };
     cpp_callbacks.before_unload = cpp_before_unload;
     cpp_callbacks.before_native_close = [sync_live_scenes, scene_provider](
@@ -494,23 +462,16 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
             scene_provider
         );
     };
-    cpp_callbacks.after_native_init = [](const termin_modules::ModuleRecord& record) {
-        end_module_registration_scope(record);
-    };
     cpp_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
         after_load(record);
     };
     cpp_callbacks.restore_reload_state = restore_reload_state;
 
     termin_modules::PythonModuleCallbacks python_callbacks;
-    python_callbacks.before_load = [](const termin_modules::ModuleRecord& record) {
-        begin_module_registration_scope(record);
-    };
     python_callbacks.after_failed_load = [](const termin_modules::ModuleRecord& record,
                                             const std::string&) {
         std::string error;
         cleanup_module_registrations(record, error, false, {});
-        end_module_registration_scope(record);
     };
     python_callbacks.before_module_remove = [sync_live_scenes, scene_provider](
                                                   const termin_modules::ModuleRecord& record,
@@ -523,7 +484,6 @@ void TermModulesIntegration::configure_runtime(termin_modules::ModuleRuntime& ru
         );
     };
     python_callbacks.after_load = [after_load](const termin_modules::ModuleRecord& record) {
-        end_module_registration_scope(record);
         after_load(record);
     };
     python_callbacks.restore_reload_state = restore_reload_state;

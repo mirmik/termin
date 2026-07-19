@@ -179,15 +179,6 @@ void ComponentRegistry::unregister(const std::string& name) {
     tc_component_registry_unregister(name.c_str());
 }
 
-void ComponentRegistry::set_registration_owner(const std::string& owner) {
-    tc_component_registry_set_registration_owner(owner.empty() ? nullptr : owner.c_str());
-}
-
-std::string ComponentRegistry::registration_owner() const {
-    const char* owner = tc_component_registry_get_registration_owner();
-    return owner ? std::string(owner) : std::string();
-}
-
 std::string ComponentRegistry::owner_of(const std::string& name) const {
     const char* owner = tc_runtime_type_registry_get_owner(name.c_str());
     return owner ? std::string(owner) : std::string();
