@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import ctypes
+import logging
 import os
 import subprocess
 import sys
 
-from tcgui.widgets.ui import UI
-from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
-from tcgui.widgets.containers import HStack, VStack, Panel
-from tcgui.widgets.units import px, pct
-from tcbase import Key, MouseButton, log
 from termin.editor_core.shader_runtime import configure_sdk_shader_runtime
 from termin.launcher.controller import (
     LaunchResult,
@@ -20,6 +16,9 @@ from termin.launcher.controller import (
 )
 from termin.launcher.recent import RecentProjects, write_launch_project
 from termin.project import create_project
+
+
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +30,9 @@ def _get_drawable_size_from_backend(window) -> tuple[int, int]:
     return window.framebuffer_size()
 
 
-def _event_key(value: int) -> Key:
+def _event_key(value: int):
+    from tcbase import Key
+
     try:
         return Key(int(value))
     except ValueError:
@@ -39,7 +40,9 @@ def _event_key(value: int) -> Key:
         return Key.UNKNOWN
 
 
-def _event_button(value: int) -> MouseButton:
+def _event_button(value: int):
+    from tcbase import MouseButton
+
     try:
         return MouseButton(int(value))
     except ValueError:
@@ -206,6 +209,17 @@ def _create_launcher_controller() -> LauncherController:
 # ---------------------------------------------------------------------------
 # Launcher app
 # ---------------------------------------------------------------------------
+
+def _load_tcgui_symbols() -> None:
+    """Load the legacy projection only when explicitly requested."""
+    global UI, Label, Button, TextInput, Separator, ListWidget
+    global HStack, VStack, Panel, px, pct
+
+    from tcgui.widgets.ui import UI
+    from tcgui.widgets.basic import Label, Button, TextInput, Separator, ListWidget
+    from tcgui.widgets.containers import HStack, VStack, Panel
+    from tcgui.widgets.units import px, pct
+
 
 class LauncherApp:
     """Manages launcher state and screen switching."""
@@ -583,7 +597,8 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
         print("Without PROJECT, opens the launcher UI.")
         print()
         print("Options:")
-        print("  --ui=tcgui      Explicitly select the current launcher UI")
+        print("  --ui=native     Select the native launcher UI (default)")
+        print("  --ui=tcgui      Select the legacy comparison UI")
         print("  -h, --help      Show this help message and exit")
         print()
         print("Environment:")
@@ -598,10 +613,10 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
     for a in args:
         if a.startswith('--ui='):
             ui_backend = a.split('=', 1)[1]
-            if ui_backend != "tcgui":
+            if ui_backend not in {"native", "tcgui"}:
                 print(
                     f"Error: unsupported launcher UI backend '{ui_backend}'. "
-                    "Only tcgui is available for the launcher.",
+                    "Expected native or tcgui.",
                     flush=True,
                 )
                 return "__error__", None
@@ -619,23 +634,12 @@ def _parse_launcher_args() -> tuple[str | None, str | None]:
     return project, ui_backend
 
 
-def run():
-    """Entry point: create window, build UI, run event loop."""
-    project, _accepted_ui_arg = _parse_launcher_args()
-    if project == "__help__":
-        return
-    if project == "__error__":
-        return
+def _run_tcgui(controller: LauncherController) -> None:
+    """Run the legacy projection without making it part of default startup."""
+    _load_tcgui_symbols()
+    configure_sdk_shader_runtime("launcher-tcgui")
 
-    if project is not None:
-        # Direct launch: skip UI, open editor with given project
-        _create_launcher_controller().open_project(project)
-        return
-
-    configure_sdk_shader_runtime("launcher")
-
-    # Route the window through BackendWindow so the launcher runs on
-    # whichever backend TERMIN_BACKEND selects (OpenGL or Vulkan).
+    from tcbase import Key, MouseButton
     from termin.display._platform_native import (
         SDLBackendWindow,
         quit_sdl,
@@ -645,11 +649,11 @@ def run():
     from tgfx import Tgfx2Context
     from termin.editor_core.application_icon import apply_editor_window_icon
 
-    window = SDLBackendWindow("Termin Launcher", 1024, 640)
+    window = SDLBackendWindow("Termin Launcher — tcgui", 1024, 640)
     apply_editor_window_icon(window)
     graphics = Tgfx2Context.from_window(window.device_ptr(), window.context_ptr())
 
-    app = LauncherApp(graphics=graphics, controller=_create_launcher_controller())
+    app = LauncherApp(graphics=graphics, controller=controller)
     presenting = False
 
     def present_ui() -> None:
@@ -708,20 +712,35 @@ def run():
         elif etype == "text_input":
             app.ui.text_input(str(ev.get("text", "")))
 
-    while running:
-        if app.should_quit:
-            break
-
-        # Block until event arrives or 500ms timeout (for cursor blink)
+    while running and not app.should_quit:
         for event in wait_sdl_events_timeout(500):
             dispatch_event(event)
-
-        if not running:
-            break
-
-        present_ui()
-
+        if running:
+            present_ui()
     quit_sdl()
+
+
+def run():
+    """Parse arguments and route to the native or explicit legacy projection."""
+    project, ui_backend = _parse_launcher_args()
+    if project == "__help__":
+        return
+    if project == "__error__":
+        return
+
+    if project is not None:
+        # Direct launch: skip UI, open editor with given project
+        _create_launcher_controller().open_project(project)
+        return
+
+    controller = _create_launcher_controller()
+    if ui_backend == "tcgui":
+        _run_tcgui(controller)
+        return
+
+    from termin.launcher.native_app import run_native_launcher
+
+    run_native_launcher(controller)
 
 
 if __name__ == "__main__":
