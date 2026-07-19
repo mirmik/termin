@@ -666,8 +666,11 @@ Current implementation note, 2026-06-18: Python project builds load this file
 through `termin.project_build.capabilities.load_sdk_capabilities`. When the file
 is absent, the loader synthesizes conservative capabilities from the current SDK
 layout: `bin/termin_shaderc`, `bin/termin_player`, `lib/python3.*`, native
-libraries, `share/termin/builtin_shaders`, `android/<abi>/lib`, and
-`android/<abi>/lib/cmake/termin_openxr/termin_openxrConfig.cmake`.
+libraries and `share/termin/builtin_shaders`. Android SDK installation records
+each ABI in `android/<abi>/share/termin/android-capabilities.json` and merges
+those records into the root manifest. Fallback discovery trusts this per-ABI
+metadata; a `termin_openxrConfig.cmake` file by itself is deliberately not proof
+of OpenXR headers, an installed loader or Vulkan support.
 
 ## Cache and Incrementality
 

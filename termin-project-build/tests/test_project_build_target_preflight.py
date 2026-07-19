@@ -52,7 +52,25 @@ def _write_openxr_sdk(termin_root: Path, abi: str = "arm64-v8a") -> Path:
     )
     sdk_config.parent.mkdir(parents=True)
     sdk_config.write_text("# fake OpenXR CMake package\n", encoding="utf-8")
+    capabilities = termin_root / "sdk" / "android" / abi / "share/termin/android-capabilities.json"
+    capabilities.parent.mkdir(parents=True)
+    capabilities.write_text(
+        '{"version": 1, "abi": "arm64-v8a", "openxr_headers": true, '
+        '"openxr_loader": true, "vulkan": true}\n',
+        encoding="utf-8",
+    )
     return termin_root / "sdk" / "android"
+
+
+def _write_placeholder_openxr_sdk(termin_root: Path, abi: str = "arm64-v8a") -> Path:
+    sdk_root = _write_openxr_sdk(termin_root, abi)
+    capabilities = sdk_root / abi / "share/termin/android-capabilities.json"
+    capabilities.write_text(
+        '{"version": 1, "abi": "arm64-v8a", "openxr_headers": false, '
+        '"openxr_loader": false, "vulkan": true}\n',
+        encoding="utf-8",
+    )
+    return sdk_root
 
 
 def _write_desktop_sdk(tmp_path: Path) -> Path:
@@ -467,6 +485,24 @@ def test_preflight_quest_openxr_reports_missing_openxr_config(tmp_path: Path, mo
     monkeypatch.delenv("TERMIN_ANDROID_SDK_ROOT", raising=False)
     termin_root = _write_quest_root(tmp_path)
     (termin_root / "sdk" / "android" / "arm64-v8a" / "lib").mkdir(parents=True)
+
+    with pytest.raises(TargetPreflightError) as exc_info:
+        preflight_quest_openxr_build(
+            termin_root=termin_root,
+            build_script=None,
+            gradle=None,
+            abi="arm64-v8a",
+            platform="android-26",
+        )
+
+    _assert_single_error(exc_info.value, "termin_openxrConfig.cmake", "OpenXR support is missing")
+
+
+def test_preflight_quest_openxr_rejects_placeholder_package(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("GRADLE_BIN", raising=False)
+    monkeypatch.delenv("TERMIN_ANDROID_SDK_ROOT", raising=False)
+    termin_root = _write_quest_root(tmp_path)
+    _write_placeholder_openxr_sdk(termin_root)
 
     with pytest.raises(TargetPreflightError) as exc_info:
         preflight_quest_openxr_build(

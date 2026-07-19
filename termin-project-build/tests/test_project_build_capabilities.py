@@ -75,7 +75,10 @@ def test_sdk_capabilities_read_manifest(tmp_path: Path, monkeypatch) -> None:
     )
 
 
-def test_sdk_capabilities_synthesize_from_current_layout(tmp_path: Path, monkeypatch) -> None:
+def test_sdk_capabilities_fallback_rejects_openxr_config_without_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
     monkeypatch.delenv("TERMIN_SDK", raising=False)
     monkeypatch.delenv("TERMIN_ANDROID_SDK_ROOT", raising=False)
     sdk_root = tmp_path / "sdk"
@@ -110,10 +113,39 @@ def test_sdk_capabilities_synthesize_from_current_layout(tmp_path: Path, monkeyp
     assert capabilities.desktop.builtin_shaders is True
     assert capabilities.android.sdk_root == sdk_root.resolve() / "android"
     assert capabilities.android.abis == ("arm64-v8a",)
+    assert capabilities.android.vulkan is False
+    assert capabilities.quest_openxr.abis == ()
+    assert not capabilities.quest_openxr.supports_openxr("arm64-v8a")
+    assert capabilities.quest_openxr.openxr_config_path("arm64-v8a") == openxr_config.resolve()
+
+
+def test_sdk_capabilities_fallback_reads_truthful_per_abi_metadata(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.delenv("TERMIN_SDK", raising=False)
+    monkeypatch.delenv("TERMIN_ANDROID_SDK_ROOT", raising=False)
+    sdk_root = tmp_path / "sdk"
+    abi_prefix = sdk_root / "android" / "arm64-v8a"
+    openxr_config = abi_prefix / "lib/cmake/termin_openxr/termin_openxrConfig.cmake"
+    openxr_config.parent.mkdir(parents=True)
+    openxr_config.write_text("# full OpenXR package\n", encoding="utf-8")
+    _write_json(
+        abi_prefix / "share/termin/android-capabilities.json",
+        {
+            "version": 1,
+            "abi": "arm64-v8a",
+            "openxr_headers": True,
+            "openxr_loader": True,
+            "vulkan": True,
+        },
+    )
+
+    capabilities = load_sdk_capabilities(sdk_root=sdk_root)
+
     assert capabilities.android.vulkan is True
     assert capabilities.quest_openxr.abis == ("arm64-v8a",)
     assert capabilities.quest_openxr.supports_openxr("arm64-v8a")
-    assert capabilities.quest_openxr.openxr_config_path("arm64-v8a") == openxr_config.resolve()
 
 
 def test_sdk_capabilities_synthesize_from_windows_desktop_layout(

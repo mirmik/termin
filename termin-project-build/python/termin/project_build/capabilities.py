@@ -10,6 +10,7 @@ from typing import Any, Mapping
 
 
 SDK_CAPABILITIES_FILENAME = "termin-sdk-capabilities.json"
+ANDROID_ABI_CAPABILITIES_RELATIVE = Path("share/termin/android-capabilities.json")
 
 
 class SDKCapabilityError(RuntimeError):
@@ -249,7 +250,15 @@ def _synthesize_capabilities(
         for abi in android_abis
         if _default_openxr_config_path(android_sdk_root, abi).is_file()
     }
-    quest_abis = tuple(sorted(openxr_config_paths))
+    abi_capabilities = {
+        abi: _read_android_abi_capabilities(android_sdk_root, abi)
+        for abi in android_abis
+    }
+    quest_abis = tuple(
+        abi
+        for abi in sorted(openxr_config_paths)
+        if _supports_quest_openxr(abi_capabilities[abi])
+    )
 
     return SDKCapabilities(
         sdk_root=sdk_root,
@@ -266,7 +275,9 @@ def _synthesize_capabilities(
         android=AndroidSDKCapabilities(
             sdk_root=android_sdk_root,
             abis=android_abis,
-            vulkan=bool(android_abis),
+            vulkan=bool(android_abis) and all(
+                capabilities["vulkan"] for capabilities in abi_capabilities.values()
+            ),
             python_runtime=False,
         ),
         quest_openxr=QuestOpenXRSDKCapabilities(
@@ -277,6 +288,39 @@ def _synthesize_capabilities(
             vulkan=bool(quest_abis),
             openxr_config_paths=openxr_config_paths,
         ),
+    )
+
+
+def _read_android_abi_capabilities(
+    android_sdk_root: Path,
+    abi: str,
+) -> dict[str, bool]:
+    path = android_sdk_root / abi / ANDROID_ABI_CAPABILITIES_RELATIVE
+    if not path.is_file():
+        return {
+            "openxr_headers": False,
+            "openxr_loader": False,
+            "vulkan": False,
+        }
+
+    data = _read_manifest(path)
+    version = data.get("version")
+    if version != 1:
+        raise SDKCapabilityError(
+            f"{path} has unsupported Android capability version {version!r}; "
+            "supported version is 1"
+        )
+    return {
+        "openxr_headers": _bool_field(data, "openxr_headers", False),
+        "openxr_loader": _bool_field(data, "openxr_loader", False),
+        "vulkan": _bool_field(data, "vulkan", False),
+    }
+
+
+def _supports_quest_openxr(capabilities: Mapping[str, bool]) -> bool:
+    return all(
+        capabilities[name]
+        for name in ("openxr_headers", "openxr_loader", "vulkan")
     )
 
 
