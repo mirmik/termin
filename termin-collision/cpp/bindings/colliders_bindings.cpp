@@ -43,6 +43,7 @@ NB_MODULE(_colliders_native, m) {
         .value("Box", ColliderType::Box)
         .value("Sphere", ColliderType::Sphere)
         .value("Capsule", ColliderType::Capsule)
+        .value("ConvexHull", ColliderType::ConvexHull)
         .export_values();
 
     // ==================== Collider (базовый интерфейс) ====================

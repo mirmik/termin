@@ -22,6 +22,10 @@ NB_MODULE(_components_mesh_native, m) {
             return c.get_mesh();
         })
         .def("set_mesh", &MeshComponent::set_mesh)
+        .def("set_generated_mesh", &MeshComponent::set_generated_mesh)
         .def("set_mesh_by_name", &MeshComponent::set_mesh_by_name)
+        .def("notify_mesh_changed", &MeshComponent::notify_mesh_changed)
+        .def_prop_ro("mesh_is_generated", &MeshComponent::mesh_is_generated)
+        .def_prop_ro("mesh_revision", &MeshComponent::mesh_revision)
         .def("get_mesh_offset_matrix", &MeshComponent::get_mesh_offset_matrix);
 }
