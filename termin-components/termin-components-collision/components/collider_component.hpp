@@ -44,6 +44,13 @@ public:
     TcMesh convex_hull_mesh;
 
 private:
+    enum class BuildState {
+        Detached,
+        PendingSource,
+        InvalidSource,
+        Ready,
+    };
+
     // Owned collider primitive
     std::unique_ptr<colliders::ColliderPrimitive> _collider;
 
@@ -56,6 +63,13 @@ private:
     // Cached scene handle for collision world access
     tc_scene_handle _scene_handle = TC_SCENE_HANDLE_INVALID;
 
+    tc_event_subscription _mesh_changed_subscription = {0};
+    tc_event_subscription _structure_changed_subscription = {0};
+    BuildState _build_state = BuildState::Detached;
+    bool _lifecycle_attached = false;
+    uint64_t _collider_revision = 0;
+    std::string _last_reported_build_error;
+
 public:
     // Inspect fields are registered from register_type().
     // Note: collider_type is registered manually with choices.
@@ -67,12 +81,14 @@ public:
     static void register_type();
 
     // Lifecycle
+    void start() override;
     void on_added() override;
     void on_removed() override;
 
     // Accessors
     colliders::ColliderPrimitive* collider() const { return _collider.get(); }
     colliders::AttachedCollider* attached_collider() const { return _attached.get(); }
+    uint64_t collider_revision() const { return _collider_revision; }
 
     // Rebuild collider after type or parameter change
     void rebuild_collider();
@@ -90,8 +106,19 @@ public:
 private:
     bool _uses_mesh_component_mesh() const;
 
+    void _rebuild_collider(bool report_failure);
+    void _report_build_failure_once(const std::string& message);
+    void _subscribe_to_scene_events();
+    void _unsubscribe_from_scene_events();
+    void _handle_mesh_component_changed(const tc_event* event);
+    void _handle_scene_structure_changed(const tc_event* event);
+    static void _mesh_component_changed_callback(const tc_event* event, void* user_data);
+    static void _scene_structure_changed_callback(const tc_event* event, void* user_data);
+
     // Create collider primitive based on current type and parameters
-    std::unique_ptr<colliders::ColliderPrimitive> _create_collider() const;
+    std::unique_ptr<colliders::ColliderPrimitive> _create_collider(
+        std::string& failure_reason,
+        bool& source_pending) const;
 
     // Get collision world from scene
     collision::CollisionWorld* _get_collision_world() const;
