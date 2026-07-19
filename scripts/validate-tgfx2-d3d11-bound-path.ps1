@@ -2,7 +2,7 @@
 # Build and run the Windows-only tgfx2 D3D11 bound-resource-set smoke.
 
 param(
-    [string]$BuildType = "Release",
+    [string]$BuildType = "",
     [string]$BuildDir = "",
     [int]$BuildJobs = [Environment]::ProcessorCount,
     [switch]$Clean,
@@ -11,6 +11,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $BuildType) {
+    $BuildType = if ($env:TERMIN_TEST_CONFIGURATION) {
+        $env:TERMIN_TEST_CONFIGURATION
+    } else {
+        "Release"
+    }
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
