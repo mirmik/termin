@@ -17,10 +17,6 @@ struct ShaderRuntimeConfiguration {
     bool dev_compile_enabled = false;
 };
 
-struct RuntimePackageLoadOptions {
-    bool allow_fallback_scene = false;
-};
-
 struct RuntimePackageLoadResult {
     bool ok = false;
     std::string message;
@@ -31,15 +27,11 @@ struct RuntimePackageLoadResult {
 
 class TERMIN_RUNTIME_API RuntimePackageLoader {
 public:
-    RuntimePackageLoadResult load(
-        const std::string& root_path,
-        const RuntimePackageLoadOptions& options = {}
-    );
+    RuntimePackageLoadResult load(const std::string& root_path);
 };
 
 TERMIN_RUNTIME_API RuntimePackageLoadResult load_runtime_package(
-    const std::string& root_path,
-    const RuntimePackageLoadOptions& options = {}
+    const std::string& root_path
 );
 
 } // namespace termin::runtime
