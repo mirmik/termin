@@ -206,7 +206,7 @@ class ScriptMeshComponent(PythonComponent):
         if mesh_component is None:
             return
 
-        mesh_component.set_mesh(tc_mesh)
+        mesh_component.set_generated_mesh(tc_mesh)
         self._last_build_key = self._build_key()
         log.info(
             f"[ScriptMeshComponent] Generated mesh '{self.mesh_name}' "
