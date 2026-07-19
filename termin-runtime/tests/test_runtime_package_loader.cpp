@@ -409,6 +409,28 @@ TEST_CASE("RuntimePackageLoader applies material uniforms and builtin textures")
     CHECK(std::fabs(lighting->ambient_color[2] - 0.9f) < 0.0001f);
     CHECK(std::fabs(lighting->ambient_intensity - 0.33f) < 0.0001f);
 }
+
+TEST_CASE("RuntimePackageLoader fails closed when the entry scene is missing or invalid") {
+    const std::filesystem::path root = make_package_root();
+    write_test_package(root);
+
+    std::filesystem::remove(root / "scene.json");
+    termin::runtime::RuntimePackageLoadResult missing =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(missing.ok);
+    CHECK_FALSE(missing.scene.valid());
+    CHECK(missing.message.find("failed to open file") != std::string::npos);
+    CHECK(missing.message.find("scene.json") != std::string::npos);
+
+    write_text(root / "scene.json", "{ invalid scene json");
+    termin::runtime::RuntimePackageLoadResult invalid =
+        termin::runtime::load_runtime_package(root.string());
+    CHECK_FALSE(invalid.ok);
+    CHECK_FALSE(invalid.scene.valid());
+    CHECK(invalid.message.find("failed to parse runtime entry scene") != std::string::npos);
+    CHECK(invalid.message.find("scene.json") != std::string::npos);
+}
+
 TEST_CASE("RuntimePackageLoader keeps package meshes alive after scene entity removal") {
     const std::filesystem::path root = make_package_root();
     write_test_package(root);

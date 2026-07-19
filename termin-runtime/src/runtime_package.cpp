@@ -1089,21 +1089,27 @@ TcSceneRef load_runtime_scene(const std::filesystem::path& root, const std::stri
     termin::bootstrap::bootstrap_runtime();
 
     const std::filesystem::path scene_path = package_path(root, rel_path);
+    const std::string scene_json = read_text_file(scene_path);
+    nos::trent scene_data;
+    try {
+        scene_data = nos::json::parse(scene_json);
+    } catch (const std::exception& ex) {
+        throw std::runtime_error(
+            "failed to parse runtime entry scene '" + rel_path + "': " + ex.what()
+        );
+    }
     TcSceneRef scene = TcSceneRef::create("runtime-scene");
     if (!scene.valid()) {
         throw std::runtime_error("failed to create runtime scene");
     }
     scene.set_source_path(scene_path.string());
-    scene.from_json_string(read_text_file(scene_path));
+    scene.load_from_data(scene_data);
     return scene;
 }
 
 } // namespace
 
-RuntimePackageLoadResult RuntimePackageLoader::load(
-    const std::string& root_path,
-    const RuntimePackageLoadOptions&
-) {
+RuntimePackageLoadResult RuntimePackageLoader::load(const std::string& root_path) {
     RuntimePackageLoadResult result;
     try {
         std::error_code root_error;
@@ -1207,11 +1213,10 @@ RuntimePackageLoadResult RuntimePackageLoader::load(
 }
 
 RuntimePackageLoadResult load_runtime_package(
-    const std::string& root_path,
-    const RuntimePackageLoadOptions& options
+    const std::string& root_path
 ) {
     RuntimePackageLoader loader;
-    return loader.load(root_path, options);
+    return loader.load(root_path);
 }
 
 } // namespace termin::runtime
