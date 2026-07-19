@@ -41,8 +41,6 @@ class PlayerPythonExecutor(PythonScriptExecutor):
             "camera": runtime.camera,
             "project_path": runtime.project_path,
             "scene_name": runtime.scene_name,
-            "asset_manifest_path": runtime.asset_manifest_path,
-            "app_manifest_path": runtime.app_manifest_path,
             "delta_time": runtime.delta_time,
             "request_quit": runtime.request_quit,
             "quit": runtime.request_quit,

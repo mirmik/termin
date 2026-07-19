@@ -59,12 +59,9 @@ dist/<app>/
 bundle root and point at `package/manifest.json` and `package/scene.json`.
 
 The editor `Build` action writes this desktop bundle. The editor `Run Build`
-action launches the bundle-local player executable when present, otherwise it
-falls back to:
-
-```bash
-python -m termin.player --bundle dist/<app>/app.json
-```
+action requires and launches the bundle-local native executable. A missing
+launcher is a build/preflight error; Python source playback is not a packaged
+runtime fallback.
 
 ## Source Playback
 

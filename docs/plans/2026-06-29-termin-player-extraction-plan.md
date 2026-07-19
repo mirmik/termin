@@ -8,6 +8,11 @@ runtime-facing packages are `termin-player`, `termin-mcp` and
 `termin-shader-runtime`; `termin-app` depends on them as a super-consumer, while
 the packaged desktop runtime seed no longer includes `termin-app`.
 
+Superseded packaged-execution note (2026-07-19): Python bundle mode and
+`runtime_package_loader.py` were subsequently removed. References below are
+historical migration inventory; packaged execution is owned by the native
+`termin_player` host and `termin-runtime`.
+
 ## Goal
 
 Вынести desktop/source/headless player слой из `termin-app` в отдельный

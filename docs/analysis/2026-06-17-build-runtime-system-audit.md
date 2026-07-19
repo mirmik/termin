@@ -7,6 +7,11 @@
 `termin_runner --mode legacy-build` удалены. Editor `Build` / `Run Build`
 переведен на desktop bundle через `termin.project_build`.
 
+Обновлено 2026-07-19: Python player package loader и Python bundle CLI удалены.
+Упоминания Python loader ниже описывают историческое
+состояние; единственный packaged execution path использует native
+`termin_player` и `termin-runtime`.
+
 ## Область
 
 Проверены:

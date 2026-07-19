@@ -248,7 +248,6 @@ candidates; dense buffers should stay until replacement buffer APIs exist.
 | `termin-physics-fem/python/termin/physics_fem/fem_revolute_joint_component.py` | joint vector math | Vec3 candidate |
 | `termin-physics-fem/python/termin/physics_fem/fem_rigid_body_component.py` | inertia vector math | Vec3 candidate |
 | `termin-physics/tests/test_energy.py` | energy vector fixture | tests only |
-| `termin-player/termin/player/runtime_package_loader.py` | mesh buffer loading | keep ndarray |
 | `termin-prefab/python/termin/prefab/asset.py` | prefab JSON arrays | serialization boundary |
 | `termin-prefab/python/termin/prefab/instance_marker.py` | override array serialization | serialization boundary |
 | `termin-prefab/python/termin/prefab/property_path.py` | transform array comparison | Vec3/Quat candidate |

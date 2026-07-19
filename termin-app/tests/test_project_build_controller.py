@@ -198,6 +198,49 @@ def test_run_build_launches_desktop_bundle_launcher(monkeypatch, tmp_path) -> No
     assert logs[-1] == f"Launching build: {launcher}"
 
 
+def test_run_build_rejects_missing_desktop_bundle_launcher(monkeypatch, tmp_path) -> None:
+    project_root = tmp_path / "Project"
+    scene_path = project_root / "Scenes" / "Main.scene"
+    scene_path.parent.mkdir(parents=True)
+    scene_path.write_text("{}", encoding="utf-8")
+    dist_dir = project_root / "dist" / "desktop" / "Project"
+    missing_launcher = dist_dir / "Project"
+    logs: list[str] = []
+    popen_calls: list[list[str]] = []
+
+    monkeypatch.setattr(
+        project_build,
+        "build_desktop_project",
+        lambda **kwargs: SimpleNamespace(
+            dist_dir=dist_dir,
+            app_manifest_path=dist_dir / "app.json",
+            package_result=SimpleNamespace(package_dir=dist_dir / "package"),
+            runtime_result=SimpleNamespace(lib_dir=dist_dir / "lib", launcher_path=missing_launcher),
+            diagnostics=[],
+        ),
+    )
+    monkeypatch.setattr(
+        project_build_module.subprocess,
+        "Popen",
+        lambda cmd, cwd=None: popen_calls.append(cmd),
+    )
+    controller = _make_controller(
+        project_root=project_root,
+        scene_name="Main",
+        scene_manager=_SceneManager({"Main": scene_path}),
+        logs=logs,
+        save_calls=[],
+    )
+
+    controller.run_build()
+
+    assert popen_calls == []
+    assert logs[-1] == (
+        "Run build failed: Desktop bundle launcher is missing after build: "
+        f"{missing_launcher}. Rebuild the desktop runtime bundle."
+    )
+
+
 def test_quest_openxr_action_projects_prepared_entry_to_frontend(tmp_path) -> None:
     project_root = tmp_path / "Project"
     scene_path = project_root / "Scenes" / "Main.scene"

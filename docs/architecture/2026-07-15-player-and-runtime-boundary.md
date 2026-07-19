@@ -24,9 +24,9 @@ build plans explain how the repository reached it but do not redefine it.
 
 ## `termin-player`: editor-adjacent project host
 
-`termin-player` owns the `termin_player` executable, `python -m termin.player`
-and related source/headless/automation entrypoints. Its primary use is running
-a project from the command line without opening the editor UI.
+`termin-player` owns two deliberately separate host surfaces: the native
+`termin_player` packaged-runtime executable and the `python -m termin.player`
+source/headless development entrypoint.
 
 The player is allowed the same broad execution capabilities as editor Play
 Mode, including:
@@ -39,7 +39,7 @@ Mode, including:
 - windowed, offscreen and headless execution;
 - input, rendering, audio and normal scene lifecycle;
 - MCP, screenshots, diagnostics and deterministic test controls;
-- loading a built runtime package when that is the requested run mode.
+- hosting a built runtime package through the native `termin_player` path.
 
 Python is not an accidental dependency of the player. The player is an
 editor-adjacent SDK tool, so linking and packaging Python is allowed.
@@ -150,7 +150,7 @@ package.
 | --- | --- | --- | --- | --- |
 | Editor Play Mode | `termin-app` | source project | yes | yes |
 | Command-line project run | `termin-player` | source project | yes | no editor-private imports |
-| Player package run | `termin-player` | runtime package | yes | no editor-private imports |
+| Native player package run | `termin_player` + `termin-runtime` | runtime package | yes, for project scripts/modules | no editor-private imports |
 | Embedded desktop/game host | host + `termin-runtime` | runtime package | host choice | forbidden in runtime |
 | Android/OpenXR host | platform host + `termin-runtime` | runtime package | host choice | forbidden in runtime |
 | Native runtime test | `termin-runtime` | fixture package | not required | forbidden |
@@ -162,13 +162,11 @@ embed Python above `termin-runtime` without changing the library boundary.
 ## Runtime package ownership
 
 A runtime package is a build artifact and a contract of `termin-runtime`.
-`termin-player` may consume it, but the player must not define a competing
-package schema or canonical loader.
-
-Python-side player loaders can be development adapters or bindings around the
-native loader. Format validation, native resource construction and scene
-loading required by embedded hosts belong to `termin-runtime` and domain
-runtime libraries.
+The native `termin_player` host consumes it through
+`termin::runtime::RuntimePackageLoader`; Python `PlayerRuntime` does not parse
+package manifests or construct packaged resources. Format validation, native
+resource construction and scene loading required by embedded hosts belong to
+`termin-runtime` and domain runtime libraries.
 
 Source project handling is the opposite: `.terminproj` discovery, development
 module loading, source asset watching and editor-like run policy belong to the
@@ -199,7 +197,6 @@ When adding execution-related code, use these questions:
 - player tests compare source-project startup and lifecycle behavior with the
   shared services used by editor Play Mode.
 - runtime-package fixtures are accepted consistently by native embedded hosts
-  and by `termin_player` package mode.
+  and by `termin_player --bundle`.
 - adding Python support to a host does not change the serialized runtime
   package contract or introduce a second loader.
-

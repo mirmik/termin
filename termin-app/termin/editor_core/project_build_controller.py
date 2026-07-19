@@ -159,14 +159,13 @@ class ProjectBuildController:
             cmd = [str(launcher_path)]
             cwd = str(launcher_path.parent)
         else:
-            cmd = [
-                sys.executable,
-                "-m",
-                "termin.player",
-                "--bundle",
-                str(result.app_manifest_path),
-            ]
-            cwd = str(result.dist_dir)
+            message = (
+                "Desktop bundle launcher is missing after build: "
+                f"{launcher_path or result.dist_dir}. Rebuild the desktop runtime bundle."
+            )
+            log.error(f"[ProjectBuildController] {message}")
+            self._log_to_console(f"Run build failed: {message}")
+            return
         self._log_to_console(f"Launching build: {' '.join(cmd)}")
         try:
             subprocess.Popen(cmd, cwd=cwd)
