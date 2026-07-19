@@ -15,7 +15,7 @@ def test_entity_clone_preserves_python_component_data_and_parent():
         """
         import termin.bootstrap
         from termin.inspect import InspectField
-        from termin.scene import Entity, PythonComponent, TcScene
+        from termin.scene import Entity, PythonComponent, TcScene, publish_python_component
 
         termin.bootstrap.bootstrap_player()
 
@@ -27,6 +27,8 @@ def test_entity_clone_preserves_python_component_data_and_parent():
             def __init__(self):
                 super().__init__()
                 self.value = 0
+
+        publish_python_component(ProbeClonePythonComponent, owner="termin-scene-test")
 
         scene = TcScene.create("python-clone-test")
         parent = scene.create_entity("parent")

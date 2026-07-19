@@ -973,6 +973,16 @@ bool PythonModuleBackend::load(
         Py_DECREF(module);
     }
 
+    if (!call_module_context_function("publish_module_owner", record.spec.id, error)) {
+        record.error_message = error;
+        collect_import_transaction_delta(config->packages, before, *handle);
+        release_module_snapshot(before);
+        PyGILState_Release(gil);
+        record.handle = handle;
+        unload(record, environment);
+        return false;
+    }
+
     collect_import_transaction_delta(config->packages, before, *handle);
     release_module_snapshot(before);
 

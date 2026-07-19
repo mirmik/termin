@@ -19,6 +19,9 @@ if TYPE_CHECKING:
 def register_editor_builtin_resources(resource_manager: "ResourceManager") -> None:
     """Register built-in resources required before editor scene loading."""
     from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController
+    from termin.scene import publish_python_component
+
+    publish_python_component(EditorCameraUIController, owner="termin-app-python")
 
     loaded_components = resource_manager.register_builtin_components()
     if loaded_components:

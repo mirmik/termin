@@ -11,6 +11,9 @@ from termin.prefab.asset_plugin import create_import_plugin, create_runtime_plug
 from termin_assets import AssetContext, PreLoadResult
 
 
+_OVERLAY = Path(__file__).resolve().parents[2] / "build/python-envs/test/overlay.json"
+
+
 class FakeResourceManager:
     def __init__(self) -> None:
         self.prefabs = {}
@@ -51,7 +54,10 @@ def _empty_entity_data(uuid: str, name: str) -> dict[str, object]:
 
 
 def _run_python(code: str) -> None:
-    subprocess.run([sys.executable, "-c", textwrap.dedent(code)], check=True)
+    subprocess.run(
+        [sys.executable, "--termin-overlay", str(_OVERLAY), "-c", textwrap.dedent(code)],
+        check=True,
+    )
 
 
 def test_prefab_runtime_plugin_registers_lazy_asset() -> None:
@@ -171,7 +177,9 @@ def test_prefab_hot_reload_reaches_only_live_native_instances() -> None:
         )
         from termin.prefab.asset import PrefabAsset
         from termin.prefab.persistence import document_from_data
-        from termin.scene import PythonComponent, TcScene
+        from termin.scene import PythonComponent, TcScene, publish_python_component
+
+        termin.bootstrap.bootstrap_player()
 
         class PrefabHotReloadProbe(PythonComponent):
             inspect_fields = {
@@ -182,7 +190,7 @@ def test_prefab_hot_reload_reaches_only_live_native_instances() -> None:
                 super().__init__()
                 self.value = 0
 
-        termin.bootstrap.bootstrap_player()
+        publish_python_component(PrefabHotReloadProbe)
         source_scene = TcScene.create("prefab-hot-reload-source")
         source_root = source_scene.create_entity("Root")
         source_component = PrefabHotReloadProbe()

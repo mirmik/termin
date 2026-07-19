@@ -22,22 +22,31 @@ from termin.bootstrap._bootstrap_native import (
 )
 
 
-def _restore_python_components() -> None:
-    from termin.scene import restore_python_components
+def _publish_builtin_python_components() -> None:
+    import importlib
 
-    restore_python_components()
+    from termin.default_assets.builtin_types import get_default_builtin_component_specs
+    from termin.scene import PythonComponent, publish_python_components
+
+    classes: list[type[PythonComponent]] = []
+    for module_name, class_name in get_default_builtin_component_specs():
+        module = importlib.import_module(module_name)
+        cls = module.__dict__.get(class_name)
+        if isinstance(cls, type) and issubclass(cls, PythonComponent):
+            classes.append(cls)
+    publish_python_components(classes, owner="termin-builtin-python")
 
 
 def bootstrap_player() -> None:
-    """Bootstrap player/runtime registries and restore loaded Python components."""
+    """Bootstrap native roots, then explicitly publish builtin Python components."""
     _bootstrap_player_native()
-    _restore_python_components()
+    _publish_builtin_python_components()
 
 
 def bootstrap_editor() -> None:
-    """Bootstrap editor registries and restore loaded Python components."""
+    """Bootstrap editor registries and builtin Python component descriptors."""
     _bootstrap_editor_native()
-    _restore_python_components()
+    _publish_builtin_python_components()
 
 
 def configure_resource_manager_factory(factory: Callable[[], object] | None) -> None:

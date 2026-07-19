@@ -28,10 +28,10 @@ class _PythonComponentRegistration:
     owner: str
 
 
-# Definitions survive shutdown_player(): the classes remain loaded in Python
-# while their native factory and inspect registrations are rebuilt on the next
-# explicit bootstrap.
-_python_component_registrations: dict[str, _PythonComponentRegistration] = {}
+# Class declarations are intentionally separate from native publication.
+# Importing a module may populate this declarative catalog, but only an explicit
+# bootstrap or module commit publishes descriptors to the runtime registries.
+_python_component_declarations: dict[tuple[str, str], _PythonComponentRegistration] = {}
 
 
 def _remember_registered_type(names: list[str], type_name: str) -> None:
@@ -84,19 +84,23 @@ def shutdown_python_components() -> None:
             try:
                 component_registry.unregister_python(type_name)
             except Exception:
-                pass
+                log.error(
+                    f"[PythonComponent] failed to unregister descriptor {type_name}",
+                    exc_info=True,
+                )
     except Exception:
-        pass
+        log.error("[PythonComponent] failed to access registry during shutdown", exc_info=True)
 
     _registered_python_component_types.clear()
 
 
 def unregister_python_component_owner(owner: str) -> None:
     """Forget loaded class definitions owned by an unloaded project module."""
-    for type_name, registration in tuple(_python_component_registrations.items()):
+    for key, registration in tuple(_python_component_declarations.items()):
         if registration.owner != owner:
             continue
-        del _python_component_registrations[type_name]
+        type_name = registration.cls.__name__
+        del _python_component_declarations[key]
         if type_name in _registered_python_component_types:
             _registered_python_component_types.remove(type_name)
 
@@ -139,7 +143,6 @@ def _register_python_component_metadata(
     owner: str,
     parent_name: str | None,
 ) -> None:
-    _ensure_python_component_type(component_registry)
     own_fields = cls.__dict__.get("inspect_fields", {})
     requirements = list(cls.__dict__.get("required_components", ()))
     for required_name in requirements:
@@ -164,38 +167,154 @@ def _register_python_component_metadata(
     _remember_registered_type(_registered_python_component_types, cls.__name__)
 
 
-def restore_python_components() -> None:
-    """Restore loaded Python component classes after native runtime bootstrap."""
-    if not _python_component_registrations:
-        return
+def _owner_for_component_class(cls: type["PythonComponent"]) -> str:
+    try:
+        from termin_modules.module_context import owner_for_python_module
+    except ModuleNotFoundError as exc:
+        if exc.name not in ("termin_modules", "termin_modules.module_context"):
+            log.error("Failed to load module ownership context", exc_info=True)
+        return "termin-scene-python"
+    except Exception:
+        log.error("Failed to load module ownership context", exc_info=True)
+        return "termin-scene-python"
+    return owner_for_python_module(cls.__module__) or "termin-scene-python"
+
+
+def _declare_python_component(cls: type["PythonComponent"], owner: str) -> None:
+    for key, registration in tuple(_python_component_declarations.items()):
+        if registration.cls is cls and key != (owner, cls.__name__):
+            del _python_component_declarations[key]
+    _python_component_declarations[(owner, cls.__name__)] = _PythonComponentRegistration(
+        cls=cls,
+        owner=owner,
+    )
+
+
+def _component_publication_order(
+    classes: list[type["PythonComponent"]],
+) -> list[type["PythonComponent"]]:
+    expanded: dict[type["PythonComponent"], None] = {}
+    for cls in classes:
+        if not isinstance(cls, type) or not issubclass(cls, PythonComponent):
+            raise TypeError("published component classes must derive from PythonComponent")
+        for parent in reversed(cls.__mro__):
+            if parent is PythonComponent:
+                continue
+            if isinstance(parent, type) and issubclass(parent, PythonComponent):
+                expanded[parent] = None
+    return sorted(expanded, key=lambda cls: (len(cls.__mro__), cls.__module__, cls.__name__))
+
+
+def publish_python_components(
+    classes: list[type["PythonComponent"]],
+    *,
+    owner: str,
+) -> list[str]:
+    """Atomically publish complete descriptors for explicitly selected classes."""
+    if not owner:
+        raise ValueError("Python component publication requires a non-empty owner")
+
+    ordered = _component_publication_order(classes)
+    if not ordered:
+        return []
+    names: dict[str, type["PythonComponent"]] = {}
+    for cls in ordered:
+        existing_class = names.get(cls.__name__)
+        if existing_class is not None and existing_class is not cls:
+            raise RuntimeError(f"duplicate Python component type name: {cls.__name__}")
+        names[cls.__name__] = cls
 
     component_registry = ComponentRegistry.instance()
+    for cls in ordered:
+        parent_name = _find_python_component_parent(cls)
+        if parent_name not in (None, "PythonComponent"):
+            parent = names.get(parent_name)
+            if parent is None and not component_registry.has(parent_name):
+                raise RuntimeError(
+                    f"cannot publish {cls.__name__}: parent descriptor {parent_name} is missing"
+                )
+        if component_registry.has(cls.__name__):
+            existing_class = component_registry.get_class(cls.__name__)
+            existing_owner = component_registry.get_info(cls.__name__)["owner"]
+            if existing_class is not cls and existing_owner != owner:
+                raise RuntimeError(
+                    f"cannot publish {cls.__name__}: another component owns that type name"
+                )
+
+    root_existed = component_registry.has("PythonComponent")
+    _ensure_python_component_type(component_registry)
+    published: list[str] = []
+    replaced: list[tuple[type["PythonComponent"], str]] = []
     try:
-        for registration in _python_component_registrations.values():
-            cls = registration.cls
-            parent_name = _find_python_component_parent(cls)
-
-            # Native bootstrap imports some Python component modules while the
-            # registries are already live. In that case __init_subclass__ has
-            # registered this exact class in the current runtime, so there is
-            # nothing to restore. This is distinct from a same-name collision:
-            # a different class must still go through register_python() and its
-            # owner checks below.
-            if (
-                component_registry.has(cls.__name__)
-                and component_registry.get_class(cls.__name__) is cls
-            ):
-                continue
-
+        for cls in ordered:
+            if component_registry.has(cls.__name__):
+                existing_class = component_registry.get_class(cls.__name__)
+                if existing_class is cls:
+                    continue
+                replaced.append((existing_class, owner))
+            _declare_python_component(cls, owner)
             _register_python_component_metadata(
                 cls,
                 component_registry=component_registry,
-                owner=registration.owner,
-                parent_name=parent_name,
+                owner=owner,
+                parent_name=_find_python_component_parent(cls),
             )
+            published.append(cls.__name__)
     except Exception:
-        log.error("[PythonComponent] failed to restore loaded component registrations", exc_info=True)
+        for type_name in reversed(published):
+            try:
+                component_registry.unregister_python(type_name)
+            except Exception:
+                log.error(
+                    f"[PythonComponent] failed to roll back descriptor {type_name}",
+                    exc_info=True,
+                )
+        for previous_class, previous_owner in reversed(replaced):
+            try:
+                _declare_python_component(previous_class, previous_owner)
+                _register_python_component_metadata(
+                    previous_class,
+                    component_registry=component_registry,
+                    owner=previous_owner,
+                    parent_name=_find_python_component_parent(previous_class),
+                )
+            except Exception:
+                log.error(
+                    f"[PythonComponent] failed to restore descriptor {previous_class.__name__}",
+                    exc_info=True,
+                )
+        if not root_existed:
+            try:
+                component_registry.unregister_python("PythonComponent")
+                if "PythonComponent" in _registered_python_component_types:
+                    _registered_python_component_types.remove("PythonComponent")
+            except Exception:
+                log.error(
+                    "[PythonComponent] failed to roll back root descriptor",
+                    exc_info=True,
+                )
+        log.error("[PythonComponent] explicit descriptor publication failed", exc_info=True)
         raise
+    return published
+
+
+def publish_python_component(
+    cls: type["PythonComponent"],
+    *,
+    owner: str | None = None,
+) -> list[str]:
+    """Publish one class and its PythonComponent ancestors explicitly."""
+    return publish_python_components([cls], owner=owner or _owner_for_component_class(cls))
+
+
+def publish_python_component_owner(owner: str) -> list[str]:
+    """Commit all declarations belonging to one loaded project module."""
+    selected: list[type["PythonComponent"]] = []
+    for registration in tuple(_python_component_declarations.values()):
+        cls = registration.cls
+        if _owner_for_component_class(cls) == owner:
+            selected.append(cls)
+    return publish_python_components(selected, owner=owner)
 
 
 class PythonComponent:
@@ -233,53 +352,13 @@ class PythonComponent:
         self.refresh_lifecycle_capabilities()
 
     def __init_subclass__(cls, **kwargs):
-        """Called when a class inherits from PythonComponent."""
+        """Record declarative metadata without publishing runtime descriptors."""
         super().__init_subclass__(**kwargs)
 
         if cls.__name__ == "PythonComponent":
             return
 
-        try:
-            from termin_modules.module_context import owner_for_python_module
-        except ModuleNotFoundError as exc:
-            if exc.name not in ("termin_modules", "termin_modules.module_context"):
-                log.error("Failed to load module ownership context", exc_info=True)
-            owner = "termin-scene-python"
-        except Exception:
-            log.error("Failed to load module ownership context", exc_info=True)
-            owner = "termin-scene-python"
-        else:
-            owner = owner_for_python_module(cls.__module__) or "termin-scene-python"
-
-        parent_name = _find_python_component_parent(cls)
-
-        component_registry = ComponentRegistry.instance()
-        if parent_name and not component_registry.has(parent_name):
-            existing = _python_component_registrations.get(cls.__name__)
-            if existing is None or (owner and existing.owner == owner):
-                _python_component_registrations[cls.__name__] = _PythonComponentRegistration(
-                    cls=cls,
-                    owner=owner,
-                )
-            return
-        try:
-            _register_python_component_metadata(
-                cls,
-                component_registry=component_registry,
-                owner=owner,
-                parent_name=parent_name,
-            )
-        except Exception:
-            log.error(
-                f"[PythonComponent] registration rejected for {cls.__name__}; "
-                "preserving existing component metadata",
-                exc_info=True,
-            )
-            return
-        _python_component_registrations[cls.__name__] = _PythonComponentRegistration(
-            cls=cls,
-            owner=owner,
-        )
+        _declare_python_component(cls, _owner_for_component_class(cls))
 
         # capability registration moved to respective subclasses:
         # - drawable: termin.render.DrawableComponent

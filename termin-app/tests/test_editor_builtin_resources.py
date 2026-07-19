@@ -1,9 +1,11 @@
 from termin.editor_core.resource_manager import ResourceManager
 from termin.editor_core.resource_loader import register_editor_builtin_resources
 from tgfx import TcTexture
+from termin.bootstrap import bootstrap_editor, shutdown_editor
 
 
 def test_editor_builtin_resources_include_render_assets() -> None:
+    bootstrap_editor()
     resource_manager = ResourceManager()
 
     try:
@@ -19,3 +21,4 @@ def test_editor_builtin_resources_include_render_assets() -> None:
         assert resource_manager.get_pipeline_asset("Triangle") is not None
     finally:
         resource_manager.clear_runtime_state()
+        shutdown_editor()

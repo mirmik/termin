@@ -84,6 +84,15 @@ def unregister_module_owner(module_id: str) -> None:
     unregister_module_packages(module_id)
 
 
+def publish_module_owner(module_id: str) -> None:
+    """Commit component descriptors after all packages imported successfully."""
+    if not module_id:
+        raise ValueError("module_id must be non-empty")
+    from termin.scene import publish_python_component_owner
+
+    publish_python_component_owner(module_id)
+
+
 def _runtime_type_records_for_owner(module_id: str, facet: str) -> list[str]:
     from termin.inspect import _inspect_native
 
@@ -147,6 +156,7 @@ def _unregister_app_resource_classes(module_id: str) -> None:
 __all__ = [
     "module_registration_context",
     "owner_for_python_module",
+    "publish_module_owner",
     "register_module_packages",
     "unregister_module_owner",
     "unregister_module_packages",

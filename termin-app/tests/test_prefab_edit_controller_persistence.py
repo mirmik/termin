@@ -18,7 +18,7 @@ def test_prefab_edit_controller_roundtrips_v3_hierarchy(tmp_path) -> None:
         from termin.engine import SceneManager
         from termin.inspect import InspectField
         from termin.prefab.persistence import PrefabPersistence, load_document
-        from termin.scene import PythonComponent
+        from termin.scene import PythonComponent, publish_python_component
 
         class PrefabRoundtripProbe(PythonComponent):
             inspect_fields = {{
@@ -30,6 +30,7 @@ def test_prefab_edit_controller_roundtrips_v3_hierarchy(tmp_path) -> None:
                 self.target = None
 
         termin.bootstrap.bootstrap_player()
+        publish_python_component(PrefabRoundtripProbe, owner="termin-app-test")
         manager = SceneManager()
         editor_scene = manager.create_scene("editor", [])
         author_scene = manager.create_scene("author", [])

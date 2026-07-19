@@ -14,7 +14,13 @@ def test_unknown_component_upgrade_preserves_python_default_enabled():
     _run_python(
         """
         import termin.bootstrap
-        from termin.scene import Entity, PythonComponent, TcScene, upgrade_unknown_components
+        from termin.scene import (
+            Entity,
+            PythonComponent,
+            TcScene,
+            publish_python_component,
+            upgrade_unknown_components,
+        )
 
         termin.bootstrap.bootstrap_player()
         scene = TcScene.create("unknown-python-default-enabled")
@@ -32,6 +38,7 @@ def test_unknown_component_upgrade_preserves_python_default_enabled():
         class ProbeUnknownDefaultEnabledComponent(PythonComponent):
             pass
 
+        publish_python_component(ProbeUnknownDefaultEnabledComponent, owner="termin-scene-test")
         stats = upgrade_unknown_components(scene)
         restored = entity.get_python_component("ProbeUnknownDefaultEnabledComponent")
         assert stats.upgraded == 1
@@ -48,7 +55,13 @@ def test_unknown_component_upgrade_applies_serialized_python_disabled_state():
     _run_python(
         """
         import termin.bootstrap
-        from termin.scene import Entity, PythonComponent, TcScene, upgrade_unknown_components
+        from termin.scene import (
+            Entity,
+            PythonComponent,
+            TcScene,
+            publish_python_component,
+            upgrade_unknown_components,
+        )
 
         termin.bootstrap.bootstrap_player()
         scene = TcScene.create("unknown-python-disabled")
@@ -69,6 +82,7 @@ def test_unknown_component_upgrade_applies_serialized_python_disabled_state():
         class ProbeUnknownDisabledComponent(PythonComponent):
             pass
 
+        publish_python_component(ProbeUnknownDisabledComponent, owner="termin-scene-test")
         stats = upgrade_unknown_components(scene)
         restored = entity.get_python_component("ProbeUnknownDisabledComponent")
         assert stats.upgraded == 1

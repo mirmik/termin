@@ -8,6 +8,7 @@ from tcgui.widgets.loader import UILoader
 from termin.editor_core.editor_camera_ui_controller import EditorCameraUIController
 from termin.editor_core.resource_loader import register_editor_builtin_resources
 from termin.render import RENDER_CATEGORY_ALL, RENDER_CATEGORY_COLLIDERS, RENDER_CATEGORY_NAVMESH
+from termin.bootstrap import bootstrap_editor, shutdown_editor
 
 
 class _IconButton:
@@ -65,11 +66,14 @@ class _ResourceManager:
 
 
 def test_editor_builtin_resources_register_camera_ui_controller() -> None:
+    bootstrap_editor()
     resource_manager = _ResourceManager()
 
-    register_editor_builtin_resources(resource_manager)
-
-    assert resource_manager.components["EditorCameraUIController"] is EditorCameraUIController
+    try:
+        register_editor_builtin_resources(resource_manager)
+        assert resource_manager.components["EditorCameraUIController"] is EditorCameraUIController
+    finally:
+        shutdown_editor()
 
 
 def test_editor_camera_ui_script_exposes_gizmo_orientation_button() -> None:

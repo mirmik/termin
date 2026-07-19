@@ -17,6 +17,7 @@ from ._termin_modules_native import (
 from .module_context import (
     module_registration_context,
     owner_for_python_module,
+    publish_module_owner,
     register_module_packages,
     unregister_module_owner,
     unregister_module_packages,
@@ -35,6 +36,7 @@ __all__ = [
     "PythonModuleBackend",
     "module_registration_context",
     "owner_for_python_module",
+    "publish_module_owner",
     "register_module_packages",
     "unregister_module_owner",
     "unregister_module_packages",
