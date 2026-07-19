@@ -26,6 +26,11 @@ def test_script_mesh_roundtrip_has_one_mesh_and_no_missing_renderer_error() -> N
                 payload = source.serialize()
 
                 components = payload["entities"][0]["components"]
+                serialized_mesh = next(
+                    item for item in components if item["type"] == "MeshComponent"
+                )["data"]
+                assert serialized_mesh["mesh_generated"] is True
+                assert serialized_mesh["mesh"]["type"] == "none"
                 components.sort(
                     key=lambda item: 0 if item["type"] == "ScriptMeshComponent" else 1
                 )
@@ -56,3 +61,5 @@ def test_script_mesh_roundtrip_has_one_mesh_and_no_missing_renderer_error() -> N
     assert result.returncode == 0, output
     assert "[RenderingManager] instance() called but no instance set" not in output
     assert "[ScriptMeshComponent] Failed to request render update" not in output
+    assert "[TcMesh] Mesh 'script_mesh' not found" not in output
+    assert "[ERROR]" not in output

@@ -217,19 +217,24 @@ class ProceduralMeshComponent(PythonComponent):
             return False
 
         tc_mesh = mesh_component.mesh
-        if tc_mesh is not None and tc_mesh.is_valid:
+        if (
+            mesh_component.mesh_is_generated
+            and tc_mesh is not None
+            and tc_mesh.is_valid
+        ):
             if not tc_mesh.set_from_mesh3(mesh3):
                 log.error(
                     "[ProceduralMeshComponent] regenerate failed to update existing mesh "
                     f"document='{self.document_name}' uuid='{tc_mesh.uuid}'"
                 )
                 return False
+            mesh_component.notify_mesh_changed()
         else:
             tc_mesh = TcMesh.from_mesh3(mesh3, self.document_name, "")
             if not tc_mesh.is_valid:
                 log.error(f"[ProceduralMeshComponent] failed to create TcMesh name='{self.document_name}'")
                 return False
-            mesh_component.set_mesh(tc_mesh)
+            mesh_component.set_generated_mesh(tc_mesh)
         self._last_build_key = build_key
         self._dirty = False
         log.info(
