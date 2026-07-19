@@ -238,6 +238,7 @@ if(BUILD_EDITOR_MINIMAL)
     )
     target_link_libraries(termin_editor PRIVATE
         Python::Python
+        termin_bootstrap::termin_bootstrap
         termin_engine::termin_engine
         termin_render::termin_render
         termin_collision::termin_collision

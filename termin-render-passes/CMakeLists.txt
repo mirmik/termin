@@ -324,6 +324,7 @@ target_include_directories(termin_render_passes_builtin_shader_sources_test PRIV
         ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
     )
     target_link_libraries(termin_render_passes_foliage_auxiliary_pass_pixel_smoke PRIVATE
+        termin_bootstrap::termin_bootstrap
         termin_render_passes
         termin_components_render
         termin_components_foliage

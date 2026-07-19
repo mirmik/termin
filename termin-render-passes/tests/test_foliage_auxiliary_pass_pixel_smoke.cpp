@@ -1,3 +1,4 @@
+#include <termin/bootstrap/bootstrap.hpp>
 #include <termin/foliage/foliage_data_registry.hpp>
 #include <termin/foliage/foliage_layer_component.hpp>
 #include <termin/render/depth_pass.hpp>
@@ -10,6 +11,7 @@
 #include <tgfx/resources/tc_mesh_registry.h>
 #include <tgfx/resources/tc_shader_registry.h>
 #include <tgfx2/device_factory.hpp>
+#include <tgfx2/builtin_shader_sources.hpp>
 #include <tgfx2/i_render_device.hpp>
 #include <tgfx2/pipeline_cache.hpp>
 #include <tgfx2/render_context.hpp>
@@ -208,6 +210,17 @@ bool run_id_pass(
     const termin::TcSceneRef& scene,
     uint32_t pick_id)
 {
+    const tc_shader_handle base_id_shader =
+        tgfx::register_builtin_shader_from_catalog("termin-engine-id");
+    tc_shader* base_id = tc_shader_get(base_id_shader);
+    tgfx::ShaderHandle base_vs;
+    tgfx::ShaderHandle base_fs;
+    if (!base_id || !termin::tc_shader_ensure_tgfx2(
+            base_id, &device, &base_vs, &base_fs)) {
+        std::fprintf(stderr, "Failed to prime the base ID shader resource layout\n");
+        return false;
+    }
+
     const tgfx::TextureHandle color = create_color(device);
     const tgfx::TextureHandle depth = create_depth(device);
     if (!color || !depth) return false;
@@ -416,14 +429,8 @@ int main(int argc, char** argv)
         std::printf("Vulkan backend not compiled, skipping test\n");
         return 0;
     }
-    tc_shader_init();
-    tc_material_init();
-    tc_mesh_init();
-    tc_scene_pool_init();
+    termin::bootstrap::bootstrap_runtime();
     const int result = run_smoke(argc > 0 ? argv[0] : nullptr);
-    tc_scene_pool_shutdown();
-    tc_mesh_shutdown();
-    tc_material_shutdown();
-    tc_shader_shutdown();
+    termin::bootstrap::shutdown_runtime();
     return result;
 }

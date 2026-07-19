@@ -45,7 +45,7 @@ Code must not use `phase_mark` to infer:
 - vertex input layout;
 - static, skinned, foliage, line, or other vertex transform templates;
 - draw-scope resource names such as `draw_data`, `shadow_draw`, `depth_draw`,
-  `normal_draw`, or `id_draw`;
+  `normal_draw`, `id_model`, or `id_pick`;
 - whether a pass consumes material fragment code;
 - fragment interface requirements;
 - pass output semantics such as depth, normal, object id, or shadow map;

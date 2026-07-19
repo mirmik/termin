@@ -9,7 +9,7 @@ from termin.project_modules.runtime import ProjectModulesRuntime
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader
 from termin.project.settings import ProjectSettings, ProjectSettingsManager
-from termin_assets import AssetRegistration, PreLoadResult
+from termin_assets import AssetRegistration, PreLoadResult, read_spec_file
 from termin_modules import ModuleKind, ModuleState
 
 
@@ -199,7 +199,7 @@ def test_module_input_processor_marks_cpp_descriptor_dirty_without_reload(tmp_pa
 
 def test_module_input_processor_marks_cpp_source_dirty_without_reload(tmp_path: Path) -> None:
     source = tmp_path / "native_core.cpp"
-    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    source.write_text('extern "C" void module_init() {}\n', encoding="utf-8")
     runtime = RecordingModulesRuntime()
     processor = ModuleInputFileProcessor(
         resource_manager=None,
@@ -214,7 +214,7 @@ def test_module_input_processor_marks_cpp_source_dirty_without_reload(tmp_path: 
 
 def test_module_input_processor_initial_scan_does_not_mark_existing_sources_dirty(tmp_path: Path) -> None:
     source = tmp_path / "native_core.cpp"
-    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    source.write_text('extern "C" void module_init() {}\n', encoding="utf-8")
     runtime = RecordingModulesRuntime()
     processor = ModuleInputFileProcessor(
         resource_manager=None,
@@ -229,7 +229,7 @@ def test_module_input_processor_initial_scan_does_not_mark_existing_sources_dirt
 
 def test_module_input_processor_live_created_source_marks_module_dirty(tmp_path: Path) -> None:
     source = tmp_path / "native_core.cpp"
-    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    source.write_text('extern "C" void module_init() {}\n', encoding="utf-8")
     runtime = RecordingModulesRuntime()
     processor = ModuleInputFileProcessor(
         resource_manager=None,
@@ -243,7 +243,7 @@ def test_module_input_processor_live_created_source_marks_module_dirty(tmp_path:
 
 def test_project_file_watcher_initial_scan_uses_initial_add_hook_for_module_inputs(tmp_path: Path) -> None:
     source = tmp_path / "native_core.cpp"
-    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    source.write_text('extern "C" void module_init() {}\n', encoding="utf-8")
     runtime = RecordingModulesRuntime()
     processor = ModuleInputFileProcessor(
         resource_manager=None,
@@ -261,7 +261,7 @@ def test_project_file_watcher_initial_scan_uses_initial_add_hook_for_module_inpu
 
 def test_project_file_watcher_live_created_module_input_marks_module_dirty(tmp_path: Path) -> None:
     source = tmp_path / "native_core.cpp"
-    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    source.write_text('extern "C" void module_init() {}\n', encoding="utf-8")
     runtime = RecordingModulesRuntime()
     processor = ModuleInputFileProcessor(
         resource_manager=None,
@@ -284,7 +284,7 @@ def test_project_modules_runtime_marks_cpp_module_dirty_for_native_input(tmp_pat
     source = tmp_path / "src" / "native_core.cpp"
     source.parent.mkdir()
     descriptor.write_text("name: native_core\ntype: cpp\n", encoding="utf-8")
-    source.write_text("extern \"C\" void module_init() {}\n", encoding="utf-8")
+    source.write_text('extern "C" void module_init() {}\n', encoding="utf-8")
     runtime = RuntimeUnderTest(
         [
             SimpleNamespace(
@@ -454,14 +454,7 @@ def test_component_processor_keeps_unowned_created_and_changed_python_inert(tmp_
 
 
 def test_project_file_watcher_ignores_service_termin_directory_events(tmp_path: Path) -> None:
-    artifact_path = (
-        tmp_path
-        / ".termin"
-        / "shader-artifacts"
-        / "shaders"
-        / "opengl"
-        / "compiled.frag.glsl"
-    )
+    artifact_path = tmp_path / ".termin" / "shader-artifacts" / "shaders" / "opengl" / "compiled.frag.glsl"
     artifact_path.parent.mkdir(parents=True)
     artifact_path.write_text("glsl", encoding="utf-8")
     artifact_path.with_name(artifact_path.name + ".artifact").write_text(
@@ -550,6 +543,28 @@ def test_project_file_watcher_initial_scan_registers_plugin_assets(tmp_path: Pat
     assert rm.registered[0].path == str(texture_path)
     assert rm.registered[0].uuid == "texture-scan-uuid"
     assert preloader.get_tracked_files() == {str(texture_path): {"texture-scan-uuid"}}
+
+
+def test_project_file_watcher_initial_scan_persists_missing_asset_identity(
+    tmp_path: Path,
+) -> None:
+    texture_path = tmp_path / "Textures" / "Imported.png"
+    texture_path.parent.mkdir()
+    texture_path.write_bytes(b"png")
+
+    rm = RecordingResourceManager()
+    preloader = PluginPreLoader(TextureImportPlugin(), rm)
+    watcher = ProjectFileWatcher()
+    watcher.register_processor(preloader)
+
+    watcher._project_path = str(tmp_path)
+    watcher._scan_directory(str(tmp_path))
+
+    assert len(rm.registered) == 1
+    generated_uuid = rm.registered[0].uuid
+    assert generated_uuid
+    assert read_spec_file(str(texture_path)) == {"uuid": generated_uuid}
+    assert preloader.get_tracked_files() == {str(texture_path): {generated_uuid}}
 
 
 def test_project_file_watcher_initial_scan_ignores_project_setting_paths(tmp_path: Path, monkeypatch) -> None:
@@ -748,9 +763,7 @@ def test_project_file_watcher_meta_change_reloads_resource_file(tmp_path: Path) 
 def test_project_file_watcher_deleted_file_clears_plugin_tracking(tmp_path: Path) -> None:
     texture_path = tmp_path / "Albedo.png"
     texture_path.write_bytes(b"png")
-    texture_path.with_name(texture_path.name + ".meta").write_text(
-        '{"uuid": "texture-deleted-uuid"}', encoding="utf-8"
-    )
+    texture_path.with_name(texture_path.name + ".meta").write_text('{"uuid": "texture-deleted-uuid"}', encoding="utf-8")
 
     rm = RecordingResourceManager()
     preloader = PluginPreLoader(TextureImportPlugin(), rm)
