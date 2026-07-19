@@ -17,7 +17,7 @@ from termin.scene import Entity, TcScene
 from termin.render_components import PerspectiveCameraComponent, MeshRenderer
 from termin.geombase import GeneralPose3
 from termin.mesh import MeshComponent
-from tgfx import TcShader
+from tgfx import ShaderLanguage, TcShader
 from termin.materials import TcMaterial
 from termin.render_framework import RenderEngine, RenderPipeline
 from termin.render_passes import ColorPass, PresentToScreenPass
@@ -90,7 +90,13 @@ def make_preview_pipeline():
 
 
 def build_scene():
-    shader = TcShader.from_sources(VERT, FRAG, "", "SDLCubeShader")
+    shader = TcShader.from_sources(
+        VERT,
+        FRAG,
+        "",
+        "SDLCubeShader",
+        language=ShaderLanguage.GLSL,
+    )
     material = TcMaterial(
         name="SDLCubeMaterial",
         shader=shader,

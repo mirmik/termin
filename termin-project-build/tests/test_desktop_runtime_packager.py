@@ -9,6 +9,7 @@ from termin.project_build.diagnostics import build_error
 from termin.project_build.desktop_runtime_packager import package_desktop_runtime
 from termin.project_build.pipeline import ProjectBuildPipelineError
 import termin.project_build.desktop_build as desktop_build
+import termin.project_build.runtime_package.shaders as runtime_shaders
 
 full_runtime_package_exporter = pytest.mark.full(
     reason="runtime package export/build scenarios spawn shader compiler subprocesses"
@@ -1093,6 +1094,17 @@ def test_export_runtime_package_rejects_unknown_default_shader_language(tmp_path
         )
 
 
+def test_builtin_shader_catalog_requires_explicit_language(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        runtime_shaders,
+        "builtin_shader_catalog_entry",
+        lambda _uuid: {"name": "MissingLanguage", "stages": {}},
+    )
+
+    with pytest.raises(ValueError, match="has no explicit language"):
+        runtime_shaders.builtin_engine_shader_artifact("missing-language")
+
+
 @full_runtime_package_exporter
 def test_export_runtime_package_writes_render_target_pipeline_asset(tmp_path: Path) -> None:
     project = tmp_path / "PipelineGame"
@@ -1289,6 +1301,8 @@ def test_export_runtime_package_collects_non_color_skinned_pipeline_shader_usage
         "opaque",
         0,
         shader_uuid=shader_uuid,
+        language=tgfx.ShaderLanguage.SLANG.value,
+        artifact_policy=tgfx.ShaderArtifactPolicy.REQUIRED.value,
     )
     assert phase is not None
     shader = tgfx.TcShader.from_uuid(shader_uuid)
@@ -1507,6 +1521,7 @@ def test_export_runtime_package_uses_live_mesh_material_shader(tmp_path: Path) -
         "opaque",
         7,
         shader_uuid=shader_uuid,
+        language=tgfx.ShaderLanguage.GLSL.value,
     )
     assert phase is not None
     shader = tgfx.TcShader.from_uuid(shader_uuid)
@@ -1629,6 +1644,7 @@ def test_export_runtime_package_includes_project_texture_referenced_by_material(
         "opaque",
         0,
         shader_uuid=shader_uuid,
+        language=tgfx.ShaderLanguage.GLSL.value,
     )
     assert phase is not None
     texture = tgfx.TcTexture.from_data(
@@ -1722,6 +1738,8 @@ def test_export_runtime_package_records_slang_shader_artifacts(tmp_path: Path) -
         "opaque",
         3,
         shader_uuid=shader_uuid,
+        language=tgfx.ShaderLanguage.SLANG.value,
+        artifact_policy=tgfx.ShaderArtifactPolicy.REQUIRED.value,
     )
     assert phase is not None
 
@@ -1812,6 +1830,8 @@ def test_export_runtime_package_can_record_d3d11_shader_artifacts(tmp_path: Path
         "opaque",
         3,
         shader_uuid=shader_uuid,
+        language=tgfx.ShaderLanguage.SLANG.value,
+        artifact_policy=tgfx.ShaderArtifactPolicy.REQUIRED.value,
     )
     assert phase is not None
 
