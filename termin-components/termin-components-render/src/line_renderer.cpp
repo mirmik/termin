@@ -467,6 +467,26 @@ TcShader get_line_material_fragment_shader(TcShader original_shader) {
         return TcShader();
     }
 
+    tc_shader* original_raw = original_shader.get();
+    if (!original_raw) {
+        tc::Log::error(
+            "[LineRenderer] cannot create line material shader variant: source shader became stale"
+        );
+        return TcShader();
+    }
+    const tc_shader_language language = tc_shader_get_language(original_raw);
+    const tc_shader_artifact_policy artifact_policy =
+        tc_shader_get_artifact_policy(original_raw);
+    const char* fragment_entry = original_raw->fragment_entry;
+    if (!fragment_entry || fragment_entry[0] == '\0') {
+        tc::Log::error(
+            "[LineRenderer] cannot create line material shader variant for '%s': "
+            "fragment entry point is empty",
+            original_shader.name()
+        );
+        return TcShader();
+    }
+
     std::string variant_name = std::string(original_shader.name()) + "_LineFragment";
     char variant_uuid[40];
     tc_shader_make_variant_uuid(
@@ -476,14 +496,22 @@ TcShader get_line_material_fragment_shader(TcShader original_shader) {
         TC_SHADER_VARIANT_LINE_MATERIAL_FRAGMENT
     );
 
-    tc_shader_handle handle = tc_shader_from_sources(
-        nullptr,
-        fragment_source,
-        nullptr,
-        variant_name.c_str(),
-        original_shader.source_path(),
-        variant_uuid
-    );
+    const tc_shader_create_desc shader_desc = {
+        {
+            nullptr,
+            fragment_source,
+            nullptr,
+            variant_name.c_str(),
+            original_shader.source_path(),
+            nullptr,
+            fragment_entry,
+            nullptr
+        },
+        variant_uuid,
+        language,
+        artifact_policy
+    };
+    tc_shader_handle handle = tc_shader_from_sources_desc(&shader_desc);
     if (tc_shader_handle_is_invalid(handle)) {
         tc::Log::error(
             "[LineRenderer] failed to create line material shader variant for '%s'",
@@ -495,7 +523,6 @@ TcShader get_line_material_fragment_shader(TcShader original_shader) {
     TcShader variant(handle);
     variant.set_features(original_shader.features());
 
-    tc_shader* original_raw = original_shader.get();
     tc_shader* variant_raw = variant.get();
     if (original_raw && variant_raw) {
         tc_shader_set_material_ubo_layout(
@@ -770,9 +797,8 @@ RenderItemTaskRejection line_render_item_task_shader_planner(
             out_detail = "failed to create line tube material shader variants";
             return RenderItemTaskRejection::ShaderPlanningRejected;
         }
-        out_plan.final_shader = body.handle;
-        if (!out_plan.add_shader_usage(body.handle) ||
-            !out_plan.add_shader_usage(cap.handle)) {
+        if (!out_plan.set_final_shader(std::move(body)) ||
+            !out_plan.add_shader_usage(std::move(cap))) {
             out_detail = "line tube shader usage packet is full";
             return RenderItemTaskRejection::ShaderPlanningRejected;
         }
@@ -784,7 +810,10 @@ RenderItemTaskRejection line_render_item_task_shader_planner(
         out_detail = "failed to create line material fragment shader variant";
         return RenderItemTaskRejection::ShaderPlanningRejected;
     }
-    out_plan.final_shader = variant.handle;
+    if (!out_plan.set_final_shader(std::move(variant))) {
+        out_detail = "line material shader usage packet is full";
+        return RenderItemTaskRejection::ShaderPlanningRejected;
+    }
     out_detail = nullptr;
     return RenderItemTaskRejection::None;
 }
