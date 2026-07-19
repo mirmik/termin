@@ -17,3 +17,6 @@
 - [Engine Loop Client and Editor Session](2026-07-19-engine-loop-client-and-editor-session.md)
   — внешнее атомарное подключение редактора к `EngineCore` и явное владение
   editor session.
+- [Termin App Product Boundary](2026-07-19-termin-app-product-boundary.md)
+  — `termin-app` как C++ application product с внутренним Python payload,
+  проверенный SDK как canonical runtime и сохранение модульных library wheels.

@@ -326,10 +326,18 @@ to the owning package entrypoints.
 
 Source of truth: [termin-app docs](https://github.com/mirmik/termin-monorepo/blob/master/termin-app/docs/index.md), [editor architecture](https://github.com/mirmik/termin-monorepo/blob/master/termin-app/docs/editor-architecture.md), [flat viewport target model](https://github.com/mirmik/termin-monorepo/blob/master/termin-app/docs/rendering-flat-viewport-target-model.md).
 
-Основное приложение/редактор. tcgui является единственным поддерживаемым UI редактора; Qt/PyQt-версия удалена.
+Основное приложение/редактор. Архитектурно это C++ executable product и
+application composition root, а не independently installable Python library.
+Editor-specific Python modules и `termin.editor._editor_native` являются
+внутренним payload приложения, устанавливаемым вместе с editor runtime в SDK.
+Текущий `termin-app` wheel и отдельный host-derived bundle pipeline являются
+незавершённой миграцией; принятое направление и границы удаления зафиксированы
+в [протоколе архитектурного совета](architecture-council/2026-07-19-termin-app-product-boundary.md).
+
+tcgui является единственным поддерживаемым UI редактора; Qt/PyQt-версия удалена.
 
 Application-level code не должен протекать вниз в graphics/render/scene. Старые app-level compatibility reexports для доменных API разбираются в пользу canonical imports из owning packages; новые re-export слои в `termin-app` добавлять не следует.
 
 ### diffusion-editor
 
-Внешний consumer в отдельном репозитории. Он подключается к Termin через SDK и wheelhouse (`sdk/wheels`) и остаётся полезным smoke-test публичности API: если diffusion-editor вынужден лезть во внутренности Termin, вероятно граница модуля описана или реализована плохо.
+Внешний consumer в отдельном репозитории. Он подключается к Termin через SDK и wheelhouse (`sdk/wheels`) без установки editor application и остаётся обязательным smoke-test публичности API. `tcbase`, `tgfx`, `termin-display`, `termin-gui-native` и другие осмысленные library subsets сохраняют самостоятельные distributions и правдивую dependency closure. Если diffusion-editor вынужден устанавливать `termin-app` или лезть во внутренности Termin, граница модуля описана или реализована плохо.
