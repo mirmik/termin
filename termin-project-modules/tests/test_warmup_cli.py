@@ -143,11 +143,19 @@ def test_warmup_cli_runs_isolated_rebuild_without_loading_module(
 ) -> None:
     _write_project(tmp_path)
     runtime = _FakeRuntime([_record("native_core", "Discovered")])
+    bootstrapped = False
+
+    def bootstrap_runtime() -> None:
+        nonlocal bootstrapped
+        bootstrapped = True
+
     monkeypatch.setattr(warmup, "_project_modules_runtime", lambda: runtime)
+    monkeypatch.setattr(warmup, "_bootstrap_runtime", bootstrap_runtime)
 
     assert warmup.main(
         ["warmup", str(tmp_path), "--rebuild-module", "native_core", "--quiet"]
     ) == 0
+    assert bootstrapped
     assert runtime.discovered_project == tmp_path
     assert runtime.artifact_operations == [("rebuild", "native_core")]
     assert runtime.loaded_modules == []
@@ -173,6 +181,7 @@ def test_main_accepts_default_warmup_command(monkeypatch, tmp_path: Path) -> Non
     _write_project(tmp_path)
     runtime = _FakeRuntime([_record("gameplay")])
     monkeypatch.setattr(warmup, "_project_modules_runtime", lambda: runtime)
+    monkeypatch.setattr(warmup, "_bootstrap_runtime", lambda: None)
 
     assert warmup.main(["--project", str(tmp_path), "--quiet"]) == 0
     assert runtime.loaded_project == tmp_path
@@ -182,6 +191,7 @@ def test_main_returns_error_for_unknown_selected_module(monkeypatch, tmp_path: P
     _write_project(tmp_path)
     runtime = _FakeRuntime([_record("gameplay")])
     monkeypatch.setattr(warmup, "_project_modules_runtime", lambda: runtime)
+    monkeypatch.setattr(warmup, "_bootstrap_runtime", lambda: None)
 
     assert warmup.main(["warmup", str(tmp_path), "--module", "missing", "--quiet"]) == 1
     assert runtime.loaded_modules == []
