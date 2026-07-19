@@ -5,7 +5,6 @@ Minimal game runtime for standalone player.
 from __future__ import annotations
 
 import time
-import json
 import os
 import sys
 from pathlib import Path
@@ -55,12 +54,11 @@ def request_quit(exit_code: int = 0) -> bool:
 def _resolve_player_window_settings(
     project_path: Path,
     *,
-    configured: ProjectPlayerWindowSettings | None,
     width: int | None,
     height: int | None,
     fullscreen: bool | None,
 ):
-    base = configured if configured is not None else _load_project_player_window_settings(project_path)
+    base = _load_project_player_window_settings(project_path)
     return ProjectPlayerWindowSettings(
         width=_resolve_positive_window_int(width, base.width, "width"),
         height=_resolve_positive_window_int(height, base.height, "height"),
@@ -70,95 +68,6 @@ def _resolve_player_window_settings(
 
 def _load_project_player_window_settings(project_path: Path):
     return load_project_runtime_settings(project_path).player_window
-
-
-def _player_window_from_manifest(data: dict, manifest_path: Path):
-    from tcbase import log
-
-    runtime = data.get("runtime")
-    if runtime is None:
-        return None
-    if not isinstance(runtime, dict):
-        log.error(f"[PlayerRuntime] Manifest runtime field must be an object: {manifest_path}")
-        return None
-
-    window = runtime.get("window")
-    if window is None:
-        return None
-    return ProjectPlayerWindowSettings.from_dict(window)
-
-
-def _package_shader_targets(manifest_path: Path) -> tuple[str, ...]:
-    from tcbase import log
-
-    try:
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            manifest = json.load(f)
-    except Exception as exc:
-        log.error(f"[PlayerRuntime] Failed to read runtime package manifest {manifest_path}: {exc}")
-        return ()
-    if not isinstance(manifest, dict):
-        log.error(f"[PlayerRuntime] Runtime package manifest root must be an object: {manifest_path}")
-        return ()
-
-    requirements = manifest.get("target_requirements")
-    if not isinstance(requirements, dict):
-        return ()
-    shader_targets = requirements.get("shader_targets")
-    if not isinstance(shader_targets, list):
-        return ()
-
-    result: list[str] = []
-    seen: set[str] = set()
-    for index, target in enumerate(shader_targets):
-        if not isinstance(target, str) or target == "":
-            log.error(
-                "[PlayerRuntime] Runtime package manifest "
-                f"target_requirements.shader_targets[{index}] must be a non-empty string"
-            )
-            continue
-        if target in seen:
-            continue
-        seen.add(target)
-        result.append(target)
-    return tuple(result)
-
-
-def _backend_is_compiled(name: str) -> bool:
-    try:
-        import tgfx
-
-        return bool(tgfx.backend_is_compiled(name))
-    except Exception:
-        if name == "d3d11":
-            return sys.platform == "win32"
-        if name in ("vulkan", "opengl"):
-            return sys.platform != "win32" or name == "vulkan"
-        return False
-
-
-def _compiled_backend_name() -> str:
-    try:
-        import tgfx
-
-        return str(tgfx.compiled_backend_name())
-    except Exception:
-        return "d3d11" if sys.platform == "win32" else "vulkan"
-
-
-def _canonical_backend_name(name: str) -> str:
-    lowered = name.lower()
-    if lowered in ("opengl", "gl"):
-        return "opengl"
-    if lowered in ("vulkan", "vk"):
-        return "vulkan"
-    if lowered in ("d3d11", "dx11"):
-        return "d3d11"
-    if lowered == "metal":
-        return "metal"
-    if lowered == "null":
-        return "null"
-    return lowered
 
 
 def _resolve_positive_window_int(value: object, default: int, field_name: str) -> int:
@@ -198,19 +107,14 @@ class PlayerRuntime:
         height: int | None = None,
         title: str = "Termin Player",
         fullscreen: bool | None = None,
-        asset_manifest_path: str | Path | None = None,
-        app_manifest_path: str | Path | None = None,
         mcp_enabled: bool = False,
         mcp_options: dict | None = None,
-        player_window: "ProjectPlayerWindowSettings | None" = None,
-        render_phase_names: tuple[str, ...] | None = None,
         engine=None,
     ):
         self.project_path = Path(project_path)
         self.scene_name = scene_name
         window_settings = _resolve_player_window_settings(
             self.project_path,
-            configured=player_window,
             width=width,
             height=height,
             fullscreen=fullscreen,
@@ -219,13 +123,7 @@ class PlayerRuntime:
         self.height = window_settings.height
         self.title = title
         self.fullscreen = window_settings.fullscreen
-        self.render_phase_names = (
-            render_phase_names
-            if render_phase_names is not None
-            else load_project_runtime_settings(self.project_path).render_phase_names
-        )
-        self.asset_manifest_path = Path(asset_manifest_path) if asset_manifest_path is not None else None
-        self.app_manifest_path = Path(app_manifest_path) if app_manifest_path is not None else None
+        self.render_phase_names = load_project_runtime_settings(self.project_path).render_phase_names
         self.mcp_enabled = bool(mcp_enabled)
         self.mcp_options = mcp_options if mcp_options is not None else {}
         self._scene_file_data = None
@@ -301,10 +199,7 @@ class PlayerRuntime:
             self._engine.rendering_manager,
         )
 
-        if self.app_manifest_path is not None:
-            log.info(f"[PlayerRuntime] Initializing bundle: {self.app_manifest_path}")
-        else:
-            log.info(f"[PlayerRuntime] Initializing project: {self.project_path}")
+        log.info(f"[PlayerRuntime] Initializing project: {self.project_path}")
 
         # Register components
         self._register_components()
@@ -312,10 +207,7 @@ class PlayerRuntime:
         # Load C++ modules
         self._load_modules()
 
-        if self.asset_manifest_path is not None:
-            self._load_manifest_assets()
-        else:
-            self._scan_project_assets()
+        self._scan_project_assets()
 
         # Register GLSL include preprocessing for explicitly loaded .glsl assets.
         from termin.shader_runtime import configure_glsl_preprocessor
@@ -525,51 +417,22 @@ class PlayerRuntime:
             )
 
     def _configure_backend_default(self) -> None:
-        """Use package backend priority or project-wide default unless overridden."""
+        """Use the source-player platform default unless explicitly overridden."""
         from tcbase import log
-
-        package_targets: tuple[str, ...] = ()
-        if self.asset_manifest_path is not None:
-            manifest_path = self.asset_manifest_path
-            if not manifest_path.is_absolute():
-                manifest_path = self.project_path / manifest_path
-            package_targets = _package_shader_targets(manifest_path)
 
         if "TERMIN_BACKEND" in os.environ:
             backend = os.environ["TERMIN_BACKEND"]
-            canonical_backend = _canonical_backend_name(backend)
-            if package_targets and canonical_backend not in package_targets:
-                log.error(
-                    "[PlayerRuntime] TERMIN_BACKEND="
-                    f"{backend} is not listed in package shader_targets {list(package_targets)}"
-                )
             log.info(f"[PlayerRuntime] Using TERMIN_BACKEND={backend}")
             return
 
-        default_backend = ""
-        for target in package_targets:
-            if _backend_is_compiled(target):
-                default_backend = target
-                break
-        if default_backend == "":
-            if package_targets:
-                log.error(
-                    "[PlayerRuntime] Runtime package has no compiled backend from "
-                    f"shader_targets {list(package_targets)}; using compiled default"
-                )
-                default_backend = _compiled_backend_name()
-            else:
-                default_backend = "d3d11" if sys.platform == "win32" else "vulkan"
+        default_backend = "d3d11" if sys.platform == "win32" else "vulkan"
         os.environ["TERMIN_BACKEND"] = default_backend
         log.info(
             f"[PlayerRuntime] TERMIN_BACKEND not set; using {default_backend} for standalone player"
         )
 
     def _configure_shader_runtime(self) -> bool:
-        """Configure shader artifacts for source-project or packaged execution."""
-        if self.asset_manifest_path is not None:
-            return True
-
+        """Configure development shader artifacts for source-project execution."""
         from termin.shader_runtime import configure_project_shader_runtime
 
         return configure_project_shader_runtime(
@@ -626,29 +489,6 @@ class PlayerRuntime:
     def _scan_project_assets(self):
         """Scan project directory for assets and register them."""
         scan_project_assets(self.project_path, log_prefix="[PlayerRuntime]")
-
-    def _load_manifest_assets(self) -> None:
-        """Load build resources listed by manifest.json."""
-        from tcbase import log
-        if self.asset_manifest_path is None:
-            log.error("[PlayerRuntime] No runtime package manifest path set")
-            return
-
-        manifest_path = self.asset_manifest_path
-        if not manifest_path.is_absolute():
-            manifest_path = self.project_path / manifest_path
-
-        if not manifest_path.exists():
-            log.error(f"[PlayerRuntime] Runtime package manifest not found: {manifest_path}")
-            return
-
-        from termin.player.runtime_package_loader import load_runtime_package_assets
-
-        load_runtime_package_assets(
-            manifest_path.parent,
-            manifest_path,
-            self._engine.rendering_manager.render_engine,
-        )
 
     def _setup_camera(self):
         """Find existing camera or create default one."""
@@ -1001,72 +841,5 @@ def run_project(
         fullscreen=fullscreen,
         mcp_enabled=mcp_enabled,
         mcp_options=mcp_options,
-    )
-    runtime.run()
-
-
-def run_bundle(
-    app_manifest_path: str | Path,
-    width: int | None = None,
-    height: int | None = None,
-    title: str = "Termin Player",
-    fullscreen: bool | None = None,
-    mcp_enabled: bool = False,
-    mcp_options: dict | None = None,
-):
-    """Run a packaged desktop bundle from app.json."""
-    app_path = Path(app_manifest_path).resolve()
-    with open(app_path, "r", encoding="utf-8") as f:
-        app_data = json.load(f)
-
-    package = app_data.get("package")
-    entry = app_data.get("entry")
-    if not isinstance(package, dict):
-        raise ValueError(f"app.json has no package object: {app_path}")
-    if not isinstance(entry, dict):
-        raise ValueError(f"app.json has no entry object: {app_path}")
-
-    runtime_manifest = app_data.get("runtime")
-    manifest_mcp_options: dict = {}
-    if isinstance(runtime_manifest, dict):
-        mcp_value = runtime_manifest.get("mcp")
-        if isinstance(mcp_value, dict):
-            manifest_mcp_options.update(mcp_value)
-    if mcp_options is not None:
-        manifest_mcp_options.update(mcp_options)
-
-    package_root_value = package.get("root")
-    package_manifest_value = package.get("manifest")
-    entry_scene_value = entry.get("scene")
-    if not isinstance(package_root_value, str) or package_root_value == "":
-        raise ValueError(f"app.json has no package.root: {app_path}")
-    if not isinstance(package_manifest_value, str) or package_manifest_value == "":
-        raise ValueError(f"app.json has no package.manifest: {app_path}")
-    if not isinstance(entry_scene_value, str) or entry_scene_value == "":
-        raise ValueError(f"app.json has no entry.scene: {app_path}")
-
-    bundle_root = app_path.parent
-    package_root = (bundle_root / package_root_value).resolve()
-    manifest_path = (bundle_root / package_manifest_value).resolve()
-    scene_path = (bundle_root / entry_scene_value).resolve()
-    scene_name = scene_path.relative_to(package_root).as_posix()
-
-    runtime = PlayerRuntime(
-        project_path=package_root,
-        scene_name=scene_name,
-        width=width,
-        height=height,
-        title=title,
-        fullscreen=fullscreen,
-        asset_manifest_path=manifest_path,
-        app_manifest_path=app_path,
-        player_window=_player_window_from_manifest(app_data, app_path),
-        render_phase_names=tuple(
-            runtime_manifest.get("render_phase_names", [])
-            if isinstance(runtime_manifest, dict)
-            else []
-        ) or None,
-        mcp_enabled=mcp_enabled,
-        mcp_options=manifest_mcp_options,
     )
     runtime.run()

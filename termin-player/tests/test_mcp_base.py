@@ -88,8 +88,6 @@ def test_player_python_executor_exposes_runtime_context(tmp_path: Path) -> None:
         camera="camera-object",
         project_path=tmp_path,
         scene_name="package/scene.json",
-        asset_manifest_path=tmp_path / "manifest.json",
-        app_manifest_path=tmp_path / "app.json",
         delta_time=0.25,
         request_quit=request_quit,
     )

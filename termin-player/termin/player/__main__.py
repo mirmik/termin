@@ -4,7 +4,6 @@ Command-line entry point for Termin Player.
 Usage:
     python -m termin.player path/to/project --scene main.scene
     python -m termin.player path/to/project --scene main.scene --headless
-    python -m termin.player --bundle dist/MyGame/app.json
 """
 
 import argparse
@@ -21,13 +20,6 @@ def main():
         type=str,
         nargs="?",
         help="Path to project directory",
-    )
-    parser.add_argument(
-        "--bundle",
-        "--app",
-        type=str,
-        default=None,
-        help="Path to app.json produced by termin build",
     )
     parser.add_argument(
         "--scene", "-s",
@@ -130,34 +122,13 @@ def main():
     args = parser.parse_args()
     mcp_options = _mcp_options_from_args(args)
 
-    if args.headless and args.bundle is not None:
-        parser.error("--headless runs source projects only; --bundle is a render runtime")
     if args.frames is not None and args.frames < 0:
         parser.error("--frames must be non-negative")
     if args.dt < 0.0:
         parser.error("--dt must be non-negative")
 
-    if args.bundle is not None:
-        app_json_path = Path(args.bundle)
-        if not app_json_path.exists():
-            print(f"Error: Bundle app manifest does not exist: {app_json_path}")
-            sys.exit(1)
-
-        from termin.player import run_bundle
-
-        run_bundle(
-            app_manifest_path=app_json_path,
-            width=args.width,
-            height=args.height,
-            title=args.title,
-            fullscreen=args.fullscreen,
-            mcp_enabled=args.mcp,
-            mcp_options=mcp_options,
-        )
-        return
-
     if args.project is None:
-        parser.error("project is required unless --bundle is used")
+        parser.error("project is required")
 
     project_path = Path(args.project)
     if not project_path.exists():

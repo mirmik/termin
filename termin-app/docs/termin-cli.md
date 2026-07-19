@@ -197,8 +197,7 @@ MCP transport, an `execute_python_script` tool against the running player
 thread, and a `capture_player_screenshot` tool that reads the player render
 surface into a PNG. The script namespace includes `runtime`/`player`, `scene`,
 `window`, `surface`, `display`, `viewport`, `camera`, `project_path`,
-`scene_name`, `asset_manifest_path`, `app_manifest_path`, `delta_time`, and
-`request_quit`.
+`scene_name`, `delta_time`, and `request_quit`.
 
 Desktop builds currently package the SDK CPython runtime, Termin Python
 packages, Termin native libraries, project Python modules, recursive Python
@@ -246,13 +245,15 @@ Packaged desktop bundles launch through the bundle-local C++ host:
 dist/<app>/<app>
 ```
 
-The host embeds the bundle-local CPython runtime, adds bundled `site-packages`
-and `package/python` to `sys.path`, and calls
-`termin.player --bundle dist/<app>/app.json`.
+The host loads `app.json` and the runtime package through native
+`termin::runtime::RuntimePackageLoader`. It embeds the bundle-local CPython
+runtime only for project scripts/modules, adding bundled `site-packages` and
+`package/python` to `sys.path`; Python `PlayerRuntime` does not manage packaged
+execution.
 `--backend <name>` is consumed by the C++ host and translated to
 `TERMIN_BACKEND` before CPython is initialized; display options such as
-`--width`, `--height`, `--title`, and `--windowed` are forwarded to the Python
-player. If `TERMIN_BACKEND` is not set explicitly, standalone player runs use
+`--width`, `--height`, and `--windowed` are consumed by the native host. If
+`TERMIN_BACKEND` is not set explicitly, packaged player runs use
 the first compiled backend listed in `package/manifest.json`
 `target_requirements.shader_targets`. Source-scene `play` runs without a
 package manifest keep the platform compiled default. By default the player

@@ -3,6 +3,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from termin.player import runtime as player_runtime
 from termin.player.runtime import PlayerRuntime
 from termin import shader_runtime
@@ -69,24 +71,6 @@ def test_player_source_runtime_requires_project_shader_runtime(monkeypatch, tmp_
     assert calls == [tmp_path]
 
 
-def test_player_packaged_runtime_uses_prebuilt_shader_artifacts(monkeypatch, tmp_path: Path):
-    calls: list[Path] = []
-    monkeypatch.setattr(
-        "termin.shader_runtime.configure_project_shader_runtime",
-        lambda project_root, *, label, render_engine: calls.append(project_root) or True,
-    )
-
-    runtime = PlayerRuntime(
-        project_path=tmp_path,
-        scene_name="scene.json",
-        asset_manifest_path=tmp_path / "manifest.json",
-        app_manifest_path=tmp_path / "app.json",
-    )
-
-    assert runtime._configure_shader_runtime()
-    assert calls == []
-
-
 def test_player_backend_default_uses_d3d11_on_windows(monkeypatch, tmp_path: Path):
     logs: list[str] = []
     fake_tcbase = types.ModuleType("tcbase")
@@ -115,94 +99,6 @@ def test_player_backend_default_uses_vulkan_off_windows(monkeypatch, tmp_path: P
 
     assert os.environ["TERMIN_BACKEND"] == "vulkan"
     assert logs == ["[PlayerRuntime] TERMIN_BACKEND not set; using vulkan for standalone player"]
-
-
-def test_player_backend_default_uses_package_shader_target_priority(monkeypatch, tmp_path: Path):
-    infos: list[str] = []
-    errors: list[str] = []
-    fake_tcbase = types.ModuleType("tcbase")
-    fake_tcbase.log = types.SimpleNamespace(info=infos.append, error=errors.append)
-    fake_tgfx = types.ModuleType("tgfx")
-    fake_tgfx.backend_is_compiled = lambda name: name == "vulkan"
-    fake_tgfx.compiled_backend_name = lambda: "vulkan"
-    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
-    monkeypatch.setitem(sys.modules, "tgfx", fake_tgfx)
-    monkeypatch.delenv("TERMIN_BACKEND", raising=False)
-
-    manifest_path = tmp_path / "manifest.json"
-    manifest_path.write_text(
-        '{"target_requirements": {"shader_targets": ["opengl", "vulkan"]}}',
-        encoding="utf-8",
-    )
-    runtime = PlayerRuntime(
-        project_path=tmp_path,
-        scene_name="scene.json",
-        asset_manifest_path=manifest_path,
-    )
-    runtime._configure_backend_default()
-
-    assert os.environ["TERMIN_BACKEND"] == "vulkan"
-    assert errors == []
-    assert infos == ["[PlayerRuntime] TERMIN_BACKEND not set; using vulkan for standalone player"]
-
-
-def test_player_backend_default_keeps_override_and_reports_manifest_mismatch(
-    monkeypatch,
-    tmp_path: Path,
-):
-    infos: list[str] = []
-    errors: list[str] = []
-    fake_tcbase = types.ModuleType("tcbase")
-    fake_tcbase.log = types.SimpleNamespace(info=infos.append, error=errors.append)
-    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
-    monkeypatch.setenv("TERMIN_BACKEND", "d3d11")
-
-    manifest_path = tmp_path / "manifest.json"
-    manifest_path.write_text(
-        '{"target_requirements": {"shader_targets": ["vulkan", "opengl"]}}',
-        encoding="utf-8",
-    )
-    runtime = PlayerRuntime(
-        project_path=tmp_path,
-        scene_name="scene.json",
-        asset_manifest_path=manifest_path,
-    )
-    runtime._configure_backend_default()
-
-    assert os.environ["TERMIN_BACKEND"] == "d3d11"
-    assert errors == [
-        "[PlayerRuntime] TERMIN_BACKEND=d3d11 is not listed in package shader_targets "
-        "['vulkan', 'opengl']"
-    ]
-    assert infos == ["[PlayerRuntime] Using TERMIN_BACKEND=d3d11"]
-
-
-def test_player_backend_default_accepts_override_alias_in_manifest_check(
-    monkeypatch,
-    tmp_path: Path,
-):
-    infos: list[str] = []
-    errors: list[str] = []
-    fake_tcbase = types.ModuleType("tcbase")
-    fake_tcbase.log = types.SimpleNamespace(info=infos.append, error=errors.append)
-    monkeypatch.setitem(sys.modules, "tcbase", fake_tcbase)
-    monkeypatch.setenv("TERMIN_BACKEND", "vk")
-
-    manifest_path = tmp_path / "manifest.json"
-    manifest_path.write_text(
-        '{"target_requirements": {"shader_targets": ["vulkan", "opengl"]}}',
-        encoding="utf-8",
-    )
-    runtime = PlayerRuntime(
-        project_path=tmp_path,
-        scene_name="scene.json",
-        asset_manifest_path=manifest_path,
-    )
-    runtime._configure_backend_default()
-
-    assert os.environ["TERMIN_BACKEND"] == "vk"
-    assert errors == []
-    assert infos == ["[PlayerRuntime] Using TERMIN_BACKEND=vk"]
 
 
 def test_player_backend_default_keeps_explicit_backend(monkeypatch, tmp_path: Path):
@@ -256,23 +152,15 @@ def test_player_runtime_explicit_window_args_override_project_settings(tmp_path:
     assert runtime.fullscreen is True
 
 
-def test_run_bundle_uses_manifest_window_settings(monkeypatch, tmp_path: Path):
-    app_path = tmp_path / "app.json"
-    app_path.write_text(
-        '{"package": {"root": "package", "manifest": "package/manifest.json"}, '
-        '"entry": {"scene": "package/scene.json"}, '
-        '"runtime": {"window": {"width": 960, "height": 540, "fullscreen": false}}}',
-        encoding="utf-8",
-    )
-    package_dir = tmp_path / "package"
-    package_dir.mkdir()
-    captured: list[tuple[int, int, bool]] = []
+def test_python_player_cli_exposes_source_modes_only(monkeypatch, capsys) -> None:
+    from termin.player import __main__ as player_main
 
-    def fake_run(self):
-        captured.append((self.width, self.height, self.fullscreen))
+    monkeypatch.setattr(sys, "argv", ["termin.player", "--help"])
+    with pytest.raises(SystemExit) as exit_info:
+        player_main.main()
 
-    monkeypatch.setattr(PlayerRuntime, "run", fake_run)
-
-    player_runtime.run_bundle(app_path)
-
-    assert captured == [(960, 540, False)]
+    assert exit_info.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "--bundle" not in help_text
+    assert "--app" not in help_text
+    assert "--headless" in help_text

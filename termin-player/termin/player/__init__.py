@@ -10,7 +10,7 @@ Or programmatically:
 """
 
 from .headless import HeadlessRuntime, HeadlessRuntimeError, HeadlessRunStats, run_headless_project
-from .runtime import PlayerRuntime, active_runtime, request_quit, run_bundle, run_project
+from .runtime import PlayerRuntime, active_runtime, request_quit, run_project
 
 __all__ = [
     "HeadlessRuntime",
@@ -19,7 +19,6 @@ __all__ = [
     "PlayerRuntime",
     "active_runtime",
     "request_quit",
-    "run_bundle",
     "run_headless_project",
     "run_project",
 ]
