@@ -370,8 +370,18 @@ class NativeUiHost:
                 continue
             self.renderer.sync_color_picker_surfaces(self.context, picker)
 
-    def register_image_preview(self, image: object, pixels: object) -> Callable[[], None]:
-        """Upload CPU pixels once and keep the resulting texture owned by this host."""
+    def register_image_preview(
+        self,
+        image: object,
+        pixels: object,
+        *,
+        max_dimension: int | None = 128,
+    ) -> Callable[[], None]:
+        """Upload CPU pixels once and keep the resulting texture owned by this host.
+
+        Preview surfaces are bounded by default because most callers display small
+        inspector thumbnails. Full-resolution UI artwork can opt out explicitly.
+        """
 
         import numpy as np
 
@@ -386,7 +396,13 @@ class NativeUiHost:
         if array.shape[2] == 3:
             alpha = np.full((*array.shape[:2], 1), 255, dtype=np.uint8)
             array = np.concatenate((array, alpha), axis=2)
-        step = max(1, math.ceil(max(array.shape[0], array.shape[1]) / 128))
+        if max_dimension is not None and max_dimension <= 0:
+            raise ValueError("native image preview max_dimension must be positive or None")
+        step = (
+            1
+            if max_dimension is None
+            else max(1, math.ceil(max(array.shape[0], array.shape[1]) / max_dimension))
+        )
         if step > 1:
             array = np.ascontiguousarray(array[::step, ::step])
         preview = _ImagePreview(image=image, pixels=array)

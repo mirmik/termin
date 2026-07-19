@@ -7,7 +7,17 @@ import os
 from pathlib import Path
 from typing import Callable
 
-from termin.gui_native import CollectionItem, CollectionModel, Color, Document, EdgeInsets
+from termin.gui_native import (
+    CollectionItem,
+    CollectionModel,
+    Color,
+    Document,
+    EdgeInsets,
+    ImageFit,
+    StyleField,
+    StyleOverride,
+    StyleRole,
+)
 from termin.launcher.controller import LauncherController, LauncherScreen
 
 
@@ -31,7 +41,51 @@ class NativeLauncherProjection:
         self.widgets: dict[str, object] = {}
         self.models: dict[str, object] = {}
         self._recent_paths: tuple[str, ...] = ()
+        self._configure_theme()
         self._build_current_screen()
+
+    def _configure_theme(self) -> None:
+        theme = self.document.theme
+        button = theme.role(StyleRole.Button)
+        button.base.background = Color(0.25, 0.25, 0.30, 1.0)
+        button.base.foreground = Color(1.0, 1.0, 1.0, 1.0)
+        button.base.corner_radius = 6.0
+        button.hovered.value.background = Color(0.35, 0.35, 0.40, 1.0)
+        button.pressed.value.background = Color(0.18, 0.18, 0.22, 1.0)
+        button.disabled.value.background = Color(0.18, 0.18, 0.20, 0.60)
+        button.disabled.value.foreground = Color(0.50, 0.50, 0.50, 1.0)
+
+        text_input = theme.role(StyleRole.TextInput)
+        text_input.base.background = Color(0.105, 0.105, 0.125, 0.96)
+        text_input.base.foreground = Color(0.92, 0.93, 0.96, 1.0)
+        text_input.base.border_width = 0.0
+        self.document.theme = theme
+
+    @staticmethod
+    def _style(
+        widget,
+        *,
+        font_size: float | None = None,
+        foreground: Color | None = None,
+        background: Color | None = None,
+        corner_radius: float | None = None,
+    ) -> None:
+        style = StyleOverride()
+        fields = 0
+        if font_size is not None:
+            fields |= StyleField.FontSize
+            style.value.font_size = font_size
+        if foreground is not None:
+            fields |= StyleField.Foreground
+            style.value.foreground = foreground
+        if background is not None:
+            fields |= StyleField.Background
+            style.value.background = background
+        if corner_radius is not None:
+            fields |= StyleField.CornerRadius
+            style.value.corner_radius = corner_radius
+        style.fields = fields
+        widget.style_override = style
 
     def _replace_root(self, root) -> None:
         if self.root is not None and self.document.is_alive(self.root.handle):
@@ -41,29 +95,30 @@ class NativeLauncherProjection:
             raise RuntimeError("failed to add native launcher root")
         self.request_render()
 
-    def _screen_frame(self, stable_id: str, panel_height: float):
+    def _screen_frame(self, stable_id: str, panel_height: float | None = None):
         root = self.document.create_vstack(f"native-{stable_id}")
         root.stable_id = stable_id
-        root.set_layout_background(Color(0.035, 0.04, 0.065, 0.80))
-
-        top = self.document.create_vstack(f"{stable_id}-top-space")
-        bottom = self.document.create_vstack(f"{stable_id}-bottom-space")
         row = self.document.create_hstack(f"{stable_id}-center-row")
         left = self.document.create_hstack(f"{stable_id}-left-space")
         right = self.document.create_hstack(f"{stable_id}-right-space")
         panel = self.document.create_vstack(f"{stable_id}-panel")
         panel.stable_id = f"{stable_id}.panel"
-        panel.set_layout_background(Color(0.10, 0.11, 0.15, 0.97))
-        panel.set_layout_border(Color(0.28, 0.31, 0.40, 1.0), 1.0)
-        panel.set_layout_padding(EdgeInsets(28.0, 24.0, 28.0, 24.0))
-        panel.set_layout_spacing(10.0)
+        panel.set_layout_background(Color(0.12, 0.12, 0.16, 0.90))
+        panel.set_layout_corner_radius(12.0)
+        panel.set_layout_padding(EdgeInsets(30.0, 28.0, 30.0, 28.0))
+        panel.set_layout_spacing(12.0)
 
         row.add_stretch_child(left)
-        row.add_fixed_child(panel, 720.0)
+        row.add_fixed_child(panel, 684.0)
         row.add_stretch_child(right)
-        root.add_stretch_child(top)
-        root.add_fixed_child(row, panel_height)
-        root.add_stretch_child(bottom)
+        if panel_height is None:
+            root.add_stretch_child(row)
+        else:
+            top = self.document.create_vstack(f"{stable_id}-top-space")
+            bottom = self.document.create_vstack(f"{stable_id}-bottom-space")
+            root.add_stretch_child(top)
+            root.add_fixed_child(row, panel_height)
+            root.add_stretch_child(bottom)
         return root, panel
 
     def _button(self, text: str, stable_id: str, callback: Callable[[], None]):
@@ -75,10 +130,31 @@ class NativeLauncherProjection:
     def _add_heading(self, panel, title: str, subtitle: str) -> None:
         heading = self.document.create_label(title, "launcher-heading")
         heading.stable_id = "launcher.heading"
+        self._style(heading, font_size=28.0, foreground=Color(1.0, 1.0, 1.0, 1.0))
         subheading = self.document.create_label(subtitle, "launcher-subheading")
         subheading.stable_id = "launcher.subheading"
-        panel.add_fixed_child(heading, 38.0)
+        self._style(
+            subheading,
+            font_size=14.0,
+            foreground=Color(0.55, 0.60, 0.70, 1.0),
+        )
+        panel.add_fixed_child(heading, 42.0)
         panel.add_fixed_child(subheading, 24.0)
+        panel.add_fixed_child(self._separator(horizontal=True), 1.0)
+
+    def _section_label(self, text: str):
+        label = self.document.create_label(text)
+        self._style(label, font_size=13.0, foreground=Color(0.60, 0.60, 0.65, 1.0))
+        return label
+
+    def _separator(self, *, horizontal: bool):
+        separator = (
+            self.document.create_hstack("launcher-horizontal-separator")
+            if horizontal
+            else self.document.create_vstack("launcher-vertical-separator")
+        )
+        separator.set_layout_background(Color(0.30, 0.30, 0.35, 1.0))
+        return separator
 
     def _add_error(self, panel) -> None:
         error = self.document.create_label("", "launcher-error")
@@ -104,14 +180,14 @@ class NativeLauncherProjection:
         self.models.clear()
 
     def _build_main(self) -> None:
-        root, panel = self._screen_frame("launcher.main", 500.0)
+        root, panel = self._screen_frame("launcher.main")
         self._add_heading(panel, "Termin Engine", "Project Launcher")
 
         columns = self.document.create_hstack("launcher-main-columns")
-        columns.set_layout_spacing(18.0)
+        columns.set_layout_spacing(20.0)
         recent_column = self.document.create_vstack("launcher-recent-column")
         recent_column.set_layout_spacing(6.0)
-        recent_column.add_fixed_child(self.document.create_label("Recent Projects"), 26.0)
+        recent_column.add_fixed_child(self._section_label("Recent Projects"), 26.0)
 
         model = CollectionModel()
         projects = self.controller.state.recent_projects
@@ -124,12 +200,18 @@ class NativeLauncherProjection:
         self._recent_paths = tuple(project.path for project in projects)
         project_list = self.document.create_list_widget(model)
         project_list.widget.stable_id = "launcher.recent-projects"
+        self._style(project_list.widget, font_size=14.0)
         recent_column.add_stretch_child(project_list.widget)
 
         actions = self.document.create_vstack("launcher-actions")
         actions.set_layout_spacing(8.0)
-        actions.add_fixed_child(self.document.create_label("Actions"), 26.0)
+        actions.add_fixed_child(self._section_label("Actions"), 26.0)
         new_button = self._button("New Project", "launcher.action.new", self._show_new_project)
+        self._style(
+            new_button.widget,
+            background=Color(0.20, 0.45, 0.80, 1.0),
+            corner_radius=6.0,
+        )
         open_button = self._button("Open Project", "launcher.action.open", self._open_selected)
         browse_button = self._button(
             "Open Existing...", "launcher.action.open-existing", self._open_existing
@@ -137,11 +219,15 @@ class NativeLauncherProjection:
         remove_button = self._button(
             "Remove from List", "launcher.action.remove", self._remove_selected
         )
-        for button in (new_button, open_button, browse_button, remove_button):
+        for button in (new_button, open_button):
+            actions.add_fixed_child(button.widget, 38.0)
+        actions.add_fixed_child(self._separator(horizontal=True), 1.0)
+        for button in (browse_button, remove_button):
             actions.add_fixed_child(button.widget, 38.0)
 
         columns.add_stretch_child(recent_column)
-        columns.add_fixed_child(actions, 190.0)
+        columns.add_fixed_child(self._separator(horizontal=False), 1.0)
+        columns.add_fixed_child(actions, 156.0)
         panel.add_stretch_child(columns)
         self.widgets.update(
             {
@@ -294,10 +380,10 @@ def _install_background(host) -> Callable[[], None] | None:
         image = host.document.create_image_widget()
         image.widget.stable_id = "launcher.background"
         image.widget.mouse_transparent = True
-        image.set_preserve_aspect(False)
+        image.fit = ImageFit.Cover
         if not host.document.add_root(image.handle):
             raise RuntimeError("failed to add native launcher background root")
-        return host.register_image_preview(image, pixels)
+        return host.register_image_preview(image, pixels, max_dimension=None)
     except Exception:
         _logger.exception("Failed to load native launcher background")
         return None
