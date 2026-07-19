@@ -99,7 +99,6 @@ if __name__ == "__main__":
                 # Data files used by main termin Python stack
                 "**/*.ui",
                 "**/*.uiscript",
-                "**/*.glsl",
                 "**/*.shader",
                 "**/*.material",
                 "**/*.meta",

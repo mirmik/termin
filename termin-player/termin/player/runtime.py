@@ -209,11 +209,6 @@ class PlayerRuntime:
 
         self._scan_project_assets()
 
-        # Register GLSL include preprocessing for explicitly loaded .glsl assets.
-        from termin.shader_runtime import configure_glsl_preprocessor
-
-        configure_glsl_preprocessor()
-
         # Create default pipeline and configure RenderingManager
         manager = self._engine.rendering_manager
         pipeline = manager.create_pipeline("Default")

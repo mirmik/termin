@@ -34,7 +34,6 @@ setup(
     entry_points={
         "termin.asset_import_plugins": [
             "audio_clip = termin.default_assets.audio.asset_plugin:create_import_plugin",
-            "glsl = termin.default_assets.render.glsl_plugin:create_import_plugin",
             "material = termin.default_assets.render.material_plugin:create_import_plugin",
             "mesh = termin.default_assets.mesh.asset_plugin:create_import_plugin",
             "navmesh = termin.default_assets.navmesh.asset_plugin:create_import_plugin",
@@ -46,7 +45,6 @@ setup(
         ],
         "termin.asset_runtime_plugins": [
             "audio_clip = termin.default_assets.audio.asset_plugin:create_runtime_plugin",
-            "glsl = termin.default_assets.render.glsl_plugin:create_runtime_plugin",
             "material = termin.default_assets.render.material_plugin:create_runtime_plugin",
             "mesh = termin.default_assets.mesh.asset_plugin:create_runtime_plugin",
             "navmesh = termin.default_assets.navmesh.asset_plugin:create_runtime_plugin",

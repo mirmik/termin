@@ -81,20 +81,6 @@ def _shutdown_python_components() -> None:
     shutdown_python_components()
 
 
-def _shutdown_glsl_preprocessor() -> None:
-    import sys
-
-    if "termin.shader_runtime" in sys.modules:
-        from termin.shader_runtime import unregister_glsl_preprocessor
-
-        unregister_glsl_preprocessor()
-        return
-
-    from termin.materials import unregister_glsl_preprocessor
-
-    unregister_glsl_preprocessor()
-
-
 def shutdown_runtime() -> None:
     """Release native process-global runtime registries."""
     _shutdown_runtime_native()
@@ -105,7 +91,6 @@ def shutdown_player() -> None:
     _run_shutdown_step("render pipelines", _shutdown_render_pipelines)
     _run_shutdown_step("Python render passes", _shutdown_python_passes)
     _run_shutdown_step("Python components", _shutdown_python_components)
-    _run_shutdown_step("GLSL preprocessor", _shutdown_glsl_preprocessor)
     _run_shutdown_step("native runtime", shutdown_runtime)
 
 

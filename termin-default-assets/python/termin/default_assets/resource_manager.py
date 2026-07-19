@@ -59,7 +59,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
         self._navmesh_registry = self._create_navmesh_registry()
         self._animation_clip_registry = self._create_animation_clip_registry()
         self._skeleton_registry = self._create_skeleton_registry()
-        self._glsl_registry = self._create_glsl_registry()
         self._audio_clip_registry = self._create_audio_clip_registry()
         self._ui_registry = self._create_ui_registry()
         self._pipeline_registry = self._create_pipeline_registry()
@@ -75,7 +74,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
             "navmesh": self._navmesh_registry,
             "animation_clip": self._animation_clip_registry,
             "skeleton": self._skeleton_registry,
-            "glsl": self._glsl_registry,
             "audio_clip": self._audio_clip_registry,
             "ui": self._ui_registry,
             "pipeline": self._pipeline_registry,
@@ -169,10 +167,6 @@ class DefaultResourceManagerBase(DefaultAssetRegistryFactoryMixin, AssetRuntimeM
     @property
     def _ui_assets(self):
         return self._ui_registry.unique_assets_by_name
-
-    @property
-    def glsl(self):
-        return self._glsl_registry
 
     @classmethod
     def instance(cls) -> "DefaultResourceManagerBase":
