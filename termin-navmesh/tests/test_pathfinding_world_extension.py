@@ -1,7 +1,19 @@
 from __future__ import annotations
 
+import pytest
+
+import termin.bootstrap
 from termin.navmesh import DetourPathfindingWorldComponent, PathfindingWorld
 from termin.scene import TcScene
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _bootstrap_runtime_extensions():
+    termin.bootstrap.bootstrap_player()
+    try:
+        yield
+    finally:
+        termin.bootstrap.shutdown_player()
 
 
 def test_pathfinding_world_tracks_multiple_components_on_one_entity() -> None:
