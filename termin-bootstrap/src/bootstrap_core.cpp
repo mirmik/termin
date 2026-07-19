@@ -35,6 +35,7 @@ extern "C" {
 #include <core/tc_component.h>
 #include <core/tc_entity_pool_registry.h>
 #include <core/tc_scene_extension.h>
+#include <termin_scene/internal/tc_scene_extension_registry.h>
 #include <core/tc_scene_pool.h>
 #include <core/tc_scene_render_mount.h>
 #include <core/tc_scene_render_state.h>

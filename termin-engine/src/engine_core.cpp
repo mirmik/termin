@@ -10,14 +10,12 @@
 extern "C" {
 #include <tcbase/tc_log.h>
 #include "tc_profiler.h"
-#include <termin_scene/termin_scene.h>
 }
 
 namespace termin {
 
 EngineCore::EngineCore()
     : rendering_manager(render_topology) {
-    termin_scene_runtime_init();
     scene_manager.set_before_scene_destroy_guard([this](tc_scene_handle scene) {
         if (!render_topology.is_attached(scene)
                 && render_topology.render_targets(scene).empty()
@@ -53,7 +51,6 @@ EngineCore::~EngineCore() {
     }
     scene_manager.close_all_scenes();
     rendering_manager.shutdown();
-    termin_scene_runtime_shutdown();
     tc_log(TC_LOG_INFO, "[EngineCore] Destroyed");
 }
 

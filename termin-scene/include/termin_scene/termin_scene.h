@@ -17,8 +17,6 @@ extern "C" {
 #endif
 
 TERMIN_SCENE_API int termin_scene_version_int(void);
-TERMIN_SCENE_API void termin_scene_runtime_init(void);
-TERMIN_SCENE_API void termin_scene_runtime_shutdown(void);
 
 #ifdef __cplusplus
 }

@@ -22,8 +22,6 @@ void register_default_scene_extensions() {
 }
 
 std::vector<tc_scene_ext_type_id> default_scene_extension_ids() {
-    register_default_scene_extensions();
-
     std::vector<tc_scene_ext_type_id> extensions = {
         TC_SCENE_EXT_TYPE_RENDER_MOUNT,
         TC_SCENE_EXT_TYPE_RENDER_STATE,

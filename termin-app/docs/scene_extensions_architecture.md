@@ -67,8 +67,10 @@ void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
 
 ## Жизненный цикл
 
-1. Инициализация модуля:
-   - модуль вызывает `tc_scene_ext_register(...)`.
+1. Инициализация процесса:
+   - `tc_init` создаёт единственный process-lifetime registry;
+   - bootstrap явно регистрирует все доступные extension types;
+   - регистрация/attach до `tc_init` отклоняются без lazy initialization.
 2. Создание сцены:
    - код создания сцены attach-ит нужные extension type.
 3. Кадровый цикл:
@@ -77,6 +79,9 @@ void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);
    - `tc_scene_before_render` вызывает `tc_scene_ext_on_scene_before_render(...)`.
 5. Уничтожение сцены:
    - `tc_scene_ext_detach_all(...)` и освобождение instance через `destroy`.
+6. Завершение процесса:
+   - `tc_shutdown` сначала уничтожает все сцены и их extension instances;
+   - затем уничтожает таблицу типов. `EngineCore` не управляет этим lifecycle.
 
 ## Плюсы текущей модели
 

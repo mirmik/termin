@@ -64,10 +64,6 @@ TC_API void tc_scene_ext_deserialize_scene(tc_scene_handle scene, const tc_value
 // Get debug name for registered extension type (or NULL if not registered).
 TC_API const char* tc_scene_ext_type_debug_name(tc_scene_ext_type_id type_id);
 
-// Internal lifecycle helpers (called from tc_init/tc_shutdown).
-TC_API void tc_scene_ext_registry_init(void);
-TC_API void tc_scene_ext_registry_shutdown(void);
-
 // Internal lifecycle hooks (called from tc_scene update/render loop).
 TC_API void tc_scene_ext_on_scene_update(tc_scene_handle scene, double dt);
 TC_API void tc_scene_ext_on_scene_before_render(tc_scene_handle scene);

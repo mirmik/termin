@@ -40,7 +40,6 @@ endif()
 
 set(TERMIN_SCENE_SOURCES
     src/termin_scene_version.c
-    src/termin_scene_runtime.c
     src/tc_archetype.c
     src/tc_component.c
     src/tc_component_capability.c
@@ -82,6 +81,7 @@ set(TERMIN_SCENE_CXX_HEADERS
 
 set(TERMIN_SCENE_HEADERS
     include/termin_scene/termin_scene.h
+    include/termin_scene/internal/tc_scene_extension_registry.h
     include/core/tc_archetype.h
     include/core/tc_component.h
     include/core/tc_component_capability.h

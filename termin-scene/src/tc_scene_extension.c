@@ -1,6 +1,7 @@
 // tc_scene_extension.c - Scene extension registry and scene-local slot storage
 #include "core/tc_scene_extension.h"
 #include "core/tc_scene.h"
+#include "termin_scene/internal/tc_scene_extension_registry.h"
 #include <tcbase/tc_log.h>
 #include <stdlib.h>
 
@@ -19,11 +20,6 @@ typedef struct {
 
 static tc_scene_ext_registry* g_registry = NULL;
 
-static void ensure_registry(void) {
-    if (g_registry) return;
-    g_registry = (tc_scene_ext_registry*)calloc(1, sizeof(tc_scene_ext_registry));
-}
-
 static tc_scene_ext_type_entry* find_type(tc_scene_ext_type_id type_id) {
     if (!g_registry) return NULL;
     if (type_id >= g_registry->type_capacity) return NULL;
@@ -32,17 +28,38 @@ static tc_scene_ext_type_entry* find_type(tc_scene_ext_type_id type_id) {
 }
 
 void tc_scene_ext_registry_init(void) {
-    ensure_registry();
-    if (g_registry->types) return;
+    if (g_registry) return;
+    g_registry = (tc_scene_ext_registry*)calloc(1, sizeof(tc_scene_ext_registry));
+    if (!g_registry) {
+        tc_log_error("[tc_scene_ext_registry_init] failed to allocate registry");
+        return;
+    }
     g_registry->types = (tc_scene_ext_type_entry*)calloc(TC_SCENE_EXT_TYPE_COUNT, sizeof(tc_scene_ext_type_entry));
+    if (!g_registry->types) {
+        tc_log_error("[tc_scene_ext_registry_init] failed to allocate type table");
+        free(g_registry);
+        g_registry = NULL;
+        return;
+    }
     g_registry->type_capacity = TC_SCENE_EXT_TYPE_COUNT;
 }
 
 void tc_scene_ext_registry_shutdown(void) {
     if (!g_registry) return;
+    if (tc_scene_pool_count() != 0) {
+        tc_log_error(
+            "[tc_scene_ext_registry_shutdown] refused with %llu live scene(s)",
+            (unsigned long long)tc_scene_pool_count()
+        );
+        return;
+    }
     free(g_registry->types);
     free(g_registry);
     g_registry = NULL;
+}
+
+bool tc_scene_ext_registry_initialized(void) {
+    return g_registry != NULL;
 }
 
 bool tc_scene_ext_register(
@@ -58,9 +75,9 @@ bool tc_scene_ext_register(
         return false;
     }
 
-    ensure_registry();
-    if (!g_registry->types) {
-        tc_scene_ext_registry_init();
+    if (!g_registry) {
+        tc_log_error("[tc_scene_ext_register] registry is not initialized; call tc_init first");
+        return false;
     }
 
     if (type_id >= g_registry->type_capacity) {
@@ -92,9 +109,11 @@ const char* tc_scene_ext_type_debug_name(tc_scene_ext_type_id type_id) {
 }
 
 bool tc_scene_ext_attach(tc_scene_handle scene, tc_scene_ext_type_id type_id) {
+    if (!g_registry) {
+        tc_log_error("[tc_scene_ext_attach] registry is not initialized; call tc_init first");
+        return false;
+    }
     if (!tc_scene_alive(scene)) return false;
-
-    ensure_registry();
     tc_scene_ext_type_entry* type_entry = find_type(type_id);
     if (!type_entry) {
         tc_log_error("[tc_scene_ext_attach] type_id is not registered: %llu", (unsigned long long) type_id);
