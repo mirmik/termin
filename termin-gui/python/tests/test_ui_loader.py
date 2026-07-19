@@ -3,7 +3,7 @@
 import pytest
 
 from tcgui.widgets.button import Button
-from tcgui.widgets.containers import HStack
+from tcgui.widgets.containers import HStack, Overlay
 from tcgui.widgets.loader import UILoader
 from tcgui.widgets.menu import Menu
 from tcgui.widgets.status_bar import StatusBar
@@ -102,3 +102,32 @@ def test_loader_rejects_unsupported_builtin_attribute() -> None:
             texxt: typo
             """
         )
+
+
+def test_loader_overlay_lays_out_independently_anchored_children() -> None:
+    root = UILoader().load_string(
+        """
+        uiscript: 1
+        root:
+          type: Overlay
+          width: 100%
+          height: 100%
+          children:
+            - type: Panel
+              name: top_right
+              size: [20, 10]
+              anchor: top-right
+              offset: [-2, 3]
+            - type: Panel
+              name: bottom_left
+              size: [30, 12]
+              anchor: bottom-left
+              offset: [4, -5]
+        """
+    )
+
+    assert isinstance(root, Overlay)
+    root.layout(0.0, 0.0, 100.0, 80.0, 100.0, 80.0)
+    top_right, bottom_left = root.children
+    assert (top_right.x, top_right.y) == pytest.approx((78.0, 3.0))
+    assert (bottom_left.x, bottom_left.y) == pytest.approx((4.0, 63.0))

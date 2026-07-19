@@ -1,7 +1,13 @@
 from pathlib import Path
 from typing import Set
 
-from termin_assets import Asset, AssetRegistry, AssetRuntimeManager, PreLoadResult
+from termin_assets import (
+    Asset,
+    AssetIdentityPolicy,
+    AssetRegistry,
+    AssetRuntimeManager,
+    PreLoadResult,
+)
 from termin_assets import project_file_watcher as watcher_module
 from termin_assets.plugin_preloader import PluginPreLoader
 from termin_assets.project_file_watcher import FilePreLoader, ProjectFileWatcher
@@ -55,6 +61,29 @@ class DummyImportPlugin:
         return PreLoadResult(resource_type=self.type_id, path=path, uuid="dummy-uuid")
 
 
+class SidecarDummyImportPlugin:
+    type_id = "sidecar_dummy"
+    extensions = {".sidecar"}
+    priority = 10
+
+    def preload(self, path: str) -> PreLoadResult:
+        return PreLoadResult(
+            resource_type=self.type_id,
+            path=path,
+            identity_policy=AssetIdentityPolicy.GENERATE_SIDECAR,
+        )
+
+
+class SidecarUuidImportPlugin(SidecarDummyImportPlugin):
+    def __init__(self, uuid: object) -> None:
+        self.uuid = uuid
+
+    def preload(self, path: str) -> PreLoadResult:
+        result = super().preload(path)
+        result.uuid = self.uuid
+        return result
+
+
 class DummyRuntimePlugin:
     type_id = "dummy"
 
@@ -73,6 +102,66 @@ class DummyRuntimePlugin:
 
     def unregister(self, context, result: PreLoadResult) -> None:
         context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)
+
+
+def test_plugin_preloader_assigns_one_persistent_sidecar_uuid(tmp_path: Path) -> None:
+    asset_path = tmp_path / "probe.sidecar"
+    asset_path.write_text("probe", encoding="utf-8")
+    preloader = PluginPreLoader(SidecarDummyImportPlugin(), resource_manager=None)
+
+    first = preloader.preload(str(asset_path))
+    second = preloader.preload(str(asset_path))
+
+    assert first is not None
+    assert second is not None
+    assert first.uuid
+    assert second.uuid == first.uuid
+    assert first.spec_data == {"uuid": first.uuid}
+    assert second.spec_data == first.spec_data
+    assert (tmp_path / "probe.sidecar.meta").read_text(encoding="utf-8") == (f'{{\n  "uuid": "{first.uuid}"\n}}\n')
+
+
+def test_plugin_preloader_rejects_invalid_existing_sidecar_uuid(
+    tmp_path: Path,
+    caplog,
+) -> None:
+    asset_path = tmp_path / "probe.sidecar"
+    asset_path.write_text("probe", encoding="utf-8")
+    meta_path = tmp_path / "probe.sidecar.meta"
+    meta_path.write_text('{"uuid": 42}', encoding="utf-8")
+    preloader = PluginPreLoader(SidecarDummyImportPlugin(), resource_manager=None)
+
+    assert preloader.preload(str(asset_path)) is None
+    assert meta_path.read_text(encoding="utf-8") == '{"uuid": 42}'
+    assert "Invalid asset UUID in metadata" in caplog.text
+
+
+def test_plugin_preloader_validates_plugin_uuid_against_sidecar(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    asset_path = tmp_path / "probe.sidecar"
+    asset_path.write_text("probe", encoding="utf-8")
+    meta_path = tmp_path / "probe.sidecar.meta"
+    meta_path.write_text('{"uuid": "persistent-uuid"}', encoding="utf-8")
+    preloader = PluginPreLoader(SidecarUuidImportPlugin("different-uuid"), resource_manager=None)
+    log_messages: list[str] = []
+    monkeypatch.setattr("termin_assets.plugin_preloader.log.error", log_messages.append)
+
+    assert preloader.preload(str(asset_path)) is None
+    assert len(log_messages) == 1
+    assert "Import UUID does not match persistent metadata" in log_messages[0]
+
+
+def test_plugin_preloader_rejects_non_object_sidecar(tmp_path: Path, caplog) -> None:
+    asset_path = tmp_path / "probe.sidecar"
+    asset_path.write_text("probe", encoding="utf-8")
+    meta_path = tmp_path / "probe.sidecar.meta"
+    meta_path.write_text("[]", encoding="utf-8")
+    preloader = PluginPreLoader(SidecarDummyImportPlugin(), resource_manager=None)
+
+    assert preloader.preload(str(asset_path)) is None
+    assert "Asset meta file must contain a JSON object" in caplog.text
 
 
 def test_plugin_preloader_unregisters_runtime_asset_on_delete(tmp_path: Path) -> None:

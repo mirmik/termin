@@ -39,16 +39,17 @@ struct IdPerFrameStd140 {
 static_assert(sizeof(IdPerFrameStd140) == 128,
               "IdPerFrameStd140 must be 2 * mat4");
 
-// Draw-scope per-object model matrix + pick color. The shader resource
-// layout maps it to backend storage; render code binds it by reflected name.
-// 64 + 16 = 80 bytes. vec4 used for pickColor because std140 pads
-// vec3 to 16-byte alignment anyway.
-struct IdPushStd140 {
+struct IdModelStd140 {
     float u_model[16];
+};
+static_assert(sizeof(IdModelStd140) == 64,
+              "IdModelStd140 must be mat4");
+
+struct IdPickStd140 {
     float u_pickColor[4];  // vec3 + pad
 };
-static_assert(sizeof(IdPushStd140) == 80,
-              "IdPushStd140 must be mat4 + vec4");
+static_assert(sizeof(IdPickStd140) == 16,
+              "IdPickStd140 must be vec4");
 
 MaterialFragmentInterface id_world_position_interface()
 {
@@ -70,7 +71,10 @@ VertexOutputAdapter id_vertex_output_adapter()
     adapter.consumed_world_semantics = id_world_position_interface();
     adapter.produced_output_semantics.semantics.push_back(
         {"clip_position", MaterialPipelineValueType::Float4});
-    adapter.resources = material_pipeline_pass_vertex_resources("id_draw", 80u);
+    adapter.resources.push_back(material_pipeline_abi_resource_decl(
+        ShaderAbiResourceId::PerFrame,
+        TC_SHADER_STAGE_VERTEX,
+        MaterialPipelineResourceOwner::Pass));
     return adapter;
 }
 
@@ -85,15 +89,25 @@ MaterialPipelinePassContract id_material_pass_contract()
         material_pipeline_make_static_mesh_vertex_transform_provider(
             "static_id",
             MeshVertexTransformProfile::Position,
-            "id_draw.model");
+            "id_model.model");
+    contract.static_vertex_transform->resources.push_back(
+        material_pipeline_draw_resource_decl(
+            "id_model", TC_SHADER_STAGE_VERTEX, 64u));
     contract.skinned_vertex_transform =
         material_pipeline_make_skinned_mesh_vertex_transform_provider(
             "skinned_id",
             MeshVertexTransformProfile::Position,
-            "id_draw.model");
+            "id_model.model");
+    contract.skinned_vertex_transform->resources.push_back(
+        material_pipeline_draw_resource_decl(
+            "id_model", TC_SHADER_STAGE_VERTEX, 64u));
     contract.foliage_vertex_transform =
         material_pipeline_make_foliage_vertex_transform_provider(
             "foliage_id", MeshVertexTransformProfile::Position);
+    MaterialPipelineResourceDecl id_pick = material_pipeline_draw_resource_decl(
+        "id_pick", TC_SHADER_STAGE_FRAGMENT, 16u);
+    id_pick.owner = MaterialPipelineResourceOwner::Pass;
+    contract.resources.push_back(std::move(id_pick));
     return contract;
 }
 
@@ -277,21 +291,23 @@ void IdPass::execute_with_data_tgfx2(
             id_to_rgb(dc.pick_id, pick_r, pick_g, pick_b);
         }
 
-        IdPushStd140 push{};
+        IdModelStd140 model{};
         if (item.flags & TC_RENDER_ITEM_FLAG_HAS_MODEL_MATRIX) {
-            std::memcpy(push.u_model, item.model_matrix, sizeof(float) * 16);
+            std::memcpy(model.u_model, item.model_matrix, sizeof(float) * 16);
         } else {
             Mat44f identity = Mat44f::identity();
-            std::memcpy(push.u_model, identity.data, sizeof(float) * 16);
+            std::memcpy(model.u_model, identity.data, sizeof(float) * 16);
         }
-        push.u_pickColor[0] = pick_r;
-        push.u_pickColor[1] = pick_g;
-        push.u_pickColor[2] = pick_b;
-        push.u_pickColor[3] = 1.0f;
+        IdPickStd140 pick{};
+        pick.u_pickColor[0] = pick_r;
+        pick.u_pickColor[1] = pick_g;
+        pick.u_pickColor[2] = pick_b;
+        pick.u_pickColor[3] = 1.0f;
 
-        std::array<RenderItemNamedUniformBinding, 2> base_draw_uniforms{{
+        std::array<RenderItemNamedUniformBinding, 3> base_draw_uniforms{{
             {"per_frame", &per_frame, static_cast<uint32_t>(sizeof(per_frame))},
-            {"id_draw", &push, static_cast<uint32_t>(sizeof(push))},
+            {"id_model", &model, static_cast<uint32_t>(sizeof(model)), "id_model"},
+            {"id_pick", &pick, static_cast<uint32_t>(sizeof(pick))},
         }};
 
         MaterialPipelineResourceView draw_material_resources{};
@@ -303,7 +319,7 @@ void IdPass::execute_with_data_tgfx2(
         RenderContext draw_context;
         draw_context.view = view;
         draw_context.projection = projection;
-        std::memcpy(draw_context.model.data, push.u_model, sizeof(push.u_model));
+        std::memcpy(draw_context.model.data, model.u_model, sizeof(model.u_model));
         draw_context.phase = TC_PHASE_ID;
         draw_context.pass_contract = shader_pass_contract();
         draw_context.current_tc_shader = dc.final_shader;

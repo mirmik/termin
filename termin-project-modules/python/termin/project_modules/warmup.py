@@ -130,6 +130,13 @@ def _project_modules_runtime() -> Any:
     return get_project_modules_runtime()
 
 
+def _bootstrap_runtime() -> None:
+    """Initialize the native type hierarchy used while validating modules."""
+    from termin.bootstrap import bootstrap_runtime
+
+    bootstrap_runtime()
+
+
 def _create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="termin modules",
@@ -228,6 +235,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         project_path = Path.cwd()
 
     try:
+        _bootstrap_runtime()
         result = warmup_project_modules(
             project_path,
             module_ids=tuple(args.module_ids),

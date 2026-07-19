@@ -184,9 +184,6 @@ int test_module_owner_registration_cleanup() {
 
     components.unregister("OwnerScopedComponent");
     inspect.unregister_type("OwnerScopedComponent");
-    components.set_registration_owner(module_id);
-    inspect.set_registration_owner(module_id);
-
     TEST_ASSERT(register_owner_scoped_component(module_id),
                 "owned component descriptor committed");
 
@@ -197,9 +194,6 @@ int test_module_owner_registration_cleanup() {
     TEST_ASSERT(components.has("OwnerScopedComponent"), "owned component registered");
     TEST_ASSERT(inspect.find_field("OwnerScopedComponent", "value") != nullptr,
                 "owned inspect field registered");
-
-    components.set_registration_owner("");
-    inspect.set_registration_owner("");
 
     TEST_ASSERT(tc_runtime_type_registry_unregister_owner(module_id) == 1,
                 "runtime owner cleanup count");
@@ -236,14 +230,8 @@ int test_module_owner_cleanup_prepares_live_components() {
 
     components.unregister("OwnerScopedComponent");
     inspect.unregister_type("OwnerScopedComponent");
-    components.set_registration_owner(module_id);
-    inspect.set_registration_owner(module_id);
-
     TEST_ASSERT(register_owner_scoped_component(module_id),
                 "owned component descriptor committed");
-
-    components.set_registration_owner("");
-    inspect.set_registration_owner("");
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("owner_prepare_unload");
     termin::Entity entity = scene.create_entity("entity");

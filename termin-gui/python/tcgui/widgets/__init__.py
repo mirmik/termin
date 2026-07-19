@@ -6,6 +6,7 @@ from tcgui.widgets.hstack import HStack
 from tcgui.widgets.vstack import VStack
 from tcgui.widgets.grid_layout import GridLayout
 from tcgui.widgets.panel import Panel
+from tcgui.widgets.overlay import Overlay
 from tcgui.widgets.scroll_area import ScrollArea
 from tcgui.widgets.group_box import GroupBox
 from tcgui.widgets.label import Label
@@ -54,7 +55,7 @@ __all__ = [
     "MouseEvent", "MouseWheelEvent", "KeyEvent", "TextEvent",
     "Value", "Unit", "px", "ndc", "pct",
     "Widget",
-    "HStack", "VStack", "GridLayout", "Panel", "ScrollArea", "GroupBox",
+    "HStack", "VStack", "GridLayout", "Panel", "Overlay", "ScrollArea", "GroupBox",
     "Label", "Button", "Checkbox", "IconButton", "Separator", "ImageWidget", "TextInput", "ListWidget",
     "FileGridWidget",
     "TableColumn", "TableWidget",

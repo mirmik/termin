@@ -3,6 +3,35 @@
 using namespace termin::gui_native::python_bindings;
 
 void bind_gui_native_control_views(nb::module_ &m) {
+  nb::class_<OverlayLayoutRef>(m, "OverlayLayout")
+      .def_prop_ro("widget",
+                   [](const OverlayLayoutRef &self) { return self.widget; })
+      .def_prop_ro("handle", [](const OverlayLayoutRef &self) {
+        return WidgetHandle{self.widget.handle};
+      })
+      .def(
+          "add_child",
+          [](const OverlayLayoutRef &self, const WidgetRef &child,
+             termin::gui_native::OverlayAnchor anchor, tc_ui_point offset) {
+            return self.get().add_child(child.handle, anchor, offset);
+          },
+          nb::arg("child"),
+          nb::arg("anchor") = termin::gui_native::OverlayAnchor::Fill,
+          nb::arg("offset") = tc_ui_point{})
+      .def("remove_child",
+           [](const OverlayLayoutRef &self, const WidgetRef &child) {
+             return self.get().remove_child(child.handle);
+           },
+           nb::arg("child"))
+      .def(
+          "set_placement",
+          [](const OverlayLayoutRef &self, const WidgetRef &child,
+             termin::gui_native::OverlayAnchor anchor, tc_ui_point offset) {
+            return self.get().set_placement(child.handle, anchor, offset);
+          },
+          nb::arg("child"), nb::arg("anchor"),
+          nb::arg("offset") = tc_ui_point{});
+
   nb::class_<ComboBoxRef>(m, "ComboBox")
       .def_prop_ro("widget",
                    [](const ComboBoxRef &self) { return self.widget; })
@@ -84,6 +113,40 @@ void bind_gui_native_control_views(nb::module_ &m) {
             self.get().set_texture(texture.id);
           },
           nb::arg("texture"))
+      .def_prop_rw(
+          "tooltip",
+          [](const IconButtonRef &self) { return self.get().tooltip(); },
+          [](const IconButtonRef &self, const std::string &tooltip) {
+            self.get().set_tooltip(tooltip);
+          })
+      .def("set_background_color",
+           [](const IconButtonRef &self, tc_ui_color color) {
+             self.get().set_background_color({color.r, color.g, color.b, color.a});
+           }, nb::arg("color"))
+      .def("set_hover_color",
+           [](const IconButtonRef &self, tc_ui_color color) {
+             self.get().set_hover_color({color.r, color.g, color.b, color.a});
+           }, nb::arg("color"))
+      .def("set_pressed_color",
+           [](const IconButtonRef &self, tc_ui_color color) {
+             self.get().set_pressed_color({color.r, color.g, color.b, color.a});
+           }, nb::arg("color"))
+      .def("set_active_color",
+           [](const IconButtonRef &self, tc_ui_color color) {
+             self.get().set_active_color({color.r, color.g, color.b, color.a});
+           }, nb::arg("color"))
+      .def("set_icon_color",
+           [](const IconButtonRef &self, tc_ui_color color) {
+             self.get().set_icon_color({color.r, color.g, color.b, color.a});
+           }, nb::arg("color"))
+      .def("set_corner_radius",
+           [](const IconButtonRef &self, float radius) {
+             self.get().set_corner_radius(radius);
+           }, nb::arg("radius"))
+      .def("set_font_size",
+           [](const IconButtonRef &self, float size) {
+             self.get().set_font_size(size);
+           }, nb::arg("size"))
       .def(
           "connect_clicked",
           [](const IconButtonRef &self, nb::object callback) {
