@@ -8,7 +8,7 @@ from typing import Any, Type
 import yaml
 
 from tcgui.widgets.widget import Widget
-from tcgui.widgets.containers import HStack, VStack, Panel, ScrollArea, GroupBox
+from tcgui.widgets.containers import HStack, VStack, Overlay, Panel, ScrollArea, GroupBox
 from tcgui.widgets.basic import (
     Button,
     Checkbox,
@@ -343,6 +343,7 @@ class UILoader:
         "HStack": HStack,
         "VStack": VStack,
         "Panel": Panel,
+        "Overlay": Overlay,
         "ScrollArea": ScrollArea,
         "Label": Label,
         "Button": Button,
