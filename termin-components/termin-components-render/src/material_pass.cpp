@@ -322,16 +322,17 @@ void MaterialPass::destroy() {
     extra_resources.clear();
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY(MaterialPass);
-
 void MaterialPass::register_type() {
-    register_frame_pass_MaterialPass();
-    _register_inspect_material();
-    _register_inspect_output_res();
-    _register_inspect_output_res_target();
-    _register_inspect_metadata_graph();
-    register_serialize_MaterialPass_texture_resources();
-    register_serialize_MaterialPass_extra_resources();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<MaterialPass>(
+        "MaterialPass", "termin-components-render");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_material(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_output_res_target(inspect);
+    _register_inspect_metadata_graph(inspect);
+    register_serialize_MaterialPass_texture_resources(inspect);
+    register_serialize_MaterialPass_extra_resources(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

@@ -9,14 +9,16 @@ namespace termin {
 
 namespace {
 
-void register_actuator_axis_scale_field();
+void register_actuator_axis_scale_field(tc::InspectFacetBuilder& builder);
 
 } // namespace
 
 void ActuatorComponent::register_type() {
-    register_component_type<ActuatorComponent>("ActuatorComponent", "KinematicUnitComponent");
-    ComponentRegistry::instance().set_category("ActuatorComponent", "Kinematic");
-    register_actuator_axis_scale_field();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<ActuatorComponent>(
+        "ActuatorComponent", "termin-components-kinematic", "KinematicUnitComponent");
+    descriptor.category("Kinematic");
+    register_actuator_axis_scale_field(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 ActuatorComponent::ActuatorComponent()
@@ -76,7 +78,7 @@ void ActuatorComponent::capture_base() {
 
 namespace {
 
-void register_actuator_axis_scale_field() {
+void register_actuator_axis_scale_field(tc::InspectFacetBuilder& builder) {
         tc::InspectFieldInfo info;
         info.type_name = "ActuatorComponent";
         info.path = "axis_scale";
@@ -113,7 +115,7 @@ void register_actuator_axis_scale_field() {
             return true;
         };
 
-        tc::InspectRegistry::instance().add_field_with_choices("ActuatorComponent", std::move(info));
+        (void)builder.add_field(std::move(info));
 }
 
 } // namespace

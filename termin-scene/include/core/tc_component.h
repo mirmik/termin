@@ -319,6 +319,20 @@ typedef bool (*tc_component_prepare_unload_fn)(
     void* user_data
 );
 
+TC_API bool tc_component_type_descriptor_add_facet(
+    tc_runtime_type_descriptor* descriptor,
+    tc_component_factory factory,
+    void* factory_userdata,
+    tc_component_kind kind,
+    bool is_abstract,
+    const char* display_name,
+    const char* category,
+    const char* const* requirements,
+    size_t requirement_count,
+    const tc_component_cap_id* capabilities,
+    size_t capability_count
+);
+
 TC_API void tc_component_registry_register(
     const char* type_name,
     tc_component_factory factory,

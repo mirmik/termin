@@ -208,7 +208,6 @@ void init_inspect_adapters() {
     }
     tc_inspect_kind_core_init();
     tc_inspect_component_adapter_init();
-    register_component_base_inspect_fields();
     tc_inspect_pass_adapter_init();
     tc_inspect_python_adapter_init();
     g_bootstrap_state.inspect_initialized = true;

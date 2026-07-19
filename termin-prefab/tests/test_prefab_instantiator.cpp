@@ -7,6 +7,7 @@
 #include <trent/json.h>
 #include <termin/entity/component.hpp>
 #include <termin/entity/component_registry.hpp>
+#include <termin/entity/unknown_component.hpp>
 #include <termin/inspect/tc_kind_cpp_ext.hpp>
 #include <termin/prefab/prefab_document.hpp>
 #include <termin/prefab/prefab_instance_state.hpp>
@@ -190,6 +191,7 @@ nos::trent source_hierarchy() {
 
 int main() {
     tc_inspect_kind_core_init();
+    termin::register_builtin_scene_component_types();
     register_inspect();
 
     termin::TcSceneRef scene = termin::TcSceneRef::create("prefab-instantiator-test");

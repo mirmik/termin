@@ -45,7 +45,7 @@ void UnknownComponent::deserialize_data(const tc_value* data, tc_scene_handle sc
 
 namespace {
 
-void register_unknown_component_inspect_fields() {
+void stage_unknown_component_inspect_fields(tc::InspectFacetBuilder& builder) {
         {
             tc::InspectFieldInfo info;
             info.type_name = "UnknownComponent";
@@ -69,7 +69,7 @@ void register_unknown_component_inspect_fields() {
                 return false;
             };
 
-            tc::InspectRegistry::instance().add_field_with_choices("UnknownComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 
         {
@@ -93,18 +93,27 @@ void register_unknown_component_inspect_fields() {
                 return true;
             };
 
-            tc::InspectRegistry::instance().add_field_with_choices("UnknownComponent", std::move(info));
+            (void)builder.add_field(std::move(info));
         }
 }
 
 } // namespace
 
 void UnknownComponent::register_type() {
-    register_component_type<UnknownComponent>("UnknownComponent", "CxxComponent");
-    register_unknown_component_inspect_fields();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<UnknownComponent>(
+        "UnknownComponent", "termin-scene", "CxxComponent");
+    stage_unknown_component_inspect_fields(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 void register_builtin_scene_component_types() {
+    auto component = ComponentTypeDescriptorBuilder::abstract_native(
+        "Component", "termin-scene");
+    stage_component_base_inspect_fields(component.inspect());
+    (void)component.commit();
+    auto cxx = ComponentTypeDescriptorBuilder::abstract_native(
+        "CxxComponent", "termin-scene", "Component");
+    (void)cxx.commit();
     UnknownComponent::register_type();
 }
 

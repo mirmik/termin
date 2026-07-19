@@ -5,12 +5,7 @@
 
 namespace termin {
 
-void register_component_base_inspect_fields() {
-    static bool registered = false;
-    if (registered) {
-        return;
-    }
-
+void stage_component_base_inspect_fields(tc::InspectFacetBuilder& builder) {
     tc::InspectFieldInfo display_name_field;
     display_name_field.type_name = "Component";
     display_name_field.path = "display_name";
@@ -28,15 +23,21 @@ void register_component_base_inspect_fields() {
         }
         return false;
     };
-    tc::InspectRegistry::instance().add_field_with_choices("Component", std::move(display_name_field));
+    (void)builder.add_field(std::move(display_name_field));
 
-    tc::InspectRegistry::instance().add_with_accessors<CxxComponent, bool>(
-        "Component", "enabled", "Enabled", "bool",
-        [](CxxComponent* c) { return c->enabled(); },
-        [](CxxComponent* c, bool v) { c->set_enabled(v); }
-    );
-
-    registered = true;
+    tc::InspectFieldInfo enabled_field;
+    enabled_field.path = "enabled";
+    enabled_field.label = "Enabled";
+    enabled_field.kind = "bool";
+    enabled_field.getter = [](void* obj) -> tc_value {
+        return tc_value_bool(static_cast<CxxComponent*>(obj)->enabled());
+    };
+    enabled_field.setter = [](void* obj, tc_value value, void*) -> bool {
+        if (value.type != TC_VALUE_BOOL) return false;
+        static_cast<CxxComponent*>(obj)->set_enabled(value.data.b);
+        return true;
+    };
+    (void)builder.add_field(std::move(enabled_field));
 }
 
 // C++ ref_vtable: retain/release use internal _ref_count, drop deletes

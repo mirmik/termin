@@ -73,7 +73,10 @@ def test_project_runtime_close_removes_python_modules_and_paths(tmp_path: Path) 
 
 
 def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Path) -> None:
+    import termin.bootstrap
     from termin.scene import ComponentRegistry
+
+    termin.bootstrap.bootstrap_player()
 
     source_root = tmp_path / "Scripts"
     package = source_root / "owned_components"
@@ -116,6 +119,7 @@ def test_pymodule_component_uses_owner_load_reload_unload_protocol(tmp_path: Pat
     finally:
         runtime.close()
         registry.unregister_python("OwnedLifecycleComponent")
+        termin.bootstrap.shutdown_player()
 
 
 def test_failed_python_load_does_not_orphan_imports_or_paths(tmp_path: Path) -> None:

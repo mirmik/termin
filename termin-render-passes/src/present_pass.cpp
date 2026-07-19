@@ -43,13 +43,14 @@ void PresentToScreenPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->blit(in_it->second, out_it->second);
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY(PresentToScreenPass);
-
 void PresentToScreenPass::register_type() {
-    register_frame_pass_PresentToScreenPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<PresentToScreenPass>(
+        "PresentToScreenPass", "termin-render-passes");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 BlitPass::BlitPass(
@@ -103,14 +104,15 @@ void BlitPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->blit(in_it->second, out_it->second);
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY(BlitPass);
-
 void BlitPass::register_type() {
-    register_frame_pass_BlitPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_output_res_target();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<BlitPass>(
+        "BlitPass", "termin-render-passes");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_output_res_target(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

@@ -1,4 +1,4 @@
-from termin.scene import PythonComponent, ComponentRegistry
+from termin.scene import PythonComponent
 from termin.input._input_native import (
     INPUT_SOURCE_EDITOR,
     INPUT_SOURCE_RUNTIME,
@@ -35,8 +35,10 @@ class InputComponent(PythonComponent):
             self.input_source_mask = input_source_mask
 
     def __init_subclass__(cls, **kwargs):
+        cls.component_capabilities = tuple(
+            dict.fromkeys((*cls.component_capabilities, input_capability_id()))
+        )
         super().__init_subclass__(**kwargs)
-        ComponentRegistry.set_capability(cls.__name__, input_capability_id(), True)
 
     @property
     def input_priority(self) -> int:

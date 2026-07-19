@@ -96,10 +96,9 @@ void deserialize_mesh_renderer_material_slots(MeshRenderer* self, const tc_value
     }
 }
 
-void register_mesh_renderer_inspect_fields() {
-    auto& inspect = tc::InspectRegistry::instance();
+void register_mesh_renderer_inspect_fields(tc::InspectFacetBuilder& inspect) {
     if (!inspect.find_field("MeshRenderer", "material")) {
-        tc::register_inspect_field(
+        tc::stage_inspect_field(inspect,
             &MeshRenderer::material,
             "MeshRenderer",
             "material",
@@ -108,7 +107,7 @@ void register_mesh_renderer_inspect_fields() {
         );
     }
     if (!inspect.find_field("MeshRenderer", "cast_shadow")) {
-        tc::register_inspect_field(
+        tc::stage_inspect_field(inspect,
             &MeshRenderer::cast_shadow,
             "MeshRenderer",
             "cast_shadow",
@@ -131,8 +130,7 @@ void register_mesh_renderer_inspect_fields() {
         );
     }
     if (!inspect.find_field("MeshRenderer", "materials")) {
-        tc::SerializableFieldRegistrar<MeshRenderer>(
-            "MeshRenderer",
+        inspect.add_serializable<MeshRenderer>(
             "materials",
             [](MeshRenderer* self) -> tc_value {
                 return serialize_mesh_renderer_material_slots(self);
@@ -143,7 +141,7 @@ void register_mesh_renderer_inspect_fields() {
         );
     }
     if (!inspect.find_field("MeshRenderer", "_overridden_material")) {
-        tc::InspectAccessorFieldRegistrar<MeshRenderer, TcMaterial>(
+        inspect.add_with_accessors<MeshRenderer, TcMaterial>(
             "MeshRenderer",
             "_overridden_material",
             "Overridden Material",
@@ -161,8 +159,7 @@ void register_mesh_renderer_inspect_fields() {
         );
     }
     if (!inspect.find_field("MeshRenderer", "_overridden_material_data")) {
-        tc::SerializableFieldRegistrar<MeshRenderer>(
-            "MeshRenderer",
+        inspect.add_serializable<MeshRenderer>(
             "_overridden_material_data",
             [](MeshRenderer* self) -> tc_value {
                 return self ? self->get_override_data() : tc_value_nil();
@@ -176,7 +173,7 @@ void register_mesh_renderer_inspect_fields() {
     }
 
     tc_value metadata = make_mesh_renderer_inspector_metadata();
-    inspect.set_type_metadata_key("MeshRenderer", "inspector", &metadata);
+    inspect.set_metadata_key("inspector", &metadata);
     tc_value_free(&metadata);
 }
 
@@ -189,10 +186,11 @@ MeshRenderer::MeshRenderer(const char* type_name)
 }
 
 void MeshRenderer::register_type() {
-    register_component_type<MeshRenderer>("MeshRenderer", "Component");
-    ComponentRegistry::instance().set_category("MeshRenderer", "Rendering");
-    register_component_requirement("MeshRenderer", "MeshComponent");
-    register_mesh_renderer_inspect_fields();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<MeshRenderer>(
+        "MeshRenderer", "termin-components-render", "Component");
+    descriptor.category("Rendering").require("MeshComponent");
+    register_mesh_renderer_inspect_fields(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 MeshRenderer::~MeshRenderer() {

@@ -229,9 +229,10 @@ WorldTextComponent::WorldTextComponent(const char* type_name)
 
 void WorldTextComponent::register_type() {
     ensure_world_text_render_item_encoder_registered();
-    register_component_type<WorldTextComponent>("WorldTextComponent", "Component");
-    ComponentRegistry::instance().set_category("WorldTextComponent", "Rendering");
-    auto& inspect = tc::InspectRegistry::instance();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<WorldTextComponent>(
+        "WorldTextComponent", "termin-components-render", "Component");
+    descriptor.category("Rendering");
+    auto& inspect = descriptor.inspect();
     inspect.add_with_callbacks<WorldTextComponent, std::string>(
         "WorldTextComponent",
         "text",
@@ -256,7 +257,7 @@ void WorldTextComponent::register_type() {
         [](WorldTextComponent* self) -> std::string& { return self->phase_mark; },
         [](WorldTextComponent* self, const std::string& value) { self->set_phase_mark(value); }
     );
-    tc::InspectAccessorFieldRegistrar<WorldTextComponent, tc_vec3>(
+    inspect.add_with_accessors<WorldTextComponent, tc_vec3>(
         "WorldTextComponent",
         "local_offset",
         "Local Offset",
@@ -268,7 +269,7 @@ void WorldTextComponent::register_type() {
             self->set_local_offset(Vec3{value.x, value.y, value.z});
         }
     );
-    tc::InspectAccessorFieldRegistrar<WorldTextComponent, tc_vec3>(
+    inspect.add_with_accessors<WorldTextComponent, tc_vec3>(
         "WorldTextComponent",
         "plane_normal",
         "Plane Normal",
@@ -280,7 +281,7 @@ void WorldTextComponent::register_type() {
             self->set_plane_normal(Vec3{value.x, value.y, value.z});
         }
     );
-    tc::InspectAccessorFieldRegistrar<WorldTextComponent, tc_vec3>(
+    inspect.add_with_accessors<WorldTextComponent, tc_vec3>(
         "WorldTextComponent",
         "text_up",
         "Text Up",
@@ -311,7 +312,7 @@ void WorldTextComponent::register_type() {
         10.0,
         0.01
     );
-    tc::InspectAccessorFieldChoicesRegistrar<WorldTextComponent, int>(
+    inspect.add_with_accessor_choices<WorldTextComponent, int>(
         "WorldTextComponent",
         "anchor",
         "Anchor",
@@ -324,7 +325,7 @@ void WorldTextComponent::register_type() {
             {"2", "Right"},
         }
     );
-    tc::InspectAccessorFieldChoicesRegistrar<WorldTextComponent, int>(
+    inspect.add_with_accessor_choices<WorldTextComponent, int>(
         "WorldTextComponent",
         "orientation",
         "Orientation",
@@ -379,6 +380,7 @@ void WorldTextComponent::register_type() {
         [](WorldTextComponent* self) -> bool& { return self->cull; },
         [](WorldTextComponent* self, const bool& value) { self->set_cull(value); }
     );
+    (void)descriptor.commit();
 }
 
 WorldTextComponent::~WorldTextComponent() = default;

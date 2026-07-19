@@ -1070,41 +1070,48 @@ void ColorToDepthPass::execute(ExecuteContext& ctx) {
     ctx.ctx2->end_pass();
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(DepthPass, GeometryPassBase);
-TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(DepthOnlyPass, CxxFramePass);
-TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(DepthToColorPass, CxxFramePass);
-TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(ColorToDepthPass, CxxFramePass);
-
 void DepthPass::register_type() {
-    register_frame_pass_DepthPass();
-    _register_inspect_pass_phase_mark();
-    _register_inspect_depth_encoding();
-    _register_inspect_clear();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<DepthPass>(
+        "DepthPass", "termin-components-render", "GeometryPassBase");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_pass_phase_mark(inspect);
+    _register_inspect_depth_encoding(inspect);
+    _register_inspect_clear(inspect);
+    (void)descriptor.commit();
 }
 
 void DepthOnlyPass::register_type() {
-    register_frame_pass_DepthOnlyPass();
-    _register_inspect_output_res();
-    _register_inspect_output_res_target();
-    _register_inspect_camera_name();
-    _register_inspect_pass_phase_mark();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<DepthOnlyPass>(
+        "DepthOnlyPass", "termin-components-render");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_output_res(inspect);
+    _register_inspect_output_res_target(inspect);
+    _register_inspect_camera_name(inspect);
+    _register_inspect_pass_phase_mark(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 void DepthToColorPass::register_type() {
-    register_frame_pass_DepthToColorPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_output_res_target();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<DepthToColorPass>(
+        "DepthToColorPass", "termin-components-render");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_output_res_target(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 void ColorToDepthPass::register_type() {
-    register_frame_pass_ColorToDepthPass();
-    _register_inspect_input_res();
-    _register_inspect_output_res();
-    _register_inspect_output_res_target();
-    _register_inspect_metadata_graph();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<ColorToDepthPass>(
+        "ColorToDepthPass", "termin-components-render");
+    auto& inspect = descriptor.inspect();
+    _register_inspect_input_res(inspect);
+    _register_inspect_output_res(inspect);
+    _register_inspect_output_res_target(inspect);
+    _register_inspect_metadata_graph(inspect);
+    (void)descriptor.commit();
 }
 
 } // namespace termin

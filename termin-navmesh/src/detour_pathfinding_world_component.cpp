@@ -219,8 +219,8 @@ DetourRaycastResult DetourPathfindingWorldComponent::raycast_world(
 
 namespace {
 
-void register_detour_pathfinding_world_inspect_fields() {
-    tc::InspectAccessorFieldRegistrar<DetourPathfindingWorldComponent, TcNavMesh>(
+void register_detour_pathfinding_world_inspect_fields(tc::InspectFacetBuilder& inspect) {
+    inspect.add_with_accessors<DetourPathfindingWorldComponent, TcNavMesh>(
         "DetourPathfindingWorldComponent",
         "navmesh",
         "NavMesh",
@@ -237,28 +237,28 @@ void register_detour_pathfinding_world_inspect_fields() {
             }
         }
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(inspect,
         &DetourPathfindingWorldComponent::query_extent_x,
         "DetourPathfindingWorldComponent",
         "query_extent_x",
         "Query Extent X",
         "float"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(inspect,
         &DetourPathfindingWorldComponent::query_extent_y,
         "DetourPathfindingWorldComponent",
         "query_extent_y",
         "Query Extent Y",
         "float"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(inspect,
         &DetourPathfindingWorldComponent::query_extent_z,
         "DetourPathfindingWorldComponent",
         "query_extent_z",
         "Query Extent Z",
         "float"
     );
-    tc::register_inspect_field(
+    tc::stage_inspect_field(inspect,
         &DetourPathfindingWorldComponent::max_polys,
         "DetourPathfindingWorldComponent",
         "max_polys",
@@ -270,12 +270,11 @@ void register_detour_pathfinding_world_inspect_fields() {
 } // namespace
 
 void DetourPathfindingWorldComponent::register_type() {
-    register_component_type<DetourPathfindingWorldComponent>(
-        "DetourPathfindingWorldComponent",
-        "Component"
-    );
-    ComponentRegistry::instance().set_category("DetourPathfindingWorldComponent", "Navigation");
-    register_detour_pathfinding_world_inspect_fields();
+    auto descriptor = ComponentTypeDescriptorBuilder::native<DetourPathfindingWorldComponent>(
+        "DetourPathfindingWorldComponent", "termin-navmesh", "Component");
+    descriptor.category("Navigation");
+    register_detour_pathfinding_world_inspect_fields(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 } // namespace termin

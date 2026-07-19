@@ -343,11 +343,11 @@ void NormalPass::execute(ExecuteContext& ctx) {
     );
 }
 
-TC_DEFINE_FRAME_PASS_FACTORY_DERIVED(NormalPass, GeometryPassBase);
-
 void NormalPass::register_type() {
-    register_frame_pass_NormalPass();
-    _register_inspect_pass_phase_mark();
+    auto descriptor = FramePassTypeDescriptorBuilder::native<NormalPass>(
+        "NormalPass", "termin-components-render", "GeometryPassBase");
+    _register_inspect_pass_phase_mark(descriptor.inspect());
+    (void)descriptor.commit();
 }
 
 } // namespace termin

@@ -221,7 +221,7 @@ private:
 // Alias for backward compatibility during migration
 using Component = CxxComponent;
 
-ENTITY_API void register_component_base_inspect_fields();
+ENTITY_API void stage_component_base_inspect_fields(tc::InspectFacetBuilder& builder);
 ENTITY_API tc_value serialize_component_data(tc_component* component);
 
 // Template definition for Entity::get_component<T>()
