@@ -7,10 +7,16 @@ class _MeshComponent:
     def __init__(self):
         self.mesh = None
         self.set_mesh_count = 0
+        self.mesh_is_generated = False
+        self.notify_mesh_changed_count = 0
 
-    def set_mesh(self, mesh):
+    def set_generated_mesh(self, mesh):
         self.mesh = mesh
+        self.mesh_is_generated = True
         self.set_mesh_count += 1
+
+    def notify_mesh_changed(self):
+        self.notify_mesh_changed_count += 1
 
 
 class _TestProceduralMeshComponent(ProceduralMeshComponent):
@@ -54,3 +60,4 @@ def test_procedural_mesh_component_updates_existing_tc_mesh_on_regenerate():
     assert mesh_component.mesh.uuid == first_uuid
     assert mesh_component.mesh.vertex_count == first_vertex_count
     assert mesh_component.set_mesh_count == 1
+    assert mesh_component.notify_mesh_changed_count == 1
