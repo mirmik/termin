@@ -724,6 +724,49 @@ def test_native_ui_host_uploads_image_preview_through_render_context():
     assert host.context.destroyed == ["preview-texture"]
 
 
+def test_native_ui_host_can_upload_full_resolution_ui_artwork():
+    import numpy as np
+
+    from termin.editor_native.ui_host import NativeUiHost
+
+    class Handle:
+        valid = True
+
+    class Image:
+        handle = Handle()
+
+        def set_texture(self, texture, size) -> None:
+            self.texture = texture
+            self.size = size
+
+    class Document:
+        def is_alive(self, handle) -> bool:
+            return handle.valid
+
+    class Context:
+        def __init__(self) -> None:
+            self.created = []
+
+        def create_texture_rgba8(self, width, height, pixels):
+            self.created.append((width, height))
+            return "artwork-texture"
+
+    host = NativeUiHost.__new__(NativeUiHost)
+    host.document = Document()
+    host.context = Context()
+    host._image_previews = []
+    host._render_requested = False
+
+    host.register_image_preview(
+        Image(),
+        np.zeros((800, 1200, 4), dtype=np.uint8),
+        max_dimension=None,
+    )
+    host._sync_image_previews()
+
+    assert host.context.created == [(1200, 800)]
+
+
 def test_native_ui_host_applies_font_size_to_all_theme_roles():
     from termin.editor_native.ui_host import NativeUiHost
 
