@@ -6,7 +6,6 @@
 
 #include <termin/render/geometry_pass_base.hpp>
 
-#include <termin/camera/camera_component.hpp>
 #include <termin/render/material_pipeline_shader_assembler.hpp>
 #include <termin/render/render_task.hpp>
 
@@ -43,7 +42,8 @@ RenderItemTaskPlanningContract geometry_task_planning_contract(
         render_item_task_input_bit(RenderItemTaskInput::DrawContext);
     contract.accepted_vertex_transform_kind_mask =
         render_item_vertex_transform_kind_bit(VertexTransformKind::StaticMesh)
-        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh);
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::SkinnedMesh)
+        | render_item_vertex_transform_kind_bit(VertexTransformKind::Foliage);
     contract.shader_contract = &shader_contract;
     contract.debug_pass_name = debug_pass_name;
     return contract;
@@ -98,20 +98,6 @@ std::vector<std::pair<std::string, std::string>> GeometryPassBase::get_inplace_a
 }
 
 void GeometryPassBase::destroy() {
-}
-
-CameraComponent* GeometryPassBase::find_camera_by_name(tc_scene_handle scene, const std::string& name) const {
-    if (name.empty() || !tc_scene_handle_valid(scene)) {
-        return nullptr;
-    }
-
-    tc_entity_id eid = tc_scene_find_entity_by_name(scene, name.c_str());
-    if (!tc_entity_id_valid(eid)) {
-        return nullptr;
-    }
-
-    Entity ent(tc_scene_entity_pool(scene), eid);
-    return ent.get_component<CameraComponent>();
 }
 
 std::optional<std::string> GeometryPassBase::fbo_format() const {
