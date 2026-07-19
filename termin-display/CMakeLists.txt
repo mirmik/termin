@@ -79,7 +79,7 @@ set(TERMIN_DISPLAY_SOURCES
 if(TERMIN_DISPLAY_HAS_SDL)
     list(APPEND TERMIN_DISPLAY_SOURCES
         ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_render_surface.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/src/platform/sdl_input_bridge.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/src/platform/window_input_bridge.cpp
     )
 endif()
 
@@ -243,7 +243,7 @@ install(FILES
 install(FILES
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/display_input_router.hpp
     ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/input_events.hpp
-    ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/sdl_input_bridge.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/include/termin/input/window_input_bridge.hpp
     DESTINATION include/termin/input
 )
 
