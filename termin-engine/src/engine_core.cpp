@@ -4,8 +4,11 @@
 
 #include <chrono>
 #include <cmath>
+#include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 extern "C" {
 #include <tcbase/tc_log.h>
@@ -14,8 +17,74 @@ extern "C" {
 
 namespace termin {
 
+namespace engine_detail {
+
+struct EngineLoopState {
+    mutable std::mutex mutex;
+    std::optional<EngineLoopClient> client;
+    std::uint64_t generation = 0;
+    std::atomic<bool> running{false};
+};
+
+} // namespace engine_detail
+
+EngineLoopClientConnection::EngineLoopClientConnection(
+    std::weak_ptr<engine_detail::EngineLoopState> state,
+    std::uint64_t generation
+)
+    : _state(std::move(state)), _generation(generation) {}
+
+EngineLoopClientConnection::~EngineLoopClientConnection() {
+    detach();
+}
+
+EngineLoopClientConnection::EngineLoopClientConnection(
+    EngineLoopClientConnection&& other
+) noexcept
+    : _state(std::move(other._state)),
+      _generation(std::exchange(other._generation, 0)) {}
+
+EngineLoopClientConnection& EngineLoopClientConnection::operator=(
+    EngineLoopClientConnection&& other
+) noexcept {
+    if (this != &other) {
+        detach();
+        _state = std::move(other._state);
+        _generation = std::exchange(other._generation, 0);
+    }
+    return *this;
+}
+
+void EngineLoopClientConnection::detach() noexcept {
+    if (_generation == 0) {
+        return;
+    }
+    if (const auto state = _state.lock()) {
+        std::lock_guard lock(state->mutex);
+        if (state->client && state->generation == _generation) {
+            state->running.store(false);
+            state->client.reset();
+        }
+    }
+    _state.reset();
+    _generation = 0;
+}
+
+bool EngineLoopClientConnection::connected() const noexcept {
+    if (_generation == 0) {
+        return false;
+    }
+    const auto state = _state.lock();
+    if (!state) {
+        return false;
+    }
+    std::lock_guard lock(state->mutex);
+    return state->client.has_value() && state->generation == _generation;
+}
+
 EngineCore::EngineCore()
-    : rendering_manager(render_topology) {
+    : rendering_manager(render_topology),
+      _loop_state(std::make_shared<engine_detail::EngineLoopState>()) {
     scene_manager.set_before_scene_destroy_guard([this](tc_scene_handle scene) {
         if (!render_topology.is_attached(scene)
                 && render_topology.render_targets(scene).empty()
@@ -40,6 +109,7 @@ EngineCore::EngineCore()
 }
 
 EngineCore::~EngineCore() {
+    stop();
     // Scene-owned render objects must be detached while scene handles and the
     // scene runtime are still alive. Member destructors run after this body.
     const std::vector<tc_scene_handle> attached_scenes(
@@ -54,6 +124,30 @@ EngineCore::~EngineCore() {
     tc_log(TC_LOG_INFO, "[EngineCore] Destroyed");
 }
 
+EngineLoopClientConnection EngineCore::attach_loop_client(EngineLoopClient client) {
+    if (!client.poll_events || !client.should_continue || !client.on_shutdown) {
+        tc_log(
+            TC_LOG_ERROR,
+            "[EngineCore] Refusing incomplete loop client; all callbacks are required"
+        );
+        throw std::invalid_argument("EngineLoopClient requires all callbacks");
+    }
+
+    std::lock_guard lock(_loop_state->mutex);
+    if (_loop_state->running.load()) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Cannot attach loop client while run() is active");
+        throw std::logic_error("cannot attach loop client while EngineCore is running");
+    }
+    if (_loop_state->client) {
+        tc_log(TC_LOG_ERROR, "[EngineCore] Refusing second active loop client");
+        throw std::logic_error("EngineCore already has an active loop client");
+    }
+
+    ++_loop_state->generation;
+    _loop_state->client.emplace(std::move(client));
+    return EngineLoopClientConnection(_loop_state, _loop_state->generation);
+}
+
 void EngineCore::set_poll_events_callback(std::function<void()> cb) {
     _poll_events_callback = std::move(cb);
 }
@@ -64,6 +158,14 @@ void EngineCore::set_should_continue_callback(std::function<bool()> cb) {
 
 void EngineCore::set_on_shutdown_callback(std::function<void()> cb) {
     _on_shutdown_callback = std::move(cb);
+}
+
+void EngineCore::stop() {
+    _loop_state->running.store(false);
+}
+
+bool EngineCore::is_running() const {
+    return _loop_state->running.load();
 }
 
 void EngineCore::set_target_fps(double fps) {
@@ -108,7 +210,24 @@ bool EngineCore::tick_and_render(double dt) {
 }
 
 void EngineCore::run() {
-    _running = true;
+    EngineLoopClient loop_client;
+    {
+        std::lock_guard lock(_loop_state->mutex);
+        if (_loop_state->running.load()) {
+            tc_log(TC_LOG_ERROR, "[EngineCore] Refusing nested run() call");
+            throw std::logic_error("EngineCore::run() is already active");
+        }
+        _loop_state->running.store(true);
+        if (_loop_state->client) {
+            loop_client = *_loop_state->client;
+        } else {
+            // Temporary compatibility path for frontends not yet migrated to
+            // attach_loop_client(). Remove together with the legacy setters.
+            loop_client.poll_events = _poll_events_callback;
+            loop_client.should_continue = _should_continue_callback;
+            loop_client.on_shutdown = _on_shutdown_callback;
+        }
+    }
 
     using clock = std::chrono::steady_clock;
     using duration = clock::duration;
@@ -124,7 +243,7 @@ void EngineCore::run() {
         tc_log(TC_LOG_INFO, "[EngineCore] Starting main loop without FPS limit");
     }
 
-    while (_running) {
+    while (_loop_state->running.load()) {
         auto frame_start = clock::now();
         const double configured_target_fps = _target_fps.load();
         if (configured_target_fps != active_target_fps) {
@@ -186,13 +305,13 @@ void EngineCore::run() {
             if (_profile_ui) tc_profiler_begin_section("UI");
             else             tc_profiler_begin_section_muted("UI");
         }
-        if (_poll_events_callback) _poll_events_callback();
+        if (loop_client.poll_events) loop_client.poll_events();
         if (profile) tc_profiler_end_section();
 
         // Check if should continue
-        if (_should_continue_callback && !_should_continue_callback()) {
+        if (loop_client.should_continue && !loop_client.should_continue()) {
             if (capture_frame) tc_profiler_end_frame();
-            _running = false;
+            _loop_state->running.store(false);
             break;
         }
 
@@ -223,8 +342,8 @@ void EngineCore::run() {
     tc_log(TC_LOG_INFO, "[EngineCore] Main loop stopped");
 
     // Shutdown callback (cleanup)
-    if (_on_shutdown_callback) {
-        _on_shutdown_callback();
+    if (loop_client.on_shutdown) {
+        loop_client.on_shutdown();
     }
 }
 

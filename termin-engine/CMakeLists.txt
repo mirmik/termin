@@ -273,6 +273,18 @@ if(TERMIN_ENGINE_BUILD_TESTS)
         COMMAND termin_engine_frame_cadence_test
     )
 
+    add_executable(termin_engine_loop_client_test
+        tests/test_engine_loop_client.cpp
+    )
+    target_include_directories(termin_engine_loop_client_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../termin-thirdparty/guard
+    )
+    target_link_libraries(termin_engine_loop_client_test PRIVATE termin_engine)
+    add_test(
+        NAME termin_engine_loop_client_test
+        COMMAND termin_engine_loop_client_test
+    )
+
     add_executable(termin_engine_viewport_render_state_test
         tests/test_viewport_render_state.cpp
     )
