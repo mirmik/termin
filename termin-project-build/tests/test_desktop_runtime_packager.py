@@ -270,9 +270,13 @@ def _write_target_marking_shader_compiler(tmp_path: Path) -> Path:
 def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
     project = tmp_path / "DesktopGame"
     project.mkdir()
+    project_render_phase_names = ["gameplay_overlay", *([""] * 47)]
     _write_json(
         project / "project_settings" / "project.json",
-        {"player_window": {"width": 1366, "height": 768, "fullscreen": False}},
+        {
+            "player_window": {"width": 1366, "height": 768, "fullscreen": False},
+            "render_phase_names": project_render_phase_names,
+        },
     )
     _write_json(project / "DesktopGame.terminproj", {"version": 1, "name": "DesktopGame"})
     _write_json(project / "Main.scene", {"uuid": "desktop-scene", "entities": []})
@@ -411,6 +415,7 @@ def test_build_desktop_project_writes_bundle_contract(tmp_path: Path) -> None:
                 "height": 768,
                 "fullscreen": False,
             },
+            "render_phase_names": project_render_phase_names,
             "mcp": {
                 "enabled": False,
                 "host": "127.0.0.1",
