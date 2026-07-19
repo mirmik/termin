@@ -124,7 +124,9 @@ def test_runtime_package_loader_registers_one_material_asset_and_preserves_it_on
     by_uuid = manager.get_material_asset_by_uuid(material_uuid)
     assert by_name is not None
     assert by_uuid is by_name
-    assert by_name.material is manager.get_material("RuntimeMaterial")
+    resolved_material = manager.get_material("RuntimeMaterial")
+    assert resolved_material.uuid == material_uuid
+    assert resolved_material.is_valid
 
     previous_material = by_name.material
     duplicate = {

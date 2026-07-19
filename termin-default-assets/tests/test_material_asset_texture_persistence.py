@@ -99,7 +99,7 @@ def test_builtin_registration_does_not_shadow_stdlib_materials() -> None:
         path.stem
         for path in (stdlib_root() / "materials").glob("*.material")
     }
-    assert stdlib_materials.isdisjoint(rm.materials)
+    assert stdlib_materials.isdisjoint(rm.list_material_names())
 
 
 def test_builtin_registration_does_not_shadow_stdlib_shaders() -> None:

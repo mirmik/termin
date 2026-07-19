@@ -57,7 +57,6 @@ class VoxelGridRuntimePlugin:
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
-        name = context.name
         asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
             return
@@ -70,11 +69,6 @@ class VoxelGridRuntimePlugin:
 
         asset.parse_spec(result.spec_data)
         asset.reload()
-
-        if asset.grid is not None:
-            from termin.voxels._voxels_native import TcVoxelGrid
-
-            rm.voxel_grids[name] = TcVoxelGrid.from_uuid(asset.uuid)
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
         context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)

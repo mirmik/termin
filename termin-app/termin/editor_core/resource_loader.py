@@ -110,7 +110,8 @@ class ResourceLoader:
                 base = f"{ent.name}_mat" if ent.name else "Material"
                 name = base
                 i = 1
-                while name in self._resource_manager.materials:
+                existing_names = set(self._resource_manager.list_material_names())
+                while name in existing_names:
                     i += 1
                     name = f"{base}_{i}"
                 mat.name = name
@@ -165,7 +166,8 @@ class ResourceLoader:
             # Ensure unique name
             base_name = material_name
             counter = 1
-            while material_name in self._resource_manager.materials:
+            existing_names = set(self._resource_manager.list_material_names())
+            while material_name in existing_names:
                 counter += 1
                 material_name = f"{base_name}_{counter}"
 

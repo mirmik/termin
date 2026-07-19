@@ -63,7 +63,6 @@ class NavMeshRuntimePlugin:
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
-        name = context.name
         asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
             return
@@ -76,11 +75,6 @@ class NavMeshRuntimePlugin:
 
         asset.parse_spec(result.spec_data)
         asset.reload()
-
-        if asset.navmesh is not None:
-            from termin.navmesh._navmesh_native import TcNavMesh
-
-            rm.navmeshes[name] = TcNavMesh.from_uuid(asset.uuid)
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
         context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)

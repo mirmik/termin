@@ -72,7 +72,6 @@ class MaterialRuntimePlugin:
 
     def reload(self, context: "AssetContext", result: "PreLoadResult") -> None:
         rm = context.resource_manager
-        name = context.name
         asset = rm.get_runtime_asset_by_uuid(self.type_id, context.uuid)
         if asset is None:
             return
@@ -84,9 +83,6 @@ class MaterialRuntimePlugin:
             return
 
         asset.reload()
-
-        if asset.material is not None:
-            rm.materials[name] = asset.material
 
     def unregister(self, context: "AssetContext", result: "PreLoadResult") -> None:
         context.resource_manager.unregister_runtime_asset_by_uuid(self.type_id, context.uuid)

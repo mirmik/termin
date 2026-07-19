@@ -63,15 +63,19 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_material_registry(self):
         """Create AssetRegistry for materials."""
         from termin_assets import AssetRegistry
+        from termin.materials import TcMaterial
 
         def data_from_asset(asset):
             if asset.material is None:
                 asset.ensure_loaded()
-            return asset.material
+            material = TcMaterial.from_uuid(asset.uuid)
+            return material if material.is_valid else None
 
         def data_to_asset(data):
+            if not isinstance(data, TcMaterial) or not data.is_valid:
+                return None
             for asset in self._material_registry.iter_assets():
-                if asset.material is data:
+                if asset.uuid == data.uuid:
                     return asset
             return None
 
@@ -224,17 +228,20 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_animation_clip_registry(self):
         """Create AssetRegistry for animation clips."""
         from termin_assets import AssetRegistry
+        from termin.animation import TcAnimationClip
 
         def data_from_asset(asset):
             clip = asset.clip
             if clip is None:
                 asset.ensure_loaded()
-                clip = asset.clip
-            return clip
+            clip = TcAnimationClip.from_uuid(asset.uuid)
+            return clip if clip.is_valid else None
 
         def data_to_asset(data):
+            if not isinstance(data, TcAnimationClip) or not data.is_valid:
+                return None
             for asset in self._animation_clip_registry.iter_assets():
-                if asset.clip is data:
+                if asset.uuid == data.uuid:
                     return asset
             return None
 
@@ -252,15 +259,19 @@ class DefaultAssetRegistryFactoryMixin:
     def _create_skeleton_registry(self):
         """Create AssetRegistry for skeletons."""
         from termin_assets import AssetRegistry
+        from termin.skeleton import TcSkeleton
 
         def data_from_asset(asset):
             if asset.skeleton_data is None:
                 asset.ensure_loaded()
-            return asset.skeleton_data
+            skeleton = TcSkeleton.from_uuid(asset.uuid)
+            return skeleton if skeleton.is_valid else None
 
         def data_to_asset(data):
+            if not isinstance(data, TcSkeleton) or not data.is_valid:
+                return None
             for asset in self._skeleton_registry.iter_assets():
-                if asset.skeleton_data is data:
+                if asset.uuid == data.uuid:
                     return asset
             return None
 
